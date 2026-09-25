@@ -228,6 +228,58 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
     }
 });
 
+app.get('/api/users/:id/stats', requireAuth, (req, res) => {
+    try {
+        const userId = parseInt(req.params.id, 10);
+        
+        const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+        if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+
+        const readVolumes = db.prepare(`
+            SELECT vr.read_at, v.volume_number, v.pages, m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
+            FROM volume_reads vr
+            JOIN volumes v ON vr.volume_id = v.id
+            JOIN mangas m ON v.manga_id = m.id
+            WHERE vr.user_id = ?
+            ORDER BY vr.read_at DESC
+        `).all(userId);
+
+        const totalVolumes = readVolumes.length;
+        const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);
+
+        const mangasReadMap = new Map();
+        readVolumes.forEach(v => {
+            if (!mangasReadMap.has(v.manga_id)) {
+                mangasReadMap.set(v.manga_id, {
+                    id: v.manga_id,
+                    title: v.manga_title,
+                    cover_image: v.manga_cover,
+                    volumes: []
+                });
+            }
+            mangasReadMap.get(v.manga_id).volumes.push({
+                volume_number: v.volume_number,
+                read_at: v.read_at
+            });
+        });
+        
+        const readMangas = Array.from(mangasReadMap.values());
+
+        res.json({
+            user: { id: user.id, username: user.username },
+            stats: {
+                totalVolumes,
+                totalPages,
+                recentVolumes: readVolumes.slice(0, 10), // Last 10 read volumes for timeline
+                readMangas
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching user stats:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Benutzer-Statistiken' });
+    }
+});
+
 // --- MANGA API ---
 app.get('/api/mangas', requireAuth, (req, res) => {
     try {
