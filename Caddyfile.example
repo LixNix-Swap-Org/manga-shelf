@@ -1,0 +1,12 @@
+# Caddyfile Konfiguration für Manga Shelf
+# Datei z.B. /etc/caddy/Caddyfile
+# Caddy holt und erneuert Let's Encrypt Zertifikate vollkommen automatisch!
+
+manga.deinedomain.de {
+    # Reverse Proxy zu Pterodactyl Manga Shelf Port
+    reverse_proxy 127.0.0.1:25502 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+}
