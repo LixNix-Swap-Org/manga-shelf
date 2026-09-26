@@ -18,6 +18,8 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
+const http = require('http');
+const https = require('https');
 require('dotenv').config();
 
 const { db, hasAdmin, uploadsDir, dataDir, closeDb, initDb } = require('./db');
@@ -30,22 +32,59 @@ app.set('trust proxy', true);
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 
 // Serve uploads
 app.use('/uploads', express.static(uploadsDir));
+
+// Allowed image MIME types and extensions for secure uploads
+const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
+
+const imageFileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_IMAGE_MIMES.has(file.mimetype) && ALLOWED_IMAGE_EXTS.has(ext)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Ungültiger Dateityp. Es sind ausschließlich Bilddateien (JPG, PNG, WebP, GIF, AVIF) erlaubt.'));
+    }
+};
 
 // Multer for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsDir),
     filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const cleanExt = ALLOWED_IMAGE_EXTS.has(ext) ? ext : '.jpg';
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+        cb(null, uniqueSuffix + cleanExt);
     }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 15 * 1024 * 1024 }, // Max 15 MB per image
+    fileFilter: imageFileFilter
+});
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-manga-key-change-in-prod';
+// Secure, persistent JWT Secret (stored in app_settings if not provided via environment)
+const crypto = require('crypto');
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    try {
+        const row = db.prepare("SELECT value FROM app_settings WHERE key = 'jwt_secret'").get();
+        if (row && row.value) {
+            JWT_SECRET = row.value;
+        } else {
+            JWT_SECRET = crypto.randomBytes(48).toString('hex');
+            db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', ?)").run(JWT_SECRET);
+        }
+    } catch (e) {
+        JWT_SECRET = 'manga-shelf-fallback-' + crypto.randomBytes(32).toString('hex');
+    }
+}
 
 // Helper for cookie options (supports direct HTTPS & reverse proxy / Cloudflare / Nginx)
 const setAuthCookie = (req, res, token) => {
@@ -196,6 +235,14 @@ app.put('/api/users/:id', requireAdmin, (req, res) => {
             newRole = ['admin', 'visitor', 'guest'].includes(role) ? role : 'editor';
         }
 
+        // Prevent demoting the last remaining admin
+        if (user.role === 'admin' && newRole !== 'admin') {
+            const adminCountRow = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get();
+            if (adminCountRow && adminCountRow.count <= 1) {
+                return res.status(400).json({ error: 'Der letzte verbleibende Administrator kann nicht herabgestuft werden' });
+            }
+        }
+
         if (password && password.length >= 4) {
             const hash = bcrypt.hashSync(password, 10);
             db.prepare('UPDATE users SET role = ?, password_hash = ? WHERE id = ?').run(newRole, hash, userId);
@@ -215,11 +262,21 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
         if (userId === req.user.id) {
             return res.status(400).json({ error: 'Du kannst dein eigenes Administratorkonto nicht löschen' });
         }
-        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+        const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
         if (!user) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
 
+        // Prevent deleting the last admin
+        if (user.role === 'admin') {
+            const adminCountRow = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get();
+            if (adminCountRow && adminCountRow.count <= 1) {
+                return res.status(400).json({ error: 'Der letzte verbleibende Administrator kann nicht gelöscht werden' });
+            }
+        }
+
+        // Clean up user volume_reads explicitly
+        db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
         res.json({ success: true });
     } catch (err) {
@@ -473,6 +530,7 @@ app.put('/api/mangas/:id', requireEditor, (req, res) => {
 
 app.delete('/api/mangas/:id', requireEditor, (req, res) => {
     try {
+        db.prepare('DELETE FROM volume_reads WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)').run(req.params.id);
         db.prepare('DELETE FROM volumes WHERE manga_id = ?').run(req.params.id);
         const result = db.prepare('DELETE FROM mangas WHERE id = ?').run(req.params.id);
         if (result.changes === 0) return res.status(404).json({ error: 'Manga nicht gefunden' });
@@ -488,13 +546,13 @@ const parsePrice = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const str = String(val).replace(',', '.').trim();
     const parsed = parseFloat(str);
-    return isNaN(parsed) ? null : Math.round(parsed * 100) / 100;
+    return (isNaN(parsed) || parsed < 0) ? null : Math.round(parsed * 100) / 100;
 };
 
 const parseNum = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const parsed = parseInt(val, 10);
-    return isNaN(parsed) ? null : parsed;
+    return (isNaN(parsed) || parsed < 0) ? null : parsed;
 };
 
 app.post('/api/volumes', requireEditor, (req, res) => {
@@ -574,8 +632,8 @@ app.post('/api/volumes/batch', requireEditor, (req, res) => {
         const start = parseInt(from, 10);
         const end = parseInt(to, 10);
 
-        if (!mId || isNaN(start) || isNaN(end) || start > end || (end - start) > 300) {
-            return res.status(400).json({ error: 'Ungültiger Bereich (maximal 300 Bände)' });
+        if (!mId || isNaN(start) || isNaN(end) || start < 0 || end < 0 || start > end || (end - start) > 300) {
+            return res.status(400).json({ error: 'Ungültiger Bereich (maximal 300 Bände, positive Zahlen)' });
         }
 
         const existing = db.prepare('SELECT volume_number FROM volumes WHERE manga_id = ?').all(mId);
@@ -591,10 +649,17 @@ app.post('/api/volumes/batch', requireEditor, (req, res) => {
         const cond = condition ? String(condition).trim() : null;
         const year = parseNum(release_year);
 
-        for (let i = start; i <= end; i++) {
-            if (!existingSet.has(String(i))) {
-                insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, year);
+        db.exec('BEGIN TRANSACTION;');
+        try {
+            for (let i = start; i <= end; i++) {
+                if (!existingSet.has(String(i))) {
+                    insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, year);
+                }
             }
+            db.exec('COMMIT;');
+        } catch (txErr) {
+            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
+            throw txErr;
         }
 
         // Update owned count
@@ -666,6 +731,7 @@ app.delete('/api/volumes/:id', requireEditor, (req, res) => {
         const vol = db.prepare('SELECT manga_id FROM volumes WHERE id = ?').get(req.params.id);
         if (!vol) return res.status(404).json({ error: 'Band nicht gefunden' });
 
+        db.prepare('DELETE FROM volume_reads WHERE volume_id = ?').run(req.params.id);
         db.prepare('DELETE FROM volumes WHERE id = ?').run(req.params.id);
 
         // Update owned count
@@ -735,17 +801,27 @@ app.post('/api/volumes/batch-read', requireEditor, (req, res) => {
         }
 
         const volumes = db.prepare("SELECT id, volume_number FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").all(mId);
-        const targetVols = volumes.filter(v => (parseFloat(v.volume_number) || 0) <= maxVol);
+        const targetVols = volumes.filter(v => {
+            const num = parseFloat(v.volume_number);
+            return !isNaN(num) && num <= maxVol;
+        });
 
         const insertStmt = db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
         const deleteStmt = db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?');
 
-        for (const v of targetVols) {
-            if (read) {
-                insertStmt.run(v.id, targetUserId);
-            } else {
-                deleteStmt.run(v.id, targetUserId);
+        db.exec('BEGIN TRANSACTION;');
+        try {
+            for (const v of targetVols) {
+                if (read) {
+                    insertStmt.run(v.id, targetUserId);
+                } else {
+                    deleteStmt.run(v.id, targetUserId);
+                }
             }
+            db.exec('COMMIT;');
+        } catch (txErr) {
+            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
+            throw txErr;
         }
 
         res.json({ success: true, count: targetVols.length });
@@ -918,6 +994,165 @@ app.put('/api/stats/settings', requireAdmin, (req, res) => {
     }
 });
 
+// --- MANGA METADATA LOOKUP (AniList GraphQL API) ---
+app.get('/api/lookup/manga', requireAuth, (req, res) => {
+    try {
+        const queryTerm = req.query.q;
+        if (!queryTerm || !queryTerm.trim()) {
+            return res.status(400).json({ error: 'Suchbegriff erforderlich' });
+        }
+
+        const graphqlQuery = {
+            query: `
+                query ($search: String) {
+                    Page(page: 1, perPage: 6) {
+                        media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
+                            id
+                            title { romaji english native }
+                            description(asHtml: false)
+                            coverImage { extraLarge large medium }
+                            bannerImage
+                            status
+                            volumes
+                            genres
+                            staff(perPage: 5) {
+                                edges {
+                                    role
+                                    node { name { full } }
+                                }
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { search: queryTerm.trim() }
+        };
+
+        const postData = JSON.stringify(graphqlQuery);
+        const options = {
+            hostname: 'graphql.anilist.co',
+            port: 443,
+            path: '/',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'MangaShelf/2.0'
+            }
+        };
+
+        const apiReq = https.request(options, (apiRes) => {
+            let data = '';
+            apiRes.on('data', chunk => { data += chunk; });
+            apiRes.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    const list = parsed.data?.Page?.media || [];
+                    const results = list.map(m => {
+                        let author = null;
+                        if (m.staff?.edges) {
+                            const storyOrArt = m.staff.edges.find(e => 
+                                e.role?.toLowerCase().includes('story') || 
+                                e.role?.toLowerCase().includes('art') || 
+                                e.role?.toLowerCase().includes('original creator')
+                            );
+                            author = storyOrArt ? storyOrArt.node?.name?.full : m.staff.edges[0]?.node?.name?.full;
+                        }
+
+                        let status = 'Laufend';
+                        if (m.status === 'FINISHED') status = 'Abgeschlossen';
+                        else if (m.status === 'HIATUS') status = 'Pausiert';
+                        else if (m.status === 'CANCELLED') status = 'Abgebrochen';
+
+                        let cleanDesc = m.description || '';
+                        cleanDesc = cleanDesc.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&#039;/g, "'").trim();
+
+                        return {
+                            id: m.id,
+                            title: m.title.english || m.title.romaji,
+                            alt_title: m.title.native || m.title.romaji,
+                            author: author || null,
+                            description: cleanDesc || null,
+                            cover_image: m.coverImage?.extraLarge || m.coverImage?.large || m.coverImage?.medium || null,
+                            banner_image: m.bannerImage || null,
+                            tags: Array.isArray(m.genres) ? m.genres.join(', ') : null,
+                            total_volumes: m.volumes || null,
+                            status: status
+                        };
+                    });
+                    res.json(results);
+                } catch (e) {
+                    console.error('Error parsing AniList response:', e);
+                    res.status(500).json({ error: 'Fehler beim Verarbeiten der Metadaten' });
+                }
+            });
+        });
+
+        apiReq.on('error', (err) => {
+            console.error('AniList API error:', err);
+            res.status(500).json({ error: 'Netzwerkfehler beim Abrufen der Metadaten: ' + err.message });
+        });
+
+        apiReq.setTimeout(8000, () => {
+            apiReq.destroy();
+            res.status(504).json({ error: 'Zeitüberschreitung bei der Metadatensuche' });
+        });
+
+        apiReq.write(postData);
+        apiReq.end();
+    } catch (err) {
+        console.error('Lookup endpoint error:', err);
+        res.status(500).json({ error: 'Interner Serverfehler' });
+    }
+});
+
+// Download remote image (e.g. from AniList) and save locally to data/uploads
+app.post('/api/upload-remote', requireEditor, async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url || !url.startsWith('http')) {
+            return res.status(400).json({ error: 'Ungültige Bild-URL' });
+        }
+        const parsedUrl = new URL(url);
+        const ext = path.extname(parsedUrl.pathname).toLowerCase() || '.jpg';
+        const cleanExt = ALLOWED_IMAGE_EXTS.has(ext) ? ext : '.jpg';
+        const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + cleanExt;
+        const targetPath = path.join(uploadsDir, filename);
+
+        const client = parsedUrl.protocol === 'https:' ? https : http;
+        const fileStream = fs.createWriteStream(targetPath);
+
+        const fetchReq = client.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (imgRes) => {
+            if (imgRes.statusCode !== 200) {
+                fileStream.close();
+                try { fs.unlinkSync(targetPath); } catch (e) {}
+                return res.status(400).json({ error: 'Bild konnte nicht geladen werden (Status ' + imgRes.statusCode + ')' });
+            }
+            imgRes.pipe(fileStream);
+            fileStream.on('finish', () => {
+                fileStream.close();
+                res.json({ url: '/uploads/' + filename });
+            });
+        });
+
+        fetchReq.on('error', (err) => {
+            fileStream.close();
+            try { fs.unlinkSync(targetPath); } catch (e) {}
+            res.status(500).json({ error: 'Fehler beim Herunterladen des Bildes: ' + err.message });
+        });
+
+        fetchReq.setTimeout(10000, () => {
+            fetchReq.destroy();
+            fileStream.close();
+            try { fs.unlinkSync(targetPath); } catch (e) {}
+            res.status(504).json({ error: 'Download-Zeitüberschreitung' });
+        });
+    } catch (e) {
+        console.error('Remote upload error:', e);
+        res.status(500).json({ error: 'Fehler beim Speichern des externen Bildes' });
+    }
+});
+
 // --- UPLOADS ---
 app.post('/api/upload', requireEditor, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
@@ -1084,9 +1319,6 @@ app.get('*', (req, res) => {
 });
 
 // --- START SERVER ---
-const http = require('http');
-const https = require('https');
-
 const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || path.join(__dirname, 'ssl', 'privkey.pem');
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || (fs.existsSync(path.join(__dirname, 'ssl', 'fullchain.pem')) ? path.join(__dirname, 'ssl', 'fullchain.pem') : path.join(__dirname, 'ssl', 'cert.pem'));
@@ -1128,7 +1360,7 @@ server.listen(PORT, '0.0.0.0', () => {
 const shutdown = () => {
     console.log('Shutting down...');
     server.close(() => {
-        db.close();
+        closeDb();
         process.exit(0);
     });
 };

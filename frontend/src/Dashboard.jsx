@@ -67,6 +67,11 @@ export default function Dashboard({ user, onLogout }) {
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
 
+  // Metadata Auto-Fill state (AniList API)
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupResults, setLookupResults] = useState(null);
+  const [lookupError, setLookupError] = useState('');
+
   useEffect(() => {
     fetchMangas();
   }, []);
@@ -167,9 +172,96 @@ export default function Dashboard({ user, onLogout }) {
     setShowAddModal(true);
   };
 
+  const closeAddModal = () => {
+    if (coverPreview && coverPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreview);
+    }
+    setCoverFile(null);
+    setCoverPreview('');
+    setErrorMessage('');
+    setLookingUp(false);
+    setLookupResults(null);
+    setLookupError('');
+    setShowAddModal(false);
+  };
+
+  const handleLookupMetadata = async () => {
+    if (!form.title.trim()) {
+      setLookupError('Bitte gib zuerst einen Titel ein.');
+      return;
+    }
+    setLookingUp(true);
+    setLookupError('');
+    setLookupResults(null);
+    try {
+      const res = await fetch(`/api/lookup/manga?q=${encodeURIComponent(form.title.trim())}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          if (data.length === 1) {
+            await applyLookupResult(data[0]);
+          } else {
+            setLookupResults(data);
+          }
+        } else {
+          setLookupError('Keine Treffer gefunden.');
+        }
+      } else {
+        const err = await res.json();
+        setLookupError(err.error || 'Fehler bei der Suche');
+      }
+    } catch (e) {
+      setLookupError('Netzwerkfehler bei der Metadatensuche');
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  const applyLookupResult = async (item) => {
+    let localCoverUrl = item.cover_image;
+    if (item.cover_image && item.cover_image.startsWith('http')) {
+      try {
+        const upRes = await fetch('/api/upload-remote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: item.cover_image })
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          if (upData.url) localCoverUrl = upData.url;
+        }
+      } catch (e) {
+        console.warn('Could not cache remote cover locally, using remote URL:', e);
+      }
+    }
+
+    setForm(prev => ({
+      ...prev,
+      title: item.title || prev.title,
+      alt_title: item.alt_title || prev.alt_title,
+      author: item.author || prev.author,
+      status: item.status || prev.status,
+      total_volumes: item.total_volumes ? String(item.total_volumes) : prev.total_volumes,
+      description: item.description || prev.description,
+      cover_image: localCoverUrl || prev.cover_image
+    }));
+    if (localCoverUrl) {
+      if (coverPreview && coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(coverPreview);
+      }
+      setCoverFile(null);
+      setCoverPreview(localCoverUrl);
+    }
+    setLookupResults(null);
+    setLookupError('');
+  };
+
   const handleCoverChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (coverPreview && coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(coverPreview);
+      }
       setCoverFile(file);
       setCoverPreview(URL.createObjectURL(file));
     }
@@ -221,7 +313,7 @@ export default function Dashboard({ user, onLogout }) {
         throw new Error(data.error || 'Fehler beim Erstellen des Mangas');
       }
 
-      setShowAddModal(false);
+      closeAddModal();
       await fetchMangas();
     } catch (err) {
       setErrorMessage(err.message);
@@ -848,7 +940,8 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
               </div>
               <button 
-                onClick={() => setShowAddModal(false)}
+                onClick={closeAddModal}
+                aria-label="Schließen"
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -865,19 +958,107 @@ export default function Dashboard({ user, onLogout }) {
             {/* Form */}
             <form onSubmit={handleCreateManga} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Titel <span className="text-red-400">*</span>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                  <span>Titel <span className="text-red-400">*</span></span>
+                  <span className="text-[11px] text-brand-400 font-normal">Tipp: Titel eingeben & auf „Auto-Fill“ klicken</span>
                 </label>
-                <input 
-                  type="text" 
-                  placeholder="z.B. One Piece, Jujutsu Kaisen..." 
-                  className="input-field" 
-                  required
-                  autoFocus
-                  value={form.title} 
-                  onChange={e => setForm({ ...form, title: e.target.value })} 
-                />
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="z.B. One Piece, Chainsaw Man, Frieren..." 
+                    className="input-field flex-1" 
+                    required
+                    autoFocus
+                    value={form.title} 
+                    onChange={e => setForm({ ...form, title: e.target.value })} 
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLookupMetadata}
+                    disabled={lookingUp || !form.title.trim()}
+                    className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-brand-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
+                    title="Sucht Cover, Autor, Genres und Beschreibung automatisch über AniList"
+                  >
+                    {lookingUp ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Suche...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+                        <span>Auto-Fill</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* Lookup Error Banner */}
+              {lookupError && (
+                <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>{lookupError}</span>
+                </div>
+              )}
+
+              {/* Lookup Results Selector */}
+              {lookupResults && lookupResults.length > 0 && (
+                <div className="bg-slate-950/90 border border-brand-500/40 rounded-xl p-3 space-y-2.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-brand-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> Treffer auswählen:
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={() => setLookupResults(null)}
+                      className="text-slate-400 hover:text-white text-[11px]"
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                    {lookupResults.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => applyLookupResult(item)}
+                        className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-900/80 hover:bg-brand-950/60 border border-slate-800 hover:border-brand-500/50 text-left transition-all group"
+                      >
+                        {item.cover_image ? (
+                          <img 
+                            src={item.cover_image} 
+                            alt={item.title} 
+                            className="w-10 h-14 object-cover rounded shadow shrink-0" 
+                          />
+                        ) : (
+                          <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-500">
+                            <BookOpen className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
+                            {item.title}
+                          </p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            {item.author || item.alt_title || 'Unbekannt'}
+                          </p>
+                          <div className="flex gap-1.5 mt-1 text-[10px] text-slate-500">
+                            <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                              {item.status}
+                            </span>
+                            {item.total_volumes && (
+                              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                                {item.total_volumes} Bände
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -992,7 +1173,7 @@ export default function Dashboard({ user, onLogout }) {
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
                 <button 
                   type="button" 
-                  onClick={() => setShowAddModal(false)} 
+                  onClick={closeAddModal} 
                   className="btn-secondary text-sm"
                   disabled={submitting}
                 >

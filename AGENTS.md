@@ -168,6 +168,8 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/stats/settings` | PUT | `requireAdmin` | z. B. Sammelstartdatum aktualisieren |
 | `/api/upload` | POST | `requireEditor` | Einzelnes Bild hochladen (Multer -> `data/uploads`) |
 | `/api/upload/multiple` | POST | `requireEditor` | Bis zu 10 Bilder auf einmal hochladen |
+| `/api/upload-remote` | POST | `requireEditor` | Externes Bild per URL herunterladen & lokal cachen |
+| `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via AniList GraphQL API |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
 

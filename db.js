@@ -28,10 +28,12 @@ function initDb() {
         const { DatabaseSync } = require('node:sqlite');
         currentDb = new DatabaseSync(dbPath);
         currentDb.exec('PRAGMA journal_mode = WAL;');
+        currentDb.exec('PRAGMA foreign_keys = ON;');
     } catch (e) {
         const Database = require('better-sqlite3');
         currentDb = new Database(dbPath);
         currentDb.pragma('journal_mode = WAL');
+        currentDb.pragma('foreign_keys = ON');
     }
 
     // Migrations / Table Creation
