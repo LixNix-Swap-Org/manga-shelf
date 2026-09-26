@@ -6,8 +6,10 @@ import {
   Users, UserPlus, Shield, User, Lock, Key, Coins, Tag,
   Building2, ArrowUpDown, ChevronDown, UploadCloud, AlertTriangle,
   FileArchive, RefreshCw, BarChart3, TrendingUp, Calendar, Clock, 
-  BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check
+  BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check,
+  Camera
 } from 'lucide-react';
+import IsbnScannerModal from './IsbnScannerModal';
 
 export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
@@ -81,6 +83,9 @@ export default function Dashboard({ user, onLogout }) {
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
   const [buyingId, setBuyingId] = useState(null);
+
+  // ISBN & Barcode Scanner Modal State
+  const [showScannerModal, setShowScannerModal] = useState(false);
 
   useEffect(() => {
     fetchMangas();
@@ -639,6 +644,14 @@ export default function Dashboard({ user, onLogout }) {
                 </button>
               )}
 
+              <button 
+                onClick={() => setShowScannerModal(true)}
+                className="btn-secondary text-xs p-2 text-indigo-300 border-indigo-500/30"
+                title="Manga Barcode & ISBN scannen"
+              >
+                <Camera className="w-4 h-4 text-indigo-400" />
+              </button>
+
               <button onClick={onLogout} className="btn-secondary p-2 text-slate-400" title="Abmelden">
                 <LogOut className="w-4 h-4" />
               </button>
@@ -674,6 +687,14 @@ export default function Dashboard({ user, onLogout }) {
               title="Statistik- & Finanz-Dashboard öffnen"
             >
               <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken & Finanzen
+            </button>
+
+            <button 
+              onClick={() => setShowScannerModal(true)}
+              className="btn-secondary flex items-center gap-2 text-sm text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/10 shadow-sm"
+              title="Manga Barcode im Buchladen scannen oder ISBN abfragen"
+            >
+              <Camera className="w-4 h-4 text-indigo-400" /> Barcode-Scanner
             </button>
 
             {canEdit && (
@@ -1156,12 +1177,21 @@ export default function Dashboard({ user, onLogout }) {
             <p className="text-xs text-slate-400 mt-2 leading-relaxed">
               Aktuell hast du keine Bände mit dem Status „Fehlt“. Sobald du bei einer Reihe Bände als fehlend markierst, erscheinen sie hier automatisch in deiner Einkaufsliste.
             </p>
-            <button
-              onClick={() => setActiveMainView('shelf')}
-              className="btn-primary text-xs mt-6 px-4 py-2"
-            >
-              Zurück zur Sammlung
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+              <button
+                onClick={() => setActiveMainView('shelf')}
+                className="btn-primary text-xs px-4 py-2"
+              >
+                Zurück zur Sammlung
+              </button>
+              <button
+                onClick={() => setShowScannerModal(true)}
+                className="btn-secondary text-xs px-4 py-2 flex items-center gap-1.5 text-indigo-300 border-indigo-500/30"
+              >
+                <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Barcode im Laden scannen</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -2399,6 +2429,21 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         </div>
       )}
+
+      {/* ISBN & BARCODE SCANNER MODAL */}
+      <IsbnScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onMangaCreated={() => {
+          fetchMangas();
+          fetchShoppingList();
+        }}
+        onVolumeAdded={() => {
+          fetchMangas();
+          fetchShoppingList();
+        }}
+        canEdit={canEdit}
+      />
 
     </div>
   );

@@ -1205,6 +1205,154 @@ app.post('/api/upload-remote', requireEditor, async (req, res) => {
     }
 });
 
+// --- GERMAN MANGA ISBN LOOKUP (Deutsche Nationalbibliothek DNB & OpenLibrary Cover) ---
+app.get('/api/lookup/isbn', requireAuth, async (req, res) => {
+    try {
+        const rawIsbn = req.query.isbn;
+        if (!rawIsbn) {
+            return res.status(400).json({ error: 'ISBN erforderlich' });
+        }
+
+        const cleanIsbn = String(rawIsbn).replace(/[^0-9X]/gi, '');
+        if (!cleanIsbn || (cleanIsbn.length !== 10 && cleanIsbn.length !== 13)) {
+            return res.status(400).json({ error: 'Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)' });
+        }
+
+        // 1. Fetch MARC21 XML from Deutsche Nationalbibliothek (DNB) SRU API
+        const dnbUrl = `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${encodeURIComponent(cleanIsbn)}&recordSchema=MARC21-xml`;
+
+        let xml = '';
+        try {
+            xml = await new Promise((resolve, reject) => {
+                const apiReq = https.get(dnbUrl, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (apiRes) => {
+                    let data = '';
+                    apiRes.on('data', chunk => data += chunk);
+                    apiRes.on('end', () => resolve(data));
+                });
+                apiReq.on('error', reject);
+                apiReq.setTimeout(8000, () => {
+                    apiReq.destroy();
+                    reject(new Error('DNB Timeout'));
+                });
+            });
+        } catch (e) {
+            console.error('DNB request failed:', e.message);
+        }
+
+        let book = null;
+        if (xml && xml.includes('<recordData>')) {
+            const getField = (tag, code) => {
+                const fieldRegex = new RegExp(`<datafield[^>]*tag="${tag}"[^>]*>[\\s\\S]*?<\\/datafield>`, 'g');
+                const matches = xml.match(fieldRegex) || [];
+                for (const f of matches) {
+                    const subRegex = new RegExp(`<subfield[^>]*code="${code}"[^>]*>([^<]+)<\\/subfield>`);
+                    const subMatch = f.match(subRegex);
+                    if (subMatch) return subMatch[1].trim();
+                }
+                return null;
+            };
+
+            let title = getField('245', 'a');
+            if (title) title = title.replace(/\s*[\/:]\s*$/, '').trim();
+
+            let volumeNumber = getField('245', 'n');
+            if (volumeNumber) {
+                volumeNumber = volumeNumber.replace(/\.$/, '').trim();
+                const numOnly = volumeNumber.match(/\d+(\.\d+)?/);
+                if (numOnly) volumeNumber = numOnly[0];
+            }
+
+            let subtitle = getField('245', 'p');
+            let author = getField('100', 'a');
+            if (author) {
+                const parts = author.split(',').map(s => s.trim());
+                if (parts.length === 2) author = `${parts[1]} ${parts[0]}`;
+            }
+
+            let publisher = getField('264', 'b') || getField('260', 'b');
+            if (publisher) publisher = publisher.replace(/\s*;\s*$/, '').trim();
+
+            const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
+            let releaseYear = null;
+            if (releaseYearRaw) {
+                const yMatch = releaseYearRaw.match(/\d{4}/);
+                if (yMatch) releaseYear = parseInt(yMatch[0], 10);
+            }
+
+            const pagesRaw = getField('300', 'a');
+            let pages = null;
+            if (pagesRaw) {
+                const pMatch = pagesRaw.match(/(\d+)/);
+                if (pMatch) pages = parseInt(pMatch[1], 10);
+            }
+
+            const priceRaw = getField('020', 'c');
+            let price = null;
+            if (priceRaw) {
+                const eurMatch = priceRaw.match(/EUR\s*([\d,.]+)/i);
+                if (eurMatch) price = parseFloat(eurMatch[1].replace(',', '.'));
+            }
+
+            if (title) {
+                book = {
+                    title,
+                    volume_number: volumeNumber || '1',
+                    subtitle,
+                    author,
+                    publisher,
+                    release_year: releaseYear,
+                    pages,
+                    price,
+                    cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
+                };
+            }
+        }
+
+        if (!book) {
+            return res.json({
+                isbn: cleanIsbn,
+                found: false,
+                message: 'Keine Metadaten für diese ISBN in der Deutschen Nationalbibliothek gefunden.'
+            });
+        }
+
+        // Cross reference existing mangas in SQLite
+        const mangas = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas').all();
+        let matchedManga = null;
+        const normTitle = book.title.toLowerCase().trim();
+
+        for (const m of mangas) {
+            const mNorm = m.title.toLowerCase().trim();
+            const altNorm = m.alt_title ? m.alt_title.toLowerCase().trim() : '';
+            if (normTitle === mNorm || normTitle.includes(mNorm) || mNorm.includes(normTitle) || (altNorm && (normTitle.includes(altNorm) || altNorm.includes(normTitle)))) {
+                matchedManga = m;
+                break;
+            }
+        }
+
+        let matchedVolume = null;
+        if (matchedManga) {
+            const vol = db.prepare(`
+                SELECT id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year
+                FROM volumes 
+                WHERE manga_id = ? AND (volume_number = ? OR isbn = ?)
+            `).get(matchedManga.id, book.volume_number, cleanIsbn);
+            if (vol) matchedVolume = vol;
+        }
+
+        res.json({
+            isbn: cleanIsbn,
+            found: true,
+            book,
+            matched_manga: matchedManga,
+            matched_volume: matchedVolume
+        });
+    } catch (err) {
+        console.error('Error during ISBN lookup:', err);
+        res.status(500).json({ error: 'Fehler beim ISBN-Lookup' });
+    }
+});
+
 // --- UPLOADS ---
 app.post('/api/upload', requireEditor, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });

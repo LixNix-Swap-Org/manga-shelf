@@ -170,6 +170,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/upload/multiple` | POST | `requireEditor` | Bis zu 10 Bilder auf einmal hochladen |
 | `/api/upload-remote` | POST | `requireEditor` | Externes Bild per URL herunterladen & lokal cachen |
 | `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via AniList GraphQL API |
+| `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
@@ -231,6 +232,18 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
    * Tab-/View-Umschalter `activeMainView: 'shelf' | 'shopping'`.
    * Filtern nach Verlagschips, Echtzeit-Suche und Schnellkauf-Button (`handleQuickBuy`).
+
+### 🔹 Fall G: Barcode- & ISBN-Scanner (DNB API & Kamera) anpassen
+1. **Backend API (`index.js`):**
+   * Route `GET /api/lookup/isbn?isbn=...`: Fragt die SRU MARC21-XML-Schnittstelle der Deutschen Nationalbibliothek (DNB) ab.
+   * Parst deutsche Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Seiten (`300$a`) und Festpreis in EUR (`020$c`).
+   * Gleicht die gefundene Reihe und den Band automatisch mit der SQLite-Datenbank ab (`matched_manga`, `matched_volume`).
+2. **Frontend UI:**
+   * `frontend/src/IsbnScannerModal.jsx`: Bindet `html5-qrcode` mit Rückkamera-Priorisierung (`facingMode: "environment"`) ein.
+   * Erkennt EAN-13 Barcodes von Buchrücken und bietet manuelle ISBN-Eingabe.
+   * Erkennt sofort, ob ein Band bereits im Regal steht, auf der Einkaufsliste fehlt oder eine neue Reihe ist.
+   * Schnellaktionen: "Ins Regal stellen (+ Besitz)", "Auf Einkaufsliste setzen", "Neue Reihe anlegen".
+   * Eingebunden in `Dashboard.jsx` (Header-Button "Scanner" & Shopping-Empty-State) sowie `MangaDetail.jsx` (Checklisten-Aktionen).
 
 ---
 
