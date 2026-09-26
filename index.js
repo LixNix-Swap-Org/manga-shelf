@@ -831,6 +831,58 @@ app.post('/api/volumes/batch-read', requireEditor, (req, res) => {
     }
 });
 
+// --- SHOPPING LIST / WISHLIST API ---
+app.get('/api/shopping-list', requireAuth, (req, res) => {
+    try {
+        const missingVols = db.prepare(`
+            SELECT 
+                v.id, v.manga_id, v.volume_number, v.isbn, v.price, 
+                v.release_year, v.condition, v.publisher as vol_publisher, 
+                v.notes, v.status,
+                m.title as manga_title, 
+                m.cover_image as manga_cover,
+                COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher
+            FROM volumes v
+            JOIN mangas m ON v.manga_id = m.id
+            WHERE v.status = 'Fehlt'
+            ORDER BY 
+                effective_publisher ASC,
+                m.title ASC,
+                CAST(v.volume_number AS REAL) ASC,
+                v.volume_number ASC
+        `).all();
+
+        const totalCost = missingVols.reduce((sum, v) => sum + (v.price || 0), 0);
+        
+        // Group by publisher for fast filter chips
+        const publisherMap = new Map();
+        missingVols.forEach(v => {
+            const pub = v.effective_publisher;
+            if (!publisherMap.has(pub)) {
+                publisherMap.set(pub, { publisher: pub, count: 0, total_price: 0 });
+            }
+            const pStat = publisherMap.get(pub);
+            pStat.count++;
+            pStat.total_price += (v.price || 0);
+        });
+
+        const publishers = Array.from(publisherMap.values()).map(p => ({
+            ...p,
+            total_price: Math.round(p.total_price * 100) / 100
+        }));
+
+        res.json({
+            total_missing: missingVols.length,
+            total_cost: Math.round(totalCost * 100) / 100,
+            publishers,
+            items: missingVols
+        });
+    } catch (err) {
+        console.error('Error fetching shopping list:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Einkaufsliste' });
+    }
+});
+
 // --- STATISTICS & FINANCE API ---
 app.get('/api/stats', requireAuth, (req, res) => {
     try {

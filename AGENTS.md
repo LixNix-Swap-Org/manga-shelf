@@ -170,6 +170,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/upload/multiple` | POST | `requireEditor` | Bis zu 10 Bilder auf einmal hochladen |
 | `/api/upload-remote` | POST | `requireEditor` | Externes Bild per URL herunterladen & lokal cachen |
 | `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via AniList GraphQL API |
+| `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
 
@@ -223,6 +224,14 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 2. **Frontend UI:**
    * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx` und `MangaDetail.jsx`.
 
+### 🔹 Fall F: Einkaufsliste / Buchladen-Modus anpassen
+1. **Backend API (`index.js`):**
+   * Route `GET /api/shopping-list` selektiert alle Bände mit `status = 'Fehlt'`, ermittelt den effektiven Verlag (`v.publisher` oder `m.publisher`) und summiert Preise & Verlage.
+   * `PUT /api/volumes/:id` schaltet den Status um (z. B. von 'Fehlt' auf 'Gekauft' / 'Besitz').
+2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
+   * Tab-/View-Umschalter `activeMainView: 'shelf' | 'shopping'`.
+   * Filtern nach Verlagschips, Echtzeit-Suche und Schnellkauf-Button (`handleQuickBuy`).
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow
@@ -275,3 +284,16 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 4. **Verzeichnisse:**
    * Alle persistenten Daten liegen ausschließlich unter `data/` (`manga.db` und `data/uploads/`).
    * Alles unter `data/` ist in `.gitignore`, damit keine privaten Daten oder Passwörter in GitHub landen.
+
+---
+
+## 9. Deutsche Manga-Spezifika & APIs
+
+1. **Deutsche Verlage:**
+   * `Carlsen Manga`, `Egmont Manga (EMA)`, `Tokyopop`, `Altraverse`, `Manga Cult`, `Hayabusa`, `Crunchyroll / Kazé`, `Panini Manga`.
+   * Buchpreisbindung in Deutschland: Jeder deutsche Manga hat einen offiziellen festen Ladenpreis (z. B. 7,00 €, 7,50 €, 8,00 €, 10,00 €).
+2. **Metadaten-Quellen:**
+   * **AniList GraphQL API:** Perfekt für internationale Reihen-Titel, alternative Romaji-/japanische Titel, Status (Laufend/Abgeschlossen) und hochauflösende Cover.
+   * **Deutsche Nationalbibliothek (DNB) API / SRU:** Gesetzliche Pflichtablieferung in Deutschland! Jeder in DE gedruckte Manga besitzt dort einen Datensatz mit exakter ISBN-13, Bandnummer, Seitenzahl, offiziellem Preis in € und Verlag. Kostenlos und ohne API-Key abrufbar unter:
+     `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D<ISBN>&recordSchema=MARC21-xml`
+

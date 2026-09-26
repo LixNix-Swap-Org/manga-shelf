@@ -6,7 +6,7 @@ import {
   Users, UserPlus, Shield, User, Lock, Key, Coins, Tag,
   Building2, ArrowUpDown, ChevronDown, UploadCloud, AlertTriangle,
   FileArchive, RefreshCw, BarChart3, TrendingUp, Calendar, Clock, 
-  BookCheck, Wallet, Award, PieChart
+  BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check
 } from 'lucide-react';
 
 export default function Dashboard({ user, onLogout }) {
@@ -72,9 +72,67 @@ export default function Dashboard({ user, onLogout }) {
   const [lookupResults, setLookupResults] = useState(null);
   const [lookupError, setLookupError] = useState('');
 
+  // Main view switcher: 'shelf' | 'shopping'
+  const [activeMainView, setActiveMainView] = useState('shelf');
+
+  // Shopping / Wishlist state
+  const [shoppingData, setShoppingData] = useState(null);
+  const [loadingShopping, setLoadingShopping] = useState(false);
+  const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
+  const [shoppingSearch, setShoppingSearch] = useState('');
+  const [buyingId, setBuyingId] = useState(null);
+
   useEffect(() => {
     fetchMangas();
+    fetchShoppingList();
   }, []);
+
+  const fetchShoppingList = async () => {
+    try {
+      setLoadingShopping(true);
+      const res = await fetch('/api/shopping-list');
+      if (res.ok) {
+        const data = await res.json();
+        setShoppingData(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch shopping list:', e);
+    } finally {
+      setLoadingShopping(false);
+    }
+  };
+
+  const handleQuickBuy = async (volumeId) => {
+    setBuyingId(volumeId);
+    try {
+      const res = await fetch(`/api/volumes/${volumeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Vorhanden' })
+      });
+      if (res.ok) {
+        setShoppingData(prev => {
+          if (!prev) return prev;
+          const updatedItems = prev.items.filter(item => item.id !== volumeId);
+          const boughtItem = prev.items.find(item => item.id === volumeId);
+          const newCost = Math.max(0, prev.total_cost - (boughtItem?.price || 0));
+          return {
+            ...prev,
+            total_missing: updatedItems.length,
+            total_cost: Math.round(newCost * 100) / 100,
+            items: updatedItems
+          };
+        });
+        fetchMangas();
+      } else {
+        alert('Fehler beim Aktualisieren des Bands');
+      }
+    } catch (e) {
+      alert('Netzwerkfehler');
+    } finally {
+      setBuyingId(null);
+    }
+  };
 
   const fetchMangas = async () => {
     try {
@@ -539,6 +597,22 @@ export default function Dashboard({ user, onLogout }) {
             {/* Mobile Actions */}
             <div className="flex md:hidden items-center gap-2">
               <button 
+                onClick={() => {
+                  const next = activeMainView === 'shelf' ? 'shopping' : 'shelf';
+                  setActiveMainView(next);
+                  if (next === 'shopping') fetchShoppingList();
+                }}
+                className={`text-xs p-2 rounded-xl border transition-all ${
+                  activeMainView === 'shopping'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                    : 'btn-secondary text-slate-300'
+                }`}
+                title="Einkaufsliste umschalten"
+              >
+                <ShoppingCart className="w-4 h-4 text-emerald-400" />
+              </button>
+
+              <button 
                 onClick={handleOpenStats}
                 className="btn-secondary text-xs p-2 text-emerald-400 border-emerald-500/30"
                 title="Statistiken & Finanzen"
@@ -680,8 +754,54 @@ export default function Dashboard({ user, onLogout }) {
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8">
         
-        {/* Quick Stats Bar */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        {/* Main View Switcher: Sammlung vs. Einkaufsliste */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
+            <button
+              onClick={() => setActiveMainView('shelf')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                activeMainView === 'shelf'
+                  ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Library className="w-4 h-4" />
+              <span>Sammlung ({mangas.length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveMainView('shopping');
+                fetchShoppingList();
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                activeMainView === 'shopping'
+                  ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4 text-emerald-400" />
+              <span>Einkaufsliste</span>
+              {shoppingData && shoppingData.total_missing > 0 && (
+                <span className="bg-emerald-500/30 text-emerald-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
+                  {shoppingData.total_missing}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {activeMainView === 'shopping' && (
+            <div className="text-xs text-slate-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Laden-Modus: Fehlende Bände abhaken & direkt einbuchen</span>
+            </div>
+          )}
+        </div>
+
+        {/* SHELF VIEW */}
+        {activeMainView === 'shelf' && (
+          <>
+            {/* Quick Stats Bar */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
           <div className="glass-panel p-4 rounded-2xl flex items-center gap-3.5 border border-slate-800/80">
             <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
               <Library className="w-5 h-5 text-sky-400" />
@@ -921,7 +1041,223 @@ export default function Dashboard({ user, onLogout }) {
             })}
           </div>
         )}
-      </main>
+      </>
+    )}
+
+    {/* SHOPPING LIST VIEW */}
+    {activeMainView === 'shopping' && (
+      <div className="space-y-6 animate-fade-in">
+        {/* Shopping Summary Card */}
+        <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-emerald-950/20">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <ShoppingCart className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>Einkaufsliste & Wunschbände</span>
+                {shoppingData && (
+                  <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    {shoppingData.total_missing} Bände
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="bg-slate-950/70 border border-slate-800 px-4 py-2 rounded-xl text-right flex-1 sm:flex-initial">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Geschätzter Gesamtpreis</p>
+              <p className="text-lg font-extrabold text-emerald-400 font-mono">
+                {shoppingData ? shoppingData.total_cost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
+              </p>
+            </div>
+            <button
+              onClick={fetchShoppingList}
+              disabled={loadingShopping}
+              className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5"
+              title="Liste aktualisieren"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingShopping ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Shopping Filters Bar */}
+        <div className="glass-panel p-4 rounded-2xl border border-slate-800/80 flex flex-col sm:flex-row justify-between items-center gap-3">
+          {/* Search */}
+          <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 w-full sm:w-72">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Titel oder Band filtern..."
+              className="w-full bg-transparent border-0 p-0 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-0"
+              value={shoppingSearch}
+              onChange={e => setShoppingSearch(e.target.value)}
+            />
+            {shoppingSearch && (
+              <button onClick={() => setShoppingSearch('')} className="text-slate-500 hover:text-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Publisher Filter Chips */}
+          {shoppingData?.publishers && shoppingData.publishers.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+              <button
+                onClick={() => setShoppingPublisherFilter('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                  shoppingPublisherFilter === 'ALL'
+                    ? 'bg-brand-600 text-white shadow'
+                    : 'bg-slate-800/60 text-slate-400 hover:text-white border border-slate-700/50'
+                }`}
+              >
+                Alle Verlage ({shoppingData.total_missing})
+              </button>
+              {shoppingData.publishers.map(p => (
+                <button
+                  key={p.publisher}
+                  onClick={() => setShoppingPublisherFilter(p.publisher)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    shoppingPublisherFilter === p.publisher
+                      ? 'bg-brand-600 text-white shadow'
+                      : 'bg-slate-800/60 text-slate-400 hover:text-white border border-slate-700/50'
+                  }`}
+                >
+                  <span>{p.publisher}</span>
+                  <span className="text-[10px] bg-slate-900/80 px-1.5 py-0.5 rounded-full font-mono">
+                    {p.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Loading State */}
+        {loadingShopping && !shoppingData && (
+          <div className="flex justify-center items-center py-20 text-slate-400 gap-2">
+            <RefreshCw className="w-5 h-5 animate-spin text-brand-400" />
+            <span>Einkaufsliste wird geladen...</span>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loadingShopping && (!shoppingData || shoppingData.items.length === 0) && (
+          <div className="glass-panel p-12 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white">Alles komplett im Regal!</h3>
+            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+              Aktuell hast du keine Bände mit dem Status „Fehlt“. Sobald du bei einer Reihe Bände als fehlend markierst, erscheinen sie hier automatisch in deiner Einkaufsliste.
+            </p>
+            <button
+              onClick={() => setActiveMainView('shelf')}
+              className="btn-primary text-xs mt-6 px-4 py-2"
+            >
+              Zurück zur Sammlung
+            </button>
+          </div>
+        )}
+
+        {/* Shopping List Items Grid */}
+        {shoppingData && shoppingData.items.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+            {shoppingData.items
+              .filter(item => {
+                const matchPub = shoppingPublisherFilter === 'ALL' || item.effective_publisher === shoppingPublisherFilter;
+                const matchSearch = !shoppingSearch || 
+                  item.manga_title.toLowerCase().includes(shoppingSearch.toLowerCase()) || 
+                  String(item.volume_number).includes(shoppingSearch) ||
+                  (item.effective_publisher && item.effective_publisher.toLowerCase().includes(shoppingSearch.toLowerCase()));
+                return matchPub && matchSearch;
+              })
+              .map(item => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-2xl p-3 border border-slate-800/80 flex gap-3 relative group hover:border-emerald-500/50 transition-all bg-slate-900/60"
+                >
+                  {/* Cover Thumbnail */}
+                  <Link to={`/manga/${item.manga_id}`} className="shrink-0 relative group/cover">
+                    {item.manga_cover ? (
+                      <img
+                        src={item.manga_cover}
+                        alt={item.manga_title}
+                        className="w-16 h-24 object-cover rounded-xl shadow-md border border-slate-800 group-hover/cover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-16 h-24 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 border border-slate-700/60">
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                    )}
+                    <span className="absolute top-1 left-1 bg-amber-500/90 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded shadow uppercase">
+                      Fehlt
+                    </span>
+                  </Link>
+
+                  {/* Info & Buy Button */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <Link
+                        to={`/manga/${item.manga_id}`}
+                        className="text-xs font-bold text-white hover:text-brand-300 truncate block transition-colors"
+                        title={item.manga_title}
+                      >
+                        {item.manga_title}
+                      </Link>
+                      
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
+                          Band {item.volume_number}
+                        </span>
+                        {item.price > 0 && (
+                          <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono px-2 py-0.5 rounded-lg font-bold">
+                            {item.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
+                        <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                        <span className="truncate">{item.effective_publisher}</span>
+                      </p>
+                      {item.isbn && (
+                        <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                          ISBN: {item.isbn}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quick Buy Button */}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickBuy(item.id)}
+                        disabled={buyingId === item.id}
+                        className="mt-2.5 w-full bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                        title="Als gekauft markieren und ins Regal stellen"
+                      >
+                        {buyingId === item.id ? (
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
+                        )}
+                        <span>Gekauft</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    )}
+  </main>
 
       {/* CREATE MANGA MODAL */}
       {showAddModal && (
