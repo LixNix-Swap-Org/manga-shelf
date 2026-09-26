@@ -174,6 +174,11 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
+| `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |
+| `/api/backups/create` | POST | `requireAdmin` | Erstellt sofort einen neuen Server-Snapshot |
+| `/api/backups/:filename/restore` | POST | `requireAdmin` | Stellt einen Server-Snapshot mit 1 Klick wieder her |
+| `/api/backups/:filename/download` | GET | `requireAdmin` | Lädt einen bestimmten Snapshot herunter |
+| `/api/backups/:filename` | DELETE | `requireAdmin` | Löscht einen Snapshot vom Server |
 
 ---
 
@@ -244,6 +249,15 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * Erkennt sofort, ob ein Band bereits im Regal steht, auf der Einkaufsliste fehlt oder eine neue Reihe ist.
    * Schnellaktionen: "Ins Regal stellen (+ Besitz)", "Auf Einkaufsliste setzen", "Neue Reihe anlegen".
    * Eingebunden in `Dashboard.jsx` (Header-Button "Scanner" & Shopping-Empty-State) sowie `MangaDetail.jsx` (Checklisten-Aktionen).
+
+### 🔹 Fall H: Backup-System & automatische Snapshots anpassen
+1. **Backend API & Scheduler (`index.js`):**
+   * Server-Snapshots werden unter `data/backups/` im ZIP-Format gespeichert.
+   * `createBackupSnapshot(prefix)` sichert `manga.db` und den Ordner `uploads/` und löscht automatisch Snapshots, die älter als die neuesten 7 sind.
+   * Ein Scheduler prüft 10s nach Serverstart und danach alle 24h, ob für heute bereits ein Backup existiert (`daily-auto`).
+   * `restoreFromZipBuffer` führt vor dem Entpacken einen SQLite-Checkpoint und ein Schließen der Verbindung durch und legt ein temporäres Rollback-Backup `manga.db.bak` an.
+2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
+   * Backup-Zentrale (`showRestoreModal`): Verwaltet Snapshots (Erstellen, Wiederherstellen, Download, Löschen) und bietet ZIP-Upload.
 
 ---
 

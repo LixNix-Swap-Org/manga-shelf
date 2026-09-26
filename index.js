@@ -1365,26 +1365,63 @@ app.post('/api/upload/multiple', requireEditor, upload.array('images', 10), (req
     res.json({ urls });
 });
 
-// --- BACKUP ---
-app.get('/api/backup', requireAdmin, (req, res) => {
-    res.attachment('manga-shelf-backup.zip');
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('error', (err) => res.status(500).send({error: err.message}));
-    archive.pipe(res);
-    archive.directory(dataDir, false);
-    archive.finalize();
-});
+// --- BACKUP & SNAPSHOT MANAGEMENT ---
+const backupsDir = path.join(dataDir, 'backups');
+if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir, { recursive: true });
+}
 
-const uploadBackup = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 500 * 1024 * 1024 } // 500 MB max backup size
-});
+async function createBackupSnapshot(prefix = 'manga-shelf-backup') {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${prefix}-${timestamp}.zip`;
+    const targetFile = path.join(backupsDir, filename);
 
-const handleBackupRestore = async (req, res) => {
-    if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ error: 'Keine Backup-Datei (.zip) ausgewählt' });
+    await new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(targetFile);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        output.on('close', resolve);
+        archive.on('error', reject);
+        archive.pipe(output);
+
+        const dbFile = path.join(dataDir, 'manga.db');
+        if (fs.existsSync(dbFile)) {
+            archive.file(dbFile, { name: 'manga.db' });
+        }
+
+        if (fs.existsSync(uploadsDir)) {
+            archive.directory(uploadsDir, 'uploads');
+        }
+
+        archive.finalize();
+    });
+
+    // Prune backups: keep latest 7 snapshots
+    try {
+        const allBackups = fs.readdirSync(backupsDir)
+            .filter(f => f.endsWith('.zip'))
+            .map(f => ({
+                name: f,
+                time: fs.statSync(path.join(backupsDir, f)).mtimeMs
+            }))
+            .sort((a, b) => b.time - a.time);
+
+        if (allBackups.length > 7) {
+            const toDelete = allBackups.slice(7);
+            for (const b of toDelete) {
+                try { fs.unlinkSync(path.join(backupsDir, b.name)); } catch (e) {}
+            }
+        }
+    } catch (e) {
+        console.warn('Pruning old backups failed:', e);
     }
 
+    const stat = fs.statSync(targetFile);
+    return { filename, size: stat.size, created_at: new Date().toISOString() };
+}
+
+// Reusable restore implementation from Buffer
+async function restoreFromZipBuffer(buffer) {
     const backupBakPath = path.join(dataDir, 'manga.db.bak');
     const dbFilePath = path.join(dataDir, 'manga.db');
     const walFilePath = path.join(dataDir, 'manga.db-wal');
@@ -1392,37 +1429,35 @@ const handleBackupRestore = async (req, res) => {
 
     let zip;
     try {
-        zip = new AdmZip(req.file.buffer);
+        zip = new AdmZip(buffer);
     } catch (err) {
-        return res.status(400).json({ error: 'Ungültiges ZIP-Archiv: ' + err.message });
+        throw new Error('Ungültiges ZIP-Archiv: ' + err.message);
     }
 
     const entries = zip.getEntries();
     const dbEntry = entries.find(e => e.entryName === 'manga.db' || e.entryName.endsWith('/manga.db'));
 
     if (!dbEntry) {
-        return res.status(400).json({ 
-            error: 'Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.' 
-        });
+        throw new Error('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
+    }
+
+    // 1. Close current active SQLite connection
+    closeDb();
+
+    // 2. Safety copy of current database
+    if (fs.existsSync(dbFilePath)) {
+        fs.copyFileSync(dbFilePath, backupBakPath);
+    }
+
+    // 3. Remove stale WAL and SHM journal files
+    if (fs.existsSync(walFilePath)) {
+        try { fs.unlinkSync(walFilePath); } catch (e) {}
+    }
+    if (fs.existsSync(shmFilePath)) {
+        try { fs.unlinkSync(shmFilePath); } catch (e) {}
     }
 
     try {
-        // 1. Close current active SQLite connection
-        closeDb();
-
-        // 2. Safety copy of current database
-        if (fs.existsSync(dbFilePath)) {
-            fs.copyFileSync(dbFilePath, backupBakPath);
-        }
-
-        // 3. Remove stale WAL and SHM journal files
-        if (fs.existsSync(walFilePath)) {
-            try { fs.unlinkSync(walFilePath); } catch (e) {}
-        }
-        if (fs.existsSync(shmFilePath)) {
-            try { fs.unlinkSync(shmFilePath); } catch (e) {}
-        }
-
         // 4. Overwrite manga.db with restored database
         fs.writeFileSync(dbFilePath, dbEntry.getData());
 
@@ -1431,7 +1466,6 @@ const handleBackupRestore = async (req, res) => {
         for (const entry of entries) {
             if (entry.isDirectory) continue;
 
-            // Extract entries inside uploads/ or data/uploads/
             let relUploadPath = null;
             if (entry.entryName.startsWith('uploads/')) {
                 relUploadPath = entry.entryName;
@@ -1463,15 +1497,11 @@ const handleBackupRestore = async (req, res) => {
             try { fs.unlinkSync(backupBakPath); } catch (e) {}
         }
 
-        console.log(`[Backup Restore] Successfully restored database! (${mangaCount} Mangas, ${restoredImagesCount} Uploads)`);
-        res.json({
-            success: true,
-            message: `Backup erfolgreich eingespielt! (${mangaCount} Manga-Reihen und ${restoredImagesCount} Bilddateien wiederhergestellt)`,
+        return {
             mangaCount,
             restoredImagesCount
-        });
+        };
     } catch (err) {
-        console.error('[Backup Restore] Error restoring backup:', err);
         // Rollback safety copy if available
         try {
             if (fs.existsSync(backupBakPath)) {
@@ -1482,12 +1512,170 @@ const handleBackupRestore = async (req, res) => {
         } catch (rollbackErr) {
             console.error('[Backup Restore] Rollback failed:', rollbackErr);
         }
+        throw err;
+    }
+}
+
+// 1. Direct stream download of current backup
+app.get('/api/backup', requireAdmin, (req, res) => {
+    res.attachment('manga-shelf-backup.zip');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => res.status(500).send({error: err.message}));
+    archive.pipe(res);
+
+    const dbFile = path.join(dataDir, 'manga.db');
+    if (fs.existsSync(dbFile)) {
+        archive.file(dbFile, { name: 'manga.db' });
+    }
+    if (fs.existsSync(uploadsDir)) {
+        archive.directory(uploadsDir, 'uploads');
+    }
+
+    archive.finalize();
+});
+
+// 2. List all automated and manual server snapshots
+app.get('/api/backups', requireAdmin, (req, res) => {
+    try {
+        const files = fs.readdirSync(backupsDir)
+            .filter(f => f.endsWith('.zip'))
+            .map(f => {
+                const fp = path.join(backupsDir, f);
+                const stat = fs.statSync(fp);
+                return {
+                    filename: f,
+                    size: stat.size,
+                    created_at: stat.birthtime || stat.mtime
+                };
+            })
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        res.json({ backups: files });
+    } catch (err) {
+        console.error('Error listing backups:', err);
+        res.status(500).json({ error: 'Fehler beim Laden der Backups' });
+    }
+});
+
+// 3. Create a new server snapshot
+app.post('/api/backups/create', requireAdmin, async (req, res) => {
+    try {
+        const snapshot = await createBackupSnapshot('manual');
+        res.json({ success: true, snapshot });
+    } catch (err) {
+        console.error('Error creating snapshot:', err);
+        res.status(500).json({ error: 'Fehler beim Erstellen des Snapshots: ' + err.message });
+    }
+});
+
+// 4. Restore from an existing server snapshot
+app.post('/api/backups/:filename/restore', requireAdmin, async (req, res) => {
+    try {
+        const filename = path.basename(req.params.filename);
+        const filePath = path.join(backupsDir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Snapshot-Datei nicht gefunden' });
+        }
+
+        const buffer = fs.readFileSync(filePath);
+        const result = await restoreFromZipBuffer(buffer);
+
+        console.log(`[Backup Restore] Restored snapshot ${filename} (${result.mangaCount} Mangas)`);
+        res.json({
+            success: true,
+            message: `Snapshot "${filename}" erfolgreich wiederhergestellt! (${result.mangaCount} Mangas, ${result.restoredImagesCount} Uploads)`,
+            ...result
+        });
+    } catch (err) {
+        console.error('Error restoring snapshot:', err);
+        res.status(500).json({ error: 'Fehler beim Wiederherstellen: ' + err.message });
+    }
+});
+
+// 5. Download a specific server snapshot
+app.get('/api/backups/:filename/download', requireAdmin, (req, res) => {
+    try {
+        const filename = path.basename(req.params.filename);
+        const filePath = path.join(backupsDir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Snapshot-Datei nicht gefunden' });
+        }
+
+        res.download(filePath, filename);
+    } catch (err) {
+        res.status(500).json({ error: 'Download-Fehler' });
+    }
+});
+
+// 6. Delete a specific server snapshot
+app.delete('/api/backups/:filename', requireAdmin, (req, res) => {
+    try {
+        const filename = path.basename(req.params.filename);
+        const filePath = path.join(backupsDir, filename);
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        res.json({ success: true, message: 'Snapshot gelöscht' });
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler beim Löschen des Snapshots' });
+    }
+});
+
+// 7. Manual ZIP upload restore
+const uploadBackup = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 500 * 1024 * 1024 } // 500 MB max backup size
+});
+
+const handleUploadedBackupRestore = async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ error: 'Keine Backup-Datei (.zip) ausgewählt' });
+    }
+
+    try {
+        const result = await restoreFromZipBuffer(req.file.buffer);
+        res.json({
+            success: true,
+            message: `Backup erfolgreich eingespielt! (${result.mangaCount} Manga-Reihen und ${result.restoredImagesCount} Bilddateien wiederhergestellt)`,
+            ...result
+        });
+    } catch (err) {
+        console.error('[Backup Restore] Error:', err);
         res.status(500).json({ error: 'Fehler beim Wiederherstellen des Backups: ' + err.message });
     }
 };
 
-app.post('/api/backup/restore', requireAdmin, uploadBackup.single('backup'), handleBackupRestore);
-app.post('/api/restore', requireAdmin, uploadBackup.single('backup'), handleBackupRestore);
+app.post('/api/backup/restore', requireAdmin, uploadBackup.single('backup'), handleUploadedBackupRestore);
+app.post('/api/restore', requireAdmin, uploadBackup.single('backup'), handleUploadedBackupRestore);
+
+// Daily automated backup scheduler (runs after 10s on boot, then every 24 hours)
+setTimeout(async () => {
+    try {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const existing = fs.readdirSync(backupsDir).filter(f => f.includes(todayStr));
+        if (existing.length === 0) {
+            console.log('[Auto-Backup] Creating daily automatic manga shelf backup snapshot...');
+            await createBackupSnapshot('daily-auto');
+            console.log('[Auto-Backup] Daily automatic backup completed successfully.');
+        }
+    } catch (e) {
+        console.warn('[Auto-Backup] Initial daily backup check failed:', e.message);
+    }
+}, 10000);
+
+setInterval(async () => {
+    try {
+        console.log('[Auto-Backup] Running scheduled daily backup snapshot...');
+        await createBackupSnapshot('daily-auto');
+        console.log('[Auto-Backup] Scheduled daily backup completed.');
+    } catch (e) {
+        console.error('[Auto-Backup] Scheduled backup failed:', e);
+    }
+}, 24 * 60 * 60 * 1000);
+
 
 
 // --- SERVE FRONTEND ---
