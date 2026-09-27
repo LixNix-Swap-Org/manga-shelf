@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, Plus, Download, LogOut, BookOpen, Trash2, 
@@ -7,9 +7,8 @@ import {
   Building2, ArrowUpDown, ChevronDown, UploadCloud, AlertTriangle,
   FileArchive, RefreshCw, BarChart3, TrendingUp, Calendar, Clock, 
   BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check,
-  Camera
+  LayoutGrid, List, Menu
 } from 'lucide-react';
-import IsbnScannerModal from './IsbnScannerModal';
 
 export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
@@ -18,9 +17,12 @@ export default function Dashboard({ user, onLogout }) {
   const [mangas, setMangas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const searchInputRef = useRef(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [publisherFilter, setPublisherFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('title_asc');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -87,9 +89,6 @@ export default function Dashboard({ user, onLogout }) {
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
   const [buyingId, setBuyingId] = useState(null);
-
-  // ISBN & Barcode Scanner Modal State
-  const [showScannerModal, setShowScannerModal] = useState(false);
 
   useEffect(() => {
     fetchMangas();
@@ -670,183 +669,174 @@ export default function Dashboard({ user, onLogout }) {
   return (
     <div className="min-h-screen pb-16">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-8 py-3.5">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 py-3">
+        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4">
           
-          {/* Logo & Title */}
-          <div className="flex items-center gap-3.5 w-full md:w-auto justify-between md:justify-start">
+          {/* Top Bar for Mobile & Tablet / Left item for Desktop */}
+          <div className="flex items-center justify-between gap-3 w-full xl:w-auto shrink-0">
+            {/* Logo & Title */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center shadow-lg shadow-brand-500/30">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center shadow-lg shadow-brand-500/30 shrink-0">
                 <BookOpen className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight">
                   MangaShelf
                 </h1>
-                <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
                   Sammlung & Tracker
                 </p>
               </div>
             </div>
 
-            {/* Mobile Actions */}
-            <div className="flex md:hidden items-center gap-2">
+            {/* Tablet & Mobile Quick Controls (< xl) */}
+            <div className="flex xl:hidden items-center gap-1.5 sm:gap-2">
               <button 
+                id="btn-mobile-shopping"
                 onClick={() => {
                   const next = activeMainView === 'shelf' ? 'shopping' : 'shelf';
                   setActiveMainView(next);
                   if (next === 'shopping') fetchShoppingList();
                 }}
-                className={`text-xs p-2 rounded-xl border transition-all ${
+                className={`p-2 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs ${
                   activeMainView === 'shopping'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                     : 'btn-secondary text-slate-300'
                 }`}
                 title="Einkaufsliste umschalten"
               >
                 <ShoppingCart className="w-4 h-4 text-emerald-400" />
-              </button>
-
-              <button 
-                onClick={handleOpenStats}
-                className="btn-secondary text-xs p-2 text-emerald-400 border-emerald-500/30"
-                title="Statistiken & Finanzen"
-              >
-                <BarChart3 className="w-4 h-4" />
+                <span className="hidden sm:inline">Einkauf</span>
+                {shoppingData && shoppingData.total_missing > 0 && (
+                  <span className="bg-emerald-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
+                    {shoppingData.total_missing}
+                  </span>
+                )}
               </button>
 
               {canEdit && (
                 <button 
                   onClick={handleOpenModal}
-                  className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5"
+                  className="hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm"
+                  title="Neuen Manga anlegen"
                 >
-                  <Plus className="w-4 h-4" /> Neu
-                </button>
-              )}
-
-              {user?.role === 'admin' && (
-                <button
-                  onClick={handleOpenUsersModal}
-                  className="btn-secondary text-xs p-2 text-brand-400"
-                  title="Benutzer verwalten"
-                >
-                  <Users className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Neuer Manga</span>
                 </button>
               )}
 
               <button 
-                onClick={() => setShowScannerModal(true)}
-                className="btn-secondary text-xs p-2 text-indigo-300 border-indigo-500/30"
-                title="Manga Barcode & ISBN scannen"
+                id="btn-mobile-menu-toggle"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="btn-secondary p-2 text-slate-300 hover:text-white"
+                title="Menü öffnen"
               >
-                <Camera className="w-4 h-4 text-indigo-400" />
-              </button>
-
-              <button onClick={onLogout} className="btn-secondary p-2 text-slate-400" title="Abmelden">
-                <LogOut className="w-4 h-4" />
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          {/* Search bar */}
-          <div className="flex items-center gap-2.5 bg-slate-950/70 border border-slate-700/80 rounded-xl px-3.5 py-2.5 w-full md:w-80 focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
+          {/* Search bar: Full width on < xl, Centered & spacious on >= xl */}
+          <div 
+            onClick={() => searchInputRef.current?.focus()}
+            className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 py-2.5 w-full xl:flex-1 xl:max-w-md xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all cursor-text shadow-inner"
+          >
             <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" />
             <input 
+              ref={searchInputRef}
+              id="main-search-input"
               type="text" 
               placeholder="Titel, Autor oder Verlag suchen..." 
-              className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 text-sm" 
+              className="w-full min-w-0 bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-sm" 
               value={search} 
               onChange={e => setSearch(e.target.value)} 
             />
             {search && (
               <button 
                 type="button"
-                onClick={() => setSearch('')}
-                className="text-slate-400 hover:text-white shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearch('');
+                  searchInputRef.current?.focus();
+                }}
+                className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800 shrink-0 transition-colors"
+                title="Suche zurücksetzen"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* Action buttons (Desktop) */}
-          <div className="hidden md:flex items-center gap-2.5">
+          {/* Desktop Action buttons (>= xl) */}
+          <div className="hidden xl:flex items-center gap-2 shrink-0">
             <button 
+              id="btn-open-stats"
               onClick={handleOpenStats} 
-              className="btn-secondary flex items-center gap-2 text-sm text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm"
+              className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-3"
               title="Statistik- & Finanz-Dashboard öffnen"
             >
-              <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken & Finanzen
-            </button>
-
-            <button 
-              onClick={() => setShowScannerModal(true)}
-              className="btn-secondary flex items-center gap-2 text-sm text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/10 shadow-sm"
-              title="Manga Barcode im Buchladen scannen oder ISBN abfragen"
-            >
-              <Camera className="w-4 h-4 text-indigo-400" /> Barcode-Scanner
+              <BarChart3 className="w-4 h-4 text-emerald-400" /> 
+              <span>Statistiken & Finanzen</span>
             </button>
 
             {canEdit && (
               <button 
+                id="btn-open-add-manga"
                 onClick={handleOpenModal} 
-                className="btn-primary flex items-center gap-2 text-sm shadow-md"
+                className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-3"
               >
-                <Plus className="w-4 h-4" /> Neuer Manga
+                <Plus className="w-4 h-4" /> 
+                <span>Neuer Manga</span>
               </button>
             )}
 
             {user?.role === 'admin' && (
               <>
                 <button
+                  id="btn-open-users"
                   onClick={handleOpenUsersModal}
-                  className="btn-secondary flex items-center gap-2 text-sm text-slate-200"
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-3"
                   title="Benutzer anlegen und verwalten"
                 >
-                  <Users className="w-4 h-4 text-brand-400" /> Benutzer
+                  <Users className="w-4 h-4 text-brand-400" /> 
+                  <span>Benutzer</span>
                 </button>
 
-                <a 
-                  href="/api/backup" 
-                  className="btn-secondary flex items-center gap-2 text-sm text-slate-200" 
-                  download
-                  title="Sicherung der Datenbank und Coverbilder herunterladen"
-                >
-                  <Download className="w-4 h-4 text-sky-400" /> Backup
-                </a>
-
                 <button
+                  id="btn-open-backups"
                   onClick={handleOpenRestoreModal}
-                  className="btn-secondary flex items-center gap-2 text-sm text-slate-200 hover:text-emerald-400 transition-colors"
-                  title="Backup-Zentrale, automatische Snapshots & Wiederherstellung"
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-3"
+                  title="Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung"
                 >
-                  <UploadCloud className="w-4 h-4 text-emerald-400" /> Backups
+                  <UploadCloud className="w-4 h-4 text-emerald-400" /> 
+                  <span>Backups</span>
                 </button>
               </>
             )}
 
-            <div className="h-6 w-[1px] bg-slate-800 mx-1"></div>
+            <div className="h-6 w-[1px] bg-slate-800 mx-0.5"></div>
 
-            <div className="flex items-center gap-2 text-xs bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/50">
+            <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-700/50">
               <span className="text-slate-400">User:</span>
               <span className="font-semibold text-slate-200">{user?.username}</span>
               {user?.role === 'admin' ? (
-                <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
                   Admin
                 </span>
               ) : isVisitor ? (
-                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
                   Gast
                 </span>
               ) : (
-                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
                   Editor
                 </span>
               )}
             </div>
 
             <button 
+              id="btn-logout"
               onClick={onLogout} 
               className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors" 
               title="Abmelden"
@@ -856,6 +846,69 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
         </div>
+
+        {/* Dropdown Menu Drawer for < xl */}
+        {mobileMenuOpen && (
+          <div className="xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-7xl mx-auto">
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Angemeldet als:</span>
+                <span className="font-bold text-white">{user?.username}</span>
+              </div>
+              <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold">
+                {user?.role}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                id="btn-mobile-menu-stats"
+                onClick={() => { setMobileMenuOpen(false); handleOpenStats(); }}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30"
+              >
+                <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken
+              </button>
+
+              {canEdit && (
+                <button 
+                  id="btn-mobile-menu-add"
+                  onClick={() => { setMobileMenuOpen(false); handleOpenModal(); }}
+                  className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Neuer Manga
+                </button>
+              )}
+
+              {user?.role === 'admin' && (
+                <>
+                  <button 
+                    id="btn-mobile-menu-users"
+                    onClick={() => { setMobileMenuOpen(false); handleOpenUsersModal(); }}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
+                  >
+                    <Users className="w-4 h-4 text-brand-400" /> Benutzer
+                  </button>
+
+                  <button 
+                    id="btn-mobile-menu-backups"
+                    onClick={() => { setMobileMenuOpen(false); handleOpenRestoreModal(); }}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
+                  >
+                    <UploadCloud className="w-4 h-4 text-emerald-400" /> Backups
+                  </button>
+                </>
+              )}
+            </div>
+
+            <button 
+              id="btn-mobile-menu-logout"
+              onClick={onLogout} 
+              className="w-full btn-secondary text-xs py-2 text-red-300 hover:bg-red-950/40 border-red-900/40 flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-4 h-4 text-red-400" /> Abmelden
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Container */}
@@ -865,6 +918,7 @@ export default function Dashboard({ user, onLogout }) {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
           <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
             <button
+              id="btn-nav-shelf"
               onClick={() => setActiveMainView('shelf')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                 activeMainView === 'shelf'
@@ -876,6 +930,7 @@ export default function Dashboard({ user, onLogout }) {
               <span>Sammlung ({mangas.length})</span>
             </button>
             <button
+              id="btn-nav-shopping"
               onClick={() => {
                 setActiveMainView('shopping');
                 fetchShoppingList();
@@ -908,66 +963,66 @@ export default function Dashboard({ user, onLogout }) {
         {activeMainView === 'shelf' && (
           <>
             {/* Quick Stats Bar */}
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
-          <div className="glass-panel p-4 rounded-2xl flex items-center gap-3.5 border border-slate-800/80">
-            <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
-              <Library className="w-5 h-5 text-sky-400" />
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
+          <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
+              <Library className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400" />
             </div>
-            <div>
-              <p className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Reihen</p>
-              <p className="text-xl sm:text-2xl font-extrabold text-white">{totalSeries}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Reihen</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-white">{totalSeries}</p>
             </div>
           </div>
 
-          <div className="glass-panel p-4 rounded-2xl flex items-center gap-3.5 border border-slate-800/80">
-            <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shrink-0">
-              <Layers className="w-5 h-5 text-indigo-400" />
+          <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
             </div>
-            <div>
-              <p className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Bände im Besitz</p>
-              <p className="text-xl sm:text-2xl font-extrabold text-white">{totalOwnedVolumes}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Bände im Besitz</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-white">{totalOwnedVolumes}</p>
             </div>
           </div>
 
           <div 
             onClick={handleOpenStats}
-            className="glass-panel p-4 rounded-2xl flex items-center gap-3.5 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900/90 cursor-pointer transition-all duration-200 group"
+            className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900/90 cursor-pointer transition-all duration-200 group"
             title="Klicken für das vollständige Finanz- & Statistik-Dashboard"
           >
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-hover:scale-105 group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
-              <Coins className="w-5 h-5 text-emerald-400" />
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-hover:scale-105 group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
+              <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Sammlungswert</p>
-                <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Details ↗</span>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium truncate">Sammlungswert</p>
+                <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-semibold hidden sm:inline">Details ↗</span>
               </div>
-              <p className="text-xl sm:text-2xl font-extrabold text-emerald-400 font-mono truncate">
+              <p className="text-sm sm:text-xl lg:text-2xl font-extrabold text-emerald-400 font-mono tracking-tight whitespace-nowrap">
                 {totalCollectionValue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
               </p>
             </div>
           </div>
 
-          <div className="glass-panel p-4 rounded-2xl flex items-center gap-3.5 border border-slate-800/80">
-            <div className="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-purple-400" />
+          <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
             </div>
-            <div>
-              <p className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Abgeschlossen</p>
-              <p className="text-xl sm:text-2xl font-extrabold text-white">{completedSeries}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Abgeschlossen</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-white">{completedSeries}</p>
             </div>
           </div>
         </section>
 
         {/* Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 mb-6 p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
           {/* Status Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+          <div className="w-full sm:w-auto flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
             {['ALL', 'Laufend', 'Abgeschlossen', 'Pausiert', 'Geplant'].map(st => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0 ${
                   statusFilter === st 
                     ? 'bg-brand-600 text-white shadow-sm' 
                     : 'text-slate-400 hover:text-slate-200'
@@ -979,14 +1034,14 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           {/* Publisher & Sort Controls */}
-          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 text-xs">
             {/* Publisher Filter */}
-            <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
+            <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
               <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
               <select
                 value={publisherFilter}
                 onChange={e => setPublisherFilter(e.target.value)}
-                className="filter-chip-select font-medium text-slate-200 group-hover:text-white"
+                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
               >
                 <option value="ALL">Alle Verlage</option>
                 {availablePublishers.map(pub => (
@@ -997,12 +1052,12 @@ export default function Dashboard({ user, onLogout }) {
             </label>
 
             {/* Sort Control */}
-            <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
+            <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
               <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="filter-chip-select font-medium text-slate-200 group-hover:text-white"
+                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
               >
                 <option value="title_asc">Titel (A → Z)</option>
                 <option value="title_desc">Titel (Z → A)</option>
@@ -1013,7 +1068,37 @@ export default function Dashboard({ user, onLogout }) {
               <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
             </label>
 
-            <div className="text-xs text-slate-400 ml-1">
+            {/* View Mode Toggle: Grid vs List */}
+            <div className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
+              <button
+                id="btn-view-grid"
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all ${
+                  viewMode === 'grid'
+                    ? 'bg-brand-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Plakative Rasteransicht"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                id="btn-view-list"
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-lg transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-brand-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Kompakte Listenansicht"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-400 ml-1 hidden sm:inline">
               {filtered.length} {filtered.length === 1 ? 'Manga' : 'Mangas'}
             </div>
           </div>
@@ -1048,8 +1133,122 @@ export default function Dashboard({ user, onLogout }) {
               </button>
             )}
           </div>
+        ) : viewMode === 'list' ? (
+          /* COMPACT LIST VIEW */
+          <div className="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl animate-fade-in">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-4 w-16">Cover</th>
+                    <th className="py-3 px-4">Titel & Autor</th>
+                    <th className="py-3 px-4 hidden sm:table-cell">Verlag</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Bände / Fortschritt</th>
+                    <th className="py-3 px-4 text-right hidden md:table-cell">Wert</th>
+                    <th className="py-3 px-4 text-right w-24">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {filtered.map(manga => {
+                    const total = manga.total_volumes || 0;
+                    const owned = manga.owned_volumes || 0;
+                    const pct = total > 0 ? Math.min(100, Math.round((owned / total) * 100)) : null;
+
+                    return (
+                      <tr key={manga.id} className="hover:bg-slate-850/60 transition-colors group">
+                        <td className="py-2.5 px-4">
+                          <Link to={`/manga/${manga.id}`} className="block w-10 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0">
+                            {manga.cover_image && !failedImages[manga.id] ? (
+                              <img 
+                                src={manga.cover_image} 
+                                alt="" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                onError={() => setFailedImages(prev => ({ ...prev, [manga.id]: true }))} 
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                <BookOpen className="w-4 h-4" />
+                              </div>
+                            )}
+                          </Link>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1">
+                            {manga.title}
+                          </Link>
+                          <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">
+                            {manga.author || 'Kein Autor'}
+                            {manga.alt_title && <span className="text-slate-500 ml-1.5">({manga.alt_title})</span>}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 hidden sm:table-cell text-slate-300">
+                          {manga.publisher ? (
+                            <span className="flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                              <span>{manga.publisher}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${getStatusBadge(manga.status)}`}>
+                            {manga.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white font-mono">
+                              {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
+                            </span>
+                            {pct !== null && (
+                              <span className="text-[10px] text-slate-400 font-mono">({pct}%)</span>
+                            )}
+                          </div>
+                          {pct !== null && (
+                            <div className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1">
+                              <div 
+                                className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 rounded-full" 
+                                style={{ width: `${pct}%` }} 
+                              />
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 text-right hidden md:table-cell font-mono font-bold text-emerald-400">
+                          {manga.total_value > 0 
+                            ? `${manga.total_value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` 
+                            : '—'}
+                        </td>
+                        <td className="py-2.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Link 
+                              to={`/manga/${manga.id}`} 
+                              className="btn-secondary py-1 px-2.5 text-xs text-brand-400 hover:text-white"
+                            >
+                              Details
+                            </Link>
+                            {canEdit && (
+                              <button
+                                onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
+                                className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors"
+                                title="Manga löschen"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+          /* POSTER / GRID VIEW */
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-fade-in">
             {filtered.map(manga => {
               const total = manga.total_volumes || 0;
               const owned = manga.owned_volumes || 0;
@@ -1270,13 +1469,6 @@ export default function Dashboard({ user, onLogout }) {
               >
                 Zurück zur Sammlung
               </button>
-              <button
-                onClick={() => setShowScannerModal(true)}
-                className="btn-secondary text-xs px-4 py-2 flex items-center gap-1.5 text-indigo-300 border-indigo-500/30"
-              >
-                <Camera className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Barcode im Laden scannen</span>
-              </button>
             </div>
           </div>
         )}
@@ -1392,6 +1584,7 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
               </div>
               <button 
+                id="btn-close-add-modal-x"
                 onClick={closeAddModal}
                 aria-label="Schließen"
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
@@ -1579,8 +1772,8 @@ export default function Dashboard({ user, onLogout }) {
                 </label>
                 <div className="flex flex-col sm:flex-row gap-3 items-center">
                   <input 
-                    type="url" 
-                    placeholder="https://example.com/cover.jpg" 
+                    type="text" 
+                    placeholder="https://example.com/cover.jpg oder /uploads/..." 
                     className="input-field flex-1 text-sm"
                     value={form.cover_image} 
                     onChange={e => {
@@ -1624,6 +1817,7 @@ export default function Dashboard({ user, onLogout }) {
               {/* Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
                 <button 
+                  id="btn-close-add-modal"
                   type="button" 
                   onClick={closeAddModal} 
                   className="btn-secondary text-sm"
@@ -1671,6 +1865,7 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
               </div>
               <button 
+                id="btn-close-users-modal-x"
                 onClick={() => setShowUsersModal(false)}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
               >
@@ -1839,6 +2034,7 @@ export default function Dashboard({ user, onLogout }) {
             {/* Close Button */}
             <div className="flex justify-end pt-5 mt-5 border-t border-slate-800">
               <button 
+                id="btn-close-users-modal"
                 type="button" 
                 onClick={() => setShowUsersModal(false)} 
                 className="btn-secondary text-xs"
@@ -1856,6 +2052,7 @@ export default function Dashboard({ user, onLogout }) {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in">
           <div className="glass-panel p-6 sm:p-7 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700/80 shadow-2xl relative overflow-hidden">
             <button 
+              id="btn-close-restore-modal-x"
               onClick={() => !restoring && setShowRestoreModal(false)}
               className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
               disabled={restoring}
@@ -2114,6 +2311,7 @@ export default function Dashboard({ user, onLogout }) {
             {/* Footer */}
             <div className="pt-3 border-t border-slate-800 flex justify-end shrink-0">
               <button
+                id="btn-close-restore-modal"
                 type="button"
                 onClick={() => setShowRestoreModal(false)}
                 className="btn-secondary text-xs px-4 py-2"
@@ -2147,6 +2345,7 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
               </div>
               <button 
+                id="btn-close-stats-modal-x"
                 onClick={() => setShowStatsModal(false)} 
                 className="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
                 title="Schließen"
@@ -2398,14 +2597,20 @@ export default function Dashboard({ user, onLogout }) {
                                 className="group p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-brand-500/50 hover:bg-slate-850 transition-all flex flex-col items-center text-center"
                               >
                                 <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden mb-2 bg-slate-950 border border-slate-800">
-                                  {ts.cover_image ? (
-                                    <img src={ts.cover_image} alt={ts.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                  {ts.cover_image && !failedImages[`ts-${ts.id}`] ? (
+                                    <img 
+                                      src={ts.cover_image} 
+                                      alt="" 
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                      onError={() => setFailedImages(prev => ({ ...prev, [`ts-${ts.id}`]: true }))}
+                                    />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-slate-700">
-                                      <BookOpen className="w-6 h-6" />
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-gradient-to-b from-slate-900 to-slate-950 p-2">
+                                      <BookOpen className="w-6 h-6 opacity-40 mb-1" />
+                                      <span className="text-[10px] text-slate-500 line-clamp-1">Kein Cover</span>
                                     </div>
                                   )}
-                                  <span className="absolute top-1 left-1 bg-black/80 text-amber-400 font-mono text-[10px] px-1.5 py-0.5 rounded font-bold">
+                                  <span className="absolute top-1 left-1 bg-black/90 text-amber-400 font-mono text-[10px] px-1.5 py-0.5 rounded font-bold border border-amber-500/30 z-10 shadow">
                                     #{idx + 1}
                                   </span>
                                 </div>
@@ -2659,6 +2864,7 @@ export default function Dashboard({ user, onLogout }) {
             {/* Modal Footer */}
             <div className="pt-4 mt-4 border-t border-slate-800 flex justify-end shrink-0">
               <button 
+                id="btn-close-stats-modal"
                 type="button" 
                 onClick={() => setShowStatsModal(false)} 
                 className="btn-secondary text-xs px-4 py-2"
@@ -2670,21 +2876,6 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         </div>
       )}
-
-      {/* ISBN & BARCODE SCANNER MODAL */}
-      <IsbnScannerModal
-        isOpen={showScannerModal}
-        onClose={() => setShowScannerModal(false)}
-        onMangaCreated={() => {
-          fetchMangas();
-          fetchShoppingList();
-        }}
-        onVolumeAdded={() => {
-          fetchMangas();
-          fetchShoppingList();
-        }}
-        canEdit={canEdit}
-      />
 
     </div>
   );

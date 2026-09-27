@@ -9,7 +9,6 @@ import {
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck
 } from 'lucide-react';
-import IsbnScannerModal from './IsbnScannerModal';
 
 export default function MangaDetail({ user }) {
   const { id } = useParams();
@@ -68,9 +67,6 @@ export default function MangaDetail({ user }) {
   // Cover upload state
   const [uploadingCover, setUploadingCover] = useState(false);
   const [failedCover, setFailedCover] = useState(false);
-
-  // ISBN Scanner Modal state
-  const [showScannerModal, setShowScannerModal] = useState(false);
 
   useEffect(() => {
     fetchManga();
@@ -921,13 +917,6 @@ export default function MangaDetail({ user }) {
             {/* Quick Actions */}
             {canEdit && (
               <div className="flex flex-wrap items-center gap-2">
-                <button 
-                  onClick={() => setShowScannerModal(true)} 
-                  className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 shadow-sm"
-                  title="Manga-Band per Barcode scannen"
-                >
-                  <Camera className="w-3.5 h-3.5 text-indigo-400" /> Barcode scannen
-                </button>
                 <button 
                   onClick={() => {
                     setBatchReadUpTo('');
@@ -2102,15 +2091,6 @@ export default function MangaDetail({ user }) {
           </div>
         </div>
       )}
-
-      {/* ISBN & BARCODE SCANNER MODAL */}
-      <IsbnScannerModal
-        isOpen={showScannerModal}
-        onClose={() => setShowScannerModal(false)}
-        onVolumeAdded={fetchManga}
-        onMangaCreated={fetchManga}
-        canEdit={canEdit}
-      />
 
     </div>
   );

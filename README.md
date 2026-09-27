@@ -2,9 +2,13 @@
 
 Diese Anwendung ist ein leichtgewichtiges Manga-Verwaltungssystem, das speziell für das einfache Deployment auf Pterodactyl ohne Git-Overhead konzipiert wurde.
 
-## 1. Lokales Bauen & Packen (ZIP-Erstellung)
+## 1. Schnelldownload (GitHub Releases) oder Lokales Bauen
 
-Um die Anwendung für Pterodactyl vorzubereiten, musst du sie lokal bauen. Du benötigst Node.js (v18+) auf deinem PC.
+### Option A: Fertige ZIP direkt von GitHub herunterladen (Empfohlen)
+Unter **[GitHub Releases](https://github.com/MoltresHD/manga-shelf/releases)** findest du für jede Version die fertig gepackte `pterodactyl-manga-shelf.zip` inklusive kompiliertem Frontend. Lade einfach die ZIP der gewünschten Version herunter und entpacke sie auf deinem Pterodactyl-Server!
+
+### Option B: Lokales Bauen & Packen (ZIP-Erstellung)
+Um die Anwendung selbst zu bauen oder ein neues Release zu veröffentlichen, benötigst du Node.js (v18+) auf deinem PC.
 
 1. Öffne ein Terminal im Projektordner.
 2. Installiere die Backend-Abhängigkeiten (nur für das Packaging Script nötig, optional falls du manuell zippst):

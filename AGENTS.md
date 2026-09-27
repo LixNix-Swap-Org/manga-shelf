@@ -238,17 +238,14 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * Tab-/View-Umschalter `activeMainView: 'shelf' | 'shopping'`.
    * Filtern nach Verlagschips, Echtzeit-Suche und Schnellkauf-Button (`handleQuickBuy`).
 
-### 🔹 Fall G: Barcode- & ISBN-Scanner (DNB API & Kamera) anpassen
+### 🔹 Fall G: ISBN- & Metadaten-Lookup (DNB API)
 1. **Backend API (`index.js`):**
    * Route `GET /api/lookup/isbn?isbn=...`: Fragt die SRU MARC21-XML-Schnittstelle der Deutschen Nationalbibliothek (DNB) ab.
    * Parst deutsche Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Seiten (`300$a`) und Festpreis in EUR (`020$c`).
    * Gleicht die gefundene Reihe und den Band automatisch mit der SQLite-Datenbank ab (`matched_manga`, `matched_volume`).
-2. **Frontend UI:**
-   * `frontend/src/IsbnScannerModal.jsx`: Bindet `html5-qrcode` mit Rückkamera-Priorisierung (`facingMode: "environment"`) ein.
-   * Erkennt EAN-13 Barcodes von Buchrücken und bietet manuelle ISBN-Eingabe.
-   * Erkennt sofort, ob ein Band bereits im Regal steht, auf der Einkaufsliste fehlt oder eine neue Reihe ist.
-   * Schnellaktionen: "Ins Regal stellen (+ Besitz)", "Auf Einkaufsliste setzen", "Neue Reihe anlegen".
-   * Eingebunden in `Dashboard.jsx` (Header-Button "Scanner" & Shopping-Empty-State) sowie `MangaDetail.jsx` (Checklisten-Aktionen).
+2. **Architektur-Hinweis (Kamera-Feature):**
+   * Das experimentelle Kamera-Live-Scanning wurde ausgebaut, da mobile Web-Browser bei HTTP-Deployments ohne SSL (z. B. Standard-Pterodactyl-Ports) WebRTC-Kamerazugriff sicherheitsbedingt sperren.
+   * Der Fokus liegt auf superschneller, schlanker UI (Bundle-Größe um über 50 % reduziert).
 
 ### 🔹 Fall H: Backup-System & automatische Snapshots anpassen
 1. **Backend API & Scheduler (`index.js`):**
@@ -281,13 +278,34 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
   ```powershell
   node test-e2e-suite.js
   ```
+* Für vollständige visuelle Regressionstests, Bildschirmfoto-Generierung aller Modals und Mobile-Check:
+  ```powershell
+  node test-deep-e2e.js
+  ```
 
-### Paketierung für Pterodactyl (Release ZIP)
-* Ein einziger Befehl kompiliert das Frontend und bündelt das Backend:
+### Paketierung & GitHub Releases
+* **Nur ZIP bauen:**
   ```powershell
   npm run package
   ```
-* Ergebnis: `pterodactyl-manga-shelf.zip` im Root- und `dist_pack/`-Verzeichnis.
+  * Ergebnis: `pterodactyl-manga-shelf.zip` im Root- und `dist_pack/`-Verzeichnis.
+* **Automatisiertes Release auf GitHub erstellen & ZIP hochladen:**
+  ```powershell
+  npm run release
+  # oder mit gezielter Version / Semver:
+  node release.js patch   # Erhöht z.B. von v2.1.0 auf v2.1.1
+  node release.js minor   # Erhöht z.B. auf v2.2.0
+  node release.js v2.1.0  # Explizite Version
+  ```
+  * Was passiert automatisch:
+    1. Baut das Frontend neu (`npm run build`).
+    2. Erzeugt die saubere `pterodactyl-manga-shelf.zip`.
+    3. Synchronisiert die Version in `package.json` und `frontend/package.json`.
+    4. Erstellt einen Git-Commit und den Git-Tag `vX.Y.Z`.
+    5. Pusht Commit und Tag zu GitHub.
+    6. Erstellt via GitHub CLI (`gh release create`) den offiziellen GitHub-Release mit Release-Notes und hängt die ZIP-Datei als Download-Asset an.
+* **GitHub Releases Übersicht:**
+  * Alle Releases und deren ZIP-Archive sind jederzeit unter `https://github.com/MoltresHD/manga-shelf/releases` einsehbar und versioniert.
 
 ### Git & GitHub Deployment
 * Repository: `https://github.com/MoltresHD/manga-shelf`
