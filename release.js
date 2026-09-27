@@ -93,15 +93,12 @@ async function main() {
     const releaseTitle = `Manga Shelf ${tag}`;
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
-#### Neu in dieser Version:
-- ✨ **Special Edition Support (\`special_edition\`):** Eigener Eintragstyp für limitierte Sonderausgaben. Nummerierte Special Editions ordnen sich automatisch chronologisch direkt neben dem zugehörigen Hauptband ein (Standard Band 1 -> Band 1 Special Edition -> Band 2).
-- 📦 **Sammelschuber & Box Sets (\`schuber\`):** Eigener Eintragstyp für Schuber. Schuber ordnen sich harmonisch hinter den regulären Bänden ein (z. B. One Piece Band 1 ganz oben, Schuber 1-4 am Ende).
-- 🏷️ **Dynamische Filter-Chips:** Bände-Checkliste zeigt nun automatisch Schnellfilter-Chips \`[✨ Special Editions (N)]\` und \`[📦 Nur Schuber (N)]\`, sobald die Reihe entsprechende Bände enthält.
-- 🎨 **Modernisiertes Status-UI (Segmented Control):**
-  - Ersetzung der engen, abgeschnittenen Dropdown-Menüs durch haptische Segmented Control Pill-Switches (\`[✓ Im Besitz]\` in Smaragdgrün vs. \`[✕ Fehlt noch]\` in Korallrot).
-  - Großzügige 2-Zeilen-Hierarchie im Bearbeiten-Modal: Volle Breite für den Eintragstyp ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special") – kein Text wird mehr abgeschnitten!
-  - Einheitliche Status-Pill-Buttons in der Schnellerfassung und im Serien-Band-Generator.
-- 📲 **PWA & Performance:** Volle Progressive Web App Unterstützung, Gzip/Brotli-Kompression und persistente Filtereinstellungen.
+#### Neu & Verbesserungen in dieser Version:
+- 📊 **Statistik-Dashboard Bugfix:** Die exakte Bandanzahl in den Verlagsbalken („Größte Verlage im Regal“ & Verlagsdiagramm) wird jetzt wieder lückenlos und sauber formatiert angezeigt (z. B. \`343 Bände (28.9%)\`).
+- 🛡️ **E2E Test-Suite Hardening:** Die automatisierte Test-Suite arbeitet jetzt mit isolierten Test-Identifikatoren (\`__TEST_AUTOMATION_SERIES__\`), wodurch reale Mangas in der Datenbank dauerhaft vor Test-Manipulationen geschützt sind.
+- 📈 **100% Konsistenz mit Google Sheets / Excel:** Centgenaue Abstimmung aller 139 Reihen, 1.185 Bände und 10.617,31 € Sammlungs-Gesamtwert inklusive synchronisierter Benutzer-Lesestände.
+- ✨ **Special Edition & Schuber Support:** Volle Unterstützung für \`special_edition\` und \`schuber\` mit chronologischer Sortierung, Filter-Chips und farbkodierten Badges.
+- 🎨 **Segmented Control Status UI:** Ergonomische Pill-Switches (\`[✓ Im Besitz]\` vs. \`[✕ Fehlt noch]\`) in allen Formularen.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;

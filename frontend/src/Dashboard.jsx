@@ -2708,7 +2708,7 @@ export default function Dashboard({ user, onLogout }) {
                                 <div className="flex justify-between items-center text-xs">
                                   <span className="font-medium text-slate-200 truncate">{pub.publisher}</span>
                                   <span className="font-mono text-slate-400 shrink-0">
-                                    <strong className="text-white">{pub.volumes_count}</strong> Bände ({pub.percentage}%)
+                                    <strong className="text-white">{pub.volume_count ?? pub.volumes_count}</strong> Bände ({pub.percentage}%)
                                   </span>
                                 </div>
                                 <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
@@ -2802,7 +2802,7 @@ export default function Dashboard({ user, onLogout }) {
                                   key={pub.publisher}
                                   className={`${colorClass} hover:opacity-90 transition-opacity`}
                                   style={{ width: `${pub.percentage}%` }}
-                                  title={`${pub.publisher}: ${pub.percentage}% (${pub.volumes_count} Bände)`}
+                                  title={`${pub.publisher}: ${pub.percentage}% (${pub.volume_count ?? pub.volumes_count} Bände)`}
                                 />
                               );
                             })}
@@ -2848,7 +2848,7 @@ export default function Dashboard({ user, onLogout }) {
 
                                 <div className="flex items-center gap-4 text-right shrink-0">
                                   <div>
-                                    <span className="font-mono font-bold text-white text-sm">{pub.volumes_count}</span>
+                                    <span className="font-mono font-bold text-white text-sm">{pub.volume_count ?? pub.volumes_count}</span>
                                     <span className="text-[11px] text-slate-400 block">Bände</span>
                                   </div>
                                   <div className="min-w-[80px]">

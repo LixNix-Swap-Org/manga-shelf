@@ -1013,6 +1013,7 @@ app.get('/api/stats', requireAuth, (req, res) => {
             publisher: p.pub_name,
             series_count: p.series_count,
             volume_count: p.volume_count,
+            volumes_count: p.volume_count,
             total_value: Math.round((p.total_value || 0) * 100) / 100,
             percentage: totalOwnedVolumes > 0 ? Math.round((p.volume_count / totalOwnedVolumes) * 1000) / 10 : 0
         }));

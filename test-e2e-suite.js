@@ -236,13 +236,13 @@ async function runTestSuite() {
     });
     await new Promise(r => setTimeout(r, 600));
 
-    const testMangaTitle = 'Jujutsu Kaisen';
+    const testMangaTitle = '__TEST_AUTOMATION_SERIES__';
     console.log(`Filling out form for "${testMangaTitle}"...`);
     await page.type('input[placeholder*="z.B. One Piece"]', testMangaTitle);
-    await page.type('input[placeholder*="z.B. Eiichiro Oda"]', 'Gege Akutami');
-    await page.type('input[placeholder*="z.B. Carlsen"]', 'Crunchyroll');
-    await page.type('input[placeholder*="z.B. 108"]', '28');
-    await page.type('textarea', 'Yuji Itadori ist ein Schüler mit erstaunlichen körperlichen Fähigkeiten...');
+    await page.type('input[placeholder*="z.B. Eiichiro Oda"]', 'Automated Test Author');
+    await page.type('input[placeholder*="z.B. Carlsen"]', 'Test Verlag');
+    await page.type('input[placeholder*="z.B. 108"]', '10');
+    await page.type('textarea', 'Dies ist eine temporäre Testreihe für die automatisierte Test-Suite...');
 
     await page.screenshot({ path: path.join(screenshotsDir, 'test5_manga_form_filled.png') });
 
