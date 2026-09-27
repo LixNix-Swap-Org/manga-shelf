@@ -18,10 +18,18 @@ export default function Dashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const searchInputRef = useRef(null);
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [publisherFilter, setPublisherFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState('title_asc');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [statusFilter, setStatusFilter] = useState(() => {
+    try { return localStorage.getItem('mangashelf_status_filter') || 'ALL'; } catch (_) { return 'ALL'; }
+  });
+  const [publisherFilter, setPublisherFilter] = useState(() => {
+    try { return localStorage.getItem('mangashelf_publisher_filter') || 'ALL'; } catch (_) { return 'ALL'; }
+  });
+  const [sortBy, setSortBy] = useState(() => {
+    try { return localStorage.getItem('mangashelf_sort_by') || 'title_asc'; } catch (_) { return 'title_asc'; }
+  });
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('mangashelf_view_mode') || 'grid'; } catch (_) { return 'grid'; }
+  }); // 'grid' | 'list'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -93,6 +101,38 @@ export default function Dashboard({ user, onLogout }) {
   useEffect(() => {
     fetchMangas();
     fetchShoppingList();
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem('mangashelf_status_filter', statusFilter); } catch (_) {}
+  }, [statusFilter]);
+
+  useEffect(() => {
+    try { localStorage.setItem('mangashelf_publisher_filter', publisherFilter); } catch (_) {}
+  }, [publisherFilter]);
+
+  useEffect(() => {
+    try { localStorage.setItem('mangashelf_sort_by', sortBy); } catch (_) {}
+  }, [sortBy]);
+
+  useEffect(() => {
+    try { localStorage.setItem('mangashelf_view_mode', viewMode); } catch (_) {}
+  }, [viewMode]);
+
+  // Keyboard shortcuts: '/' to focus search, 'Escape' to blur/clear
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearch('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const fetchShoppingList = async () => {
@@ -613,18 +653,56 @@ export default function Dashboard({ user, onLogout }) {
     mangas.map(m => m.publisher && m.publisher.trim()).filter(Boolean)
   )).sort((a, b) => a.localeCompare(b));
 
+  // Helper for reading progress calculation (0 - 100%)
+  const getMangaProgress = (m) => {
+    const total = m.owned_volumes || m.volume_count || 0;
+    if (total === 0) return 0;
+    const read = m.read_volume_count || 0;
+    return Math.min(100, Math.round((read / total) * 100));
+  };
+
+  // Status Filter Counts for badges
+  const filterCounts = {
+    ALL: mangas.length,
+    Laufend: mangas.filter(m => m.status === 'Laufend').length,
+    Abgeschlossen: mangas.filter(m => m.status === 'Abgeschlossen').length,
+    UNREAD: mangas.filter(m => {
+      const total = m.owned_volumes || m.volume_count || 0;
+      return total > 0 && (m.read_volume_count || 0) < total;
+    }).length,
+    READ_ALL: mangas.filter(m => {
+      const total = m.owned_volumes || m.volume_count || 0;
+      return total > 0 && (m.read_volume_count || 0) >= total;
+    }).length,
+    Pausiert: mangas.filter(m => m.status === 'Pausiert').length,
+    Geplant: mangas.filter(m => m.status === 'Geplant').length,
+  };
+
   // Filter & sort logic
   const filtered = mangas
     .filter(m => {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase().trim();
       const matchesSearch = 
+        !q ||
         m.title.toLowerCase().includes(q) || 
         (m.alt_title && m.alt_title.toLowerCase().includes(q)) ||
         (m.author && m.author.toLowerCase().includes(q)) ||
         (m.publisher && m.publisher.toLowerCase().includes(q));
       
       if (!matchesSearch) return false;
-      if (statusFilter !== 'ALL' && m.status !== statusFilter) return false;
+
+      // Status Filter logic
+      if (statusFilter === 'UNREAD') {
+        const total = m.owned_volumes || m.volume_count || 0;
+        if (total === 0 || (m.read_volume_count || 0) >= total) return false;
+      } else if (statusFilter === 'READ_ALL') {
+        const total = m.owned_volumes || m.volume_count || 0;
+        if (total === 0 || (m.read_volume_count || 0) < total) return false;
+      } else if (statusFilter !== 'ALL' && m.status !== statusFilter) {
+        return false;
+      }
+
+      // Publisher Filter logic
       if (publisherFilter !== 'ALL') {
         const p = (m.publisher && m.publisher.trim()) || '';
         if (p.toLowerCase() !== publisherFilter.toLowerCase()) return false;
@@ -633,6 +711,14 @@ export default function Dashboard({ user, onLogout }) {
     })
     .sort((a, b) => {
       switch (sortBy) {
+        case 'newest_first':
+          return (b.id || 0) - (a.id || 0);
+        case 'oldest_first':
+          return (a.id || 0) - (b.id || 0);
+        case 'progress_desc':
+          return getMangaProgress(b) - getMangaProgress(a) || (a.title || '').localeCompare(b.title || '');
+        case 'progress_asc':
+          return getMangaProgress(a) - getMangaProgress(b) || (a.title || '').localeCompare(b.title || '');
         case 'title_desc':
           return (b.title || '').localeCompare(a.title || '');
         case 'publisher_asc':
@@ -1014,27 +1100,40 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         </section>
 
-        {/* Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
-          {/* Status Tabs */}
-          <div className="w-full sm:w-auto flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
-            {['ALL', 'Laufend', 'Abgeschlossen', 'Pausiert', 'Geplant'].map(st => (
+        {/* Filter & Sort Toolbar */}
+        <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
+          {/* Status Tabs with Count Badges */}
+          <div className="w-full xl:w-auto flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
+            {[
+              { id: 'ALL', label: 'Alle', count: filterCounts.ALL },
+              { id: 'Laufend', label: 'Laufend', count: filterCounts.Laufend },
+              { id: 'Abgeschlossen', label: 'Abgeschlossen', count: filterCounts.Abgeschlossen },
+              { id: 'UNREAD', label: 'Ungelesen', count: filterCounts.UNREAD },
+              { id: 'READ_ALL', label: 'Gelesen', count: filterCounts.READ_ALL },
+              { id: 'Pausiert', label: 'Pausiert', count: filterCounts.Pausiert },
+              { id: 'Geplant', label: 'Geplant', count: filterCounts.Geplant },
+            ].filter(tab => tab.id === 'ALL' || tab.count > 0).map(tab => (
               <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0 ${
-                  statusFilter === st 
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                  statusFilter === tab.id 
                     ? 'bg-brand-600 text-white shadow-sm' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`}
               >
-                {st === 'ALL' ? 'Alle anzeigen' : st}
+                <span>{tab.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none ${
+                  statusFilter === tab.id ? 'bg-brand-700/90 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
 
-          {/* Publisher & Sort Controls */}
-          <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 text-xs">
+          {/* Publisher, Sort, Reset & View Mode Controls */}
+          <div className="w-full xl:w-auto flex flex-wrap items-center justify-between xl:justify-start gap-2 text-xs">
             {/* Publisher Filter */}
             <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
               <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
@@ -1057,16 +1156,36 @@ export default function Dashboard({ user, onLogout }) {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
+                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
               >
-                <option value="title_asc">Titel (A → Z)</option>
-                <option value="title_desc">Titel (Z → A)</option>
-                <option value="publisher_asc">Verlag (A → Z)</option>
-                <option value="volumes_desc">Meiste Bände</option>
-                <option value="value_desc">Höchster Wert (€)</option>
+                <option value="newest_first">✨ Zuletzt hinzugefügt</option>
+                <option value="title_asc">🔤 Titel (A → Z)</option>
+                <option value="title_desc">🔤 Titel (Z → A)</option>
+                <option value="progress_desc">📈 Fortschritt (Höchster %)</option>
+                <option value="progress_asc">📖 Ungelesen zuerst</option>
+                <option value="volumes_desc">📚 Meiste Bände</option>
+                <option value="value_desc">💰 Höchster Wert (€)</option>
+                <option value="publisher_asc">🏢 Verlag (A → Z)</option>
+                <option value="oldest_first">⏳ Zuerst hinzugefügt</option>
               </select>
               <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
             </label>
+
+            {/* Reset Filter Button (visible when filter active) */}
+            {(statusFilter !== 'ALL' || publisherFilter !== 'ALL' || search) && (
+              <button
+                onClick={() => {
+                  setStatusFilter('ALL');
+                  setPublisherFilter('ALL');
+                  setSearch('');
+                }}
+                className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"
+                title="Alle Filter und Suche zurücksetzen"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Zurücksetzen</span>
+              </button>
+            )}
 
             {/* View Mode Toggle: Grid vs List */}
             <div className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
@@ -1202,8 +1321,16 @@ export default function Dashboard({ user, onLogout }) {
                             <span className="font-bold text-white font-mono">
                               {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
                             </span>
-                            {pct !== null && (
-                              <span className="text-[10px] text-slate-400 font-mono">({pct}%)</span>
+                            {manga.read_volume_count > 0 ? (
+                              <span className={`text-[10px] font-mono ${
+                                manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0)
+                                  ? 'text-emerald-400 font-bold' 
+                                  : 'text-sky-300'
+                              }`}>
+                                ({manga.read_volume_count} gelesen • {Math.round(((manga.read_volume_count || 0) / (manga.owned_volumes || manga.volume_count || 1)) * 100)}%)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 font-mono">(Ungelesen)</span>
                             )}
                           </div>
                           {pct !== null && (
@@ -1287,6 +1414,20 @@ export default function Dashboard({ user, onLogout }) {
                           {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
                         </span>
                       </div>
+
+                      {/* Reading Progress Badge */}
+                      {manga.read_volume_count > 0 && (
+                        <div className="absolute top-9 right-2 pointer-events-none">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1 border shadow-sm ${
+                            manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0)
+                              ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'
+                              : 'bg-slate-950/85 border-sky-500/40 text-sky-300'
+                          }`}>
+                            <BookCheck className="w-2.5 h-2.5" />
+                            <span>{manga.read_volume_count}{manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0) ? ' ✓' : `/${manga.owned_volumes || manga.volume_count}`}</span>
+                          </span>
+                        </div>
+                      )}
 
                       {/* Progress Bar at bottom of poster */}
                       {pct !== null && (

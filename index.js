@@ -18,6 +18,7 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
+const compression = require('compression');
 const http = require('http');
 const https = require('https');
 require('dotenv').config();
@@ -30,6 +31,9 @@ const app = express();
 // Allows Express to correctly identify HTTPS (req.secure) and client IPs behind proxies
 app.set('trust proxy', true);
 
+// Enable Gzip/Brotli response compression for blazing fast API responses
+app.use(compression());
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
@@ -37,8 +41,12 @@ app.use(cors({
     credentials: true
 }));
 
-// Serve uploads
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploads with browser caching (7 days) for high-performance cover rendering
+app.use('/uploads', express.static(uploadsDir, {
+    maxAge: '7d',
+    etag: true,
+    lastModified: true
+}));
 
 // Allowed image MIME types and extensions for secure uploads
 const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
@@ -340,16 +348,19 @@ app.get('/api/users/:id/stats', requireAuth, (req, res) => {
 // --- MANGA API ---
 app.get('/api/mangas', requireAuth, (req, res) => {
     try {
+        const userId = req.user.id;
         const mangas = db.prepare(`
             SELECT m.*, 
                    COALESCE(SUM(CASE WHEN v.status = 'Vorhanden' THEN v.price ELSE 0 END), 0) as total_value,
                    COALESCE(SUM(v.price), 0) as full_value,
-                   COUNT(v.id) as volume_count
+                   COUNT(DISTINCT v.id) as volume_count,
+                   COUNT(DISTINCT vr.volume_id) as read_volume_count
             FROM mangas m
             LEFT JOIN volumes v ON m.id = v.manga_id
+            LEFT JOIN volume_reads vr ON v.id = vr.volume_id AND vr.user_id = ?
             GROUP BY m.id
             ORDER BY m.title ASC
-        `).all();
+        `).all(userId);
         res.json(mangas);
     } catch (err) {
         console.error('Error fetching mangas:', err);
@@ -1692,7 +1703,24 @@ if (!fs.existsSync(indexPath)) {
     }
 }
 
-app.use(express.static(frontendPath));
+// Cache compiled Vite assets (CSS/JS with content hashes) for 1 year immutable
+const assetsDir = path.join(frontendPath, 'assets');
+if (fs.existsSync(assetsDir)) {
+    app.use('/assets', express.static(assetsDir, {
+        maxAge: '1y',
+        immutable: true
+    }));
+}
+
+// Serve root static assets (manifest.json, sw.js, icons, favicon)
+app.use(express.static(frontendPath, {
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('sw.js') || filePath.endsWith('manifest.json')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 app.get('*', (req, res) => {
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);

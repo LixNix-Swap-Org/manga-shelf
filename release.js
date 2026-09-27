@@ -94,13 +94,15 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu in dieser Version:
-- 📱 **Mobile UI Optimierungen:** Perfekte Darstellung aller Statistik-Karten, Menüs und Modals auf Smartphones
-- ⚡ **Performance & Bundle-Größe:** Entfernung ungenutzter Bibliotheken – Frontend-Bundle um über 50% verkleinert (von 694 kB auf 334 kB)
-- 📚 **DNB ISBN & Barcode Lookup:** Deutsche Nationalbibliothek MARC21-Schnittstelle zur automatischen Metadaten- & Preisfindung
-- 🛒 **Einkaufsliste & Buchladen-Modus:** Fehlende Bände mit Verlag-Filtern und Gesamtkosten-Berechnung
-- 💾 **Automatisches Snapshot-Backup-System:** Tägliche automatische Backups und 1-Klick-Wiederherstellung im Dashboard
-- 🎨 **AniList Metadaten & Cover Auto-Fill:** Automatische Cover-, Status- und Beschreibungs-Übernahme
-- 🔒 **Security & Robustheit:** Sicheres Session-Cookie-Handling, Password-Hashing (bcrypt) und bereinigte URL-Validierung
+- 📲 **Progressive Web App (PWA):** Kann jetzt auf dem Smartphone (iOS / Android) als App auf den Homescreen hinzugefügt werden – ohne störende Browser-Leiste!
+- ⚡ **Performance-Boost:** Gzip/Brotli-Kompression für Express-Routen & 7-Tage-Browser-Caching für Cover-Bilder und statische Assets
+- 🗂️ **Erweiterte Sortierung & Filter:** 
+  - Neue Sortierungen: *Zuletzt hinzugefügt*, *Lesefortschritt (%)*, *Ungelesen zuerst*, *Titel (A-Z)*, *Meiste Bände*, *Wert*
+  - Status-Filter-Chips mit Live-Mengenanzeige (*Alle*, *Laufend*, *Abgeschlossen*, *Ungelesen*, *Gelesen*)
+  - 1-Klick-Button zum Zurücksetzen aller Filter
+- 📖 **Lese-Fortschrittsanzeige:** Badge und prozentualer Fortschrittsbalken direkt auf den Manga-Karten und in der Tabellenansicht
+- 💾 **Persistente Einstellungen:** Filter, Sortierung und Ansichtsmodus (Grid/Liste) werden automatisch im Browser gespeichert
+- ⌨️ **Tastatur-Shortcuts:** Drücke \`/\` zum schnellen Suchen und \`Esc\` zum Abbrechen
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;
