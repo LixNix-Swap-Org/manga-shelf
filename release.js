@@ -94,15 +94,14 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu in dieser Version:
-- 📲 **Progressive Web App (PWA):** Kann jetzt auf dem Smartphone (iOS / Android) als App auf den Homescreen hinzugefügt werden – ohne störende Browser-Leiste!
-- ⚡ **Performance-Boost:** Gzip/Brotli-Kompression für Express-Routen & 7-Tage-Browser-Caching für Cover-Bilder und statische Assets
-- 🗂️ **Erweiterte Sortierung & Filter:** 
-  - Neue Sortierungen: *Zuletzt hinzugefügt*, *Lesefortschritt (%)*, *Ungelesen zuerst*, *Titel (A-Z)*, *Meiste Bände*, *Wert*
-  - Status-Filter-Chips mit Live-Mengenanzeige (*Alle*, *Laufend*, *Abgeschlossen*, *Ungelesen*, *Gelesen*)
-  - 1-Klick-Button zum Zurücksetzen aller Filter
-- 📖 **Lese-Fortschrittsanzeige:** Badge und prozentualer Fortschrittsbalken direkt auf den Manga-Karten und in der Tabellenansicht
-- 💾 **Persistente Einstellungen:** Filter, Sortierung und Ansichtsmodus (Grid/Liste) werden automatisch im Browser gespeichert
-- ⌨️ **Tastatur-Shortcuts:** Drücke \`/\` zum schnellen Suchen und \`Esc\` zum Abbrechen
+- ✨ **Special Edition Support (\`special_edition\`):** Eigener Eintragstyp für limitierte Sonderausgaben. Nummerierte Special Editions ordnen sich automatisch chronologisch direkt neben dem zugehörigen Hauptband ein (Standard Band 1 -> Band 1 Special Edition -> Band 2).
+- 📦 **Sammelschuber & Box Sets (\`schuber\`):** Eigener Eintragstyp für Schuber. Schuber ordnen sich harmonisch hinter den regulären Bänden ein (z. B. One Piece Band 1 ganz oben, Schuber 1-4 am Ende).
+- 🏷️ **Dynamische Filter-Chips:** Bände-Checkliste zeigt nun automatisch Schnellfilter-Chips \`[✨ Special Editions (N)]\` und \`[📦 Nur Schuber (N)]\`, sobald die Reihe entsprechende Bände enthält.
+- 🎨 **Modernisiertes Status-UI (Segmented Control):**
+  - Ersetzung der engen, abgeschnittenen Dropdown-Menüs durch haptische Segmented Control Pill-Switches (\`[✓ Im Besitz]\` in Smaragdgrün vs. \`[✕ Fehlt noch]\` in Korallrot).
+  - Großzügige 2-Zeilen-Hierarchie im Bearbeiten-Modal: Volle Breite für den Eintragstyp ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special") – kein Text wird mehr abgeschnitten!
+  - Einheitliche Status-Pill-Buttons in der Schnellerfassung und im Serien-Band-Generator.
+- 📲 **PWA & Performance:** Volle Progressive Web App Unterstützung, Gzip/Brotli-Kompression und persistente Filtereinstellungen.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;

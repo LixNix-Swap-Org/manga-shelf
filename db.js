@@ -81,6 +81,7 @@ function initDb() {
             notes TEXT,
             cover_image TEXT,
             images TEXT,
+            type TEXT DEFAULT 'volume',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE
         );
@@ -115,6 +116,49 @@ function initDb() {
         if (!volColNames.has('publisher')) currentDb.exec('ALTER TABLE volumes ADD COLUMN publisher TEXT DEFAULT NULL;');
         if (!volColNames.has('cover_image')) currentDb.exec('ALTER TABLE volumes ADD COLUMN cover_image TEXT DEFAULT NULL;');
         if (!volColNames.has('images')) currentDb.exec('ALTER TABLE volumes ADD COLUMN images TEXT DEFAULT NULL;');
+        if (!volColNames.has('type')) currentDb.exec("ALTER TABLE volumes ADD COLUMN type TEXT DEFAULT 'volume';");
+
+        // Migration: Update existing One Piece 'Special %' to type = 'schuber' and volume_number = 'Schuber %'
+        try {
+            currentDb.exec(`
+                UPDATE volumes 
+                SET type = 'schuber', 
+                    volume_number = REPLACE(volume_number, 'Special', 'Schuber') 
+                WHERE manga_id IN (SELECT id FROM mangas WHERE title LIKE '%One Piece%') 
+                  AND (volume_number LIKE 'Special%' OR (notes IS NOT NULL AND notes LIKE '%Schuber%'));
+            `);
+        } catch (mErr) {
+            console.error('One Piece Schuber migration error:', mErr);
+        }
+
+        // Migration: Update any items with Schuber in volume_number to type = 'schuber'
+        try {
+            currentDb.exec(`
+                UPDATE volumes 
+                SET type = 'schuber' 
+                WHERE volume_number LIKE 'Schuber%' AND (type IS NULL OR type = 'volume');
+            `);
+        } catch (mErr) {}
+
+        // Migration: Update items with Special/Extra to type = 'special'
+        try {
+            currentDb.exec(`
+                UPDATE volumes 
+                SET type = 'special' 
+                WHERE (volume_number LIKE 'Special%' OR volume_number LIKE 'Extra%' OR volume_number LIKE 'Sonderband%') 
+                  AND (type IS NULL OR type = 'volume');
+            `);
+        } catch (mErr) {}
+
+        // Migration: Update items with 'Special Edition' or 'Limited Edition' to type = 'special_edition'
+        try {
+            currentDb.exec(`
+                UPDATE volumes 
+                SET type = 'special_edition' 
+                WHERE (volume_number LIKE '%special edition%' OR volume_number LIKE '%limited edition%' OR (notes IS NOT NULL AND (notes LIKE '%special edition%' OR notes LIKE '%limited edition%'))) 
+                  AND (type IS NULL OR type = 'volume' OR type = 'special');
+            `);
+        } catch (mErr) {}
     } catch (e) {
         console.error('Migration error on volumes table:', e);
     }

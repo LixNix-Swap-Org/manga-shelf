@@ -105,6 +105,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `notes` (TEXT)
    * `cover_image` (TEXT)
    * `images` (TEXT) – JSON-String für Zusatzbilder / Galerie
+   * `type` (TEXT, DEFAULT `'volume'`) – Werte: `'volume'` (Einzelband), `'special_edition'` (Special / Limited Edition), `'schuber'` (Sammelschuber / Box Set), `'special'` (Sonderband / Extra / Fanbook)
    * `created_at` (DATETIME)
 
 4. **`volume_reads`**
@@ -256,6 +257,19 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
    * Backup-Zentrale (`showRestoreModal`): Verwaltet Snapshots (Erstellen, Wiederherstellen, Download, Löschen) und bietet ZIP-Upload.
 
+### 🔹 Fall I: Schuber, Special Editions & Sonderbände erfassen & sortieren
+1. **Datenbank (`db.js`):**
+   * `volumes.type` (`'volume'`, `'special_edition'`, `'schuber'`, `'special'`).
+   * Automatische Migration in `db.js` konvertiert vorhandene "Special X" Einträge bei Reihen wie One Piece in `type = 'schuber'` und `volume_number = 'Schuber X'`, sowie Einträge mit "Special Edition" oder "Limited Edition" in `type = 'special_edition'`.
+2. **Backend API (`index.js`):**
+   * `GET /api/mangas/:id`: Sortiert per `ORDER BY CASE` reguläre Bände und nummerierte Special Editions an erster Stelle (Standard Band 1 -> Band 1 Special Edition -> Band 2). Unnummerierte Special Editions ordnen sich direkt dahinter ein (Rang 1.5), gefolgt von Schubern (Rang 2) und Specials/Extras (Rang 3).
+   * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `type` entgegen, validieren gegen die erlaubten Typen und speichern ihn ab.
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+   * Sortierung: `getVolumeSortInfo(vol)` berechnet `rank` und `subRank` (Standard Band = 0, Special Edition = 1).
+   * Filter-Chips: `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]`.
+   * Bandkarten: Zeigen bei Special Editions ein markantes `✨ Special Edition`-Badge in Fuchsia/Violett, bei Schubern `📦 Schuber` in Indigo/Lila und bei Specials `⭐ Special` in Bernstein/Gold.
+   * Formulare: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") beim Erstellen und Bearbeiten mit dynamischen Feldbezeichnungen.
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow
@@ -284,6 +298,8 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
   ```
 
 ### Paketierung & GitHub Releases
+* **Regelmäßige Releases (WICHTIG!):**
+  * Nach jeder abgeschlossenen Feature-Implementierung, Bugfix oder UI-Verbesserung **muss** ein Git-Release via `node release.js patch` (bzw. `minor` bei neuen Funktionen) erstellt und auf GitHub publiziert werden. So bleibt die Versionierung lückenlos und das Pterodactyl-ZIP auf GitHub stets aktuell.
 * **Nur ZIP bauen:**
   ```powershell
   npm run package
@@ -293,9 +309,9 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
   ```powershell
   npm run release
   # oder mit gezielter Version / Semver:
-  node release.js patch   # Erhöht z.B. von v2.1.0 auf v2.1.1
-  node release.js minor   # Erhöht z.B. auf v2.2.0
-  node release.js v2.1.0  # Explizite Version
+  node release.js patch   # Erhöht z.B. von v2.2.0 auf v2.2.1
+  node release.js minor   # Erhöht z.B. von v2.2.0 auf v2.3.0
+  node release.js v2.3.0  # Explizite Version
   ```
   * Was passiert automatisch:
     1. Baut das Frontend neu (`npm run build`).

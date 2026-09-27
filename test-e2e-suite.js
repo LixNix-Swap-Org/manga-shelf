@@ -71,14 +71,20 @@ async function runTestSuite() {
     await page.screenshot({ path: path.join(screenshotsDir, 'test1_initial.png') });
 
     if (page.url().includes('/login')) {
-      console.log('Logging in as admin...');
-      await page.type('input[type="text"]', 'admin');
-      await page.type('input[type="password"]', 'password123');
-      await Promise.all([
-        page.click('button[type="submit"]'),
-        page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
-      ]);
+      console.log('Logging in as Moltres / admin...');
+      await page.type('input[type="text"]', 'Moltres');
+      await page.type('input[type="password"]', 'Start1234!');
+      await page.click('button[type="submit"]');
       await new Promise(r => setTimeout(r, 1200));
+
+      if (page.url().includes('/login')) {
+        await page.click('input[type="text"]', { clickCount: 3 });
+        await page.type('input[type="text"]', 'admin');
+        await page.click('input[type="password"]', { clickCount: 3 });
+        await page.type('input[type="password"]', 'password123');
+        await page.click('button[type="submit"]');
+        await new Promise(r => setTimeout(r, 1200));
+      }
     }
     console.log('Current page title/url:', page.url());
     await page.screenshot({ path: path.join(screenshotsDir, 'test1_dashboard_loaded.png') });

@@ -416,8 +416,30 @@ app.post('/api/mangas', requireEditor, (req, res) => {
 app.get('/api/mangas/:id', requireAuth, (req, res) => {
     try {
         const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(req.params.id);
-        if (!manga) return res.status(404).json({ error: 'Manga nicht gefunden' });
-        const volumes = db.prepare('SELECT * FROM volumes WHERE manga_id = ? ORDER BY CAST(volume_number AS INTEGER) ASC, volume_number ASC').all(req.params.id);
+        const volumes = db.prepare(`
+            SELECT * FROM volumes 
+            WHERE manga_id = ? 
+            ORDER BY 
+                CASE 
+                    WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
+                    WHEN COALESCE(type, 'volume') = 'special_edition' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
+                    WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1.5
+                    WHEN COALESCE(type, 'volume') = 'schuber' THEN 2 
+                    WHEN COALESCE(type, 'volume') = 'special' THEN 3 
+                    ELSE 2 
+                END ASC, 
+                CASE 
+                    WHEN CAST(volume_number AS REAL) > 0 THEN CAST(volume_number AS REAL) 
+                    WHEN volume_number = '0' THEN 0 
+                    ELSE 999999 
+                END ASC, 
+                CASE 
+                    WHEN COALESCE(type, 'volume') = 'volume' THEN 0 
+                    WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1 
+                    ELSE 2 
+                END ASC,
+                volume_number ASC
+        `).all(req.params.id);
         manga.volumes = volumes || [];
 
         // Fetch volume reading records
@@ -581,11 +603,27 @@ app.post('/api/volumes', requireEditor, (req, res) => {
             status = 'Vorhanden', 
             notes = null,
             cover_image = null,
-            images = null
+            images = null,
+            type = 'volume'
         } = req.body;
 
         if (!manga_id || volume_number === undefined || volume_number === '') {
             return res.status(400).json({ error: 'manga_id und Bandnummer erforderlich' });
+        }
+
+        let volType = type ? String(type).trim().toLowerCase() : 'volume';
+        if (!['volume', 'special_edition', 'schuber', 'special'].includes(volType)) {
+            const vLower = String(volume_number).toLowerCase();
+            const nLower = notes ? String(notes).toLowerCase() : '';
+            if (vLower.includes('schuber') || nLower.includes('schuber')) {
+                volType = 'schuber';
+            } else if (vLower.includes('special edition') || vLower.includes('limited edition') || vLower.includes('spezial edition') || nLower.includes('special edition') || nLower.includes('limited edition')) {
+                volType = 'special_edition';
+            } else if (vLower.includes('special') || vLower.includes('extra') || vLower.includes('sonderband')) {
+                volType = 'special';
+            } else {
+                volType = 'volume';
+            }
         }
 
         let imagesVal = null;
@@ -596,8 +634,8 @@ app.post('/api/volumes', requireEditor, (req, res) => {
         }
 
         const stmt = db.prepare(`
-            INSERT INTO volumes (manga_id, volume_number, isbn, price, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO volumes (manga_id, volume_number, isbn, price, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const result = stmt.run(
             parseInt(manga_id, 10),
@@ -612,7 +650,8 @@ app.post('/api/volumes', requireEditor, (req, res) => {
             status || 'Vorhanden',
             notes ? String(notes).trim() : null,
             cover_image ? String(cover_image).trim() : null,
-            imagesVal
+            imagesVal,
+            volType
         );
 
         // Update owned count
@@ -701,6 +740,14 @@ app.put('/api/volumes/:id', requireEditor, (req, res) => {
         const status = body.status !== undefined ? body.status : vol.status;
         const notes = body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : vol.notes;
 
+        let volType = vol.type || 'volume';
+        if (body.type !== undefined) {
+            const rawType = String(body.type).trim().toLowerCase();
+            if (['volume', 'special_edition', 'schuber', 'special'].includes(rawType)) {
+                volType = rawType;
+            }
+        }
+
         let imagesVal = vol.images;
         if (body.images !== undefined) {
             imagesVal = Array.isArray(body.images) ? JSON.stringify(body.images) : (body.images ? String(body.images) : null);
@@ -721,10 +768,10 @@ app.put('/api/volumes/:id', requireEditor, (req, res) => {
             UPDATE volumes SET 
                 volume_number = ?, isbn = ?, price = ?, release_year = ?, 
                 condition = ?, pages = ?, publisher = ?, purchase_date = ?, 
-                status = ?, notes = ?, cover_image = ?, images = ?
+                status = ?, notes = ?, cover_image = ?, images = ?, type = ?
             WHERE id = ?
         `);
-        stmt.run(volume_number, isbn, price, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, req.params.id);
+        stmt.run(volume_number, isbn, price, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, req.params.id);
 
         // Update owned count
         const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
@@ -811,8 +858,9 @@ app.post('/api/volumes/batch-read', requireEditor, (req, res) => {
             return res.status(400).json({ error: 'Ungültige Parameter' });
         }
 
-        const volumes = db.prepare("SELECT id, volume_number FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").all(mId);
+        const volumes = db.prepare("SELECT id, volume_number, type FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").all(mId);
         const targetVols = volumes.filter(v => {
+            if (v.type === 'schuber') return false;
             const num = parseFloat(v.volume_number);
             return !isNaN(num) && num <= maxVol;
         });
@@ -859,7 +907,24 @@ app.get('/api/shopping-list', requireAuth, (req, res) => {
             ORDER BY 
                 effective_publisher ASC,
                 m.title ASC,
-                CAST(v.volume_number AS REAL) ASC,
+                CASE 
+                    WHEN COALESCE(v.type, 'volume') = 'volume' AND (v.volume_number = '0' OR CAST(v.volume_number AS REAL) > 0) THEN 1 
+                    WHEN COALESCE(v.type, 'volume') = 'special_edition' AND (v.volume_number = '0' OR CAST(v.volume_number AS REAL) > 0) THEN 1 
+                    WHEN COALESCE(v.type, 'volume') = 'special_edition' THEN 1.5
+                    WHEN COALESCE(v.type, 'volume') = 'schuber' THEN 2 
+                    WHEN COALESCE(v.type, 'volume') = 'special' THEN 3 
+                    ELSE 2 
+                END ASC, 
+                CASE 
+                    WHEN CAST(v.volume_number AS REAL) > 0 THEN CAST(v.volume_number AS REAL) 
+                    WHEN v.volume_number = '0' THEN 0 
+                    ELSE 999999 
+                END ASC, 
+                CASE 
+                    WHEN COALESCE(v.type, 'volume') = 'volume' THEN 0 
+                    WHEN COALESCE(v.type, 'volume') = 'special_edition' THEN 1 
+                    ELSE 2 
+                END ASC,
                 v.volume_number ASC
         `).all();
 

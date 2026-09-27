@@ -7,7 +7,7 @@ import {
   FileText, Filter, ArrowUpDown, Info, Bookmark, Hash, 
   Building2, Search, SlidersHorizontal, ChevronDown,
   Star, Maximize2, Camera, Link as LinkIcon,
-  BookCheck, CheckCheck
+  BookCheck, CheckCheck, Package
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -25,6 +25,7 @@ export default function MangaDetail({ user }) {
 
   // Filters & Sorting for Volumes
   const [volumeFilter, setVolumeFilter] = useState('ALL'); // 'ALL' | 'Vorhanden' | 'Fehlt' | 'Gelesen' | 'Ungelesen'
+  const [volumeTypeFilter, setVolumeTypeFilter] = useState('ALL'); // 'ALL' | 'volume' | 'special_edition' | 'schuber' | 'special'
   const [selectedReaderId, setSelectedReaderId] = useState(user?.id || 'ALL');
   const [showBatchReadModal, setShowBatchReadModal] = useState(false);
   const [batchReadUpTo, setBatchReadUpTo] = useState('');
@@ -38,6 +39,7 @@ export default function MangaDetail({ user }) {
   const [formData, setFormData] = useState({});
 
   // Single volume add state
+  const [newVolumeType, setNewVolumeType] = useState('volume'); // 'volume' | 'special_edition' | 'schuber' | 'special'
   const [newVolumeNum, setNewVolumeNum] = useState('');
   const [newVolumeStatus, setNewVolumeStatus] = useState('Vorhanden');
   const [newVolumePrice, setNewVolumePrice] = useState('');
@@ -177,6 +179,7 @@ export default function MangaDetail({ user }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           manga_id: id,
+          type: newVolumeType,
           volume_number: newVolumeNum.trim(),
           status: newVolumeStatus,
           price: newVolumePrice ? newVolumePrice.trim() : null,
@@ -190,6 +193,7 @@ export default function MangaDetail({ user }) {
         setNewVolumePrice('');
         setNewVolumePublisher('');
         setNewVolumeCover('');
+        setNewVolumeType('volume');
         await fetchManga();
       } else {
         const data = await res.json();
@@ -421,7 +425,14 @@ export default function MangaDetail({ user }) {
     const volImages = Array.isArray(vol.images) 
       ? vol.images 
       : (vol.cover_image ? [vol.cover_image] : []);
+    const detectedType = vol.type || (
+      String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
+      String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
+      String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') || String(vol.volume_number).toLowerCase().includes('sonderband') ? 'special' :
+      'volume'
+    );
     setEditVolForm({
+      type: detectedType,
       volume_number: vol.volume_number || '',
       status: vol.status || 'Vorhanden',
       price: vol.price !== null && vol.price !== undefined ? String(vol.price) : '',
@@ -517,6 +528,96 @@ export default function MangaDetail({ user }) {
   // Available conditions
   const conditionsList = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
 
+  const getVolumeSortInfo = (vol) => {
+    const rawType = vol.type || (
+      String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
+      String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
+      String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') || String(vol.volume_number).toLowerCase().includes('sonderband') ? 'special' :
+      'volume'
+    );
+    
+    // Check for number in volume_number
+    const match = String(vol.volume_number).match(/(\d+(\.\d+)?)/);
+    const num = match ? parseFloat(match[1]) : (parseFloat(vol.volume_number) || 999999);
+    
+    let rank = 1;
+    let subRank = 0;
+    if (rawType === 'volume') {
+      rank = 1;
+      subRank = 0;
+    } else if (rawType === 'special_edition') {
+      if (match) {
+        rank = 1;
+        subRank = 1;
+      } else {
+        rank = 1.5;
+        subRank = 1;
+      }
+    } else if (rawType === 'schuber') {
+      rank = 2;
+      subRank = 2;
+    } else if (rawType === 'special') {
+      rank = 3;
+      subRank = 3;
+    } else if (isNaN(parseFloat(vol.volume_number)) && !match) {
+      rank = 4;
+      subRank = 4;
+    }
+
+    return { rank, num, subRank, raw: String(vol.volume_number), type: rawType };
+  };
+
+  const getVolumeDisplayTitle = (vol) => {
+    const type = vol.type || (
+      String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
+      String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
+      String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') || String(vol.volume_number).toLowerCase().includes('sonderband') ? 'special' :
+      'volume'
+    );
+    const numStr = String(vol.volume_number || '').trim();
+    if (type === 'schuber') {
+      return numStr.toLowerCase().startsWith('schuber') ? numStr : `Schuber ${numStr}`;
+    }
+    if (type === 'special_edition') {
+      return (numStr.toLowerCase().includes('special edition') || numStr.toLowerCase().includes('limited edition') || numStr.toLowerCase().includes('spezial edition'))
+        ? numStr
+        : `Band ${numStr} (Special Edition)`;
+    }
+    if (type === 'special') {
+      return (numStr.toLowerCase().startsWith('special') || numStr.toLowerCase().startsWith('extra') || numStr.toLowerCase().startsWith('sonderband')) 
+        ? numStr 
+        : `Special ${numStr}`;
+    }
+    return numStr.toLowerCase().startsWith('band') ? numStr : `Band ${numStr}`;
+  };
+
+  const schuberCount = volumes.filter(v => v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber')).length;
+  const specialEditionCount = volumes.filter(v => v.type === 'special_edition' || (
+    v.type !== 'schuber' && (
+      String(v.volume_number).toLowerCase().includes('special edition') ||
+      String(v.volume_number).toLowerCase().includes('limited edition') ||
+      String(v.volume_number).toLowerCase().includes('spezial edition') ||
+      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
+    )
+  )).length;
+  const specialCount = volumes.filter(v => {
+    if (v.type === 'special_edition' || v.type === 'schuber') return false;
+    const vLower = String(v.volume_number).toLowerCase();
+    if (vLower.includes('special edition') || vLower.includes('limited edition') || vLower.includes('spezial edition') || vLower.includes('schuber')) return false;
+    return v.type === 'special' || vLower.includes('special') || vLower.includes('extra') || vLower.includes('sonderband');
+  }).length;
+  const regularVolumeCount = volumes.filter(v => {
+    const isSchuber = v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber');
+    const isSpecialEd = v.type === 'special_edition' || (
+      String(v.volume_number).toLowerCase().includes('special edition') ||
+      String(v.volume_number).toLowerCase().includes('limited edition') ||
+      String(v.volume_number).toLowerCase().includes('spezial edition') ||
+      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
+    );
+    const isSpecial = v.type === 'special' || String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband');
+    return !isSchuber && !isSpecialEd && !isSpecial;
+  }).length;
+
   // Filter & sort volumes
   const filteredVolumes = volumes
     .filter(v => {
@@ -530,6 +631,16 @@ export default function MangaDetail({ user }) {
       if (volumeFilter === 'Gelesen' && !isReadByTarget) return false;
       if (volumeFilter === 'Ungelesen') {
         if (v.status !== 'Vorhanden' || isReadByTarget) return false;
+      }
+
+      if (volumeTypeFilter !== 'ALL') {
+        const t = v.type || (
+          String(v.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
+          String(v.volume_number).toLowerCase().includes('special edition') || String(v.volume_number).toLowerCase().includes('limited edition') || String(v.volume_number).toLowerCase().includes('spezial edition') || (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
+          String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband') ? 'special' :
+          'volume'
+        );
+        if (t !== volumeTypeFilter) return false;
       }
       
       if (volumePublisherFilter !== 'ALL') {
@@ -557,8 +668,8 @@ export default function MangaDetail({ user }) {
       return true;
     })
     .sort((a, b) => {
-      const numA = parseFloat(a.volume_number) || 0;
-      const numB = parseFloat(b.volume_number) || 0;
+      const infoA = getVolumeSortInfo(a);
+      const infoB = getVolumeSortInfo(b);
       const priceA = a.price !== null && a.price !== undefined ? a.price : -1;
       const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
       const pubA = ((a.publisher && a.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '').toLowerCase();
@@ -568,11 +679,14 @@ export default function MangaDetail({ user }) {
 
       switch (volumeSort) {
         case 'number_desc':
-          return numB !== numA ? numB - numA : String(b.volume_number).localeCompare(String(a.volume_number));
+          if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
+          if (infoB.num !== infoA.num) return infoB.num - infoA.num;
+          if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
+          return infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true });
         case 'publisher_asc':
-          return pubA.localeCompare(pubB) || (numA - numB);
+          return pubA.localeCompare(pubB) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
         case 'publisher_desc':
-          return pubB.localeCompare(pubA) || (numA - numB);
+          return pubB.localeCompare(pubA) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
         case 'price_desc':
           return priceB - priceA;
         case 'price_asc':
@@ -585,7 +699,10 @@ export default function MangaDetail({ user }) {
           return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
         case 'number_asc':
         default:
-          return numA !== numB ? numA - numB : String(a.volume_number).localeCompare(String(b.volume_number));
+          if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
+          if (infoA.num !== infoB.num) return infoA.num - infoB.num;
+          if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
+          return infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
       }
     });
 
@@ -1126,6 +1243,76 @@ export default function MangaDetail({ user }) {
 
               </div>
             </div>
+
+            {/* Optional Type Filter Chips (if manga contains Special Editions, Schuber or Specials) */}
+            {(specialEditionCount > 0 || schuberCount > 0 || specialCount > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/60 text-xs">
+                <span className="text-[11px] text-slate-400 font-semibold mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3 text-brand-400" /> Typ:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVolumeTypeFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    volumeTypeFilter === 'ALL'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  }`}
+                >
+                  Alle ({volumes.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVolumeTypeFilter('volume')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                    volumeTypeFilter === 'volume'
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3 h-3 text-brand-400" /> Nur Bände ({regularVolumeCount})
+                </button>
+                {specialEditionCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setVolumeTypeFilter('special_edition')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                      volumeTypeFilter === 'special_edition'
+                        ? 'bg-fuchsia-600 text-white shadow-sm ring-1 ring-fuchsia-400'
+                        : 'bg-fuchsia-950/40 text-fuchsia-300 hover:bg-fuchsia-900/50 border border-fuchsia-800/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3 text-fuchsia-400" /> ✨ Special Editions ({specialEditionCount})
+                  </button>
+                )}
+                {schuberCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setVolumeTypeFilter('schuber')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                      volumeTypeFilter === 'schuber'
+                        ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400'
+                        : 'bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/50 border border-indigo-800/50'
+                    }`}
+                  >
+                    <Package className="w-3 h-3 text-indigo-400" /> 📦 Nur Schuber ({schuberCount})
+                  </button>
+                )}
+                {specialCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setVolumeTypeFilter('special')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                      volumeTypeFilter === 'special'
+                        ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-400'
+                        : 'bg-amber-950/40 text-amber-300 hover:bg-amber-900/50 border border-amber-800/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-400" /> ⭐ Specials ({specialCount})
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Volumes Grid */}
@@ -1180,12 +1367,49 @@ export default function MangaDetail({ user }) {
                         >
                           {isOwned ? <Check className="w-3 h-3 stroke-[2.5]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>}
                         </button>
-                        <span 
-                          className="font-bold text-white text-sm tracking-tight truncate"
-                          title={`Band ${vol.volume_number}`}
+                        <div 
+                          className="font-bold text-white text-sm tracking-tight flex items-center gap-1.5 min-w-0 overflow-hidden"
+                          title={getVolumeDisplayTitle(vol)}
                         >
-                          Band {vol.volume_number}
-                        </span>
+                          {vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber') ? (
+                            <>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shrink-0 shadow-sm">
+                                <Package className="w-2.5 h-2.5 text-indigo-400" /> Schuber
+                              </span>
+                              <span className="truncate">{String(vol.volume_number).replace(/schuber\s*/i, '')}</span>
+                            </>
+                          ) : vol.type === 'special_edition' || (
+                            vol.type !== 'schuber' && (
+                              String(vol.volume_number).toLowerCase().includes('special edition') ||
+                              String(vol.volume_number).toLowerCase().includes('limited edition') ||
+                              String(vol.volume_number).toLowerCase().includes('spezial edition') ||
+                              (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition')))
+                            )
+                          ) ? (
+                            <>
+                              <span className="shrink-0 font-bold">
+                                {(() => {
+                                  const rawNum = String(vol.volume_number || '');
+                                  const cleaned = rawNum.replace(/special\s*edition|limited\s*edition|spezial\s*edition/gi, '').trim();
+                                  const match = (cleaned || rawNum).match(/\d+(\.\d+)?/);
+                                  return match ? `Band ${match[0]}` : (cleaned || rawNum || 'Special');
+                                })()}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 shrink-0 shadow-sm">
+                                <Sparkles className="w-2.5 h-2.5 text-fuchsia-400" /> Special Edition
+                              </span>
+                            </>
+                          ) : vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') ? (
+                            <>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/25 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-sm">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Special
+                              </span>
+                              <span className="truncate">{String(vol.volume_number).replace(/special\s*|extra\s*|sonderband\s*/i, '')}</span>
+                            </>
+                          ) : (
+                            <span className="truncate">Band {vol.volume_number}</span>
+                          )}
+                        </div>
                       </div>
 
                       {canEdit && (
@@ -1233,7 +1457,7 @@ export default function MangaDetail({ user }) {
                         >
                           <img 
                             src={vol.cover_image} 
-                            alt={`Band ${vol.volume_number}`} 
+                            alt={getVolumeDisplayTitle(vol)} 
                             className="w-12 h-16 sm:w-13 sm:h-18 object-cover group-hover/cover:scale-105 transition-transform duration-200" 
                             loading="lazy"
                           />
@@ -1372,23 +1596,43 @@ export default function MangaDetail({ user }) {
             </div>
           )}
 
-          {/* Add Single Volume Bar */}
+          {/* Add Single Volume / Schuber Bar */}
           {canEdit && (
             <form onSubmit={handleAddSingleVolume} className="pt-6 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-                  Einzelnen Band hinzufügen
+                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider block flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5 text-brand-400" />
+                  Band, Special Edition oder Schuber hinzufügen
                 </span>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Band-Nummer, Status und optional Preis, Verlag oder Coverfoto eingeben
+                  Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben
                 </p>
               </div>
               
               <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                {/* Type Selection */}
+                <div className="w-36 sm:w-40 shrink-0">
+                  <select 
+                    className="input-field bg-slate-950 text-sm py-2 px-2.5 w-full cursor-pointer font-medium"
+                    value={newVolumeType}
+                    onChange={e => setNewVolumeType(e.target.value)}
+                  >
+                    <option value="volume">📖 Einzelband</option>
+                    <option value="special_edition">✨ Special Edition</option>
+                    <option value="schuber">📦 Schuber</option>
+                    <option value="special">⭐ Special / Extra</option>
+                  </select>
+                </div>
+
                 <div className="w-28 sm:w-32 shrink-0">
                   <input 
                     type="text" 
-                    placeholder="Band-Nr. (z.B. 11)" 
+                    placeholder={
+                      newVolumeType === 'schuber' ? 'Schuber-Nr. (z.B. 1)' :
+                      newVolumeType === 'special_edition' ? 'Band-Nr. (z.B. 1)' :
+                      newVolumeType === 'special' ? 'Bezeichnung (z.B. 1)' :
+                      'Band-Nr. (z.B. 11)'
+                    }
                     className="input-field text-sm py-2 px-3 w-full font-medium" 
                     value={newVolumeNum} 
                     onChange={e => setNewVolumeNum(e.target.value)} 
@@ -1405,15 +1649,32 @@ export default function MangaDetail({ user }) {
                   />
                 </div>
 
-                <div className="w-32 sm:w-36 shrink-0">
-                  <select 
-                    className="input-field bg-slate-950 text-sm py-2 px-3 w-full cursor-pointer font-medium"
-                    value={newVolumeStatus}
-                    onChange={e => setNewVolumeStatus(e.target.value)}
+                {/* Status Toggle Switch */}
+                <div className="inline-flex p-1 bg-slate-950 rounded-xl border border-slate-800 shrink-0 gap-1 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setNewVolumeStatus('Vorhanden')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 select-none ${
+                      newVolumeStatus === 'Vorhanden'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
                   >
-                    <option value="Vorhanden">✓ Vorhanden</option>
-                    <option value="Fehlt">✕ Fehlt noch</option>
-                  </select>
+                    <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                    <span>Im Besitz</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewVolumeStatus('Fehlt')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 select-none ${
+                      newVolumeStatus === 'Fehlt'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                  >
+                    <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5]" />
+                    <span>Fehlt</span>
+                  </button>
                 </div>
 
                 {/* Optional Cover upload for new volume */}
@@ -1466,11 +1727,17 @@ export default function MangaDetail({ user }) {
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-brand-400" />
-                  Band {editVolForm.volume_number || activeVolume.volume_number} bearbeiten
+                  {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400" /> :
+                   editVolForm.type === 'special_edition' ? <Sparkles className="w-5 h-5 text-fuchsia-400" /> :
+                   editVolForm.type === 'special' ? <Sparkles className="w-5 h-5 text-amber-400" /> :
+                   <Layers className="w-5 h-5 text-brand-400" />}
+                  {editVolForm.type === 'schuber' ? 'Schuber ' : 
+                   editVolForm.type === 'special_edition' ? 'Special Edition ' :
+                   editVolForm.type === 'special' ? 'Special ' : 'Band '} 
+                  {String(editVolForm.volume_number || activeVolume.volume_number).replace(/schuber\s*|special\s*edition\s*|limited\s*edition\s*|spezial\s*edition\s*|special\s*|extra\s*/i, '')} bearbeiten
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Details, Preis und Sammlerangaben für diesen Band
+                  Typ, Details, Preis und Sammlerangaben für diesen Eintrag
                 </p>
               </div>
               <button 
@@ -1482,44 +1749,90 @@ export default function MangaDetail({ user }) {
             </div>
 
             <form onSubmit={handleSaveVolume} className="space-y-4">
-              {/* Row 1: Volume number, Status, Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Band-Nummer <span className="text-red-400">*</span>
+              {/* Row 1: Type & Volume Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                <div className="sm:col-span-7">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-brand-400" /> Eintragstyp
+                  </label>
+                  <select 
+                    className="input-field bg-slate-950 font-medium py-2.5 text-sm w-full cursor-pointer hover:border-slate-700"
+                    value={editVolForm.type || 'volume'} 
+                    onChange={e => setEditVolForm({ ...editVolForm, type: e.target.value })}
+                  >
+                    <option value="volume">📖 Einzelband</option>
+                    <option value="special_edition">✨ Special Edition</option>
+                    <option value="schuber">📦 Schuber</option>
+                    <option value="special">⭐ Special / Extra</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-5">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-slate-400" />
+                    {editVolForm.type === 'schuber' ? 'Schuber-Nr.' : 
+                     editVolForm.type === 'special_edition' ? 'Band-Nr. (z.B. 1)' :
+                     editVolForm.type === 'special' ? 'Bezeichnung' : 'Band-Nummer'} <span className="text-red-400">*</span>
                   </label>
                   <input 
                     type="text" 
                     required
-                    className="input-field" 
+                    className="input-field py-2.5 text-sm font-semibold" 
                     value={editVolForm.volume_number} 
                     onChange={e => setEditVolForm({ ...editVolForm, volume_number: e.target.value })} 
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Status</label>
-                  <select 
-                    className="input-field bg-slate-950 font-medium"
-                    value={editVolForm.status} 
-                    onChange={e => setEditVolForm({ ...editVolForm, status: e.target.value })}
-                  >
-                    <option value="Vorhanden">✓ Im Besitz</option>
-                    <option value="Fehlt">✕ Fehlt noch</option>
-                  </select>
+              {/* Row 2: Status & Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+                <div className="sm:col-span-7">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Bookmark className="w-3.5 h-3.5 text-brand-400" /> Sammler-Status
+                  </label>
+                  {/* Segmented Switch Pill Control */}
+                  <div className="grid grid-cols-2 p-1 bg-slate-950/90 rounded-xl border border-slate-800 gap-1.5 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorhanden' })}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 select-none ${
+                        editVolForm.status === 'Vorhanden'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
+                      }`}
+                    >
+                      <Check className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                      <span>Im Besitz</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditVolForm({ ...editVolForm, status: 'Fehlt' })}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 select-none ${
+                        editVolForm.status === 'Fehlt'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
+                      }`}
+                    >
+                      <X className="w-4 h-4 text-rose-400 stroke-[2.5]" />
+                      <span>Fehlt noch</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1">
-                    <Coins className="w-3.5 h-3.5" /> Preis (€)
+                <div className="sm:col-span-5">
+                  <label className="block text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5" /> Kaufpreis (€)
                   </label>
-                  <input 
-                    type="text" 
-                    placeholder="z. B. 7,99"
-                    className="input-field border-emerald-500/40 focus:border-emerald-500 font-mono font-bold text-emerald-300" 
-                    value={editVolForm.price} 
-                    onChange={e => setEditVolForm({ ...editVolForm, price: e.target.value })} 
-                  />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="0,00"
+                      className="input-field border-emerald-500/40 focus:border-emerald-500 font-mono font-bold text-emerald-300 pr-8 py-2.5 text-sm" 
+                      value={editVolForm.price} 
+                      onChange={e => setEditVolForm({ ...editVolForm, price: e.target.value })} 
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-emerald-500/70 font-bold pointer-events-none">€</span>
+                  </div>
                 </div>
               </div>
 
@@ -1891,29 +2204,52 @@ export default function MangaDetail({ user }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Startstatus</label>
-                  <select 
-                    className="input-field bg-slate-950 text-xs"
-                    value={batchStatus} 
-                    onChange={e => setBatchStatus(e.target.value)}
-                  >
-                    <option value="Vorhanden">Vorhanden (im Regal)</option>
-                    <option value="Fehlt">Fehlt noch (Wunsch)</option>
-                  </select>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <Bookmark className="w-3.5 h-3.5 text-brand-400" /> Startstatus
+                  </label>
+                  <div className="grid grid-cols-2 p-1 bg-slate-950/90 rounded-xl border border-slate-800 gap-1.5 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setBatchStatus('Vorhanden')}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                        batchStatus === 'Vorhanden'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/30'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                      <span>Im Regal</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchStatus('Fehlt')}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                        batchStatus === 'Fehlt'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/30'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                    >
+                      <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5]" />
+                      <span>Fehlt noch</span>
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1">
-                    <Coins className="w-3 h-3" /> Preis pro Band (€)
+                  <label className="block text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5" /> Preis pro Band (€)
                   </label>
-                  <input 
-                    type="text" 
-                    placeholder="z. B. 7,99 (optional)"
-                    className="input-field text-xs font-mono text-emerald-300"
-                    value={batchPrice} 
-                    onChange={e => setBatchPrice(e.target.value)} 
-                  />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="z. B. 7,99 (optional)"
+                      className="input-field text-xs font-mono text-emerald-300 pr-8 py-2.5 border-emerald-500/40 focus:border-emerald-500 font-bold"
+                      value={batchPrice} 
+                      onChange={e => setBatchPrice(e.target.value)} 
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-emerald-500/70 font-bold pointer-events-none">€</span>
+                  </div>
                 </div>
               </div>
 
