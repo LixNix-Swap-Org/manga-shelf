@@ -520,10 +520,48 @@ export default function MangaDetail({ user }) {
   const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read).length;
   const currentReaderUnreadCount = currentReaderStats ? currentReaderStats.unread_count : Math.max(0, ownedCount - currentReaderReadCount);
 
-  // Available publishers for filtering (from volumes and manga)
-  const availablePublishers = Array.from(new Set(
-    volumes.map(v => (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim())).filter(Boolean)
-  )).sort((a, b) => a.localeCompare(b));
+  const CANONICAL_PUBLISHERS = {
+    'altraverse': 'Altraverse',
+    'carlsen manga': 'Carlsen Manga',
+    'crunchyroll': 'Crunchyroll',
+    'dani books': 'Dani Books',
+    'dark horse manga': 'Dark Horse Manga',
+    'egmont manga': 'Egmont Manga',
+    'hayabusa': 'Hayabusa',
+    'kazé manga': 'Kazé Manga',
+    'kaze manga': 'Kazé Manga',
+    'manga cult': 'Manga Cult',
+    'manga jam session': 'Manga JAM Session',
+    'panini verlag gmbh': 'Panini Verlags GmbH',
+    'panini verlags gmbh': 'Panini Verlags GmbH',
+    'panini': 'Panini Verlags GmbH',
+    'papertoons': 'Papertoons',
+    'schreiber&leser': 'Schreiber&Leser',
+    'schreiber & leser': 'Schreiber&Leser',
+    'tokyopop': 'TOKYOPOP'
+  };
+
+  const normalizePubName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    return CANONICAL_PUBLISHERS[lower] || trimmed;
+  };
+
+  // Available publishers for filtering (deduplicated case-insensitively & canonicalized)
+  const availablePublishers = (() => {
+    const pubMap = new Map();
+    volumes.forEach(v => {
+      const raw = (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim());
+      if (!raw) return;
+      const canonical = normalizePubName(raw);
+      const key = canonical.toLowerCase();
+      if (!pubMap.has(key)) {
+        pubMap.set(key, canonical);
+      }
+    });
+    return Array.from(pubMap.values()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+  })();
 
   // Available conditions
   const conditionsList = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
@@ -644,7 +682,8 @@ export default function MangaDetail({ user }) {
       }
       
       if (volumePublisherFilter !== 'ALL') {
-        const pub = (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '';
+        const rawPub = (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '';
+        const pub = normalizePubName(rawPub);
         if (pub.toLowerCase() !== volumePublisherFilter.toLowerCase()) return false;
       }
 

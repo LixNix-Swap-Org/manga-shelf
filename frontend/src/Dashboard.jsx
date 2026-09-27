@@ -648,10 +648,49 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
-  // Available publishers for filtering
-  const availablePublishers = Array.from(new Set(
-    mangas.map(m => m.publisher && m.publisher.trim()).filter(Boolean)
-  )).sort((a, b) => a.localeCompare(b));
+  // Known canonical German publishers map for clean display
+  const CANONICAL_PUBLISHERS = {
+    'altraverse': 'Altraverse',
+    'carlsen manga': 'Carlsen Manga',
+    'crunchyroll': 'Crunchyroll',
+    'dani books': 'Dani Books',
+    'dark horse manga': 'Dark Horse Manga',
+    'egmont manga': 'Egmont Manga',
+    'hayabusa': 'Hayabusa',
+    'kazé manga': 'Kazé Manga',
+    'kaze manga': 'Kazé Manga',
+    'manga cult': 'Manga Cult',
+    'manga jam session': 'Manga JAM Session',
+    'panini verlag gmbh': 'Panini Verlags GmbH',
+    'panini verlags gmbh': 'Panini Verlags GmbH',
+    'panini': 'Panini Verlags GmbH',
+    'papertoons': 'Papertoons',
+    'schreiber&leser': 'Schreiber&Leser',
+    'schreiber & leser': 'Schreiber&Leser',
+    'tokyopop': 'TOKYOPOP'
+  };
+
+  const normalizePubName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    return CANONICAL_PUBLISHERS[lower] || trimmed;
+  };
+
+  // Available publishers for filtering (deduplicated case-insensitively & canonicalized)
+  const availablePublishers = (() => {
+    const pubMap = new Map();
+    mangas.forEach(m => {
+      const raw = m.publisher && m.publisher.trim();
+      if (!raw) return;
+      const canonical = normalizePubName(raw);
+      const key = canonical.toLowerCase();
+      if (!pubMap.has(key)) {
+        pubMap.set(key, canonical);
+      }
+    });
+    return Array.from(pubMap.values()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+  })();
 
   // Helper for reading progress calculation (0 - 100%)
   const getMangaProgress = (m) => {
@@ -704,7 +743,7 @@ export default function Dashboard({ user, onLogout }) {
 
       // Publisher Filter logic
       if (publisherFilter !== 'ALL') {
-        const p = (m.publisher && m.publisher.trim()) || '';
+        const p = normalizePubName(m.publisher);
         if (p.toLowerCase() !== publisherFilter.toLowerCase()) return false;
       }
       return true;
@@ -1138,6 +1177,7 @@ export default function Dashboard({ user, onLogout }) {
             <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
               <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
               <select
+                id="filter-publisher-select"
                 value={publisherFilter}
                 onChange={e => setPublisherFilter(e.target.value)}
                 className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
@@ -1619,7 +1659,8 @@ export default function Dashboard({ user, onLogout }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
             {shoppingData.items
               .filter(item => {
-                const matchPub = shoppingPublisherFilter === 'ALL' || item.effective_publisher === shoppingPublisherFilter;
+                const matchPub = shoppingPublisherFilter === 'ALL' || 
+                  normalizePubName(item.effective_publisher).toLowerCase() === shoppingPublisherFilter.toLowerCase();
                 const matchSearch = !shoppingSearch || 
                   item.manga_title.toLowerCase().includes(shoppingSearch.toLowerCase()) || 
                   String(item.volume_number).includes(shoppingSearch) ||

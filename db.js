@@ -159,6 +159,21 @@ function initDb() {
                   AND (type IS NULL OR type = 'volume' OR type = 'special');
             `);
         } catch (mErr) {}
+
+        // Migration: Normalize publisher casing & variations in mangas and volumes
+        try {
+            currentDb.exec(`
+                UPDATE mangas SET publisher = 'Kazé Manga' WHERE publisher = 'kazé Manga';
+                UPDATE mangas SET publisher = 'Manga Cult' WHERE publisher = 'manga Cult';
+                UPDATE mangas SET publisher = 'Panini Verlags GmbH' WHERE publisher = 'Panini Verlag GmbH';
+                UPDATE mangas SET publisher = 'Papertoons' WHERE publisher = 'papertoons';
+
+                UPDATE volumes SET publisher = 'Kazé Manga' WHERE publisher = 'kazé Manga';
+                UPDATE volumes SET publisher = 'Manga Cult' WHERE publisher = 'manga Cult';
+                UPDATE volumes SET publisher = 'Panini Verlags GmbH' WHERE publisher = 'Panini Verlag GmbH';
+                UPDATE volumes SET publisher = 'Papertoons' WHERE publisher = 'papertoons';
+            `);
+        } catch (mErr) {}
     } catch (e) {
         console.error('Migration error on volumes table:', e);
     }

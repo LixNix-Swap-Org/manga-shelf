@@ -368,6 +368,36 @@ app.get('/api/mangas', requireAuth, (req, res) => {
     }
 });
 
+// Canonical German Manga Publishers map & Normalization Helper
+const CANONICAL_PUBLISHERS = {
+    'altraverse': 'Altraverse',
+    'carlsen manga': 'Carlsen Manga',
+    'crunchyroll': 'Crunchyroll',
+    'dani books': 'Dani Books',
+    'dark horse manga': 'Dark Horse Manga',
+    'egmont manga': 'Egmont Manga',
+    'hayabusa': 'Hayabusa',
+    'kazé manga': 'Kazé Manga',
+    'kaze manga': 'Kazé Manga',
+    'manga cult': 'Manga Cult',
+    'manga jam session': 'Manga JAM Session',
+    'panini verlag gmbh': 'Panini Verlags GmbH',
+    'panini verlags gmbh': 'Panini Verlags GmbH',
+    'panini': 'Panini Verlags GmbH',
+    'papertoons': 'Papertoons',
+    'schreiber&leser': 'Schreiber&Leser',
+    'schreiber & leser': 'Schreiber&Leser',
+    'tokyopop': 'TOKYOPOP'
+};
+
+const normalizePublisher = (name) => {
+    if (!name || typeof name !== 'string') return null;
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const lower = trimmed.toLowerCase();
+    return CANONICAL_PUBLISHERS[lower] || trimmed;
+};
+
 app.post('/api/mangas', requireEditor, (req, res) => {
     try {
         const {
@@ -396,7 +426,7 @@ app.post('/api/mangas', requireEditor, (req, res) => {
             title.trim(),
             alt_title ? alt_title.trim() : null,
             author ? author.trim() : null,
-            publisher ? publisher.trim() : null,
+            publisher ? normalizePublisher(publisher) : null,
             language || 'Deutsch',
             status || 'Laufend',
             tags ? tags.trim() : null,
@@ -521,7 +551,7 @@ app.put('/api/mangas/:id', requireEditor, (req, res) => {
         const title = body.title !== undefined ? body.title : manga.title;
         const alt_title = body.alt_title !== undefined ? body.alt_title : manga.alt_title;
         const author = body.author !== undefined ? body.author : manga.author;
-        const publisher = body.publisher !== undefined ? body.publisher : manga.publisher;
+        const publisher = body.publisher !== undefined ? normalizePublisher(body.publisher) : normalizePublisher(manga.publisher);
         const language = body.language !== undefined ? body.language : manga.language;
         const status = body.status !== undefined ? body.status : manga.status;
         const tags = body.tags !== undefined ? body.tags : manga.tags;
@@ -645,7 +675,7 @@ app.post('/api/volumes', requireEditor, (req, res) => {
             parseNum(release_year),
             condition ? String(condition).trim() : null,
             parseNum(pages),
-            publisher ? String(publisher).trim() : null,
+            publisher ? normalizePublisher(publisher) : null,
             purchase_date ? String(purchase_date).trim() : null,
             status || 'Vorhanden',
             notes ? String(notes).trim() : null,
@@ -695,7 +725,7 @@ app.post('/api/volumes/batch', requireEditor, (req, res) => {
         `);
 
         const p = parsePrice(default_price);
-        const pub = publisher ? String(publisher).trim() : null;
+        const pub = publisher ? normalizePublisher(publisher) : null;
         const cond = condition ? String(condition).trim() : null;
         const year = parseNum(release_year);
 
@@ -735,7 +765,7 @@ app.put('/api/volumes/:id', requireEditor, (req, res) => {
         const release_year = body.release_year !== undefined ? parseNum(body.release_year) : vol.release_year;
         const condition = body.condition !== undefined ? (body.condition ? String(body.condition).trim() : null) : vol.condition;
         const pages = body.pages !== undefined ? parseNum(body.pages) : vol.pages;
-        const publisher = body.publisher !== undefined ? (body.publisher ? String(body.publisher).trim() : null) : vol.publisher;
+        const publisher = body.publisher !== undefined ? normalizePublisher(body.publisher) : normalizePublisher(vol.publisher);
         const purchase_date = body.purchase_date !== undefined ? (body.purchase_date ? String(body.purchase_date).trim() : null) : vol.purchase_date;
         const status = body.status !== undefined ? body.status : vol.status;
         const notes = body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : vol.notes;
@@ -933,7 +963,7 @@ app.get('/api/shopping-list', requireAuth, (req, res) => {
         // Group by publisher for fast filter chips
         const publisherMap = new Map();
         missingVols.forEach(v => {
-            const pub = v.effective_publisher;
+            const pub = normalizePublisher(v.effective_publisher) || 'Unbekannt';
             if (!publisherMap.has(pub)) {
                 publisherMap.set(pub, { publisher: pub, count: 0, total_price: 0 });
             }
@@ -1347,7 +1377,7 @@ app.get('/api/lookup/isbn', requireAuth, async (req, res) => {
             }
 
             let publisher = getField('264', 'b') || getField('260', 'b');
-            if (publisher) publisher = publisher.replace(/\s*;\s*$/, '').trim();
+            if (publisher) publisher = normalizePublisher(publisher.replace(/\s*;\s*$/, '').trim());
 
             const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
             let releaseYear = null;
