@@ -7,7 +7,7 @@ import {
   Building2, ArrowUpDown, ChevronDown, UploadCloud, AlertTriangle,
   FileArchive, RefreshCw, BarChart3, TrendingUp, Calendar, Clock, 
   BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check,
-  LayoutGrid, List, Menu, Wifi, WifiOff
+  LayoutGrid, List, Menu, Wifi, WifiOff, Package, Bookmark, Truck
 } from 'lucide-react';
 
 export default function Dashboard({ user, onLogout }) {
@@ -88,11 +88,12 @@ export default function Dashboard({ user, onLogout }) {
   const [lookupResults, setLookupResults] = useState(null);
   const [lookupError, setLookupError] = useState('');
 
-  // Main view switcher: 'shelf' | 'shopping' (initialized from URL if present)
+  // Main view switcher: 'shelf' | 'shopping' | 'radar' (initialized from URL if present)
   const [activeMainView, setActiveMainView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('view') === 'shopping') return 'shopping';
+      const v = params.get('view');
+      if (v === 'shopping' || v === 'radar') return v;
     } catch (_) {}
     return 'shelf';
   });
@@ -108,6 +109,14 @@ export default function Dashboard({ user, onLogout }) {
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
   const [buyingId, setBuyingId] = useState(null);
+
+  // Release-Radar State
+  const [radarData, setRadarData] = useState(null);
+  const [loadingRadar, setLoadingRadar] = useState(false);
+  const [radarPublisherFilter, setRadarPublisherFilter] = useState('ALL');
+  const [radarStatusFilter, setRadarStatusFilter] = useState('ALL');
+  const [radarSearch, setRadarSearch] = useState('');
+  const [markingDeliveredId, setMarkingDeliveredId] = useState(null);
 
   // Network & PWA State
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
@@ -206,6 +215,7 @@ export default function Dashboard({ user, onLogout }) {
   useEffect(() => {
     fetchMangas();
     fetchShoppingList();
+    fetchReleaseRadar();
   }, []);
 
   useEffect(() => {
@@ -333,6 +343,48 @@ export default function Dashboard({ user, onLogout }) {
       setIsOfflineMode(true);
     } finally {
       setBuyingId(null);
+    }
+  };
+
+  const fetchReleaseRadar = async () => {
+    try {
+      setLoadingRadar(true);
+      const res = await fetch('/api/release-radar');
+      if (res.ok) {
+        const data = await res.json();
+        setRadarData(data);
+      }
+    } catch (err) {
+      console.error('Error fetching release radar:', err);
+    } finally {
+      setLoadingRadar(false);
+    }
+  };
+
+  const handleMarkDelivered = async (item) => {
+    if (!canEdit) return;
+    setMarkingDeliveredId(item.id);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/volumes/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'Vorhanden',
+          purchase_date: item.purchase_date || todayStr
+        })
+      });
+      if (res.ok) {
+        await Promise.all([fetchReleaseRadar(), fetchMangas()]);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Fehler beim Markieren als erhalten');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Netzwerkfehler');
+    } finally {
+      setMarkingDeliveredId(null);
     }
   };
 
@@ -964,7 +1016,7 @@ export default function Dashboard({ user, onLogout }) {
                     MangaShelf
                   </h1>
                   <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">
-                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.4.0'}
+                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
@@ -995,6 +1047,29 @@ export default function Dashboard({ user, onLogout }) {
                 {shoppingData && shoppingData.total_missing > 0 && (
                   <span className="bg-emerald-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
                     {shoppingData.total_missing}
+                  </span>
+                )}
+              </button>
+
+              <button 
+                id="btn-mobile-radar"
+                onClick={() => {
+                  const next = activeMainView === 'radar' ? 'shelf' : 'radar';
+                  setActiveMainView(next);
+                  if (next === 'radar') fetchReleaseRadar();
+                }}
+                className={`p-2 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs ${
+                  activeMainView === 'radar'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
+                    : 'btn-secondary text-slate-300'
+                }`}
+                title="Release-Radar umschalten"
+              >
+                <Calendar className="w-4 h-4 text-sky-400" />
+                <span className="hidden sm:inline">Radar</span>
+                {radarData && radarData.total_releases > 0 && (
+                  <span className="bg-sky-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
+                    {radarData.total_releases}
                   </span>
                 )}
               </button>
@@ -1165,6 +1240,18 @@ export default function Dashboard({ user, onLogout }) {
                 <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken
               </button>
 
+              <button 
+                id="btn-mobile-menu-radar"
+                onClick={() => { 
+                  setMobileMenuOpen(false); 
+                  setActiveMainView('radar'); 
+                  fetchReleaseRadar(); 
+                }}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
+              >
+                <Calendar className="w-4 h-4 text-sky-400" /> Release-Radar
+              </button>
+
               {canEdit && (
                 <button 
                   id="btn-mobile-menu-add"
@@ -1259,12 +1346,40 @@ export default function Dashboard({ user, onLogout }) {
                 </span>
               )}
             </button>
+            <button
+              id="btn-nav-radar"
+              onClick={() => {
+                setActiveMainView('radar');
+                try { window.history.replaceState(null, '', '?view=radar'); } catch (_) {}
+                fetchReleaseRadar();
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                activeMainView === 'radar'
+                  ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Calendar className="w-4 h-4 text-sky-400" />
+              <span>Release-Radar</span>
+              {radarData && radarData.total_releases > 0 && (
+                <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
+                  {radarData.total_releases}
+                </span>
+              )}
+            </button>
           </div>
 
           {activeMainView === 'shopping' && (
             <div className="text-xs text-slate-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>Laden-Modus: Fehlende Bände abhaken & direkt einbuchen</span>
+            </div>
+          )}
+
+          {activeMainView === 'radar' && (
+            <div className="text-xs text-slate-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+              <span>Kalender-Modus: Vorbestellungen & Neuerscheinungen im Blick</span>
             </div>
           )}
         </div>
@@ -1966,6 +2081,379 @@ export default function Dashboard({ user, onLogout }) {
         )}
       </div>
     )}
+
+    {/* RELEASE RADAR / ERSCHEINUNGSKALENDER VIEW */}
+    {activeMainView === 'radar' && (
+      <div className="space-y-6 animate-fade-in">
+        {/* Release Radar Summary Card */}
+        <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-sky-950/30">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
+              <Calendar className="w-6 h-6 text-sky-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>Release-Radar & Erscheinungskalender</span>
+                {radarData && (
+                  <span className="bg-sky-500/20 text-sky-300 text-xs px-2.5 py-0.5 rounded-full border border-sky-500/30 font-mono font-bold">
+                    {radarData.total_releases} {radarData.total_releases === 1 ? 'Band' : 'Bände'}
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Verfolge anstehende Veröffentlichungen, Vorbestellungen und behalte dein monatliches Manga-Budget im Blick
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full md:w-auto">
+            {/* Preorder Budget KPI */}
+            <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
+                <Package className="w-3 h-3 text-sky-400" /> Vorbestellt ({radarData ? radarData.preordered_count : 0})
+              </p>
+              <p className="text-base sm:text-lg font-extrabold text-sky-400 font-mono">
+                {radarData ? radarData.preordered_budget.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
+              </p>
+            </div>
+
+            {/* Total Budget KPI */}
+            <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
+                <Coins className="w-3 h-3 text-emerald-400" /> Gesamt geplant
+              </p>
+              <p className="text-base sm:text-lg font-extrabold text-emerald-400 font-mono">
+                {radarData ? radarData.total_budget.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
+              </p>
+            </div>
+
+            <button
+              onClick={fetchReleaseRadar}
+              disabled={loadingRadar}
+              className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 shrink-0"
+              title="Release-Radar aktualisieren"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingRadar ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Radar Filters Bar */}
+        <div className="glass-panel p-3.5 sm:p-4 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+          {/* Search */}
+          <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 w-full md:w-72 shadow-inner">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Reihe oder Verlag suchen..."
+              className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 text-xs"
+              value={radarSearch}
+              onChange={e => setRadarSearch(e.target.value)}
+            />
+            {radarSearch && (
+              <button onClick={() => setRadarSearch('')} className="text-slate-500 hover:text-white">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter Chips */}
+            <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+              {[
+                { id: 'ALL', label: 'Alle Neuheiten' },
+                { id: 'Vorbestellt', label: '📦 Vorbestellt' },
+                { id: 'Erscheint bald', label: '⏳ Erscheint bald' },
+              ].map(st => (
+                <button
+                  key={st.id}
+                  onClick={() => setRadarStatusFilter(st.id)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 ${
+                    radarStatusFilter === st.id
+                      ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Publisher Filter */}
+            {radarData && radarData.publishers && radarData.publishers.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs">
+                <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                <select
+                  value={radarPublisherFilter}
+                  onChange={e => setRadarPublisherFilter(e.target.value)}
+                  className="bg-transparent border-0 p-0 text-slate-200 focus:outline-none focus:ring-0 font-medium cursor-pointer"
+                >
+                  <option value="ALL">Alle Verlage</option>
+                  {radarData.publishers.map(p => (
+                    <option key={p.publisher} value={p.publisher}>
+                      {p.publisher} ({p.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(radarSearch || radarPublisherFilter !== 'ALL' || radarStatusFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setRadarSearch('');
+                  setRadarPublisherFilter('ALL');
+                  setRadarStatusFilter('ALL');
+                }}
+                className="btn-secondary text-xs py-2 px-3 text-slate-400 hover:text-white"
+              >
+                Filter zurücksetzen
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Empty State when no releases found */}
+        {(!radarData || radarData.total_releases === 0) && (
+          <div className="glass-panel p-10 rounded-2xl border border-slate-800/80 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-4 text-sky-400">
+              <Calendar className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">Keine anstehenden Neuerscheinungen im Radar</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
+              Trage bei deinen Reihen Bände mit dem Status <strong>„Vorbestellt“</strong> oder <strong>„Erscheint bald“</strong> und einem konkreten Erscheinungsdatum ein. So behältst du dein monatliches Budget und Lieferungen hier im Kalender jederzeit im Überblick!
+            </p>
+            <button
+              onClick={() => setActiveMainView('shelf')}
+              className="btn-primary text-xs px-4 py-2"
+            >
+              Zurück zur Sammlung
+            </button>
+          </div>
+        )}
+
+        {/* Monthly Groups Timeline */}
+        {radarData && radarData.groups && radarData.groups.length > 0 && (
+          <div className="space-y-8">
+            {radarData.groups.map(group => {
+              // Apply active filters to group items
+              const visibleItems = group.items.filter(item => {
+                const matchPub = radarPublisherFilter === 'ALL' || 
+                  item.effective_publisher.toLowerCase() === radarPublisherFilter.toLowerCase();
+                const matchStatus = radarStatusFilter === 'ALL' || 
+                  item.status === radarStatusFilter;
+                const matchSearch = !radarSearch || 
+                  item.manga_title.toLowerCase().includes(radarSearch.toLowerCase()) || 
+                  String(item.volume_number).includes(radarSearch) ||
+                  (item.effective_publisher && item.effective_publisher.toLowerCase().includes(radarSearch.toLowerCase()));
+                return matchPub && matchStatus && matchSearch;
+              });
+
+              if (visibleItems.length === 0) return null;
+
+              const groupTotalVisible = visibleItems.reduce((sum, it) => sum + (it.price || 0), 0);
+              const groupPreorderedVisible = visibleItems.filter(it => ['Vorbestellt', 'Bestellt'].includes(it.status)).length;
+
+              return (
+                <div key={group.key} className="space-y-3.5">
+                  {/* Monthly Section Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500/20 to-brand-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow-sm">
+                        <Calendar className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <span>{group.label}</span>
+                          <span className="text-xs font-mono font-normal text-slate-400">
+                            ({visibleItems.length} {visibleItems.length === 1 ? 'Band' : 'Bände'})
+                          </span>
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      {groupPreorderedVisible > 0 && (
+                        <span className="inline-flex items-center gap-1 bg-sky-500/15 border border-sky-500/30 text-sky-300 font-semibold px-2.5 py-1 rounded-xl">
+                          <Package className="w-3 h-3 text-sky-400" />
+                          <span>{groupPreorderedVisible} Vorbestellt</span>
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono font-bold px-2.5 py-1 rounded-xl">
+                        <Coins className="w-3 h-3 text-emerald-400" />
+                        <span>{groupTotalVisible.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Volume Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                    {visibleItems.map(item => {
+                      const isPreordered = ['Vorbestellt', 'Bestellt'].includes(item.status);
+                      const isComingSoon = item.status === 'Erscheint bald';
+                      const isSpecial = item.type === 'special_edition' || item.type === 'schuber' || item.type === 'special';
+                      const displayTitle = item.type === 'schuber' ? `Schuber ${item.volume_number}` :
+                        item.type === 'special_edition' ? `Band ${item.volume_number} (Special Edition)` :
+                        item.type === 'special' ? `Special ${item.volume_number}` :
+                        `Band ${item.volume_number}`;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`glass-card rounded-2xl p-3.5 border transition-all flex flex-col justify-between group relative ${
+                            isPreordered 
+                              ? 'border-sky-500/40 bg-gradient-to-b from-sky-950/20 via-slate-900/60 to-slate-900/80 hover:border-sky-500/70 shadow-lg shadow-sky-950/20' 
+                              : isComingSoon
+                              ? 'border-purple-500/40 bg-gradient-to-b from-purple-950/20 via-slate-900/60 to-slate-900/80 hover:border-purple-500/70 shadow-lg shadow-purple-950/20'
+                              : 'border-slate-800/80 hover:border-slate-700 bg-slate-900/60'
+                          }`}
+                        >
+                          <div>
+                            {/* Card Header Row: Badges & Countdown */}
+                            <div className="flex items-center justify-between gap-1.5 mb-2.5">
+                              {/* Status Badge */}
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 shrink-0 ${
+                                isPreordered
+                                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
+                                  : isComingSoon
+                                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}>
+                                {isPreordered ? <Package className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
+                                <span>{item.status}</span>
+                              </span>
+
+                              {/* Countdown Pill */}
+                              {item.countdown_label && (
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border truncate ${
+                                  item.days_until === 0
+                                    ? 'bg-emerald-500/25 border-emerald-500/60 text-emerald-300 animate-pulse'
+                                    : item.days_until > 0 && item.days_until <= 7
+                                    ? 'bg-sky-500/20 border-sky-500/40 text-sky-200'
+                                    : item.days_until < 0
+                                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                    : 'bg-slate-800/80 border-slate-700/60 text-slate-400'
+                                }`}>
+                                  {item.countdown_label}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Main Info Row: Thumbnail + Details */}
+                            <div className="flex gap-3">
+                              {/* Cover */}
+                              <Link 
+                                to={`/manga/${item.manga_id}`}
+                                className="shrink-0 relative group/thumb overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md"
+                              >
+                                {item.vol_cover || item.manga_cover ? (
+                                  <img
+                                    src={item.vol_cover || item.manga_cover}
+                                    alt={item.manga_title}
+                                    className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover/thumb:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-16 h-24 bg-slate-800 rounded-xl flex items-center justify-center text-slate-600">
+                                    <BookOpen className="w-6 h-6" />
+                                  </div>
+                                )}
+                              </Link>
+
+                              {/* Text Details */}
+                              <div className="flex-1 min-w-0">
+                                <Link
+                                  to={`/manga/${item.manga_id}`}
+                                  className="text-xs sm:text-sm font-bold text-white hover:text-brand-300 truncate block transition-colors leading-snug"
+                                  title={item.manga_title}
+                                >
+                                  {item.manga_title}
+                                </Link>
+
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
+                                    {displayTitle}
+                                  </span>
+                                  {item.type === 'special_edition' && (
+                                    <span className="bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                                      Special
+                                    </span>
+                                  )}
+                                  {item.type === 'schuber' && (
+                                    <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                                      Schuber
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
+                                  <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                                  <span className="truncate">{item.effective_publisher}</span>
+                                </p>
+
+                                {item.release_date && (
+                                  <p className="text-[11px] text-slate-300 mt-1 flex items-center gap-1 font-mono">
+                                    <Calendar className="w-3 h-3 text-sky-400 shrink-0" />
+                                    <span>
+                                      {item.release_date.split('-').length === 3 
+                                        ? `${item.release_date.split('-')[2]}.${item.release_date.split('-')[1]}.${item.release_date.split('-')[0]}`
+                                        : item.release_date}
+                                    </span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Row: Price & Actions */}
+                          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                            <div className="font-mono">
+                              {item.price > 0 ? (
+                                <span className="text-sm font-extrabold text-emerald-400">
+                                  {item.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-500">Preis n.a.</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <Link
+                                to={`/manga/${item.manga_id}`}
+                                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs"
+                                title="Zu den Manga-Details"
+                              >
+                                Details ↗
+                              </Link>
+
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkDelivered(item)}
+                                  disabled={markingDeliveredId === item.id}
+                                  className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                                  title="Band als geliefert/erhalten markieren (Status wird auf 'Vorhanden' gesetzt)"
+                                >
+                                  {markingDeliveredId === item.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  )}
+                                  <span>Geliefert</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    )}
   </main>
 
   {/* Footer with App Version, Status & PWA Install */}
@@ -1974,7 +2462,7 @@ export default function Dashboard({ user, onLogout }) {
       <span className="font-semibold text-slate-400">Manga Shelf</span>
       <span className="text-slate-600">•</span>
       <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60">
-        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.4.0'}
+        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0'}
       </span>
     </div>
     <div className="flex flex-wrap items-center justify-center gap-3 text-slate-400">

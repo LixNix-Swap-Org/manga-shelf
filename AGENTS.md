@@ -96,12 +96,13 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `volume_number` (TEXT, NOT NULL) – String, um z. B. "1", "0", "12.5" oder "Special" zu erlauben
    * `isbn` (TEXT)
    * `price` (REAL) – Kaufpreis in €
+   * `release_date` (TEXT) – Konkretes Erscheinungsdatum (Format `YYYY-MM-DD` oder `YYYY-MM`) für Release-Radar
    * `release_year` (INTEGER)
    * `condition` (TEXT) – Zustand (z. B. "Sehr gut", "Neu")
    * `pages` (INTEGER) – Seitenanzahl (wichtig für Lesestatistiken)
    * `publisher` (TEXT)
    * `purchase_date` (TEXT) – Kaufdatum (Format `YYYY-MM-DD`)
-   * `status` (TEXT) – z. B. "Besitz", "Bestellt", "Wunschliste"
+   * `status` (TEXT) – z. B. "Vorhanden", "Fehlt", "Vorbestellt", "Erscheint bald", "Bestellt"
    * `notes` (TEXT)
    * `cover_image` (TEXT)
    * `images` (TEXT) – JSON-String für Zusatzbilder / Galerie
@@ -173,6 +174,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via AniList GraphQL API |
 | `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
+| `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
 | `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |

@@ -7,7 +7,7 @@ import {
   FileText, Filter, ArrowUpDown, Info, Bookmark, Hash, 
   Building2, Search, SlidersHorizontal, ChevronDown,
   Star, Maximize2, Camera, Link as LinkIcon,
-  BookCheck, CheckCheck, Package,
+  BookCheck, CheckCheck, Package, Truck,
   Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart
 } from 'lucide-react';
 
@@ -53,6 +53,7 @@ export default function MangaDetail({ user }) {
   const [newVolumeType, setNewVolumeType] = useState('volume'); // 'volume' | 'special_edition' | 'schuber' | 'special'
   const [newVolumeNum, setNewVolumeNum] = useState('');
   const [newVolumeStatus, setNewVolumeStatus] = useState('Vorhanden');
+  const [newVolumeReleaseDate, setNewVolumeReleaseDate] = useState('');
   const [newVolumePrice, setNewVolumePrice] = useState('');
   const [newVolumePublisher, setNewVolumePublisher] = useState('');
   const [newVolumeCover, setNewVolumeCover] = useState('');
@@ -193,6 +194,7 @@ export default function MangaDetail({ user }) {
           type: newVolumeType,
           volume_number: newVolumeNum.trim(),
           status: newVolumeStatus,
+          release_date: newVolumeReleaseDate ? newVolumeReleaseDate.trim() : null,
           price: newVolumePrice ? newVolumePrice.trim() : null,
           publisher: newVolumePublisher ? newVolumePublisher.trim() : null,
           cover_image: newVolumeCover || null,
@@ -202,6 +204,7 @@ export default function MangaDetail({ user }) {
       if (res.ok) {
         setNewVolumeNum('');
         setNewVolumePrice('');
+        setNewVolumeReleaseDate('');
         setNewVolumePublisher('');
         setNewVolumeCover('');
         setNewVolumeType('volume');
@@ -354,12 +357,21 @@ export default function MangaDetail({ user }) {
 
   const handleToggleVolume = async (vol) => {
     if (!canEdit) return;
-    const nextStatus = vol.status === 'Vorhanden' ? 'Fehlt' : 'Vorhanden';
+    let nextStatus = 'Vorhanden';
+    let purchaseDate = vol.purchase_date;
+    if (vol.status === 'Vorhanden') {
+      nextStatus = 'Fehlt';
+    } else {
+      nextStatus = 'Vorhanden';
+      if (!purchaseDate) {
+        purchaseDate = new Date().toISOString().split('T')[0];
+      }
+    }
     try {
       const res = await fetch(`/api/volumes/${vol.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...vol, status: nextStatus })
+        body: JSON.stringify({ ...vol, status: nextStatus, purchase_date: purchaseDate })
       });
       if (res.ok) {
         await fetchManga();
@@ -449,6 +461,7 @@ export default function MangaDetail({ user }) {
       price: vol.price !== null && vol.price !== undefined ? String(vol.price) : '',
       publisher: vol.publisher || '',
       condition: vol.condition || '',
+      release_date: vol.release_date || '',
       release_year: vol.release_year ? String(vol.release_year) : '',
       pages: vol.pages ? String(vol.pages) : '',
       isbn: vol.isbn || '',
@@ -514,6 +527,8 @@ export default function MangaDetail({ user }) {
   const volumes = manga.volumes || [];
   const ownedCount = volumes.filter(v => v.status === 'Vorhanden').length;
   const missingCount = volumes.filter(v => v.status === 'Fehlt').length;
+  const preorderedCount = volumes.filter(v => v.status === 'Vorbestellt').length;
+  const upcomingCount = volumes.filter(v => v.status === 'Erscheint bald').length;
   const totalTarget = manga.total_volumes || 0;
   const completionPct = totalTarget > 0 ? Math.min(100, Math.round((ownedCount / totalTarget) * 100)) : null;
 
@@ -677,6 +692,8 @@ export default function MangaDetail({ user }) {
 
       if (volumeFilter === 'Vorhanden' && v.status !== 'Vorhanden') return false;
       if (volumeFilter === 'Fehlt' && v.status !== 'Fehlt') return false;
+      if (volumeFilter === 'Vorbestellt' && v.status !== 'Vorbestellt') return false;
+      if (volumeFilter === 'Erscheint bald' && v.status !== 'Erscheint bald') return false;
       if (volumeFilter === 'Gelesen' && !isReadByTarget) return false;
       if (volumeFilter === 'Ungelesen') {
         if (v.status !== 'Vorhanden' || isReadByTarget) return false;
@@ -1516,6 +1533,30 @@ export default function MangaDetail({ user }) {
                 >
                   ✕ Fehlt noch ({missingCount})
                 </button>
+                {preorderedCount > 0 && (
+                  <button
+                    onClick={() => setVolumeFilter('Vorbestellt')}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                      volumeFilter === 'Vorbestellt' 
+                        ? 'bg-sky-600 text-white shadow-sm' 
+                        : 'text-sky-400 hover:text-sky-300'
+                    }`}
+                  >
+                    📦 Vorbestellt ({preorderedCount})
+                  </button>
+                )}
+                {upcomingCount > 0 && (
+                  <button
+                    onClick={() => setVolumeFilter('Erscheint bald')}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                      volumeFilter === 'Erscheint bald' 
+                        ? 'bg-purple-600 text-white shadow-sm' 
+                        : 'text-purple-400 hover:text-purple-300'
+                    }`}
+                  >
+                    📅 Erscheint bald ({upcomingCount})
+                  </button>
+                )}
                 <button
                   onClick={() => setVolumeFilter('Gelesen')}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
@@ -1837,12 +1878,20 @@ export default function MangaDetail({ user }) {
                                       ✓
                                     </span>
                                   )}
-                                  {/* Missing Badge */}
-                                  {!isOwned && (
+                                  {/* Status Badge */}
+                                  {vol.status === 'Vorbestellt' ? (
+                                    <span className="text-[8px] font-extrabold bg-sky-500 text-slate-950 px-1 rounded-sm shadow-sm" title="Vorbestellt">
+                                      BESTELLT
+                                    </span>
+                                  ) : vol.status === 'Erscheint bald' ? (
+                                    <span className="text-[8px] font-extrabold bg-purple-500 text-slate-950 px-1 rounded-sm shadow-sm" title="Erscheint bald">
+                                      BALD
+                                    </span>
+                                  ) : !isOwned ? (
                                     <span className="text-[8px] font-extrabold bg-amber-500 text-slate-950 px-1 rounded-sm" title="Fehlt in der Sammlung">
                                       FEHLT
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -1945,11 +1994,23 @@ export default function MangaDetail({ user }) {
                                 } ${
                                   isOwned
                                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    : vol.status === 'Vorbestellt'
+                                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                                      : vol.status === 'Erscheint bald'
+                                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                 }`}
                                 title={canEdit ? 'Klicken zum Status umschalten' : ''}
                               >
-                                {isOwned ? '✓ Im Besitz' : '✕ Fehlt'}
+                                {isOwned ? (
+                                  '✓ Im Besitz'
+                                ) : vol.status === 'Vorbestellt' ? (
+                                  <><Truck className="w-3 h-3 text-sky-400" /> Vorbestellt</>
+                                ) : vol.status === 'Erscheint bald' ? (
+                                  <><Calendar className="w-3 h-3 text-purple-400" /> Erscheint bald</>
+                                ) : (
+                                  '✕ Fehlt'
+                                )}
                               </button>
                             </td>
 
@@ -2041,7 +2102,11 @@ export default function MangaDetail({ user }) {
                     } ${
                       isOwned 
                         ? 'bg-slate-900/90 border-emerald-500/40 text-slate-100 shadow-emerald-950/20' + (canEdit ? ' hover:border-emerald-400 hover:bg-slate-850' : '') 
-                        : 'bg-slate-950/70 border-slate-800 text-slate-400' + (canEdit ? ' hover:border-slate-700 hover:text-slate-200' : '')
+                        : vol.status === 'Vorbestellt'
+                          ? 'bg-sky-950/30 border-sky-500/40 text-slate-100 shadow-sky-950/20' + (canEdit ? ' hover:border-sky-400 hover:bg-sky-900/30' : '')
+                          : vol.status === 'Erscheint bald'
+                            ? 'bg-purple-950/30 border-purple-500/40 text-slate-100 shadow-purple-950/20' + (canEdit ? ' hover:border-purple-400 hover:bg-purple-900/30' : '')
+                            : 'bg-slate-950/70 border-slate-800 text-slate-400' + (canEdit ? ' hover:border-slate-700 hover:text-slate-200' : '')
                     }`}
                   >
                     {/* Top Row: Checkmark / Status + Volume Number + Actions (Full width across card) */}
@@ -2059,11 +2124,23 @@ export default function MangaDetail({ user }) {
                           } ${
                             isOwned 
                               ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canEdit ? ' hover:bg-emerald-500/30' : '') 
-                              : 'bg-slate-800/80 border border-slate-700 text-slate-500' + (canEdit ? ' hover:border-slate-500 hover:text-slate-300' : '')
+                              : vol.status === 'Vorbestellt'
+                                ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canEdit ? ' hover:bg-sky-500/30' : '')
+                                : vol.status === 'Erscheint bald'
+                                  ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canEdit ? ' hover:bg-purple-500/30' : '')
+                                  : 'bg-slate-800/80 border border-slate-700 text-slate-500' + (canEdit ? ' hover:border-slate-500 hover:text-slate-300' : '')
                           }`}
-                          title={!canEdit ? (isOwned ? 'Status: Im Besitz' : 'Status: Fehlt') : (isOwned ? 'Status: Im Besitz (Klicken zum Umschalten)' : 'Status: Fehlt (Klicken zum Umschalten)')}
+                          title={!canEdit ? `Status: ${vol.status || 'Fehlt'}` : `Status: ${vol.status || 'Fehlt'} (Klicken zum Umschalten)`}
                         >
-                          {isOwned ? <Check className="w-3 h-3 stroke-[2.5]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>}
+                          {isOwned ? (
+                            <Check className="w-3 h-3 stroke-[2.5]" />
+                          ) : vol.status === 'Vorbestellt' ? (
+                            <Truck className="w-3 h-3" />
+                          ) : vol.status === 'Erscheint bald' ? (
+                            <Calendar className="w-3 h-3" />
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                          )}
                         </button>
                         <div 
                           className="font-bold text-white text-sm tracking-tight flex items-center gap-1.5 min-w-0 overflow-hidden"
@@ -2169,6 +2246,25 @@ export default function MangaDetail({ user }) {
                       )}
 
                       <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        {vol.status === 'Vorbestellt' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-sky-300 bg-sky-950/70 border border-sky-500/40 text-[10px]">
+                            <Truck className="w-3 h-3 text-sky-400" />
+                            Vorbestellt
+                          </span>
+                        ) : vol.status === 'Erscheint bald' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-purple-300 bg-purple-950/70 border border-purple-500/40 text-[10px]">
+                            <Calendar className="w-3 h-3 text-purple-400" />
+                            Erscheint bald
+                          </span>
+                        ) : null}
+
+                        {vol.release_date ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${vol.release_date}`}>
+                            <Calendar className="w-3 h-3 text-sky-400" />
+                            {vol.release_date}
+                          </span>
+                        ) : null}
+
                         {vol.price !== null && vol.price !== undefined ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30">
                             <Coins className="w-3 h-3 text-emerald-400" />
@@ -2349,32 +2445,28 @@ export default function MangaDetail({ user }) {
                   />
                 </div>
 
-                {/* Status Toggle Switch */}
-                <div className="inline-flex p-1 bg-slate-950 rounded-xl border border-slate-800 shrink-0 gap-1 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setNewVolumeStatus('Vorhanden')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 select-none ${
-                      newVolumeStatus === 'Vorhanden'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
-                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                    }`}
+                {/* Status Selection */}
+                <div className="w-36 sm:w-40 shrink-0">
+                  <select 
+                    className="input-field bg-slate-950 text-sm py-2 px-2.5 w-full cursor-pointer font-medium"
+                    value={newVolumeStatus}
+                    onChange={e => setNewVolumeStatus(e.target.value)}
                   >
-                    <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
-                    <span>Im Besitz</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewVolumeStatus('Fehlt')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 select-none ${
-                      newVolumeStatus === 'Fehlt'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
-                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                    }`}
-                  >
-                    <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5]" />
-                    <span>Fehlt</span>
-                  </button>
+                    <option value="Vorhanden">✓ Im Besitz</option>
+                    <option value="Vorbestellt">📦 Vorbestellt</option>
+                    <option value="Erscheint bald">⏳ Erscheint bald</option>
+                    <option value="Fehlt">✕ Fehlt noch</option>
+                  </select>
+                </div>
+
+                {/* Release Date for Radar */}
+                <div className="w-36 sm:w-40 shrink-0" title="Erscheinungsdatum (für Release-Radar)">
+                  <input 
+                    type="date" 
+                    className="input-field text-sm py-2 px-2.5 w-full font-mono bg-slate-950" 
+                    value={newVolumeReleaseDate} 
+                    onChange={e => setNewVolumeReleaseDate(e.target.value)} 
+                  />
                 </div>
 
                 {/* Optional Cover upload for new volume */}
@@ -2491,29 +2583,53 @@ export default function MangaDetail({ user }) {
                     <Bookmark className="w-3.5 h-3.5 text-brand-400" /> Sammler-Status
                   </label>
                   {/* Segmented Switch Pill Control */}
-                  <div className="grid grid-cols-2 p-1 bg-slate-950/90 rounded-xl border border-slate-800 gap-1.5 shadow-inner">
+                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/90 rounded-xl border border-slate-800 shadow-inner">
                     <button
                       type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorhanden' })}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 select-none ${
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
                         editVolForm.status === 'Vorhanden'
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <Check className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                      <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
                       <span>Im Besitz</span>
                     </button>
                     <button
                       type="button"
+                      onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorbestellt' })}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                        editVolForm.status === 'Vorbestellt'
+                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm shadow-sky-950/40 ring-1 ring-sky-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
+                      }`}
+                    >
+                      <Truck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5]" />
+                      <span>Vorbestellt</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditVolForm({ ...editVolForm, status: 'Erscheint bald' })}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                        editVolForm.status === 'Erscheint bald'
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-950/40 ring-1 ring-purple-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
+                      }`}
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-purple-400 stroke-[2.5]" />
+                      <span>Erscheint bald</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Fehlt' })}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 select-none ${
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
                         editVolForm.status === 'Fehlt'
                           ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <X className="w-4 h-4 text-rose-400 stroke-[2.5]" />
+                      <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5]" />
                       <span>Fehlt noch</span>
                     </button>
                   </div>
@@ -2804,15 +2920,30 @@ export default function MangaDetail({ user }) {
                 </div>
               </div>
 
-              {/* Row 5: Purchase date */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Kaufdatum</label>
-                <input 
-                  type="date" 
-                  className="input-field bg-slate-950" 
-                  value={editVolForm.purchase_date} 
-                  onChange={e => setEditVolForm({ ...editVolForm, purchase_date: e.target.value })} 
-                />
+              {/* Row 5: Release date & Purchase date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-sky-400 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" /> Erscheinungsdatum (Radar)
+                  </label>
+                  <input 
+                    type="date" 
+                    className="input-field bg-slate-950 border-sky-500/30 focus:border-sky-500 text-sky-200" 
+                    value={editVolForm.release_date || ''} 
+                    onChange={e => setEditVolForm({ ...editVolForm, release_date: e.target.value })} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> Kaufdatum
+                  </label>
+                  <input 
+                    type="date" 
+                    className="input-field bg-slate-950" 
+                    value={editVolForm.purchase_date} 
+                    onChange={e => setEditVolForm({ ...editVolForm, purchase_date: e.target.value })} 
+                  />
+                </div>
               </div>
 
               {/* Row 6: Notes & Extras */}

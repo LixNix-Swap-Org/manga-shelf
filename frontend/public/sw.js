@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mangashelf-v2.5.0';
+const CACHE_NAME = 'mangashelf-v2.6.0';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

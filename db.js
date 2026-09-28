@@ -72,6 +72,7 @@ function initDb() {
             volume_number TEXT NOT NULL,
             isbn TEXT,
             price REAL,
+            release_date TEXT,
             release_year INTEGER,
             condition TEXT,
             pages INTEGER,
@@ -110,6 +111,7 @@ function initDb() {
         const volCols = currentDb.prepare("PRAGMA table_info(volumes)").all();
         const volColNames = new Set(volCols.map(c => c.name));
         if (!volColNames.has('price')) currentDb.exec('ALTER TABLE volumes ADD COLUMN price REAL DEFAULT NULL;');
+        if (!volColNames.has('release_date')) currentDb.exec('ALTER TABLE volumes ADD COLUMN release_date TEXT DEFAULT NULL;');
         if (!volColNames.has('release_year')) currentDb.exec('ALTER TABLE volumes ADD COLUMN release_year INTEGER DEFAULT NULL;');
         if (!volColNames.has('condition')) currentDb.exec('ALTER TABLE volumes ADD COLUMN condition TEXT DEFAULT NULL;');
         if (!volColNames.has('pages')) currentDb.exec('ALTER TABLE volumes ADD COLUMN pages INTEGER DEFAULT NULL;');
