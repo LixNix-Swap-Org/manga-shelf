@@ -267,22 +267,6 @@ export default function Dashboard({ user, onLogout }) {
     try { localStorage.setItem('mangashelf_view_mode', viewMode); } catch (_) {}
   }, [viewMode]);
 
-  // Keyboard shortcuts: '/' to focus search, 'Escape' to blur/clear
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        setSearch('');
-        searchInputRef.current?.blur();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const fetchShoppingList = async () => {
     try {
       setLoadingShopping(true);
@@ -625,6 +609,45 @@ export default function Dashboard({ user, onLogout }) {
     setLookupError('');
     setShowAddModal(false);
   };
+
+  // Keyboard shortcuts: '/' to focus search, 'Escape' to close open modals or blur/clear
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (showAddModal) {
+          closeAddModal();
+          return;
+        }
+        if (showStatsModal) {
+          setShowStatsModal(false);
+          return;
+        }
+        if (showUsersModal) {
+          setShowUsersModal(false);
+          return;
+        }
+        if (showRestoreModal) {
+          setShowRestoreModal(false);
+          return;
+        }
+        if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
+          return;
+        }
+        if (document.activeElement === searchInputRef.current) {
+          setSearch('');
+          searchInputRef.current?.blur();
+        } else if (search) {
+          setSearch('');
+        }
+      } else if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal, showStatsModal, showUsersModal, showRestoreModal, mobileMenuOpen, search]);
 
   const handleLookupMetadata = async () => {
     if (!form.title.trim()) {
@@ -1133,33 +1156,33 @@ export default function Dashboard({ user, onLogout }) {
     <div className="min-h-screen pb-16 overflow-x-hidden">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 py-3">
-        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4 min-w-0">
+        <div className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4 min-w-0">
           
           {/* Top Bar for Mobile & Tablet / Left item for Desktop */}
-          <div className="flex items-center justify-between gap-3 w-full xl:w-auto shrink-0">
+          <div className="flex items-center justify-between gap-3 w-full xl:w-auto shrink-0 min-w-0">
             {/* Logo & Title */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center shadow-lg shadow-brand-500/30 shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center shadow-lg shadow-brand-500/30 shrink-0">
                 <BookOpen className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className="text-lg sm:text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight truncate">
                     MangaShelf
                   </h1>
-                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">
-                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0'}
+                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none shrink-0">
+                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.8.2'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block`}></span>
-                  {isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}
+                <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block shrink-0`}></span>
+                  <span className="truncate">{isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}</span>
                 </p>
               </div>
             </div>
 
             {/* Tablet & Mobile Quick Controls (< xl) */}
-            <div className="flex xl:hidden items-center gap-1.5 sm:gap-2">
+            <div className="flex xl:hidden items-center gap-1 sm:gap-1.5 shrink-0">
               <button 
                 id="btn-mobile-shopping"
                 onClick={() => {
@@ -1167,17 +1190,17 @@ export default function Dashboard({ user, onLogout }) {
                   setActiveMainView(next);
                   if (next === 'shopping') fetchShoppingList();
                 }}
-                className={`p-2 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs ${
+                className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
                   activeMainView === 'shopping'
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                     : 'btn-secondary text-slate-300'
                 }`}
                 title="Einkaufsliste umschalten"
               >
-                <ShoppingCart className="w-4 h-4 text-emerald-400" />
+                <ShoppingCart className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="hidden sm:inline">Einkauf</span>
                 {shoppingData && shoppingData.total_missing > 0 && (
-                  <span className="bg-emerald-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
+                  <span className="bg-emerald-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono shrink-0">
                     {shoppingData.total_missing}
                   </span>
                 )}
@@ -1190,17 +1213,17 @@ export default function Dashboard({ user, onLogout }) {
                   setActiveMainView(next);
                   if (next === 'radar') fetchReleaseRadar();
                 }}
-                className={`p-2 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs ${
+                className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
                   activeMainView === 'radar'
                     ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
                     : 'btn-secondary text-slate-300'
                 }`}
                 title="Release-Radar umschalten"
               >
-                <Calendar className="w-4 h-4 text-sky-400" />
+                <Calendar className="w-4 h-4 text-sky-400 shrink-0" />
                 <span className="hidden sm:inline">Radar</span>
                 {radarData && radarData.total_releases > 0 && (
-                  <span className="bg-sky-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
+                  <span className="bg-sky-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono shrink-0">
                     {radarData.total_releases}
                   </span>
                 )}
@@ -1209,7 +1232,7 @@ export default function Dashboard({ user, onLogout }) {
               {canEdit && (
                 <button 
                   onClick={handleOpenModal}
-                  className="hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm"
+                  className="hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm shrink-0"
                   title="Neuen Manga anlegen"
                 >
                   <Plus className="w-4 h-4" />
@@ -1220,7 +1243,7 @@ export default function Dashboard({ user, onLogout }) {
               <button 
                 id="btn-mobile-menu-toggle"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="btn-secondary p-2 text-slate-300 hover:text-white"
+                className="btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
                 title="Menü öffnen"
               >
                 {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -1231,7 +1254,7 @@ export default function Dashboard({ user, onLogout }) {
           {/* Search bar: Full width on < xl, Centered & spacious on >= xl */}
           <div 
             onClick={() => searchInputRef.current?.focus()}
-            className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 py-2.5 w-full xl:flex-1 xl:max-w-md xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all cursor-text shadow-inner"
+            className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 py-2.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[200px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all cursor-text shadow-inner"
           >
             <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" />
             <input 
@@ -1260,24 +1283,24 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           {/* Desktop Action buttons (>= xl) */}
-          <div className="hidden xl:flex items-center gap-2 shrink-0 flex-wrap justify-end min-w-0">
+          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0 flex-nowrap justify-end min-w-0">
             <button 
               id="btn-open-stats"
               onClick={handleOpenStats} 
-              className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-3"
+              className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
               title="Statistik- & Finanz-Dashboard öffnen"
             >
-              <BarChart3 className="w-4 h-4 text-emerald-400" /> 
-              <span>Statistiken & Finanzen</span>
+              <BarChart3 className="w-4 h-4 text-emerald-400 shrink-0" /> 
+              <span>Statistiken<span className="hidden 2xl:inline"> & Finanzen</span></span>
             </button>
 
             {canEdit && (
               <button 
                 id="btn-open-add-manga"
                 onClick={handleOpenModal} 
-                className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-3"
+                className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-2.5 2xl:px-3 whitespace-nowrap"
               >
-                <Plus className="w-4 h-4" /> 
+                <Plus className="w-4 h-4 shrink-0" /> 
                 <span>Neuer Manga</span>
               </button>
             )}
@@ -1286,11 +1309,11 @@ export default function Dashboard({ user, onLogout }) {
               <button
                 id="btn-install-pwa"
                 onClick={handleInstallClick}
-                className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-3 shadow-sm transition-all"
+                className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-2.5 2xl:px-3 shadow-sm transition-all whitespace-nowrap"
                 title="Manga Shelf als native App auf deinem Gerät installieren"
               >
-                <Download className="w-4 h-4 text-brand-400" />
-                <span className="hidden sm:inline">App installieren</span>
+                <Download className="w-4 h-4 text-brand-400 shrink-0" />
+                <span className="hidden 2xl:inline">App installieren</span>
               </button>
             )}
 
@@ -1299,40 +1322,40 @@ export default function Dashboard({ user, onLogout }) {
                 <button
                   id="btn-open-users"
                   onClick={handleOpenUsersModal}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-3"
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
                   title="Benutzer anlegen und verwalten"
                 >
-                  <Users className="w-4 h-4 text-brand-400" /> 
+                  <Users className="w-4 h-4 text-brand-400 shrink-0" /> 
                   <span>Benutzer</span>
                 </button>
 
                 <button
                   id="btn-open-backups"
                   onClick={handleOpenRestoreModal}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-3"
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
                   title="Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung"
                 >
-                  <UploadCloud className="w-4 h-4 text-emerald-400" /> 
+                  <UploadCloud className="w-4 h-4 text-emerald-400 shrink-0" /> 
                   <span>Backups</span>
                 </button>
               </>
             )}
 
-            <div className="h-6 w-[1px] bg-slate-800 mx-0.5"></div>
+            <div className="h-6 w-[1px] bg-slate-800 mx-0.5 shrink-0"></div>
 
-            <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-700/50">
-              <span className="text-slate-400">User:</span>
-              <span className="font-semibold text-slate-200">{user?.username}</span>
+            <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2 py-1.5 2xl:px-2.5 rounded-xl border border-slate-700/50 shrink-0">
+              <span className="text-slate-400 hidden 2xl:inline">User:</span>
+              <span className="font-semibold text-slate-200 truncate max-w-[90px] 2xl:max-w-none">{user?.username}</span>
               {user?.role === 'admin' ? (
-                <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
+                <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
                   Admin
                 </span>
               ) : isVisitor ? (
-                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
+                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
                   Gast
                 </span>
               ) : (
-                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase">
+                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
                   Editor
                 </span>
               )}
@@ -1341,7 +1364,7 @@ export default function Dashboard({ user, onLogout }) {
             <button 
               id="btn-logout"
               onClick={onLogout} 
-              className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors" 
+              className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors shrink-0" 
               title="Abmelden"
             >
               <LogOut className="w-4 h-4" />
@@ -1352,7 +1375,7 @@ export default function Dashboard({ user, onLogout }) {
 
         {/* Dropdown Menu Drawer for < xl */}
         {mobileMenuOpen && (
-          <div className="xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-7xl mx-auto">
+          <div className="xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto">
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
               <div className="flex items-center gap-2">
                 <span className="text-slate-400">Angemeldet als:</span>
@@ -1437,7 +1460,7 @@ export default function Dashboard({ user, onLogout }) {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-8">
+      <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
         
         {/* Main View Switcher: Sammlung vs. Einkaufsliste */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
@@ -1703,21 +1726,30 @@ export default function Dashboard({ user, onLogout }) {
             <p className="text-sm">Lade Sammlung...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="glass-panel p-12 rounded-3xl text-center max-w-lg mx-auto my-12 border border-slate-800">
+          <div className="glass-panel p-8 sm:p-12 rounded-3xl text-center max-w-lg mx-auto my-12 border border-slate-800 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-4">
               <BookOpen className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-white mb-2">
-              {search ? 'Keine Treffer gefunden' : 'Deine Sammlung ist noch leer'}
+              {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL'
+                ? 'Keine Treffer gefunden'
+                : 'Deine Sammlung ist noch leer'}
             </h3>
             <p className="text-sm text-slate-400 mb-6">
-              {search 
-                ? `Für "${search}" konnte kein Manga gefunden werden.` 
+              {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL'
+                ? 'Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.'
                 : 'Füge deinen ersten Manga hinzu, um Bände und deinen Fortschritt zu verfolgen.'}
             </p>
-            {search ? (
-              <button onClick={() => setSearch('')} className="btn-secondary text-sm">
-                Suche zurücksetzen
+            {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL' ? (
+              <button 
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('ALL');
+                  setPublisherFilter('ALL');
+                }} 
+                className="btn-secondary text-sm inline-flex items-center gap-2"
+              >
+                <X className="w-4 h-4" /> Filter & Suche zurücksetzen
               </button>
             ) : (
               <button onClick={handleOpenModal} className="btn-primary text-sm inline-flex items-center gap-2">
@@ -1848,7 +1880,7 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         ) : (
           /* POSTER / GRID VIEW */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-fade-in">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-4 sm:gap-5 lg:gap-6 animate-fade-in">
             {filtered.map(manga => {
               const total = manga.total_volumes || 0;
               const owned = manga.owned_volumes || 0;
@@ -1878,12 +1910,12 @@ export default function Dashboard({ user, onLogout }) {
                       )}
 
                       {/* Top Badges */}
-                      <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-md border ${getStatusBadge(manga.status)}`}>
+                      <div className="absolute top-2 left-2 right-2 flex justify-between items-start gap-1 pointer-events-none min-w-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-md border truncate shrink-0 max-w-[65%] ${getStatusBadge(manga.status)}`}>
                           {manga.status}
                         </span>
 
-                        <span className="bg-slate-950/80 border border-slate-800 text-white text-[11px] font-bold px-2 py-0.5 rounded-lg backdrop-blur-md">
+                        <span className="bg-slate-950/80 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg backdrop-blur-md shrink-0">
                           {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
                         </span>
                       </div>
@@ -2123,7 +2155,7 @@ export default function Dashboard({ user, onLogout }) {
 
         {/* Shopping List Items Grid */}
         {shoppingData && shoppingData.items.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4">
             {shoppingData.items
               .filter(item => {
                 const matchPub = shoppingPublisherFilter === 'ALL' || 
@@ -2141,10 +2173,11 @@ export default function Dashboard({ user, onLogout }) {
                 >
                   {/* Cover Thumbnail */}
                   <Link to={`/manga/${item.manga_id}`} className="shrink-0 relative group/cover">
-                    {item.manga_cover ? (
+                    {item.manga_cover && !failedImages[`shop-${item.id}`] ? (
                       <img
                         src={item.manga_cover}
                         alt={item.manga_title}
+                        onError={() => setFailedImages(prev => ({ ...prev, [`shop-${item.id}`]: true }))}
                         className="w-16 h-24 object-cover rounded-xl shadow-md border border-slate-800 group-hover/cover:scale-105 transition-transform"
                       />
                     ) : (
@@ -2528,7 +2561,7 @@ export default function Dashboard({ user, onLogout }) {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-4">
                         {group.items.map(item => {
                           const isOwned = item.user_volume_status === 'Vorhanden';
                           const isPreordered = item.user_volume_status === 'Vorbestellt';
@@ -2584,15 +2617,16 @@ export default function Dashboard({ user, onLogout }) {
 
                                 <div className="flex gap-3">
                                   <div className="shrink-0 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
-                                    {item.cover_image ? (
+                                    {item.cover_image && !failedImages[`radar-${item.id || item.manga_passion_id || item.title}`] ? (
                                       <img
                                         src={item.cover_image}
                                         alt={item.title}
                                         loading="lazy"
+                                        onError={() => setFailedImages(prev => ({ ...prev, [`radar-${item.id || item.manga_passion_id || item.title}`]: true }))}
                                         className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
                                       />
                                     ) : (
-                                      <div className="w-16 h-24 bg-slate-800 rounded-xl flex items-center justify-center text-slate-600">
+                                      <div className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-600">
                                         <BookOpen className="w-6 h-6" />
                                       </div>
                                     )}
@@ -3099,7 +3133,10 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* CREATE MANGA MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) closeAddModal(); }}
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+        >
           <div className="glass-panel w-full max-w-xl rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl my-8 relative">
             
             {/* Header */}
@@ -3204,10 +3241,11 @@ export default function Dashboard({ user, onLogout }) {
                             : 'bg-slate-900/80 hover:bg-brand-950/60 border-slate-800 hover:border-brand-500/50'
                         }`}
                       >
-                        {item.cover_image ? (
+                        {item.cover_image && !failedImages[`lookup-${item.id || item.title}`] ? (
                           <img 
                             src={item.cover_image} 
                             alt={item.title} 
+                            onError={() => setFailedImages(prev => ({ ...prev, [`lookup-${item.id || item.title}`]: true }))}
                             className="w-10 h-14 object-cover rounded shadow shrink-0" 
                           />
                         ) : (
@@ -3400,7 +3438,10 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* USER MANAGEMENT MODAL (ADMIN ONLY) */}
       {showUsersModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowUsersModal(false); }}
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+        >
           <div className="glass-panel w-full max-w-2xl rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl my-8 relative">
             
             {/* Header */}
@@ -3599,7 +3640,10 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* Backups & Snapshots Management Modal */}
       {showRestoreModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget && !restoring) setShowRestoreModal(false); }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto"
+        >
           <div className="glass-panel p-6 sm:p-7 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700/80 shadow-2xl relative overflow-hidden">
             <button 
               id="btn-close-restore-modal-x"
@@ -3876,7 +3920,10 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* STATISTIK- & FINANZ-DASHBOARD MODAL */}
       {showStatsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowStatsModal(false); }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in overflow-y-auto"
+        >
           <div className="glass-panel w-full max-w-4xl max-h-[90vh] rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl relative flex flex-col overflow-hidden">
             
             {/* Modal Header */}

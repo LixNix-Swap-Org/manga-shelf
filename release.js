@@ -94,9 +94,23 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu & Verbesserungen in dieser Version:
-- 🇩🇪 **Manga Passion First im Auto-Fill:** Beim Anlegen neuer Reihen und beim Bearbeiten bestehender Reihen wird nun zuerst die deutsche Manga Passion Datenbank abgefragt.
-- 🏢 **Offizielle deutsche Verlags- & Editionsdaten:** Übernimmt automatisch den deutschen Verlag (z. B. Panini Manga, Carlsen, Manga Cult, Egmont), Autor, deutsche Beschreibung, hochauflösendes deutsches Cover und die exakte deutsche Gesamtbandzahl.
-- 🌐 **AniList als internationaler Fallback:** Sollte ein Titel nicht bei Manga Passion verzeichnet sein, wird nahtlos AniList als Fallback angeboten.
+- 🖥️ **Full-HD (1920x1080) & Display-Scaling Optimierung:**
+  - Viewport- & Layout-Container von starren 1280px (\`max-w-7xl\`) auf bis zu 1840px (\`max-w-[1720px] 2xl:max-w-[1840px]\`) erweitert – eliminiert ungenutzte Trauerränder auf Full-HD- und 2K/1440p-Monitoren.
+  - Manga-Grid skaliert jetzt responsiv mit 6–8 Spalten (\`xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8\`) mit konsistenten 2:3 Cover-Proportionen (215–235px Kartenbreite).
+- 🔍 **Windows DPI Scaling (100 %, 125 %, 150 %) Support:**
+  - Horizontale Navbar-Überläufe bei 150 % Windows-Skalierung (1280x720) vollständig behoben durch dynamisches Padding, \`flex-nowrap\` und adaptive Textbeschriftungen.
+  - Null horizontale Scrollbalken auf allen Standard-Breakpoints (Mobile 390px, Tablet 820px, 1080p 1280–1920px, 1440p 2560px).
+- 🖼️ **Robuste Image Fallbacks (Broken Images):**
+  - Universelle \`onError\`-Fallbacks für alle Cover, Volume-Thumbnails (Raster- & Listenansicht), Einkaufsliste, Release-Radar und Auto-Fill-Suchergebnisse (SVG-Fallback statt defekter Bildsymbole).
+- ⌨️ **Universal Modal & UX Handling:**
+  - Globaler \`Escape\`-Key-Listener schließt zuverlässig alle Modals (Manga anlegen/bearbeiten, Band-Details, Batch-Generierung, Lese-Status, Statistiken, Backups, Manga Passion Edition-Selector) sowie Suchfokus.
+  - Backdrop-Click-Outside schließt alle Overlays intuitiv.
+  - Scrollbare Modals (\`max-h-[90vh] overflow-y-auto\`) für Laptops mit geringer Bildschirmhöhe bei 150 % Skalierung.
+- 🎯 **Empty States & Text-Overflow:**
+  - Differenzierter Empty-State zwischen aktiven Filtern/Suche ("Keine Treffer gefunden" mit 1-Klick-Zurücksetzen) und leerer Bibliothek.
+  - Kein Textüberlauf bei überlangen Titeln/Verlagen durch \`line-clamp-2\`, \`truncate\` und flexible Badge-Layouts.
+- 🇩🇪 **Manga Passion First im Auto-Fill:** Beim Anlegen neuer Reihen und beim Bearbeiten bestehender Reihen wird zuerst die deutsche Manga Passion Datenbank abgefragt.
+- 🏢 **Offizielle deutsche Verlags- & Editionsdaten:** Übernimmt automatisch den deutschen Verlag, Autor, deutsche Beschreibung, hochauflösendes Cover und die exakte deutsche Gesamtbandzahl.
 - 🔍 **Manga Passion API Integration für Lücken-Erkennung:** Intelligenter Abgleich der Sammlung mit der offiziellen deutschen Manga Passion API (\`api.manga-passion.de\`).
 - 🛑 **Schluss mit Phantom-Lücken:** Verhindert falsche Lücken bei Doppel-/Sammelbänden (z. B. 20th Century Boys: 11 deutsche Bände statt 22 japanische Tankōbon-Bände).
 - ⚡ **1-Klick-Synchronisation & Diskrepanz-Erkennung:** Erkennt automatisch Abweichungen zwischen hinterlegten Bandzahlen und der echten deutschen Edition mit 1-Klick-Anpassung.

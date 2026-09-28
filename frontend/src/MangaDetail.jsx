@@ -492,19 +492,45 @@ export default function MangaDetail({ user }) {
     }
   };
 
-  // Keyboard navigation for photo gallery lightbox
+  // Keyboard navigation & Escape handling for modals, edit mode and photo gallery lightbox
   useEffect(() => {
-    if (!lightboxData) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        setLightboxData(null);
-      } else if (e.key === 'ArrowLeft') {
+        if (lightboxData) {
+          setLightboxData(null);
+          return;
+        }
+        if (activeVolume) {
+          setActiveVolume(null);
+          return;
+        }
+        if (showBatchModal) {
+          setShowBatchModal(false);
+          return;
+        }
+        if (showBatchReadModal) {
+          setShowBatchReadModal(false);
+          return;
+        }
+        if (fillingGapNumber !== null) {
+          setFillingGapNumber(null);
+          return;
+        }
+        if (showMpEditionModal) {
+          setShowMpEditionModal(false);
+          return;
+        }
+        if (editing) {
+          setEditing(false);
+          return;
+        }
+      } else if (lightboxData && e.key === 'ArrowLeft') {
         setLightboxData(prev => {
           if (!prev || prev.images.length <= 1) return prev;
           const nextIdx = (prev.currentIndex - 1 + prev.images.length) % prev.images.length;
           return { ...prev, currentIndex: nextIdx };
         });
-      } else if (e.key === 'ArrowRight') {
+      } else if (lightboxData && e.key === 'ArrowRight') {
         setLightboxData(prev => {
           if (!prev || prev.images.length <= 1) return prev;
           const nextIdx = (prev.currentIndex + 1) % prev.images.length;
@@ -514,7 +540,7 @@ export default function MangaDetail({ user }) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxData]);
+  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing]);
 
   const handleRemoveVolumeImage = (imgUrl) => {
     if (!canEdit) return;
@@ -1362,7 +1388,7 @@ export default function MangaDetail({ user }) {
   return (
     <div className="min-h-screen pb-20 overflow-x-hidden">
       {/* Top Bar */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 pb-4">
+      <div className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
         <Link 
           to="/" 
           className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium bg-slate-900/60 hover:bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-800 shadow-sm"
@@ -1372,7 +1398,7 @@ export default function MangaDetail({ user }) {
       </div>
 
       {/* Main Container */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-8">
+      <div className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Hero Card */}
         <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl flex flex-col md:flex-row gap-8 mb-8 relative overflow-hidden">
@@ -1381,7 +1407,7 @@ export default function MangaDetail({ user }) {
           <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
           {/* Cover Column */}
-          <div className="w-full md:w-64 shrink-0 flex flex-col items-center">
+          <div className="w-full md:w-64 lg:w-72 shrink-0 flex flex-col items-center">
             <div className="relative group w-48 sm:w-56 md:w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-slate-700/80 bg-slate-950 flex items-center justify-center">
               {manga.cover_image && !failedCover ? (
                 <img 
@@ -2480,6 +2506,10 @@ export default function MangaDetail({ user }) {
                                     src={vol.cover_image} 
                                     alt={vol.volume_number} 
                                     className="w-8 h-12 object-cover rounded shadow border border-slate-800 group-hover/thumb:scale-110 transition-transform"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150" fill="%231e293b"><rect width="100" height="150" fill="%230f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-size="12" font-family="sans-serif">?</text></svg>';
+                                    }}
                                   />
                                   {vol.images && vol.images.length > 1 && (
                                     <span className="absolute -bottom-1 -right-1 bg-black/90 text-brand-300 font-mono text-[8px] px-1 rounded font-bold border border-brand-500/30">
@@ -2627,7 +2657,7 @@ export default function MangaDetail({ user }) {
 
               {/* GRID VIEW */}
               {volumeViewMode === 'grid' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1800px]:grid-cols-7 gap-3 sm:gap-3.5 mb-8">
               {filteredVolumes.map(vol => {
                 const isOwned = vol.status === 'Vorhanden';
                 const effectivePublisher = (vol.publisher && vol.publisher.trim()) || (manga.publisher && manga.publisher.trim());
@@ -2777,6 +2807,10 @@ export default function MangaDetail({ user }) {
                             alt={getVolumeDisplayTitle(vol)} 
                             className="w-12 h-16 sm:w-13 sm:h-18 object-cover group-hover/cover:scale-105 transition-transform duration-200" 
                             loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150" fill="%231e293b"><rect width="100" height="150" fill="%230f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-size="10" font-family="sans-serif">Kein Bild</text></svg>';
+                            }}
                           />
                           {vol.images && vol.images.length > 1 && (
                             <span className="absolute bottom-1 right-1 bg-black/85 text-brand-300 font-mono text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow flex items-center gap-1 border border-brand-500/30 backdrop-blur-xs">
@@ -3067,8 +3101,11 @@ export default function MangaDetail({ user }) {
 
       {/* VOLUME DETAIL & EDIT MODAL */}
       {activeVolume && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
-          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8">
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setActiveVolume(null); }}
+        >
+          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
               <div>
@@ -3579,8 +3616,11 @@ export default function MangaDetail({ user }) {
 
       {/* BATCH ADD MODAL */}
       {showBatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative">
+        <div 
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBatchModal(false); }}
+        >
+          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-brand-400" /> Bände in Serie hinzufügen
@@ -3716,8 +3756,11 @@ export default function MangaDetail({ user }) {
 
       {/* BATCH READ STATUS MODAL */}
       {showBatchReadModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative">
+        <div 
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBatchReadModal(false); }}
+        >
+          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <BookCheck className="w-4 h-4 text-emerald-400" /> Lesestatus in Serie festlegen
@@ -3814,11 +3857,11 @@ export default function MangaDetail({ user }) {
       {/* FILL GAP MODAL */}
       {fillingGapNumber !== null && (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
           onClick={() => !fillingGapLoading && setFillingGapNumber(null)}
         >
           <div 
-            className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative"
+            className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative my-8"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
