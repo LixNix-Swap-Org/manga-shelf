@@ -40,15 +40,29 @@ function scoreEdition(e, targetTitle, targetPub, targetTotal) {
     else if (Math.abs(e.numVolumes - targetTotal) <= 2) score += 15;
   }
 
-  // Demote single volume spin-offs if target title isn't a spin-off
+  // Demote single volume spin-offs, artbooks, novels, etc. if target title isn't explicitly looking for them
   const isSpinOff = e.title.toLowerCase().includes('guide') || 
                     e.title.toLowerCase().includes('artbook') || 
+                    e.title.toLowerCase().includes('artworks') ||
                     e.title.toLowerCase().includes('spin-off') || 
                     e.title.toLowerCase().includes('roman') || 
                     e.title.toLowerCase().includes('novel') || 
+                    e.title.toLowerCase().includes('präludium') ||
+                    e.title.toLowerCase().includes('fanbuch') ||
+                    e.title.toLowerCase().includes('kochbuch') ||
                     e.title.toLowerCase().includes('wimmelbuch');
-  if (isSpinOff && !tNorm.includes('guide') && !tNorm.includes('spin-off') && !tNorm.includes('novel') && !tNorm.includes('roman')) {
-    score -= 35;
+  if (isSpinOff && !tNorm.includes('guide') && !tNorm.includes('spin-off') && !tNorm.includes('novel') && !tNorm.includes('roman') && !tNorm.includes('artbook') && !tNorm.includes('fanbuch')) {
+    score -= 40;
+  }
+
+  // Multi-volume series are preferred over single extras when searching general titles
+  if (e.numVolumes && e.numVolumes > 1) {
+    score += 20;
+  }
+
+  // Bonus for closer title length to the searched title
+  if (eBase === tBase) {
+    score += Math.max(0, 30 - Math.min(30, Math.abs(e.title.length - targetTitle.length)));
   }
 
   return score;
@@ -118,7 +132,10 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     try {
       const cached = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
       if (cached && cached.json_data && (Date.now() - cached.created_at < CACHE_TTL_MS)) {
-        return JSON.parse(cached.json_data);
+        const parsed = JSON.parse(cached.json_data);
+        if (parsed?.edition && parsed.edition.author !== undefined) {
+          return parsed;
+        }
       }
     } catch (_) {}
   }
@@ -129,9 +146,21 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     const edRes = await fetch(`https://api.manga-passion.de/editions/${editionId}`, { headers: HEADERS });
     if (edRes.ok) {
       const edData = await edRes.json();
+      const s0 = edData.sources?.[0];
+      let author = null;
+      if (s0?.contributors) {
+        const names = [...new Set(s0.contributors.map(c => c.contributor?.name).filter(Boolean))];
+        if (names.length > 0) author = names.join(', ');
+      }
+      const alt_title = s0?.romaji || s0?.title || null;
+      const tags = s0?.tags ? s0.tags.map(t => t.name).join(', ') : null;
+
       edition = {
         id: edData.id,
         title: edData.title,
+        alt_title,
+        author,
+        tags,
         total_volumes: edData.numVolumes || null,
         status: edData.status === 2 ? 'Abgeschlossen' : (edData.status === 1 ? 'Laufend' : 'Unbekannt'),
         publisher: edData.publishers?.[0]?.name || 'Unbekannt',
@@ -406,10 +435,70 @@ async function syncMangaWithEdition(mangaId, editionId, options = {}) {
   return updatedManga;
 }
 
+async function searchMangaPassionForLookup(queryTerm) {
+  if (!queryTerm || !queryTerm.trim()) return [];
+  const searchRes = await searchMangaPassionEditions(queryTerm.trim());
+  if (!searchRes.candidates || searchRes.candidates.length === 0) return [];
+
+  // Filter candidates with score >= 0 (up to 5)
+  const top = searchRes.candidates.filter(c => c.score >= 0).slice(0, 5);
+  const results = [];
+
+  const detailPromises = top.map(c => 
+    getEditionDetailsAndVolumes(c.id).catch(err => {
+      console.warn(`Failed to fetch details for edition ${c.id}:`, err.message);
+      return null;
+    })
+  );
+
+  const resolved = await Promise.all(detailPromises);
+  for (let i = 0; i < resolved.length; i++) {
+    const item = resolved[i];
+    const cand = top[i];
+    if (item && item.edition) {
+      const ed = item.edition;
+      results.push({
+        id: `mp_${ed.id}`,
+        manga_passion_id: ed.id,
+        source: 'manga_passion',
+        source_label: '🇩🇪 Manga Passion',
+        title: ed.title || cand.title,
+        alt_title: ed.alt_title || null,
+        author: ed.author || cand.author || null,
+        publisher: ed.publisher || cand.publisher || null,
+        status: ed.status || cand.status || 'Laufend',
+        total_volumes: ed.total_volumes || cand.total_volumes || null,
+        description: ed.description || null,
+        cover_image: ed.cover_image || cand.cover_image || null,
+        tags: ed.tags || null
+      });
+    } else if (cand) {
+      results.push({
+        id: `mp_${cand.id}`,
+        manga_passion_id: cand.id,
+        source: 'manga_passion',
+        source_label: '🇩🇪 Manga Passion',
+        title: cand.title,
+        alt_title: null,
+        author: null,
+        publisher: cand.publisher || null,
+        status: cand.status || 'Laufend',
+        total_volumes: cand.total_volumes || null,
+        description: null,
+        cover_image: cand.cover_image || null,
+        tags: null
+      });
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   searchMangaPassionEditions,
   getEditionDetailsAndVolumes,
   reconcileMangaGaps,
   batchImportGaps,
-  syncMangaWithEdition
+  syncMangaWithEdition,
+  searchMangaPassionForLookup
 };

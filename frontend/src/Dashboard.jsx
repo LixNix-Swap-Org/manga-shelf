@@ -604,7 +604,8 @@ export default function Dashboard({ user, onLogout }) {
       status: 'Laufend',
       total_volumes: '',
       description: '',
-      cover_image: ''
+      cover_image: '',
+      manga_passion_id: null
     });
     setCoverFile(null);
     setCoverPreview('');
@@ -680,10 +681,12 @@ export default function Dashboard({ user, onLogout }) {
       title: item.title || prev.title,
       alt_title: item.alt_title || prev.alt_title,
       author: item.author || prev.author,
+      publisher: item.publisher || prev.publisher,
       status: item.status || prev.status,
       total_volumes: item.total_volumes ? String(item.total_volumes) : prev.total_volumes,
       description: item.description || prev.description,
-      cover_image: localCoverUrl || prev.cover_image
+      cover_image: localCoverUrl || prev.cover_image,
+      manga_passion_id: item.manga_passion_id || null
     }));
     if (localCoverUrl) {
       if (coverPreview && coverPreview.startsWith('blob:')) {
@@ -744,7 +747,8 @@ export default function Dashboard({ user, onLogout }) {
           status: form.status,
           total_volumes: form.total_volumes ? parseInt(form.total_volumes, 10) : null,
           description: form.description.trim() || null,
-          cover_image: finalCover || null
+          cover_image: finalCover || null,
+          manga_passion_id: form.manga_passion_id || null
         })
       });
 
@@ -3147,8 +3151,8 @@ export default function Dashboard({ user, onLogout }) {
                     type="button"
                     onClick={handleLookupMetadata}
                     disabled={lookingUp || !form.title.trim()}
-                    className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-brand-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
-                    title="Sucht Cover, Autor, Genres und Beschreibung automatisch über AniList"
+                    className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-emerald-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
+                    title="Sucht offizielle deutsche Ausgaben über Manga Passion (mit AniList-Fallback)"
                   >
                     {lookingUp ? (
                       <>
@@ -3175,10 +3179,10 @@ export default function Dashboard({ user, onLogout }) {
 
               {/* Lookup Results Selector */}
               {lookupResults && lookupResults.length > 0 && (
-                <div className="bg-slate-950/90 border border-brand-500/40 rounded-xl p-3 space-y-2.5">
+                <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-brand-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> Treffer auswählen:
+                      <Sparkles className="w-3.5 h-3.5" /> Treffer auswählen (Manga Passion zuerst):
                     </span>
                     <button 
                       type="button" 
@@ -3188,13 +3192,17 @@ export default function Dashboard({ user, onLogout }) {
                       Schließen
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
                     {lookupResults.map(item => (
                       <button
                         key={item.id}
                         type="button"
                         onClick={() => applyLookupResult(item)}
-                        className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-900/80 hover:bg-brand-950/60 border border-slate-800 hover:border-brand-500/50 text-left transition-all group"
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all group ${
+                          item.source === 'manga_passion'
+                            ? 'bg-gradient-to-r from-emerald-950/30 to-slate-900/90 border-emerald-500/40 hover:border-emerald-400 hover:from-emerald-950/50'
+                            : 'bg-slate-900/80 hover:bg-brand-950/60 border-slate-800 hover:border-brand-500/50'
+                        }`}
                       >
                         {item.cover_image ? (
                           <img 
@@ -3208,21 +3216,37 @@ export default function Dashboard({ user, onLogout }) {
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            {item.source === 'manga_passion' ? (
+                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-0.2 rounded text-[9px] font-bold shrink-0">
+                                🇩🇪 Manga Passion
+                              </span>
+                            ) : (
+                              <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-0.2 rounded text-[9px] font-medium shrink-0">
+                                🌐 AniList
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
                             {item.title}
                           </p>
                           <p className="text-[11px] text-slate-400 truncate">
                             {item.author || item.alt_title || 'Unbekannt'}
                           </p>
-                          <div className="flex gap-1.5 mt-1 text-[10px] text-slate-500">
-                            <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
-                              {item.status}
-                            </span>
+                          <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                            {item.publisher && (
+                              <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
+                                {item.publisher}
+                              </span>
+                            )}
                             {item.total_volumes && (
-                              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                              <span className="bg-slate-800 text-slate-200 border border-slate-700/80 px-1.5 py-0.5 rounded font-bold">
                                 {item.total_volumes} Bände
                               </span>
                             )}
+                            <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
+                              {item.status}
+                            </span>
                           </div>
                         </div>
                       </button>

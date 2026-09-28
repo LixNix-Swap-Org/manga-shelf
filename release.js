@@ -94,12 +94,14 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu & Verbesserungen in dieser Version:
+- 🇩🇪 **Manga Passion First im Auto-Fill:** Beim Anlegen neuer Reihen und beim Bearbeiten bestehender Reihen wird nun zuerst die deutsche Manga Passion Datenbank abgefragt.
+- 🏢 **Offizielle deutsche Verlags- & Editionsdaten:** Übernimmt automatisch den deutschen Verlag (z. B. Panini Manga, Carlsen, Manga Cult, Egmont), Autor, deutsche Beschreibung, hochauflösendes deutsches Cover und die exakte deutsche Gesamtbandzahl.
+- 🌐 **AniList als internationaler Fallback:** Sollte ein Titel nicht bei Manga Passion verzeichnet sein, wird nahtlos AniList als Fallback angeboten.
 - 🔍 **Manga Passion API Integration für Lücken-Erkennung:** Intelligenter Abgleich der Sammlung mit der offiziellen deutschen Manga Passion API (\`api.manga-passion.de\`).
-- 🛑 **Schluss mit Phantom-Lücken:** Verhindert falsche Lücken bei Doppel-/Sammelbänden (z. B. 20th Century Boys: 11 deutsche Bände statt 22 japanische Tankōbon-Bände aus AniList).
+- 🛑 **Schluss mit Phantom-Lücken:** Verhindert falsche Lücken bei Doppel-/Sammelbänden (z. B. 20th Century Boys: 11 deutsche Bände statt 22 japanische Tankōbon-Bände).
 - ⚡ **1-Klick-Synchronisation & Diskrepanz-Erkennung:** Erkennt automatisch Abweichungen zwischen hinterlegten Bandzahlen und der echten deutschen Edition mit 1-Klick-Anpassung.
-- 🎨 **Regal Ghost-Spines mit Original-Cover & Euro-Preis:** Zeigt Lücken im Regal mit dem echten deutschen Cover-Artwork und aktuellem Festpreis (z. B. 19,00 €) an.
+- 🎨 **Regal Ghost-Spines mit Original-Cover & Euro-Preis:** Zeigt Lücken im Regal mit dem echten deutschen Cover-Artwork und aktuellem Festpreis an.
 - 🛒 **Batch-Import zur Einkaufsliste:** Alle echten Lücken können mit einem Klick inkl. offizieller Cover und Buchpreise auf die Einkaufsliste übernommen werden.
-- 📚 **Editions-Manager:** Schneller Wechsel zwischen verschiedenen deutschen Ausgaben (z. B. Standard vs. Massiv vs. Deluxe) direkt in der Manga-Detailansicht.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;

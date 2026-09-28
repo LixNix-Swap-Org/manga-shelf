@@ -30,7 +30,8 @@ const {
     getEditionDetailsAndVolumes,
     reconcileMangaGaps,
     batchImportGaps,
-    syncMangaWithEdition
+    syncMangaWithEdition,
+    searchMangaPassionForLookup
 } = require('./mangaPassion');
 
 const app = express();
@@ -1648,18 +1649,13 @@ app.put('/api/stats/settings', requireAdmin, (req, res) => {
     }
 });
 
-// --- MANGA METADATA LOOKUP (AniList GraphQL API) ---
-app.get('/api/lookup/manga', requireAuth, (req, res) => {
-    try {
-        const queryTerm = req.query.q;
-        if (!queryTerm || !queryTerm.trim()) {
-            return res.status(400).json({ error: 'Suchbegriff erforderlich' });
-        }
-
+// --- MANGA METADATA LOOKUP (Manga Passion First, AniList Fallback) ---
+function searchAniList(queryTerm) {
+    return new Promise((resolve) => {
         const graphqlQuery = {
             query: `
                 query ($search: String) {
-                    Page(page: 1, perPage: 6) {
+                    Page(page: 1, perPage: 5) {
                         media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
                             id
                             title { romaji english native }
@@ -1691,7 +1687,7 @@ app.get('/api/lookup/manga', requireAuth, (req, res) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'User-Agent': 'MangaShelf/2.0'
+                'User-Agent': 'MangaShelf/2.8.0'
             }
         };
 
@@ -1722,10 +1718,14 @@ app.get('/api/lookup/manga', requireAuth, (req, res) => {
                         cleanDesc = cleanDesc.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&#039;/g, "'").trim();
 
                         return {
-                            id: m.id,
+                            id: 'al_' + m.id,
+                            manga_passion_id: null,
+                            source: 'anilist',
+                            source_label: '🌐 AniList',
                             title: m.title.english || m.title.romaji,
                             alt_title: m.title.native || m.title.romaji,
                             author: author || null,
+                            publisher: null,
                             description: cleanDesc || null,
                             cover_image: m.coverImage?.extraLarge || m.coverImage?.large || m.coverImage?.medium || null,
                             banner_image: m.bannerImage || null,
@@ -1734,29 +1734,54 @@ app.get('/api/lookup/manga', requireAuth, (req, res) => {
                             status: status
                         };
                     });
-                    res.json(results);
+                    resolve(results);
                 } catch (e) {
-                    console.error('Error parsing AniList response:', e);
-                    res.status(500).json({ error: 'Fehler beim Verarbeiten der Metadaten' });
+                    resolve([]);
                 }
             });
         });
 
-        apiReq.on('error', (err) => {
-            console.error('AniList API error:', err);
-            res.status(500).json({ error: 'Netzwerkfehler beim Abrufen der Metadaten: ' + err.message });
-        });
-
-        apiReq.setTimeout(8000, () => {
+        apiReq.on('error', () => resolve([]));
+        apiReq.setTimeout(6000, () => {
             apiReq.destroy();
-            res.status(504).json({ error: 'Zeitüberschreitung bei der Metadatensuche' });
+            resolve([]);
         });
-
         apiReq.write(postData);
         apiReq.end();
+    });
+}
+
+app.get('/api/lookup/manga', requireAuth, async (req, res) => {
+    try {
+        const queryTerm = req.query.q;
+        if (!queryTerm || !queryTerm.trim()) {
+            return res.status(400).json({ error: 'Suchbegriff erforderlich' });
+        }
+
+        const trimmed = queryTerm.trim();
+
+        // 1. ZUERST: Deutsche Manga Passion API nach offiziellen deutschen Ausgaben durchsuchen
+        let mpResults = [];
+        try {
+            mpResults = await searchMangaPassionForLookup(trimmed);
+        } catch (mpErr) {
+            console.warn('Manga Passion lookup error:', mpErr.message);
+        }
+
+        // 2. AniList als Ergänzung und Fallback
+        let aniListResults = [];
+        try {
+            aniListResults = await searchAniList(trimmed);
+        } catch (alErr) {
+            console.warn('AniList lookup error:', alErr.message);
+        }
+
+        // Manga Passion hat Vorrang (deutsche Verlage, korrekte deutsche Bandzahlen & Cover)
+        const combined = [...mpResults, ...aniListResults];
+        res.json(combined);
     } catch (err) {
         console.error('Lookup endpoint error:', err);
-        res.status(500).json({ error: 'Interner Serverfehler' });
+        res.status(500).json({ error: 'Interner Serverfehler beim Metadaten-Lookup' });
     }
 });
 
