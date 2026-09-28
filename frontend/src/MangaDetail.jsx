@@ -38,7 +38,7 @@ export default function MangaDetail({ user }) {
 
   // View mode & Gap Detection states
   const [volumeViewMode, setVolumeViewMode] = useState(() => {
-    return localStorage.getItem('mangashelf_volume_view_mode') || 'spine';
+    return localStorage.getItem('mangashelf_volume_view_mode') || 'grid';
   });
   const [showGaps, setShowGaps] = useState(() => {
     return localStorage.getItem('mangashelf_show_gaps') !== 'false';
@@ -1419,19 +1419,6 @@ export default function MangaDetail({ user }) {
                 <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
                   <button
                     type="button"
-                    onClick={() => handleSetVolumeViewMode('spine')}
-                    className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
-                      volumeViewMode === 'spine'
-                        ? 'bg-brand-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                    title="3D-Buchrückenansicht / Echtes Manga-Regal"
-                  >
-                    <Library className="w-3.5 h-3.5" />
-                    <span>Regal</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => handleSetVolumeViewMode('grid')}
                     className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                       volumeViewMode === 'grid'
@@ -1442,6 +1429,19 @@ export default function MangaDetail({ user }) {
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
                     <span>Karten</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetVolumeViewMode('spine')}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                      volumeViewMode === 'spine'
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="3D-Buchrückenansicht / Echtes Manga-Regal"
+                  >
+                    <Library className="w-3.5 h-3.5" />
+                    <span>Regal</span>
                   </button>
                   <button
                     type="button"
