@@ -121,6 +121,11 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `value` (TEXT)
    * z. B. `collection_start_date` (Default: `'2021-04-09'`) für die Berechnung der Sammeljahre
 
+6. **`manga_passion_cache`**
+   * `cache_key` (TEXT, PK) – z. B. `'releases_2026_10'`
+   * `json_data` (TEXT) – Gecachte Rohdaten der Manga Passion API
+   * `created_at` (INTEGER) – Unix-Timestamp für 12h-Cache-Invalidierung
+
 ---
 
 ## 4. Rollen- & Berechtigungskonzept
@@ -175,6 +180,8 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
+| `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
+| `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (Status: Vorbestellt oder Fehlt) |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
 | `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |

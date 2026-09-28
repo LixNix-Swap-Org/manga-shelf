@@ -1161,6 +1161,243 @@ app.get('/api/release-radar', requireAuth, (req, res) => {
     }
 });
 
+// --- MANGA PASSION GERMAN RELEASE CALENDAR API ---
+app.get('/api/manga-passion/releases', requireAuth, async (req, res) => {
+    try {
+        const now = new Date();
+        const year = parseInt(req.query.year, 10) || now.getFullYear();
+        const month = parseInt(req.query.month, 10) || (now.getMonth() + 1);
+        const forceRefresh = req.query.force_refresh === 'true';
+
+        if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+            return res.status(400).json({ error: 'Ungültiges Jahr oder Monat' });
+        }
+
+        const cacheKey = `mp_releases_${year}_${month}`;
+        let cachedRow = null;
+
+        if (!forceRefresh) {
+            try {
+                cachedRow = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
+            } catch (_) {}
+        }
+
+        let rawItems = null;
+        const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+        if (cachedRow && cachedRow.json_data && (Date.now() - cachedRow.created_at < CACHE_TTL_MS)) {
+            try {
+                rawItems = JSON.parse(cachedRow.json_data);
+            } catch (_) {}
+        }
+
+        if (!rawItems) {
+            const baseUrl = `https://api.manga-passion.de/volumes?year=${year}&month=${month}&itemsPerPage=100&order[date]=asc`;
+            const headers = { 'User-Agent': 'MangaShelf/2.6.0', 'Accept': 'application/ld+json' };
+
+            let allVolumes = [];
+            let page = 1;
+            let totalItems = 0;
+
+            while (page <= 5) {
+                const response = await fetch(`${baseUrl}&page=${page}`, { headers });
+                if (!response.ok) {
+                    if (page === 1) throw new Error(`Manga Passion API Fehler (Status ${response.status})`);
+                    break;
+                }
+                const data = await response.json();
+                const members = data['hydra:member'] || (Array.isArray(data) ? data : []);
+                if (members.length === 0) break;
+
+                allVolumes = allVolumes.concat(members);
+                totalItems = data['hydra:totalItems'] || allVolumes.length;
+                if (allVolumes.length >= totalItems || members.length < 100) break;
+                page++;
+            }
+
+            rawItems = allVolumes.map(v => {
+                const rawTitle = v.edition?.title || '';
+                const isDigital = Boolean(v.edition?.digital || rawTitle.includes('(eBook)'));
+                const cleanTitle = rawTitle.replace(/\s*\(eBook\)/i, '').trim();
+                const rawPub = v.edition?.publishers?.[0]?.name ? normalizePublisher(v.edition.publishers[0].name) : 'Unbekannt';
+                
+                return {
+                    id: v.id,
+                    edition_id: v.edition?.id || null,
+                    title: cleanTitle,
+                    raw_title: rawTitle,
+                    volume_number: v.numberDisplay || (v.number !== null && v.number !== undefined ? String(v.number) : 'Special'),
+                    publisher: rawPub,
+                    date: v.date ? v.date.slice(0, 10) : null,
+                    year: v.year,
+                    month: v.month,
+                    day: v.day,
+                    price: v.price ? Math.round(v.price) / 100 : null,
+                    cover_image: v.cover || null,
+                    pages: v.pages || null,
+                    is_digital: isDigital,
+                    format: v.format ?? 0
+                };
+            });
+
+            try {
+                db.prepare(`
+                    INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+                `).run(cacheKey, JSON.stringify(rawItems), Date.now());
+            } catch (cacheErr) {
+                console.warn('Cache write failed:', cacheErr);
+            }
+        }
+
+        // Live reconciliation with user's collection in SQLite
+        const userMangas = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas').all();
+        const userVolumes = db.prepare('SELECT id, manga_id, volume_number, status, price, release_date FROM volumes').all();
+
+        const cleanStr = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const mangaMap = new Map();
+        userMangas.forEach(m => {
+            mangaMap.set(cleanStr(m.title), m);
+            if (m.alt_title) mangaMap.set(cleanStr(m.alt_title), m);
+        });
+
+        const matchSeries = (title) => {
+            const norm = cleanStr(title);
+            if (mangaMap.has(norm)) return mangaMap.get(norm);
+
+            const lower = title.toLowerCase();
+            for (const m of userMangas) {
+                if (m.title.toLowerCase() === lower) return m;
+                if (m.alt_title && m.alt_title.toLowerCase() === lower) return m;
+            }
+
+            const prefix = title.split(/[–\-:]/)[0].trim();
+            const normPre = cleanStr(prefix);
+            if (normPre.length >= 4 && mangaMap.has(normPre)) {
+                return mangaMap.get(normPre);
+            }
+            return null;
+        };
+
+        const enrichedItems = rawItems.map(item => {
+            const matchedManga = matchSeries(item.title);
+            let inCollection = false;
+            let userMangaId = null;
+            let userVolumeStatus = null;
+            let userVolumeId = null;
+
+            if (matchedManga) {
+                inCollection = true;
+                userMangaId = matchedManga.id;
+                const volNum = String(item.volume_number || '').trim();
+                const existingVol = userVolumes.find(uv => uv.manga_id === matchedManga.id && String(uv.volume_number).trim() === volNum);
+                if (existingVol) {
+                    userVolumeStatus = existingVol.status;
+                    userVolumeId = existingVol.id;
+                }
+            }
+
+            return {
+                ...item,
+                in_collection: inCollection,
+                user_manga_id: userMangaId,
+                user_manga_title: matchedManga ? matchedManga.title : null,
+                user_volume_status: userVolumeStatus,
+                user_volume_id: userVolumeId
+            };
+        });
+
+        // Publisher list
+        const pubMap = new Map();
+        enrichedItems.forEach(it => {
+            if (it.publisher && it.publisher !== 'Unbekannt') {
+                pubMap.set(it.publisher, (pubMap.get(it.publisher) || 0) + 1);
+            }
+        });
+
+        const publishers = Array.from(pubMap.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+
+        res.json({
+            year,
+            month,
+            total_items: enrichedItems.length,
+            print_count: enrichedItems.filter(i => !i.is_digital).length,
+            user_series_count: enrichedItems.filter(i => i.in_collection).length,
+            publishers,
+            items: enrichedItems
+        });
+    } catch (err) {
+        console.error('Manga Passion releases error:', err);
+        res.status(500).json({ error: 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen: ' + err.message });
+    }
+});
+
+app.post('/api/manga-passion/import', requireEditor, (req, res) => {
+    try {
+        const {
+            manga_id,
+            title,
+            volume_number,
+            publisher,
+            release_date,
+            price,
+            cover_image,
+            target_status
+        } = req.body;
+
+        let effMangaId = manga_id;
+
+        // If manga doesn't exist yet, create it
+        if (!effMangaId) {
+            const cleanTitle = (title || '').replace(/\s*\(eBook\)/i, '').trim();
+            const insManga = db.prepare(`
+                INSERT INTO mangas (title, publisher, cover_image, status, created_at, updated_at)
+                VALUES (?, ?, ?, 'Laufend', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `).run(cleanTitle, publisher || null, cover_image || null);
+            effMangaId = Number(insManga.lastInsertRowid);
+        }
+
+        const volNumStr = String(volume_number || '1').trim();
+        const existingVol = db.prepare('SELECT id, status FROM volumes WHERE manga_id = ? AND volume_number = ?').get(effMangaId, volNumStr);
+
+        let volumeId;
+        const effStatus = target_status || 'Vorbestellt';
+
+        if (existingVol) {
+            db.prepare(`
+                UPDATE volumes 
+                SET status = ?, 
+                    price = COALESCE(?, price),
+                    release_date = COALESCE(?, release_date),
+                    publisher = COALESCE(?, publisher),
+                    cover_image = COALESCE(cover_image, ?)
+                WHERE id = ?
+            `).run(effStatus, price || null, release_date || null, publisher || null, cover_image || null, existingVol.id);
+            volumeId = existingVol.id;
+        } else {
+            const insVol = db.prepare(`
+                INSERT INTO volumes (manga_id, volume_number, status, price, release_date, publisher, cover_image, type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'volume', CURRENT_TIMESTAMP)
+            `).run(effMangaId, volNumStr, effStatus, price || null, release_date || null, publisher || null, cover_image || null);
+            volumeId = Number(insVol.lastInsertRowid);
+        }
+
+        res.json({
+            success: true,
+            manga_id: effMangaId,
+            volume_id: volumeId,
+            status: effStatus
+        });
+    } catch (err) {
+        console.error('Import error:', err);
+        res.status(500).json({ error: 'Fehler beim Übernehmen des Bands: ' + err.message });
+    }
+});
+
 // --- STATISTICS & FINANCE API ---
 app.get('/api/stats', requireAuth, (req, res) => {
     try {

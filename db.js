@@ -100,6 +100,12 @@ function initDb() {
             key TEXT PRIMARY KEY,
             value TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS manga_passion_cache (
+            cache_key TEXT PRIMARY KEY,
+            json_data TEXT,
+            created_at INTEGER
+        );
     `);
 
     try {
