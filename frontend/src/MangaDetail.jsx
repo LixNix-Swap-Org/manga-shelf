@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -9,7 +9,7 @@ import {
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck, Package, Truck,
   Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart,
-  ChevronLeft, ChevronRight, ExternalLink
+  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -47,6 +47,14 @@ export default function MangaDetail({ user }) {
   });
   const [fillingGapNumber, setFillingGapNumber] = useState(null);
   const [fillingGapLoading, setFillingGapLoading] = useState(false);
+
+  // Manga Passion Live Gap Reconciliation States
+  const [mpGapData, setMpGapData] = useState(null);
+  const [mpGapLoading, setMpGapLoading] = useState(false);
+  const [showMpEditionModal, setShowMpEditionModal] = useState(false);
+  const [mpEditionSearchQuery, setMpEditionSearchQuery] = useState('');
+  const [mpEditionSearchResults, setMpEditionSearchResults] = useState(null);
+  const [searchingMpEditions, setSearchingMpEditions] = useState(false);
 
   // Edit form state
   const [formData, setFormData] = useState({});
@@ -86,7 +94,29 @@ export default function MangaDetail({ user }) {
 
   useEffect(() => {
     fetchManga();
+    fetchMpGaps();
   }, [id]);
+
+  const fetchMpGaps = async (forcedEditionId = null, forceRefresh = false) => {
+    try {
+      setMpGapLoading(true);
+      let url = `/api/mangas/${id}/gaps`;
+      const params = [];
+      if (forcedEditionId) params.push(`edition_id=${forcedEditionId}`);
+      if (forceRefresh) params.push(`force_refresh=true`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setMpGapData(data);
+      }
+    } catch (e) {
+      console.warn('Manga Passion gaps fetch failed:', e);
+    } finally {
+      setMpGapLoading(false);
+    }
+  };
 
   const fetchManga = async () => {
     try {
@@ -924,6 +954,7 @@ export default function MangaDetail({ user }) {
   const handleFillGap = async (gapNum, targetStatus = 'Fehlt') => {
     if (!canEdit) return;
     setFillingGapLoading(true);
+    const gapMeta = mpGapMap.get(String(gapNum).toLowerCase());
     try {
       const res = await fetch('/api/volumes', {
         method: 'POST',
@@ -932,6 +963,9 @@ export default function MangaDetail({ user }) {
           manga_id: id,
           volume_number: String(gapNum),
           status: targetStatus,
+          price: gapMeta && gapMeta.price !== null ? gapMeta.price : null,
+          release_date: gapMeta && gapMeta.release_date ? gapMeta.release_date : null,
+          cover_image: gapMeta && gapMeta.cover_image ? gapMeta.cover_image : null,
           publisher: manga.publisher || null,
           type: 'volume'
         })
@@ -939,6 +973,7 @@ export default function MangaDetail({ user }) {
       if (res.ok) {
         setFillingGapNumber(null);
         await fetchManga();
+        await fetchMpGaps();
       } else {
         const data = await res.json();
         alert(data.error || 'Fehler beim Erfassen des Bandes');
@@ -955,24 +990,101 @@ export default function MangaDetail({ user }) {
     if (!confirm(`${detectedGaps.length} fehlende Bände auf Status '${targetStatus}' erfassen?`)) return;
     setFillingGapLoading(true);
     try {
-      for (const gapNum of detectedGaps) {
-        await fetch('/api/volumes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            manga_id: id,
-            volume_number: String(gapNum),
-            status: targetStatus,
-            publisher: manga.publisher || null,
-            type: 'volume'
-          })
-        });
+      const res = await fetch(`/api/mangas/${id}/batch-import-gaps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          volume_numbers: detectedGaps.map(String),
+          target_status: targetStatus,
+          edition_id: mpGapData?.edition?.id || null
+        })
+      });
+      if (res.ok) {
+        await fetchManga();
+        await fetchMpGaps();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Erfassen der Lücken');
       }
-      await fetchManga();
     } catch (err) {
       alert('Fehler beim Erfassen der Lücken');
     } finally {
       setFillingGapLoading(false);
+    }
+  };
+
+  const handleSyncTotalVolumes = async (officialTotal) => {
+    if (!canEdit || !mpGapData?.edition?.id) return;
+    setMpGapLoading(true);
+    try {
+      const res = await fetch(`/api/mangas/${id}/sync-edition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          edition_id: mpGapData.edition.id,
+          update_total_volumes: true,
+          update_status: true,
+          update_publisher: false
+        })
+      });
+      if (res.ok) {
+        await fetchManga();
+        await fetchMpGaps(mpGapData.edition.id, true);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Abgleich');
+      }
+    } catch (err) {
+      alert('Netzwerkfehler');
+    } finally {
+      setMpGapLoading(false);
+    }
+  };
+
+  const handleSearchMpEditions = async (e) => {
+    if (e) e.preventDefault();
+    const query = mpEditionSearchQuery.trim() || manga.title;
+    if (!query) return;
+    setSearchingMpEditions(true);
+    try {
+      const res = await fetch(`/api/manga-passion/editions?title=${encodeURIComponent(query)}&publisher=${encodeURIComponent(manga.publisher || '')}&total_volumes=${manga.total_volumes || ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMpEditionSearchResults(data.candidates || []);
+      }
+    } catch (err) {
+      alert('Fehler bei der Editionssuche');
+    } finally {
+      setSearchingMpEditions(false);
+    }
+  };
+
+  const handleSelectMpEdition = async (selectedEdition) => {
+    if (!canEdit || !selectedEdition) return;
+    setMpGapLoading(true);
+    try {
+      const res = await fetch(`/api/mangas/${id}/sync-edition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          edition_id: selectedEdition.id,
+          update_total_volumes: true,
+          update_status: true,
+          update_publisher: false
+        })
+      });
+      if (res.ok) {
+        setShowMpEditionModal(false);
+        await fetchManga();
+        await fetchMpGaps(selectedEdition.id, true);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Fehler beim Auswählen der Edition');
+      }
+    } catch (err) {
+      alert('Netzwerkfehler');
+    } finally {
+      setMpGapLoading(false);
     }
   };
 
@@ -1077,8 +1189,27 @@ export default function MangaDetail({ user }) {
     };
   };
 
-  // Gap Detection for numeric volumes
+  // Map of Manga Passion gaps by volume_number for quick lookup of price, cover, date
+  const mpGapMap = new Map();
+  if (mpGapData && mpGapData.gaps) {
+    mpGapData.gaps.forEach(g => {
+      mpGapMap.set(String(g.volume_number).trim().toLowerCase(), g);
+    });
+  }
+
+  // Gap Detection for numeric volumes:
+  // Prioritizes verified Manga Passion official edition data if available;
+  // falls back to local detection.
   const detectedGaps = (() => {
+    // If Manga Passion matched the German edition, use the verified official missing volumes!
+    if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
+      return mpGapData.gaps.map(g => {
+        const match = String(g.volume_number).trim().match(/^(\d+)$/);
+        return match ? parseInt(match[1], 10) : g.volume_number;
+      });
+    }
+
+    // Local fallback:
     const existingNums = new Set();
     let maxFound = 0;
     
@@ -1117,10 +1248,10 @@ export default function MangaDetail({ user }) {
     }
 
     const items = [];
-    const gapsSet = new Set(detectedGaps);
+    const gapsSet = new Set(detectedGaps.map(g => (typeof g === 'string' && /^\d+$/.test(g)) ? parseInt(g, 10) : g));
     const sorted = [...filteredVolumes];
     const maxTarget = Math.max(
-      ...Array.from(gapsSet),
+      ...Array.from(gapsSet).map(g => typeof g === 'number' ? g : 0),
       ...sorted.map(v => {
         const match = String(v.volume_number).trim().match(/^(\d+)$/);
         return match ? parseInt(match[1], 10) : 0;
@@ -1130,7 +1261,8 @@ export default function MangaDetail({ user }) {
     let volIndex = 0;
     for (let i = 1; i <= maxTarget; i++) {
       if (gapsSet.has(i)) {
-        items.push({ isGap: true, gapNumber: i });
+        const gapMeta = mpGapMap.get(String(i).toLowerCase());
+        items.push({ isGap: true, gapNumber: i, gapMeta });
       }
       while (volIndex < sorted.length) {
         const v = sorted[volIndex];
@@ -1611,9 +1743,9 @@ export default function MangaDetail({ user }) {
                 </div>
               </div>
 
-              {/* Lücken-Erkennung Toggle */}
-              {detectedGaps.length > 0 && (
-                <div className="flex items-center gap-2">
+              {/* Lücken-Erkennung Toggle & Manga Passion Pill */}
+              <div className="flex items-center gap-2">
+                {detectedGaps.length > 0 && (
                   <button
                     type="button"
                     onClick={handleToggleShowGaps}
@@ -1630,8 +1762,36 @@ export default function MangaDetail({ user }) {
                       {showGaps ? 'AN' : 'AUS'}
                     </span>
                   </button>
-                </div>
-              )}
+                )}
+
+                {/* Manga Passion Pill / Discrepancy indicator */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMpEditionSearchQuery(manga.title);
+                    setShowMpEditionModal(true);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                    mpGapData?.discrepancy 
+                      ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 hover:bg-amber-500/25 shadow-sm' 
+                      : mpGapData?.matched
+                        ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                        : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                  }`}
+                  title="Klicken für Manga-Passion Editionsabgleich"
+                >
+                  <Globe className="w-3.5 h-3.5 text-brand-400" />
+                  <span className="hidden sm:inline">Manga-Passion:</span>
+                  <span className="font-semibold text-white truncate max-w-[130px]">
+                    {mpGapData?.edition ? mpGapData.edition.publisher : (mpGapLoading ? 'Prüfe...' : 'Abgleich')}
+                  </span>
+                  {mpGapData?.discrepancy && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-500/30 text-amber-200">
+                      {mpGapData.discrepancy.official_total} statt {mpGapData.discrepancy.db_total}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1878,26 +2038,72 @@ export default function MangaDetail({ user }) {
                 <div className="mb-8">
                   {/* Shelf Gap Notice Banner if gaps detected */}
                   {showGaps && detectedGaps.length > 0 && volumeFilter === 'ALL' && !volumeSearch && (
-                    <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>
-                          <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} im Regal entdeckt:</strong> Band {detectedGaps.slice(0, 10).join(', ')}{detectedGaps.length > 10 ? ` (+ ${detectedGaps.length - 10} weitere)` : ''}
-                        </span>
-                      </div>
-                      {canEdit && (
+                    <div className="mb-4 space-y-2">
+                      {/* Discrepancy warning banner if AniList total differs from German Edition total */}
+                      {mpGapData?.discrepancy && canEdit && (
+                        <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+                          <div className="flex items-center gap-2.5">
+                            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                            <div>
+                              <div className="font-bold text-amber-300">Sammlungs-Info korrigieren (Manga-Passion Abgleich)</div>
+                              <div className="text-[11px] text-amber-200/90 leading-tight">
+                                {mpGapData.discrepancy.message}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSyncTotalVolumes(mpGapData.discrepancy.official_total)}
+                              disabled={mpGapLoading}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Auf {mpGapData.discrepancy.official_total} Bände anpassen</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Main Gaps Banner */}
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>
+                            <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} im Regal entdeckt:</strong> Band {detectedGaps.slice(0, 10).join(', ')}{detectedGaps.length > 10 ? ` (+ ${detectedGaps.length - 10} weitere)` : ''}
+                            {mpGapData?.edition && (
+                              <span className="ml-1.5 text-amber-300/80 text-[11px]">
+                                (geprüft mit Manga-Passion: <em>{mpGapData.edition.title}</em>, {mpGapData.total_official_volumes} Bände)
+                              </span>
+                            )}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleBatchFillGaps('Fehlt')}
-                            disabled={fillingGapLoading}
-                            className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                            onClick={() => {
+                              setMpEditionSearchQuery(manga.title);
+                              setShowMpEditionModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Manga-Passion Edition prüfen oder wechseln"
                           >
-                            <ShoppingCart className="w-3 h-3 text-amber-300" />
-                            <span>Alle auf Einkaufsliste</span>
+                            <Search className="w-3 h-3 text-brand-400" />
+                            <span>Manga-Passion Edition</span>
                           </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => handleBatchFillGaps('Fehlt')}
+                              disabled={fillingGapLoading}
+                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <ShoppingCart className="w-3 h-3 text-amber-300" />
+                              <span>Alle auf Einkaufsliste</span>
+                            </button>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
 
@@ -1907,23 +2113,35 @@ export default function MangaDetail({ user }) {
                       <div className="flex items-end gap-1.5 sm:gap-2 min-w-max px-2 pb-1">
                         {spineShelfItems.map((item, idx) => {
                           if (item.isGap) {
+                            const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
                             return (
                               <div
                                 key={`gap-${item.gapNumber}-${idx}`}
                                 onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
-                                className={`manga-spine-ghost w-[50px] sm:w-[56px] flex flex-col justify-between items-center py-3 px-1 text-center shrink-0 ${
-                                  canEdit ? 'cursor-pointer' : 'cursor-default'
-                                }`}
-                                title={canEdit ? `Lücke: Band ${item.gapNumber} fehlt. Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
+                                className={`manga-spine-ghost relative group w-[52px] sm:w-[58px] flex flex-col justify-between items-center py-3 px-1 text-center shrink-0 rounded-lg overflow-hidden border border-dashed transition-all ${
+                                  canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03]' : 'cursor-default'
+                                } border-amber-500/40 bg-slate-900/60 backdrop-blur-sm`}
+                                title={gapMeta?.price ? `Lücke: Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €${gapMeta.release_date ? ' • ' + gapMeta.release_date : ''}). Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
                               >
-                                <div className="text-[10px] font-bold text-amber-400/80 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                                {gapMeta?.cover_image && (
+                                  <div 
+                                    className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity pointer-events-none"
+                                    style={{ backgroundImage: `url(${gapMeta.cover_image})` }}
+                                  />
+                                )}
+                                <div className="relative z-10 text-[10px] font-bold text-amber-400/90 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40">
                                   +
                                 </div>
-                                <div className="flex flex-col items-center">
+                                <div className="relative z-10 flex flex-col items-center">
                                   <span className="text-[10px] font-black text-amber-300/80 tracking-tight">Band</span>
                                   <span className="text-base font-black text-amber-400 leading-tight">{item.gapNumber}</span>
+                                  {gapMeta?.price && (
+                                    <span className="text-[9px] font-mono font-bold text-amber-300/90 mt-0.5">
+                                      {gapMeta.price.toFixed(2).replace('.', ',')} €
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="text-[8px] font-bold uppercase tracking-wider text-amber-400/80 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                                <div className="relative z-10 text-[8px] font-bold uppercase tracking-wider text-amber-400/90 bg-amber-500/20 px-1 py-0.5 rounded border border-amber-500/30">
                                   Lücke
                                 </div>
                               </div>
@@ -3443,9 +3661,46 @@ export default function MangaDetail({ user }) {
               </button>
             </div>
 
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
               Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {fillingGapNumber} erfassen?
             </p>
+
+            {/* Manga Passion Volume Preview Card */}
+            {(() => {
+              const meta = mpGapMap.get(String(fillingGapNumber).toLowerCase());
+              if (!meta) return null;
+              return (
+                <div className="mb-4 p-3 bg-slate-950/90 rounded-xl border border-slate-800 flex gap-3 items-center">
+                  {meta.cover_image && (
+                    <img 
+                      src={meta.cover_image} 
+                      alt={`Band ${fillingGapNumber}`}
+                      className="w-12 h-16 object-cover rounded-lg border border-slate-700 shrink-0 shadow-md"
+                    />
+                  )}
+                  <div className="text-xs space-y-1 min-w-0 flex-1">
+                    <div className="font-bold text-white truncate flex items-center gap-1.5">
+                      <span>{manga.title} – Band {fillingGapNumber}</span>
+                    </div>
+                    {meta.price && (
+                      <div className="text-amber-400 font-mono font-bold text-xs flex items-center gap-1">
+                        <Coins className="w-3 h-3 text-amber-400" />
+                        <span>Offizieller Preis: {meta.price.toFixed(2).replace('.', ',')} €</span>
+                      </div>
+                    )}
+                    {meta.release_date && (
+                      <div className="text-slate-400 text-[11px] flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-500" />
+                        <span>Erschienen: {meta.release_date}</span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${meta.is_released ? 'bg-emerald-500/20 text-emerald-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                          {meta.is_released ? 'Bereits im Handel' : 'Vorbestellbar'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-3">
               <button
@@ -3637,6 +3892,161 @@ export default function MangaDetail({ user }) {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* MANGA PASSION EDITION SELECTOR MODAL */}
+      {showMpEditionModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowMpEditionModal(false)}
+        >
+          <div 
+            className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Manga-Passion Datenabgleich</h3>
+                  <p className="text-xs text-slate-400">Deutsche Editionsdaten, Lücken & offizielle Bände</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowMpEditionModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body (scrollable) */}
+            <div className="overflow-y-auto custom-scrollbar flex-1 space-y-4 pr-1">
+              {/* Currently matched edition */}
+              {mpGapData?.edition && (
+                <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                  <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Aktuell verknüpfte Edition</div>
+                  <div className="flex gap-3 items-center">
+                    {mpGapData.edition.cover_image && (
+                      <img 
+                        src={mpGapData.edition.cover_image} 
+                        alt={mpGapData.edition.title}
+                        className="w-12 h-16 object-cover rounded-lg border border-slate-700 shrink-0" 
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-white text-sm truncate">{mpGapData.edition.title}</h4>
+                      <p className="text-xs text-slate-400">
+                        {mpGapData.edition.publisher} • {mpGapData.edition.total_volumes || '?'} Bände • Status: {mpGapData.edition.status}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions for current edition */}
+                  <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800 text-xs">
+                    {mpGapData.discrepancy && (
+                      <button
+                        type="button"
+                        onClick={() => handleSyncTotalVolumes(mpGapData.discrepancy.official_total)}
+                        disabled={mpGapLoading}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Bandzahl auf {mpGapData.discrepancy.official_total} korrigieren</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => fetchMpGaps(mpGapData.edition.id, true)}
+                      disabled={mpGapLoading}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${mpGapLoading ? 'animate-spin' : ''}`} />
+                      <span>Daten neu laden</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Search other editions */}
+              <div className="space-y-2">
+                <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Andere deutsche Edition wählen</div>
+                <form onSubmit={handleSearchMpEditions} className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={mpEditionSearchQuery}
+                    onChange={e => setMpEditionSearchQuery(e.target.value)}
+                    placeholder="Titel auf Manga-Passion suchen..."
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={searchingMpEditions}
+                    className="btn-primary px-3 py-2 text-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Suchen</span>
+                  </button>
+                </form>
+
+                {/* Candidate / Search Results list */}
+                <div className="space-y-2 pt-2">
+                  {(mpEditionSearchResults || mpGapData?.candidate_editions || []).map(candidate => {
+                    const isCurrent = mpGapData?.edition?.id === candidate.id;
+                    return (
+                      <div 
+                        key={candidate.id}
+                        className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 text-xs ${
+                          isCurrent 
+                            ? 'bg-brand-500/10 border-brand-500/40 text-brand-200' 
+                            : 'bg-slate-950/60 hover:bg-slate-800/60 border-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-white truncate">{candidate.title}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {candidate.publisher} • {candidate.total_volumes || candidate.numVolumes || '?'} Bände • Status: {candidate.status === 2 ? 'Abgeschlossen' : (candidate.status === 1 ? 'Laufend' : (candidate.status || 'Unbekannt'))}
+                          </div>
+                        </div>
+                        <div>
+                          {isCurrent ? (
+                            <span className="text-[10px] font-bold uppercase bg-brand-500/20 text-brand-300 px-2 py-1 rounded-md border border-brand-500/30">
+                              Aktiv
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectMpEdition(candidate)}
+                              disabled={mpGapLoading}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-brand-600 text-slate-200 hover:text-white rounded-lg transition-all font-medium border border-slate-700 cursor-pointer"
+                            >
+                              Übernehmen
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowMpEditionModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

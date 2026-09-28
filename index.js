@@ -25,6 +25,13 @@ require('dotenv').config();
 
 const pkg = require('./package.json');
 const { db, hasAdmin, uploadsDir, dataDir, closeDb, initDb } = require('./db');
+const {
+    searchMangaPassionEditions,
+    getEditionDetailsAndVolumes,
+    reconcileMangaGaps,
+    batchImportGaps,
+    syncMangaWithEdition
+} = require('./mangaPassion');
 
 const app = express();
 
@@ -417,7 +424,8 @@ app.post('/api/mangas', requireEditor, (req, res) => {
             total_volumes = null,
             description = null,
             cover_image = null,
-            banner_image = null
+            banner_image = null,
+            manga_passion_id = null
         } = req.body;
 
         if (!title || !title.trim()) {
@@ -425,8 +433,8 @@ app.post('/api/mangas', requireEditor, (req, res) => {
         }
 
         const stmt = db.prepare(`
-            INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const result = stmt.run(
             title.trim(),
@@ -440,6 +448,7 @@ app.post('/api/mangas', requireEditor, (req, res) => {
             description ? description.trim() : null,
             cover_image || null,
             banner_image || null,
+            manga_passion_id ? (parseInt(manga_passion_id, 10) || null) : null,
             req.user.id
         );
         res.json({ success: true, id: Number(result.lastInsertRowid) });
@@ -569,12 +578,13 @@ app.put('/api/mangas/:id', requireEditor, (req, res) => {
         const description = body.description !== undefined ? body.description : manga.description;
         const cover_image = body.cover_image !== undefined ? body.cover_image : manga.cover_image;
         const banner_image = body.banner_image !== undefined ? body.banner_image : manga.banner_image;
+        const manga_passion_id = body.manga_passion_id !== undefined ? (parseInt(body.manga_passion_id, 10) || null) : manga.manga_passion_id;
 
         const stmt = db.prepare(`
             UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?, 
             language = ?, status = ?, tags = ?, total_volumes = ?, 
             owned_volumes = ?, description = ?, cover_image = ?, 
-            banner_image = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+            banner_image = ?, manga_passion_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
         stmt.run(
@@ -590,6 +600,7 @@ app.put('/api/mangas/:id', requireEditor, (req, res) => {
             description || null,
             cover_image || null,
             banner_image || null,
+            manga_passion_id,
             req.user.id,
             req.params.id
         );
@@ -1398,6 +1409,78 @@ app.post('/api/manga-passion/import', requireEditor, (req, res) => {
     } catch (err) {
         console.error('Import error:', err);
         res.status(500).json({ error: 'Fehler beim Übernehmen des Bands: ' + err.message });
+    }
+});
+
+// --- MANGA PASSION EDITION SEARCH ---
+app.get('/api/manga-passion/editions', requireAuth, async (req, res) => {
+    try {
+        const title = req.query.title || '';
+        const publisher = req.query.publisher || '';
+        const totalVolumes = parseInt(req.query.total_volumes, 10) || null;
+        if (!title.trim()) {
+            return res.status(400).json({ error: 'Titel-Parameter ist erforderlich' });
+        }
+        const result = await searchMangaPassionEditions(title, publisher, totalVolumes);
+        res.json(result);
+    } catch (err) {
+        console.error('Manga Passion edition search error:', err);
+        res.status(500).json({ error: 'Fehler bei der Editionssuche: ' + err.message });
+    }
+});
+
+// --- MANGA GAPS CHECK (Manga Passion Live-Abgleich) ---
+app.get('/api/mangas/:id/gaps', requireAuth, async (req, res) => {
+    try {
+        const mangaId = parseInt(req.params.id, 10);
+        const editionId = req.query.edition_id ? parseInt(req.query.edition_id, 10) : null;
+        const forceRefresh = req.query.force_refresh === 'true';
+
+        const result = await reconcileMangaGaps(mangaId, { edition_id: editionId, force_refresh: forceRefresh });
+        res.json(result);
+    } catch (err) {
+        console.error('Manga gaps check error:', err);
+        res.status(500).json({ error: 'Fehler beim Abgleich der Lücken: ' + err.message });
+    }
+});
+
+// --- SYNC MANGA WITH MANGA PASSION EDITION ---
+app.post('/api/mangas/:id/sync-edition', requireEditor, async (req, res) => {
+    try {
+        const mangaId = parseInt(req.params.id, 10);
+        const { edition_id, update_total_volumes, update_status, update_publisher } = req.body;
+        if (!edition_id) {
+            return res.status(400).json({ error: 'edition_id ist erforderlich' });
+        }
+
+        const updatedManga = await syncMangaWithEdition(mangaId, edition_id, {
+            update_total_volumes: update_total_volumes !== false,
+            update_status: Boolean(update_status),
+            update_publisher: Boolean(update_publisher)
+        });
+
+        res.json({ success: true, manga: updatedManga });
+    } catch (err) {
+        console.error('Sync edition error:', err);
+        res.status(500).json({ error: 'Fehler beim Synchronisieren der Edition: ' + err.message });
+    }
+});
+
+// --- BATCH IMPORT GAPS FROM MANGA PASSION ---
+app.post('/api/mangas/:id/batch-import-gaps', requireEditor, async (req, res) => {
+    try {
+        const mangaId = parseInt(req.params.id, 10);
+        const { volume_numbers, target_status, edition_id } = req.body;
+
+        if (!Array.isArray(volume_numbers) || volume_numbers.length === 0) {
+            return res.status(400).json({ error: 'volume_numbers Array ist erforderlich' });
+        }
+
+        const result = await batchImportGaps(mangaId, volume_numbers, target_status || 'Fehlt', edition_id);
+        res.json(result);
+    } catch (err) {
+        console.error('Batch import gaps error:', err);
+        res.status(500).json({ error: 'Fehler beim Erfassen der Lücken: ' + err.message });
     }
 });
 

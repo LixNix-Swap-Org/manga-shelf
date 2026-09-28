@@ -60,6 +60,8 @@ function initDb() {
             description TEXT,
             cover_image TEXT,
             banner_image TEXT,
+            manga_passion_id INTEGER DEFAULT NULL,
+            manga_passion_edition_data TEXT DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_by INTEGER,
@@ -83,6 +85,7 @@ function initDb() {
             cover_image TEXT,
             images TEXT,
             type TEXT DEFAULT 'volume',
+            manga_passion_volume_id INTEGER DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE
         );
@@ -112,8 +115,13 @@ function initDb() {
         currentDb.exec("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('collection_start_date', '2021-04-09');");
     } catch (e) {}
 
-    // Migrations for existing databases to ensure all volume fields exist
+    // Migrations for existing databases to ensure all manga & volume fields exist
     try {
+        const mangaCols = currentDb.prepare("PRAGMA table_info(mangas)").all();
+        const mangaColNames = new Set(mangaCols.map(c => c.name));
+        if (!mangaColNames.has('manga_passion_id')) currentDb.exec('ALTER TABLE mangas ADD COLUMN manga_passion_id INTEGER DEFAULT NULL;');
+        if (!mangaColNames.has('manga_passion_edition_data')) currentDb.exec('ALTER TABLE mangas ADD COLUMN manga_passion_edition_data TEXT DEFAULT NULL;');
+
         const volCols = currentDb.prepare("PRAGMA table_info(volumes)").all();
         const volColNames = new Set(volCols.map(c => c.name));
         if (!volColNames.has('price')) currentDb.exec('ALTER TABLE volumes ADD COLUMN price REAL DEFAULT NULL;');
@@ -125,6 +133,7 @@ function initDb() {
         if (!volColNames.has('cover_image')) currentDb.exec('ALTER TABLE volumes ADD COLUMN cover_image TEXT DEFAULT NULL;');
         if (!volColNames.has('images')) currentDb.exec('ALTER TABLE volumes ADD COLUMN images TEXT DEFAULT NULL;');
         if (!volColNames.has('type')) currentDb.exec("ALTER TABLE volumes ADD COLUMN type TEXT DEFAULT 'volume';");
+        if (!volColNames.has('manga_passion_volume_id')) currentDb.exec('ALTER TABLE volumes ADD COLUMN manga_passion_volume_id INTEGER DEFAULT NULL;');
 
         // Migration: Update existing One Piece 'Special %' to type = 'schuber' and volume_number = 'Schuber %'
         try {

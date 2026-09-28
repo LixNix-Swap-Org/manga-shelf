@@ -181,7 +181,11 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
 | `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
+| `/api/manga-passion/editions` | GET | `requireAuth` | Suche & Auflistung passender Manga Passion Editionen nach Titel & Verlag |
 | `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (Status: Vorbestellt oder Fehlt) |
+| `/api/mangas/:id/gaps` | GET | `requireAuth` | Intelligente Lücken-Erkennung & Abgleich gegen offizielle deutsche Manga Passion Edition |
+| `/api/mangas/:id/sync-edition` | POST | `requireEditor` | 1-Klick-Synchronisation von `total_volumes` und Editions-Metadaten |
+| `/api/mangas/:id/batch-import-gaps` | POST | `requireEditor` | Batch-Übernahme aller echten Lücken auf die Einkaufsliste (inkl. Preisen & Covern) |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
 | `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |
@@ -291,6 +295,20 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * **1-Klick-Cover-Wechsel:** Direkt in der Lightbox kann jedes Galerie-Foto mit einem Klick ("Als Cover festlegen") zum primären Coverbild des Bandes gemacht werden.
    * **Foto-Manager im Edit-Modal:** Ermöglicht Multi-Upload (bis zu 10 Bilder), URL-Eingabe, Umsortieren der Fotos per `◀` / `▶`, Löschen einzelner Fotos sowie Festlegen des Cover-Fotos.
    * **Karten- & Listen-Badges:** Bei Einträgen mit mehr als 1 Foto erscheint ein markantes `📷 X Fotos`-Badge sowohl auf dem Cover als auch bei den Metadaten.
+
+### 🔹 Fall K: Intelligente Lücken-Erkennung & Manga Passion Editions-Abgleich
+1. **Problem & Hintergrund:**
+   * Bei Importen aus internationalen Datenbanken (AniList) werden häufig japanische Tankōbon-Gesamtbandzahlen hinterlegt (z. B. 20th Century Boys: 22 japanische Bände vs. 11 deutsche Doppelbände der Ultimative Edition; Evangelion: 14 vs. 7 Perfect Edition Bände). Dadurch entstanden früher falsche Phantom-Lücken (z. B. Band 12–22).
+2. **Backend Service (`mangaPassion.js`) & API (`index.js`):**
+   * `mangaPassion.js` gleicht die Reihe intelligent mit der offiziellen deutschen Manga Passion API (`https://api.manga-passion.de`) ab (Caching für 12h in `manga_passion_cache`).
+   * `GET /api/mangas/:id/gaps`: Liefert verifizierte echte Lücken mit offiziellen deutschen Preisen, Veröffentlichungsdaten und Cover-Bildern. Erkennt Diskrepanzen zwischen der DB-Gesamtzahl und der deutschen Editions-Bandzahl.
+   * `POST /api/mangas/:id/sync-edition`: 1-Klick-Synchronisation der Gesamtbandzahl und Metadaten auf die offizielle deutsche Edition.
+   * `POST /api/mangas/:id/batch-import-gaps`: Überträgt alle erkannten Lücken als `Fehlt` mit offiziellen Preisen und Covern direkt in die Einkaufsliste / Sammlung.
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+   * **Diskrepanz-Warnung:** Weist auffällig darauf hin, wenn AniList-Zahlen von der deutschen Ausgabe abweichen, und bietet 1-Klick-Anpassung.
+   * **Regal Ghost-Spines:** Zeigt Lücken mit transluzentem Original-Cover, Bandnummer und offiziellem Preis in Euro an.
+   * **Lücken-Füll-Modal:** Ermöglicht die Vorschau des offiziellen deutschen Covers, Preises und Datums vor der Übernahme in die Sammlung.
+   * **Editions-Manager:** Modal zum manuellen Durchsuchen und Auswählen von alternativen deutschen Ausgaben (z. B. Standard vs. Massiv vs. Deluxe).
 
 ---
 
