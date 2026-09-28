@@ -36,6 +36,7 @@ c:\Manga Webseite 2.0/
 ├── package.js                 # Packager-Skript: baut Frontend & packt Backend als ZIP
 ├── index.js                   # Hauptserver: Express App, Middleware, alle REST-Routen
 ├── db.js                      # DB-Verbindung, Schema, Tabellen-Erstellung & Migrationen
+├── mangaPassion.js            # Manga Passion API Client, Lückenabgleich & Editions-Lookup
 ├── egg-manga-shelf.json       # Pterodactyl Egg Vorlage
 ├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx

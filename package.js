@@ -32,6 +32,7 @@ archive.pipe(output);
 archive.file('package.json', { name: 'package.json' });
 archive.file('index.js', { name: 'index.js' });
 archive.file('db.js', { name: 'db.js' });
+archive.file('mangaPassion.js', { name: 'mangaPassion.js' });
 
 // Add frontend build
 archive.directory('frontend/dist/', 'frontend/dist');
