@@ -94,11 +94,12 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu & Verbesserungen in dieser Version:
-- 📊 **Statistik-Dashboard Bugfix:** Die exakte Bandanzahl in den Verlagsbalken („Größte Verlage im Regal“ & Verlagsdiagramm) wird jetzt wieder lückenlos und sauber formatiert angezeigt (z. B. \`343 Bände (28.9%)\`).
-- 🛡️ **E2E Test-Suite Hardening:** Die automatisierte Test-Suite arbeitet jetzt mit isolierten Test-Identifikatoren (\`__TEST_AUTOMATION_SERIES__\`), wodurch reale Mangas in der Datenbank dauerhaft vor Test-Manipulationen geschützt sind.
-- 📈 **100% Konsistenz mit Google Sheets / Excel:** Centgenaue Abstimmung aller 139 Reihen, 1.185 Bände und 10.617,31 € Sammlungs-Gesamtwert inklusive synchronisierter Benutzer-Lesestände.
-- ✨ **Special Edition & Schuber Support:** Volle Unterstützung für \`special_edition\` und \`schuber\` mit chronologischer Sortierung, Filter-Chips und farbkodierten Badges.
-- 🎨 **Segmented Control Status UI:** Ergonomische Pill-Switches (\`[✓ Im Besitz]\` vs. \`[✕ Fehlt noch]\`) in allen Formularen.
+- 📅 **Manga Passion Release-Radar & Monatskalender:** Vollständige Anbindung an die Manga Passion API zur Anzeige aller monatlichen Manga-Neuerscheinungen in Deutschland nach Verlagen sortiert.
+- ⚡ **Intelligenter Sammlungsabgleich in Echtzeit:** Automatische Erkennung und Kennzeichnung von Bänden und Reihen, die du bereits besitzt (\`⭐ Reihe im Regal\`, \`✓ Im Regal\`, \`📦 Vorbestellt\`, \`🛒 Auf Einkaufsliste\`).
+- 🎯 **1-Klick-Vorbestellung & Einkaufsliste:** Bände direkt mit 1 Klick in die Sammlung übernehmen inklusive offiziellem Festpreis, Erscheinungsdatum, Verlag und HD-Cover.
+- 🔍 **Smarte Filter & Monatsnavigation:** Schnelle Monats- & Jahresauswahl, Verlags-Filter, „Nur Print-Bände“ und 1-Klick-Filter „Nur meine Reihen“.
+- 💰 **Persönlicher Budget- & Vorbestellungs-Tracker:** Monatliches Manga-Budget im Blick behalten und gelieferte Bände mit einem Klick ins Regal einbuchen.
+- 🎴 **Karten-Ansicht als Standard:** Modernes Manga-Cover-Grid als Standardansicht im Regal.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;
