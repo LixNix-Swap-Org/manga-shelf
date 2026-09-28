@@ -1126,10 +1126,10 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pb-16 overflow-x-hidden">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 py-3">
-        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4">
+        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4 min-w-0">
           
           {/* Top Bar for Mobile & Tablet / Left item for Desktop */}
           <div className="flex items-center justify-between gap-3 w-full xl:w-auto shrink-0">
@@ -1256,7 +1256,7 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           {/* Desktop Action buttons (>= xl) */}
-          <div className="hidden xl:flex items-center gap-2 shrink-0">
+          <div className="hidden xl:flex items-center gap-2 shrink-0 flex-wrap justify-end min-w-0">
             <button 
               id="btn-open-stats"
               onClick={handleOpenStats} 

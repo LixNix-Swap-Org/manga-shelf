@@ -22,6 +22,7 @@ export default function MangaDetail({ user }) {
 
   const [manga, setManga] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +91,7 @@ export default function MangaDetail({ user }) {
   const fetchManga = async () => {
     try {
       setLoading(true);
+      setNotFound(false);
       const res = await fetch(`/api/mangas/${id}`);
       if (res.ok) {
         const data = await res.json();
@@ -107,10 +109,14 @@ export default function MangaDetail({ user }) {
           cover_image: data.cover_image || ''
         });
       } else if (res.status === 404) {
-        navigate('/');
+        setNotFound(true);
+      } else {
+        // 500 or other error - show not found
+        setNotFound(true);
       }
     } catch (e) {
       console.error(e);
+      setNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -630,6 +636,26 @@ export default function MangaDetail({ user }) {
       </div>
     );
   }
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl">
+          📚
+        </div>
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h2>
+          <p className="text-slate-400 text-sm">Dieser Manga existiert nicht oder wurde gelöscht.</p>
+        </div>
+        <Link
+          to="/"
+          className="btn-primary flex items-center gap-2 px-5 py-2.5"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Zurück zur Übersicht
+        </Link>
+      </div>
+    );
+  }
 
   if (!manga) return null;
 
@@ -1130,7 +1156,7 @@ export default function MangaDetail({ user }) {
   })();
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 overflow-x-hidden">
       {/* Top Bar */}
       <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-6 pb-4">
         <Link 

@@ -452,6 +452,9 @@ app.post('/api/mangas', requireEditor, (req, res) => {
 app.get('/api/mangas/:id', requireAuth, (req, res) => {
     try {
         const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(req.params.id);
+        if (!manga) {
+            return res.status(404).json({ error: 'Manga nicht gefunden' });
+        }
         const volumes = db.prepare(`
             SELECT * FROM volumes 
             WHERE manga_id = ? 
