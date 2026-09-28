@@ -94,12 +94,12 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu & Verbesserungen in dieser Version:
-- 📅 **Manga Passion Release-Radar & Monatskalender:** Vollständige Anbindung an die Manga Passion API zur Anzeige aller monatlichen Manga-Neuerscheinungen in Deutschland nach Verlagen sortiert.
-- ⚡ **Intelligenter Sammlungsabgleich in Echtzeit:** Automatische Erkennung und Kennzeichnung von Bänden und Reihen, die du bereits besitzt (\`⭐ Reihe im Regal\`, \`✓ Im Regal\`, \`📦 Vorbestellt\`, \`🛒 Auf Einkaufsliste\`).
-- 🎯 **1-Klick-Vorbestellung & Einkaufsliste:** Bände direkt mit 1 Klick in die Sammlung übernehmen inklusive offiziellem Festpreis, Erscheinungsdatum, Verlag und HD-Cover.
-- 🔍 **Smarte Filter & Monatsnavigation:** Schnelle Monats- & Jahresauswahl, Verlags-Filter, „Nur Print-Bände“ und 1-Klick-Filter „Nur meine Reihen“.
-- 💰 **Persönlicher Budget- & Vorbestellungs-Tracker:** Monatliches Manga-Budget im Blick behalten und gelieferte Bände mit einem Klick ins Regal einbuchen.
-- 🎴 **Karten-Ansicht als Standard:** Modernes Manga-Cover-Grid als Standardansicht im Regal.
+- 📷 **Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7):** Bände und Schuber können jetzt mehrere Fotos enthalten (z. B. Frontcover, Rückseite, Farbschnitt, Extras/Postkarten, Buchrücken oder Zustandsfotos).
+- 🖼️ **Interaktive Vollbild-Lightbox:** Hochmoderne Lightbox mit Blur-Backdrop, Tastaturnavigation (\`◀\` / \`▶\`, \`Esc\`), Bildzähler (\`1 / X\`) und Thumbnail-Karussell am unteren Rand.
+- ⭐ **1-Klick-Cover-Wechsel:** Jedes Foto kann direkt in der Lightbox mit einem Klick („Als Cover festlegen“) zum primären Coverbild des Eintrags gemacht werden.
+- 🔄 **Foto-Manager im Edit-Modal:** Multi-Upload für bis zu 10 Fotos gleichzeitig, URL-Import, freies Umsortieren per \`◀\` / \`▶\` und Einzelfoto-Löschung.
+- 🏷️ **Smarte Badges:** Dezentes \`📷 X\`-Badge auf Bandkarten und interaktiver \`📷 X Fotos\`-Button für direkten Zugriff auf die Fotogalerie.
+- ⚡ **Performance & Clean UI:** Vollständige Integration in Karten-, Regal- und Listenansichten ohne Ladeverzögerung.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;
