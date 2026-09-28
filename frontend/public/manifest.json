@@ -27,6 +27,22 @@
       "purpose": "any maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Einkaufsliste",
+      "short_name": "Einkauf",
+      "description": "Fehlende Bände direkt im Buchladen aufrufen",
+      "url": "/?view=shopping",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Statistiken",
+      "short_name": "Stats",
+      "description": "Sammlungswert & Lesestatistiken",
+      "url": "/?view=stats",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "categories": ["books", "entertainment", "lifestyle"],
   "lang": "de"
 }

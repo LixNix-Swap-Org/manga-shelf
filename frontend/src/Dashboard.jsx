@@ -7,7 +7,7 @@ import {
   Building2, ArrowUpDown, ChevronDown, UploadCloud, AlertTriangle,
   FileArchive, RefreshCw, BarChart3, TrendingUp, Calendar, Clock, 
   BookCheck, Wallet, Award, PieChart, ShoppingCart, ShoppingBag, Check,
-  LayoutGrid, List, Menu
+  LayoutGrid, List, Menu, Wifi, WifiOff
 } from 'lucide-react';
 
 export default function Dashboard({ user, onLogout }) {
@@ -88,15 +88,120 @@ export default function Dashboard({ user, onLogout }) {
   const [lookupResults, setLookupResults] = useState(null);
   const [lookupError, setLookupError] = useState('');
 
-  // Main view switcher: 'shelf' | 'shopping'
-  const [activeMainView, setActiveMainView] = useState('shelf');
+  // Main view switcher: 'shelf' | 'shopping' (initialized from URL if present)
+  const [activeMainView, setActiveMainView] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'shopping') return 'shopping';
+    } catch (_) {}
+    return 'shelf';
+  });
 
-  // Shopping / Wishlist state
-  const [shoppingData, setShoppingData] = useState(null);
+  // Shopping / Wishlist state with offline local storage cache
+  const [shoppingData, setShoppingData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('mangashelf_shopping_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch (_) { return null; }
+  });
   const [loadingShopping, setLoadingShopping] = useState(false);
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
   const [buyingId, setBuyingId] = useState(null);
+
+  // Network & PWA State
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [offlineLastUpdated, setOfflineLastUpdated] = useState(() => {
+    try {
+      const meta = localStorage.getItem('mangashelf_shopping_meta');
+      return meta ? JSON.parse(meta)?.timestamp : null;
+    } catch (_) { return null; }
+  });
+
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isInstalledApp, setIsInstalledApp] = useState(() => {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  });
+
+  // PWA Install Prompt Listener
+  useEffect(() => {
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    const handleAppInstalled = () => {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+      setIsInstalledApp(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+    }
+    setDeferredPrompt(null);
+  };
+
+  // Sync offline queued purchases once online
+  const syncPendingPurchases = async () => {
+    try {
+      const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
+      if (!queue.length) return;
+      console.log(`[PWA] Synchronisiere ${queue.length} offline getätigte Käufe...`);
+      for (const volId of queue) {
+        await fetch(`/api/volumes/${volId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Vorhanden' })
+        });
+      }
+      localStorage.removeItem('mangashelf_pending_purchases');
+      fetchShoppingList();
+      fetchMangas();
+    } catch (err) {
+      console.warn('Sync pending purchases deferred:', err);
+    }
+  };
+
+  // Online / Offline Network Listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOfflineMode(false);
+      syncPendingPurchases();
+      fetchShoppingList();
+      fetchMangas();
+    };
+    const handleOffline = () => {
+      setIsOfflineMode(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial sync check
+    if (navigator.onLine) {
+      syncPendingPurchases();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     fetchMangas();
@@ -142,9 +247,30 @@ export default function Dashboard({ user, onLogout }) {
       if (res.ok) {
         const data = await res.json();
         setShoppingData(data);
+        setIsOfflineMode(false);
+        const now = new Date().toISOString();
+        setOfflineLastUpdated(now);
+        try {
+          localStorage.setItem('mangashelf_shopping_cache', JSON.stringify(data));
+          localStorage.setItem('mangashelf_shopping_meta', JSON.stringify({ timestamp: now }));
+        } catch (_) {}
+      } else {
+        // Fallback to cache if server error
+        const cached = localStorage.getItem('mangashelf_shopping_cache');
+        if (cached) {
+          setShoppingData(JSON.parse(cached));
+          setIsOfflineMode(true);
+        }
       }
     } catch (e) {
-      console.error('Failed to fetch shopping list:', e);
+      console.warn('Network issue fetching shopping list, using offline cache:', e);
+      try {
+        const cached = localStorage.getItem('mangashelf_shopping_cache');
+        if (cached) {
+          setShoppingData(JSON.parse(cached));
+          setIsOfflineMode(true);
+        }
+      } catch (_) {}
     } finally {
       setLoadingShopping(false);
     }
@@ -152,6 +278,38 @@ export default function Dashboard({ user, onLogout }) {
 
   const handleQuickBuy = async (volumeId) => {
     setBuyingId(volumeId);
+
+    const updateLocalState = () => {
+      setShoppingData(prev => {
+        if (!prev) return prev;
+        const updatedItems = prev.items.filter(item => item.id !== volumeId);
+        const boughtItem = prev.items.find(item => item.id === volumeId);
+        const newCost = Math.max(0, prev.total_cost - (boughtItem?.price || 0));
+        const updated = {
+          ...prev,
+          total_missing: updatedItems.length,
+          total_cost: Math.round(newCost * 100) / 100,
+          items: updatedItems
+        };
+        try {
+          localStorage.setItem('mangashelf_shopping_cache', JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    };
+
+    if (!navigator.onLine) {
+      // Offline mode: queue purchase in local storage
+      try {
+        const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
+        if (!queue.includes(volumeId)) queue.push(volumeId);
+        localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(queue));
+      } catch (_) {}
+      updateLocalState();
+      setBuyingId(null);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/volumes/${volumeId}`, {
         method: 'PUT',
@@ -159,24 +317,20 @@ export default function Dashboard({ user, onLogout }) {
         body: JSON.stringify({ status: 'Vorhanden' })
       });
       if (res.ok) {
-        setShoppingData(prev => {
-          if (!prev) return prev;
-          const updatedItems = prev.items.filter(item => item.id !== volumeId);
-          const boughtItem = prev.items.find(item => item.id === volumeId);
-          const newCost = Math.max(0, prev.total_cost - (boughtItem?.price || 0));
-          return {
-            ...prev,
-            total_missing: updatedItems.length,
-            total_cost: Math.round(newCost * 100) / 100,
-            items: updatedItems
-          };
-        });
+        updateLocalState();
         fetchMangas();
       } else {
         alert('Fehler beim Aktualisieren des Bands');
       }
     } catch (e) {
-      alert('Netzwerkfehler');
+      // Network drop: queue purchase offline
+      try {
+        const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
+        if (!queue.includes(volumeId)) queue.push(volumeId);
+        localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(queue));
+      } catch (_) {}
+      updateLocalState();
+      setIsOfflineMode(true);
     } finally {
       setBuyingId(null);
     }
@@ -805,12 +959,17 @@ export default function Dashboard({ user, onLogout }) {
                 <BookOpen className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight">
-                  MangaShelf
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight">
+                    MangaShelf
+                  </h1>
+                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">
+                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.4.0'}
+                  </span>
+                </div>
                 <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
-                  Sammlung & Tracker
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block`}></span>
+                  {isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}
                 </p>
               </div>
             </div>
@@ -913,6 +1072,18 @@ export default function Dashboard({ user, onLogout }) {
               >
                 <Plus className="w-4 h-4" /> 
                 <span>Neuer Manga</span>
+              </button>
+            )}
+
+            {isInstallable && !isInstalledApp && (
+              <button
+                id="btn-install-pwa"
+                onClick={handleInstallClick}
+                className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-3 shadow-sm transition-all"
+                title="Manga Shelf als native App auf deinem Gerät installieren"
+              >
+                <Download className="w-4 h-4 text-brand-400" />
+                <span className="hidden sm:inline">App installieren</span>
               </button>
             )}
 
@@ -1025,6 +1196,16 @@ export default function Dashboard({ user, onLogout }) {
               )}
             </div>
 
+            {isInstallable && !isInstalledApp && (
+              <button
+                id="btn-mobile-install-pwa"
+                onClick={() => { setMobileMenuOpen(false); handleInstallClick(); }}
+                className="w-full btn-secondary text-xs py-2 text-brand-300 bg-brand-500/10 border-brand-500/40 hover:bg-brand-500/20 flex items-center justify-center gap-2 font-medium"
+              >
+                <Download className="w-4 h-4 text-brand-400" /> MangaShelf als App installieren
+              </button>
+            )}
+
             <button 
               id="btn-mobile-menu-logout"
               onClick={onLogout} 
@@ -1044,7 +1225,10 @@ export default function Dashboard({ user, onLogout }) {
           <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
             <button
               id="btn-nav-shelf"
-              onClick={() => setActiveMainView('shelf')}
+              onClick={() => {
+                setActiveMainView('shelf');
+                try { window.history.replaceState(null, '', window.location.pathname); } catch (_) {}
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                 activeMainView === 'shelf'
                   ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
@@ -1058,6 +1242,7 @@ export default function Dashboard({ user, onLogout }) {
               id="btn-nav-shopping"
               onClick={() => {
                 setActiveMainView('shopping');
+                try { window.history.replaceState(null, '', '?view=shopping'); } catch (_) {}
                 fetchShoppingList();
               }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
@@ -1534,6 +1719,40 @@ export default function Dashboard({ user, onLogout }) {
     {/* SHOPPING LIST VIEW */}
     {activeMainView === 'shopping' && (
       <div className="space-y-6 animate-fade-in">
+        {/* Offline Banner when offline or using cached shopping list */}
+        {isOfflineMode && (
+          <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-3.5 rounded-2xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+                <WifiOff className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-200 text-sm flex items-center gap-2">
+                  <span>Offline-Einkaufsmodus aktiv</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                </p>
+                <p className="text-amber-300/90 text-xs mt-0.5">
+                  Keine Internetverbindung. Die Liste wird aus dem lokalen Smartphone-Speicher bereitgestellt{offlineLastUpdated ? ` (Stand: ${new Date(offlineLastUpdated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr)` : ''}. Im Laden getätigte Käufe werden vorgemerkt und automatisch synchronisiert.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (navigator.onLine) {
+                  fetchShoppingList();
+                  syncPendingPurchases();
+                } else {
+                  alert('Gerät ist noch immer offline. Sobald wieder Netz vorhanden ist, wird automatisch synchronisiert.');
+                }
+              }}
+              className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-xl text-amber-200 text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-1.5 self-stretch sm:self-auto cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Verbindung prüfen</span>
+            </button>
+          </div>
+        )}
+
         {/* Shopping Summary Card */}
         <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-emerald-950/20">
           <div className="flex items-center gap-4">
@@ -1748,6 +1967,39 @@ export default function Dashboard({ user, onLogout }) {
       </div>
     )}
   </main>
+
+  {/* Footer with App Version, Status & PWA Install */}
+  <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-xs text-slate-500 border-t border-slate-800/60 mt-12 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div className="flex items-center gap-2">
+      <span className="font-semibold text-slate-400">Manga Shelf</span>
+      <span className="text-slate-600">•</span>
+      <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60">
+        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.4.0'}
+      </span>
+    </div>
+    <div className="flex flex-wrap items-center justify-center gap-3 text-slate-400">
+      {isOfflineMode ? (
+        <span className="inline-flex items-center gap-1.5 text-amber-400 font-medium bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+          <WifiOff className="w-3.5 h-3.5" />
+          Offline-Modus aktiv
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Online & Synchronisiert
+        </span>
+      )}
+      {isInstallable && !isInstalledApp && (
+        <button
+          onClick={handleInstallClick}
+          className="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 font-medium hover:underline cursor-pointer transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" />
+          App installieren
+        </button>
+      )}
+    </div>
+  </footer>
 
       {/* CREATE MANGA MODAL */}
       {showAddModal && (

@@ -23,6 +23,7 @@ const http = require('http');
 const https = require('https');
 require('dotenv').config();
 
+const pkg = require('./package.json');
 const { db, hasAdmin, uploadsDir, dataDir, closeDb, initDb } = require('./db');
 
 const app = express();
@@ -142,9 +143,14 @@ const requireEditor = (req, res, next) => {
     });
 };
 
+// --- SYSTEM & VERSION ---
+app.get('/api/version', (req, res) => {
+    res.json({ version: pkg.version });
+});
+
 // --- SETUP & AUTH ---
 app.get('/api/setup/status', (req, res) => {
-    res.json({ needsSetup: !hasAdmin() });
+    res.json({ needsSetup: !hasAdmin(), version: pkg.version });
 });
 
 app.post('/api/setup', (req, res) => {
@@ -1856,6 +1862,9 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
+    console.log('=========================================');
+    console.log(`[Manga Shelf] Running Version: v${pkg.version}`);
+    console.log('=========================================');
     // Keep 'Manga Shelf running on http://0.0.0.0:' to ensure Pterodactyl egg triggers
     console.log(`Manga Shelf running on http://0.0.0.0:${PORT}`);
     if (isNativeHttps) {
