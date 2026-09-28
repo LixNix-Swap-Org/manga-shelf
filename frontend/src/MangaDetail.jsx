@@ -8,7 +8,8 @@ import {
   Building2, Search, SlidersHorizontal, ChevronDown,
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck, Package, Truck,
-  Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart
+  Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart,
+  ChevronLeft, ChevronRight, ExternalLink
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -64,7 +65,7 @@ export default function MangaDetail({ user }) {
   const [editVolForm, setEditVolForm] = useState({});
   const [savingVol, setSavingVol] = useState(false);
   const [uploadingVolImage, setUploadingVolImage] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null); // Lightbox
+  const [lightboxData, setLightboxData] = useState(null); // Full photo gallery lightbox
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [manualImageUrl, setManualImageUrl] = useState('');
 
@@ -298,6 +299,114 @@ export default function MangaDetail({ user }) {
     setManualImageUrl('');
     setShowUrlInput(false);
   };
+
+  const handleMoveVolumeImage = (fromIdx, toIdx) => {
+    if (!canEdit || !editVolForm.images) return;
+    const imgs = [...editVolForm.images];
+    if (toIdx < 0 || toIdx >= imgs.length) return;
+    const [moved] = imgs.splice(fromIdx, 1);
+    imgs.splice(toIdx, 0, moved);
+    setEditVolForm(prev => ({
+      ...prev,
+      images: imgs
+    }));
+  };
+
+  const openVolumeGallery = (vol, initialImageOrIndex = 0) => {
+    if (!vol) return;
+    const allImages = [];
+    if (vol.cover_image) allImages.push(vol.cover_image);
+    if (Array.isArray(vol.images)) {
+      vol.images.forEach(img => {
+        if (img && !allImages.includes(img)) allImages.push(img);
+      });
+    }
+    if (allImages.length === 0) return;
+
+    let startIndex = 0;
+    if (typeof initialImageOrIndex === 'number') {
+      startIndex = initialImageOrIndex;
+    } else if (typeof initialImageOrIndex === 'string') {
+      const found = allImages.indexOf(initialImageOrIndex);
+      if (found !== -1) startIndex = found;
+    }
+
+    setLightboxData({
+      volumeId: vol.id,
+      volume: vol,
+      title: getVolumeDisplayTitle(vol),
+      subtitle: `${manga?.title || ''}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price} €` : ''}`,
+      images: allImages,
+      currentIndex: Math.max(0, Math.min(startIndex, allImages.length - 1))
+    });
+  };
+
+  const setPreviewImage = (url) => {
+    if (!url) {
+      setLightboxData(null);
+      return;
+    }
+    const vol = (manga?.volumes || []).find(v => v.cover_image === url || (Array.isArray(v.images) && v.images.includes(url)));
+    if (vol) {
+      openVolumeGallery(vol, url);
+    } else {
+      setLightboxData({
+        title: manga?.title || 'Vorschau',
+        subtitle: 'Foto-Ansicht',
+        images: [url],
+        currentIndex: 0
+      });
+    }
+  };
+
+  const handleSetCoverFromLightbox = async () => {
+    if (!canEdit || !lightboxData || !lightboxData.volumeId) return;
+    const currentImg = lightboxData.images[lightboxData.currentIndex];
+    if (!currentImg) return;
+    try {
+      const res = await fetch(`/api/volumes/${lightboxData.volumeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...lightboxData.volume,
+          cover_image: currentImg
+        })
+      });
+      if (res.ok) {
+        await fetchManga();
+        setLightboxData(prev => ({
+          ...prev,
+          volume: { ...prev.volume, cover_image: currentImg }
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Keyboard navigation for photo gallery lightbox
+  useEffect(() => {
+    if (!lightboxData) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setLightboxData(null);
+      } else if (e.key === 'ArrowLeft') {
+        setLightboxData(prev => {
+          if (!prev || prev.images.length <= 1) return prev;
+          const nextIdx = (prev.currentIndex - 1 + prev.images.length) % prev.images.length;
+          return { ...prev, currentIndex: nextIdx };
+        });
+      } else if (e.key === 'ArrowRight') {
+        setLightboxData(prev => {
+          if (!prev || prev.images.length <= 1) return prev;
+          const nextIdx = (prev.currentIndex + 1) % prev.images.length;
+          return { ...prev, currentIndex: nextIdx };
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxData]);
 
   const handleRemoveVolumeImage = (imgUrl) => {
     if (!canEdit) return;
@@ -1939,12 +2048,22 @@ export default function MangaDetail({ user }) {
                             {/* Cover thumbnail */}
                             <td className="py-2 px-3 text-center">
                               {vol.cover_image ? (
-                                <img 
-                                  src={vol.cover_image} 
-                                  alt={vol.volume_number} 
-                                  onClick={() => setPreviewImage(vol.cover_image)}
-                                  className="w-8 h-12 object-cover rounded shadow border border-slate-800 cursor-pointer mx-auto hover:scale-110 transition-transform"
-                                />
+                                <div 
+                                  className="relative inline-block cursor-pointer group/thumb"
+                                  onClick={() => openVolumeGallery(vol)}
+                                  title="Fotogalerie öffnen"
+                                >
+                                  <img 
+                                    src={vol.cover_image} 
+                                    alt={vol.volume_number} 
+                                    className="w-8 h-12 object-cover rounded shadow border border-slate-800 group-hover/thumb:scale-110 transition-transform"
+                                  />
+                                  {vol.images && vol.images.length > 1 && (
+                                    <span className="absolute -bottom-1 -right-1 bg-black/90 text-brand-300 font-mono text-[8px] px-1 rounded font-bold border border-brand-500/30">
+                                      {vol.images.length}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="w-8 h-12 rounded bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-600 text-[10px]">
                                   📖
@@ -2223,12 +2342,12 @@ export default function MangaDetail({ user }) {
                     <div className="flex gap-2.5 items-start flex-1 py-2.5 min-w-0">
                       {hasCover && (
                         <div 
-                          className="relative shrink-0 group/cover rounded-xl overflow-hidden shadow-md border border-slate-700/80 bg-slate-950 cursor-zoom-in"
+                          className="relative shrink-0 group/cover rounded-xl overflow-hidden shadow-md border border-slate-700/80 bg-slate-950 cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPreviewImage(vol.cover_image);
+                            openVolumeGallery(vol);
                           }}
-                          title="Klicken zum Vergrößern"
+                          title="Klicken zum Öffnen der Fotogalerie"
                         >
                           <img 
                             src={vol.cover_image} 
@@ -2237,8 +2356,8 @@ export default function MangaDetail({ user }) {
                             loading="lazy"
                           />
                           {vol.images && vol.images.length > 1 && (
-                            <span className="absolute bottom-1 right-1 bg-black/80 text-white font-mono text-[9px] px-1 py-0.2 rounded-md font-bold shadow flex items-center gap-0.5">
-                              <Camera className="w-2.5 h-2.5" />
+                            <span className="absolute bottom-1 right-1 bg-black/85 text-brand-300 font-mono text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow flex items-center gap-1 border border-brand-500/30 backdrop-blur-xs">
+                              <Camera className="w-2.5 h-2.5 text-brand-400" />
                               {vol.images.length}
                             </span>
                           )}
@@ -2309,6 +2428,18 @@ export default function MangaDetail({ user }) {
                             <FileText className="w-3 h-3 text-brand-400" />
                           </span>
                         ) : null}
+
+                        {vol.images && vol.images.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openVolumeGallery(vol); }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-brand-300 bg-brand-950/60 border border-brand-500/30 text-[10px] hover:bg-brand-900/80 transition-colors font-medium cursor-pointer"
+                            title="Fotogalerie öffnen"
+                          >
+                            <Camera className="w-3 h-3 text-brand-400" />
+                            <span>{vol.images.length} Fotos</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -2737,8 +2868,8 @@ export default function MangaDetail({ user }) {
                           />
 
                           {/* Hover Actions Overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 flex flex-col justify-between">
-                            <div className="flex items-center justify-between">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 flex flex-col justify-between">
+                            <div className="flex items-center justify-between gap-1">
                               {isCover ? (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-500 text-white shadow">
                                   <Star className="w-2.5 h-2.5 fill-current" /> Cover
@@ -2754,23 +2885,54 @@ export default function MangaDetail({ user }) {
                                 </button>
                               )}
 
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveVolumeImage(imgUrl)}
-                                className="p-1 rounded-md bg-red-500/80 hover:bg-red-600 text-white shadow transition-colors"
-                                title="Bild löschen"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                              <div className="flex items-center gap-0.5">
+                                {idx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveVolumeImage(idx, idx - 1)}
+                                    className="p-1 rounded bg-slate-800/90 hover:bg-slate-700 text-white text-[10px] transition-colors"
+                                    title="Nach links verschieben"
+                                  >
+                                    ◀
+                                  </button>
+                                )}
+                                {idx < editVolForm.images.length - 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveVolumeImage(idx, idx + 1)}
+                                    className="p-1 rounded bg-slate-800/90 hover:bg-slate-700 text-white text-[10px] transition-colors"
+                                    title="Nach rechts verschieben"
+                                  >
+                                    ▶
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveVolumeImage(imgUrl)}
+                                  className="p-1 rounded-md bg-red-500/80 hover:bg-red-600 text-white shadow transition-colors"
+                                  title="Bild löschen"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="flex justify-center">
                               <button
                                 type="button"
-                                onClick={() => setPreviewImage(imgUrl)}
-                                className="text-[10px] text-white/90 hover:text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs"
+                                onClick={() => {
+                                  setLightboxData({
+                                    volumeId: activeVolume.id,
+                                    volume: activeVolume,
+                                    title: `${editVolForm.type === 'schuber' ? 'Schuber ' : 'Band '} ${editVolForm.volume_number || activeVolume.volume_number}`,
+                                    subtitle: `${manga.title} • Foto ${idx + 1} von ${editVolForm.images.length}`,
+                                    images: editVolForm.images || [],
+                                    currentIndex: idx
+                                  });
+                                }}
+                                className="text-[10px] text-white/90 hover:text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs hover:bg-black/90 transition-colors"
                               >
-                                <Maximize2 className="w-2.5 h-2.5" /> Vergrößern
+                                <Maximize2 className="w-2.5 h-2.5" /> Galerie öffnen
                               </button>
                             </div>
                           </div>
@@ -3307,36 +3469,148 @@ export default function MangaDetail({ user }) {
         </div>
       )}
 
-      {/* LIGHTBOX PREVIEW MODAL */}
-      {previewImage && (
+      {/* LIGHTBOX / MANGA PHOTO GALLERY MODAL */}
+      {lightboxData && (
         <div 
-          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 z-60 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
+          onClick={() => setLightboxData(null)}
         >
-          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
-            <button 
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-10 right-0 text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors"
-              title="Schließen"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <img 
-              src={previewImage} 
-              alt="Vorschau" 
-              className="max-h-[82vh] max-w-full rounded-2xl shadow-2xl object-contain border border-slate-800"
-            />
-            <div className="mt-3 flex items-center gap-3">
+          {/* Lightbox Top Bar */}
+          <div className="flex items-center justify-between gap-4 z-10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-brand-400 shrink-0">
+                <Camera className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <span>{lightboxData.title}</span>
+                  {lightboxData.images.length > 1 && (
+                    <span className="bg-slate-800 text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded-full border border-slate-700">
+                      {lightboxData.currentIndex + 1} / {lightboxData.images.length}
+                    </span>
+                  )}
+                  {lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] && (
+                    <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-current text-brand-400" /> Cover
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400">{lightboxData.subtitle}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {canEdit && lightboxData.volumeId && (
+                <button
+                  type="button"
+                  onClick={handleSetCoverFromLightbox}
+                  className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all ${
+                    lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex]
+                      ? 'bg-brand-500/20 text-brand-300 border-brand-500/50 cursor-default'
+                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700'
+                  }`}
+                  title="Dieses Bild als Coverbild für diesen Eintrag festlegen"
+                >
+                  <Star className={`w-3.5 h-3.5 ${lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] ? 'fill-current text-brand-400' : 'text-slate-400'}`} />
+                  <span className="hidden sm:inline">
+                    {lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] ? 'Aktuelles Cover' : 'Als Cover festlegen'}
+                  </span>
+                </button>
+              )}
+
               <a 
-                href={previewImage} 
+                href={lightboxData.images[lightboxData.currentIndex]} 
                 target="_blank" 
                 rel="noreferrer" 
-                className="text-xs text-brand-400 hover:text-brand-300 underline flex items-center gap-1 bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-800"
+                className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 sm:px-3 sm:py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+                title="In Originalgröße in neuem Tab öffnen"
               >
-                In Originalgröße öffnen ↗
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Original</span>
               </a>
+
+              <button 
+                onClick={() => setLightboxData(null)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-colors"
+                title="Galerie schließen (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
+
+          {/* Lightbox Center: Image with Left / Right Navigation */}
+          <div className="flex-1 flex items-center justify-between gap-2 sm:gap-4 my-2 sm:my-4 relative min-h-0" onClick={e => e.stopPropagation()}>
+            {/* Prev Button */}
+            {lightboxData.images.length > 1 ? (
+              <button
+                onClick={() => setLightboxData(prev => ({
+                  ...prev,
+                  currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+                }))}
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
+                title="Vorheriges Bild (Pfeiltaste links)"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            ) : <div className="w-10 sm:w-12 shrink-0" />}
+
+            {/* Main Image */}
+            <div className="flex-1 flex flex-col items-center justify-center h-full max-h-[75vh] relative overflow-hidden">
+              <img 
+                key={lightboxData.images[lightboxData.currentIndex]}
+                src={lightboxData.images[lightboxData.currentIndex]} 
+                alt={`Foto ${lightboxData.currentIndex + 1}`} 
+                className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain border border-slate-800/80 transition-all duration-200 animate-fade-in"
+              />
+            </div>
+
+            {/* Next Button */}
+            {lightboxData.images.length > 1 ? (
+              <button
+                onClick={() => setLightboxData(prev => ({
+                  ...prev,
+                  currentIndex: (prev.currentIndex + 1) % prev.images.length
+                }))}
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
+                title="Nächstes Bild (Pfeiltaste rechts)"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            ) : <div className="w-10 sm:w-12 shrink-0" />}
+          </div>
+
+          {/* Lightbox Bottom Thumbnail Strip */}
+          {lightboxData.images.length > 1 && (
+            <div className="flex items-center justify-center gap-2 overflow-x-auto py-2 px-4 max-w-2xl mx-auto z-10" onClick={e => e.stopPropagation()}>
+              {lightboxData.images.map((thumbUrl, idx) => {
+                const isActive = idx === lightboxData.currentIndex;
+                const isCover = lightboxData.volume?.cover_image === thumbUrl;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setLightboxData(prev => ({ ...prev, currentIndex: idx }))}
+                    className={`relative rounded-xl overflow-hidden shrink-0 transition-all ${
+                      isActive 
+                        ? 'ring-2 ring-brand-500 scale-110 shadow-lg shadow-brand-500/30 border border-brand-400' 
+                        : 'opacity-50 hover:opacity-100 border border-slate-800'
+                    }`}
+                  >
+                    <img 
+                      src={thumbUrl} 
+                      alt={`Thumb ${idx + 1}`} 
+                      className="w-10 h-14 sm:w-12 sm:h-16 object-cover" 
+                    />
+                    {isCover && (
+                      <div className="absolute bottom-0 inset-x-0 bg-brand-600/90 text-[8px] text-white font-bold py-0.2 text-center">
+                        Cover
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

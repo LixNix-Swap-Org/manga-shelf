@@ -279,6 +279,19 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * Bandkarten: Zeigen bei Special Editions ein markantes `✨ Special Edition`-Badge in Fuchsia/Violett, bei Schubern `📦 Schuber` in Indigo/Lila und bei Specials `⭐ Special` in Bernstein/Gold.
    * Formulare: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") beim Erstellen und Bearbeiten mit dynamischen Feldbezeichnungen.
 
+### 🔹 Fall J: Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7)
+1. **Datenbank (`db.js`):**
+   * `volumes.images` speichert ein JSON-Array von Strings (`["/uploads/...", ...]`).
+2. **Backend API (`index.js`):**
+   * `POST /api/upload/multiple`: Nimmt bis zu 10 Bilddateien entgegen und speichert sie lokal unter `data/uploads/`.
+   * `GET /api/mangas/:id`: Parst `vol.images` automatisch als echtes Array.
+   * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `images` entgegen und serialisieren es als JSON in die DB.
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+   * **Lightbox:** Moderne Vollbild-Galerie mit abgedunkeltem Hintergrund, Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`), Haupt-Cover-Markierung und "Originalgröße in neuem Tab"-Link.
+   * **1-Klick-Cover-Wechsel:** Direkt in der Lightbox kann jedes Galerie-Foto mit einem Klick ("Als Cover festlegen") zum primären Coverbild des Bandes gemacht werden.
+   * **Foto-Manager im Edit-Modal:** Ermöglicht Multi-Upload (bis zu 10 Bilder), URL-Eingabe, Umsortieren der Fotos per `◀` / `▶`, Löschen einzelner Fotos sowie Festlegen des Cover-Fotos.
+   * **Karten- & Listen-Badges:** Bei Einträgen mit mehr als 1 Foto erscheint ein markantes `📷 X Fotos`-Badge sowohl auf dem Cover als auch bei den Metadaten.
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow
