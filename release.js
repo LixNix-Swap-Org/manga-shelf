@@ -94,28 +94,25 @@ async function main() {
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
 #### Neu & Verbesserungen in dieser Version:
+- 📱 **Mobile UI Fixes für Band-Bearbeiten & Modals:**
+  - **Negativer Viewport-Offset behoben:** Durch Umstellung des Modal-Containers von starrem \`items-center\` auf \`items-start sm:items-center\` wird der Modal-Kopf bei langen Formularen nicht mehr nach oben aus dem Bildschirm geschoben (bisher bei Bildschirmhöhen < 900px unscrollbar abgeschnitten).
+  - **Sticky Header & Close-Button:** Der Header mit Titel ("Band bearbeiten" / "Neuen Band anlegen") und Schließen-Button \`[X]\` bleibt beim Scrollen permanent am oberen Displayrand sichtbar und erreichbar.
+  - **Sticky Footer mit Daumen-Bedienung:** "Abbrechen" und "Speichern" sind mobil stets unten angeheftet und nutzen die volle Breite, der Lösch-Button ist sicher darunter platziert.
+  - **Touch-optimierte Fotoverwaltung:** Bisherige reine Desktop-Hover-Controls (\`group-hover:opacity-100\`) bei Zusatzbildern durch immer zugängliche Touch-Buttons (Cover festlegen, Löschen, Reihenfolge per Pfeiltasten anpassen) ersetzt.
+  - **Responsive Sammler-Status-Pills:** Flexible Status-Buttons mit optimiertem Padding und Truncate-Schutz verhindern Umbrüche und horizontales Verzerren auf schmalen Smartphone-Displays (360px–390px).
+  - **Systemweite Modal-Absicherung:** Auch Batch-Generierung, Lese-Status-Batch, Lücken-Füllen und Manga-Erstellung gegen Abschneiden auf Mobilgeräten gehärtet.
 - 🖥️ **Full-HD (1920x1080) & Display-Scaling Optimierung:**
   - Viewport- & Layout-Container von starren 1280px (\`max-w-7xl\`) auf bis zu 1840px (\`max-w-[1720px] 2xl:max-w-[1840px]\`) erweitert – eliminiert ungenutzte Trauerränder auf Full-HD- und 2K/1440p-Monitoren.
-  - Manga-Grid skaliert jetzt responsiv mit 6–8 Spalten (\`xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8\`) mit konsistenten 2:3 Cover-Proportionen (215–235px Kartenbreite).
+  - Manga-Grid skaliert jetzt responsiv mit 6–8 Spalten (\`xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8\`) mit konsistenten 2:3 Cover-Proportionen.
 - 🔍 **Windows DPI Scaling (100 %, 125 %, 150 %) Support:**
-  - Horizontale Navbar-Überläufe bei 150 % Windows-Skalierung (1280x720) vollständig behoben durch dynamisches Padding, \`flex-nowrap\` und adaptive Textbeschriftungen.
-  - Null horizontale Scrollbalken auf allen Standard-Breakpoints (Mobile 390px, Tablet 820px, 1080p 1280–1920px, 1440p 2560px).
+  - Horizontale Navbar-Überläufe bei 150 % Windows-Skalierung vollständig behoben durch dynamisches Padding und \`flex-nowrap\`.
+  - Null horizontale Scrollbalken auf allen Breakpoints.
 - 🖼️ **Robuste Image Fallbacks (Broken Images):**
-  - Universelle \`onError\`-Fallbacks für alle Cover, Volume-Thumbnails (Raster- & Listenansicht), Einkaufsliste, Release-Radar und Auto-Fill-Suchergebnisse (SVG-Fallback statt defekter Bildsymbole).
+  - Universelle \`onError\`-Fallbacks für alle Cover, Volume-Thumbnails (Raster- & Listenansicht), Einkaufsliste, Release-Radar und Auto-Fill-Suchergebnisse.
 - ⌨️ **Universal Modal & UX Handling:**
-  - Globaler \`Escape\`-Key-Listener schließt zuverlässig alle Modals (Manga anlegen/bearbeiten, Band-Details, Batch-Generierung, Lese-Status, Statistiken, Backups, Manga Passion Edition-Selector) sowie Suchfokus.
-  - Backdrop-Click-Outside schließt alle Overlays intuitiv.
-  - Scrollbare Modals (\`max-h-[90vh] overflow-y-auto\`) für Laptops mit geringer Bildschirmhöhe bei 150 % Skalierung.
-- 🎯 **Empty States & Text-Overflow:**
-  - Differenzierter Empty-State zwischen aktiven Filtern/Suche ("Keine Treffer gefunden" mit 1-Klick-Zurücksetzen) und leerer Bibliothek.
-  - Kein Textüberlauf bei überlangen Titeln/Verlagen durch \`line-clamp-2\`, \`truncate\` und flexible Badge-Layouts.
-- 🇩🇪 **Manga Passion First im Auto-Fill:** Beim Anlegen neuer Reihen und beim Bearbeiten bestehender Reihen wird zuerst die deutsche Manga Passion Datenbank abgefragt.
-- 🏢 **Offizielle deutsche Verlags- & Editionsdaten:** Übernimmt automatisch den deutschen Verlag, Autor, deutsche Beschreibung, hochauflösendes Cover und die exakte deutsche Gesamtbandzahl.
-- 🔍 **Manga Passion API Integration für Lücken-Erkennung:** Intelligenter Abgleich der Sammlung mit der offiziellen deutschen Manga Passion API (\`api.manga-passion.de\`).
-- 🛑 **Schluss mit Phantom-Lücken:** Verhindert falsche Lücken bei Doppel-/Sammelbänden (z. B. 20th Century Boys: 11 deutsche Bände statt 22 japanische Tankōbon-Bände).
-- ⚡ **1-Klick-Synchronisation & Diskrepanz-Erkennung:** Erkennt automatisch Abweichungen zwischen hinterlegten Bandzahlen und der echten deutschen Edition mit 1-Klick-Anpassung.
-- 🎨 **Regal Ghost-Spines mit Original-Cover & Euro-Preis:** Zeigt Lücken im Regal mit dem echten deutschen Cover-Artwork und aktuellem Festpreis an.
-- 🛒 **Batch-Import zur Einkaufsliste:** Alle echten Lücken können mit einem Klick inkl. offizieller Cover und Buchpreise auf die Einkaufsliste übernommen werden.
+  - Globaler \`Escape\`-Key-Listener schließt zuverlässig alle Modals und Dropdowns.
+  - Intuitiver Backdrop-Click-Outside zum Schließen.
+- 🇩🇪 **Manga Passion First im Auto-Fill:** Priorisiert die deutsche Manga Passion Datenbank beim Anlegen und Bearbeiten von Reihen für offizielle deutsche Titel, Verlage, Bände und Beschreibungen.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;

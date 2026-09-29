@@ -3135,9 +3135,9 @@ export default function Dashboard({ user, onLogout }) {
       {showAddModal && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) closeAddModal(); }}
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
         >
-          <div className="glass-panel w-full max-w-xl rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl my-8 relative">
+          <div className="glass-panel w-full max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8 relative">
             
             {/* Header */}
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
@@ -3440,9 +3440,9 @@ export default function Dashboard({ user, onLogout }) {
       {showUsersModal && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) setShowUsersModal(false); }}
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
         >
-          <div className="glass-panel w-full max-w-2xl rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl my-8 relative">
+          <div className="glass-panel w-full max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8 relative">
             
             {/* Header */}
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">

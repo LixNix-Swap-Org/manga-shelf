@@ -3102,30 +3102,34 @@ export default function MangaDetail({ user }) {
       {/* VOLUME DETAIL & EDIT MODAL */}
       {activeVolume && (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setActiveVolume(null); }}
         >
-          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400" /> :
-                   editVolForm.type === 'special_edition' ? <Sparkles className="w-5 h-5 text-fuchsia-400" /> :
-                   editVolForm.type === 'special' ? <Sparkles className="w-5 h-5 text-amber-400" /> :
-                   <Layers className="w-5 h-5 text-brand-400" />}
-                  {editVolForm.type === 'schuber' ? 'Schuber ' : 
-                   editVolForm.type === 'special_edition' ? 'Special Edition ' :
-                   editVolForm.type === 'special' ? 'Special ' : 'Band '} 
-                  {String(editVolForm.volume_number || activeVolume.volume_number).replace(/schuber\s*|special\s*edition\s*|limited\s*edition\s*|spezial\s*edition\s*|special\s*|extra\s*/i, '')} bearbeiten
+          <div className="glass-panel w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
+            {/* Modal Header (Sticky on Mobile & Desktop) */}
+            <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-md -mx-4 -mt-4 px-4 pt-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 mb-4 pb-3 border-b border-slate-800 rounded-t-2xl sm:rounded-t-3xl flex items-center justify-between">
+              <div className="min-w-0 flex-1 pr-2">
+                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
+                  {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400 shrink-0" /> :
+                   editVolForm.type === 'special_edition' ? <Sparkles className="w-5 h-5 text-fuchsia-400 shrink-0" /> :
+                   editVolForm.type === 'special' ? <Sparkles className="w-5 h-5 text-amber-400 shrink-0" /> :
+                   <Layers className="w-5 h-5 text-brand-400 shrink-0" />}
+                  <span className="truncate">
+                    {editVolForm.type === 'schuber' ? 'Schuber ' : 
+                     editVolForm.type === 'special_edition' ? 'Special Edition ' :
+                     editVolForm.type === 'special' ? 'Special ' : 'Band '} 
+                    {String(editVolForm.volume_number || activeVolume.volume_number).replace(/schuber\s*|special\s*edition\s*|limited\s*edition\s*|spezial\s*edition\s*|special\s*|extra\s*/i, '')} bearbeiten
+                  </span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
                   Typ, Details, Preis und Sammlerangaben für diesen Eintrag
                 </p>
               </div>
               <button 
+                type="button"
                 onClick={() => setActiveVolume(null)} 
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0 bg-slate-800/40"
+                aria-label="Schließen"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3133,7 +3137,7 @@ export default function MangaDetail({ user }) {
 
             <form onSubmit={handleSaveVolume} className="space-y-4">
               {/* Row 1: Type & Volume Number */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-3.5">
                 <div className="sm:col-span-7">
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-brand-400" /> Eintragstyp
@@ -3154,7 +3158,7 @@ export default function MangaDetail({ user }) {
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Hash className="w-3.5 h-3.5 text-slate-400" />
                     {editVolForm.type === 'schuber' ? 'Schuber-Nr.' : 
-                     editVolForm.type === 'special_edition' ? 'Band-Nr. (z.B. 1)' :
+                     editVolForm.type === 'special_edition' ? 'Band-Nr.' :
                      editVolForm.type === 'special' ? 'Bezeichnung' : 'Band-Nummer'} <span className="text-red-400">*</span>
                   </label>
                   <input 
@@ -3168,7 +3172,7 @@ export default function MangaDetail({ user }) {
               </div>
 
               {/* Row 2: Status & Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-3.5 items-end">
                 <div className="sm:col-span-7">
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <Bookmark className="w-3.5 h-3.5 text-brand-400" /> Sammler-Status
@@ -3178,50 +3182,50 @@ export default function MangaDetail({ user }) {
                     <button
                       type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorhanden' })}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                      className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
                         editVolForm.status === 'Vorhanden'
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
-                      <span>Im Besitz</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5] shrink-0" />
+                      <span className="truncate">Im Besitz</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorbestellt' })}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                      className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
                         editVolForm.status === 'Vorbestellt'
                           ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm shadow-sky-950/40 ring-1 ring-sky-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <Truck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5]" />
-                      <span>Vorbestellt</span>
+                      <Truck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5] shrink-0" />
+                      <span className="truncate">Vorbestellt</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Erscheint bald' })}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                      className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
                         editVolForm.status === 'Erscheint bald'
                           ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-950/40 ring-1 ring-purple-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <Calendar className="w-3.5 h-3.5 text-purple-400 stroke-[2.5]" />
-                      <span>Erscheint bald</span>
+                      <Calendar className="w-3.5 h-3.5 text-purple-400 stroke-[2.5] shrink-0" />
+                      <span className="truncate">Erscheint bald</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditVolForm({ ...editVolForm, status: 'Fehlt' })}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
+                      className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
                         editVolForm.status === 'Fehlt'
                           ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
                       }`}
                     >
-                      <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5]" />
-                      <span>Fehlt noch</span>
+                      <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5] shrink-0" />
+                      <span className="truncate">Fehlt noch</span>
                     </button>
                   </div>
                 </div>
@@ -3244,7 +3248,7 @@ export default function MangaDetail({ user }) {
               </div>
 
               {/* Volume Cover & Images Section */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div>
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -3256,19 +3260,19 @@ export default function MangaDetail({ user }) {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                       type="button"
                       onClick={() => setShowUrlInput(!showUrlInput)}
-                      className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 border border-slate-800 px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                      className="flex-1 sm:flex-initial justify-center text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 border border-slate-800 px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
                     >
                       <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
                       <span>{showUrlInput ? 'Abbrechen' : 'URL eingeben'}</span>
                     </button>
 
-                    <label className={`btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shadow-md ${uploadingVolImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className={`flex-1 sm:flex-initial justify-center btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shadow-md ${uploadingVolImage ? 'opacity-50 pointer-events-none' : ''}`}>
                       <Upload className="w-3.5 h-3.5" />
-                      <span>{uploadingVolImage ? 'Lädt hoch...' : 'Fotos hochladen'}</span>
+                      <span>{uploadingVolImage ? 'Lädt...' : 'Fotos hochladen'}</span>
                       <input 
                         type="file" 
                         multiple 
@@ -3279,7 +3283,7 @@ export default function MangaDetail({ user }) {
                             handleUploadVolumeImages(Array.from(e.target.files));
                             e.target.value = '';
                           }
-                        }}
+                        }} 
                       />
                     </label>
                   </div>
@@ -3308,7 +3312,7 @@ export default function MangaDetail({ user }) {
 
                 {/* Uploaded Images Gallery */}
                 {editVolForm.images && editVolForm.images.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                     {editVolForm.images.map((imgUrl, idx) => {
                       const isCover = editVolForm.cover_image === imgUrl;
                       return (
@@ -3327,84 +3331,55 @@ export default function MangaDetail({ user }) {
                             onClick={() => setPreviewImage(imgUrl)}
                           />
 
-                          {/* Hover Actions Overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 flex flex-col justify-between">
-                            <div className="flex items-center justify-between gap-1">
-                              {isCover ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-500 text-white shadow">
-                                  <Star className="w-2.5 h-2.5 fill-current" /> Cover
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetVolumeCover(imgUrl)}
-                                  className="text-[10px] bg-slate-900/90 hover:bg-brand-600 text-slate-200 hover:text-white px-1.5 py-0.5 rounded shadow transition-colors"
-                                  title="Als Hauptcover festlegen"
-                                >
-                                  Setze Cover
-                                </button>
-                              )}
-
-                              <div className="flex items-center gap-0.5">
-                                {idx > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveVolumeImage(idx, idx - 1)}
-                                    className="p-1 rounded bg-slate-800/90 hover:bg-slate-700 text-white text-[10px] transition-colors"
-                                    title="Nach links verschieben"
-                                  >
-                                    ◀
-                                  </button>
-                                )}
-                                {idx < editVolForm.images.length - 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveVolumeImage(idx, idx + 1)}
-                                    className="p-1 rounded bg-slate-800/90 hover:bg-slate-700 text-white text-[10px] transition-colors"
-                                    title="Nach rechts verschieben"
-                                  >
-                                    ▶
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveVolumeImage(imgUrl)}
-                                  className="p-1 rounded-md bg-red-500/80 hover:bg-red-600 text-white shadow transition-colors"
-                                  title="Bild löschen"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex justify-center">
+                          {/* Quick Actions (Move & Delete): Accessible on mobile and desktop */}
+                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                            {idx > 0 && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setLightboxData({
-                                    volumeId: activeVolume.id,
-                                    volume: activeVolume,
-                                    title: `${editVolForm.type === 'schuber' ? 'Schuber ' : 'Band '} ${editVolForm.volume_number || activeVolume.volume_number}`,
-                                    subtitle: `${manga.title} • Foto ${idx + 1} von ${editVolForm.images.length}`,
-                                    images: editVolForm.images || [],
-                                    currentIndex: idx
-                                  });
-                                }}
-                                className="text-[10px] text-white/90 hover:text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-xs hover:bg-black/90 transition-colors"
+                                onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx - 1); }}
+                                className="w-6 h-6 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
+                                title="Nach links verschieben"
                               >
-                                <Maximize2 className="w-2.5 h-2.5" /> Galerie öffnen
+                                ◀
                               </button>
-                            </div>
+                            )}
+                            {idx < editVolForm.images.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx + 1); }}
+                                className="w-6 h-6 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
+                                title="Nach rechts verschieben"
+                              >
+                                ▶
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleRemoveVolumeImage(imgUrl); }}
+                              className="w-6 h-6 rounded-lg bg-red-600/90 hover:bg-red-500 text-white shadow flex items-center justify-center transition-colors"
+                              title="Bild löschen"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
 
-                          {/* Permanent Cover indicator if selected */}
-                          {isCover && (
-                            <div className="absolute top-1.5 left-1.5 pointer-events-none group-hover:hidden">
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-brand-500 text-white shadow">
-                                <Star className="w-2.5 h-2.5 fill-current" /> Cover
+                          {/* Bottom Cover Action / Indicator */}
+                          <div className="absolute bottom-1.5 inset-x-1.5 z-10">
+                            {isCover ? (
+                              <span className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-brand-500 text-white shadow-md flex items-center justify-center gap-1">
+                                <Star className="w-3 h-3 fill-current" /> Cover
                               </span>
-                            </div>
-                          )}
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleSetVolumeCover(imgUrl); }}
+                                className="w-full py-1 px-1.5 text-[10px] bg-black/80 hover:bg-brand-600 text-slate-200 hover:text-white rounded-lg shadow-md font-semibold transition-colors flex items-center justify-center gap-1 border border-white/10"
+                                title="Als Hauptcover festlegen"
+                              >
+                                <Star className="w-3 h-3" /> Setze Cover
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -3423,12 +3398,12 @@ export default function MangaDetail({ user }) {
                             handleUploadVolumeImages(Array.from(e.target.files));
                             e.target.value = '';
                           }
-                        }}
+                        }} 
                       />
                     </label>
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-slate-800 hover:border-brand-500/60 rounded-2xl p-6 text-center transition-all bg-slate-900/30 hover:bg-slate-900/70 cursor-pointer flex flex-col items-center justify-center group block">
+                  <label className="border-2 border-dashed border-slate-800 hover:border-brand-500/60 rounded-2xl p-5 text-center transition-all bg-slate-900/30 hover:bg-slate-900/70 cursor-pointer flex flex-col items-center justify-center group block">
                     <input 
                       type="file" 
                       multiple 
@@ -3439,7 +3414,7 @@ export default function MangaDetail({ user }) {
                           handleUploadVolumeImages(Array.from(e.target.files));
                           e.target.value = '';
                         }
-                      }}
+                      }} 
                     />
                     <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400 mb-2 group-hover:scale-110 group-hover:bg-brand-500/20 transition-all">
                       <Upload className="w-5 h-5" />
@@ -3543,7 +3518,7 @@ export default function MangaDetail({ user }) {
               </div>
 
               {/* Row 5: Release date & Purchase date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-sky-400 mb-1 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" /> Erscheinungsdatum (Radar)
@@ -3582,30 +3557,30 @@ export default function MangaDetail({ user }) {
                 />
               </div>
 
-              {/* Modal Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+              {/* Modal Buttons (Sticky on Mobile & Desktop) */}
+              <div className="sticky bottom-0 z-20 bg-slate-900/95 backdrop-blur-md -mx-4 -mb-4 px-4 py-3 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-4 border-t border-slate-800 rounded-b-2xl sm:rounded-b-3xl flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5">
                 <button 
                   type="button" 
                   onClick={(e) => handleDeleteVolume(e, activeVolume.id)} 
-                  className="btn-danger text-xs flex items-center gap-1.5"
+                  className="btn-danger text-xs py-2 px-3 flex items-center justify-center gap-1.5 w-full sm:w-auto"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Band löschen
                 </button>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button 
                     type="button" 
                     onClick={() => setActiveVolume(null)} 
-                    className="btn-secondary text-xs"
+                    className="btn-secondary text-xs py-2 px-4 flex-1 sm:flex-initial text-center"
                   >
                     Abbrechen
                   </button>
                   <button 
                     type="submit" 
                     disabled={savingVol}
-                    className="btn-primary text-xs flex items-center gap-1.5"
+                    className="btn-primary text-xs py-2 px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 shadow-lg"
                   >
-                    <Save className="w-3.5 h-3.5" /> {savingVol ? 'Speichert...' : 'Änderungen speichern'}
+                    <Save className="w-3.5 h-3.5" /> {savingVol ? 'Speichert...' : 'Speichern'}
                   </button>
                 </div>
               </div>
@@ -3617,10 +3592,10 @@ export default function MangaDetail({ user }) {
       {/* BATCH ADD MODAL */}
       {showBatchModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setShowBatchModal(false); }}
         >
-          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
+          <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-brand-400" /> Bände in Serie hinzufügen
@@ -3757,10 +3732,10 @@ export default function MangaDetail({ user }) {
       {/* BATCH READ STATUS MODAL */}
       {showBatchReadModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setShowBatchReadModal(false); }}
         >
-          <div className="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700/80 shadow-2xl relative my-8" onClick={e => e.stopPropagation()}>
+          <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <BookCheck className="w-4 h-4 text-emerald-400" /> Lesestatus in Serie festlegen
@@ -3857,11 +3832,11 @@ export default function MangaDetail({ user }) {
       {/* FILL GAP MODAL */}
       {fillingGapNumber !== null && (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
           onClick={() => !fillingGapLoading && setFillingGapNumber(null)}
         >
           <div 
-            className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative my-8"
+            className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl relative my-3 sm:my-8"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
