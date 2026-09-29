@@ -1525,12 +1525,13 @@ export default function MangaDetail({ user }) {
 
     if (item.isGap) {
       const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+      // In all multi-row modes: flex-1 with min/max so books fill full shelf width
       const ghostWidthClass = isFit
-        ? 'flex-1 min-w-[18px] max-w-[56px]'
+        ? 'flex-1 min-w-[18px] max-w-[56px]'  // single-row auto-fit
         : (
-          shelfScale === 's' ? 'w-[36px] sm:w-[40px]' :
-          shelfScale === 'l' ? 'w-[56px] sm:w-[64px]' :
-          'w-[44px] sm:w-[50px]'
+          shelfScale === 's' ? 'flex-1 min-w-[28px] max-w-[48px]' :
+          shelfScale === 'l' ? 'flex-1 min-w-[46px] max-w-[80px]' :
+          'flex-1 min-w-[36px] max-w-[64px]'
         );
 
       return (
@@ -1597,18 +1598,18 @@ export default function MangaDetail({ user }) {
 
     let spineWidth = '';
     if (isFit) {
-      // Single-row auto-fit: use flex proportions
+      // Single-row auto-fit: strict flex proportions to spread across full width
       spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
     } else {
-      // Fixed-width mode (rows / scroll / fit-multirow):
+      // Rows / scroll / fit-multirow: flex-1 with min/max so spines fill the full row
       const isS = shelfScale === 's';
       const isL = shelfScale === 'l';
       if (isSchuber) {
-        spineWidth = isS ? 'w-[68px] sm:w-[76px]' : isL ? 'w-[100px] sm:w-[112px]' : 'w-[80px] sm:w-[92px]';
+        spineWidth = isS ? 'flex-[1.8] min-w-[52px] max-w-[90px]' : isL ? 'flex-[1.8] min-w-[80px] max-w-[130px]' : 'flex-[1.8] min-w-[64px] max-w-[108px]';
       } else if (isSpecialEd) {
-        spineWidth = isS ? 'w-[40px] sm:w-[44px]' : isL ? 'w-[60px] sm:w-[68px]' : 'w-[50px] sm:w-[56px]';
+        spineWidth = isS ? 'flex-[1.2] min-w-[32px] max-w-[54px]' : isL ? 'flex-[1.2] min-w-[50px] max-w-[80px]' : 'flex-[1.2] min-w-[40px] max-w-[66px]';
       } else {
-        spineWidth = isS ? 'w-[36px] sm:w-[40px]' : isL ? 'w-[54px] sm:w-[62px]' : 'w-[44px] sm:w-[50px]';
+        spineWidth = isS ? 'flex-1 min-w-[28px] max-w-[48px]' : isL ? 'flex-1 min-w-[46px] max-w-[72px]' : 'flex-1 min-w-[36px] max-w-[60px]';
       }
     }
 
@@ -2821,7 +2822,7 @@ export default function MangaDetail({ user }) {
                           </div>
                           {shelfRows.map((row, rIdx) => (
                             <div key={rIdx} className="relative">
-                              <div className="flex items-end gap-1 sm:gap-1.5 px-1 pb-1 flex-wrap justify-start">
+                              <div className="flex items-end gap-1 sm:gap-1.5 w-full pb-1">
                                 {row.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
                               </div>
                               <div className="shelf-plank w-full mt-[-2px]" />
@@ -2844,7 +2845,7 @@ export default function MangaDetail({ user }) {
                       <div className="space-y-5 pt-2 pb-2 px-1">
                         {shelfRows.map((row, rIdx) => (
                           <div key={rIdx} className="relative">
-                            <div className="flex items-end gap-1 sm:gap-1.5 px-1 pb-1 flex-wrap justify-start">
+                            <div className="flex items-end gap-1 sm:gap-1.5 w-full pb-1">
                               {row.map((item, idx) => renderShelfSpine(item, idx, 'rows'))}
                             </div>
                             <div className="shelf-plank w-full mt-[-2px]" />
