@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -9,7 +9,7 @@ import {
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck, Package, Truck,
   Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart,
-  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw, RotateCcw
+  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw, RotateCcw, MoveHorizontal
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -49,6 +49,32 @@ export default function MangaDetail({ user }) {
   const [volumeViewMode, setVolumeViewMode] = useState(() => {
     return localStorage.getItem('mangashelf_volume_view_mode') || 'grid';
   });
+  // 3D Shelf scaling and layout modes: 'fit' (Auto-Fit) | 'rows' (Mehrzeilig) | 'scroll' (Horizontal scrollen)
+  const [shelfMode, setShelfMode] = useState(() => {
+    return localStorage.getItem('mangashelf_shelf_mode') || 'fit';
+  });
+  // Shelf scale presets: 's' (Kompakt) | 'm' (Standard) | 'l' (Groß)
+  const [shelfScale, setShelfScale] = useState(() => {
+    return localStorage.getItem('mangashelf_shelf_scale') || 'm';
+  });
+  const shelfScrollRef = useRef(null);
+
+  const handleSetShelfMode = (mode) => {
+    setShelfMode(mode);
+    localStorage.setItem('mangashelf_shelf_mode', mode);
+  };
+
+  const handleSetShelfScale = (scale) => {
+    setShelfScale(scale);
+    localStorage.setItem('mangashelf_shelf_scale', scale);
+  };
+
+  const scrollShelf = (offset) => {
+    if (shelfScrollRef.current) {
+      shelfScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
   const [showGaps, setShowGaps] = useState(() => {
     return localStorage.getItem('mangashelf_show_gaps') !== 'false';
   });
@@ -1311,7 +1337,31 @@ export default function MangaDetail({ user }) {
     // If Manga Passion matched the German edition, use the verified official missing volumes:
     if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
       return mpGapData.gaps
-        .filter(g => !existingVolNums.has(String(g.volume_number || '').trim().toLowerCase()))
+        .filter(g => {
+          const strNum = String(g.volume_number || '').trim().toLowerCase();
+          if (existingVolNums.has(strNum)) return false;
+
+          // Check range bundle (e.g. "21-25", "26-30")
+          const rangeMatch = strNum.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+          if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            let allOwned = true;
+            for (let k = start; k <= end; k++) {
+              if (!existingVolNums.has(String(k))) {
+                allOwned = false;
+                break;
+              }
+            }
+            if (allOwned) return false;
+          }
+
+          if (g.title && (g.title.toLowerCase().includes('schuber') || g.title.toLowerCase().includes('box')) && rangeMatch) {
+            return false;
+          }
+
+          return true;
+        })
         .map(g => {
           const match = String(g.volume_number).trim().match(/^(\d+)$/);
           return match ? parseInt(match[1], 10) : g.volume_number;
@@ -1413,6 +1463,218 @@ export default function MangaDetail({ user }) {
 
   // Keep spineShelfItems as alias for Spine Shelf
   const spineShelfItems = displayVolumeItems;
+
+  // Smart Balanced Shelf Rows calculation for 'rows' mode (multi-tier bookcase)
+  const shelfRows = useMemo(() => {
+    if (shelfMode !== 'rows') return [spineShelfItems];
+    
+    // Optimal books per shelf plank based on scale:
+    const targetPerRow = shelfScale === 's' ? 22 : shelfScale === 'l' ? 13 : 17;
+    if (spineShelfItems.length <= targetPerRow) {
+      return [spineShelfItems];
+    }
+    
+    const rowCount = Math.ceil(spineShelfItems.length / targetPerRow);
+    const itemsPerRow = Math.ceil(spineShelfItems.length / rowCount);
+    
+    const rows = [];
+    for (let i = 0; i < spineShelfItems.length; i += itemsPerRow) {
+      rows.push(spineShelfItems.slice(i, i + itemsPerRow));
+    }
+    return rows;
+  }, [spineShelfItems, shelfMode, shelfScale]);
+
+  const renderShelfSpine = (item, idx, currentMode = shelfMode) => {
+    const isFit = currentMode === 'fit';
+    const totalCount = spineShelfItems.length;
+    const isVeryCompact = isFit && totalCount > 24;
+    const isUltraCompact = isFit && totalCount > 34;
+
+    // Proportional spine height:
+    let spineHeightPx = '220px';
+    if (shelfScale === 's') {
+      spineHeightPx = isFit && isUltraCompact ? '150px' : isVeryCompact ? '160px' : '170px';
+    } else if (shelfScale === 'l') {
+      spineHeightPx = isFit && isUltraCompact ? '210px' : '260px';
+    } else {
+      spineHeightPx = isFit ? (isUltraCompact ? '175px' : isVeryCompact ? '195px' : '220px') : '220px';
+    }
+
+    if (item.isGap) {
+      const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+      const ghostWidthClass = isFit
+        ? 'flex-1 min-w-[18px] max-w-[56px]'
+        : (
+          shelfScale === 's' ? 'w-[38px] sm:w-[42px]' :
+          shelfScale === 'l' ? 'w-[58px] sm:w-[66px]' :
+          'w-[52px] sm:w-[58px]'
+        );
+
+      return (
+        <div
+          key={`gap-${item.gapNumber}-${idx}`}
+          onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
+          style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
+          className={`manga-spine-ghost relative group ${ghostWidthClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 text-center shrink-0 rounded-lg overflow-hidden border border-dashed transition-all ${
+            canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03]' : 'cursor-default'
+          } border-amber-500/40 bg-slate-900/60 backdrop-blur-sm`}
+          title={gapMeta?.price ? `Lücke: Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €${gapMeta.release_date ? ' • ' + gapMeta.release_date : ''}). Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
+        >
+          {gapMeta?.cover_image && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity pointer-events-none"
+              style={{ backgroundImage: `url(${gapMeta.cover_image})` }}
+            />
+          )}
+          <div className={`relative z-10 font-bold text-amber-400/90 flex items-center justify-center rounded-full bg-amber-500/20 border border-amber-500/40 ${
+            isUltraCompact ? 'w-4 h-4 text-[9px]' : 'w-5 h-5 text-[10px]'
+          }`}>
+            +
+          </div>
+          <div className="relative z-10 flex flex-col items-center">
+            {!isUltraCompact && (
+              <span className="text-[10px] font-black text-amber-300/80 tracking-tight leading-none mb-0.5">Band</span>
+            )}
+            <span className={`${isUltraCompact ? 'text-xs sm:text-sm' : isVeryCompact ? 'text-sm' : 'text-base'} font-black text-amber-400 leading-tight drop-shadow`}>
+              {item.gapNumber}
+            </span>
+            {gapMeta?.price && !isUltraCompact && (
+              <span className="text-[8px] sm:text-[9px] font-mono font-bold text-amber-300/90 mt-0.5 truncate max-w-full">
+                {gapMeta.price.toFixed(2).replace('.', ',')} €
+              </span>
+            )}
+          </div>
+          <div className={`relative z-10 uppercase tracking-wider text-amber-400/90 bg-amber-500/20 px-0.5 sm:px-1 py-0.5 rounded border border-amber-500/30 truncate max-w-full ${
+            isUltraCompact ? 'text-[7px] leading-none' : 'text-[8px] font-bold'
+          }`}>
+            Lücke
+          </div>
+        </div>
+      );
+    }
+
+    const vol = item.volume;
+    const isOwned = vol.status === 'Vorhanden';
+    const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
+    const isRead = vol.read_users 
+      ? vol.read_users.some(u => String(u.user_id || u.id) === String(effUserId)) 
+      : (Boolean(vol.is_read) && String(effUserId) === String(user?.id));
+
+    const theme = getSpinePublisherTheme(vol.publisher || manga.publisher);
+    const isSchuber = vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber');
+    const isSpecialEd = vol.type === 'special_edition' || (
+      vol.type !== 'schuber' && (
+        String(vol.volume_number).toLowerCase().includes('special edition') ||
+        String(vol.volume_number).toLowerCase().includes('limited edition') ||
+        String(vol.volume_number).toLowerCase().includes('spezial edition') ||
+        (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition')))
+      )
+    );
+    const isSpecial = vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra');
+
+    let spineWidth = '';
+    if (isFit) {
+      spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
+    } else {
+      const isS = shelfScale === 's';
+      const isL = shelfScale === 'l';
+      if (isSchuber) {
+        spineWidth = isS ? 'w-[72px] sm:w-[78px]' : isL ? 'w-[104px] sm:w-[116px]' : 'w-[88px] sm:w-[98px]';
+      } else if (isSpecialEd) {
+        spineWidth = isS ? 'w-[44px] sm:w-[48px]' : isL ? 'w-[64px] sm:w-[72px]' : 'w-[54px] sm:w-[60px]';
+      } else {
+        spineWidth = isS ? 'w-[38px] sm:w-[42px]' : isL ? 'w-[58px] sm:w-[66px]' : 'w-[48px] sm:w-[54px]';
+      }
+    }
+
+    return (
+      <div
+        key={vol.id}
+        onClick={() => canEdit && handleOpenEditVolume(vol)}
+        style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
+        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} shrink-0 flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative ${
+          canEdit ? 'cursor-pointer' : 'cursor-default'
+        } ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
+        title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
+      >
+        {/* Spine Top: Publisher Logo / Accent */}
+        <div className="w-full flex justify-center shrink-0">
+          <span className={`px-0.5 sm:px-1 py-0.5 rounded truncate max-w-full leading-tight text-center ${
+            isUltraCompact ? 'text-[7px] max-w-[32px]' : 'text-[8px] sm:text-[9px] max-w-[42px] sm:max-w-[48px]'
+          } ${theme.accentBadge}`}>
+            {theme.accentName}
+          </span>
+        </div>
+
+        {/* Spine Center: Vertical Manga Title */}
+        <div className="flex-1 flex items-center justify-center my-1 overflow-hidden pointer-events-none w-full">
+          <span className={`spine-vertical-text font-bold select-none truncate ${
+            isUltraCompact ? 'text-[8px] sm:text-[9px] max-h-[70px]' : isVeryCompact ? 'text-[9px] sm:text-[10px] max-h-[85px]' : 'text-[11px] sm:text-xs tracking-wider max-h-[110px]'
+          } ${theme.text} opacity-90 drop-shadow-sm`}>
+            {manga.title}
+          </span>
+        </div>
+
+        {/* Spine Bottom: Volume Number & Status Badges */}
+        <div className="w-full flex flex-col items-center gap-0.5 sm:gap-1 shrink-0 pt-1 border-t border-white/10">
+          {isSchuber ? (
+            <div className="text-[9px] sm:text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
+              <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+              <span className="truncate">{String(vol.volume_number).replace(/schuber\s*/i, '')}</span>
+            </div>
+          ) : isSpecialEd ? (
+            <div className="flex flex-col items-center">
+              <span className="text-xs sm:text-sm font-black text-fuchsia-300 drop-shadow">
+                {String(vol.volume_number).replace(/special\s*edition|limited\s*edition/gi, '').trim() || 'SE'}
+              </span>
+              <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40">
+                SPEC
+              </span>
+            </div>
+          ) : isSpecial ? (
+            <div className="flex flex-col items-center">
+              <span className="text-xs sm:text-sm font-black text-amber-300 drop-shadow">
+                {String(vol.volume_number).replace(/special\s*|extra\s*/gi, '').trim() || 'SP'}
+              </span>
+              <span className="text-[7px] sm:text-[8px] font-bold text-amber-300 bg-amber-950/70 px-0.5 sm:px-1 rounded border border-amber-500/40">
+                EXTRA
+              </span>
+            </div>
+          ) : (
+            <span className={`${
+              isUltraCompact ? 'text-xs sm:text-sm' : isVeryCompact ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
+            } font-black text-white tracking-tight leading-none drop-shadow`}>
+              {vol.volume_number}
+            </span>
+          )}
+
+          {/* Status Badges Row (Owned / Read) */}
+          <div className="flex items-center gap-1 mt-0.5">
+            {/* Read Checkmark */}
+            {isOwned && isRead && (
+              <span className={`${isUltraCompact ? 'w-3 h-3 text-[7px]' : 'w-3.5 h-3.5 text-[8px]'} rounded-full bg-emerald-500/25 border border-emerald-400 text-emerald-300 flex items-center justify-center font-bold`} title="Gelesen">
+                ✓
+              </span>
+            )}
+            {/* Status Badge */}
+            {vol.status === 'Vorbestellt' ? (
+              <span className="text-[7px] sm:text-[8px] font-extrabold bg-sky-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Vorbestellt">
+                BESTELLT
+              </span>
+            ) : vol.status === 'Erscheint bald' ? (
+              <span className="text-[7px] sm:text-[8px] font-extrabold bg-purple-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Erscheint bald">
+                BALD
+              </span>
+            ) : !isOwned ? (
+              <span className="text-[7px] sm:text-[8px] font-extrabold bg-amber-500 text-slate-950 px-0.5 sm:px-1 rounded-sm" title="Fehlt in der Sammlung">
+                FEHLT
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -2399,153 +2661,166 @@ export default function MangaDetail({ user }) {
               {/* SPINE VIEW */}
               {volumeViewMode === 'spine' && (
                 <div className="mb-8">
+                  {/* Shelf Controls Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <Library className="w-4 h-4 text-brand-400" />
+                        Manga-Regal
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        ({spineShelfItems.length} {spineShelfItems.length === 1 ? 'Band' : 'Bände'})
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Shelf Layout Mode: Auto-Fit | Regalbretter | Scrollen */}
+                      <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfMode('fit')}
+                          className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                            shelfMode === 'fit'
+                              ? 'bg-brand-600 text-white shadow-sm font-semibold'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                          title="Auto-Fit: Alle Bände passen sich dynamisch an die Bildschirmbreite an"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>Auto-Fit</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfMode('rows')}
+                          className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                            shelfMode === 'rows'
+                              ? 'bg-brand-600 text-white shadow-sm font-semibold'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                          title="Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Regalbretter</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfMode('scroll')}
+                          className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                            shelfMode === 'scroll'
+                              ? 'bg-brand-600 text-white shadow-sm font-semibold'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                          title="Scrollen: Klassische horizontale Leiste mit Scrollbalken"
+                        >
+                          <MoveHorizontal className="w-3.5 h-3.5" />
+                          <span>Scrollen</span>
+                        </button>
+                      </div>
+
+                      {/* Shelf Scale (S / M / L) */}
+                      <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfScale('s')}
+                          className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                            shelfScale === 's'
+                              ? 'bg-slate-700 text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                          title="Kompakte Ansicht (S)"
+                        >
+                          S
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfScale('m')}
+                          className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                            shelfScale === 'm'
+                              ? 'bg-slate-700 text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                          title="Standard Ansicht (M)"
+                        >
+                          M
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetShelfScale('l')}
+                          className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                            shelfScale === 'l'
+                              ? 'bg-slate-700 text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                          title="Große Ansicht (L)"
+                        >
+                          L
+                        </button>
+                      </div>
+
+                      {/* Quick Scroll Left/Right arrows when in scroll mode */}
+                      {shelfMode === 'scroll' && (
+                        <div className="flex items-center gap-0.5 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => scrollShelf(-350)}
+                            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                            title="Nach links scrollen"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => scrollShelf(350)}
+                            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                            title="Nach rechts scrollen"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Physical Shelf Container */}
                   <div className="relative bg-slate-950/70 p-4 sm:p-6 rounded-2xl border border-slate-800/80 shadow-2xl">
-                    <div className="overflow-x-auto pb-2 pt-4 px-2 custom-scrollbar">
-                      <div className="flex items-end gap-1.5 sm:gap-2 min-w-max px-2 pb-1">
-                        {spineShelfItems.map((item, idx) => {
-                          if (item.isGap) {
-                            const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
-                            return (
-                              <div
-                                key={`gap-${item.gapNumber}-${idx}`}
-                                onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
-                                className={`manga-spine-ghost relative group w-[52px] sm:w-[58px] flex flex-col justify-between items-center py-3 px-1 text-center shrink-0 rounded-lg overflow-hidden border border-dashed transition-all ${
-                                  canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03]' : 'cursor-default'
-                                } border-amber-500/40 bg-slate-900/60 backdrop-blur-sm`}
-                                title={gapMeta?.price ? `Lücke: Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €${gapMeta.release_date ? ' • ' + gapMeta.release_date : ''}). Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
-                              >
-                                {gapMeta?.cover_image && (
-                                  <div 
-                                    className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity pointer-events-none"
-                                    style={{ backgroundImage: `url(${gapMeta.cover_image})` }}
-                                  />
-                                )}
-                                <div className="relative z-10 text-[10px] font-bold text-amber-400/90 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/40">
-                                  +
-                                </div>
-                                <div className="relative z-10 flex flex-col items-center">
-                                  <span className="text-[10px] font-black text-amber-300/80 tracking-tight">Band</span>
-                                  <span className="text-base font-black text-amber-400 leading-tight">{item.gapNumber}</span>
-                                  {gapMeta?.price && (
-                                    <span className="text-[9px] font-mono font-bold text-amber-300/90 mt-0.5">
-                                      {gapMeta.price.toFixed(2).replace('.', ',')} €
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="relative z-10 text-[8px] font-bold uppercase tracking-wider text-amber-400/90 bg-amber-500/20 px-1 py-0.5 rounded border border-amber-500/30">
-                                  Lücke
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          const vol = item.volume;
-                          const isOwned = vol.status === 'Vorhanden';
-                          const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
-                          const isRead = vol.read_users 
-                            ? vol.read_users.some(u => String(u.user_id || u.id) === String(effUserId)) 
-                            : (Boolean(vol.is_read) && String(effUserId) === String(user?.id));
-
-                          const theme = getSpinePublisherTheme(vol.publisher || manga.publisher);
-                          const isSchuber = vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber');
-                          const isSpecialEd = vol.type === 'special_edition' || (
-                            vol.type !== 'schuber' && (
-                              String(vol.volume_number).toLowerCase().includes('special edition') ||
-                              String(vol.volume_number).toLowerCase().includes('limited edition') ||
-                              String(vol.volume_number).toLowerCase().includes('spezial edition') ||
-                              (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition')))
-                            )
-                          );
-                          const isSpecial = vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra');
-
-                          const spineWidth = isSchuber ? 'w-[88px] sm:w-[98px]' : isSpecialEd ? 'w-[54px] sm:w-[60px]' : 'w-[48px] sm:w-[54px]';
-
-                          return (
-                            <div
-                              key={vol.id}
-                              onClick={() => canEdit && handleOpenEditVolume(vol)}
-                              className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} shrink-0 flex flex-col justify-between items-center py-2.5 px-1 relative ${
-                                canEdit ? 'cursor-pointer' : 'cursor-default'
-                              } ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
-                              title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
-                            >
-                              {/* Spine Top: Publisher Logo / Accent */}
-                              <div className="w-full flex justify-center shrink-0">
-                                <span className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded truncate max-w-[42px] sm:max-w-[48px] leading-tight text-center ${theme.accentBadge}`}>
-                                  {theme.accentName}
-                                </span>
-                              </div>
-
-                              {/* Spine Center: Vertical Manga Title */}
-                              <div className="flex-1 flex items-center justify-center my-1 overflow-hidden pointer-events-none w-full">
-                                <span className={`spine-vertical-text text-[11px] sm:text-xs font-bold tracking-wider select-none truncate max-h-[110px] ${theme.text} opacity-90 drop-shadow-sm`}>
-                                  {manga.title}
-                                </span>
-                              </div>
-
-                              {/* Spine Bottom: Volume Number & Status Badges */}
-                              <div className="w-full flex flex-col items-center gap-1 shrink-0 pt-1 border-t border-white/10">
-                                {isSchuber ? (
-                                  <div className="text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
-                                    <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-                                    <span className="truncate">{String(vol.volume_number).replace(/schuber\s*/i, '')}</span>
-                                  </div>
-                                ) : isSpecialEd ? (
-                                  <div className="flex flex-col items-center">
-                                    <span className="text-sm font-black text-fuchsia-300 drop-shadow">
-                                      {String(vol.volume_number).replace(/special\s*edition|limited\s*edition/gi, '').trim() || 'SE'}
-                                    </span>
-                                    <span className="text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-1 rounded border border-fuchsia-500/40">
-                                      SPEC
-                                    </span>
-                                  </div>
-                                ) : isSpecial ? (
-                                  <div className="flex flex-col items-center">
-                                    <span className="text-sm font-black text-amber-300 drop-shadow">
-                                      {String(vol.volume_number).replace(/special\s*|extra\s*/gi, '').trim() || 'SP'}
-                                    </span>
-                                    <span className="text-[8px] font-bold text-amber-300 bg-amber-950/70 px-1 rounded border border-amber-500/40">
-                                      EXTRA
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-base sm:text-lg font-black text-white tracking-tight leading-none drop-shadow">
-                                    {vol.volume_number}
-                                  </span>
-                                )}
-
-                                {/* Status Badges Row (Owned / Read) */}
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  {/* Read Checkmark */}
-                                  {isOwned && isRead && (
-                                    <span className="w-3.5 h-3.5 rounded-full bg-emerald-500/25 border border-emerald-400 text-emerald-300 flex items-center justify-center text-[8px] font-bold" title="Gelesen">
-                                      ✓
-                                    </span>
-                                  )}
-                                  {/* Status Badge */}
-                                  {vol.status === 'Vorbestellt' ? (
-                                    <span className="text-[8px] font-extrabold bg-sky-500 text-slate-950 px-1 rounded-sm shadow-sm" title="Vorbestellt">
-                                      BESTELLT
-                                    </span>
-                                  ) : vol.status === 'Erscheint bald' ? (
-                                    <span className="text-[8px] font-extrabold bg-purple-500 text-slate-950 px-1 rounded-sm shadow-sm" title="Erscheint bald">
-                                      BALD
-                                    </span>
-                                  ) : !isOwned ? (
-                                    <span className="text-[8px] font-extrabold bg-amber-500 text-slate-950 px-1 rounded-sm" title="Fehlt in der Sammlung">
-                                      FEHLT
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                    {/* MODE 1: AUTO-FIT (Single responsive row fitting screen width) */}
+                    {shelfMode === 'fit' && (
+                      <div className="pb-2 pt-2 px-1">
+                        <div className="flex items-end gap-1 sm:gap-1.5 w-full justify-between pb-1">
+                          {spineShelfItems.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
+                        </div>
+                        <div className="shelf-plank w-full mt-[-2px]" />
                       </div>
-                      {/* Shelf Plank Base */}
-                      <div className="shelf-plank w-full mt-[-2px]" />
-                    </div>
+                    )}
+
+                    {/* MODE 2: REGALBRETTER (Multi-tier bookcase shelves) */}
+                    {shelfMode === 'rows' && (
+                      <div className="space-y-6 pt-2 pb-2 px-1">
+                        {shelfRows.map((row, rIdx) => (
+                          <div key={rIdx} className="relative">
+                            <div className="flex items-end gap-1.5 sm:gap-2 px-1 pb-1 justify-start">
+                              {row.map((item, idx) => renderShelfSpine(item, idx, 'rows'))}
+                            </div>
+                            <div className="shelf-plank w-full mt-[-2px]" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* MODE 3: SCROLL (Classic horizontal single-row with scrollbar) */}
+                    {shelfMode === 'scroll' && (
+                      <div 
+                        ref={shelfScrollRef}
+                        className="overflow-x-auto pb-2 pt-4 px-2 custom-scrollbar scroll-smooth"
+                      >
+                        <div className="flex items-end gap-1.5 sm:gap-2 min-w-max px-2 pb-1">
+                          {spineShelfItems.map((item, idx) => renderShelfSpine(item, idx, 'scroll'))}
+                        </div>
+                        <div className="shelf-plank w-full mt-[-2px]" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

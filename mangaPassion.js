@@ -307,6 +307,33 @@ async function reconcileMangaGaps(mangaId, options = {}) {
     const existing = userVolMap.get(key);
 
     if (!existing) {
+      // Check if this entry represents a volume range (e.g. "21-25", "26-30" or Sammelschuber)
+      const rangeMatch = key.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+        if (start < end && (end - start) <= 30) {
+          let allOwned = true;
+          for (let k = start; k <= end; k++) {
+            const constituent = userVolMap.get(String(k));
+            if (!constituent || constituent.status !== 'Vorhanden') {
+              allOwned = false;
+              break;
+            }
+          }
+          if (allOwned) {
+            // The user already owns every individual volume in this range!
+            return;
+          }
+        }
+      }
+
+      // Also skip schubers / box sets if constituent volumes are owned
+      const isSchuber = ov.title && (ov.title.toLowerCase().includes('schuber') || ov.title.toLowerCase().includes('box'));
+      if (isSchuber && rangeMatch) {
+        return;
+      }
+
       gaps.push({
         ...ov,
         in_collection: false,
