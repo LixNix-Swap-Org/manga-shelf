@@ -346,6 +346,7 @@ export default function Dashboard({ user, onLogout }) {
       if (res.ok) {
         updateLocalState();
         fetchMangas();
+        fetchShoppingList();
       } else {
         alert('Fehler beim Aktualisieren des Bands');
       }
@@ -910,6 +911,8 @@ export default function Dashboard({ user, onLogout }) {
 
       setRestoreSuccess(data.message || 'Backup erfolgreich eingespielt!');
       await fetchMangas();
+      await fetchShoppingList();
+      await fetchReleaseRadar();
       setTimeout(() => {
         setShowRestoreModal(false);
         setRestoreSuccess('');
@@ -980,6 +983,8 @@ export default function Dashboard({ user, onLogout }) {
       if (res.ok) {
         setRestoreSuccess(data.message || 'Snapshot erfolgreich wiederhergestellt!');
         await fetchMangas();
+        await fetchShoppingList();
+        await fetchReleaseRadar();
         setTimeout(() => {
           setShowRestoreModal(false);
           setRestoreSuccess('');

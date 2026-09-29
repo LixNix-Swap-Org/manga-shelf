@@ -870,8 +870,9 @@ app.post('/api/volumes/:id/read', requireEditor, (req, res) => {
         const existing = db.prepare('SELECT * FROM volume_reads WHERE volume_id = ? AND user_id = ?').get(volumeId, targetUserId);
         let isRead = false;
 
-        if (req.body.read !== undefined) {
-            if (req.body.read) {
+        const explicitRead = req.body.read !== undefined ? req.body.read : req.body.is_read;
+        if (explicitRead !== undefined) {
+            if (explicitRead) {
                 if (!existing) {
                     db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, targetUserId);
                 }
@@ -905,7 +906,9 @@ app.post('/api/volumes/:id/read', requireEditor, (req, res) => {
 
 app.post('/api/volumes/batch-read', requireEditor, (req, res) => {
     try {
-        const { manga_id, up_to_volume, read = true, user_id } = req.body;
+        const readParam = req.body.read !== undefined ? req.body.read : req.body.is_read;
+        const read = readParam !== undefined ? Boolean(readParam) : true;
+        const { manga_id, up_to_volume, user_id } = req.body;
         const targetUserId = (user_id && req.user.role === 'admin') ? parseInt(user_id, 10) : req.user.id;
         const mId = parseInt(manga_id, 10);
         const maxVol = parseFloat(up_to_volume);
@@ -1033,7 +1036,11 @@ app.get('/api/release-radar', requireAuth, (req, res) => {
                OR (v.release_date IS NOT NULL AND TRIM(v.release_date) != '' AND v.status NOT IN ('Vorhanden', 'Gelesen'))
             ORDER BY 
                 CASE WHEN v.release_date IS NOT NULL AND TRIM(v.release_date) != '' THEN 0 ELSE 1 END ASC,
-                v.release_date ASC,
+                CASE 
+                    WHEN TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN TRIM(v.release_date) || '-01'
+                    WHEN TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9]' THEN SUBSTR(TRIM(v.release_date), 1, 5) || '0' || SUBSTR(TRIM(v.release_date), 6) || '-01'
+                    ELSE TRIM(v.release_date)
+                END ASC,
                 m.title ASC,
                 CASE 
                     WHEN CAST(v.volume_number AS REAL) > 0 THEN CAST(v.volume_number AS REAL) 

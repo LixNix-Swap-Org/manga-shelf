@@ -133,6 +133,9 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
       const cached = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
       if (cached && cached.json_data && (Date.now() - cached.created_at < CACHE_TTL_MS)) {
         const parsed = JSON.parse(cached.json_data);
+        if (parsed?.notFound) {
+          return parsed;
+        }
         if (parsed?.edition && parsed.edition.author !== undefined) {
           return parsed;
         }
@@ -144,6 +147,17 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   let edition = null;
   try {
     const edRes = await fetch(`https://api.manga-passion.de/editions/${editionId}`, { headers: HEADERS });
+    if (edRes.status === 404) {
+      const notFoundResult = { notFound: true, edition: null, volumes: [] };
+      try {
+        db.prepare(`
+          INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+        `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
+      } catch (_) {}
+      return notFoundResult;
+    }
     if (edRes.ok) {
       const edData = await edRes.json();
       const s0 = edData.sources?.[0];
@@ -175,6 +189,17 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   // Fetch volumes
   const volUrl = `https://api.manga-passion.de/editions/${editionId}/volumes`;
   const volRes = await fetch(volUrl, { headers: HEADERS });
+  if (volRes.status === 404) {
+    const notFoundResult = { notFound: true, edition, volumes: [] };
+    try {
+      db.prepare(`
+        INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+      `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
+    } catch (_) {}
+    return notFoundResult;
+  }
   if (!volRes.ok) {
     throw new Error(`Manga Passion API Fehler beim Abrufen der Bände (Status ${volRes.status})`);
   }
@@ -256,7 +281,16 @@ async function reconcileMangaGaps(mangaId, options = {}) {
     };
   }
 
-  const { edition, volumes: officialVolumes } = await getEditionDetailsAndVolumes(editionId, options.force_refresh);
+  const details = await getEditionDetailsAndVolumes(editionId, options.force_refresh);
+  if (!details || details.notFound || !details.volumes) {
+    return {
+      success: false,
+      matched: false,
+      message: 'Manga-Passion Edition nicht gefunden oder nicht verfügbar.',
+      candidate_editions: candidateEditions
+    };
+  }
+  const { edition, volumes: officialVolumes } = details;
 
   // Map user's volumes by cleaned volume_number
   const userVolMap = new Map();

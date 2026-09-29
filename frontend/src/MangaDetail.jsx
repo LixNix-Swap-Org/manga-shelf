@@ -9,7 +9,7 @@ import {
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck, Package, Truck,
   Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart,
-  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw
+  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw, RotateCcw
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -30,6 +30,13 @@ export default function MangaDetail({ user }) {
   const [volumeFilter, setVolumeFilter] = useState('ALL'); // 'ALL' | 'Vorhanden' | 'Fehlt' | 'Gelesen' | 'Ungelesen'
   const [volumeTypeFilter, setVolumeTypeFilter] = useState('ALL'); // 'ALL' | 'volume' | 'special_edition' | 'schuber' | 'special'
   const [selectedReaderId, setSelectedReaderId] = useState(user?.id || 'ALL');
+
+  useEffect(() => {
+    if (user?.id && (selectedReaderId === 'ALL' || !selectedReaderId)) {
+      setSelectedReaderId(user.id);
+    }
+  }, [user?.id]);
+
   const [showBatchReadModal, setShowBatchReadModal] = useState(false);
   const [batchReadUpTo, setBatchReadUpTo] = useState('');
   const [batchReadAction, setBatchReadAction] = useState(true); // true = gelesen, false = ungelesen
@@ -279,8 +286,9 @@ export default function MangaDetail({ user }) {
         await fetch(`/api/mangas/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, cover_image: data.url })
+          body: JSON.stringify({ cover_image: data.url })
         });
+        setFormData(prev => ({ ...prev, cover_image: data.url }));
         await fetchManga();
       }
     } catch (err) {
@@ -637,6 +645,7 @@ export default function MangaDetail({ user }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: effUserId,
+          read: !hasRead,
           is_read: !hasRead
         })
       });
@@ -667,6 +676,7 @@ export default function MangaDetail({ user }) {
         body: JSON.stringify({
           manga_id: id,
           up_to_volume: parseFloat(batchReadUpTo),
+          read: batchReadAction,
           is_read: batchReadAction,
           user_id: effUserId
         })
@@ -756,55 +766,24 @@ export default function MangaDetail({ user }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-3">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm">Lade Manga-Details...</p>
-      </div>
-    );
-  }
-  if (notFound) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
-        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl">
-          📚
-        </div>
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h2>
-          <p className="text-slate-400 text-sm">Dieser Manga existiert nicht oder wurde gelöscht.</p>
-        </div>
-        <Link
-          to="/"
-          className="btn-primary flex items-center gap-2 px-5 py-2.5"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Zurück zur Übersicht
-        </Link>
-      </div>
-    );
-  }
-
-  if (!manga) return null;
-
-  const volumes = manga.volumes || [];
+  const volumes = manga?.volumes || [];
   const ownedCount = volumes.filter(v => v.status === 'Vorhanden').length;
   const missingCount = volumes.filter(v => v.status === 'Fehlt').length;
   const preorderedCount = volumes.filter(v => v.status === 'Vorbestellt').length;
   const upcomingCount = volumes.filter(v => v.status === 'Erscheint bald').length;
-  const totalTarget = manga.total_volumes || 0;
+  const totalTarget = manga?.total_volumes || 0;
   const completionPct = totalTarget > 0 ? Math.min(100, Math.round((ownedCount / totalTarget) * 100)) : null;
 
   // Total value calculation
-  const totalOwnedValue = manga.total_value !== undefined ? manga.total_value : volumes
+  const totalOwnedValue = manga?.total_value !== undefined ? manga.total_value : volumes
     .filter(v => v.status === 'Vorhanden')
     .reduce((sum, v) => sum + (typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0)), 0);
 
-  const totalPossibleValue = manga.full_value !== undefined ? manga.full_value : volumes
+  const totalPossibleValue = manga?.full_value !== undefined ? manga.full_value : volumes
     .reduce((sum, v) => sum + (typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0)), 0);
 
   // Readers stats
-  const readers = manga.user_reading_stats || [];
+  const readers = manga?.user_reading_stats || [];
   const currentReaderStats = readers.find(r => String(r.user_id) === String(selectedReaderId)) || readers.find(r => String(r.user_id) === String(user?.id)) || null;
   const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read).length;
   const currentReaderUnreadCount = currentReaderStats ? currentReaderStats.unread_count : Math.max(0, ownedCount - currentReaderReadCount);
@@ -838,10 +817,10 @@ export default function MangaDetail({ user }) {
   };
 
   // Available publishers for filtering (deduplicated case-insensitively & canonicalized)
-  const availablePublishers = (() => {
+  const availablePublishers = useMemo(() => {
     const pubMap = new Map();
     volumes.forEach(v => {
-      const raw = (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim());
+      const raw = (v.publisher && v.publisher.trim()) || (manga?.publisher && manga.publisher.trim());
       if (!raw) return;
       const canonical = normalizePubName(raw);
       const key = canonical.toLowerCase();
@@ -850,7 +829,7 @@ export default function MangaDetail({ user }) {
       }
     });
     return Array.from(pubMap.values()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
-  })();
+  }, [volumes, manga?.publisher]);
 
   // Available conditions
   const conditionsList = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
@@ -918,36 +897,9 @@ export default function MangaDetail({ user }) {
     return numStr.toLowerCase().startsWith('band') ? numStr : `Band ${numStr}`;
   };
 
-  const schuberCount = volumes.filter(v => v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber')).length;
-  const specialEditionCount = volumes.filter(v => v.type === 'special_edition' || (
-    v.type !== 'schuber' && (
-      String(v.volume_number).toLowerCase().includes('special edition') ||
-      String(v.volume_number).toLowerCase().includes('limited edition') ||
-      String(v.volume_number).toLowerCase().includes('spezial edition') ||
-      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
-    )
-  )).length;
-  const specialCount = volumes.filter(v => {
-    if (v.type === 'special_edition' || v.type === 'schuber') return false;
-    const vLower = String(v.volume_number).toLowerCase();
-    if (vLower.includes('special edition') || vLower.includes('limited edition') || vLower.includes('spezial edition') || vLower.includes('schuber')) return false;
-    return v.type === 'special' || vLower.includes('special') || vLower.includes('extra') || vLower.includes('sonderband');
-  }).length;
-  const regularVolumeCount = volumes.filter(v => {
-    const isSchuber = v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber');
-    const isSpecialEd = v.type === 'special_edition' || (
-      String(v.volume_number).toLowerCase().includes('special edition') ||
-      String(v.volume_number).toLowerCase().includes('limited edition') ||
-      String(v.volume_number).toLowerCase().includes('spezial edition') ||
-      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
-    );
-    const isSpecial = v.type === 'special' || String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband');
-    return !isSchuber && !isSpecialEd && !isSpecial;
-  }).length;
-
-  // Filter & sort volumes
-  const filteredVolumes = volumes
-    .filter(v => {
+  // Base volumes matching all filters EXCEPT the type filter (for computing accurate type badge counts)
+  const baseVolumesForType = useMemo(() => {
+    return volumes.filter(v => {
       const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
       const isReadByTarget = v.read_users 
         ? v.read_users.some(u => String(u.user_id) === String(effUserId))
@@ -961,19 +913,9 @@ export default function MangaDetail({ user }) {
       if (volumeFilter === 'Ungelesen') {
         if (v.status !== 'Vorhanden' || isReadByTarget) return false;
       }
-
-      if (volumeTypeFilter !== 'ALL') {
-        const t = v.type || (
-          String(v.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
-          String(v.volume_number).toLowerCase().includes('special edition') || String(v.volume_number).toLowerCase().includes('limited edition') || String(v.volume_number).toLowerCase().includes('spezial edition') || (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
-          String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband') ? 'special' :
-          'volume'
-        );
-        if (t !== volumeTypeFilter) return false;
-      }
       
       if (volumePublisherFilter !== 'ALL') {
-        const rawPub = (v.publisher && v.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '';
+        const rawPub = (v.publisher && v.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
         const pub = normalizePubName(rawPub);
         if (pub.toLowerCase() !== volumePublisherFilter.toLowerCase()) return false;
       }
@@ -991,50 +933,108 @@ export default function MangaDetail({ user }) {
         const numMatch = String(v.volume_number).toLowerCase().includes(q);
         const isbnMatch = v.isbn && String(v.isbn).toLowerCase().includes(q);
         const notesMatch = v.notes && String(v.notes).toLowerCase().includes(q);
-        const pubMatch = ((v.publisher || manga.publisher || '')).toLowerCase().includes(q);
+        const pubMatch = ((v.publisher || manga?.publisher || '')).toLowerCase().includes(q);
         if (!numMatch && !isbnMatch && !notesMatch && !pubMatch) return false;
       }
 
       return true;
-    })
-    .sort((a, b) => {
-      const infoA = getVolumeSortInfo(a);
-      const infoB = getVolumeSortInfo(b);
-      const priceA = a.price !== null && a.price !== undefined ? a.price : -1;
-      const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
-      const pubA = ((a.publisher && a.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '').toLowerCase();
-      const pubB = ((b.publisher && b.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '').toLowerCase();
-      const yearA = a.release_year || 0;
-      const yearB = b.release_year || 0;
-
-      switch (volumeSort) {
-        case 'number_desc':
-          if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
-          if (infoB.num !== infoA.num) return infoB.num - infoA.num;
-          if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
-          return infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true });
-        case 'publisher_asc':
-          return pubA.localeCompare(pubB) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
-        case 'publisher_desc':
-          return pubB.localeCompare(pubA) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
-        case 'price_desc':
-          return priceB - priceA;
-        case 'price_asc':
-          return (priceA === -1 ? 999999 : priceA) - (priceB === -1 ? 999999 : priceB);
-        case 'year_desc':
-          return yearB - yearA;
-        case 'year_asc':
-          return (yearA || 9999) - (yearB || 9999);
-        case 'condition':
-          return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
-        case 'number_asc':
-        default:
-          if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
-          if (infoA.num !== infoB.num) return infoA.num - infoB.num;
-          if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
-          return infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
-      }
     });
+  }, [volumes, selectedReaderId, user?.id, volumeFilter, volumePublisherFilter, volumeConditionFilter, volumeSearch, manga?.publisher]);
+
+  const schuberCount = useMemo(() => baseVolumesForType.filter(v => v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber')).length, [baseVolumesForType]);
+
+  const specialEditionCount = useMemo(() => baseVolumesForType.filter(v => v.type === 'special_edition' || (
+    v.type !== 'schuber' && (
+      String(v.volume_number).toLowerCase().includes('special edition') ||
+      String(v.volume_number).toLowerCase().includes('limited edition') ||
+      String(v.volume_number).toLowerCase().includes('spezial edition') ||
+      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
+    )
+  )).length, [baseVolumesForType]);
+
+  const specialCount = useMemo(() => baseVolumesForType.filter(v => {
+    if (v.type === 'special_edition' || v.type === 'schuber') return false;
+    const vLower = String(v.volume_number).toLowerCase();
+    if (vLower.includes('special edition') || vLower.includes('limited edition') || vLower.includes('spezial edition') || vLower.includes('schuber')) return false;
+    return v.type === 'special' || vLower.includes('special') || vLower.includes('extra') || vLower.includes('sonderband');
+  }).length, [baseVolumesForType]);
+
+  const regularVolumeCount = useMemo(() => baseVolumesForType.filter(v => {
+    const isSchuber = v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber');
+    const isSpecialEd = v.type === 'special_edition' || (
+      String(v.volume_number).toLowerCase().includes('special edition') ||
+      String(v.volume_number).toLowerCase().includes('limited edition') ||
+      String(v.volume_number).toLowerCase().includes('spezial edition') ||
+      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
+    );
+    const isSpecial = v.type === 'special' || String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband');
+    return !isSchuber && !isSpecialEd && !isSpecial;
+  }).length, [baseVolumesForType]);
+
+  // Filter & sort volumes
+  const filteredVolumes = useMemo(() => {
+    return baseVolumesForType
+      .filter(v => {
+        if (volumeTypeFilter !== 'ALL') {
+          const t = v.type || (
+            String(v.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
+            String(v.volume_number).toLowerCase().includes('special edition') || String(v.volume_number).toLowerCase().includes('limited edition') || String(v.volume_number).toLowerCase().includes('spezial edition') || (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
+            String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband') ? 'special' :
+            'volume'
+          );
+          if (t !== volumeTypeFilter) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const infoA = getVolumeSortInfo(a);
+        const infoB = getVolumeSortInfo(b);
+        const priceA = a.price !== null && a.price !== undefined ? a.price : -1;
+        const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
+        const pubA = ((a.publisher && a.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '').toLowerCase();
+        const pubB = ((b.publisher && b.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '').toLowerCase();
+        const yearA = a.release_year || 0;
+        const yearB = b.release_year || 0;
+
+        switch (volumeSort) {
+          case 'number_desc':
+            if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
+            if (infoB.num !== infoA.num) return infoB.num - infoA.num;
+            if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
+            return infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true });
+          case 'publisher_asc':
+            return pubA.localeCompare(pubB) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
+          case 'publisher_desc':
+            return pubB.localeCompare(pubA) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
+          case 'price_desc':
+            return priceB - priceA;
+          case 'price_asc':
+            return (priceA === -1 ? 999999 : priceA) - (priceB === -1 ? 999999 : priceB);
+          case 'year_desc':
+            return yearB - yearA;
+          case 'year_asc':
+            return (yearA || 9999) - (yearB || 9999);
+          case 'condition':
+            return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
+          case 'number_asc':
+          default:
+            if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
+            if (infoA.num !== infoB.num) return infoA.num - infoB.num;
+            if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
+            return infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
+        }
+      });
+  }, [baseVolumesForType, volumeTypeFilter, volumeSort, manga?.publisher]);
+
+  const hasActiveFilters = volumeFilter !== 'ALL' || volumeTypeFilter !== 'ALL' || volumePublisherFilter !== 'ALL' || volumeConditionFilter !== 'ALL' || Boolean(volumeSearch.trim());
+
+  const handleResetFilters = () => {
+    setVolumeFilter('ALL');
+    setVolumeTypeFilter('ALL');
+    setVolumePublisherFilter('ALL');
+    setVolumeConditionFilter('ALL');
+    setVolumeSearch('');
+  };
 
   const handleSetVolumeViewMode = (mode) => {
     setVolumeViewMode(mode);
@@ -1288,23 +1288,34 @@ export default function MangaDetail({ user }) {
   };
 
   // Map of Manga Passion gaps by volume_number for quick lookup of price, cover, date
-  const mpGapMap = new Map();
-  if (mpGapData && mpGapData.gaps) {
-    mpGapData.gaps.forEach(g => {
-      mpGapMap.set(String(g.volume_number).trim().toLowerCase(), g);
-    });
-  }
+  const mpGapMap = useMemo(() => {
+    const map = new Map();
+    if (mpGapData && mpGapData.gaps) {
+      mpGapData.gaps.forEach(g => {
+        map.set(String(g.volume_number).trim().toLowerCase(), g);
+      });
+    }
+    return map;
+  }, [mpGapData]);
 
   // Gap Detection for numeric volumes:
   // Prioritizes verified Manga Passion official edition data if available;
   // falls back to local detection.
-  const detectedGaps = (() => {
-    // If Manga Passion matched the German edition, use the verified official missing volumes!
+  // Filters out volumes already present in user's collection to avoid duplicates!
+  const detectedGaps = useMemo(() => {
+    // Collect all existing volume numbers currently in the DB/collection:
+    const existingVolNums = new Set(
+      volumes.map(v => String(v.volume_number || '').trim().toLowerCase())
+    );
+
+    // If Manga Passion matched the German edition, use the verified official missing volumes:
     if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
-      return mpGapData.gaps.map(g => {
-        const match = String(g.volume_number).trim().match(/^(\d+)$/);
-        return match ? parseInt(match[1], 10) : g.volume_number;
-      });
+      return mpGapData.gaps
+        .filter(g => !existingVolNums.has(String(g.volume_number || '').trim().toLowerCase()))
+        .map(g => {
+          const match = String(g.volume_number).trim().match(/^(\d+)$/);
+          return match ? parseInt(match[1], 10) : g.volume_number;
+        });
     }
 
     // Local fallback:
@@ -1327,7 +1338,7 @@ export default function MangaDetail({ user }) {
       }
     });
 
-    const targetMax = Math.min(200, Math.max(maxFound, parseInt(manga.total_volumes, 10) || 0));
+    const targetMax = Math.min(200, Math.max(maxFound, parseInt(manga?.total_volumes, 10) || 0));
     if (targetMax <= 1 || existingNums.size === 0) return [];
 
     const gaps = [];
@@ -1337,10 +1348,10 @@ export default function MangaDetail({ user }) {
       }
     }
     return gaps;
-  })();
+  }, [mpGapData, volumes, manga?.total_volumes]);
 
   // Items to render on the Spine Shelf (interleaving gaps if showGaps is active)
-  const spineShelfItems = (() => {
+  const spineShelfItems = useMemo(() => {
     if (!showGaps || detectedGaps.length === 0 || volumeTypeFilter !== 'ALL' || volumeFilter !== 'ALL' || volumeSearch.trim() || volumeSort !== 'number_asc') {
       return filteredVolumes.map(v => ({ isGap: false, volume: v }));
     }
@@ -1348,6 +1359,13 @@ export default function MangaDetail({ user }) {
     const items = [];
     const gapsSet = new Set(detectedGaps.map(g => (typeof g === 'string' && /^\d+$/.test(g)) ? parseInt(g, 10) : g));
     const sorted = [...filteredVolumes];
+
+    // Ensure no volume that actually exists in sorted is treated as a gap:
+    sorted.forEach(v => {
+      const match = String(v.volume_number).trim().match(/^(\d+)$/);
+      if (match) gapsSet.delete(parseInt(match[1], 10));
+    });
+
     const maxTarget = Math.max(
       ...Array.from(gapsSet).map(g => typeof g === 'number' ? g : 0),
       ...sorted.map(v => {
@@ -1383,7 +1401,39 @@ export default function MangaDetail({ user }) {
     }
 
     return items;
-  })();
+  }, [showGaps, detectedGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-3">
+        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm">Lade Manga-Details...</p>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl">
+          📚
+        </div>
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h2>
+          <p className="text-slate-400 text-sm">Dieser Manga existiert nicht oder wurde gelöscht.</p>
+        </div>
+        <Link
+          to="/"
+          className="btn-primary flex items-center gap-2 px-5 py-2.5"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Zurück zur Übersicht
+        </Link>
+      </div>
+    );
+  }
+
+  if (!manga) return null;
 
   return (
     <div className="min-h-screen pb-20 overflow-x-hidden">
@@ -1792,7 +1842,7 @@ export default function MangaDetail({ user }) {
                   <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                     <div 
                       className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500"
-                      style={{ width: `${completionPct !== null ? completionPct : Math.min(100, ownedCount * 5)}%` }}
+                      style={{ width: `${completionPct !== null ? completionPct : 0}%` }}
                     />
                   </div>
                 </div>
@@ -2152,6 +2202,19 @@ export default function MangaDetail({ user }) {
                   )}
                 </div>
 
+                {/* Reset Filters Button (visible when filters are active) */}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="inline-flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all shadow-sm cursor-pointer"
+                    title="Alle Filter zurücksetzen"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-brand-400" />
+                    <span className="hidden sm:inline">Filter zurücksetzen</span>
+                  </button>
+                )}
+
               </div>
             </div>
 
@@ -2170,7 +2233,7 @@ export default function MangaDetail({ user }) {
                       : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
                   }`}
                 >
-                  Alle ({volumes.length})
+                  Alle ({baseVolumesForType.length})
                 </button>
                 <button
                   type="button"
@@ -2235,6 +2298,15 @@ export default function MangaDetail({ user }) {
                   ? 'Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.' 
                   : 'Keine Bände mit diesen Filtereinstellungen gefunden.'}
               </p>
+              {volumes.length > 0 && hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="mt-3.5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600/30 hover:bg-brand-600/50 text-brand-300 border border-brand-500/40 transition-all cursor-pointer shadow-sm"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Filter zurücksetzen
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -2301,10 +2373,14 @@ export default function MangaDetail({ user }) {
                               type="button"
                               onClick={() => handleBatchFillGaps('Fehlt')}
                               disabled={fillingGapLoading}
-                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <ShoppingCart className="w-3 h-3 text-amber-300" />
-                              <span>Alle auf Einkaufsliste</span>
+                              {fillingGapLoading ? (
+                                <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <ShoppingCart className="w-3 h-3 text-amber-300" />
+                              )}
+                              <span>{fillingGapLoading ? 'Wird übertragen...' : 'Alle auf Einkaufsliste'}</span>
                             </button>
                           )}
                         </div>

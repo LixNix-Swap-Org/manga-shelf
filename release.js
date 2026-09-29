@@ -93,26 +93,30 @@ async function main() {
     const releaseTitle = `Manga Shelf ${tag}`;
     const releaseNotes = `### Manga Shelf ${tag} 🚀
 
-#### Neu & Verbesserungen in dieser Version:
-- 📱 **Mobile UI Fixes für Band-Bearbeiten & Modals:**
-  - **Negativer Viewport-Offset behoben:** Durch Umstellung des Modal-Containers von starrem \`items-center\` auf \`items-start sm:items-center\` wird der Modal-Kopf bei langen Formularen nicht mehr nach oben aus dem Bildschirm geschoben (bisher bei Bildschirmhöhen < 900px unscrollbar abgeschnitten).
-  - **Sticky Header & Close-Button:** Der Header mit Titel ("Band bearbeiten" / "Neuen Band anlegen") und Schließen-Button \`[X]\` bleibt beim Scrollen permanent am oberen Displayrand sichtbar und erreichbar.
-  - **Sticky Footer mit Daumen-Bedienung:** "Abbrechen" und "Speichern" sind mobil stets unten angeheftet und nutzen die volle Breite, der Lösch-Button ist sicher darunter platziert.
-  - **Touch-optimierte Fotoverwaltung:** Bisherige reine Desktop-Hover-Controls (\`group-hover:opacity-100\`) bei Zusatzbildern durch immer zugängliche Touch-Buttons (Cover festlegen, Löschen, Reihenfolge per Pfeiltasten anpassen) ersetzt.
-  - **Responsive Sammler-Status-Pills:** Flexible Status-Buttons mit optimiertem Padding und Truncate-Schutz verhindern Umbrüche und horizontales Verzerren auf schmalen Smartphone-Displays (360px–390px).
-  - **Systemweite Modal-Absicherung:** Auch Batch-Generierung, Lese-Status-Batch, Lücken-Füllen und Manga-Erstellung gegen Abschneiden auf Mobilgeräten gehärtet.
-- 🖥️ **Full-HD (1920x1080) & Display-Scaling Optimierung:**
-  - Viewport- & Layout-Container von starren 1280px (\`max-w-7xl\`) auf bis zu 1840px (\`max-w-[1720px] 2xl:max-w-[1840px]\`) erweitert – eliminiert ungenutzte Trauerränder auf Full-HD- und 2K/1440p-Monitoren.
-  - Manga-Grid skaliert jetzt responsiv mit 6–8 Spalten (\`xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8\`) mit konsistenten 2:3 Cover-Proportionen.
-- 🔍 **Windows DPI Scaling (100 %, 125 %, 150 %) Support:**
-  - Horizontale Navbar-Überläufe bei 150 % Windows-Skalierung vollständig behoben durch dynamisches Padding und \`flex-nowrap\`.
-  - Null horizontale Scrollbalken auf allen Breakpoints.
-- 🖼️ **Robuste Image Fallbacks (Broken Images):**
-  - Universelle \`onError\`-Fallbacks für alle Cover, Volume-Thumbnails (Raster- & Listenansicht), Einkaufsliste, Release-Radar und Auto-Fill-Suchergebnisse.
-- ⌨️ **Universal Modal & UX Handling:**
-  - Globaler \`Escape\`-Key-Listener schließt zuverlässig alle Modals und Dropdowns.
-  - Intuitiver Backdrop-Click-Outside zum Schließen.
-- 🇩🇪 **Manga Passion First im Auto-Fill:** Priorisiert die deutsche Manga Passion Datenbank beim Anlegen und Bearbeiten von Reihen für offizielle deutsche Titel, Verlage, Bände und Beschreibungen.
+#### Bugfixes & Optimierungen:
+- 🐞 **Lese-Status API Parameter Bugfix (\`read\` vs \`is_read\`):**
+  - \`handleToggleVolumeRead\` und \`handleBatchRead\` übergeben nun das korrekte Backend-Feld \`read\`. Das Backend akzeptiert abwärtskompatibel sowohl \`read\` als auch \`is_read\`.
+  - Batch-Ungelesen-Setzen funktioniert nun einwandfrei.
+- 🛍️ **Einkaufsliste & Quick-Buy Synchronisation:**
+  - Nach einem Direktkauf auf der Einkaufsliste wird nun sofort \`fetchShoppingList()\` ausgeführt, um Server-Statistiken und Cache sofort abzugleichen.
+- 🔄 **Vollständiger Sync nach Backup-Restore:**
+  - Nach dem Einspielen eines Backups oder Server-Snapshots werden Sammlungsliste, Einkaufsliste und Release-Radar frisch geladen und der lokale Cache erneuert.
+- 🖼️ **Cover-Upload ohne Datenverlust:**
+  - Der Cover-Upload in der Detailansicht sendet nur noch das geänderte Bildfeld, statt ungespeicherte Formularfelder mit alten Werten zu überschreiben.
+- ⚡ **Performance-Optimierung via \`useMemo\` & Rules of Hooks:**
+  - \`filteredVolumes\`, \`baseVolumesForType\`, \`typeFilterCounts\`, \`spineShelfItems\`, \`detectedGaps\` und \`availablePublishers\` werden sauber memoisiert.
+  - Alle Hooks laufen strikt auf oberster Komponentenebene vor Rendering-Abbrüchen.
+- 📦 **Keine Geister-Lücken mehr im Regal:**
+  - Bereits in der Sammlung angelegte Bände (z. B. mit Status "Fehlt") werden auf dem virtuellen Buchrücken-Regal nicht mehr doppelt als Lücken-Ghost-Spine angezeigt.
+- 🔄 **Filter-Reset-Button & dynamische Typ-Zähler:**
+  - Neuer "Filter zurücksetzen"-Button in der Filterleiste und im Empty-State.
+  - Die Zähler auf den Typ-Filter-Chips (Einzelbände, Special Editions, Schuber, Specials) berechnen sich nun dynamisch aus den gefilterten Bänden.
+- ⏳ **Loading-Spinner beim Batch-Lücken-Import:**
+  - Der Button "Alle auf Einkaufsliste" zeigt während des Imports einen Spinner und den Status "Wird übertragen...".
+- 📅 **Release-Radar YYYY-MM Sortierung:**
+  - Sichere Datums-Normalisierung in SQLite (\`YYYY-MM\` wird vor \`YYYY-MM-02\` geordnet).
+- 🛡️ **Manga Passion 404 Negative Caching:**
+  - Fehlerhafte oder gelöschte Editionen werden im Cache registriert, um wiederholte externe API-Anfragen zu vermeiden.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;
