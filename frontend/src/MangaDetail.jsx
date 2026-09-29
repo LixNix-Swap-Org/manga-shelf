@@ -51,7 +51,7 @@ export default function MangaDetail({ user }) {
   });
   // 3D Shelf scaling and layout modes: 'fit' (Auto-Fit) | 'rows' (Mehrzeilig) | 'scroll' (Horizontal scrollen)
   const [shelfMode, setShelfMode] = useState(() => {
-    return localStorage.getItem('mangashelf_shelf_mode') || 'fit';
+    return localStorage.getItem('mangashelf_shelf_mode') || 'rows';
   });
   // Shelf scale presets: 's' (Kompakt) | 'm' (Standard) | 'l' (Groß)
   const [shelfScale, setShelfScale] = useState(() => {
@@ -1464,40 +1464,63 @@ export default function MangaDetail({ user }) {
   // Keep spineShelfItems as alias for Spine Shelf
   const spineShelfItems = displayVolumeItems;
 
-  // Smart Balanced Shelf Rows calculation for 'rows' mode (multi-tier bookcase)
+  // Smart Balanced Shelf Rows calculation for 'rows' mode AND auto-multi-row in 'fit' mode
+  const AUTO_FIT_MULTIROW_THRESHOLD = 36; // beyond this, auto-fit becomes multi-row too
+
   const shelfRows = useMemo(() => {
-    if (shelfMode !== 'rows') return [spineShelfItems];
-    
-    // Optimal books per shelf plank based on scale:
-    const targetPerRow = shelfScale === 's' ? 22 : shelfScale === 'l' ? 13 : 17;
-    if (spineShelfItems.length <= targetPerRow) {
+    const count = spineShelfItems.length;
+
+    // In 'fit' mode with few items: single row
+    if (shelfMode === 'fit' && count <= AUTO_FIT_MULTIROW_THRESHOLD) {
       return [spineShelfItems];
     }
-    
-    const rowCount = Math.ceil(spineShelfItems.length / targetPerRow);
-    const itemsPerRow = Math.ceil(spineShelfItems.length / rowCount);
-    
+
+    // In 'scroll' mode: always single (horizontally scrollable) row
+    if (shelfMode === 'scroll') {
+      return [spineShelfItems];
+    }
+
+    // 'rows' mode OR 'fit' mode with many books → calculate balanced rows:
+    // Optimal books per shelf plank based on scale:
+    //  S = compact spines (~42px) → ~20 per row on a 900px shelf
+    //  M = standard spines (~52px) → ~16 per row
+    //  L = large spines (~66px) → ~12 per row
+    const targetPerRow = shelfScale === 's' ? 20 : shelfScale === 'l' ? 12 : 16;
+
+    if (count <= targetPerRow) {
+      return [spineShelfItems];
+    }
+
+    // Compute balanced row count so rows are evenly filled
+    const rowCount = Math.ceil(count / targetPerRow);
+    const itemsPerRow = Math.ceil(count / rowCount);
+
     const rows = [];
-    for (let i = 0; i < spineShelfItems.length; i += itemsPerRow) {
+    for (let i = 0; i < count; i += itemsPerRow) {
       rows.push(spineShelfItems.slice(i, i + itemsPerRow));
     }
     return rows;
   }, [spineShelfItems, shelfMode, shelfScale]);
 
+  // Derived: is fit-mode actually rendering as multi-row (auto-rows)?
+  const isFitMultiRow = shelfMode === 'fit' && spineShelfItems.length > AUTO_FIT_MULTIROW_THRESHOLD;
+
   const renderShelfSpine = (item, idx, currentMode = shelfMode) => {
-    const isFit = currentMode === 'fit';
+    // In fit-multirow or rows mode, items use fixed widths (not flex-1)
+    const isFit = currentMode === 'fit' && !isFitMultiRow;
+    const isRows = currentMode === 'rows' || isFitMultiRow;
     const totalCount = spineShelfItems.length;
     const isVeryCompact = isFit && totalCount > 24;
     const isUltraCompact = isFit && totalCount > 34;
 
-    // Proportional spine height:
-    let spineHeightPx = '220px';
+    // Proportional spine height based on scale + mode:
+    let spineHeightPx;
     if (shelfScale === 's') {
-      spineHeightPx = isFit && isUltraCompact ? '150px' : isVeryCompact ? '160px' : '170px';
+      spineHeightPx = isFit && isUltraCompact ? '150px' : '170px';
     } else if (shelfScale === 'l') {
-      spineHeightPx = isFit && isUltraCompact ? '210px' : '260px';
+      spineHeightPx = isFit ? (isUltraCompact ? '210px' : '260px') : '240px';
     } else {
-      spineHeightPx = isFit ? (isUltraCompact ? '175px' : isVeryCompact ? '195px' : '220px') : '220px';
+      spineHeightPx = isFit ? (isUltraCompact ? '175px' : isVeryCompact ? '195px' : '220px') : '210px';
     }
 
     if (item.isGap) {
@@ -1505,9 +1528,9 @@ export default function MangaDetail({ user }) {
       const ghostWidthClass = isFit
         ? 'flex-1 min-w-[18px] max-w-[56px]'
         : (
-          shelfScale === 's' ? 'w-[38px] sm:w-[42px]' :
-          shelfScale === 'l' ? 'w-[58px] sm:w-[66px]' :
-          'w-[52px] sm:w-[58px]'
+          shelfScale === 's' ? 'w-[36px] sm:w-[40px]' :
+          shelfScale === 'l' ? 'w-[56px] sm:w-[64px]' :
+          'w-[44px] sm:w-[50px]'
         );
 
       return (
@@ -1574,16 +1597,18 @@ export default function MangaDetail({ user }) {
 
     let spineWidth = '';
     if (isFit) {
+      // Single-row auto-fit: use flex proportions
       spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
     } else {
+      // Fixed-width mode (rows / scroll / fit-multirow):
       const isS = shelfScale === 's';
       const isL = shelfScale === 'l';
       if (isSchuber) {
-        spineWidth = isS ? 'w-[72px] sm:w-[78px]' : isL ? 'w-[104px] sm:w-[116px]' : 'w-[88px] sm:w-[98px]';
+        spineWidth = isS ? 'w-[68px] sm:w-[76px]' : isL ? 'w-[100px] sm:w-[112px]' : 'w-[80px] sm:w-[92px]';
       } else if (isSpecialEd) {
-        spineWidth = isS ? 'w-[44px] sm:w-[48px]' : isL ? 'w-[64px] sm:w-[72px]' : 'w-[54px] sm:w-[60px]';
+        spineWidth = isS ? 'w-[40px] sm:w-[44px]' : isL ? 'w-[60px] sm:w-[68px]' : 'w-[50px] sm:w-[56px]';
       } else {
-        spineWidth = isS ? 'w-[38px] sm:w-[42px]' : isL ? 'w-[58px] sm:w-[66px]' : 'w-[48px] sm:w-[54px]';
+        spineWidth = isS ? 'w-[36px] sm:w-[40px]' : isL ? 'w-[54px] sm:w-[62px]' : 'w-[44px] sm:w-[50px]';
       }
     }
 
@@ -2785,22 +2810,41 @@ export default function MangaDetail({ user }) {
 
                   {/* Physical Shelf Container */}
                   <div className="relative bg-slate-950/70 p-4 sm:p-6 rounded-2xl border border-slate-800/80 shadow-2xl">
-                    {/* MODE 1: AUTO-FIT (Single responsive row fitting screen width) */}
+                    {/* MODE 1: AUTO-FIT — Single responsive row (few items) OR multi-row (many items) */}
                     {shelfMode === 'fit' && (
-                      <div className="pb-2 pt-2 px-1">
-                        <div className="flex items-end gap-1 sm:gap-1.5 w-full justify-between pb-1">
-                          {spineShelfItems.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
+                      isFitMultiRow ? (
+                        /* Auto-multi-row: too many books for single row → display as balanced rows */
+                        <div className="space-y-5 pt-2 pb-2 px-1">
+                          <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1.5">
+                            <Layers className="w-3 h-3 text-slate-600" />
+                            Auto-Fit: {shelfRows.length} Reihen für {spineShelfItems.length} Einträge
+                          </div>
+                          {shelfRows.map((row, rIdx) => (
+                            <div key={rIdx} className="relative">
+                              <div className="flex items-end gap-1 sm:gap-1.5 px-1 pb-1 flex-wrap justify-start">
+                                {row.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
+                              </div>
+                              <div className="shelf-plank w-full mt-[-2px]" />
+                            </div>
+                          ))}
                         </div>
-                        <div className="shelf-plank w-full mt-[-2px]" />
-                      </div>
+                      ) : (
+                        /* Single-row auto-fit: few items, stretch to fill width */
+                        <div className="pb-2 pt-2 px-1">
+                          <div className="flex items-end gap-1 sm:gap-1.5 w-full justify-between pb-1">
+                            {spineShelfItems.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
+                          </div>
+                          <div className="shelf-plank w-full mt-[-2px]" />
+                        </div>
+                      )
                     )}
 
                     {/* MODE 2: REGALBRETTER (Multi-tier bookcase shelves) */}
                     {shelfMode === 'rows' && (
-                      <div className="space-y-6 pt-2 pb-2 px-1">
+                      <div className="space-y-5 pt-2 pb-2 px-1">
                         {shelfRows.map((row, rIdx) => (
                           <div key={rIdx} className="relative">
-                            <div className="flex items-end gap-1.5 sm:gap-2 px-1 pb-1 justify-start">
+                            <div className="flex items-end gap-1 sm:gap-1.5 px-1 pb-1 flex-wrap justify-start">
                               {row.map((item, idx) => renderShelfSpine(item, idx, 'rows'))}
                             </div>
                             <div className="shelf-plank w-full mt-[-2px]" />
