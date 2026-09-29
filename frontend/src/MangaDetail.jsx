@@ -1350,9 +1350,13 @@ export default function MangaDetail({ user }) {
     return gaps;
   }, [mpGapData, volumes, manga?.total_volumes]);
 
-  // Items to render on the Spine Shelf (interleaving gaps if showGaps is active)
-  const spineShelfItems = useMemo(() => {
-    if (!showGaps || detectedGaps.length === 0 || volumeTypeFilter !== 'ALL' || volumeFilter !== 'ALL' || volumeSearch.trim() || volumeSort !== 'number_asc') {
+  // Items to render across Spine Shelf, Grid View, and Table View (interleaving gaps if showGaps is active)
+  const displayVolumeItems = useMemo(() => {
+    const isNumberSort = volumeSort === 'number_asc' || volumeSort === 'number_desc';
+    const allowTypeFilter = volumeTypeFilter === 'ALL' || volumeTypeFilter === 'volume';
+    const allowStatusFilter = volumeFilter === 'ALL' || volumeFilter === 'Fehlt';
+
+    if (!showGaps || detectedGaps.length === 0 || !allowTypeFilter || !allowStatusFilter || volumeSearch.trim() || !isNumberSort) {
       return filteredVolumes.map(v => ({ isGap: false, volume: v }));
     }
 
@@ -1400,8 +1404,15 @@ export default function MangaDetail({ user }) {
       volIndex++;
     }
 
+    if (volumeSort === 'number_desc') {
+      items.reverse();
+    }
+
     return items;
   }, [showGaps, detectedGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap]);
+
+  // Keep spineShelfItems as alias for Spine Shelf
+  const spineShelfItems = displayVolumeItems;
 
   if (loading) {
     return (
@@ -2009,7 +2020,7 @@ export default function MangaDetail({ user }) {
                         ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-950/40'
                         : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
                     }`}
-                    title={showGaps ? 'Lücken-Erkennung im Regal aktiv (Klicken zum Ausblenden)' : 'Lücken-Erkennung ausgeblendet (Klicken zum Aktivieren)'}
+                    title={showGaps ? 'Lücken-Erkennung in Regal & Karten aktiv (Klicken zum Ausblenden)' : 'Lücken-Erkennung ausgeblendet (Klicken zum Aktivieren)'}
                   >
                     {showGaps ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-slate-500" />}
                     <span>Lücken: <strong>{detectedGaps.length} fehlend</strong></span>
@@ -2081,7 +2092,7 @@ export default function MangaDetail({ user }) {
                       : 'text-amber-400 hover:text-amber-300'
                   }`}
                 >
-                  ✕ Fehlt noch ({missingCount})
+                  ✕ Fehlt noch ({missingCount}{showGaps && detectedGaps.length > 0 ? ` + ${detectedGaps.length} Lücken` : ''})
                 </button>
                 {preorderedCount > 0 && (
                   <button
@@ -2290,7 +2301,7 @@ export default function MangaDetail({ user }) {
           </div>
 
           {/* Volumes Grid */}
-          {filteredVolumes.length === 0 ? (
+          {displayVolumeItems.length === 0 ? (
             <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 my-4">
               <BookOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
               <p className="text-sm text-slate-400">
@@ -2310,84 +2321,84 @@ export default function MangaDetail({ user }) {
             </div>
           ) : (
             <>
-              {/* SPINE VIEW */}
-              {volumeViewMode === 'spine' && (
-                <div className="mb-8">
-                  {/* Shelf Gap Notice Banner if gaps detected */}
-                  {showGaps && detectedGaps.length > 0 && volumeFilter === 'ALL' && !volumeSearch && (
-                    <div className="mb-4 space-y-2">
-                      {/* Discrepancy warning banner if AniList total differs from German Edition total */}
-                      {mpGapData?.discrepancy && canEdit && (
-                        <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
-                          <div className="flex items-center gap-2.5">
-                            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
-                            <div>
-                              <div className="font-bold text-amber-300">Sammlungs-Info korrigieren (Manga-Passion Abgleich)</div>
-                              <div className="text-[11px] text-amber-200/90 leading-tight">
-                                {mpGapData.discrepancy.message}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleSyncTotalVolumes(mpGapData.discrepancy.official_total)}
-                              disabled={mpGapLoading}
-                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Auf {mpGapData.discrepancy.official_total} Bände anpassen</span>
-                            </button>
+              {/* Collection Gap Notice Banner (Shown in all view modes if gaps detected) */}
+              {showGaps && detectedGaps.length > 0 && (volumeFilter === 'ALL' || volumeFilter === 'Fehlt') && !volumeSearch && (
+                <div className="mb-4 space-y-2">
+                  {/* Discrepancy warning banner if AniList total differs from German Edition total */}
+                  {mpGapData?.discrepancy && canEdit && (
+                    <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+                      <div className="flex items-center gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                        <div>
+                          <div className="font-bold text-amber-300">Sammlungs-Info korrigieren (Manga-Passion Abgleich)</div>
+                          <div className="text-[11px] text-amber-200/90 leading-tight">
+                            {mpGapData.discrepancy.message}
                           </div>
                         </div>
-                      )}
-
-                      {/* Main Gaps Banner */}
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span>
-                            <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} im Regal entdeckt:</strong> Band {detectedGaps.slice(0, 10).join(', ')}{detectedGaps.length > 10 ? ` (+ ${detectedGaps.length - 10} weitere)` : ''}
-                            {mpGapData?.edition && (
-                              <span className="ml-1.5 text-amber-300/80 text-[11px]">
-                                (geprüft mit Manga-Passion: <em>{mpGapData.edition.title}</em>, {mpGapData.total_official_volumes} Bände)
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMpEditionSearchQuery(manga.title);
-                              setShowMpEditionModal(true);
-                            }}
-                            className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
-                            title="Manga-Passion Edition prüfen oder wechseln"
-                          >
-                            <Search className="w-3 h-3 text-brand-400" />
-                            <span>Manga-Passion Edition</span>
-                          </button>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => handleBatchFillGaps('Fehlt')}
-                              disabled={fillingGapLoading}
-                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {fillingGapLoading ? (
-                                <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <ShoppingCart className="w-3 h-3 text-amber-300" />
-                              )}
-                              <span>{fillingGapLoading ? 'Wird übertragen...' : 'Alle auf Einkaufsliste'}</span>
-                            </button>
-                          )}
-                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSyncTotalVolumes(mpGapData.discrepancy.official_total)}
+                          disabled={mpGapLoading}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Auf {mpGapData.discrepancy.official_total} Bände anpassen</span>
+                        </button>
                       </div>
                     </div>
                   )}
 
+                  {/* Main Gaps Banner */}
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} entdeckt:</strong> Band {detectedGaps.slice(0, 10).join(', ')}{detectedGaps.length > 10 ? ` (+ ${detectedGaps.length - 10} weitere)` : ''}
+                        {mpGapData?.edition && (
+                          <span className="ml-1.5 text-amber-300/80 text-[11px]">
+                            (geprüft mit Manga-Passion: <em>{mpGapData.edition.title}</em>, {mpGapData.total_official_volumes} Bände)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMpEditionSearchQuery(manga.title);
+                          setShowMpEditionModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Manga-Passion Edition prüfen oder wechseln"
+                      >
+                        <Search className="w-3 h-3 text-brand-400" />
+                        <span>Manga-Passion Edition</span>
+                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleBatchFillGaps('Fehlt')}
+                          disabled={fillingGapLoading}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {fillingGapLoading ? (
+                            <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <ShoppingCart className="w-3 h-3 text-amber-300" />
+                          )}
+                          <span>{fillingGapLoading ? 'Wird übertragen...' : 'Alle auf Einkaufsliste'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SPINE VIEW */}
+              {volumeViewMode === 'spine' && (
+                <div className="mb-8">
                   {/* Physical Shelf Container */}
                   <div className="relative bg-slate-950/70 p-4 sm:p-6 rounded-2xl border border-slate-800/80 shadow-2xl">
                     <div className="overflow-x-auto pb-2 pt-4 px-2 custom-scrollbar">
@@ -2557,7 +2568,81 @@ export default function MangaDetail({ user }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                      {filteredVolumes.map(vol => {
+                      {displayVolumeItems.map((item, idx) => {
+                        if (item.isGap) {
+                          const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+                          return (
+                            <tr 
+                              key={`table-gap-${item.gapNumber}-${idx}`}
+                              className="border-b border-amber-500/20 hover:bg-amber-950/20 transition-colors bg-amber-950/10 cursor-pointer"
+                              onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
+                            >
+                              <td className="py-2 px-3 text-center">
+                                {gapMeta?.cover_image ? (
+                                  <div className="w-8 h-12 rounded overflow-hidden shadow mx-auto border border-amber-500/40 relative">
+                                    <img src={gapMeta.cover_image} alt="" className="w-full h-full object-cover opacity-60" />
+                                  </div>
+                                ) : (
+                                  <div className="w-8 h-12 rounded bg-amber-950/30 border border-dashed border-amber-500/40 flex items-center justify-center mx-auto text-amber-400 text-xs font-bold">
+                                    +
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 font-bold text-amber-300 text-sm">
+                                Band {item.gapNumber}
+                                <span className="block text-[10px] text-amber-400/80 font-normal">
+                                  Offizielle Lücke in Reihe
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  Lücke
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <button
+                                  type="button"
+                                  disabled={!canEdit}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (canEdit) setFillingGapNumber(item.gapNumber);
+                                  }}
+                                  className="px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 cursor-pointer"
+                                  title="Band erfassen"
+                                >
+                                  ✕ Fehlt (Lücke)
+                                </button>
+                              </td>
+                              <td className="py-2 px-3 text-slate-600 text-xs text-center">-</td>
+                              <td className="py-2 px-3 text-slate-400 text-xs">
+                                {gapMeta?.publisher || manga.publisher || '-'}
+                              </td>
+                              <td className="py-2 px-3 font-mono text-emerald-400 text-xs">
+                                {gapMeta?.price ? `${gapMeta.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-slate-500 text-xs italic">
+                                {gapMeta?.release_date || '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFillingGapNumber(item.gapNumber);
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all ml-auto cursor-pointer"
+                                    title="Band in Sammlung aufnehmen"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" /> Erfassen
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        const vol = item.volume;
                         const isOwned = vol.status === 'Vorhanden';
                         const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
                         const isRead = vol.read_users 
@@ -2734,8 +2819,122 @@ export default function MangaDetail({ user }) {
               {/* GRID VIEW */}
               {volumeViewMode === 'grid' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1800px]:grid-cols-7 gap-3 sm:gap-3.5 mb-8">
-              {filteredVolumes.map(vol => {
-                const isOwned = vol.status === 'Vorhanden';
+                  {displayVolumeItems.map((item, itemIdx) => {
+                    if (item.isGap) {
+                      const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+                      return (
+                        <div 
+                          key={`gap-card-${item.gapNumber}-${itemIdx}`}
+                          onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
+                          className={`group relative flex flex-col justify-between p-3 rounded-2xl border border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-900/60 hover:bg-slate-900/90 text-sm select-none shadow-sm shadow-amber-950/20 transition-all duration-200 overflow-hidden ${
+                            canEdit ? 'cursor-pointer hover:scale-[1.01]' : 'cursor-default'
+                          }`}
+                          title={gapMeta?.price ? `Fehlender Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €) • Klicken zum schnellen Erfassen` : `Fehlender Band ${item.gapNumber} fehlt in der Sammlung • Klicken zum Erfassen`}
+                        >
+                          {/* Top Row: Gap Indicator & Number & Action */}
+                          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-amber-500/20 w-full shrink-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 border border-amber-500/50 text-amber-400 font-bold text-xs">
+                                +
+                              </div>
+                              <div className="font-bold text-amber-300 text-sm tracking-tight flex items-center gap-1.5 min-w-0">
+                                <span className="truncate">Band {item.gapNumber}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Fehlend
+                                </span>
+                              </div>
+                            </div>
+
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFillingGapNumber(item.gapNumber);
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+                                title="Band in Sammlung erfassen"
+                              >
+                                <Plus className="w-3 h-3" /> Erfassen
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Middle: Cover Ghost / Official Image & Metadata */}
+                          <div className="flex gap-2.5 items-start flex-1 py-2.5 min-w-0">
+                            {gapMeta?.cover_image ? (
+                              <div className="relative shrink-0 rounded-xl overflow-hidden shadow-md border border-amber-500/40 bg-slate-950 w-12 h-16 sm:w-13 sm:h-18 group-hover:scale-105 transition-transform duration-200">
+                                <img 
+                                  src={gapMeta.cover_image} 
+                                  alt={`Band ${item.gapNumber}`}
+                                  className="w-full h-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
+                                  loading="lazy"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end justify-center p-1">
+                                  <span className="text-[8px] font-black text-amber-300 uppercase tracking-wider">Lücke</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-12 h-16 sm:w-13 sm:h-18 rounded-xl border border-dashed border-amber-500/30 bg-amber-950/20 shrink-0 flex flex-col items-center justify-center text-amber-500/60 p-1">
+                                <BookOpen className="w-4 h-4 mb-1 opacity-50" />
+                                <span className="text-[9px] font-bold text-center leading-tight">Band {item.gapNumber}</span>
+                              </div>
+                            )}
+
+                            <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 text-[11px]">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 text-[10px]">
+                                <AlertCircle className="w-3 h-3 text-amber-400" />
+                                Lücke in Reihe
+                              </span>
+
+                              {gapMeta?.price !== undefined && gapMeta?.price !== null && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 text-[10px]">
+                                  <Coins className="w-3 h-3 text-emerald-400" />
+                                  {gapMeta.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                                </span>
+                              )}
+
+                              {(gapMeta?.publisher || manga.publisher) && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={`Verlag: ${gapMeta?.publisher || manga.publisher}`}>
+                                  <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                                  <span className="truncate">{gapMeta?.publisher || manga.publisher}</span>
+                                </span>
+                              )}
+
+                              {gapMeta?.release_date && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${gapMeta.release_date}`}>
+                                  <Calendar className="w-3 h-3 text-sky-400" />
+                                  {gapMeta.release_date}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Bottom Row: Quick Add Prompt */}
+                          <div className="w-full mt-auto pt-2 border-t border-amber-500/20 flex items-center justify-between gap-1.5 shrink-0 text-xs">
+                            <span className="text-slate-400 text-[11px] flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                              {canEdit ? 'Klicken zum Erfassen' : 'Noch zu sammeln'}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFillingGapNumber(item.gapNumber);
+                                }}
+                                className="text-amber-400 hover:text-amber-300 font-semibold text-xs flex items-center gap-1 hover:underline cursor-pointer"
+                              >
+                                <span>+ Zu Sammlung</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const vol = item.volume;
+                    const isOwned = vol.status === 'Vorhanden';
                 const effectivePublisher = (vol.publisher && vol.publisher.trim()) || (manga.publisher && manga.publisher.trim());
                 const hasCover = Boolean(vol.cover_image);
 
