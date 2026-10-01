@@ -325,6 +325,19 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * **Band-Bearbeiten-Modal:** Auffälliges Banner `✨ Automatisch ausfüllen (Manga Passion)` sowie Schnell-Link `Auto-Ausfüllen` direkt neben dem Label "Erscheinungsdatum (Radar)". Füllt fehlende Felder aus, ohne bereits manuell gepflegte Daten zu überschreiben.
    * **Editions-Manager:** Button `⚡ Alle Bände mit Erscheinungsdaten anreichern` für 1-Klick-Batch-Vervollständigung der gesamten Serie.
 
+### 🔹 Fall M: Schuber- & Boxset-Bilderdownload & Auto-Matching (Manga Passion)
+1. **Problem & Hintergrund:**
+   * Bei Schuber-Einträgen (z. B. "Schuber 1" bis "Schuber 10" bei One Piece) wurde früher fälschlicherweise das Bild und die Daten von Band 1 (Tankōbon) geladen, da bei Ziffernextraktion aus "Schuber 1" die Zahl "1" gefunden wurde.
+2. **Backend Service (`mangaPassion.js`) & API (`index.js`):**
+   * `matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes)`: Erkennt gezielt Schuber (`type === 3` und `specialType === 1`) in der Manga Passion API. Unterscheidet Leerschuber (Ladenpreis ~12 € oder "leer") und gefüllte Sammelschuber (>25 € oder "sammel"). Ordnet "Schuber 1" exakt dem ersten Schuber (z. B. "East Blue Leerschuber" ID 9736) bis "Schuber 10" ("Wa No Kuni Leerschuber") zu.
+   * `downloadRemoteImageToUploads(url)`: Lädt das Original-Cover von Manga Passion (`covers.manga-passion.de`) über HTTP-Fetch herunter, prüft die Mindestgröße (>500 Byte) und speichert es lokal unter `data/uploads/` als permanentes Cover ab.
+   * Direkter URL- / ID-Lookup: `lookupVolumeMetadata` und die API `GET /api/volumes/lookup` akzeptieren auch direkte Manga Passion URLs (z. B. `https://www.manga-passion.de/volumes/9736/one-piece-east-blue-leerschuber`) oder IDs und laden Metadaten + Cover direkt herunter.
+   * Batch-Anreicherung (`autofillMangaVolumes`): Gleicht alle Schuber einer Reihe mit der echten Schuber-Liste ab und versieht sie mit den korrekten Covern, Erscheinungsdaten, Preisen und Schuber-Titeln.
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+   * **Schuber-Banner:** Beim Bearbeiten eines Eintrags vom Typ Schuber erscheint ein spezielles Banner `Schuber-Cover & Details automatisch laden (Manga Passion)` mit Aktions-Button `✨ Schuber laden`.
+   * **Direkte URL-Erkennung:** Wird in das Feld "URL eingeben" eine Manga Passion Volume-URL oder Volume-ID eingefügt, wird automatisch der komplette Schuber-Datensatz samt lokalem Cover-Download geladen.
+   * **Bereinigung fehlerhafter Band-1-Daten:** Überschreibt versehentlich zuvor eingetragene Band-1-Notizen ("Das Abenteuer beginnt"), falsche Seitenzahlen und falsche ISBNs mit den echten Schuber-Daten.
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow

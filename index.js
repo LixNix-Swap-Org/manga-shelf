@@ -1500,14 +1500,24 @@ app.get('/api/volumes/lookup', requireAuth, async (req, res) => {
         const mangaId = req.query.manga_id ? parseInt(req.query.manga_id, 10) : null;
         const volumeNumber = req.query.volume_number;
         const isbn = req.query.isbn ? req.query.isbn.trim() : null;
+        const type = req.query.type ? req.query.type.trim() : null;
+        const notes = req.query.notes ? req.query.notes.trim() : null;
+        const price = req.query.price ? parseFloat(req.query.price) : null;
+        const url = req.query.url ? req.query.url.trim() : null;
+        const mpVolumeId = req.query.mp_volume_id ? req.query.mp_volume_id.trim() : null;
         const forceRefresh = req.query.force_refresh === 'true';
 
-        if (!volumeNumber && !isbn) {
-            return res.status(400).json({ error: 'Band-Nummer oder ISBN erforderlich' });
+        if (!volumeNumber && !isbn && !url && !mpVolumeId) {
+            return res.status(400).json({ error: 'Band-Nummer, ISBN oder URL erforderlich' });
         }
 
         const result = await lookupVolumeMetadata(mangaId, volumeNumber, {
             isbn,
+            type,
+            notes,
+            price,
+            url,
+            mp_volume_id: mpVolumeId,
             force_refresh: forceRefresh
         });
 

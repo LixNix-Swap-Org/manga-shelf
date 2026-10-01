@@ -432,9 +432,43 @@ export default function MangaDetail({ user }) {
     }
   };
 
-  const handleAddImageUrl = () => {
+  const handleAddImageUrl = async () => {
     if (!canEdit || !manualImageUrl.trim()) return;
     const url = manualImageUrl.trim();
+
+    // Check if user entered a Manga Passion Volume URL or ID (e.g. https://www.manga-passion.de/volumes/9736/...)
+    const mpMatch = url.match(/manga-passion\.de\/volumes\/(\d+)/i) || url.match(/^#?(\d{4,8})$/);
+    if (mpMatch) {
+      setShowUrlInput(false);
+      setManualImageUrl('');
+      await handleAutofillVolumeData({ url, mp_volume_id: mpMatch[1], force_cover: true });
+      return;
+    }
+
+    try {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const upRes = await fetch('/api/upload-remote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          if (upData.url) {
+            const currentImages = editVolForm.images || [];
+            setEditVolForm(prev => ({
+              ...prev,
+              images: [upData.url, ...currentImages.filter(u => u !== upData.url)],
+              cover_image: upData.url
+            }));
+            setManualImageUrl('');
+            setShowUrlInput(false);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
     const currentImages = editVolForm.images || [];
     setEditVolForm(prev => ({
       ...prev,
@@ -758,9 +792,11 @@ export default function MangaDetail({ user }) {
     setAutofillingVolume(false);
   };
 
-  const handleAutofillVolumeData = async () => {
-    if (!editVolForm.volume_number && !editVolForm.isbn) {
-      setAutofillMessage({ type: 'warning', text: 'Bitte gib zuerst eine Band-Nummer oder ISBN ein.' });
+  const handleAutofillVolumeData = async (extraOpts = {}) => {
+    const targetUrl = extraOpts.url || (manualImageUrl && manualImageUrl.includes('manga-passion.de') ? manualImageUrl.trim() : '');
+    const mpVolId = extraOpts.mp_volume_id || '';
+    if (!editVolForm.volume_number && !editVolForm.isbn && !targetUrl && !mpVolId) {
+      setAutofillMessage({ type: 'warning', text: 'Bitte gib zuerst eine Band-Nummer, ISBN oder Manga Passion URL ein.' });
       return;
     }
     setAutofillingVolume(true);
@@ -768,7 +804,13 @@ export default function MangaDetail({ user }) {
     try {
       const qNum = encodeURIComponent(editVolForm.volume_number || '');
       const qIsbn = encodeURIComponent(editVolForm.isbn || '');
-      const res = await fetch(`/api/volumes/lookup?manga_id=${id}&volume_number=${qNum}&isbn=${qIsbn}`);
+      const qType = encodeURIComponent(editVolForm.type || '');
+      const qNotes = encodeURIComponent(editVolForm.notes || '');
+      const qPrice = encodeURIComponent(editVolForm.price || '');
+      const qUrl = encodeURIComponent(targetUrl || '');
+      const qMpId = encodeURIComponent(mpVolId || '');
+
+      const res = await fetch(`/api/volumes/lookup?manga_id=${id}&volume_number=${qNum}&isbn=${qIsbn}&type=${qType}&notes=${qNotes}&price=${qPrice}&url=${qUrl}&mp_volume_id=${qMpId}`);
       const result = await res.json();
 
       if (res.ok && result.success && result.data) {
@@ -777,6 +819,11 @@ export default function MangaDetail({ user }) {
 
         setEditVolForm(prev => {
           const next = { ...prev };
+          const isSchuber = prev.type === 'schuber' || String(prev.volume_number || '').toLowerCase().includes('schuber');
+
+          if (d.volume_number && isSchuber && !prev.volume_number.toLowerCase().includes('schuber')) {
+            next.volume_number = d.volume_number;
+          }
           if (d.release_date) {
             next.release_date = d.release_date;
             updatedFields.push(`Erscheinungsdatum (${d.release_date})`);
@@ -785,30 +832,38 @@ export default function MangaDetail({ user }) {
             next.release_year = String(d.release_year);
             updatedFields.push(`Jahr (${d.release_year})`);
           }
-          if (d.pages) {
+          if (d.pages !== undefined && d.pages !== null) {
             next.pages = String(d.pages);
             updatedFields.push(`Seitenzahl (${d.pages})`);
+          } else if (isSchuber) {
+            next.pages = '';
           }
           if (d.isbn) {
             next.isbn = d.isbn;
             updatedFields.push('ISBN');
+          } else if (isSchuber) {
+            next.isbn = '';
           }
-          if (d.price && (!prev.price || prev.price === '0' || prev.price === '0,00' || prev.price === '0.00')) {
+          if (d.price && (!prev.price || prev.price === '0' || prev.price === '0,00' || prev.price === '0.00' || isSchuber)) {
             next.price = String(d.price);
             updatedFields.push(`Kaufpreis (${d.price} €)`);
           }
-          if (d.publisher && !prev.publisher) {
+          if (d.publisher) {
             next.publisher = d.publisher;
             updatedFields.push('Verlag');
           }
-          if (d.notes && !prev.notes) {
+          if (d.notes && (!prev.notes || isSchuber || prev.notes === 'Das Abenteuer beginnt')) {
             next.notes = d.notes;
-            updatedFields.push('Titel/Notiz');
+            updatedFields.push(`Titel (${d.notes})`);
           }
-          if (!prev.cover_image && d.cover_image) {
-            next.cover_image = d.cover_image;
-            next.images = prev.images && prev.images.length > 0 ? [d.cover_image, ...prev.images] : [d.cover_image];
-            updatedFields.push('Cover-Bild');
+          if (d.cover_image) {
+            const shouldUpdateCover = isSchuber || !prev.cover_image || extraOpts.force_cover || prev.cover_image.includes('1790518007122');
+            if (shouldUpdateCover || prev.cover_image !== d.cover_image) {
+              next.cover_image = d.cover_image;
+              const curImages = prev.images || [];
+              next.images = [d.cover_image, ...curImages.filter(u => u !== d.cover_image)];
+              updatedFields.push('Cover-Bild');
+            }
           }
           return next;
         });
@@ -827,7 +882,7 @@ export default function MangaDetail({ user }) {
       } else {
         setAutofillMessage({
           type: 'warning',
-          text: result.message || `Keine Daten für Band ${editVolForm.volume_number} auf Manga Passion gefunden.`
+          text: result.message || `Keine Daten für "${editVolForm.volume_number || targetUrl}" auf Manga Passion gefunden.`
         });
       }
     } catch (err) {
@@ -3880,29 +3935,31 @@ export default function MangaDetail({ user }) {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 rounded-2xl bg-gradient-to-r from-sky-950/50 via-slate-900 to-indigo-950/40 border border-sky-500/25 shadow-inner">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-                    <Sparkles className="w-4 h-4" />
+                    {editVolForm.type === 'schuber' ? <Package className="w-4 h-4 text-indigo-400" /> : <Sparkles className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                      <span>Metadaten automatisch ausfüllen</span>
+                      <span>{editVolForm.type === 'schuber' ? 'Schuber-Cover & Details automatisch laden' : 'Metadaten automatisch ausfüllen'}</span>
                       <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
                         Manga Passion
                       </span>
                     </p>
                     <p className="text-[11px] text-slate-400 truncate">
-                      Erscheinungsdatum, Jahr, Seitenzahl, ISBN & Preis laden
+                      {editVolForm.type === 'schuber'
+                        ? 'Offizielles Schuber-Cover herunterladen, Datum, Titel & Preis abrufen'
+                        : 'Erscheinungsdatum, Jahr, Seitenzahl, ISBN & Preis laden'}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={handleAutofillVolumeData}
+                  onClick={() => handleAutofillVolumeData()}
                   disabled={autofillingVolume}
                   className="btn-primary text-xs py-2 px-3.5 flex items-center justify-center gap-1.5 shrink-0 shadow-md shadow-sky-600/20 active:scale-95 transition-all"
                   title="Metadaten via Manga Passion automatisch abrufen"
                 >
                   <Sparkles className={`w-3.5 h-3.5 ${autofillingVolume ? 'animate-spin' : ''}`} />
-                  <span>{autofillingVolume ? 'Lade Daten...' : '✨ Automatisch ausfüllen'}</span>
+                  <span>{autofillingVolume ? 'Lade Daten...' : (editVolForm.type === 'schuber' ? '✨ Schuber laden' : '✨ Automatisch ausfüllen')}</span>
                 </button>
               </div>
 
@@ -4090,22 +4147,27 @@ export default function MangaDetail({ user }) {
 
                 {/* Manual URL Input dropdown if toggled */}
                 {showUrlInput && (
-                  <div className="flex items-center gap-2 p-2 bg-slate-900/90 rounded-xl border border-slate-800 animate-fade-in">
-                    <input 
-                      type="text"
-                      placeholder="Bild-URL einfügen (https://... oder /uploads/...)"
-                      className="input-field text-xs py-1.5 flex-1"
-                      value={manualImageUrl}
-                      onChange={e => setManualImageUrl(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddImageUrl}
-                      className="btn-primary text-xs py-1.5 px-3 shrink-0"
-                    >
-                      Hinzufügen
-                    </button>
+                  <div className="space-y-1.5 p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Bild-URL oder Manga-Passion Link (z. B. https://www.manga-passion.de/volumes/9736/...)"
+                        className="input-field text-xs py-1.5 flex-1"
+                        value={manualImageUrl}
+                        onChange={e => setManualImageUrl(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddImageUrl}
+                        className="btn-primary text-xs py-1.5 px-3 shrink-0"
+                      >
+                        {manualImageUrl.includes('manga-passion.de') ? '✨ Importieren' : 'Hinzufügen'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      💡 Unterstützt direkte Bild-Links sowie offizielle <span className="text-sky-400 font-medium">Manga Passion Bände- & Schuber-URLs</span> (lädt Cover, Titel & Datum automatisch herunter).
+                    </p>
                   </div>
                 )}
 
