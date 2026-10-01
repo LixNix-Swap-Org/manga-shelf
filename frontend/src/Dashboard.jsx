@@ -3246,7 +3246,7 @@ export default function Dashboard({ user, onLogout }) {
                       Schließen
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                     {lookupResults.map(item => (
                       <button
                         key={item.id}
@@ -3571,7 +3571,7 @@ export default function Dashboard({ user, onLogout }) {
               {loadingUsers ? (
                 <div className="p-6 text-center text-slate-500 text-xs">Lade Benutzerliste...</div>
               ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                   {usersList.map(u => {
                     const isSelf = u.id === user?.id;
 
@@ -3740,7 +3740,7 @@ export default function Dashboard({ user, onLogout }) {
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1 py-4 pr-1 space-y-4">
+            <div className="overflow-y-auto custom-scrollbar flex-1 py-4 pr-1 space-y-4">
               {/* TAB 1: SERVER SNAPSHOTS */}
               {backupModalTab === 'snapshots' && (
                 <div className="space-y-4">
@@ -4003,7 +4003,7 @@ export default function Dashboard({ user, onLogout }) {
             </div>
 
             {/* Modal Body / Scrollable */}
-            <div className="overflow-y-auto flex-1 pr-1 pt-4 space-y-6">
+            <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 pt-4 space-y-6">
               {loadingStats ? (
                 <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
                   <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>

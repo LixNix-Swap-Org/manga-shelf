@@ -359,11 +359,15 @@ async function reconcileMangaGaps(mangaId, options = {}) {
   }
   const { edition, volumes: officialVolumes } = details;
 
-  // Map user's volumes by cleaned volume_number
+  // Map user's volumes by cleaned volume_number and by notes
   const userVolMap = new Map();
+  const userNotesMap = new Map();
   userVolumes.forEach(v => {
     const key = String(v.volume_number || '').trim().toLowerCase();
     userVolMap.set(key, v);
+    if (v.notes) {
+      userNotesMap.set(String(v.notes).trim().toLowerCase(), v);
+    }
   });
 
   const gaps = [];
@@ -371,7 +375,55 @@ async function reconcileMangaGaps(mangaId, options = {}) {
 
   officialVolumes.forEach(ov => {
     const key = String(ov.volume_number || '').trim().toLowerCase();
-    const existing = userVolMap.get(key);
+    const titleKey = String(ov.title || '').trim().toLowerCase();
+    let existing = userVolMap.get(key);
+
+    // If no direct number match and this entry has a title, check notes/titles or Schuber names
+    if (!existing && titleKey) {
+      existing = userNotesMap.get(titleKey);
+      if (!existing) {
+        existing = userVolumes.find(uv => {
+          const uvNotes = String(uv.notes || '').trim().toLowerCase();
+          const uvNum = String(uv.volume_number || '').trim().toLowerCase();
+          if (uvNotes && (uvNotes.includes(titleKey) || titleKey.includes(uvNotes))) return true;
+          if (uvNum && (uvNum.includes(titleKey) || titleKey.includes(uvNum))) return true;
+          return false;
+        });
+      }
+      // Also match saga names in Schubers (e.g. East Blue, Alabasta, Skypia, Water 7, etc.)
+      if (!existing && (titleKey.includes('schuber') || titleKey.includes('box'))) {
+        const schuberMatch = titleKey.match(/(east blue|alabasta|skypia|water seven|water 7|thriller bark|marine ford|marineford|fischmenschen|dress rosa|whole cake|wa no kuni)/i);
+        if (schuberMatch) {
+          const saga = schuberMatch[1].toLowerCase();
+          existing = userVolumes.find(uv => {
+            const uvStr = `${uv.volume_number} ${uv.notes || ''}`.toLowerCase();
+            return uvStr.includes(saga);
+          });
+        }
+      }
+    }
+
+    // Determine entry type and display title
+    let inferredType = 'volume';
+    if (ov.specialType === 1 || titleKey.includes('schuber') || titleKey.includes('box')) {
+      inferredType = 'schuber';
+    } else if (ov.specialType === 2 || /edition|limited|collectors|variant/i.test(titleKey)) {
+      inferredType = 'special_edition';
+    } else if (key === 'special' || /special|extra|guide/i.test(titleKey)) {
+      inferredType = 'special';
+    }
+
+    let finalVolNumber = ov.volume_number;
+    if (key === 'special' && ov.title) {
+      finalVolNumber = ov.title.trim();
+    }
+
+    const enrichedOv = {
+      ...ov,
+      volume_number: finalVolNumber,
+      display_title: (ov.title && ov.title.trim() !== finalVolNumber) ? `${finalVolNumber} (${ov.title.trim()})` : finalVolNumber,
+      type: inferredType
+    };
 
     if (!existing) {
       // Check if this entry represents a volume range (e.g. "21-25", "26-30" or Sammelschuber)
@@ -396,26 +448,26 @@ async function reconcileMangaGaps(mangaId, options = {}) {
       }
 
       // Also skip schubers / box sets if constituent volumes are owned
-      const isSchuber = ov.title && (ov.title.toLowerCase().includes('schuber') || ov.title.toLowerCase().includes('box'));
+      const isSchuber = enrichedOv.type === 'schuber';
       if (isSchuber && rangeMatch) {
         return;
       }
 
       gaps.push({
-        ...ov,
+        ...enrichedOv,
         in_collection: false,
         user_status: null,
         user_volume_id: null
       });
     } else if (existing.status === 'Fehlt') {
       gaps.push({
-        ...ov,
+        ...enrichedOv,
         in_collection: true,
         user_status: 'Fehlt',
         user_volume_id: existing.id
       });
     } else if (existing.status === 'Vorhanden') {
-      ownedOfficial.push(ov);
+      ownedOfficial.push(enrichedOv);
     }
   });
 
@@ -477,13 +529,23 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
     const key = cleanNum.toLowerCase();
     
     // Find matching official volume data if available
-    const matchedOfficial = officialVolumes.find(ov => String(ov.volume_number).trim().toLowerCase() === key);
+    const matchedOfficial = officialVolumes.find(ov => {
+      const ovNum = String(ov.volume_number || '').trim().toLowerCase();
+      const ovTitle = String(ov.title || '').trim().toLowerCase();
+      return ovNum === key || (ovTitle && ovTitle === key);
+    });
     
     const price = matchedOfficial && matchedOfficial.price !== null ? matchedOfficial.price : null;
     const releaseDate = matchedOfficial && matchedOfficial.release_date ? matchedOfficial.release_date : null;
     const coverImage = matchedOfficial && matchedOfficial.cover_image ? matchedOfficial.cover_image : null;
     const mpVolId = matchedOfficial ? matchedOfficial.id : null;
     const publisher = manga.publisher || null;
+
+    const isSchuber = key.includes('schuber') || (matchedOfficial?.title && matchedOfficial.title.toLowerCase().includes('schuber')) || matchedOfficial?.specialType === 1;
+    const isSpecialEdition = !isSchuber && (/special\s*edition|limited\s*edition|collectors\s*edition/i.test(key) || (matchedOfficial?.title && /special\s*edition|limited\s*edition|collectors\s*edition/i.test(matchedOfficial.title)) || matchedOfficial?.specialType === 2);
+    const isSpecial = !isSchuber && !isSpecialEdition && (key === 'special' || (matchedOfficial?.title && /special|extra|guide/i.test(matchedOfficial.title)));
+    const targetType = isSchuber ? 'schuber' : (isSpecialEdition ? 'special_edition' : (isSpecial ? 'special' : 'volume'));
+    const notes = isSchuber ? (matchedOfficial?.title || cleanNum) : (matchedOfficial?.title || null);
 
     const existing = existingMap.get(key);
     if (existing) {
@@ -493,18 +555,20 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
             price = COALESCE(price, ?),
             release_date = COALESCE(release_date, ?),
             cover_image = COALESCE(cover_image, ?),
+            type = COALESCE(type, ?),
+            notes = COALESCE(notes, ?),
             manga_passion_volume_id = COALESCE(manga_passion_volume_id, ?)
         WHERE id = ?
-      `).run(targetStatus, price, releaseDate, coverImage, mpVolId, existing.id);
+      `).run(targetStatus, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
       updatedIds.push(existing.id);
     } else {
       const ins = db.prepare(`
         INSERT INTO volumes (
           manga_id, volume_number, status, price, release_date, 
-          publisher, cover_image, type, manga_passion_volume_id, created_at
+          publisher, cover_image, type, notes, manga_passion_volume_id, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'volume', ?, CURRENT_TIMESTAMP)
-      `).run(mangaId, cleanNum, targetStatus, price, releaseDate, publisher, coverImage, mpVolId);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(mangaId, cleanNum, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
       importedIds.push(Number(ins.lastInsertRowid));
     }
   }

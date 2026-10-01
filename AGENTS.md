@@ -338,6 +338,17 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * **Direkte URL-Erkennung:** Wird in das Feld "URL eingeben" eine Manga Passion Volume-URL oder Volume-ID eingefügt, wird automatisch der komplette Schuber-Datensatz samt lokalem Cover-Download geladen.
    * **Bereinigung fehlerhafter Band-1-Daten:** Überschreibt versehentlich zuvor eingetragene Band-1-Notizen ("Das Abenteuer beginnt"), falsche Seitenzahlen und falsche ISBNs mit den echten Schuber-Daten.
 
+### 🔹 Fall N: Intelligente Lücken- & Editions-Deduplizierung sowie Schuber-Erkennung (v2.9.9)
+1. **Problem & Hintergrund:**
+   * Bei Reihen mit Schubern (z. B. One Piece) oder Sonderausgaben/Varianten desselben Bandes (z. B. Solo Leveling Band 14 Standard vs. Band 14 Collectors Edition) wurden früher Phantom-Lücken gemeldet oder doppelte Bandnummern im Banner angezeigt (`Band 14, 14, 15, 15` bzw. 6x `Special, Special, Special...`), selbst wenn der Nutzer die Schuber bereits besaß.
+2. **Backend Service (`mangaPassion.js`) & API (`index.js`):**
+   * `reconcileMangaGaps`: Gleicht offizielle Bände nicht nur gegen `volume_number`, sondern auch intelligent gegen Notizen (`notes`), Titel und Saga-Namen (z. B. "East Blue", "Alabasta") ab. Bereits im Bestand befindliche Schuber werden als "Vorhanden" erkannt und erscheinen nicht als Lücke.
+   * Sonderausgaben und Leerschuber mit `volume_number === 'Special'` erhalten ihren echten Titel als Bezeichner.
+   * `batchImportGaps`: Erkennt bei der Übernahme von Lücken in die Einkaufsliste automatisch den korrekten Typ (`schuber`, `special_edition` oder `volume`) und speichert Notizen und Cover.
+3. **Frontend UI (`MangaDetail.jsx` & `Dashboard.jsx`):**
+   * **Lücken-Banner:** Listet Lücken differenziert mit Band-Präfix oder Volltitel auf (z. B. `Band 14, Band 14 (Collectors Edition), Band 15, Band 15 (Sammelschuber)` bzw. `Fischmenscheninsel Leerschuber`), ohne redundante "Special"-Wiederholungen.
+   * **Custom-Scrollbars:** Sämtliche scrollbaren Modal-Bereiche (Statistik-Dashboard, Server-Snapshots, Benutzerverwaltung, Batch-Generatoren) nutzen jetzt die einheitliche `custom-scrollbar`-Klasse für ein modernes, dunkles Scroll-Design.
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow

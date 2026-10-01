@@ -1501,9 +1501,12 @@ export default function MangaDetail({ user }) {
   // falls back to local detection.
   // Filters out volumes already present in user's collection to avoid duplicates!
   const detectedGaps = useMemo(() => {
-    // Collect all existing volume numbers currently in the DB/collection:
+    // Collect all existing volume numbers and notes currently in the DB/collection:
     const existingVolNums = new Set(
       volumes.map(v => String(v.volume_number || '').trim().toLowerCase())
+    );
+    const existingNotes = new Set(
+      volumes.map(v => String(v.notes || '').trim().toLowerCase()).filter(Boolean)
     );
 
     // If Manga Passion matched the German edition, use the verified official missing volumes:
@@ -1512,6 +1515,18 @@ export default function MangaDetail({ user }) {
         .filter(g => {
           const strNum = String(g.volume_number || '').trim().toLowerCase();
           if (existingVolNums.has(strNum)) return false;
+
+          const cleanTitle = String(g.title || '').trim().toLowerCase();
+          if (cleanTitle && existingNotes.has(cleanTitle)) return false;
+          if (cleanTitle) {
+            const hasMatch = volumes.some(v => {
+              const vn = String(v.notes || '').trim().toLowerCase();
+              const vnum = String(v.volume_number || '').trim().toLowerCase();
+              return (vn && (vn.includes(cleanTitle) || cleanTitle.includes(vn))) ||
+                     (vnum && (vnum.includes(cleanTitle) || cleanTitle.includes(vnum)));
+            });
+            if (hasMatch) return false;
+          }
 
           // Check range bundle (e.g. "21-25", "26-30")
           const rangeMatch = strNum.match(/^(\d+)\s*[-–]\s*(\d+)$/);
@@ -1536,7 +1551,10 @@ export default function MangaDetail({ user }) {
         })
         .map(g => {
           const match = String(g.volume_number).trim().match(/^(\d+)$/);
-          return match ? parseInt(match[1], 10) : g.volume_number;
+          if (match) {
+            return g.title ? `${match[1]} (${g.title.trim()})` : parseInt(match[1], 10);
+          }
+          return g.title || g.volume_number;
         });
     }
 
@@ -2112,7 +2130,7 @@ export default function MangaDetail({ user }) {
                         Schließen
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                       {editLookupResults.map(item => (
                         <button
                           key={item.id}
@@ -2848,7 +2866,7 @@ export default function MangaDetail({ user }) {
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                       <span>
-                        <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} entdeckt:</strong> Band {detectedGaps.slice(0, 10).join(', ')}{detectedGaps.length > 10 ? ` (+ ${detectedGaps.length - 10} weitere)` : ''}
+                        <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} entdeckt:</strong> {detectedGaps.slice(0, 8).map(g => typeof g === 'number' ? `Band ${g}` : (String(g).startsWith('Band') ? g : (String(g).match(/^\d+/) ? `Band ${g}` : g))).join(', ')}{detectedGaps.length > 8 ? ` (+ ${detectedGaps.length - 8} weitere)` : ''}
                         {mpGapData?.edition && (
                           <span className="ml-1.5 text-amber-300/80 text-[11px]">
                             (geprüft mit Manga-Passion: <em>{mpGapData.edition.title}</em>, {mpGapData.total_official_volumes} Bände)
