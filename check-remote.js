@@ -1,51 +1,71 @@
 const http = require('http');
+require('dotenv').config();
+
+const REMOTE_HOST = process.env.REMOTE_HOST || process.argv[2] || 'localhost';
+const REMOTE_PORT = parseInt(process.env.REMOTE_PORT || process.argv[3] || '3000', 10);
+const USERNAME = process.env.ADMIN_USER || process.env.REMOTE_USER || 'admin';
+const PASSWORD = process.env.ADMIN_PASS || process.env.REMOTE_PASS || '';
+
+if (!PASSWORD) {
+  console.warn('Hinweis: Kein Passwort angegeben. Setze ADMIN_PASS oder REMOTE_PASS in der .env oder als Umgebungsvariable.');
+}
 
 async function check() {
+  const baseUrl = `http://${REMOTE_HOST}:${REMOTE_PORT}`;
+  console.log(`Verbinde mit ${baseUrl} als Benutzer "${USERNAME}"...`);
+
   const loginRes = await new Promise(resolve => {
-    const req = http.request('http://159.195.49.57:25502/api/auth/login', {
+    const req = http.request(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     }, res => {
       let body = '';
       res.on('data', c => body += c);
-      res.on('end', () => resolve({ cookie: res.headers['set-cookie'] ? res.headers['set-cookie'][0] : null }));
+      res.on('end', () => resolve({ status: res.statusCode, cookie: res.headers['set-cookie'] ? res.headers['set-cookie'][0] : null, body }));
     });
-    req.write(JSON.stringify({ username: 'Moltres', password: 'Start1234!' }));
+    req.on('error', err => {
+      console.error(`Verbindungsfehler zu ${baseUrl}:`, err.message);
+      resolve({ status: 500, cookie: null });
+    });
+    req.write(JSON.stringify({ username: USERNAME, password: PASSWORD }));
     req.end();
   });
 
   if (!loginRes.cookie) {
-    console.error('Failed to log in!');
+    console.error('Login fehlgeschlagen! Status:', loginRes.status, loginRes.body || '');
     return;
   }
 
   const mangas = await new Promise(resolve => {
-    http.get('http://159.195.49.57:25502/api/mangas', { headers: { Cookie: loginRes.cookie } }, res => {
+    http.get(`${baseUrl}/api/mangas`, { headers: { Cookie: loginRes.cookie } }, res => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => {
         try { resolve(JSON.parse(body)); } catch (e) { resolve([]); }
       });
+    }).on('error', err => {
+      console.error('Fehler beim Abrufen der Mangas:', err.message);
+      resolve([]);
     });
   });
 
-  console.log('Total Mangas on Remote:', mangas.length);
+  console.log('Total Mangas:', mangas.length);
   for (const m of mangas) {
     console.log(`\n========================================`);
     console.log(`ID: ${m.id} | Titel: ${m.title}`);
-    console.log(`Autor: ${m.author} | Verlag: ${m.publisher} | Status: ${m.status}`);
+    console.log(`Autor: ${m.author || '-'} | Verlag: ${m.publisher || '-'} | Status: ${m.status || '-'}`);
     console.log(`Fortschritt: ${m.owned_volumes} von ${m.total_volumes || '?'} Bänden | Gesamtwert: ${Number(m.total_value || 0).toFixed(2)} €`);
-    console.log(`Cover: ${m.cover_image}`);
+    console.log(`Cover: ${m.cover_image || '-'}`);
 
     // fetch manga details with volumes
     const detail = await new Promise(resolve => {
-      http.get('http://159.195.49.57:25502/api/mangas/' + m.id, { headers: { Cookie: loginRes.cookie } }, res => {
+      http.get(`${baseUrl}/api/mangas/${m.id}`, { headers: { Cookie: loginRes.cookie } }, res => {
         let body = '';
         res.on('data', c => body += c);
         res.on('end', () => {
           try { resolve(JSON.parse(body)); } catch (e) { resolve({}); }
         });
-      });
+      }).on('error', () => resolve({}));
     });
 
     const vols = detail.volumes || [];

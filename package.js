@@ -34,6 +34,12 @@ archive.file('index.js', { name: 'index.js' });
 archive.file('db.js', { name: 'db.js' });
 archive.file('mangaPassion.js', { name: 'mangaPassion.js' });
 
+// Add modularized backend folders
+archive.directory('routes/', 'routes');
+archive.directory('services/', 'services');
+archive.directory('middleware/', 'middleware');
+archive.directory('utils/', 'utils');
+
 // Add frontend build
 archive.directory('frontend/dist/', 'frontend/dist');
 

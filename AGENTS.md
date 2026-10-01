@@ -32,17 +32,36 @@
 c:\Manga Webseite 2.0/
 ├── AGENTS.md                  # <-- DIESE WISSENSDATENBANK
 ├── README.md                  # Setup- & Deployment-Anleitung für Nutzer/Admins
+├── .env.example               # Vorlage für Umgebungsvariablen (Port, Host, Secrets)
+├── Dockerfile                 # Multi-Stage Docker-Build (Vite Build -> Alpine Runner)
+├── docker-compose.yml         # Docker Compose Setup mit Volume-Mapping auf ./data
 ├── package.json               # Backend Root Dependencies & NPM Scripts
 ├── package.js                 # Packager-Skript: baut Frontend & packt Backend als ZIP
-├── index.js                   # Hauptserver: Express App, Middleware, alle REST-Routen
-├── db.js                      # DB-Verbindung, Schema, Tabellen-Erstellung & Migrationen
-├── mangaPassion.js            # Manga Passion API Client, Lückenabgleich & Editions-Lookup
+├── index.js                   # Schlanker Hauptserver: Express Initialisierung & Route-Mounting
+├── db.js                      # DB-Verbindung, Schema, Indizes & sequentielle Migrationen
+├── mangaPassion.js            # Manga Passion API Client mit Timeout & Resilienz
 ├── egg-manga-shelf.json       # Pterodactyl Egg Vorlage
 ├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
 ├── test-e2e-suite.js          # Automatisierte Puppeteer Browser E2E-Tests
+├── middleware/                # Wiederverwendbare Express-Middlewares
+│   ├── auth.js                # Auth, Rollenprüfungen (requireAdmin, requireEditor) & JWT
+│   └── upload.js              # Multer Konfiguration (Covers & Staging für Backups)
+├── routes/                    # Modularisierte Express Router
+│   ├── auth.js                # Setup, Login, Logout, Session & Benutzerverwaltung
+│   ├── mangas.js              # Manga CRUD, Editionsabgleich & Lückenverwaltung
+│   ├── volumes.js             # Band CRUD, Batch-Generierung & Lese-Status
+│   ├── backups.js             # Server-Snapshots & Wiederherstellung (Disk-Staging)
+│   ├── stats.js               # Sammlungsstatistiken & Einstellungen
+│   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar
+│   └── lookup.js              # DNB ISBN-Suche, Manga Passion / AniList Lookup & Uploads
+├── services/                  # Hintergrund-Dienste
+│   └── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+├── utils/                     # Hilfsfunktionen & Normalisierer
+│   └── publishers.js          # Verlags-Normalisierung & Mappings
 ├── data/                      # Persistente Anwendungsdaten (in .gitignore)
 │   ├── manga.db               # SQLite-Hauptdatenbank (WAL-Modus)
+│   ├── temp/                  # Temporäres Staging für Backup-Uploads (Anti-OOM)
 │   └── uploads/               # Hochgeladene Cover- & Bandbilder
 ├── dist_pack/                 # Ausgabeordner für Pterodactyl ZIP-Pakete
 └── frontend/                  # React Frontend Projekt
@@ -126,6 +145,18 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `cache_key` (TEXT, PK) – z. B. `'releases_2026_10'`
    * `json_data` (TEXT) – Gecachte Rohdaten der Manga Passion API
    * `created_at` (INTEGER) – Unix-Timestamp für 12h-Cache-Invalidierung
+
+7. **`schema_migrations`**
+   * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
+   * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
+
+### Performance-Indizes
+Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):
+* `idx_volumes_manga_id` auf `volumes (manga_id)`
+* `idx_volumes_status` auf `volumes (status)`
+* `idx_volume_reads_user` auf `volume_reads (user_id)`
+* `idx_volume_reads_vol` auf `volume_reads (volume_id)`
+* `idx_mangas_passion_id` auf `mangas (manga_passion_id)`
 
 ---
 

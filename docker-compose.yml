@@ -1,0 +1,15 @@
+services:
+  manga-shelf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: manga-shelf
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=change-this-in-production-to-a-secure-random-secret
+    volumes:
+      - ./data:/app/data

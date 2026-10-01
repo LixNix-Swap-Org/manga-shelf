@@ -1,6 +1,12 @@
+require('dotenv').config();
 const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
+
+const REMOTE_HOST = process.env.REMOTE_HOST || process.argv[2] || 'localhost';
+const REMOTE_PORT = parseInt(process.env.REMOTE_PORT || process.argv[3] || '3000', 10);
+const USERNAME = process.env.ADMIN_USER || process.env.REMOTE_USER || 'admin';
+const PASSWORD = process.env.ADMIN_PASS || process.env.REMOTE_PASS || '';
 
 async function testRemote() {
   const screenshotsDir = path.join(__dirname, 'screenshots');
@@ -9,11 +15,16 @@ async function testRemote() {
   }
 
   const chromePaths = [
+    process.env.CHROME_BIN,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-  ];
+  ].filter(Boolean);
   const executablePath = chromePaths.find(p => fs.existsSync(p));
 
   const browser = await puppeteer.launch({
@@ -24,13 +35,14 @@ async function testRemote() {
   });
 
   const page = await browser.newPage();
-  console.log('Navigating to http://159.195.49.57:25502...');
-  await page.goto('http://159.195.49.57:25502', { waitUntil: 'networkidle0' });
+  const remoteUrl = `http://${REMOTE_HOST}:${REMOTE_PORT}`;
+  console.log(`Navigating to ${remoteUrl}...`);
+  await page.goto(remoteUrl, { waitUntil: 'networkidle0' });
 
   if (page.url().includes('/login')) {
-    console.log('Logging in as Moltres...');
-    await page.type('input[type="text"]', 'Moltres');
-    await page.type('input[type="password"]', 'Start1234!');
+    console.log(`Logging in as ${USERNAME}...`);
+    await page.type('input[type="text"]', USERNAME);
+    await page.type('input[type="password"]', PASSWORD);
     await Promise.all([
       page.click('button[type="submit"]'),
       page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})

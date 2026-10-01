@@ -1,10 +1,11 @@
+require('dotenv').config();
 const https = require('https');
 const http = require('http');
 
-const REMOTE_HOST = '159.195.49.57';
-const REMOTE_PORT = 25502;
-const USERNAME = 'Moltres';
-const PASSWORD = 'Start1234!';
+const REMOTE_HOST = process.env.REMOTE_HOST || process.argv[2] || 'localhost';
+const REMOTE_PORT = parseInt(process.env.REMOTE_PORT || process.argv[3] || '3000', 10);
+const USERNAME = process.env.ADMIN_USER || process.env.REMOTE_USER || 'admin';
+const PASSWORD = process.env.ADMIN_PASS || process.env.REMOTE_PASS || '';
 
 function request(method, path, data = null, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -233,7 +234,7 @@ async function main() {
     }
   }
 
-  console.log('\n🎉 ALL 3 MANGA SERIES & VOLUMES SUCCESSFULLY CREATED ON http://159.195.49.57:25502 🎉');
+  console.log(`\n🎉 ALL 3 MANGA SERIES & VOLUMES SUCCESSFULLY CREATED ON http://${REMOTE_HOST}:${REMOTE_PORT} 🎉`);
 }
 
 main().catch(err => {

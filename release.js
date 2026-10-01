@@ -91,32 +91,28 @@ async function main() {
   try {
     // Falls Release bereits existiert, überschreiben / anpassen
     const releaseTitle = `Manga Shelf ${tag}`;
-    const releaseNotes = `### Manga Shelf ${tag} 🚀
+    const releaseNotes = `### Manga Shelf ${tag} 🚀 – Architecture & Production Hardening
 
-#### Bugfixes & Optimierungen:
-- 🐞 **Lese-Status API Parameter Bugfix (\`read\` vs \`is_read\`):**
-  - \`handleToggleVolumeRead\` und \`handleBatchRead\` übergeben nun das korrekte Backend-Feld \`read\`. Das Backend akzeptiert abwärtskompatibel sowohl \`read\` als auch \`is_read\`.
-  - Batch-Ungelesen-Setzen funktioniert nun einwandfrei.
-- 🛍️ **Einkaufsliste & Quick-Buy Synchronisation:**
-  - Nach einem Direktkauf auf der Einkaufsliste wird nun sofort \`fetchShoppingList()\` ausgeführt, um Server-Statistiken und Cache sofort abzugleichen.
-- 🔄 **Vollständiger Sync nach Backup-Restore:**
-  - Nach dem Einspielen eines Backups oder Server-Snapshots werden Sammlungsliste, Einkaufsliste und Release-Radar frisch geladen und der lokale Cache erneuert.
-- 🖼️ **Cover-Upload ohne Datenverlust:**
-  - Der Cover-Upload in der Detailansicht sendet nur noch das geänderte Bildfeld, statt ungespeicherte Formularfelder mit alten Werten zu überschreiben.
-- ⚡ **Performance-Optimierung via \`useMemo\` & Rules of Hooks:**
-  - \`filteredVolumes\`, \`baseVolumesForType\`, \`typeFilterCounts\`, \`spineShelfItems\`, \`detectedGaps\` und \`availablePublishers\` werden sauber memoisiert.
-  - Alle Hooks laufen strikt auf oberster Komponentenebene vor Rendering-Abbrüchen.
-- 📦 **Keine Geister-Lücken mehr im Regal:**
-  - Bereits in der Sammlung angelegte Bände (z. B. mit Status "Fehlt") werden auf dem virtuellen Buchrücken-Regal nicht mehr doppelt als Lücken-Ghost-Spine angezeigt.
-- 🔄 **Filter-Reset-Button & dynamische Typ-Zähler:**
-  - Neuer "Filter zurücksetzen"-Button in der Filterleiste und im Empty-State.
-  - Die Zähler auf den Typ-Filter-Chips (Einzelbände, Special Editions, Schuber, Specials) berechnen sich nun dynamisch aus den gefilterten Bänden.
-- ⏳ **Loading-Spinner beim Batch-Lücken-Import:**
-  - Der Button "Alle auf Einkaufsliste" zeigt während des Imports einen Spinner und den Status "Wird übertragen...".
-- 📅 **Release-Radar YYYY-MM Sortierung:**
-  - Sichere Datums-Normalisierung in SQLite (\`YYYY-MM\` wird vor \`YYYY-MM-02\` geordnet).
-- 🛡️ **Manga Passion 404 Negative Caching:**
-  - Fehlerhafte oder gelöschte Editionen werden im Cache registriert, um wiederholte externe API-Anfragen zu vermeiden.
+#### Highlights & Neuerungen:
+- 🏗️ **Backend-Modularisierung:**
+  - Die monolithische \`index.js\` wurde in saubere Express-Router und Services aufgeteilt (\`routes/auth.js\`, \`routes/mangas.js\`, \`routes/volumes.js\`, \`routes/backups.js\`, \`routes/stats.js\`, \`routes/radar.js\`, \`routes/lookup.js\`, \`services/scheduler.js\`, \`middleware/\`, \`utils/\`).
+  - Schlanker Entrypoint mit vollständiger Abwärtskompatibilität und Erhaltung aller Pterodactyl Wings Startup-Hooks.
+- ⚡ **Datenbank-Performance & Migrationen:**
+  - Explizite Indizes für alle Fremdschlüssel und häufig gefilterte Spalten (\`manga_id\`, \`status\`, \`user_id\`, \`volume_id\`, \`manga_passion_id\`).
+  - Neue transaktionssichere, sequentielle Migrations-Registry (\`schema_migrations\`).
+  - SQLite WAL-Checkpoint vor Snapshots, Exporten und beim Herunterfahren.
+- 🛡️ **Memory-DoS Schutz bei Backups:**
+  - Umstellung von \`memoryStorage()\` auf \`diskStorage()\` mit Staging in \`data/temp/\`.
+  - Verhindert OOM-Crashes bei Uploads großer Backup-Archive (bis zu 500 MB) in ressourcenbeschränkten Containern.
+- 🌐 **Manga Passion API Resilienz:**
+  - Alle externen API-Aufrufe mit kontrolliertem Timeout (\`AbortSignal.timeout(8000)\`) abgesichert.
+  - Graceful Degraded-Mode bei externen Ausfällen/Timeouts ohne UI-Blockierung.
+- 🔒 **Security Hardening & Platform-Agnostic:**
+  - Hardcoded IPs und Test-Credentials bereinigt, vollständige \`.env.example\` bereitgestellt.
+  - Absolute Pfade in Testskripten durch plattformunabhängige Pfade ersetzt.
+- 🐳 **Containerisierung & CI/CD:**
+  - Multi-Stage \`Dockerfile\` und fertiges \`docker-compose.yml\` mit persistentem Data-Volume.
+  - GitHub Actions Workflow (\`.github/workflows/release.yml\`) für automatisierte Releases.
 
 #### Deployment-Hinweis:
 Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;

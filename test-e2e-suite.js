@@ -9,11 +9,16 @@ async function runTestSuite() {
   }
 
   const chromePaths = [
+    process.env.CHROME_BIN,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-  ];
+  ].filter(Boolean);
   const executablePath = chromePaths.find(p => fs.existsSync(p));
   if (!executablePath) throw new Error('No browser executable found!');
 

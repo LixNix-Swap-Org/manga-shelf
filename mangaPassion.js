@@ -9,6 +9,16 @@ const HEADERS = {
   'Accept': 'application/ld+json'
 };
 
+const REQUEST_TIMEOUT_MS = 8000;
+
+/**
+ * Resilient fetch wrapper with controlled timeout using AbortSignal.timeout(8000)
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  return await fetch(url, { ...options, signal });
+}
+
 /**
  * Downloads a remote image (e.g. from Manga Passion) and saves it permanently to data/uploads/.
  * Uses a deterministic hash based on the remote URL to prevent duplicate downloads and identical files.
@@ -38,7 +48,7 @@ async function downloadRemoteImageToUploads(url) {
       }
     }
 
-    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': USER_AGENT } }, 8000);
     if (!res.ok) return url;
     const buffer = Buffer.from(await res.arrayBuffer());
     if (buffer.length < 500) return url; // Invalid image or empty
@@ -131,7 +141,7 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
   for (const q of uniqueQueries) {
     try {
       const url = `https://api.manga-passion.de/editions?title=${encodeURIComponent(q)}&itemsPerPage=50`;
-      const res = await fetch(url, { headers: HEADERS });
+      const res = await fetchWithTimeout(url, { headers: HEADERS }, 8000);
       if (res.ok) {
         const data = await res.json();
         const list = (data['hydra:member'] || []).filter(e => !e.digital && !e.title.toLowerCase().includes('(ebook)'));
@@ -192,7 +202,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   // Fetch edition info
   let edition = null;
   try {
-    const edRes = await fetch(`https://api.manga-passion.de/editions/${editionId}`, { headers: HEADERS });
+    const edRes = await fetchWithTimeout(`https://api.manga-passion.de/editions/${editionId}`, { headers: HEADERS }, 8000);
     if (edRes.status === 404) {
       const notFoundResult = { notFound: true, edition: null, volumes: [] };
       try {
@@ -237,35 +247,40 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   let nextUrl = `https://api.manga-passion.de/editions/${editionId}/volumes?itemsPerPage=100`;
 
   while (nextUrl) {
-    const volRes = await fetch(nextUrl, { headers: HEADERS });
-    if (volRes.status === 404) {
-      if (rawList.length === 0) {
-        const notFoundResult = { notFound: true, edition, volumes: [] };
-        try {
-          db.prepare(`
-            INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
-          `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-        } catch (_) {}
-        return notFoundResult;
+    try {
+      const volRes = await fetchWithTimeout(nextUrl, { headers: HEADERS }, 8000);
+      if (volRes.status === 404) {
+        if (rawList.length === 0) {
+          const notFoundResult = { notFound: true, edition, volumes: [] };
+          try {
+            db.prepare(`
+              INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+              VALUES (?, ?, ?)
+              ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+            `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
+          } catch (_) {}
+          return notFoundResult;
+        }
+        break;
       }
+      if (!volRes.ok) {
+        console.warn(`[Manga Passion] Upstream error fetching volumes: status ${volRes.status}`);
+        break;
+      }
+
+      const volData = await volRes.json();
+      const items = Array.isArray(volData) ? volData : (volData['hydra:member'] || []);
+      rawList.push(...items);
+
+      const nextPath = volData['hydra:view']?.['hydra:next'];
+      if (nextPath && items.length > 0) {
+        nextUrl = nextPath.startsWith('http') ? nextPath : `https://api.manga-passion.de${nextPath}`;
+      } else {
+        nextUrl = null;
+      }
+    } catch (volErr) {
+      console.warn(`[Manga Passion] Network or timeout error fetching volumes:`, volErr.message);
       break;
-    }
-    if (!volRes.ok) {
-      if (rawList.length > 0) break;
-      throw new Error(`Manga Passion API Fehler beim Abrufen der Bände (Status ${volRes.status})`);
-    }
-
-    const volData = await volRes.json();
-    const items = Array.isArray(volData) ? volData : (volData['hydra:member'] || []);
-    rawList.push(...items);
-
-    const nextPath = volData['hydra:view']?.['hydra:next'];
-    if (nextPath && items.length > 0) {
-      nextUrl = nextPath.startsWith('http') ? nextPath : `https://api.manga-passion.de${nextPath}`;
-    } else {
-      nextUrl = null;
     }
   }
 
@@ -746,7 +761,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
 
   if (directVolumeId) {
     try {
-      const fullRes = await fetch(`https://api.manga-passion.de/volumes/${directVolumeId}`, { headers: HEADERS });
+      const fullRes = await fetchWithTimeout(`https://api.manga-passion.de/volumes/${directVolumeId}`, { headers: HEADERS }, 8000);
       if (fullRes.ok) {
         const fullVol = await fullRes.json();
         const localCover = await downloadRemoteImageToUploads(fullVol.cover);
@@ -847,7 +862,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
     let fullVol = null;
     if (matchedVolume.id) {
       try {
-        const fullRes = await fetch(`https://api.manga-passion.de/volumes/${matchedVolume.id}`, { headers: HEADERS });
+        const fullRes = await fetchWithTimeout(`https://api.manga-passion.de/volumes/${matchedVolume.id}`, { headers: HEADERS }, 8000);
         if (fullRes.ok) {
           fullVol = await fullRes.json();
         }

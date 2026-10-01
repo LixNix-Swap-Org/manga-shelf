@@ -4,17 +4,25 @@ const path = require('path');
 const http = require('http');
 
 async function runPerformanceSuite() {
-  const artifactDir = path.resolve('C:\\Users\\Test1\\.gemini\\antigravity-ide\\brain\\94e0ebeb-6e7c-4efd-9e23-e0f71c0c962a');
+  const artifactDir = process.env.REPORT_DIR || path.join(__dirname, 'reports');
+  if (!fs.existsSync(artifactDir)) {
+    fs.mkdirSync(artifactDir, { recursive: true });
+  }
   const reportPath = path.join(artifactDir, 'performance_report.json');
 
   console.log('⚡ Starting MangaShelf Performance Benchmark Suite...');
 
   const chromePaths = [
+    process.env.CHROME_BIN,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-  ];
+  ].filter(Boolean);
   const executablePath = chromePaths.find(p => fs.existsSync(p));
   if (!executablePath) throw new Error('No browser executable found!');
 
