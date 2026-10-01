@@ -3932,35 +3932,44 @@ export default function MangaDetail({ user }) {
 
             <form onSubmit={handleSaveVolume} className="space-y-4">
               {/* Auto-Fill Banner / Button */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 rounded-2xl bg-gradient-to-r from-sky-950/50 via-slate-900 to-indigo-950/40 border border-sky-500/25 shadow-inner">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-                    {editVolForm.type === 'schuber' ? <Package className="w-4 h-4 text-indigo-400" /> : <Sparkles className="w-4 h-4" />}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-900 to-sky-950/40 border border-sky-500/25 shadow-lg relative overflow-hidden">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
+                    {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400" /> : <Sparkles className="w-5 h-5 text-sky-400" />}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                      <span>{editVolForm.type === 'schuber' ? 'Schuber-Cover & Details automatisch laden' : 'Metadaten automatisch ausfüllen'}</span>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-xs sm:text-sm font-bold text-white">
+                        {editVolForm.type === 'schuber' ? 'Schuber-Cover & Details laden' : 'Metadaten automatisch ausfüllen'}
+                      </h4>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
                         Manga Passion
                       </span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 truncate">
+                    </div>
+                    <p className="text-[11px] text-slate-300/80 mt-1 leading-relaxed">
                       {editVolForm.type === 'schuber'
-                        ? 'Offizielles Schuber-Cover herunterladen, Datum, Titel & Preis abrufen'
-                        : 'Erscheinungsdatum, Jahr, Seitenzahl, ISBN & Preis laden'}
+                        ? 'Offizielles Schuber-Cover herunterladen, Erscheinungsdatum, Titel & Preis automatisch abrufen.'
+                        : 'Erscheinungsdatum, Jahr, Seitenzahl, ISBN & Preis automatisch abrufen.'}
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleAutofillVolumeData()}
-                  disabled={autofillingVolume}
-                  className="btn-primary text-xs py-2 px-3.5 flex items-center justify-center gap-1.5 shrink-0 shadow-md shadow-sky-600/20 active:scale-95 transition-all"
-                  title="Metadaten via Manga Passion automatisch abrufen"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 ${autofillingVolume ? 'animate-spin' : ''}`} />
-                  <span>{autofillingVolume ? 'Lade Daten...' : (editVolForm.type === 'schuber' ? '✨ Schuber laden' : '✨ Automatisch ausfüllen')}</span>
-                </button>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => handleAutofillVolumeData()}
+                    disabled={autofillingVolume}
+                    className="btn-primary w-full text-xs py-2.5 px-4 flex items-center justify-center gap-2 shadow-md shadow-sky-600/20 active:scale-[0.99] transition-all font-semibold"
+                    title="Metadaten via Manga Passion automatisch abrufen"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${autofillingVolume ? 'animate-spin' : ''}`} />
+                    <span>
+                      {autofillingVolume 
+                        ? 'Lade Daten von Manga Passion...' 
+                        : (editVolForm.type === 'schuber' ? '✨ Schuber-Cover & Details jetzt laden' : '✨ Daten jetzt automatisch ausfüllen')}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Autofill Status Message */}
