@@ -79,7 +79,7 @@ async function main() {
   if (existingTags.includes(tag)) {
     console.log(`⚠️ Tag ${tag} existiert bereits. Erneuere Tag...`);
     run(`git tag -d ${tag}`);
-    try { run(`git push origin :refs/tags/${tag}`); } catch (_) {}
+    try { run(`git push origin :refs/tags/${tag}`); } catch (_) { }
   }
 
   console.log(`🏷️ Erstelle Git Tag ${tag}...`);
