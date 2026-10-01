@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { db } = require('./db.js');
 
 const USER_AGENT = 'MangaShelf/2.6.0';
@@ -10,25 +11,38 @@ const HEADERS = {
 
 /**
  * Downloads a remote image (e.g. from Manga Passion) and saves it permanently to data/uploads/.
+ * Uses a deterministic hash based on the remote URL to prevent duplicate downloads and identical files.
  * Returns the local URL (/uploads/{filename}) or the original URL on failure.
  */
 async function downloadRemoteImageToUploads(url) {
   if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-    if (!res.ok) return url;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length < 500) return url; // Invalid image or empty
-
     const parsed = new URL(url);
     const ext = path.extname(parsed.pathname).toLowerCase() || '.jpg';
     const cleanExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
-    const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${cleanExt}`;
+    
+    // Deterministic filename based on MD5 hash of the URL to prevent duplicates
+    const urlHash = crypto.createHash('md5').update(url.trim()).digest('hex').slice(0, 16);
+    const filename = `mp-cov-${urlHash}${cleanExt}`;
     const uploadsDir = path.join(__dirname, 'data', 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
     const targetPath = path.join(uploadsDir, filename);
+
+    // If already downloaded and valid, return existing local URL immediately
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath);
+      if (stats.size > 500) {
+        return `/uploads/${filename}`;
+      }
+    }
+
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    if (!res.ok) return url;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length < 500) return url; // Invalid image or empty
+
     fs.writeFileSync(targetPath, buffer);
     return `/uploads/${filename}`;
   } catch (err) {

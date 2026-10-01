@@ -761,9 +761,12 @@ export default function MangaDetail({ user }) {
     if (e) e.stopPropagation();
     if (!canEdit) return;
     setActiveVolume(vol);
-    const volImages = Array.isArray(vol.images) 
-      ? vol.images 
-      : (vol.cover_image ? [vol.cover_image] : []);
+    const rawImages = Array.isArray(vol.images) ? vol.images : (vol.cover_image ? [vol.cover_image] : []);
+    const volImages = [];
+    if (vol.cover_image) volImages.push(vol.cover_image);
+    rawImages.forEach(img => {
+      if (img && !volImages.includes(img)) volImages.push(img);
+    });
     const detectedType = vol.type || (
       String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
       String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
@@ -859,9 +862,11 @@ export default function MangaDetail({ user }) {
           if (d.cover_image) {
             const shouldUpdateCover = isSchuber || !prev.cover_image || extraOpts.force_cover || prev.cover_image.includes('1790518007122');
             if (shouldUpdateCover || prev.cover_image !== d.cover_image) {
+              const oldCover = prev.cover_image;
               next.cover_image = d.cover_image;
-              const curImages = prev.images || [];
-              next.images = [d.cover_image, ...curImages.filter(u => u !== d.cover_image)];
+              // Cleanly replace old cover and eliminate duplicate entries
+              const otherImages = (prev.images || []).filter(u => u !== oldCover && u !== d.cover_image);
+              next.images = Array.from(new Set([d.cover_image, ...otherImages]));
               updatedFields.push('Cover-Bild');
             }
           }
@@ -3897,12 +3902,15 @@ export default function MangaDetail({ user }) {
       {/* VOLUME DETAIL & EDIT MODAL */}
       {activeVolume && (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start justify-center p-2 sm:p-4 md:p-6 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in overflow-hidden"
           onClick={(e) => { if (e.target === e.currentTarget) setActiveVolume(null); }}
         >
-          <div className="glass-panel w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
-            {/* Modal Header (Sticky on Mobile & Desktop) */}
-            <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-md -mx-4 -mt-4 px-4 pt-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 mb-4 pb-3 border-b border-slate-800 rounded-t-2xl sm:rounded-t-3xl flex items-center justify-between">
+          <div 
+            className="glass-panel w-full max-w-lg max-h-[92vh] flex flex-col rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl relative overflow-hidden my-auto" 
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header (Fixed at top) */}
+            <div className="shrink-0 bg-slate-900/95 backdrop-blur-md px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="min-w-0 flex-1 pr-2">
                 <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
                   {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400 shrink-0" /> :
@@ -3921,7 +3929,7 @@ export default function MangaDetail({ user }) {
                 </p>
               </div>
               <button 
-                type="button"
+                type="button" 
                 onClick={() => setActiveVolume(null)} 
                 className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0 bg-slate-800/40"
                 aria-label="Schließen"
@@ -3930,8 +3938,10 @@ export default function MangaDetail({ user }) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveVolume} className="space-y-4">
-              {/* Auto-Fill Banner / Button */}
+            <form onSubmit={handleSaveVolume} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
+                {/* Auto-Fill Banner / Button */}
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-900 to-sky-950/40 border border-sky-500/25 shadow-lg relative overflow-hidden">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
@@ -4439,8 +4449,10 @@ export default function MangaDetail({ user }) {
                 />
               </div>
 
-              {/* Modal Buttons (Sticky on Mobile & Desktop) */}
-              <div className="sticky bottom-0 z-20 bg-slate-900/95 backdrop-blur-md -mx-4 -mb-4 px-4 py-3 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-4 border-t border-slate-800 rounded-b-2xl sm:rounded-b-3xl flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5">
+              </div>
+
+              {/* Modal Buttons (Fixed at bottom with solid background, NEVER overlapping or bleeding through) */}
+              <div className="shrink-0 bg-slate-900 border-t border-slate-800 px-4 py-3 sm:px-6 sm:py-3.5 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5">
                 <button 
                   type="button" 
                   onClick={(e) => handleDeleteVolume(e, activeVolume.id)} 
@@ -4460,7 +4472,7 @@ export default function MangaDetail({ user }) {
                   <button 
                     type="submit" 
                     disabled={savingVol}
-                    className="btn-primary text-xs py-2 px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 shadow-lg"
+                    className="btn-primary text-xs py-2 px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 shadow-lg font-semibold"
                   >
                     <Save className="w-3.5 h-3.5" /> {savingVol ? 'Speichert...' : 'Speichern'}
                   </button>
