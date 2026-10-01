@@ -311,6 +311,20 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * **Lücken-Füll-Modal:** Ermöglicht die Vorschau des offiziellen deutschen Covers, Preises und Datums vor der Übernahme in die Sammlung.
    * **Editions-Manager:** Modal zum manuellen Durchsuchen und Auswählen von alternativen deutschen Ausgaben (z. B. Standard vs. Massiv vs. Deluxe).
 
+### 🔹 Fall L: Metadaten- & Erscheinungsdaten-Auto-Fill pro Band & Reihe (Manga Passion & DNB)
+1. **Zweck & Nutzen:**
+   * Automatische Vervollständigung von Band-Metadaten wie Erscheinungsdatum (Radar `release_date`), Erscheinungsjahr (`release_year`), Seitenzahl (`pages`), ISBN-13 (`isbn`), Preis (`price`) und Verlag (`publisher`).
+   * Verhindert manuelle Tipparbeit und Recherche im Browser.
+2. **Backend Service (`mangaPassion.js`) & API (`index.js`):**
+   * `lookupVolumeMetadata(mangaId, volumeNumber, options)`: Ermittelt die passende offizielle deutsche Manga Passion Edition (mit Paginierung für >100 Bände) und ruft Band-Details (`isbn13`, `date`, `pages`, `price`) ab. Fallback auf DNB MARC21 XML.
+   * `autofillMangaVolumes(mangaId, options)`: Reichert in einer atomaren SQLite-Transaktion alle Bände einer Reihe an, bei denen Felder noch leer sind.
+   * Endpunkte:
+     * `GET /api/volumes/lookup?manga_id=...&volume_number=...`: Liefert Metadaten für das Bearbeiten-Modal.
+     * `POST /api/mangas/:id/autofill-volumes`: Batch-Anreicherung aller Bände einer Reihe.
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+   * **Band-Bearbeiten-Modal:** Auffälliges Banner `✨ Automatisch ausfüllen (Manga Passion)` sowie Schnell-Link `Auto-Ausfüllen` direkt neben dem Label "Erscheinungsdatum (Radar)". Füllt fehlende Felder aus, ohne bereits manuell gepflegte Daten zu überschreiben.
+   * **Editions-Manager:** Button `⚡ Alle Bände mit Erscheinungsdaten anreichern` für 1-Klick-Batch-Vervollständigung der gesamten Serie.
+
 ---
 
 ## 7. Build-, Test- & Release-Workflow
