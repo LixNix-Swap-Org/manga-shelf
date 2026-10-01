@@ -31,6 +31,11 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Prevent browser default white borders or outlines on select elements */
+  select {
+    border-color: transparent;
+  }
 }
 
 .glass-panel {
@@ -68,11 +73,13 @@
 
 /* Seamless Filter Select Chips without native browser borders */
 .filter-chip-select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
   background-color: transparent !important;
   border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
   outline: none !important;
   box-shadow: none !important;
   color: #e2e8f0;
@@ -83,15 +90,47 @@
 }
 
 .filter-chip-select:focus,
-.filter-chip-select:active {
+.filter-chip-select:active,
+.filter-chip-select:focus-visible {
   outline: none !important;
   border: none !important;
+  border-width: 0 !important;
   box-shadow: none !important;
 }
 
 .filter-chip-select option {
-  background-color: #0f172a;
-  color: #f8fafc;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  padding: 8px 12px;
+}
+
+/* Universal seamless select without browser borders/boxes across Chrome, Edge, Firefox, Safari */
+.seamless-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+.seamless-select:focus,
+.seamless-select:active,
+.seamless-select:focus-visible {
+  outline: none !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  box-shadow: none !important;
+}
+
+.seamless-select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
   padding: 8px 12px;
 }
 

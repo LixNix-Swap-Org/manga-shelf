@@ -1506,40 +1506,53 @@ export default function MangaDetail({ user }) {
   const isFitMultiRow = shelfMode === 'fit' && spineShelfItems.length > AUTO_FIT_MULTIROW_THRESHOLD;
 
   const renderShelfSpine = (item, idx, currentMode = shelfMode) => {
-    // In fit-multirow or rows mode, items use fixed widths (not flex-1)
-    const isFit = currentMode === 'fit' && !isFitMultiRow;
-    const isRows = currentMode === 'rows' || isFitMultiRow;
+    // Determine effective layout mode:
+    //  - isFitSingleRow: true auto-fit with few items → flex-1 WITH max-width
+    //  - isFlexFill: rows or fit-multirow → flex-1 WITHOUT max-width (fill full shelf width)
+    //  - isScrollFixed: scroll mode → fixed pixel widths, no flex
+    const isFitSingleRow = currentMode === 'fit' && !isFitMultiRow;
+    const isScrollFixed = currentMode === 'scroll';
+    const isFlexFill = !isFitSingleRow && !isScrollFixed; // rows mode or fit-multirow
+
     const totalCount = spineShelfItems.length;
-    const isVeryCompact = isFit && totalCount > 24;
-    const isUltraCompact = isFit && totalCount > 34;
+    const isVeryCompact = isFitSingleRow && totalCount > 24;
+    const isUltraCompact = isFitSingleRow && totalCount > 34;
 
     // Proportional spine height based on scale + mode:
     let spineHeightPx;
     if (shelfScale === 's') {
-      spineHeightPx = isFit && isUltraCompact ? '150px' : '170px';
+      spineHeightPx = isFitSingleRow && isUltraCompact ? '150px' : '170px';
     } else if (shelfScale === 'l') {
-      spineHeightPx = isFit ? (isUltraCompact ? '210px' : '260px') : '240px';
+      spineHeightPx = isFitSingleRow ? (isUltraCompact ? '210px' : '260px') : '240px';
     } else {
-      spineHeightPx = isFit ? (isUltraCompact ? '175px' : isVeryCompact ? '195px' : '220px') : '210px';
+      spineHeightPx = isFitSingleRow ? (isUltraCompact ? '175px' : isVeryCompact ? '195px' : '220px') : '210px';
     }
 
     if (item.isGap) {
       const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
-      // In all multi-row modes: flex-1 with min/max so books fill full shelf width
-      const ghostWidthClass = isFit
-        ? 'flex-1 min-w-[18px] max-w-[56px]'  // single-row auto-fit
-        : (
-          shelfScale === 's' ? 'flex-1 min-w-[28px] max-w-[48px]' :
-          shelfScale === 'l' ? 'flex-1 min-w-[46px] max-w-[80px]' :
-          'flex-1 min-w-[36px] max-w-[64px]'
-        );
+      // Width class depends on layout mode:
+      // KEY MATH: max-width must satisfy (targetPerRow × max-width > ~950px container)
+      //   so flex-1 is forced to shrink items in full rows → row fills entire width.
+      //   For partial rows (few items), max-width caps growth → books look normal.
+      let ghostWidthClass;
+      if (isFitSingleRow) {
+        ghostWidthClass = 'flex-1 min-w-[18px] max-w-[56px]';
+      } else if (isScrollFixed) {
+        ghostWidthClass = shelfScale === 's' ? 'w-[36px]' : shelfScale === 'l' ? 'w-[56px]' : 'w-[46px]';
+      } else {
+        // Rows / fit-multirow: flex-1 with generous max-width
+        // S(20/row): 20×56=1120>950 ✓  M(16/row): 16×70=1120>950 ✓  L(12/row): 12×92=1104>950 ✓
+        ghostWidthClass = shelfScale === 's' ? 'flex-1 min-w-[20px] max-w-[56px]'
+          : shelfScale === 'l' ? 'flex-1 min-w-[20px] max-w-[92px]'
+          : 'flex-1 min-w-[20px] max-w-[70px]';
+      }
 
       return (
         <div
           key={`gap-${item.gapNumber}-${idx}`}
           onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
           style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
-          className={`manga-spine-ghost relative group ${ghostWidthClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 text-center shrink-0 rounded-lg overflow-hidden border border-dashed transition-all ${
+          className={`manga-spine-ghost relative group ${ghostWidthClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 text-center ${isFlexFill ? '' : 'shrink-0'} rounded-lg overflow-hidden border border-dashed transition-all ${
             canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03]' : 'cursor-default'
           } border-amber-500/40 bg-slate-900/60 backdrop-blur-sm`}
           title={gapMeta?.price ? `Lücke: Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €${gapMeta.release_date ? ' • ' + gapMeta.release_date : ''}). Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
@@ -1597,28 +1610,48 @@ export default function MangaDetail({ user }) {
     const isSpecial = vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra');
 
     let spineWidth = '';
-    if (isFit) {
-      // Single-row auto-fit: strict flex proportions to spread across full width
+    if (isFitSingleRow) {
+      // Single-row auto-fit: flex-1 WITH max-width to prevent overflow on one line
       spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
-    } else {
-      // Rows / scroll / fit-multirow: flex-1 with min/max so spines fill the full row
+    } else if (isScrollFixed) {
+      // Scroll mode: fixed pixel widths for predictable horizontal scrolling
       const isS = shelfScale === 's';
       const isL = shelfScale === 'l';
       if (isSchuber) {
-        spineWidth = isS ? 'flex-[1.8] min-w-[52px] max-w-[90px]' : isL ? 'flex-[1.8] min-w-[80px] max-w-[130px]' : 'flex-[1.8] min-w-[64px] max-w-[108px]';
+        spineWidth = isS ? 'w-[68px]' : isL ? 'w-[100px]' : 'w-[84px]';
       } else if (isSpecialEd) {
-        spineWidth = isS ? 'flex-[1.2] min-w-[32px] max-w-[54px]' : isL ? 'flex-[1.2] min-w-[50px] max-w-[80px]' : 'flex-[1.2] min-w-[40px] max-w-[66px]';
+        spineWidth = isS ? 'w-[42px]' : isL ? 'w-[62px]' : 'w-[52px]';
       } else {
-        spineWidth = isS ? 'flex-1 min-w-[28px] max-w-[48px]' : isL ? 'flex-1 min-w-[46px] max-w-[72px]' : 'flex-1 min-w-[36px] max-w-[60px]';
+        spineWidth = isS ? 'w-[36px]' : isL ? 'w-[56px]' : 'w-[46px]';
+      }
+    } else {
+      // Rows / fit-multirow: flex-1 with CALCULATED max-width
+      // The max-width is chosen so that (targetPerRow × max-width > container ~950px).
+      // This forces flex to shrink full rows to fit → row fills 100% of shelf width.
+      // For partial rows, max-width caps each book at a reasonable spine width.
+      //   Scale S (20/row): regular 56px → 20×56=1120>950 ✓
+      //   Scale M (16/row): regular 70px → 16×70=1120>950 ✓
+      //   Scale L (12/row): regular 92px → 12×92=1104>950 ✓
+      const isS = shelfScale === 's';
+      const isL = shelfScale === 'l';
+      if (isSchuber) {
+        spineWidth = isS ? 'flex-[1.8] min-w-[36px] max-w-[100px]' : isL ? 'flex-[1.8] min-w-[50px] max-w-[165px]' : 'flex-[1.8] min-w-[40px] max-w-[126px]';
+      } else if (isSpecialEd) {
+        spineWidth = isS ? 'flex-[1.2] min-w-[24px] max-w-[67px]' : isL ? 'flex-[1.2] min-w-[30px] max-w-[110px]' : 'flex-[1.2] min-w-[26px] max-w-[84px]';
+      } else {
+        spineWidth = isS ? 'flex-1 min-w-[20px] max-w-[56px]' : isL ? 'flex-1 min-w-[26px] max-w-[92px]' : 'flex-1 min-w-[22px] max-w-[70px]';
       }
     }
+
+    // In flex-fill modes, don't use shrink-0 so flex distributes space properly
+    const shrinkClass = isFlexFill ? '' : 'shrink-0';
 
     return (
       <div
         key={vol.id}
         onClick={() => canEdit && handleOpenEditVolume(vol)}
         style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
-        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} shrink-0 flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative ${
+        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative ${
           canEdit ? 'cursor-pointer' : 'cursor-default'
         } ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
         title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
