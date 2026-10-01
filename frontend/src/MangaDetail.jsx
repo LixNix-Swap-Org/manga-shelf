@@ -9,7 +9,7 @@ import {
   Star, Maximize2, Camera, Link as LinkIcon,
   BookCheck, CheckCheck, Package, Truck,
   Library, LayoutGrid, List, Eye, EyeOff, ShoppingCart,
-  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw, RotateCcw, MoveHorizontal
+  ChevronLeft, ChevronRight, ExternalLink, Globe, RefreshCw, RotateCcw, MoveHorizontal, AlertTriangle
 } from 'lucide-react';
 
 export default function MangaDetail({ user }) {
@@ -110,6 +110,9 @@ export default function MangaDetail({ user }) {
   const [lightboxData, setLightboxData] = useState(null); // Full photo gallery lightbox
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [manualImageUrl, setManualImageUrl] = useState('');
+  const [autofillingVolume, setAutofillingVolume] = useState(false);
+  const [autofillMessage, setAutofillMessage] = useState(null);
+  const [batchAutofilling, setBatchAutofilling] = useState(false);
 
   // Batch add state
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -751,6 +754,115 @@ export default function MangaDetail({ user }) {
     });
     setShowUrlInput(false);
     setManualImageUrl('');
+    setAutofillMessage(null);
+    setAutofillingVolume(false);
+  };
+
+  const handleAutofillVolumeData = async () => {
+    if (!editVolForm.volume_number && !editVolForm.isbn) {
+      setAutofillMessage({ type: 'warning', text: 'Bitte gib zuerst eine Band-Nummer oder ISBN ein.' });
+      return;
+    }
+    setAutofillingVolume(true);
+    setAutofillMessage(null);
+    try {
+      const qNum = encodeURIComponent(editVolForm.volume_number || '');
+      const qIsbn = encodeURIComponent(editVolForm.isbn || '');
+      const res = await fetch(`/api/volumes/lookup?manga_id=${id}&volume_number=${qNum}&isbn=${qIsbn}`);
+      const result = await res.json();
+
+      if (res.ok && result.success && result.data) {
+        const d = result.data;
+        const updatedFields = [];
+
+        setEditVolForm(prev => {
+          const next = { ...prev };
+          if (d.release_date) {
+            next.release_date = d.release_date;
+            updatedFields.push(`Erscheinungsdatum (${d.release_date})`);
+          }
+          if (d.release_year) {
+            next.release_year = String(d.release_year);
+            updatedFields.push(`Jahr (${d.release_year})`);
+          }
+          if (d.pages) {
+            next.pages = String(d.pages);
+            updatedFields.push(`Seitenzahl (${d.pages})`);
+          }
+          if (d.isbn) {
+            next.isbn = d.isbn;
+            updatedFields.push('ISBN');
+          }
+          if (d.price && (!prev.price || prev.price === '0' || prev.price === '0,00' || prev.price === '0.00')) {
+            next.price = String(d.price);
+            updatedFields.push(`Kaufpreis (${d.price} €)`);
+          }
+          if (d.publisher && !prev.publisher) {
+            next.publisher = d.publisher;
+            updatedFields.push('Verlag');
+          }
+          if (d.notes && !prev.notes) {
+            next.notes = d.notes;
+            updatedFields.push('Titel/Notiz');
+          }
+          if (!prev.cover_image && d.cover_image) {
+            next.cover_image = d.cover_image;
+            next.images = prev.images && prev.images.length > 0 ? [d.cover_image, ...prev.images] : [d.cover_image];
+            updatedFields.push('Cover-Bild');
+          }
+          return next;
+        });
+
+        if (updatedFields.length > 0) {
+          setAutofillMessage({
+            type: 'success',
+            text: `Erfolgreich von ${result.data.source || 'Manga Passion'} ausgefüllt: ${updatedFields.join(', ')}!`
+          });
+        } else {
+          setAutofillMessage({
+            type: 'info',
+            text: `Alle Daten von ${result.data.source || 'Manga Passion'} stimmen bereits mit deinen Eingaben überein.`
+          });
+        }
+      } else {
+        setAutofillMessage({
+          type: 'warning',
+          text: result.message || `Keine Daten für Band ${editVolForm.volume_number} auf Manga Passion gefunden.`
+        });
+      }
+    } catch (err) {
+      setAutofillMessage({ type: 'warning', text: 'Fehler beim Abrufen der Metadaten.' });
+    } finally {
+      setAutofillingVolume(false);
+    }
+  };
+
+  const handleBatchAutofillManga = async (overwrite = false) => {
+    if (!canEdit) return;
+    const confirmMsg = overwrite 
+      ? 'Möchtest du wirklich alle Bände dieser Reihe mit den offiziellen Daten (Erscheinungsdatum, Jahr, Seitenzahl, Preise) überschreiben?' 
+      : 'Möchtest du alle fehlenden Erscheinungsdaten, Jahre, Seitenzahlen und Preise für die Bände dieser Reihe automatisch ausfüllen?';
+    if (!confirm(confirmMsg)) return;
+
+    setBatchAutofilling(true);
+    try {
+      const res = await fetch(`/api/mangas/${id}/autofill-volumes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overwrite })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchManga();
+        alert(`Erfolg: ${data.updated_count} von ${data.total_user_volumes} Bänden wurden mit offiziellen Daten aktualisiert!`);
+      } else {
+        alert(data.message || data.error || 'Fehler beim automatischen Ausfüllen');
+      }
+    } catch (err) {
+      alert('Netzwerkfehler beim automatischen Ausfüllen der Bände');
+    } finally {
+      setBatchAutofilling(false);
+    }
   };
 
   const handleSaveVolume = async (e) => {
@@ -3730,7 +3842,7 @@ export default function MangaDetail({ user }) {
       {/* VOLUME DETAIL & EDIT MODAL */}
       {activeVolume && (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start justify-center p-2 sm:p-4 md:p-6 animate-fade-in overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setActiveVolume(null); }}
         >
           <div className="glass-panel w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
@@ -3764,6 +3876,65 @@ export default function MangaDetail({ user }) {
             </div>
 
             <form onSubmit={handleSaveVolume} className="space-y-4">
+              {/* Auto-Fill Banner / Button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 rounded-2xl bg-gradient-to-r from-sky-950/50 via-slate-900 to-indigo-950/40 border border-sky-500/25 shadow-inner">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                      <span>Metadaten automatisch ausfüllen</span>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                        Manga Passion
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      Erscheinungsdatum, Jahr, Seitenzahl, ISBN & Preis laden
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutofillVolumeData}
+                  disabled={autofillingVolume}
+                  className="btn-primary text-xs py-2 px-3.5 flex items-center justify-center gap-1.5 shrink-0 shadow-md shadow-sky-600/20 active:scale-95 transition-all"
+                  title="Metadaten via Manga Passion automatisch abrufen"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${autofillingVolume ? 'animate-spin' : ''}`} />
+                  <span>{autofillingVolume ? 'Lade Daten...' : '✨ Automatisch ausfüllen'}</span>
+                </button>
+              </div>
+
+              {/* Autofill Status Message */}
+              {autofillMessage && (
+                <div className={`p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 animate-fade-in ${
+                  autofillMessage.type === 'success' 
+                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300' 
+                    : autofillMessage.type === 'info'
+                      ? 'bg-sky-500/15 border border-sky-500/30 text-sky-300'
+                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {autofillMessage.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : autofillMessage.type === 'info' ? (
+                      <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    )}
+                    <span>{autofillMessage.text}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutofillMessage(null)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Row 1: Type & Volume Number */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-3.5">
                 <div className="sm:col-span-7">
@@ -4148,8 +4319,20 @@ export default function MangaDetail({ user }) {
               {/* Row 5: Release date & Purchase date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-sky-400 mb-1 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" /> Erscheinungsdatum (Radar)
+                  <label className="block text-xs font-semibold text-sky-400 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" /> Erscheinungsdatum (Radar)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAutofillVolumeData}
+                      disabled={autofillingVolume}
+                      className="text-[10px] text-sky-400 hover:text-sky-300 underline font-normal flex items-center gap-1 cursor-pointer"
+                      title="Erscheinungsdatum und Details automatisch suchen"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      {autofillingVolume ? 'Lade...' : 'Auto-Ausfüllen'}
+                    </button>
                   </label>
                   <input 
                     type="date" 
@@ -4793,6 +4976,17 @@ export default function MangaDetail({ user }) {
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${mpGapLoading ? 'animate-spin' : ''}`} />
                       <span>Daten neu laden</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleBatchAutofillManga(false)}
+                      disabled={batchAutofilling || mpGapLoading}
+                      className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-sky-900/30"
+                      title="Füllt fehlende Erscheinungsdaten, Jahr, Seiten und Preise für alle Bände dieser Reihe aus"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${batchAutofilling ? 'animate-spin' : ''}`} />
+                      <span>{batchAutofilling ? 'Fülle Bände aus...' : '⚡ Alle Bände mit Erscheinungsdaten anreichern'}</span>
                     </button>
                   </div>
                 </div>

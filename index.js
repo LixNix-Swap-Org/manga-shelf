@@ -31,7 +31,9 @@ const {
     reconcileMangaGaps,
     batchImportGaps,
     syncMangaWithEdition,
-    searchMangaPassionForLookup
+    searchMangaPassionForLookup,
+    lookupVolumeMetadata,
+    autofillMangaVolumes
 } = require('./mangaPassion');
 
 const app = express();
@@ -1489,6 +1491,48 @@ app.post('/api/mangas/:id/batch-import-gaps', requireEditor, async (req, res) =>
     } catch (err) {
         console.error('Batch import gaps error:', err);
         res.status(500).json({ error: 'Fehler beim Erfassen der Lücken: ' + err.message });
+    }
+});
+
+// --- VOLUME METADATA LOOKUP (Manga Passion & DNB) ---
+app.get('/api/volumes/lookup', requireAuth, async (req, res) => {
+    try {
+        const mangaId = req.query.manga_id ? parseInt(req.query.manga_id, 10) : null;
+        const volumeNumber = req.query.volume_number;
+        const isbn = req.query.isbn ? req.query.isbn.trim() : null;
+        const forceRefresh = req.query.force_refresh === 'true';
+
+        if (!volumeNumber && !isbn) {
+            return res.status(400).json({ error: 'Band-Nummer oder ISBN erforderlich' });
+        }
+
+        const result = await lookupVolumeMetadata(mangaId, volumeNumber, {
+            isbn,
+            force_refresh: forceRefresh
+        });
+
+        res.json(result);
+    } catch (err) {
+        console.error('Volume metadata lookup error:', err);
+        res.status(500).json({ error: 'Fehler beim Abrufen der Band-Metadaten: ' + err.message });
+    }
+});
+
+// --- BATCH AUTOFILL MANGA VOLUMES (Release Dates, Year, Pages, Prices) ---
+app.post('/api/mangas/:id/autofill-volumes', requireEditor, async (req, res) => {
+    try {
+        const mangaId = parseInt(req.params.id, 10);
+        const { overwrite, edition_id } = req.body;
+
+        const result = await autofillMangaVolumes(mangaId, {
+            overwrite: Boolean(overwrite),
+            edition_id: edition_id ? parseInt(edition_id, 10) : null
+        });
+
+        res.json(result);
+    } catch (err) {
+        console.error('Batch autofill volumes error:', err);
+        res.status(500).json({ error: 'Fehler beim automatischen Ausfüllen der Bände: ' + err.message });
     }
 });
 

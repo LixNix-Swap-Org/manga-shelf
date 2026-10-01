@@ -75,6 +75,7 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
     title,
     title.replace(/[–—]/g, '-').trim(),
     title.replace(/[-–—:]/g, ' ').replace(/\s+/g, ' ').trim(),
+    title.replace(/\./g, '. ').replace(/\s+/g, ' ').trim(),
     title.split(/[:–—\-]/)[0].trim()
   ];
   const uniqueQueries = [...new Set(queries.map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length >= 2))];
@@ -186,26 +187,42 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     console.warn(`Error fetching edition ${editionId}:`, err.message);
   }
 
-  // Fetch volumes
-  const volUrl = `https://api.manga-passion.de/editions/${editionId}/volumes`;
-  const volRes = await fetch(volUrl, { headers: HEADERS });
-  if (volRes.status === 404) {
-    const notFoundResult = { notFound: true, edition, volumes: [] };
-    try {
-      db.prepare(`
-        INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
-      `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-    } catch (_) {}
-    return notFoundResult;
-  }
-  if (!volRes.ok) {
-    throw new Error(`Manga Passion API Fehler beim Abrufen der Bände (Status ${volRes.status})`);
-  }
+  // Fetch volumes with pagination support
+  let rawList = [];
+  let nextUrl = `https://api.manga-passion.de/editions/${editionId}/volumes?itemsPerPage=100`;
 
-  const volData = await volRes.json();
-  const rawList = Array.isArray(volData) ? volData : (volData['hydra:member'] || []);
+  while (nextUrl) {
+    const volRes = await fetch(nextUrl, { headers: HEADERS });
+    if (volRes.status === 404) {
+      if (rawList.length === 0) {
+        const notFoundResult = { notFound: true, edition, volumes: [] };
+        try {
+          db.prepare(`
+            INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+          `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
+        } catch (_) {}
+        return notFoundResult;
+      }
+      break;
+    }
+    if (!volRes.ok) {
+      if (rawList.length > 0) break;
+      throw new Error(`Manga Passion API Fehler beim Abrufen der Bände (Status ${volRes.status})`);
+    }
+
+    const volData = await volRes.json();
+    const items = Array.isArray(volData) ? volData : (volData['hydra:member'] || []);
+    rawList.push(...items);
+
+    const nextPath = volData['hydra:view']?.['hydra:next'];
+    if (nextPath && items.length > 0) {
+      nextUrl = nextPath.startsWith('http') ? nextPath : `https://api.manga-passion.de${nextPath}`;
+    } else {
+      nextUrl = null;
+    }
+  }
 
   const volumes = rawList.map(v => {
     const nrStr = v.numberDisplay || (v.number !== null && v.number !== undefined ? String(v.number) : 'Special');
@@ -555,11 +572,248 @@ async function searchMangaPassionForLookup(queryTerm) {
   return results;
 }
 
+/**
+ * Looks up detailed metadata for a single volume (release_date, release_year, pages, isbn, price, cover, title)
+ * via Manga Passion (and optionally DNB).
+ */
+async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
+  let manga = null;
+  if (mangaId) {
+    manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
+  }
+
+  let editionId = options.edition_id || manga?.manga_passion_id;
+
+  if (!editionId && manga) {
+    try {
+      const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
+      if (searchRes.recommended) {
+        editionId = searchRes.recommended.id;
+        try {
+          db.prepare('UPDATE mangas SET manga_passion_id = ? WHERE id = ?').run(editionId, manga.id);
+          manga.manga_passion_id = editionId;
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.warn('Error finding edition for volume lookup:', e.message);
+    }
+  }
+
+  let matchedVolume = null;
+  let editionInfo = null;
+
+  if (editionId) {
+    try {
+      const details = await getEditionDetailsAndVolumes(editionId, options.force_refresh);
+      if (details && details.volumes && details.volumes.length > 0) {
+        editionInfo = details.edition;
+        const targetClean = String(volumeNumber || '').trim().toLowerCase();
+        const targetNumMatch = targetClean.match(/(\d+(\.\d+)?)/);
+        const targetNum = targetNumMatch ? parseFloat(targetNumMatch[1]) : null;
+
+        // 1. Exact volume_number string match
+        matchedVolume = details.volumes.find(v => String(v.volume_number || '').trim().toLowerCase() === targetClean);
+
+        // 2. Numeric match (e.g. 1 === 1.0 or "01" === 1)
+        if (!matchedVolume && targetNum !== null) {
+          matchedVolume = details.volumes.find(v => v.num === targetNum);
+        }
+
+        // 3. Substring match (e.g. "Band 1" or "Vol. 1")
+        if (!matchedVolume && targetNum !== null) {
+          matchedVolume = details.volumes.find(v => {
+            const m = String(v.volume_number || '').match(/(\d+(\.\d+)?)/);
+            return m && parseFloat(m[1]) === targetNum;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching edition volumes:', e.message);
+    }
+  }
+
+  let resultData = null;
+
+  if (matchedVolume) {
+    let fullVol = null;
+    if (matchedVolume.id) {
+      try {
+        const fullRes = await fetch(`https://api.manga-passion.de/volumes/${matchedVolume.id}`, { headers: HEADERS });
+        if (fullRes.ok) {
+          fullVol = await fullRes.json();
+        }
+      } catch (e) {
+        console.warn('Error fetching full volume details from Manga Passion:', e.message);
+      }
+    }
+
+    const relDate = fullVol?.date ? fullVol.date.slice(0, 10) : matchedVolume.release_date;
+    const relYear = fullVol?.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
+    const pages = fullVol?.pages || matchedVolume.pages || null;
+    const isbn = fullVol?.isbn13 || fullVol?.isbn10 || options.isbn || null;
+    const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
+    const cover = fullVol?.cover || matchedVolume.cover_image || null;
+    const title = fullVol?.title || matchedVolume.title || null;
+    const publisher = editionInfo?.publisher || manga?.publisher || null;
+
+    resultData = {
+      volume_number: matchedVolume.volume_number || String(volumeNumber),
+      release_date: relDate || null,
+      release_year: relYear || null,
+      pages: pages || null,
+      isbn: isbn || null,
+      price: price || null,
+      publisher: publisher || null,
+      cover_image: cover || null,
+      notes: title || null,
+      mp_volume_id: matchedVolume.id,
+      source: 'Manga Passion'
+    };
+  }
+
+  if (resultData) {
+    return {
+      success: true,
+      matched: true,
+      data: resultData
+    };
+  }
+
+  return {
+    success: false,
+    matched: false,
+    message: `Keine Daten für Band ${volumeNumber} auf Manga Passion gefunden.`
+  };
+}
+
+/**
+ * Batch-autofills missing release dates, years, pages, and prices for all volumes in a manga.
+ */
+async function autofillMangaVolumes(mangaId, options = {}) {
+  const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
+  if (!manga) throw new Error('Manga nicht gefunden');
+
+  let editionId = options.edition_id || manga.manga_passion_id;
+  if (!editionId) {
+    const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
+    if (searchRes.recommended) {
+      editionId = searchRes.recommended.id;
+      try {
+        db.prepare('UPDATE mangas SET manga_passion_id = ? WHERE id = ?').run(editionId, manga.id);
+        manga.manga_passion_id = editionId;
+      } catch (_) {}
+    }
+  }
+
+  if (!editionId) {
+    return {
+      success: false,
+      message: 'Keine passende deutsche Edition auf Manga-Passion gefunden.',
+      updated_count: 0
+    };
+  }
+
+  const details = await getEditionDetailsAndVolumes(editionId, false);
+  if (!details || !details.volumes || details.volumes.length === 0) {
+    return {
+      success: false,
+      message: 'Keine Bände für diese Edition gefunden.',
+      updated_count: 0
+    };
+  }
+
+  const officialVolumes = details.volumes;
+  const userVolumes = db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId);
+
+  const offByNumStr = new Map();
+  const offByNumFloat = new Map();
+
+  officialVolumes.forEach(ov => {
+    const cleanStr = String(ov.volume_number || '').trim().toLowerCase();
+    offByNumStr.set(cleanStr, ov);
+    if (ov.num !== null && ov.num !== undefined && ov.num < 99999) {
+      offByNumFloat.set(ov.num, ov);
+    }
+  });
+
+  let updatedCount = 0;
+  const overwrite = Boolean(options.overwrite);
+
+  const updateStmt = db.prepare(`
+    UPDATE volumes SET
+      release_date = ?,
+      release_year = ?,
+      pages = ?,
+      price = ?,
+      publisher = ?
+    WHERE id = ?
+  `);
+
+  db.exec('BEGIN TRANSACTION;');
+  try {
+    for (const uv of userVolumes) {
+      const cleanKey = String(uv.volume_number || '').trim().toLowerCase();
+      const numMatch = cleanKey.match(/(\d+(\.\d+)?)/);
+      const floatKey = numMatch ? parseFloat(numMatch[1]) : null;
+
+      const matched = offByNumStr.get(cleanKey) || (floatKey !== null ? offByNumFloat.get(floatKey) : null);
+      if (!matched) continue;
+
+      let changed = false;
+      let newDate = uv.release_date;
+      let newYear = uv.release_year;
+      let newPages = uv.pages;
+      let newPrice = uv.price;
+      let newPub = uv.publisher;
+
+      if ((overwrite || !newDate) && matched.release_date) {
+        newDate = matched.release_date;
+        changed = true;
+      }
+      const inferredYear = matched.release_date ? parseInt(matched.release_date.slice(0, 4), 10) : null;
+      if ((overwrite || !newYear) && inferredYear) {
+        newYear = inferredYear;
+        changed = true;
+      }
+      if ((overwrite || !newPages) && matched.pages) {
+        newPages = matched.pages;
+        changed = true;
+      }
+      if ((overwrite || !newPrice || newPrice === 0) && matched.price) {
+        newPrice = matched.price;
+        changed = true;
+      }
+      if ((overwrite || !newPub) && (details.edition?.publisher || manga.publisher)) {
+        newPub = details.edition?.publisher || manga.publisher;
+        changed = true;
+      }
+
+      if (changed) {
+        updateStmt.run(newDate, newYear, newPages, newPrice, newPub, uv.id);
+        updatedCount++;
+      }
+    }
+    db.exec('COMMIT;');
+  } catch (err) {
+    try { db.exec('ROLLBACK;'); } catch (_) {}
+    throw err;
+  }
+
+  return {
+    success: true,
+    edition_title: details.edition?.title,
+    updated_count: updatedCount,
+    total_user_volumes: userVolumes.length
+  };
+}
+
 module.exports = {
   searchMangaPassionEditions,
   getEditionDetailsAndVolumes,
   reconcileMangaGaps,
   batchImportGaps,
   syncMangaWithEdition,
-  searchMangaPassionForLookup
+  searchMangaPassionForLookup,
+  lookupVolumeMetadata,
+  autofillMangaVolumes
 };
