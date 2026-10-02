@@ -217,8 +217,11 @@ router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
             ...result
         });
     } catch (err) {
-        log.error('Error restoring snapshot:', err);
-        res.status(500).json({ error: 'Fehler beim Wiederherstellen: ' + err.message });
+        // an invalid snapshot file is a client-side problem (400), like an invalid upload
+        const status = err.status || 500;
+        if (status >= 500) log.error('Error restoring snapshot:', err);
+        else log.warn('Rejected snapshot restore:', err.message);
+        res.status(status).json({ error: 'Fehler beim Wiederherstellen: ' + err.message });
     }
 });
 

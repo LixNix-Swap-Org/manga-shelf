@@ -126,7 +126,7 @@ test('restore rejects invalid archives and keeps the live database', async () =>
     fs.writeFileSync(path.join(snapshotDir, 'broken.zip'), garbageDb.toBuffer());
 
     const res = await admin('POST', '/backups/broken.zip/restore');
-    assert.equal(res.status, 500);
+    assert.equal(res.status, 400);
     assert.match(res.body.error, /Ungültige Backup-Datenbank/);
 
     const after = await admin('GET', '/mangas');
