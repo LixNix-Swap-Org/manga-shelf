@@ -41,7 +41,7 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup') {
     // Flush WAL checkpoint to ensure manga.db is fully consistent on disk
     try {
         db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-    } catch (e) {}
+    } catch (e) { console.warn('WAL checkpoint before backup failed (snapshot may miss recent writes):', e.message); }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${prefix}-${timestamp}.zip`;

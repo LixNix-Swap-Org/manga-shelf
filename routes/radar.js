@@ -257,7 +257,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
         if (!forceRefresh) {
             try {
                 cachedRow = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
-            } catch (_) {}
+            } catch (e) { console.warn('Release radar cache read failed:', e.message); }
         }
 
         let rawItems = null;
@@ -266,7 +266,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
         if (cachedRow && cachedRow.json_data && (Date.now() - cachedRow.created_at < CACHE_TTL_MS)) {
             try {
                 rawItems = JSON.parse(cachedRow.json_data);
-            } catch (_) {}
+            } catch (e) { console.warn('Release radar cache is corrupt:', e.message); }
         }
 
         if (!rawItems) {

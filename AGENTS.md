@@ -216,6 +216,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 
 | Endpunkt | Methode | Middleware | Beschreibung |
 | :--- | :--- | :--- | :--- |
+| `/api/health` | GET | public | Liveness-/Readiness-Probe (DB-Check, Version, Uptime); 503 wenn DB nicht erreichbar. Nutzt Docker-`HEALTHCHECK` und CI |
 | `/api/setup/status` | GET | public | Prüft ob initialer Admin existiert (`needsSetup`) |
 | `/api/setup` | POST | public | Erstellt initialen Admin-User bei Setup |
 | `/api/auth/login` | POST | public | Login (setzt JWT `httpOnly` Cookie) |
@@ -432,7 +433,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 ### Tests, Lint & CI
 * **API-Tests (schnell, ohne Browser):** `npm test` (`node --test test/*.test.js`) startet die App gegen eine temporäre `DATA_DIR`. Neue Backend-Features sollten hier einen Test bekommen.
 * **Lint:** `npm run lint` (ESLint). Fehler brechen die CI, Warnungen nicht.
-* **CI (`.github/workflows/ci.yml`):** Lint + Tests (Node 22) und ein Docker-Job (Build + Start-Test über `/api/version`). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
+* **CI (`.github/workflows/ci.yml`):** Lint + Tests (Node 22) und ein Docker-Job (Build + Start-Test über `/api/health`). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
 
 ### Automatisierte E2E Browser-Tests
 * Zum Validieren von UI, Logins, CRUD und Backups:

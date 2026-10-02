@@ -192,7 +192,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
           return parsed;
         }
       }
-    } catch (_) {}
+    } catch (e) { console.warn('Manga Passion edition cache read failed:', e.message); }
   }
 
   // Fetch edition info
@@ -207,7 +207,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
           VALUES (?, ?, ?)
           ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
         `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-      } catch (_) {}
+      } catch (e) { console.warn('Manga Passion cache write failed:', e.message); }
       return notFoundResult;
     }
     if (edRes.ok) {
@@ -254,7 +254,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
               VALUES (?, ?, ?)
               ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
             `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-          } catch (_) {}
+          } catch (e) { console.warn('Manga Passion cache write failed:', e.message); }
           return notFoundResult;
         }
         break;
@@ -341,7 +341,7 @@ async function reconcileMangaGaps(mangaId, options = {}) {
       try {
         db.prepare('UPDATE mangas SET manga_passion_id = ? WHERE id = ?').run(editionId, mangaId);
         manga.manga_passion_id = editionId;
-      } catch (_) {}
+      } catch (e) { console.warn('Auto-saving Manga Passion edition id failed:', e.message); }
     }
   } else {
     // Also fetch alternatives in background so user can switch
@@ -525,7 +525,7 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
     try {
       const data = await getEditionDetailsAndVolumes(effEditionId);
       officialVolumes = data.volumes || [];
-    } catch (_) {}
+    } catch (e) { console.warn('Loading Manga Passion edition for gap import failed:', e.message); }
   }
 
   const existingVolumes = db.prepare('SELECT id, volume_number, status, price, release_date, cover_image FROM volumes WHERE manga_id = ?').all(mangaId);
@@ -805,7 +805,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
         try {
           db.prepare('UPDATE mangas SET manga_passion_id = ? WHERE id = ?').run(editionId, manga.id);
           manga.manga_passion_id = editionId;
-        } catch (_) {}
+        } catch (e) { console.warn('Auto-saving Manga Passion edition id failed:', e.message); }
       }
     } catch (e) {
       console.warn('Error finding edition for volume lookup:', e.message);
@@ -939,7 +939,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       try {
         db.prepare('UPDATE mangas SET manga_passion_id = ? WHERE id = ?').run(editionId, manga.id);
         manga.manga_passion_id = editionId;
-      } catch (_) {}
+      } catch (e) { console.warn('Auto-saving Manga Passion edition id failed:', e.message); }
     }
   }
 
@@ -1002,7 +1002,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
         try {
           const localCover = await downloadRemoteImageToUploads(matched.cover_image);
           if (localCover) schuberCovers.set(uv.id, localCover);
-        } catch (_) {}
+        } catch (e) { console.warn('Schuber cover download failed:', e.message); }
       }
     }
   }

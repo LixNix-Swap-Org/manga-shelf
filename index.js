@@ -19,7 +19,7 @@ const https = require('https');
 require('dotenv').config({ quiet: true });
 
 const pkg = require('./package.json');
-const { closeDb, uploadsDir } = require('./db');
+const { db, closeDb, uploadsDir } = require('./db');
 const { initScheduler } = require('./services/scheduler');
 
 // Route modules
@@ -54,6 +54,16 @@ app.use('/uploads', express.static(uploadsDir, {
         res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     }
 }));
+
+// Liveness/readiness probe for Docker, Pterodactyl and reverse proxies (no auth, no data exposed)
+app.get('/api/health', (req, res) => {
+    try {
+        db.prepare('SELECT 1').get();
+        res.json({ status: 'ok', version: pkg.version, uptime: Math.round(process.uptime()) });
+    } catch (e) {
+        res.status(503).json({ status: 'error' });
+    }
+});
 
 // Mount API routes
 app.use('/api', authRoutes);

@@ -50,7 +50,7 @@ async function restoreFromZip(source) {
         // 2. Flush WAL logs to disk then close active connection
         try {
             db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-        } catch (e) {}
+        } catch (e) { console.warn('WAL checkpoint before restore failed:', e.message); }
         closeDb();
 
         // 3. Safety copy of current database
@@ -137,7 +137,7 @@ router.get('/backup', requireAdmin, (req, res) => {
         // Flush WAL checkpoint to disk before streaming
         try {
             db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-        } catch (e) {}
+        } catch (e) { console.warn('WAL checkpoint before backup download failed:', e.message); }
 
         res.attachment('manga-shelf-backup.zip');
         const archive = archiver('zip', { zlib: { level: 9 } });

@@ -128,3 +128,12 @@ test('snapshot create + restore round-trip', async () => {
     assert.equal(restored.status, 200);
     assert.equal((await admin('GET', '/mangas')).body.length, withExtra - 1);
 });
+
+test('health: public readiness probe reports ok without authentication', async () => {
+    const anon = ctx.client();
+    const res = await anon('GET', '/health');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'ok');
+    assert.equal(typeof res.body.version, 'string');
+    assert.equal(typeof res.body.uptime, 'number');
+});

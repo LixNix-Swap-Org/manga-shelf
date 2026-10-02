@@ -42,7 +42,7 @@ jobs:
         run: |
           docker run -d --name ms -p 3000:3000 manga-shelf:ci
           for i in $(seq 1 30); do
-            curl -fs http://127.0.0.1:3000/api/version && exit 0
+            curl -fs http://127.0.0.1:3000/api/health && exit 0
             sleep 1
           done
           docker logs ms

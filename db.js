@@ -266,7 +266,7 @@ function initDb() {
 
     try {
         currentDb.exec("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('collection_start_date', '2021-04-09');");
-    } catch (e) {}
+    } catch (e) { console.warn('Seeding collection_start_date failed:', e.message); }
 
     // Run Sequential Migrations Registry
     try {
@@ -311,7 +311,7 @@ function runTransaction(fn) {
     } catch (err) {
         try {
             currentDb.exec('ROLLBACK;');
-        } catch (_) {}
+        } catch (e) { console.warn('ROLLBACK failed:', e.message); }
         throw err;
     }
 }
@@ -320,7 +320,7 @@ function closeDb() {
     if (currentDb) {
         try {
             currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-        } catch (e) {}
+        } catch (e) { console.warn('WAL checkpoint before close failed:', e.message); }
         try {
             currentDb.close();
         } catch (e) {}
