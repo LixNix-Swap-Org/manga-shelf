@@ -243,6 +243,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/upload-remote` | POST | `requireEditor` | Externes Bild per URL herunterladen & lokal cachen |
 | `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via Manga Passion API (Prio 1) & AniList GraphQL API (Fallback) |
 | `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
+| `/api/offline-snapshot` | GET | `requireAuth` | Gesamte Sammlung (Liste + alle Reihen-Details, Lesestatus des Aufrufers) in einer Antwort für die Offline-Kopie im Browser |
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
 | `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
@@ -515,6 +516,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 17. **Express 5 (`index.js`):**
    * Catch-all-Route heißt `app.get('/{*splat}', ...)` (ein nacktes `'*'` ist ungültig). `req.body` ist ohne Body `undefined`; eine Middleware setzt es auf `{}`, weil Handler direkt destrukturieren. `req.query` ist nur lesbar; Strings daraus immer über `qstr()` (`utils/query.js`) lesen, sonst werfen `?a=1&a=2` bzw. `?a[x]=1` bei `.trim()` einen 500.
    * Unbekannte `/api/*`-Pfade liefern JSON-404; der letzte Error-Handler gibt bei 5xx nur eine generische Meldung aus (Details im Log), bei 4xx die Fehlermeldung (z. B. abgelehnter Upload).
+18. **Offline-Kopie (`frontend/src/utils/offlineStore.js`):**
+   * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und bis zu 400 Cover vorgeladen, damit der Service Worker sie cached.
+   * `App.jsx`: Antwortet `/api/auth/me` nicht (Netz/Gateway weg) und es gibt einen gespeicherten Benutzer, läuft die App als `{ role: 'visitor', realRole, offline: true }` weiter (alle Bearbeiten-Buttons verschwinden; Einkaufslisten-Schnellkauf nutzt `realRole` und die vorhandene Offline-Warteschlange). Alle 30 s und beim `online`-Event wird erneut geprüft. Bei 401 und beim Logout wird alles gelöscht (`clearOfflineData`) – nie Daten nach dem Abmelden lesbar lassen.
+   * Nicht offline verfügbar: Statistiken, Release-Radar, alles Schreibende.
 
 ---
 

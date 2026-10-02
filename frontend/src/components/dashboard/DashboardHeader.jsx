@@ -164,8 +164,9 @@ export default function DashboardHeader({
           <button 
             id="btn-open-stats"
             onClick={handleOpenStats} 
-            className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-            title="Statistik- & Finanz-Dashboard öffnen"
+            disabled={isOfflineMode}
+            className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            title={isOfflineMode ? 'Offline nicht verfügbar' : 'Statistik- & Finanz-Dashboard öffnen'}
           >
             <BarChart3 className="w-4 h-4 text-emerald-400 shrink-0" /> 
             <span>Statistiken<span className="hidden 2xl:inline"> & Finanzen</span></span>
@@ -229,7 +230,7 @@ export default function DashboardHeader({
               </span>
             ) : isVisitor ? (
               <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
-                Gast
+                {user?.offline ? 'Offline' : 'Gast'}
               </span>
             ) : (
               <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
@@ -267,7 +268,8 @@ export default function DashboardHeader({
             <button 
               id="btn-mobile-menu-stats"
               onClick={() => { setMobileMenuOpen(false); handleOpenStats(); }}
-              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30"
+              disabled={isOfflineMode}
+              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken
             </button>

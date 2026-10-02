@@ -8,6 +8,7 @@ import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { loadMangaDetail, updateCachedManga } from './utils/offlineStore';
 import { normalizePubName, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
@@ -220,8 +221,8 @@ export default function MangaDetail({ user }) {
 
   useEffect(() => {
     fetchManga();
-    fetchMpGaps();
-  }, [id]);
+    if (!user?.offline) fetchMpGaps();
+  }, [id, user?.offline]);
 
   const fetchMpGaps = async (forcedEditionId = null, forceRefresh = false) => {
     try {
@@ -244,36 +245,47 @@ export default function MangaDetail({ user }) {
     }
   };
 
+  const applyMangaData = (data) => {
+    setManga(data);
+    setFormData({
+      title: data.title || '',
+      alt_title: data.alt_title || '',
+      author: data.author || '',
+      publisher: data.publisher || '',
+      language: data.language || 'Deutsch',
+      status: data.status || 'Laufend',
+      tags: data.tags || '',
+      total_volumes: data.total_volumes || '',
+      description: data.description || '',
+      cover_image: data.cover_image || '',
+      manga_passion_id: data.manga_passion_id || null
+    });
+  };
+
   const fetchManga = async () => {
     try {
       setLoading(true);
       setNotFound(false);
-      const res = await fetch(`/api/mangas/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setManga(data);
-        setFormData({
-          title: data.title || '',
-          alt_title: data.alt_title || '',
-          author: data.author || '',
-          publisher: data.publisher || '',
-          language: data.language || 'Deutsch',
-          status: data.status || 'Laufend',
-          tags: data.tags || '',
-          total_volumes: data.total_volumes || '',
-          description: data.description || '',
-          cover_image: data.cover_image || '',
-          manga_passion_id: data.manga_passion_id || null
-        });
-      } else if (res.status === 404) {
-        setNotFound(true);
-      } else {
-        // 500 or other error - show not found
-        setNotFound(true);
+      if (!user?.offline) {
+        try {
+          const res = await fetch(`/api/mangas/${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            applyMangaData(data);
+            updateCachedManga(data);
+            return;
+          }
+          // 404 or any server error - show not found
+          setNotFound(true);
+          return;
+        } catch (e) {
+          // server unreachable: show the read-only offline copy if we have one
+          console.warn('Manga fetch failed, trying offline copy:', e);
+        }
       }
-    } catch (e) {
-      console.error(e);
-      setNotFound(true);
+      const cached = await loadMangaDetail(id);
+      if (cached) applyMangaData(cached);
+      else setNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -1422,6 +1434,7 @@ export default function MangaDetail({ user }) {
         
         {/* Hero Card */}
         <MangaHeroCard
+          isOffline={Boolean(user?.offline)}
           applyEditLookupResult={applyEditLookupResult}
           canEdit={canEdit}
           completionPct={completionPct}

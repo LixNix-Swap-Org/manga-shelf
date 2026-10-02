@@ -11,10 +11,9 @@ const {
 } = require('../mangaPassion');
 
 // --- MANGA API ---
-router.get('/mangas', requireAuth, (req, res) => {
-    try {
-        const userId = req.user.id;
-        const mangas = db.prepare(`
+// Series list with aggregates for the dashboard (also reused by the offline snapshot)
+function listMangas(userId) {
+    return db.prepare(`
             SELECT m.*, 
                    COALESCE(SUM(CASE WHEN v.status = 'Vorhanden' THEN v.price ELSE 0 END), 0) as total_value,
                    COALESCE(SUM(v.price), 0) as full_value,
@@ -26,7 +25,11 @@ router.get('/mangas', requireAuth, (req, res) => {
             GROUP BY m.id
             ORDER BY m.title ASC
         `).all(userId);
-        res.json(mangas);
+}
+
+router.get('/mangas', requireAuth, (req, res) => {
+    try {
+        res.json(listMangas(req.user.id));
     } catch (err) {
         console.error('Error fetching mangas:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Mangas' });
@@ -95,104 +98,128 @@ router.post('/mangas', requireEditor, (req, res) => {
     }
 });
 
+// Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id
+function loadMangaDetail(mangaId, userId) {
+    const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
+    if (!manga) return null;
+    const volumes = db.prepare(`
+        SELECT * FROM volumes 
+        WHERE manga_id = ? 
+        ORDER BY 
+            CASE 
+                WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
+                WHEN COALESCE(type, 'volume') = 'special_edition' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
+                WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1.5
+                WHEN COALESCE(type, 'volume') = 'schuber' THEN 2 
+                WHEN COALESCE(type, 'volume') = 'special' THEN 3 
+                ELSE 2 
+            END ASC, 
+            CASE 
+                WHEN CAST(volume_number AS REAL) > 0 THEN CAST(volume_number AS REAL) 
+                WHEN volume_number = '0' THEN 0 
+                ELSE 999999 
+            END ASC, 
+            CASE 
+                WHEN COALESCE(type, 'volume') = 'volume' THEN 0 
+                WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1 
+                ELSE 2 
+            END ASC,
+            volume_number ASC
+    `).all(mangaId);
+    manga.volumes = volumes || [];
+
+    // Fetch volume reading records
+    const reads = db.prepare(`
+        SELECT vr.volume_id, vr.user_id, u.username
+        FROM volume_reads vr
+        JOIN users u ON vr.user_id = u.id
+        JOIN volumes v ON vr.volume_id = v.id
+        WHERE v.manga_id = ?
+    `).all(mangaId);
+
+    const readMap = {};
+    for (const r of reads) {
+        if (!readMap[r.volume_id]) readMap[r.volume_id] = [];
+        readMap[r.volume_id].push({ id: r.user_id, username: r.username });
+    }
+
+    let total_value = 0;
+    let full_value = 0;
+    for (const v of manga.volumes) {
+        const p = typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0);
+        if (v.status === 'Vorhanden') total_value += p;
+        full_value += p;
+
+        // Reading info
+        const usersWhoRead = readMap[v.id] || [];
+        v.read_by = usersWhoRead.map(u => u.id);
+        v.read_users = usersWhoRead;
+        v.is_read = v.read_by.includes(userId);
+
+        // Parse images
+        try {
+            if (v.images) {
+                v.images = Array.isArray(v.images) ? v.images : JSON.parse(v.images);
+            } else if (v.cover_image) {
+                v.images = [v.cover_image];
+            } else {
+                v.images = [];
+            }
+        } catch (e) {
+            v.images = v.cover_image ? [v.cover_image] : [];
+        }
+        if (!v.cover_image && v.images.length > 0) {
+            v.cover_image = v.images[0];
+        }
+    }
+    manga.total_value = Math.round(total_value * 100) / 100;
+    manga.full_value = Math.round(full_value * 100) / 100;
+
+    // Statistics for each reader
+    const allUsers = db.prepare('SELECT id, username FROM users ORDER BY id ASC').all();
+    manga.reader_stats = allUsers.map(u => {
+        const count = manga.volumes.filter(v => v.read_by.includes(u.id)).length;
+        const total = manga.volumes.filter(v => v.status === 'Vorhanden').length;
+        return {
+            user_id: u.id,
+            username: u.username,
+            read_count: count,
+            total_owned: total,
+            unread_count: Math.max(0, total - count),
+            percentage: total > 0 ? Math.round((count / total) * 100) : 0
+        };
+    });
+    return manga;
+}
+
 router.get('/mangas/:id', requireAuth, (req, res) => {
     try {
-        const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(req.params.id);
+        const manga = loadMangaDetail(req.params.id, req.user.id);
         if (!manga) {
             return res.status(404).json({ error: 'Manga nicht gefunden' });
         }
-        const volumes = db.prepare(`
-            SELECT * FROM volumes 
-            WHERE manga_id = ? 
-            ORDER BY 
-                CASE 
-                    WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
-                    WHEN COALESCE(type, 'volume') = 'special_edition' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
-                    WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1.5
-                    WHEN COALESCE(type, 'volume') = 'schuber' THEN 2 
-                    WHEN COALESCE(type, 'volume') = 'special' THEN 3 
-                    ELSE 2 
-                END ASC, 
-                CASE 
-                    WHEN CAST(volume_number AS REAL) > 0 THEN CAST(volume_number AS REAL) 
-                    WHEN volume_number = '0' THEN 0 
-                    ELSE 999999 
-                END ASC, 
-                CASE 
-                    WHEN COALESCE(type, 'volume') = 'volume' THEN 0 
-                    WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1 
-                    ELSE 2 
-                END ASC,
-                volume_number ASC
-        `).all(req.params.id);
-        manga.volumes = volumes || [];
-
-        // Fetch volume reading records
-        const reads = db.prepare(`
-            SELECT vr.volume_id, vr.user_id, u.username
-            FROM volume_reads vr
-            JOIN users u ON vr.user_id = u.id
-            JOIN volumes v ON vr.volume_id = v.id
-            WHERE v.manga_id = ?
-        `).all(req.params.id);
-
-        const readMap = {};
-        for (const r of reads) {
-            if (!readMap[r.volume_id]) readMap[r.volume_id] = [];
-            readMap[r.volume_id].push({ id: r.user_id, username: r.username });
-        }
-
-        let total_value = 0;
-        let full_value = 0;
-        for (const v of manga.volumes) {
-            const p = typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0);
-            if (v.status === 'Vorhanden') total_value += p;
-            full_value += p;
-
-            // Reading info
-            const usersWhoRead = readMap[v.id] || [];
-            v.read_by = usersWhoRead.map(u => u.id);
-            v.read_users = usersWhoRead;
-            v.is_read = v.read_by.includes(req.user.id);
-
-            // Parse images
-            try {
-                if (v.images) {
-                    v.images = Array.isArray(v.images) ? v.images : JSON.parse(v.images);
-                } else if (v.cover_image) {
-                    v.images = [v.cover_image];
-                } else {
-                    v.images = [];
-                }
-            } catch (e) {
-                v.images = v.cover_image ? [v.cover_image] : [];
-            }
-            if (!v.cover_image && v.images.length > 0) {
-                v.cover_image = v.images[0];
-            }
-        }
-        manga.total_value = Math.round(total_value * 100) / 100;
-        manga.full_value = Math.round(full_value * 100) / 100;
-
-        // Statistics for each reader
-        const allUsers = db.prepare('SELECT id, username FROM users ORDER BY id ASC').all();
-        manga.reader_stats = allUsers.map(u => {
-            const count = manga.volumes.filter(v => v.read_by.includes(u.id)).length;
-            const total = manga.volumes.filter(v => v.status === 'Vorhanden').length;
-            return {
-                user_id: u.id,
-                username: u.username,
-                read_count: count,
-                total_owned: total,
-                unread_count: Math.max(0, total - count),
-                percentage: total > 0 ? Math.round((count / total) * 100) : 0
-            };
-        });
-
         res.json(manga);
     } catch (err) {
         console.error('Error fetching manga:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Mangas' });
+    }
+});
+
+// Whole collection in one response so the client can keep a read-only offline copy.
+router.get('/offline-snapshot', requireAuth, (req, res) => {
+    try {
+        const mangas = listMangas(req.user.id);
+        const details = {};
+        for (const m of mangas) details[m.id] = loadMangaDetail(m.id, req.user.id);
+        res.json({
+            generated_at: new Date().toISOString(),
+            user: { id: req.user.id, username: req.user.username, role: req.user.role },
+            mangas,
+            details
+        });
+    } catch (err) {
+        console.error('Error building offline snapshot:', err);
+        res.status(500).json({ error: 'Fehler beim Erstellen der Offline-Kopie' });
     }
 });
 

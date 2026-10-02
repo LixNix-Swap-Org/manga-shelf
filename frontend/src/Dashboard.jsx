@@ -8,6 +8,7 @@ import BarcodeScannerButton from './components/common/BarcodeScannerButton';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePubName } from './utils/volumeHelpers';
+import { loadMangaList, loadMeta, syncOfflineCopy, formatAge } from './utils/offlineStore';
 import { 
   Search, Plus, Download, LogOut, BookOpen, Trash2, 
   Sparkles, CheckCircle2, Library, X, Upload, Layers,
@@ -43,6 +44,8 @@ const formatGermanDate = (dateStr) => {
 export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
   const canEdit = user && (user.role === 'admin' || user.role === 'editor');
+  // Offline (server unreachable) the user is demoted to read-only, but queued shopping purchases still work
+  const canQuickBuy = Boolean(user) && !['visitor', 'guest'].includes(user.realRole || user.role);
 
   const navigate = useNavigate();
   const [mangas, setMangas] = useState([]);
@@ -132,7 +135,10 @@ export default function Dashboard({ user, onLogout }) {
   const [importingMpId, setImportingMpId] = useState(null);
 
   // Network & PWA State
-  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [networkOffline, setNetworkOffline] = useState(!navigator.onLine);
+  const isOfflineMode = networkOffline || Boolean(user?.offline);
+  const [offlineCopyAt, setOfflineCopyAt] = useState(null);
+  const [refreshingCopy, setRefreshingCopy] = useState(false);
   const [offlineLastUpdated, setOfflineLastUpdated] = useState(() => {
     try {
       const meta = localStorage.getItem('mangashelf_shopping_meta');
@@ -202,13 +208,13 @@ export default function Dashboard({ user, onLogout }) {
   // Online / Offline Network Listeners
   useEffect(() => {
     const handleOnline = () => {
-      setIsOfflineMode(false);
+      setNetworkOffline(false);
       syncPendingPurchases();
       fetchShoppingList();
       fetchMangas();
     };
     const handleOffline = () => {
-      setIsOfflineMode(true);
+      setNetworkOffline(true);
     };
 
     window.addEventListener('online', handleOnline);
@@ -228,8 +234,9 @@ export default function Dashboard({ user, onLogout }) {
   useEffect(() => {
     fetchMangas();
     fetchShoppingList();
-    fetchReleaseRadar();
-  }, []);
+    if (!user?.offline) fetchReleaseRadar();
+    loadMeta().then(meta => setOfflineCopyAt(meta?.synced_at || null));
+  }, [user?.offline]);
 
   // Fetch heavy Manga Passion monthly calendar releases only when radar view is active
   useEffect(() => {
@@ -261,7 +268,7 @@ export default function Dashboard({ user, onLogout }) {
       if (res.ok) {
         const data = await res.json();
         setShoppingData(data);
-        setIsOfflineMode(false);
+        setNetworkOffline(false);
         const now = new Date().toISOString();
         setOfflineLastUpdated(now);
         try {
@@ -273,7 +280,7 @@ export default function Dashboard({ user, onLogout }) {
         const cached = localStorage.getItem('mangashelf_shopping_cache');
         if (cached) {
           setShoppingData(JSON.parse(cached));
-          setIsOfflineMode(true);
+          setNetworkOffline(true);
         }
       }
     } catch (e) {
@@ -282,7 +289,7 @@ export default function Dashboard({ user, onLogout }) {
         const cached = localStorage.getItem('mangashelf_shopping_cache');
         if (cached) {
           setShoppingData(JSON.parse(cached));
-          setIsOfflineMode(true);
+          setNetworkOffline(true);
         }
       } catch (_) {}
     } finally {
@@ -348,7 +355,7 @@ export default function Dashboard({ user, onLogout }) {
         localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(queue));
       } catch (_) {}
       updateLocalState();
-      setIsOfflineMode(true);
+      setNetworkOffline(true);
     } finally {
       setBuyingId(null);
     }
@@ -500,18 +507,40 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
+  // Falls back to the read-only offline copy when the server cannot be reached
+  const loadOfflineMangas = async () => {
+    const cached = await loadMangaList();
+    if (cached && cached.length) setMangas(cached);
+  };
+
   const fetchMangas = async () => {
     try {
       setLoading(true);
+      if (user?.offline) {
+        await loadOfflineMangas();
+        return;
+      }
       const res = await fetch('/api/mangas');
       if (res.ok) {
         const data = await res.json();
         setMangas(data);
       }
     } catch (e) {
-      console.error('Failed to fetch mangas:', e);
+      console.error('Failed to fetch mangas, using offline copy:', e);
+      await loadOfflineMangas();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshOfflineCopy = async () => {
+    setRefreshingCopy(true);
+    try {
+      await syncOfflineCopy({ force: true });
+      const meta = await loadMeta();
+      setOfflineCopyAt(meta?.synced_at || null);
+    } finally {
+      setRefreshingCopy(false);
     }
   };
 
@@ -939,7 +968,7 @@ export default function Dashboard({ user, onLogout }) {
         setShoppingPublisherFilter={setShoppingPublisherFilter}
         normalizePubName={normalizePubName}
         setActiveMainView={setActiveMainView}
-        canEdit={canEdit}
+        canEdit={canQuickBuy}
         handleQuickBuy={handleQuickBuy}
         buyingId={buyingId}
         failedImages={failedImages}
@@ -1013,6 +1042,17 @@ export default function Dashboard({ user, onLogout }) {
           <CheckCircle2 className="w-3.5 h-3.5" />
           Online & Synchronisiert
         </span>
+      )}
+      {!user?.offline && offlineCopyAt && (
+        <button
+          onClick={handleRefreshOfflineCopy}
+          disabled={refreshingCopy || networkOffline}
+          className="inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-default"
+          title="Lädt die gesamte Sammlung für die Offline-Ansicht neu"
+        >
+          <Download className="w-3.5 h-3.5" />
+          {refreshingCopy ? 'Aktualisiere...' : `Offline-Kopie: ${formatAge(offlineCopyAt)} – aktualisieren`}
+        </button>
       )}
       {isInstallable && !isInstalledApp && (
         <button

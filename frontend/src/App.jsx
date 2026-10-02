@@ -1,5 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { WifiOff } from 'lucide-react';
+import { saveUser, loadUser, loadMeta, clearOfflineData, syncOfflineCopy, formatAge } from './utils/offlineStore';
 
 const Login = lazy(() => import('./Login'));
 const Dashboard = lazy(() => import('./Dashboard'));
@@ -17,14 +19,46 @@ function LoadingScreen() {
   );
 }
 
+function OfflineBanner({ lastSync }) {
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 px-4 py-2 bg-amber-500/95 text-slate-950 text-xs font-semibold shadow-lg">
+      <WifiOff className="w-4 h-4 shrink-0" />
+      <span>
+        Offline – Stand der Sammlung: {lastSync ? formatAge(lastSync) : 'unbekannt'}. Nur Ansicht, Änderungen sind erst mit Verbindung möglich.
+      </span>
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
 
   useEffect(() => {
     checkStatus();
   }, []);
+
+  // Keep the offline copy fresh: re-sync (throttled) whenever the app comes back to the foreground
+  useEffect(() => {
+    if (!user || user.offline) return undefined;
+    const onVisible = () => { if (document.visibilityState === 'visible') syncOfflineCopy(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id, user?.offline]);
+
+  // While the server is unreachable: retry in the background and as soon as the browser reports a connection
+  useEffect(() => {
+    if (!user?.offline) return undefined;
+    const retry = () => { checkStatus(); };
+    const timer = setInterval(retry, 30000);
+    window.addEventListener('online', retry);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [user?.offline]);
 
   const checkStatus = async () => {
     try {
@@ -46,8 +80,22 @@ function App() {
       if (authRes && authRes.ok) {
         const authData = await authRes.json();
         setUser(authData.user);
-      } else {
+        saveUser(authData.user);
+        syncOfflineCopy();
+      } else if (authRes && authRes.status === 401) {
+        // Session invalid or expired: drop the offline copy so it cannot be read without a login
+        await clearOfflineData();
         setUser(null);
+      } else {
+        // Server unreachable (no network, proxy/gateway down): fall back to the last known user, read-only
+        const cached = await loadUser();
+        if (cached) {
+          const meta = await loadMeta();
+          setLastSync(meta?.synced_at || null);
+          setUser({ ...cached, role: 'visitor', realRole: cached.role, offline: true });
+        } else {
+          setUser(null);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -63,6 +111,7 @@ function App() {
     } catch (e) {
       console.error('Logout error:', e);
     } finally {
+      await clearOfflineData();
       setUser(null);
     }
   };
@@ -81,6 +130,7 @@ function App() {
 
   return (
     <Router>
+      {user?.offline && <OfflineBanner lastSync={lastSync} />}
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route path="/login" element={!user ? <Login onLogin={checkStatus} /> : <Navigate to="/" />} />
