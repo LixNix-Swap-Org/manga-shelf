@@ -428,6 +428,15 @@ export default function Dashboard({ user, onLogout }) {
     fetchMangaPassionReleases(nextYear, nextMonth);
   };
 
+  const handleCurrentMonth = () => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    setMpYear(curYear);
+    setMpMonth(curMonth);
+    fetchMangaPassionReleases(curYear, curMonth);
+  };
+
   const handleImportMangaPassion = async (item, targetStatus = 'Vorbestellt') => {
     if (!canEdit) return;
     setImportingMpId(item.id);
@@ -1594,8 +1603,12 @@ export default function Dashboard({ user, onLogout }) {
         radarData={radarData}
         loadingRadar={loadingRadar}
         fetchReleaseRadar={fetchReleaseRadar}
-        radarTimeframe={radarTimeframe}
-        setRadarTimeframe={setRadarTimeframe}
+        radarPublisherFilter={radarPublisherFilter}
+        setRadarPublisherFilter={setRadarPublisherFilter}
+        radarStatusFilter={radarStatusFilter}
+        setRadarStatusFilter={setRadarStatusFilter}
+        radarSearch={radarSearch}
+        setRadarSearch={setRadarSearch}
         mpData={mpData}
         loadingMp={loadingMp}
         fetchMangaPassionReleases={fetchMangaPassionReleases}
