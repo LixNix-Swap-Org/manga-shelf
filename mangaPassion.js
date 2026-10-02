@@ -290,8 +290,9 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     const nrStr = v.numberDisplay || (v.number !== null && v.number !== undefined ? String(v.number) : 'Special');
     const numMatch = nrStr.match(/(\d+(\.\d+)?)/);
     const num = numMatch ? parseFloat(numMatch[1]) : (typeof v.number === 'number' ? v.number : 999999);
-    const dateStr = v.date ? v.date.slice(0, 10) : null;
-    const isReleased = dateStr ? (new Date(dateStr) <= new Date()) : true;
+    const dateStr = cleanOfficialDate(v.date);
+    // no date although the API sent one = announced without a date: not released yet
+    const isReleased = dateStr ? (new Date(dateStr) <= new Date()) : !v.date;
 
     return {
       id: v.id,
@@ -325,6 +326,17 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   }
 
   return result;
+}
+
+/**
+ * Manga Passion marks "release date not announced yet" with a placeholder far in the future (2999-12-31).
+ * That is no date: returns null for it (and for empty input), otherwise the YYYY-MM-DD part.
+ */
+function cleanOfficialDate(raw) {
+  if (!raw) return null;
+  const day = String(raw).slice(0, 10);
+  const year = parseInt(day.slice(0, 4), 10);
+  return Number.isNaN(year) || year >= 2100 ? null : day;
 }
 
 /**
@@ -417,8 +429,8 @@ async function reconcileMangaGaps(mangaId, options = {}) {
     const inferredType = classifyOfficialVolume(ov);
     let existing = userByTypeNum.get(`${inferredType}:${key}`);
 
-    // Numbered schuber / special editions / specials: "Schuber 8" in the collection is official "8 (Schuber)"
-    if (!existing && inferredType !== 'volume' && /^\d+$/.test(key)) {
+    // Numbered entries: "Band 14" / "Schuber 8" in the collection are the official "14" / "8 (Schuber)"
+    if (!existing && /^\d+$/.test(key)) {
       const wanted = parseInt(key, 10);
       existing = userVolumes.find(uv => inferVolumeType(uv) === inferredType && volumeNumberOf(uv) === wanted);
     }
@@ -827,7 +839,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
       if (fullRes.ok) {
         const fullVol = await fullRes.json();
         const localCover = await downloadRemoteImageToUploads(fullVol.cover);
-        const relDate = fullVol.date ? fullVol.date.slice(0, 10) : null;
+        const relDate = cleanOfficialDate(fullVol.date);
         const relYear = fullVol.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
         const publisher = normalizePublisher(fullVol.edition?.publishers?.[0]?.name) || manga?.publisher || null;
 
@@ -933,7 +945,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
       }
     }
 
-    const relDate = fullVol?.date ? fullVol.date.slice(0, 10) : matchedVolume.release_date;
+    const relDate = fullVol?.date ? cleanOfficialDate(fullVol.date) : matchedVolume.release_date;
     const relYear = fullVol?.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
     const pages = fullVol?.pages || matchedVolume.pages || null;
     const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
@@ -1155,5 +1167,6 @@ module.exports = {
   lookupVolumeMetadata,
   autofillMangaVolumes,
   scoreEdition,
-  matchSchuberVolume
+  matchSchuberVolume,
+  cleanOfficialDate
 };

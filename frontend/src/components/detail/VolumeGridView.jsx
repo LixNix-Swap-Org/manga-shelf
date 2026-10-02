@@ -224,7 +224,7 @@ export default function VolumeGridView({
                       <span className="truncate">{String(vol.volume_number).replace(/special\s*|extra\s*|sonderband\s*/i, '')}</span>
                     </>
                   ) : (
-                    <span className="truncate">Band {vol.volume_number}</span>
+                    <span className="truncate">{getVolumeDisplayTitle(vol)}</span>
                   )}
                 </div>
               </div>

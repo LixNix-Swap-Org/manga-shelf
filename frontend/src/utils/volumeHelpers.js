@@ -60,7 +60,7 @@ export const isGapCovered = (gap, volumes) => {
   const sameType = volumes.filter(v => inferVolumeType(v) === type);
 
   if (sameType.some(v => String(v.volume_number || '').trim().toLowerCase() === key)) return true;
-  if (type !== 'volume' && numeric && sameType.some(v => volumeNumberOf(v) === parseInt(key, 10))) return true;
+  if (numeric && sameType.some(v => volumeNumberOf(v) === parseInt(key, 10))) return true;
 
   // named entries / titled volumes: match by title in notes or number. A special edition's title ("Collectors
   // Edition") is shared by many entries, and numbered schuber are handled above, so neither is matched by name.
@@ -101,6 +101,24 @@ export const gapVolumeNumber = (gap) => {
   if (typeof gap === 'number') return Number.isInteger(gap) ? gap : null;
   const match = String(gap).trim().match(/^(\d+)(?:\s*\(.*\))?$/);
   return match ? parseInt(match[1], 10) : null;
+};
+
+/**
+ * Collection progress of a series. Only regular volumes count towards completion (schuber and extras are
+ * "+N"), and the target grows with the highest owned volume number: an ongoing series whose stored total is
+ * stale ("21 / 18") shows 21 / 21 instead of an impossible ratio.
+ * Accepts the /api/mangas row (regular_owned, max_regular_number) or just the counts.
+ */
+export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes }) => {
+  const all = owned_volumes || 0;
+  const regular = regular_owned ?? all;
+  const total = Math.max(total_volumes || 0, max_regular_number || 0);
+  return {
+    owned: regular,
+    total,
+    extras: Math.max(0, all - regular),
+    pct: total > 0 ? Math.min(100, Math.round((regular / total) * 100)) : null
+  };
 };
 
 export const getVolumeSortInfo = (vol) => {

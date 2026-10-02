@@ -18,6 +18,7 @@ export default function MangaHeroCard({
   handleUpdate,
   manga,
   ownedCount,
+  extrasCount = 0,
   saving,
   setEditLookupResults,
   setEditing,
@@ -80,7 +81,7 @@ export default function MangaHeroCard({
         <div className="w-full mt-4 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex justify-around text-center">
           <div>
             <span className="text-[10px] uppercase font-semibold text-slate-400 block">Bände</span>
-            <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}</span>
+            <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title="Schuber, Specials und Extras zusätzlich zu den Bänden">+{extrasCount}</span>}</span>
           </div>
           <div className="w-[1px] bg-slate-800"></div>
           <div>
@@ -412,7 +413,7 @@ export default function MangaHeroCard({
                   Sammlungs-Fortschritt
                 </span>
                 <span className="text-slate-400 font-mono">
-                  <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : 'im Besitz'} 
+                  <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : 'im Besitz'}{extrasCount > 0 ? ` + ${extrasCount} Extras` : ''} 
                   {completionPct !== null && ` (${completionPct}%)`}
                 </span>
               </div>

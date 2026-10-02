@@ -200,3 +200,13 @@ test('migration v6 renames volumes imported under their UI label to the clean nu
         ['4|volume', '5|volume', '6|volume', '6 (Doppelt)|volume', '7 (Collectors Edition)|special_edition']);
     assert.equal(rows(id)[0].notes, 'Wolf im Schafspelz');
 });
+
+test('cleanOfficialDate: the 2999-12-31 "not announced yet" placeholder is no release date', () => {
+    assert.equal(mp.cleanOfficialDate('2999-12-31'), null);
+    assert.equal(mp.cleanOfficialDate('2999-12-31T00:00:00+00:00'), null);
+    assert.equal(mp.cleanOfficialDate('2026-03-03T00:00:00+00:00'), '2026-03-03');
+    assert.equal(mp.cleanOfficialDate('2099-12-31'), '2099-12-31');
+    assert.equal(mp.cleanOfficialDate(null), null);
+    assert.equal(mp.cleanOfficialDate(''), null);
+    assert.equal(mp.cleanOfficialDate('kein datum'), null);
+});

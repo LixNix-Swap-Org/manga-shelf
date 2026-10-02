@@ -1,5 +1,6 @@
 import { BookCheck, BookOpen, Building2, Coins, Plus, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getSeriesProgress } from '../../utils/volumeHelpers';
 
 /** Loading / empty state / grid / list of all mangas on the shelf. Purely presentational; all state and handlers come in via props. */
 export default function MangaCollectionGrid({
@@ -76,9 +77,7 @@ export default function MangaCollectionGrid({
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {filtered.map(manga => {
-                  const total = manga.total_volumes || 0;
-                  const owned = manga.owned_volumes || 0;
-                  const pct = total > 0 ? Math.min(100, Math.round((owned / total) * 100)) : null;
+                  const { owned, total, extras, pct } = getSeriesProgress(manga);
 
                   return (
                     <tr key={manga.id} className="hover:bg-slate-850/60 transition-colors group">
@@ -125,7 +124,7 @@ export default function MangaCollectionGrid({
                       <td className="py-2.5 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-white font-mono">
-                            {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
+                            {owned} {total > 0 ? `/ ${total}` : 'Bde.'}{extras > 0 ? ` +${extras}` : ''}
                           </span>
                           {manga.read_volume_count > 0 ? (
                             <span className={`text-[10px] font-mono ${
@@ -183,9 +182,7 @@ export default function MangaCollectionGrid({
         /* POSTER / GRID VIEW */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-4 sm:gap-5 lg:gap-6 animate-fade-in">
           {filtered.map(manga => {
-            const total = manga.total_volumes || 0;
-            const owned = manga.owned_volumes || 0;
-            const pct = total > 0 ? Math.min(100, Math.round((owned / total) * 100)) : null;
+            const { owned, total, extras, pct } = getSeriesProgress(manga);
 
             return (
               <div key={manga.id} className="group relative flex flex-col">
@@ -217,7 +214,7 @@ export default function MangaCollectionGrid({
                       </span>
 
                       <span className="bg-slate-950/80 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg backdrop-blur-md shrink-0">
-                        {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
+                        {owned} {total > 0 ? `/ ${total}` : 'Bde.'}{extras > 0 ? ` +${extras}` : ''}
                       </span>
                     </div>
 

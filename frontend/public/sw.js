@@ -35,19 +35,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cover uploads: stale-while-revalidate for instantaneous display
+  // Cover uploads: cache first. File names are unique and the content never changes, so a cached image is
+  // served as is - no re-download in the background (that used to cost tens of MB per sync on large collections)
   if (url.pathname.startsWith('/uploads/')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cachedResponse = await cache.match(event.request);
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          if (networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch(() => cachedResponse);
-
-        return cachedResponse || fetchPromise;
+        if (cachedResponse) return cachedResponse;
+        const networkResponse = await fetch(event.request);
+        if (networkResponse.status === 200) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
       })
     );
     return;

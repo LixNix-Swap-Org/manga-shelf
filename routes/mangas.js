@@ -19,6 +19,8 @@ function listMangas(userId) {
                    COALESCE(SUM(CASE WHEN v.status = 'Vorhanden' THEN v.price ELSE 0 END), 0) as total_value,
                    COALESCE(SUM(v.price), 0) as full_value,
                    COUNT(DISTINCT v.id) as volume_count,
+                   COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume' AND (TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) GLOB '[0-9]*' AND TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) NOT GLOB '*[^0-9]*') THEN CAST(TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) AS INTEGER) END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
+                   MAX(CASE WHEN v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume' AND (TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) GLOB '[0-9]*' AND TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) NOT GLOB '*[^0-9]*') THEN CAST(TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) AS INTEGER) END) as max_regular_number,
                    COUNT(DISTINCT vr.volume_id) as read_volume_count
             FROM mangas m
             LEFT JOIN volumes v ON m.id = v.manga_id

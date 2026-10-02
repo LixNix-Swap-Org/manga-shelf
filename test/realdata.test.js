@@ -71,3 +71,100 @@ test('shopping list tells special editions and schuber apart from regular volume
     const items = (await admin('GET', '/shopping-list')).body.items.filter(i => i.manga_id === id);
     assert.deepEqual(items.map(i => `${i.volume_number}|${i.type}`).sort(), ['11|special_edition', '11|volume', 'Leerschuber 1-5|schuber']);
 });
+
+test('list rows carry regular/extra counts; progress and completion count regular volumes only', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Fortschritt Reihe', total_volumes: 3, status: 'Laufend' })).body.id;
+    assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 4, status: 'Vorhanden' })).status, 200); // 4 > stale total 3
+    for (const [n, type] of [['Schuber 1', 'schuber'], ['Extra 1', 'special']]) {
+        assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: n, type, status: 'Vorhanden' })).status, 200);
+    }
+    const row = (await admin('GET', '/mangas')).body.find(m => m.id === id);
+    assert.equal(row.owned_volumes, 6);
+    assert.equal(row.regular_owned, 4);
+    assert.equal(row.max_regular_number, 4);
+
+    const { getSeriesProgress } = await import(require('url').pathToFileURL(require('path').join(__dirname, '..', 'frontend', 'src', 'utils', 'volumeHelpers.js')).href);
+    assert.deepEqual(getSeriesProgress(row), { owned: 4, total: 4, extras: 2, pct: 100 });
+});
+
+test('a series is not "completed" because schuber and extras raise the owned count', async () => {
+    const before = (await admin('GET', '/stats')).body.completed_series;
+    const id = (await admin('POST', '/mangas', { title: 'Nicht komplett', total_volumes: 3, status: 'Laufend' })).body.id;
+    assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 1, status: 'Vorhanden' })).status, 200);
+    for (const n of ['Schuber 1', 'Schuber 2']) {
+        assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: n, type: 'schuber', status: 'Vorhanden' })).status, 200);
+    }
+    assert.equal((await admin('GET', '/stats')).body.completed_series, before); // 3 owned entries, but only 1 of 3 volumes
+    assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 2, to: 3, status: 'Vorhanden' })).status, 200);
+    assert.equal((await admin('GET', '/stats')).body.completed_series, before + 1);
+});
+
+test('the same type and number cannot be added twice, but a special edition of the same number can', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Doppelt' })).body.id;
+    const add = (volume_number, type) => admin('POST', '/volumes', { manga_id: id, volume_number, type });
+    assert.equal((await add('6', 'volume')).status, 200);
+    const again = await add('6', 'volume');
+    assert.equal(again.status, 409);
+    assert.match(again.body.error, /Band 6 existiert bereits/);
+    assert.ok(again.body.existing_id);
+    assert.equal((await add(' 6 ', 'volume')).status, 409);                       // whitespace does not make it a new volume
+    assert.equal((await add('6', 'special_edition')).status, 200);                // Collectors Edition 6 next to Band 6
+    assert.equal((await add('Schuber 1', 'schuber')).status, 200);
+    assert.equal((await add('schuber 1', 'schuber')).status, 409);               // case-insensitive
+    assert.equal((await admin('GET', `/mangas/${id}`)).body.volumes.length, 3);
+});
+
+test('migration v7 removes the 2999-12-31 placeholder release date', () => {
+    const { db, initDb } = require('../db');
+    const mangaId = Number(db.prepare("INSERT INTO mangas (title) VALUES ('Platzhalter')").run().lastInsertRowid);
+    const add = (n, date) => db.prepare('INSERT INTO volumes (manga_id, volume_number, status, release_date) VALUES (?, ?, ?, ?)').run(mangaId, n, 'Fehlt', date);
+    add('1', '2999-12-31'); add('2', '2027-02-02'); add('3', '2026-10'); add('4', null);
+    db.prepare('DELETE FROM schema_migrations WHERE version = 7').run();
+    initDb();
+    const dates = db.prepare('SELECT release_date FROM volumes WHERE manga_id = ? ORDER BY CAST(volume_number AS INTEGER)').all(mangaId).map(r => r.release_date);
+    assert.deepEqual(dates, [null, '2027-02-02', '2026-10', null]);
+});
+
+test('"Band 14" counts as regular volume 14; "Starter 1" is an extra; migration v8 cleans the prefix', () => {
+    const { db, initDb } = require('../db');
+    const mangaId = Number(db.prepare("INSERT INTO mangas (title, total_volumes) VALUES ('Praefix', 14)").run().lastInsertRowid);
+    const add = (n) => db.prepare("INSERT INTO volumes (manga_id, volume_number, status, type) VALUES (?, ?, 'Vorhanden', 'volume')").run(mangaId, n);
+    add('13'); add('Band 14'); add('Starter 1'); add('Band 13');
+    db.prepare('DELETE FROM schema_migrations WHERE version = 8').run();
+    initDb();
+    const nums = db.prepare('SELECT volume_number FROM volumes WHERE manga_id = ? ORDER BY id').all(mangaId).map(r => r.volume_number);
+    assert.deepEqual(nums, ['13', '14', 'Starter 1', 'Band 13']);   // "Band 13" stays: a clean 13 already exists
+});
+
+test('list counts: numbered regular volumes only, even when stored as "Band N"', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Zaehlung', total_volumes: 3 })).body.id;
+    for (const [n, type] of [['1', 'volume'], ['Band 2', 'volume'], ['Starter 1', 'volume'], ['Schuber 1', 'schuber']]) {
+        assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: n, type })).status, 200);
+    }
+    const row = (await admin('GET', '/mangas')).body.find(m => m.id === id);
+    assert.equal(row.owned_volumes, 4);
+    assert.equal(row.regular_owned, 2);
+    assert.equal(row.max_regular_number, 2);
+});
+
+test('a duplicate entry does not raise the progress of a series', async () => {
+    const { db } = require('../db');
+    const id = (await admin('POST', '/mangas', { title: 'Doppelte zaehlen nicht', total_volumes: 5 })).body.id;
+    assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3, status: 'Vorhanden' })).status, 200);
+    // pre-existing duplicate (created before the server refused them)
+    db.prepare("INSERT INTO volumes (manga_id, volume_number, status, type) VALUES (?, '3', 'Vorhanden', 'volume')").run(id);
+    const row = (await admin('GET', '/mangas')).body.find(m => m.id === id);
+    assert.equal(row.volume_count, 4);
+    assert.equal(row.regular_owned, 3);
+});
+
+test('static headers: index.html, sw.js and manifest.json are revalidated, hashed assets are not touched', () => {
+    const { setStaticHeaders } = require('../utils/staticHeaders');
+    const headersFor = (file) => { const h = {}; setStaticHeaders({ setHeader: (k, v) => { h[k] = v; } }, file); return h; };
+    for (const file of ['C:\\app\\frontend\\dist\\index.html', '/app/frontend/dist/index.html', '/app/dist/sw.js', '/app/dist/manifest.json']) {
+        assert.deepEqual(headersFor(file), { 'Cache-Control': 'no-cache' }, file);
+    }
+    for (const file of ['/app/dist/assets/index-abc123.js', '/app/dist/assets/Dashboard-x.js', '/app/dist/favicon.svg', '/app/dist/assets/notindex.html.js']) {
+        assert.deepEqual(headersFor(file), {}, file);
+    }
+});

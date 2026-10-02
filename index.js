@@ -21,6 +21,7 @@ require('dotenv').config({ quiet: true });
 const pkg = require('./package.json');
 const { db, closeDb, uploadsDir } = require('./db');
 const { initScheduler } = require('./services/scheduler');
+const { setStaticHeaders } = require('./utils/staticHeaders');
 
 // Route modules
 const authRoutes = require('./routes/auth');
@@ -136,11 +137,7 @@ if (fs.existsSync(assetsDir)) {
 // Serve root static assets (manifest.json, sw.js, icons, favicon)
 app.use(express.static(frontendPath, {
     maxAge: '1h',
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('sw.js') || filePath.endsWith('manifest.json')) {
-            res.setHeader('Cache-Control', 'no-cache');
-        }
-    }
+    setHeaders: setStaticHeaders
 }));
 
 app.get('/{*splat}', (req, res) => {

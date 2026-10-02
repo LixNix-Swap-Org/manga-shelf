@@ -67,6 +67,19 @@ router.post('/volumes', requireEditor, (req, res) => {
             }
         }
 
+        // The same type + number twice is almost always a double click or a repeated entry; edit the existing one instead
+        const duplicate = db.prepare(`
+            SELECT id, status FROM volumes
+            WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND COALESCE(type, 'volume') = ?
+        `).get(mId, volNumStr, volType);
+        if (duplicate) {
+            const label = volType === 'volume' ? `Band ${volNumStr}` : volNumStr;
+            return res.status(409).json({
+                error: `${label} existiert bereits (${duplicate.status}). Bitte den vorhandenen Eintrag bearbeiten.`,
+                existing_id: duplicate.id
+            });
+        }
+
         let imagesVal = null;
         if (images) {
             imagesVal = Array.isArray(images) ? JSON.stringify(images) : String(images);

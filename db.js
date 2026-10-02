@@ -165,6 +165,29 @@ function runSequentialMigrations(database) {
                     update.run(match[1], match[2].trim(), row.id);
                 }
             }
+        },
+        {
+            version: 7,
+            name: 'drop_placeholder_release_dates',
+            up: (d) => {
+                // Manga Passion's "date not announced" placeholder (2999-12-31) was stored as a real date and ended up in the radar
+                d.exec("UPDATE volumes SET release_date = NULL WHERE release_date IS NOT NULL AND CAST(SUBSTR(release_date, 1, 4) AS INTEGER) >= 2100;");
+            }
+        },
+        {
+            version: 8,
+            name: 'strip_band_prefix_from_volume_numbers',
+            up: (d) => {
+                // Some collections store regular volumes as "Band 14" while the official lists (and gap detection) use "14"
+                const rows = d.prepare("SELECT id, manga_id, volume_number FROM volumes WHERE COALESCE(type, 'volume') = 'volume' AND LOWER(volume_number) LIKE 'band %'").all();
+                const taken = d.prepare("SELECT 1 FROM volumes WHERE manga_id = ? AND volume_number = ? AND COALESCE(type, 'volume') = 'volume'");
+                const update = d.prepare('UPDATE volumes SET volume_number = ? WHERE id = ?');
+                for (const row of rows) {
+                    const match = String(row.volume_number).trim().match(/^band\s+(\d+)$/i);
+                    if (!match || taken.get(row.manga_id, match[1])) continue;
+                    update.run(match[1], row.id);
+                }
+            }
         }
     ];
 

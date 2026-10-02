@@ -9,7 +9,8 @@ import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { loadMangaDetail, updateCachedManga } from './utils/offlineStore';
-import { normalizePubName, gapVolumeNumber, isGapCovered, getEditionLabel, getSpecialEditionNumber, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
+import { inferVolumeType } from './utils/volumeHelpers';
+import { normalizePubName, getSeriesProgress, volumeNumberOf, gapVolumeNumber, isGapCovered, getEditionLabel, getSpecialEditionNumber, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -358,9 +359,11 @@ export default function MangaDetail({ user }) {
     }
   };
 
+  const addingVolumeRef = useRef(false);
   const handleAddSingleVolume = async (e) => {
     e.preventDefault();
-    if (!canEdit || !newVolumeNum.trim()) return;
+    if (!canEdit || !newVolumeNum.trim() || addingVolumeRef.current) return; // a double click must not add it twice
+    addingVolumeRef.current = true;
 
     try {
       const res = await fetch('/api/volumes', {
@@ -392,6 +395,8 @@ export default function MangaDetail({ user }) {
       }
     } catch (err) {
       alert('Netzwerkfehler');
+    } finally {
+      addingVolumeRef.current = false;
     }
   };
 
@@ -618,8 +623,24 @@ export default function MangaDetail({ user }) {
   const missingCount = volumes.filter(v => v.status === 'Fehlt').length;
   const preorderedCount = volumes.filter(v => v.status === 'Vorbestellt').length;
   const upcomingCount = volumes.filter(v => v.status === 'Erscheint bald').length;
-  const totalTarget = manga?.total_volumes || 0;
-  const completionPct = totalTarget > 0 ? Math.min(100, Math.round((ownedCount / totalTarget) * 100)) : null;
+  // progress counts regular volumes only; schuber/extras show as "+N", a stale total follows the highest owned number
+  const ownedRegular = volumes.filter(v => v.status === 'Vorhanden' && inferVolumeType(v) === 'volume' && volumeNumberOf(v) !== null);
+  const seriesProgress = getSeriesProgress({
+    regular_owned: new Set(ownedRegular.map(v => volumeNumberOf(v))).size, // distinct: a duplicate entry does not raise progress
+    max_regular_number: Math.max(0, ...ownedRegular.map(v => volumeNumberOf(v))),
+    total_volumes: manga?.total_volumes,
+    owned_volumes: ownedCount
+  });
+  const duplicateEntries = useMemo(() => {
+    const groups = new Map();
+    for (const v of volumes) {
+      const key = `${inferVolumeType(v)}:${String(v.volume_number).trim().toLowerCase()}`;
+      groups.set(key, [...(groups.get(key) || []), v]);
+    }
+    return [...groups.values()].filter(g => g.length > 1).map(g => ({ label: getVolumeDisplayTitle(g[0]), count: g.length }));
+  }, [volumes]);
+  const totalTarget = seriesProgress.total;
+  const completionPct = seriesProgress.pct;
 
   // Total value calculation
   const totalOwnedValue = manga?.total_value !== undefined ? manga.total_value : volumes
@@ -1410,7 +1431,8 @@ export default function MangaDetail({ user }) {
           handleEditLookup={handleEditLookup}
           handleUpdate={handleUpdate}
           manga={manga}
-          ownedCount={ownedCount}
+          ownedCount={seriesProgress.owned}
+          extrasCount={seriesProgress.extras}
           saving={saving}
           setEditLookupResults={setEditLookupResults}
           setEditing={setEditing}
@@ -1572,6 +1594,17 @@ export default function MangaDetail({ user }) {
             </div>
           ) : (
             <>
+              {/* Duplicate entries (same type and number more than once), e.g. from an accidental double click */}
+              {duplicateEntries.length > 0 && canEdit && (
+                <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-200">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>
+                    <strong>Doppelte Einträge:</strong> {duplicateEntries.map(d => `${d.label} (${d.count}×)`).join(', ')}
+                    {' '}– überzählige Bände kannst du über das ✕ an der Karte löschen.
+                  </span>
+                </div>
+              )}
+
               {/* Collection Gap Notice Banner (Shown in all view modes if gaps detected) */}
               {showGaps && detectedGaps.length > 0 && (volumeFilter === 'ALL' || volumeFilter === 'Fehlt') && !volumeSearch && (
                 <div className="mb-4 space-y-2">

@@ -23,7 +23,11 @@ router.get('/stats', requireAuth, (req, res) => {
         const completedRow = db.prepare(`
             SELECT count(*) as count FROM mangas 
             WHERE status = 'Abgeschlossen' 
-               OR (total_volumes IS NOT NULL AND total_volumes > 0 AND owned_volumes >= total_volumes)
+               OR (total_volumes IS NOT NULL AND total_volumes > 0 AND (
+                    SELECT COUNT(DISTINCT CAST(TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) AS INTEGER)) FROM volumes v
+                    WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume'
+                      AND (TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) GLOB '[0-9]*' AND TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) NOT GLOB '*[^0-9]*')
+                   ) >= total_volumes)
         `).get();
         const completedSeries = completedRow ? completedRow.count : 0;
 

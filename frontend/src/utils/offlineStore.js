@@ -108,15 +108,16 @@ function warmCaches(snapshot) {
     // lazy route chunks (incl. login for a cold start after the session expired): only cached by the service worker once fetched online
     await Promise.allSettled([import('../Dashboard'), import('../MangaDetail'), import('../Login')]);
     if (navigator.connection?.saveData) return;
-    const urls = new Set();
-    for (const m of snapshot.mangas) if (m.cover_image) urls.add(m.cover_image);
-    for (const d of Object.values(snapshot.details || {})) {
-      for (const v of d.volumes || []) if (v.cover_image) urls.add(v.cover_image);
-    }
-    const queue = [...urls].filter((u) => u.startsWith('/uploads/')).slice(0, 400);
+    // Only the series covers (the dashboard): volume covers can add up to dozens of MB on a big collection and
+    // are cached by the service worker when they are viewed. Covers that are already cached are skipped.
+    const queue = [...new Set(snapshot.mangas.map((m) => m.cover_image).filter((u) => u && u.startsWith('/uploads/')))];
     const worker = async () => {
       while (queue.length) {
-        try { await fetch(queue.shift()); } catch (_) { /* offline again: stop quietly */ return; }
+        const url = queue.shift();
+        try {
+          if (typeof caches !== 'undefined' && await caches.match(url)) continue;
+          await fetch(url);
+        } catch (_) { /* offline again: stop quietly */ return; }
       }
     };
     await Promise.all([worker(), worker(), worker()]);
