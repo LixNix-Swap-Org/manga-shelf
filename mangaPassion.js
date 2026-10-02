@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { db, uploadsDir, runTransaction, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
 const { normalizePublisher } = require('./utils/publishers');
+const { normalizeIsbn } = require('./utils/isbn');
 
 const pkg = require('./package.json');
 const log = require('./utils/logger').child('manga-passion');
@@ -783,7 +784,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
             release_date: relDate,
             release_year: relYear,
             pages: fullVol.pages || null,
-            isbn: fullVol.isbn13 || fullVol.isbn10 || null,
+            isbn: normalizeIsbn(fullVol.isbn13 || fullVol.isbn10),
             price: fullVol.price ? Math.round(fullVol.price) / 100 : null,
             publisher,
             cover_image: localCover || fullVol.cover || null,
@@ -880,7 +881,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
     const relDate = fullVol?.date ? fullVol.date.slice(0, 10) : matchedVolume.release_date;
     const relYear = fullVol?.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
     const pages = fullVol?.pages || matchedVolume.pages || null;
-    const isbn = fullVol?.isbn13 || fullVol?.isbn10 || options.isbn || null;
+    const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
     const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
     const localCover = await downloadRemoteImageToUploads(rawCover);

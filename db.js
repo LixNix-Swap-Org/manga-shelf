@@ -135,6 +135,20 @@ function runSequentialMigrations(database) {
                     }
                 }
             }
+        },
+        {
+            version: 5,
+            name: 'normalize_isbn_format',
+            up: (d) => {
+                // hyphenated / ISBN-10 values -> canonical digits-only ISBN-13 (same form barcode scans produce)
+                const { normalizeIsbn } = require('./utils/isbn');
+                const rows = d.prepare("SELECT id, isbn FROM volumes WHERE isbn IS NOT NULL AND TRIM(isbn) != ''").all();
+                const update = d.prepare('UPDATE volumes SET isbn = ? WHERE id = ?');
+                for (const { id, isbn } of rows) {
+                    const normalized = normalizeIsbn(isbn);
+                    if (normalized && normalized !== isbn) update.run(normalized, id);
+                }
+            }
         }
     ];
 

@@ -4,6 +4,7 @@ const { db, runTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
+const { normalizeIsbn } = require('../utils/isbn');
 const { lookupVolumeMetadata } = require('../mangaPassion');
 const log = require('../utils/logger').child('volumes');
 
@@ -83,7 +84,7 @@ router.post('/volumes', requireEditor, (req, res) => {
             const result = stmt.run(
                 mId,
                 volNumStr,
-                isbn ? String(isbn).trim() : null,
+                normalizeIsbn(isbn),
                 parsePrice(price),
                 release_date ? String(release_date).trim() : null,
                 parseNum(release_year),
@@ -172,7 +173,7 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
 
         const body = req.body;
         const volume_number = body.volume_number !== undefined ? String(body.volume_number).trim() : vol.volume_number;
-        const isbn = body.isbn !== undefined ? (body.isbn ? String(body.isbn).trim() : null) : vol.isbn;
+        const isbn = body.isbn !== undefined ? normalizeIsbn(body.isbn) : vol.isbn;
         const price = body.price !== undefined ? parsePrice(body.price) : vol.price;
         const release_date = body.release_date !== undefined ? (body.release_date ? String(body.release_date).trim() : null) : vol.release_date;
         const release_year = body.release_year !== undefined ? parseNum(body.release_year) : vol.release_year;
@@ -341,7 +342,7 @@ router.get('/volumes/lookup', requireAuth, async (req, res) => {
     try {
         const mangaId = req.query.manga_id ? parseInt(req.query.manga_id, 10) : null;
         const volumeNumber = qstr(req.query.volume_number);
-        const isbn = qstr(req.query.isbn)?.trim() || null;
+        const isbn = normalizeIsbn(qstr(req.query.isbn));
         const type = qstr(req.query.type)?.trim() || null;
         const notes = qstr(req.query.notes)?.trim() || null;
         const price = req.query.price ? parseFloat(req.query.price) : null;

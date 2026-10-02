@@ -9,6 +9,7 @@ const { upload } = require('../middleware/upload');
 const { fetchRemoteImage } = require('../utils/safeFetch');
 const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
+const { normalizeIsbn } = require('../utils/isbn');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
 const log = require('../utils/logger').child('lookup');
 
@@ -358,7 +359,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
                 SELECT id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year
                 FROM volumes 
                 WHERE manga_id = ? AND (volume_number = ? OR isbn = ?)
-            `).get(matchedManga.id, book.volume_number, cleanIsbn);
+            `).get(matchedManga.id, book.volume_number, normalizeIsbn(cleanIsbn));
             if (vol) matchedVolume = vol;
         }
 
