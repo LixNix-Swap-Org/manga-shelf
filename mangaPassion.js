@@ -180,6 +180,25 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
   };
 }
 
+function writeEditionCache(cacheKey, value) {
+  try {
+    db.prepare(`
+      INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
+    `).run(cacheKey, JSON.stringify(value), Date.now());
+  } catch (e) { log.warn('Manga Passion cache write failed:', e.message); }
+}
+
+/** Last cached edition data regardless of age (used when Manga Passion is unreachable). */
+function readStaleEditionCache(cacheKey) {
+  try {
+    const row = db.prepare('SELECT json_data FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
+    const parsed = row?.json_data ? JSON.parse(row.json_data) : null;
+    return parsed && !parsed.notFound && parsed.volumes?.length ? parsed : null;
+  } catch (e) { return null; }
+}
+
 async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   const cacheKey = `mp_edition_vols_${editionId}`;
   const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -201,19 +220,16 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     } catch (e) { log.warn('Manga Passion edition cache read failed:', e.message); }
   }
 
+  // Anything but a clean answer (timeout, 5xx, aborted pagination) must never be cached as if it were complete
+  let complete = true;
+
   // Fetch edition info
   let edition = null;
   try {
     const edRes = await fetchWithTimeout(`https://api.manga-passion.de/editions/${editionId}`, { headers: HEADERS }, 8000);
     if (edRes.status === 404) {
       const notFoundResult = { notFound: true, edition: null, volumes: [] };
-      try {
-        db.prepare(`
-          INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
-          VALUES (?, ?, ?)
-          ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
-        `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-      } catch (e) { log.warn('Manga Passion cache write failed:', e.message); }
+      writeEditionCache(cacheKey, notFoundResult);
       return notFoundResult;
     }
     if (edRes.ok) {
@@ -239,8 +255,11 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
         cover_image: edData.cover || null,
         description: edData.description || null
       };
+    } else {
+      complete = false;
     }
   } catch (err) {
+    complete = false;
     log.warn(`Error fetching edition ${editionId}:`, err.message);
   }
 
@@ -254,19 +273,14 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
       if (volRes.status === 404) {
         if (rawList.length === 0) {
           const notFoundResult = { notFound: true, edition, volumes: [] };
-          try {
-            db.prepare(`
-              INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
-              VALUES (?, ?, ?)
-              ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
-            `).run(cacheKey, JSON.stringify(notFoundResult), Date.now());
-          } catch (e) { log.warn('Manga Passion cache write failed:', e.message); }
+          writeEditionCache(cacheKey, notFoundResult);
           return notFoundResult;
         }
         break;
       }
       if (!volRes.ok) {
         log.warn(`[Manga Passion] Upstream error fetching volumes: status ${volRes.status}`);
+        complete = false;
         break;
       }
 
@@ -282,6 +296,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
       }
     } catch (volErr) {
       log.warn(`[Manga Passion] Network or timeout error fetching volumes:`, volErr.message);
+      complete = false;
       break;
     }
   }
@@ -315,16 +330,12 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
 
   const result = { edition, volumes };
 
-  try {
-    db.prepare(`
-      INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
-    `).run(cacheKey, JSON.stringify(result), Date.now());
-  } catch (e) {
-    log.warn('Cache write failed:', e);
+  if (!complete) {
+    // keep serving the last good data (even if older than the TTL) instead of an empty or truncated list
+    return readStaleEditionCache(cacheKey) || { ...result, incomplete: true };
   }
 
+  writeEditionCache(cacheKey, result);
   return result;
 }
 
@@ -380,11 +391,6 @@ async function reconcileMangaGaps(mangaId, options = {}) {
         manga.manga_passion_id = editionId;
       } catch (e) { log.warn('Auto-saving Manga Passion edition id failed:', e.message); }
     }
-  } else {
-    // Also fetch alternatives in background so user can switch
-    searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes)
-      .then(res => { candidateEditions = res.candidates; })
-      .catch(() => {});
   }
 
   if (!editionId) {
@@ -402,6 +408,14 @@ async function reconcileMangaGaps(mangaId, options = {}) {
       success: false,
       matched: false,
       message: 'Manga-Passion Edition nicht gefunden oder nicht verfügbar.',
+      candidate_editions: candidateEditions
+    };
+  }
+  if (details.incomplete && !details.volumes.length) {
+    return {
+      success: false,
+      matched: false,
+      message: 'Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.',
       candidate_editions: candidateEditions
     };
   }
@@ -548,6 +562,7 @@ async function reconcileMangaGaps(mangaId, options = {}) {
     upcoming_gaps: upcomingGaps,
     owned_count: userVolumes.filter(v => v.status === 'Vorhanden').length,
     user_volumes_count: userVolumes.length,
+    incomplete: Boolean(details.incomplete),
     candidate_editions: candidateEditions
   };
 }
@@ -996,6 +1011,29 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
   };
 }
 
+const AUTOFILL_COLUMNS = ['release_date', 'release_year', 'pages', 'price', 'publisher', 'cover_image', 'notes'];
+
+/**
+ * Writes autofill results in one transaction. `pendingUpdates` is [{ uv, next }]: the volume row as it was read and the
+ * new values computed from it. Those were computed before the (async) cover downloads, so a field somebody edited in
+ * the meantime keeps its current value instead of being overwritten with the stale snapshot.
+ * Returns the number of rows written.
+ */
+function applyAutofillUpdates(pendingUpdates) {
+  const updateStmt = db.prepare(`UPDATE volumes SET ${AUTOFILL_COLUMNS.map(c => `${c} = ?`).join(', ')} WHERE id = ?`);
+  let written = 0;
+  withTransaction(() => {
+    for (const { uv, next } of pendingUpdates) {
+      const current = db.prepare('SELECT * FROM volumes WHERE id = ?').get(uv.id);
+      if (!current) continue; // deleted meanwhile
+      const merged = AUTOFILL_COLUMNS.map(c => (current[c] !== uv[c] ? current[c] : next[c]));
+      updateStmt.run(...merged, uv.id);
+      written++;
+    }
+  });
+  return written;
+}
+
 /**
  * Batch-autofills missing release dates, years, pages, and prices for all volumes in a manga.
  */
@@ -1051,18 +1089,6 @@ async function autofillMangaVolumes(mangaId, options = {}) {
 
   let updatedCount = 0;
   const overwrite = Boolean(options.overwrite);
-
-  const updateStmt = db.prepare(`
-    UPDATE volumes SET
-      release_date = ?,
-      release_year = ?,
-      pages = ?,
-      price = ?,
-      publisher = ?,
-      cover_image = ?,
-      notes = ?
-    WHERE id = ?
-  `);
 
   // Phase 1 (async): pre-download needed Schuber covers and collect updates without holding a DB lock
   const schuberCovers = new Map();
@@ -1139,15 +1165,15 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       }
 
       if (changed) {
-        pendingUpdates.push([newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id]);
+        pendingUpdates.push({
+          uv,
+          next: { release_date: newDate, release_year: newYear, pages: newPages, price: newPrice, publisher: newPub, cover_image: newCover, notes: newNotes }
+        });
       }
     }
 
   // Phase 2 (sync): apply all updates atomically
-  withTransaction(() => {
-    for (const params of pendingUpdates) updateStmt.run(...params);
-  });
-  updatedCount = pendingUpdates.length;
+  updatedCount = applyAutofillUpdates(pendingUpdates);
 
   return {
     success: true,
@@ -1168,5 +1194,6 @@ module.exports = {
   autofillMangaVolumes,
   scoreEdition,
   matchSchuberVolume,
-  cleanOfficialDate
+  cleanOfficialDate,
+  applyAutofillUpdates
 };

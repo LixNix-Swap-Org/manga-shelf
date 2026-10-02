@@ -18,18 +18,7 @@ export default function MpEditionModal({
   const [mpEditionSearchResults, setMpEditionSearchResults] = useState(null);
   const [searchingMpEditions, setSearchingMpEditions] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      setMpEditionSearchQuery('');
-      setMpEditionSearchResults(null);
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSearchMpEditions = async (e) => {
-    if (e) e.preventDefault();
-    const query = mpEditionSearchQuery.trim() || manga?.title;
+  const searchEditions = async (query) => {
     if (!query) return;
     setSearchingMpEditions(true);
     try {
@@ -43,6 +32,21 @@ export default function MpEditionModal({
     } finally {
       setSearchingMpEditions(false);
     }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setMpEditionSearchQuery('');
+    setMpEditionSearchResults(null);
+    // the gap check no longer ships alternatives for an already linked edition: look them up when the dialog opens
+    if (!mpGapData?.candidate_editions?.length) searchEditions(manga?.title);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSearchMpEditions = (e) => {
+    if (e) e.preventDefault();
+    return searchEditions(mpEditionSearchQuery.trim() || manga?.title);
   };
 
   return (

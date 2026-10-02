@@ -169,3 +169,88 @@ test('batchImportGaps: importing twice does not create duplicates', async () => 
     await mp.batchImportGaps(id, ['2']);
     assert.equal(db.prepare('SELECT COUNT(*) c FROM volumes WHERE manga_id = ?').get(id).c, 2);
 });
+
+test('getEditionDetailsAndVolumes: an upstream outage is not cached as an empty edition', async () => {
+    const realFetch = global.fetch;
+    const id = 5151;
+    const key = `mp_edition_vols_${id}`;
+    db.prepare('DELETE FROM manga_passion_cache WHERE cache_key = ?').run(key);
+    try {
+        global.fetch = async () => ({ ok: false, status: 503, json: async () => ({}) });
+        const down = await mp.getEditionDetailsAndVolumes(id);
+        assert.equal(down.incomplete, true);
+        assert.equal(db.prepare('SELECT 1 FROM manga_passion_cache WHERE cache_key = ?').get(key), undefined);
+
+        // back online: the next call must fetch again instead of serving the outage from the cache
+        global.fetch = async (url) => ({
+            ok: true, status: 200,
+            json: async () => String(url).includes('/volumes')
+                ? { 'hydra:member': [{ id: 1, number: 1, numberDisplay: '1', date: '2020-01-01T00:00:00+00:00', price: 700 }] }
+                : { id, title: 'Online', numVolumes: 1, status: 1, publishers: [{ name: 'Carlsen Manga' }] }
+        });
+        const up = await mp.getEditionDetailsAndVolumes(id);
+        assert.equal(up.incomplete, undefined);
+        assert.equal(up.volumes.length, 1);
+        assert.ok(db.prepare('SELECT 1 FROM manga_passion_cache WHERE cache_key = ?').get(key));
+    } finally {
+        global.fetch = realFetch;
+    }
+});
+
+test('getEditionDetailsAndVolumes: during an outage the last cached data is served even when it is stale', async () => {
+    const realFetch = global.fetch;
+    const id = 5152;
+    const key = `mp_edition_vols_${id}`;
+    db.prepare(`INSERT INTO manga_passion_cache (cache_key, json_data, created_at) VALUES (?, ?, 0)
+        ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = 0`)
+        .run(key, JSON.stringify({ edition: { title: 'Alt', publisher: 'Carlsen Manga', total_volumes: 2, author: 'X' }, volumes: [ov('1'), ov('2')] }));
+    try {
+        global.fetch = async () => { throw new Error('network down'); };
+        const res = await mp.getEditionDetailsAndVolumes(id);
+        assert.equal(res.volumes.length, 2);
+        assert.equal(res.incomplete, undefined);
+    } finally {
+        global.fetch = realFetch;
+    }
+});
+
+test('reconcileMangaGaps: outage without any cached data reports "not reachable" instead of an empty gap list', async () => {
+    const realFetch = global.fetch;
+    const mangaId = Number(db.prepare('INSERT INTO mangas (title, publisher, total_volumes, manga_passion_id) VALUES (?, ?, ?, ?)')
+        .run('Ausfallreihe', 'Carlsen Manga', 3, 5153).lastInsertRowid);
+    try {
+        global.fetch = async () => { throw new Error('network down'); };
+        const res = await mp.reconcileMangaGaps(mangaId);
+        assert.equal(res.success, false);
+        assert.match(res.message, /nicht erreichbar/);
+    } finally {
+        global.fetch = realFetch;
+    }
+});
+
+test('applyAutofillUpdates: a field edited after the snapshot keeps its new value', () => {
+    const id = createManga('Autofillreihe', 2);
+    addVolume(id, '1', 'Vorhanden');
+    const uv = db.prepare('SELECT * FROM volumes WHERE manga_id = ?').get(id);
+    // somebody edits the volume while the autofill is still downloading covers
+    db.prepare('UPDATE volumes SET notes = ? WHERE id = ?').run('Handgepflegt', uv.id);
+
+    const written = mp.applyAutofillUpdates([{
+        uv,
+        next: { release_date: '2021-02-03', release_year: 2021, pages: 200, price: 8, publisher: 'Carlsen Manga', cover_image: null, notes: 'Vom Autofill' }
+    }]);
+
+    const after = db.prepare('SELECT * FROM volumes WHERE id = ?').get(uv.id);
+    assert.equal(written, 1);
+    assert.equal(after.notes, 'Handgepflegt');
+    assert.equal(after.release_date, '2021-02-03');
+    assert.equal(after.pages, 200);
+});
+
+test('applyAutofillUpdates: a volume deleted meanwhile is skipped', () => {
+    const id = createManga('Autofillreihe 2', 1);
+    addVolume(id, '1', 'Vorhanden');
+    const uv = db.prepare('SELECT * FROM volumes WHERE manga_id = ?').get(id);
+    db.prepare('DELETE FROM volumes WHERE id = ?').run(uv.id);
+    assert.equal(mp.applyAutofillUpdates([{ uv, next: { ...uv, pages: 5 } }]), 0);
+});
