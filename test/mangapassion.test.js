@@ -356,3 +356,68 @@ test('reconcileMangaGaps: an already linked edition is always confirmed', async 
     const res = await mp.reconcileMangaGaps(id);
     assert.equal(res.link_confirmed, true);
 });
+
+const { titleKey, titleRelation, buildSearchQueries } = require('../services/mangaPassion/classify');
+
+test('titleKey: apostrophes, dots and punctuation do not make two spellings differ', () => {
+    assert.equal(titleKey("Hell's Paradise"), titleKey('Hells Paradise'));
+    assert.equal(titleKey('ONE-PUNCH MAN'), titleKey('One Punch Man'));
+    assert.equal(titleKey('Akame ga Kill!'), 'akame ga kill');
+    assert.equal(titleKey("Komi can't communicate"), titleKey('Komi can´t communicate'));
+});
+
+test('titleRelation: exact / candidate-longer / target-longer / fuzzy', () => {
+    assert.equal(titleRelation('Eyeshield 21', 'Eyeshield21'), 'exact');
+    assert.equal(titleRelation('Pochi & Kuro', 'Pochi&Kuro'), 'exact');
+    assert.equal(titleRelation('Mashle: Magic and Muscles', 'Mashle'), 'candidate-longer');
+    assert.equal(titleRelation('Dragon Ball', 'Dragon Ball max'), 'target-longer');
+    assert.equal(titleRelation('Magilumiere Inc.', 'Dandadan'), 'fuzzy');
+});
+
+test('buildSearchQueries: other spellings for hyphens, apostrophes and glued numbers, rare words as fallback', () => {
+    const one = buildSearchQueries('One Punch Man');
+    assert.ok(one.variants.includes('One-Punch Man') && one.variants.includes('One-Punch-Man'));
+    assert.ok(buildSearchQueries('Hells Paradise').variants.includes("Hell's Paradise"));
+    assert.ok(buildSearchQueries('Eyeshield21').variants.includes('Eyeshield 21'));
+    assert.ok(one.primary.includes('One Punch Man'));
+    assert.deepEqual(buildSearchQueries('Berserk Deluxe').words, ['berserk']); // "deluxe" is a stop word
+    assert.deepEqual(buildSearchQueries('   ').primary, []);
+});
+
+test('scoreEdition: a similar title is needed before publisher and volume count add anything', () => {
+    const unrelated = { title: 'Dada Adventure', numVolumes: 5, publishers: [{ name: 'Altraverse' }] };
+    assert.ok(mp.scoreEdition(unrelated, 'JoJo Bizarre Adventure Part 1', 'Altraverse', 5) < 20);
+    const punctuation = { title: "Hell's Paradise", numVolumes: 13, publishers: [{ name: 'KAZÉ Manga' }] };
+    assert.ok(mp.scoreEdition(punctuation, 'Hells Paradise', 'Kazé Manga', 13) >= 100);
+});
+
+test('isConfidentMatch: a series title with extra words is not linked to the plain series', () => {
+    assert.equal(isConfidentMatch([{ score: 145, title_relation: 'target-longer' }, { score: 85 }]), false);
+    assert.equal(isConfidentMatch([{ score: 145, title_relation: 'candidate-longer' }, { score: 85 }]), true);
+    assert.equal(isConfidentMatch([{ score: 200, title_relation: 'fuzzy' }]), false);
+});
+
+test('searchMangaPassionEditions: finds "One Punch Man" via the hyphenated spelling the API needs', async () => {
+    const realFetch = global.fetch;
+    const asked = [];
+    try {
+        global.fetch = async (url) => {
+            const q = decodeURIComponent(String(url).split('title=')[1].split('&')[0]);
+            asked.push(q);
+            const hit = q === 'One-Punch Man';
+            return { ok: true, status: 200, json: async () => ({ 'hydra:member': hit ? [{ id: 7001, title: 'ONE-PUNCH MAN', numVolumes: 32, status: 1, publishers: [{ name: 'KAZÉ Manga' }] }] : [] }) };
+        };
+        const res = await mp.searchMangaPassionEditions('One Punch Man', 'Kazé Manga', 30);
+        assert.equal(res.recommended?.id, 7001);
+        assert.ok(asked.includes('One Punch Man') && asked.includes('One-Punch Man'));
+    } finally { global.fetch = realFetch; }
+});
+
+test('searchMangaPassionEditions: a hopeless title yields no recommendation instead of a random edition', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ 'hydra:member': [{ id: 7002, title: 'Ganz Etwas Anderes', numVolumes: 5, status: 1, publishers: [{ name: 'Carlsen Manga' }] }] }) });
+        const res = await mp.searchMangaPassionEditions('Zzyzx Qwerty', 'Carlsen Manga', 5);
+        assert.equal(res.recommended, null);
+    } finally { global.fetch = realFetch; }
+});

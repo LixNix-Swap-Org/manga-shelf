@@ -3,16 +3,60 @@
  * No database or network access, so everything here can be unit-tested directly.
  */
 
+/**
+ * Comparison key of a title: lowercase, apostrophes / dots / ! / ? dropped, dashes, colons and the like turned into
+ * spaces ("Hell's Paradise" = "Hells Paradise", "ONE-PUNCH MAN" = "One Punch Man", "Akame ga Kill!" = "Akame ga Kill").
+ */
+function titleKey(t) {
+  return String(t || '').toLowerCase()
+    .replace(/[’'`´.!?]/g, '')
+    .replace(/[:–—\-_/&,;]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+const compactKey = (t) => titleKey(t).replace(/\s+/g, '');
+
+/** Share of identical words between two titles (0 - 1). */
+function wordOverlap(a, b) {
+  const wa = new Set(titleKey(a).split(' ').filter(Boolean));
+  const wb = new Set(titleKey(b).split(' ').filter(Boolean));
+  if (!wa.size || !wb.size) return 0;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared++;
+  return shared / (wa.size + wb.size - shared);
+}
+
+/**
+ * How the title of an edition relates to the series title: 'exact' (same words, also "Eyeshield21" = "Eyeshield 21"),
+ * 'candidate-longer' (an official subtitle was added), 'target-longer' (the series title has extra words such as
+ * "max", "Extream" or "Anthology": probably a different edition than the plain series), or 'fuzzy'.
+ */
+function titleRelation(editionTitle, targetTitle) {
+  const e = titleKey(editionTitle);
+  const t = titleKey(targetTitle);
+  if (!e || !t) return 'fuzzy';
+  if (e === t || compactKey(editionTitle) === compactKey(targetTitle)) return 'exact';
+  if (e.includes(t)) return 'candidate-longer';
+  if (t.includes(e)) return 'target-longer';
+  return 'fuzzy';
+}
+
 function scoreEdition(e, targetTitle, targetPub, targetTotal) {
   let score = 0;
-  const tNorm = (targetTitle || '').toLowerCase().replace(/[:–—-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const eNorm = (e.title || '').toLowerCase().replace(/[:–—-]/g, ' ').replace(/\s+/g, ' ').trim();
-  
-  if (eNorm === tNorm) score += 100;
-  else if (eNorm.includes(tNorm) || tNorm.includes(eNorm)) score += 50;
+  const tNorm = titleKey(targetTitle);
+  const eNorm = titleKey(e.title);
 
-  const tBase = (targetTitle || '').toLowerCase().split(/[:–—-]/)[0].trim();
-  const eBase = (e.title || '').toLowerCase().split(/[:–—-]/)[0].trim();
+  if (eNorm === tNorm) score += 100;
+  else if (compactKey(e.title) === compactKey(targetTitle) && tNorm) score += 90; // "Eyeshield21" = "Eyeshield 21"
+  else if (eNorm.includes(tNorm) || tNorm.includes(eNorm)) score += 50;
+  else score += Math.round(40 * wordOverlap(e.title, targetTitle)); // "JoJo Bizarre Adventure Part 1" ~ "JoJo's Bizarre Adventure - Part 1: Phantom Blood"
+
+  // Publisher and volume count only count for a title that is at least somewhat similar (otherwise any edition of the
+  // same publisher with a matching volume count would look like a hit)
+  if (score < 15) return score;
+
+  const tBase = titleKey(String(targetTitle || '').split(/[:–—-]/)[0]);
+  const eBase = titleKey(String(e.title || '').split(/[:–—-]/)[0]);
   if (tBase && eBase && tBase === eBase) score += 35;
 
   if (targetPub && e.publishers?.[0]?.name) {
@@ -132,7 +176,52 @@ const MIN_CONFIDENT_LEAD = 20;
 function isConfidentMatch(candidates) {
   const [best, second] = candidates || [];
   if (!best || best.score < MIN_CONFIDENT_SCORE) return false;
+  // a series title with extra words ("Dragon Ball max") must not be linked to the plain series ("Dragon Ball") unasked
+  if (best.title_relation === 'target-longer' || best.title_relation === 'fuzzy') return false;
   return !second || best.score - second.score >= MIN_CONFIDENT_LEAD;
+}
+
+const SEARCH_STOP_WORDS = new Set(['edition', 'deluxe', 'ultimate', 'ultimative', 'collectors', 'manga', 'premium', 'special', 'limited', 'master', 'perfect', 'complete', 'anthology', 'magazin']);
+
+/**
+ * Queries for the Manga Passion title search, which only finds a title when the spelling matches closely
+ * ("One Punch Man" finds nothing, "One-Punch Man" does). `primary` are the cheap spellings, `variants` guess
+ * hyphens, apostrophes and glued numbers, `words` are single rare words used as a last resort.
+ */
+function buildSearchQueries(title) {
+  const clean = String(title || '').replace(/\s+/g, ' ').trim();
+  const unique = (list) => [...new Set(list.map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length >= 2))];
+
+  const primary = unique([
+    clean,
+    clean.replace(/[–—]/g, '-'),
+    clean.replace(/[-–—:]/g, ' '),
+    clean.replace(/\./g, '. '),
+    clean.split(/[:–—-]/)[0]
+  ]);
+
+  const words = clean.split(' ');
+  const variants = [clean.replace(/([A-Za-zÄÖÜäöüß])(\d)/g, '$1 $2')]; // Eyeshield21 -> Eyeshield 21
+  if (words.length >= 2 && words.length <= 5 && !/[-–—:]/.test(clean)) {
+    for (let i = 0; i < words.length - 1; i++) { // One Punch Man -> One-Punch Man, One Punch-Man
+      variants.push([...words.slice(0, i), words[i] + '-' + words[i + 1], ...words.slice(i + 2)].join(' '));
+    }
+    variants.push(words.join('-'));
+  }
+  words.forEach((w, i) => { // Hells Paradise -> Hell's Paradise
+    if (/^[A-Za-zÄÖÜäöüß]{4,}s$/.test(w)) variants.push([...words.slice(0, i), w.slice(0, -1) + "'s", ...words.slice(i + 1)].join(' '));
+  });
+
+  const rare = titleKey(clean).split(' ')
+    .filter(w => w.length >= 5 && !SEARCH_STOP_WORDS.has(w))
+    .sort((a, b) => b.length - a.length);
+
+  const seen = new Set(primary);
+  return {
+    primary,
+    variants: unique(variants).filter(q => !seen.has(q)).slice(0, 8),
+    words: [...new Set(rare)].slice(0, 2)
+  };
 }
 
 /** A Schuber / box set entry of the official edition (never a regular volume). */
@@ -198,6 +287,9 @@ function matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes) {
 
 module.exports = {
   scoreEdition,
+  titleKey,
+  titleRelation,
+  buildSearchQueries,
   isConfidentMatch,
   cleanOfficialDate,
   classifyOfficialVolume,

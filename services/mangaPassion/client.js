@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { db, uploadsDir } = require('../../db.js');
 const { fetchRemoteImage } = require('../../utils/safeFetch');
 const { normalizePublisher } = require('../../utils/publishers');
-const { scoreEdition, cleanOfficialDate, isConfidentMatch } = require('./classify');
+const { scoreEdition, titleRelation, cleanOfficialDate, isConfidentMatch, buildSearchQueries } = require('./classify');
 
 const pkg = require('../../package.json');
 const log = require('../../utils/logger').child('manga-passion');
@@ -61,43 +61,47 @@ async function downloadRemoteImageToUploads(url) {
   }
 }
 
+// A candidate list without a convincing title match makes the next query round worthwhile
+const GOOD_TITLE_SCORE = 100;
+// Below this the best candidate is not even a similar title: better "no match" than a wrong suggestion
+const MIN_RECOMMEND_SCORE = 50;
+
 async function searchMangaPassionEditions(title, publisher = '', totalVolumes = null) {
   if (!title || !title.trim()) return { candidates: [], recommended: null };
 
-  const queries = [
-    title,
-    title.replace(/[–—]/g, '-').trim(),
-    title.replace(/[-–—:]/g, ' ').replace(/\s+/g, ' ').trim(),
-    title.replace(/\./g, '. ').replace(/\s+/g, ' ').trim(),
-    title.split(/[:–—-]/)[0].trim()
-  ];
-  const uniqueQueries = [...new Set(queries.map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length >= 2))];
-
+  const { primary, variants, words } = buildSearchQueries(title);
   const seenIds = new Set();
   const candidates = [];
 
-  for (const q of uniqueQueries) {
-    try {
-      const url = `${API_BASE}/editions?title=${encodeURIComponent(q)}&itemsPerPage=50`;
-      const res = await fetchWithTimeout(url, { headers: HEADERS }, 8000);
-      if (res.ok) {
-        const data = await res.json();
-        const list = (data['hydra:member'] || []).filter(e => !e.digital && !e.title.toLowerCase().includes('(ebook)'));
-        for (const item of list) {
-          if (!seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            candidates.push(item);
+  const runQueries = async (queries, stopAt = 10) => {
+    for (const q of queries) {
+      try {
+        const url = `${API_BASE}/editions?title=${encodeURIComponent(q)}&itemsPerPage=50`;
+        const res = await fetchWithTimeout(url, { headers: HEADERS }, 8000);
+        if (res.ok) {
+          const data = await res.json();
+          const list = (data['hydra:member'] || []).filter(e => !e.digital && !e.title.toLowerCase().includes('(ebook)'));
+          for (const item of list) {
+            if (!seenIds.has(item.id)) {
+              seenIds.add(item.id);
+              candidates.push(item);
+            }
           }
+          if (candidates.length >= stopAt) break;
         }
-        if (candidates.length >= 10) break;
+      } catch (err) {
+        log.warn('Manga Passion edition search query failed:', q, err.message);
       }
-    } catch (err) {
-      log.warn('Manga Passion edition search query failed:', q, err.message);
     }
-  }
+  };
+  const score = (c) => scoreEdition(c, title, publisher, totalVolumes);
+  const hasGoodMatch = () => candidates.some(c => score(c) >= GOOD_TITLE_SCORE);
+
+  await runQueries(primary);
+  if (!hasGoodMatch()) await runQueries(variants, Infinity);   // other spellings of the same title
+  if (candidates.length === 0) await runQueries(words, Infinity); // last resort: a single rare word, ranked locally
 
   const scored = candidates.map(c => {
-    const score = scoreEdition(c, title, publisher, totalVolumes);
     const pubName = normalizePublisher(c.publishers?.[0]?.name) || 'Unbekannt';
     return {
       id: c.id,
@@ -106,11 +110,12 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
       status: c.status === 2 ? 'Abgeschlossen' : (c.status === 1 ? 'Laufend' : 'Unbekannt'),
       publisher: pubName,
       cover_image: c.cover || null,
-      score
+      title_relation: titleRelation(c.title, title),
+      score: score(c)
     };
   }).sort((a, b) => b.score - a.score);
 
-  const recommended = scored.length > 0 ? { ...scored[0], recommended: true } : null;
+  const recommended = scored.length > 0 && scored[0].score >= MIN_RECOMMEND_SCORE ? { ...scored[0], recommended: true } : null;
 
   return {
     candidates: scored,
