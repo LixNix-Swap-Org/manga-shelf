@@ -4,8 +4,9 @@ import UserManagementModal from './components/modals/UserManagementModal';
 import BackupRestoreModal from './components/modals/BackupRestoreModal';
 import StatsModal from './components/modals/StatsModal';
 import AddMangaModal from './components/modals/AddMangaModal';
+import BarcodeScannerButton from './components/common/BarcodeScannerButton';
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, Plus, Download, LogOut, BookOpen, Trash2, 
   Sparkles, CheckCircle2, Library, X, Upload, Layers,
@@ -39,10 +40,27 @@ export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
   const canEdit = user && (user.role === 'admin' || user.role === 'editor');
 
+  const navigate = useNavigate();
   const [mangas, setMangas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const searchInputRef = useRef(null);
+
+  const handleBarcodeDetected = async (scannedCode) => {
+    setSearch(scannedCode);
+    try {
+      const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`);
+      const data = await res.json();
+      if (data && data.found && data.matched_manga) {
+        setSearch(data.matched_manga.title);
+        navigate(`/manga/${data.matched_manga.id}`);
+      } else if (data && data.found && data.book) {
+        setSearch(data.book.title);
+      }
+    } catch (e) {
+      console.warn('Barcode lookup failed:', e);
+    }
+  };
   const [statusFilter, setStatusFilter] = useState(() => {
     try { return localStorage.getItem('mangashelf_status_filter') || 'ALL'; } catch (_) { return 'ALL'; }
   });
@@ -280,6 +298,9 @@ export default function Dashboard({ user, onLogout }) {
         try {
           localStorage.setItem('mangashelf_shopping_cache', JSON.stringify(updated));
         } catch (_) {}
+        if ('vibrate' in navigator) {
+          try { navigator.vibrate([25, 45, 25]); } catch (_) {}
+        }
         return updated;
       });
     };
@@ -809,20 +830,23 @@ export default function Dashboard({ user, onLogout }) {
               value={search} 
               onChange={e => setSearch(e.target.value)} 
             />
-            {search && (
-              <button 
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSearch('');
-                  searchInputRef.current?.focus();
-                }}
-                className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800 shrink-0 transition-colors"
-                title="Suche zurücksetzen"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <div className="shrink-0 flex items-center gap-1">
+              <BarcodeScannerButton compact onDetected={handleBarcodeDetected} />
+              {search && (
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearch('');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800 shrink-0 transition-colors"
+                  title="Suche zurücksetzen"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Desktop Action buttons (>= xl) */}

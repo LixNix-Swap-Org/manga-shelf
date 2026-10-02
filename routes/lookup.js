@@ -202,7 +202,99 @@ router.post('/upload-remote', requireEditor, async (req, res) => {
     }
 });
 
-// 3. GERMAN MANGA ISBN LOOKUP (Deutsche Nationalbibliothek DNB & OpenLibrary Cover)
+// Helper to fetch text via HTTPS with timeout
+function fetchTextHttps(url, timeoutMs = 7000) {
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(url);
+        const req = https.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
+            if (res.statusCode >= 400) {
+                return reject(new Error(`HTTP ${res.statusCode}`));
+            }
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => resolve(data));
+        });
+        req.on('error', reject);
+        req.setTimeout(timeoutMs, () => {
+            req.destroy();
+            reject(new Error('Timeout'));
+        });
+    });
+}
+
+function parseMarc21Xml(xml, cleanIsbn, sourceName) {
+    if (!xml || !xml.includes('<recordData>') && !xml.includes('<record>')) return null;
+
+    const getField = (tag, code) => {
+        const fieldRegex = new RegExp(`<datafield[^>]*tag="${tag}"[^>]*>[\\s\\S]*?<\\/datafield>`, 'g');
+        const matches = xml.match(fieldRegex) || [];
+        for (const f of matches) {
+            const subRegex = new RegExp(`<subfield[^>]*code="${code}"[^>]*>([^<]+)<\\/subfield>`);
+            const subMatch = f.match(subRegex);
+            if (subMatch) return subMatch[1].trim();
+        }
+        return null;
+    };
+
+    let title = getField('245', 'a');
+    if (title) title = title.replace(/\s*[\/:]\s*$/, '').trim();
+
+    let volumeNumber = getField('245', 'n');
+    if (volumeNumber) {
+        volumeNumber = volumeNumber.replace(/\.$/, '').trim();
+        const numOnly = volumeNumber.match(/\d+(\.\d+)?/);
+        if (numOnly) volumeNumber = numOnly[0];
+    }
+
+    let subtitle = getField('245', 'p');
+    let author = getField('100', 'a');
+    if (author) {
+        const parts = author.split(',').map(s => s.trim());
+        if (parts.length === 2) author = `${parts[1]} ${parts[0]}`;
+    }
+
+    let publisher = getField('264', 'b') || getField('260', 'b');
+    if (publisher) publisher = normalizePublisher(publisher.replace(/\s*;\s*$/, '').trim());
+
+    const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
+    let releaseYear = null;
+    if (releaseYearRaw) {
+        const yMatch = releaseYearRaw.match(/\d{4}/);
+        if (yMatch) releaseYear = parseInt(yMatch[0], 10);
+    }
+
+    const pagesRaw = getField('300', 'a');
+    let pages = null;
+    if (pagesRaw) {
+        const pMatch = pagesRaw.match(/(\d+)/);
+        if (pMatch) pages = parseInt(pMatch[1], 10);
+    }
+
+    const priceRaw = getField('020', 'c');
+    let price = null;
+    if (priceRaw) {
+        const eurMatch = priceRaw.match(/EUR\s*([\d,.]+)/i);
+        if (eurMatch) price = parseFloat(eurMatch[1].replace(',', '.'));
+    }
+
+    if (title) {
+        return {
+            title,
+            volume_number: volumeNumber || '1',
+            subtitle,
+            author,
+            publisher,
+            release_year: releaseYear,
+            pages,
+            price,
+            source: sourceName,
+            cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
+        };
+    }
+    return null;
+}
+
+// 3. RESILIENT GERMAN MANGA ISBN LOOKUP (DNB -> K10plus -> Google Books)
 router.get('/lookup/isbn', requireAuth, async (req, res) => {
     try {
         const rawIsbn = req.query.isbn;
@@ -215,93 +307,61 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)' });
         }
 
-        // Fetch MARC21 XML from Deutsche Nationalbibliothek (DNB) SRU API
-        const dnbUrl = `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${encodeURIComponent(cleanIsbn)}&recordSchema=MARC21-xml`;
+        let book = null;
 
-        let xml = '';
+        // Step 1: Deutsche Nationalbibliothek (DNB) SRU MARC21
         try {
-            xml = await new Promise((resolve, reject) => {
-                const apiReq = https.get(dnbUrl, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (apiRes) => {
-                    let data = '';
-                    apiRes.on('data', chunk => data += chunk);
-                    apiRes.on('end', () => resolve(data));
-                });
-                apiReq.on('error', reject);
-                apiReq.setTimeout(8000, () => {
-                    apiReq.destroy();
-                    reject(new Error('DNB Timeout'));
-                });
-            });
-        } catch (e) {
-            console.error('DNB request failed:', e.message);
+            const dnbUrl = `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${encodeURIComponent(cleanIsbn)}&recordSchema=MARC21-xml`;
+            const dnbXml = await fetchTextHttps(dnbUrl, 6000);
+            book = parseMarc21Xml(dnbXml, cleanIsbn, 'DNB (Deutsche Nationalbibliothek)');
+        } catch (dnbErr) {
+            console.warn('[Lookup] DNB request failed or timed out:', dnbErr.message);
         }
 
-        let book = null;
-        if (xml && xml.includes('<recordData>')) {
-            const getField = (tag, code) => {
-                const fieldRegex = new RegExp(`<datafield[^>]*tag="${tag}"[^>]*>[\\s\\S]*?<\\/datafield>`, 'g');
-                const matches = xml.match(fieldRegex) || [];
-                for (const f of matches) {
-                    const subRegex = new RegExp(`<subfield[^>]*code="${code}"[^>]*>([^<]+)<\\/subfield>`);
-                    const subMatch = f.match(subRegex);
-                    if (subMatch) return subMatch[1].trim();
+        // Step 2: K10plus (GBV / SWB Verbundkatalog) SRU MARC21 Fallback
+        if (!book) {
+            try {
+                const k10Url = `https://sru.k10plus.de/opac-de-627?version=1.1&operation=searchRetrieve&recordSchema=marcxml&maximumRecords=1&query=pica.isb%3D${encodeURIComponent(cleanIsbn)}`;
+                const k10Xml = await fetchTextHttps(k10Url, 6000);
+                book = parseMarc21Xml(k10Xml, cleanIsbn, 'K10plus (Gemeinsamer Bibliotheksverbund)');
+            } catch (k10Err) {
+                console.warn('[Lookup] K10plus request failed or timed out:', k10Err.message);
+            }
+        }
+
+        // Step 3: Google Books API Fallback
+        if (!book) {
+            try {
+                const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(cleanIsbn)}`;
+                const gbJsonText = await fetchTextHttps(gbUrl, 6000);
+                const gbData = JSON.parse(gbJsonText);
+                if (gbData.items && gbData.items.length > 0) {
+                    const vi = gbData.items[0].volumeInfo || {};
+                    let volNum = '1';
+                    const numMatch = (vi.title || '').match(/(\d+)$/);
+                    if (numMatch) volNum = numMatch[1];
+
+                    let year = null;
+                    if (vi.publishedDate) {
+                        const yMatch = vi.publishedDate.match(/\d{4}/);
+                        if (yMatch) year = parseInt(yMatch[0], 10);
+                    }
+
+                    book = {
+                        title: vi.title || 'Unbekannter Titel',
+                        volume_number: volNum,
+                        subtitle: vi.subtitle || null,
+                        author: vi.authors && vi.authors.length > 0 ? vi.authors.join(', ') : null,
+                        publisher: vi.publisher ? normalizePublisher(vi.publisher) : null,
+                        release_year: year,
+                        pages: vi.pageCount || null,
+                        price: null,
+                        source: 'Google Books',
+                        cover_url: vi.imageLinks?.thumbnail ? vi.imageLinks.thumbnail.replace('http://', 'https://') : `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
+                    };
                 }
-                return null;
-            };
-
-            let title = getField('245', 'a');
-            if (title) title = title.replace(/\s*[\/:]\s*$/, '').trim();
-
-            let volumeNumber = getField('245', 'n');
-            if (volumeNumber) {
-                volumeNumber = volumeNumber.replace(/\.$/, '').trim();
-                const numOnly = volumeNumber.match(/\d+(\.\d+)?/);
-                if (numOnly) volumeNumber = numOnly[0];
-            }
-
-            let subtitle = getField('245', 'p');
-            let author = getField('100', 'a');
-            if (author) {
-                const parts = author.split(',').map(s => s.trim());
-                if (parts.length === 2) author = `${parts[1]} ${parts[0]}`;
-            }
-
-            let publisher = getField('264', 'b') || getField('260', 'b');
-            if (publisher) publisher = normalizePublisher(publisher.replace(/\s*;\s*$/, '').trim());
-
-            const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
-            let releaseYear = null;
-            if (releaseYearRaw) {
-                const yMatch = releaseYearRaw.match(/\d{4}/);
-                if (yMatch) releaseYear = parseInt(yMatch[0], 10);
-            }
-
-            const pagesRaw = getField('300', 'a');
-            let pages = null;
-            if (pagesRaw) {
-                const pMatch = pagesRaw.match(/(\d+)/);
-                if (pMatch) pages = parseInt(pMatch[1], 10);
-            }
-
-            const priceRaw = getField('020', 'c');
-            let price = null;
-            if (priceRaw) {
-                const eurMatch = priceRaw.match(/EUR\s*([\d,.]+)/i);
-                if (eurMatch) price = parseFloat(eurMatch[1].replace(',', '.'));
-            }
-
-            if (title) {
-                book = {
-                    title,
-                    volume_number: volumeNumber || '1',
-                    subtitle,
-                    author,
-                    publisher,
-                    release_year: releaseYear,
-                    pages,
-                    price,
-                    cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
-                };
+            } catch (gbErr) {
+                console.warn('[Lookup] Google Books request failed:', gbErr.message);
             }
         }
 
@@ -309,7 +369,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
             return res.json({
                 isbn: cleanIsbn,
                 found: false,
-                message: 'Keine Metadaten für diese ISBN in der Deutschen Nationalbibliothek gefunden.'
+                message: 'Keine Metadaten für diese ISBN in DNB, K10plus oder Google Books gefunden.'
             });
         }
 

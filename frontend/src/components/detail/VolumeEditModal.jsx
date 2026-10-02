@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import { 
   Package, Sparkles, Layers, X, RefreshCw, CheckCircle2, AlertTriangle,
   Upload, Link as LinkIcon, Camera, Star, ArrowLeft, ArrowRight,
@@ -794,8 +795,17 @@ export default function VolumeEditModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                    <Hash className="w-3.5 h-3.5 text-slate-400" /> ISBN-Nummer
+                  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Hash className="w-3.5 h-3.5 text-slate-400" /> ISBN-Nummer
+                    </span>
+                    <BarcodeScannerButton 
+                      compact 
+                      buttonText="Scannen"
+                      onDetected={(isbn) => {
+                        setEditVolForm(prev => ({ ...prev, isbn }));
+                      }} 
+                    />
                   </label>
                   <input 
                     type="text" 

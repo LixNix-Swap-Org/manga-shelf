@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import { 
   ShoppingCart, RefreshCw, Search, X, CheckCircle2, 
   BookOpen, Building2, Check, WifiOff 
@@ -23,6 +24,40 @@ export default function ShoppingListView({
   failedImages,
   setFailedImages
 }) {
+  const handleBarcodeScan = async (scannedCode) => {
+    const cleanIsbn = scannedCode.replace(/[^0-9X]/gi, '');
+    const matchedItem = (shoppingData?.items || []).find(it => {
+      const itIsbn = (it.isbn || '').replace(/[^0-9X]/gi, '');
+      return itIsbn && itIsbn === cleanIsbn;
+    });
+
+    if (matchedItem) {
+      setShoppingSearch(matchedItem.title);
+      alert(`🎯 Treffer auf der Einkaufsliste: "${matchedItem.title} Band ${matchedItem.volume_number}" gefunden!`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(cleanIsbn)}`);
+      const data = await res.json();
+      if (data && data.found) {
+        if (data.matched_volume && data.matched_volume.status === 'Vorhanden') {
+          alert(`✅ Bereits in deiner Sammlung: "${data.matched_manga.title} Band ${data.matched_volume.volume_number}" besitzt du bereits!`);
+        } else if (data.matched_manga) {
+          setShoppingSearch(data.matched_manga.title);
+          alert(`ℹ️ "${data.matched_manga.title}" ist in deiner Sammlung – dieser Band (${data.book?.volume_number || ''}) fehlt dir noch.`);
+        } else {
+          setShoppingSearch(data.book?.title || cleanIsbn);
+          alert(`📖 Gefunden: "${data.book?.title || 'Unbekannt'}". Diese Reihe ist noch nicht in deiner Sammlung.`);
+        }
+      } else {
+        setShoppingSearch(cleanIsbn);
+      }
+    } catch (_) {
+      setShoppingSearch(cleanIsbn);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Offline Banner when offline or using cached shopping list */}
@@ -110,11 +145,14 @@ export default function ShoppingListView({
             value={shoppingSearch}
             onChange={e => setShoppingSearch(e.target.value)}
           />
-          {shoppingSearch && (
-            <button onClick={() => setShoppingSearch('')} className="text-slate-500 hover:text-white">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            <BarcodeScannerButton compact onDetected={handleBarcodeScan} buttonText="Laden-Scan" />
+            {shoppingSearch && (
+              <button onClick={() => setShoppingSearch('')} className="text-slate-500 hover:text-white p-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Publisher Filter Chips */}

@@ -61,6 +61,7 @@ export default function MangaDetail({ user }) {
   const [shelfScale, setShelfScale] = useState(() => {
     return localStorage.getItem('mangashelf_shelf_scale') || 'm';
   });
+  const [focusedVolumeId, setFocusedVolumeId] = useState(null);
   const shelfScrollRef = useRef(null);
 
   const handleSetShelfMode = (mode) => {
@@ -511,11 +512,55 @@ export default function MangaDetail({ user }) {
           const nextIdx = (prev.currentIndex + 1) % prev.images.length;
           return { ...prev, currentIndex: nextIdx };
         });
+      } else {
+        // Keyboard navigation when no modal is open
+        const isInputActive = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+        if (isInputActive) return;
+
+        const hasModalOpen = lightboxData || activeVolume || showBatchModal || showBatchReadModal || fillingGapNumber !== null || showMpEditionModal || editing;
+        if (hasModalOpen) return;
+
+        const volList = filteredVolumes || [];
+        if (volList.length === 0) return;
+
+        if (e.key === 'j' || e.key === 'J') {
+          e.preventDefault();
+          setFocusedVolumeId(prev => {
+            if (!prev) return volList[0].id;
+            const currIdx = volList.findIndex(v => v.id === prev);
+            const nextIdx = (currIdx + 1) % volList.length;
+            return volList[nextIdx].id;
+          });
+        } else if (e.key === 'k' || e.key === 'K') {
+          e.preventDefault();
+          setFocusedVolumeId(prev => {
+            if (!prev) return volList[volList.length - 1].id;
+            const currIdx = volList.findIndex(v => v.id === prev);
+            const nextIdx = (currIdx - 1 + volList.length) % volList.length;
+            return volList[nextIdx].id;
+          });
+        } else if (e.key === ' ' || e.code === 'Space') {
+          if (focusedVolumeId) {
+            e.preventDefault();
+            const targetVol = volList.find(v => v.id === focusedVolumeId);
+            if (targetVol && canEdit) {
+              handleToggleVolumeRead(targetVol);
+            }
+          }
+        } else if (e.key === 'e' || e.key === 'E') {
+          if (focusedVolumeId && canEdit) {
+            e.preventDefault();
+            const targetVol = volList.find(v => v.id === focusedVolumeId);
+            if (targetVol) {
+              handleOpenEditVolume(targetVol);
+            }
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing]);
+  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing, filteredVolumes, focusedVolumeId, canEdit]);
 
   const handleRemoveVolumeImage = (imgUrl) => {
     if (!canEdit) return;
@@ -1398,29 +1443,25 @@ export default function MangaDetail({ user }) {
     );
     const isSpecial = vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra');
 
+    // Page-count realistic spine thickness factor (Standard manga ~192p = 1.0, Double-vol ~380p = 1.5)
+    const pageFactor = (vol.pages && Number(vol.pages) > 40)
+      ? Math.max(0.85, Math.min(1.75, Number(vol.pages) / 192))
+      : 1.0;
+
     let spineWidth = '';
+    let customWidthStyle = {};
     if (isFitSingleRow) {
       // Single-row auto-fit: flex-1 WITH max-width to prevent overflow on one line
       spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
     } else if (isScrollFixed) {
-      // Scroll mode: fixed pixel widths for predictable horizontal scrolling
+      // Scroll mode: fixed pixel widths for predictable horizontal scrolling with page factor
       const isS = shelfScale === 's';
       const isL = shelfScale === 'l';
-      if (isSchuber) {
-        spineWidth = isS ? 'w-[68px]' : isL ? 'w-[100px]' : 'w-[84px]';
-      } else if (isSpecialEd) {
-        spineWidth = isS ? 'w-[42px]' : isL ? 'w-[62px]' : 'w-[52px]';
-      } else {
-        spineWidth = isS ? 'w-[36px]' : isL ? 'w-[56px]' : 'w-[46px]';
-      }
+      const baseW = isSchuber ? (isS ? 68 : isL ? 100 : 84) : isSpecialEd ? (isS ? 42 : isL ? 62 : 52) : (isS ? 36 : isL ? 56 : 46);
+      const calculatedW = Math.round(baseW * pageFactor);
+      customWidthStyle = { width: `${calculatedW}px` };
     } else {
       // Rows / fit-multirow: flex-1 with CALCULATED max-width
-      // The max-width is chosen so that (targetPerRow × max-width > container ~950px).
-      // This forces flex to shrink full rows to fit → row fills 100% of shelf width.
-      // For partial rows, max-width caps each book at a reasonable spine width.
-      //   Scale S (20/row): regular 56px → 20×56=1120>950 ✓
-      //   Scale M (16/row): regular 70px → 16×70=1120>950 ✓
-      //   Scale L (12/row): regular 92px → 12×92=1104>950 ✓
       const isS = shelfScale === 's';
       const isL = shelfScale === 'l';
       if (isSchuber) {
@@ -1434,15 +1475,24 @@ export default function MangaDetail({ user }) {
 
     // In flex-fill modes, don't use shrink-0 so flex distributes space properly
     const shrinkClass = isFlexFill ? '' : 'shrink-0';
+    const isFocused = vol.id === focusedVolumeId;
 
     return (
       <div
         key={vol.id}
-        onClick={() => canEdit && handleOpenEditVolume(vol)}
-        style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
-        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative ${
-          canEdit ? 'cursor-pointer' : 'cursor-default'
-        } ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
+        onClick={() => {
+          setFocusedVolumeId(vol.id);
+          if (canEdit) handleOpenEditVolume(vol);
+        }}
+        style={{ 
+          height: spineHeightPx, 
+          '--spine-height': spineHeightPx,
+          ...customWidthStyle,
+          ...(isFlexFill ? { flexGrow: (isSchuber ? 1.8 : isSpecialEd ? 1.25 : 1.0) * pageFactor } : {})
+        }}
+        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
+          isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
+        } ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
         title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
       >
         {/* Spine Top: Publisher Logo / Accent */}
@@ -2518,6 +2568,17 @@ export default function MangaDetail({ user }) {
                       </span>
                       <span className="text-[11px] text-slate-500 font-mono">
                         ({spineShelfItems.length} {spineShelfItems.length === 1 ? 'Band' : 'Bände'})
+                      </span>
+                      <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 font-medium" title="Tastatur-Navigation im Regal">
+                        <span>Tasten:</span>
+                        <kbd className="px-1 bg-slate-900 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">J</kbd>
+                        <kbd className="px-1 bg-slate-900 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">K</kbd>
+                        <span className="text-slate-600">•</span>
+                        <kbd className="px-1 bg-slate-900 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Space</kbd>
+                        <span className="text-slate-500">Gelesen</span>
+                        <span className="text-slate-600">•</span>
+                        <kbd className="px-1 bg-slate-900 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">E</kbd>
+                        <span className="text-slate-500">Edit</span>
                       </span>
                     </div>
 
