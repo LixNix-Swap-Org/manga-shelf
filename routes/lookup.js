@@ -9,6 +9,7 @@ const { requireAuth, requireEditor } = require('../middleware/auth');
 const { upload, ALLOWED_IMAGE_EXTS } = require('../middleware/upload');
 const { normalizePublisher } = require('../utils/publishers');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
+const { assertSafeRemoteUrl } = require('../utils/security');
 
 // AniList GraphQL Search Helper
 function searchAniList(queryTerm) {
@@ -154,7 +155,14 @@ router.post('/upload-remote', requireEditor, async (req, res) => {
         if (!url || !url.startsWith('http')) {
             return res.status(400).json({ error: 'Ungültige Bild-URL' });
         }
-        const parsedUrl = new URL(url);
+
+        let parsedUrl;
+        try {
+            parsedUrl = await assertSafeRemoteUrl(url);
+        } catch (secErr) {
+            return res.status(400).json({ error: secErr.message });
+        }
+
         const ext = path.extname(parsedUrl.pathname).toLowerCase() || '.jpg';
         const cleanExt = ALLOWED_IMAGE_EXTS.has(ext) ? ext : '.jpg';
         const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + cleanExt;

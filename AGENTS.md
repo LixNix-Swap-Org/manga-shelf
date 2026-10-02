@@ -71,11 +71,27 @@ c:\Manga Webseite 2.0/
     └── src/
         ├── main.jsx           # React Root Mount
         ├── App.jsx            # Routing, Auth-Check & Setup-Check
-        ├── Dashboard.jsx      # Hauptdashboard: Manga-Grid, Filter, Suche, Stats, User-Modal
-        ├── MangaDetail.jsx    # Manga-Detailseite: Bände, Batch-Lese-Status, Edit-Modals
+        ├── Dashboard.jsx      # Schlankes Hauptdashboard (Regal/Grid, Filter, Toolbar)
+        ├── MangaDetail.jsx    # Schlanke Manga-Detailansicht (Banner, Buchrücken-Regal, Bände)
         ├── Login.jsx          # Login-Maske
         ├── Setup.jsx          # Initialer Einrichtungs-Assistent (Admin-Account)
-        └── index.css          # Globale Styles, Scrollbars, Glasmorphismus & Farbtöne
+        ├── index.css          # Globale Styles, Scrollbars, Glasmorphismus & Farbtöne
+        └── components/        # Modulare Komponenten & Modals (Frontend-Refactoring)
+            ├── modals/        # Dashboard-Modals
+            │   ├── UserManagementModal.jsx  # Benutzerverwaltung (Rollenwechsel, Anlegen, Löschen)
+            │   ├── BackupRestoreModal.jsx   # Server-Snapshots, Uploads & 1-Klick Restore
+            │   ├── StatsModal.jsx           # Finanz-KPIs, Charts, Leserranking & Leser-Details
+            │   └── AddMangaModal.jsx        # Reihe anlegen mit Manga Passion/AniList Metadatensuche
+            ├── dashboard/     # Dashboard Views
+            │   ├── ShoppingListView.jsx     # Einkaufsliste, Buchladen-Modus & Schnellkauf
+            │   └── ReleaseRadarView.jsx     # Neuheiten-Kalender & Monats-Release-Radar
+            └── detail/        # Manga-Detailansicht Subkomponenten & Modals
+                ├── VolumeEditModal.jsx      # Band-Details, Fotogalerie-Manager & MP-Autofill
+                ├── BatchAddModal.jsx        # Batch-Generator für Bandnummern 1..N
+                ├── BatchReadModal.jsx       # Batch-Lesestatus bis Band X für Leser
+                ├── GapFillModal.jsx         # 1-Klick-Lückenfüller mit MP-Preis/Cover
+                ├── MpEditionModal.jsx       # Manga Passion Editionsabgleich & Sync
+                └── LightboxGallery.jsx      # Vollbild-Lightbox für Cover- & Bandfotos
 ```
 
 ---
@@ -239,7 +255,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Im `PUT /api/mangas/:id` das Feld in das `UPDATE mangas SET ...` aufnehmen.
    * Im `GET /api/mangas` und `GET /api/mangas/:id` sicherstellen, dass das Feld selektiert wird (meist durch `SELECT *`).
 3. **Frontend UI:**
-   * `frontend/src/Dashboard.jsx`: Im Modal "Manga anlegen / bearbeiten" ein Eingabefeld hinzufügen.
+   * `frontend/src/components/modals/AddMangaModal.jsx`: Eingabefelder für neue Metadaten beim Anlegen ergänzen.
    * `frontend/src/MangaDetail.jsx`: In den Metadaten der Detailansicht das Feld anzeigen und im Bearbeiten-Modal editierbar machen.
 
 ### 🔹 Fall B: Neues Feld für Bände/Volumes hinzufügen (z. B. "Edition", "Farbe", "Format")
@@ -249,16 +265,16 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 2. **Backend API (`index.js`):**
    * In `POST /api/volumes`, `POST /api/volumes/batch` und `PUT /api/volumes/:id` das Feld berücksichtigen.
 3. **Frontend UI:**
-   * `frontend/src/MangaDetail.jsx`:
-     * Im Volume-Card / List-Item rendern.
-     * Im "Band hinzufügen"- & "Band bearbeiten"-Modal Formularfelder hinzufügen.
+   * `frontend/src/components/detail/VolumeEditModal.jsx`: Formularfelder im Band-Bearbeiten-Modal hinzufügen.
+   * `frontend/src/components/detail/BatchAddModal.jsx`: Falls das Feld im Batch-Generator gesetzt werden soll, Eingabefeld hinzufügen.
+   * `frontend/src/MangaDetail.jsx`: Im Volume-Card, Tabellen- & Listen-Item rendern.
 
 ### 🔹 Fall C: Neues Statistik-Widget oder Auswertung hinzufügen
 1. **Backend API (`index.js`):**
    * Route `GET /api/stats` aufrufen/bearbeiten.
    * Die SQLite-Aggregatsabfrage (SUM, AVG, COUNT, GROUP BY) hinzufügen und im Antwort-JSON zurückgeben.
-2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
-   * Im Tab "Statistiken" (`activeTab === 'stats'`) das neue Widget oder Diagramm gestalten.
+2. **Frontend UI:**
+   * `frontend/src/components/modals/StatsModal.jsx`: Das neue KPI-Widget, Diagramm oder die Leser-Statistik gestalten.
 
 ### 🔹 Fall D: UI/Design/Styling ändern
 1. **Globale Farbtöne, Scrollbars, Glasmorphismus:**
@@ -266,23 +282,26 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 2. **Tailwind-Konfiguration:**
    * `frontend/tailwind.config.js`.
 3. **Komponenten:**
-   * Header, Regal-Ansicht, Grid-Ansicht, Modals: `frontend/src/Dashboard.jsx`.
-   * Banner, Bandkarten, Cover-Grid: `frontend/src/MangaDetail.jsx`.
+   * Header, Regal-Ansicht, Grid-Ansicht: `frontend/src/Dashboard.jsx`.
+   * Dashboard-Modals: `frontend/src/components/modals/`.
+   * Einkaufsliste & Release-Radar: `frontend/src/components/dashboard/`.
+   * Banner, Buchrücken-Regal, Bandkarten: `frontend/src/MangaDetail.jsx`.
+   * Band-Editor, Batch-Tools, Lückenfüller, Lightbox: `frontend/src/components/detail/`.
 
 ### 🔹 Fall E: Benutzerberechtigungen anpassen
 1. **Backend Middleware (`index.js`):**
    * Funktionen `requireAuth`, `requireAdmin`, `requireEditor`.
    * Neue Rollen oder feinere Rechte direkt in den entsprechenden Routen prüfen.
 2. **Frontend UI:**
-   * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx` und `MangaDetail.jsx`.
+   * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx`, `MangaDetail.jsx` und den jeweiligen Modals in `components/`.
 
 ### 🔹 Fall F: Einkaufsliste / Buchladen-Modus anpassen
 1. **Backend API (`index.js`):**
    * Route `GET /api/shopping-list` selektiert alle Bände mit `status = 'Fehlt'`, ermittelt den effektiven Verlag (`v.publisher` oder `m.publisher`) und summiert Preise & Verlage.
    * `PUT /api/volumes/:id` schaltet den Status um (z. B. von 'Fehlt' auf 'Gekauft' / 'Besitz').
-2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
-   * Tab-/View-Umschalter `activeMainView: 'shelf' | 'shopping'`.
-   * Filtern nach Verlagschips, Echtzeit-Suche und Schnellkauf-Button (`handleQuickBuy`).
+2. **Frontend UI (`frontend/src/components/dashboard/ShoppingListView.jsx`):**
+   * Filtern nach Verlagschips, Echtzeit-Suche, Offline-Puffer und Schnellkauf-Button (`handleQuickBuy`).
+   * Hauptumschalter `activeMainView: 'shelf' | 'shopping' | 'radar'` in `Dashboard.jsx`.
 
 ### 🔹 Fall G: ISBN- & Metadaten-Lookup (DNB API)
 1. **Backend API (`index.js`):**
@@ -299,8 +318,8 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `createBackupSnapshot(prefix)` sichert `manga.db` und den Ordner `uploads/` und löscht automatisch Snapshots, die älter als die neuesten 7 sind.
    * Ein Scheduler prüft 10s nach Serverstart und danach alle 24h, ob für heute bereits ein Backup existiert (`daily-auto`).
    * `restoreFromZipBuffer` führt vor dem Entpacken einen SQLite-Checkpoint und ein Schließen der Verbindung durch und legt ein temporäres Rollback-Backup `manga.db.bak` an.
-2. **Frontend UI (`frontend/src/Dashboard.jsx`):**
-   * Backup-Zentrale (`showRestoreModal`): Verwaltet Snapshots (Erstellen, Wiederherstellen, Download, Löschen) und bietet ZIP-Upload.
+2. **Frontend UI (`frontend/src/components/modals/BackupRestoreModal.jsx`):**
+   * Snapshot-Verwaltung (Erstellen, Wiederherstellen, Download, Löschen) und ZIP-Datei-Upload.
 
 ### 🔹 Fall I: Schuber, Special Editions & Sonderbände erfassen & sortieren
 1. **Datenbank (`db.js`):**
@@ -309,11 +328,9 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 2. **Backend API (`index.js`):**
    * `GET /api/mangas/:id`: Sortiert per `ORDER BY CASE` reguläre Bände und nummerierte Special Editions an erster Stelle (Standard Band 1 -> Band 1 Special Edition -> Band 2). Unnummerierte Special Editions ordnen sich direkt dahinter ein (Rang 1.5), gefolgt von Schubern (Rang 2) und Specials/Extras (Rang 3).
    * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `type` entgegen, validieren gegen die erlaubten Typen und speichern ihn ab.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
-   * Sortierung: `getVolumeSortInfo(vol)` berechnet `rank` und `subRank` (Standard Band = 0, Special Edition = 1).
-   * Filter-Chips: `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]`.
-   * Bandkarten: Zeigen bei Special Editions ein markantes `✨ Special Edition`-Badge in Fuchsia/Violett, bei Schubern `📦 Schuber` in Indigo/Lila und bei Specials `⭐ Special` in Bernstein/Gold.
-   * Formulare: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") beim Erstellen und Bearbeiten mit dynamischen Feldbezeichnungen.
+3. **Frontend UI:**
+   * `frontend/src/components/detail/VolumeEditModal.jsx`: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") mit dynamischen Feldern.
+   * `frontend/src/MangaDetail.jsx`: Filter-Chips `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]` und Badges in den Ansichten.
 
 ### 🔹 Fall J: Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7)
 1. **Datenbank (`db.js`):**
@@ -322,11 +339,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `POST /api/upload/multiple`: Nimmt bis zu 10 Bilddateien entgegen und speichert sie lokal unter `data/uploads/`.
    * `GET /api/mangas/:id`: Parst `vol.images` automatisch als echtes Array.
    * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `images` entgegen und serialisieren es als JSON in die DB.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
-   * **Lightbox:** Moderne Vollbild-Galerie mit abgedunkeltem Hintergrund, Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`), Haupt-Cover-Markierung und "Originalgröße in neuem Tab"-Link.
-   * **1-Klick-Cover-Wechsel:** Direkt in der Lightbox kann jedes Galerie-Foto mit einem Klick ("Als Cover festlegen") zum primären Coverbild des Bandes gemacht werden.
-   * **Foto-Manager im Edit-Modal:** Ermöglicht Multi-Upload (bis zu 10 Bilder), URL-Eingabe, Umsortieren der Fotos per `◀` / `▶`, Löschen einzelner Fotos sowie Festlegen des Cover-Fotos.
-   * **Karten- & Listen-Badges:** Bei Einträgen mit mehr als 1 Foto erscheint ein markantes `📷 X Fotos`-Badge sowohl auf dem Cover als auch bei den Metadaten.
+3. **Frontend UI:**
+   * `frontend/src/components/detail/LightboxGallery.jsx`: Moderne Vollbild-Galerie mit Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`) und 1-Klick-Cover-Festlegung.
+   * `frontend/src/components/detail/VolumeEditModal.jsx`: Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
+   * `frontend/src/MangaDetail.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
 
 ### 🔹 Fall K: Intelligente Lücken-Erkennung & Manga Passion Editions-Abgleich
 1. **Problem & Hintergrund:**
@@ -449,12 +465,16 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 1. **Node.js 25+ Warning Suppression (`index.js` Zeile 1–9):**
    * Node 25 wirft für ältere `fs.Stats` Konstruktoren Warnungen (`DEP0180`). Diese werden am Dateianfang von `index.js` abgefangen, um Logs sauber zu halten. Nicht entfernen!
 2. **SQLite WAL-Modus & Backup-Restore:**
-   * Vor dem Entpacken eines Restore-Archivs muss `closeDb()` aufgerufen werden (inkl. `PRAGMA wal_checkpoint(TRUNCATE)`), da Windows offene Dateihandles sperrt. Nach dem Restore wird `initDb()` aufgerufen.
+   * Vor dem Entpacken eines Restore-Archivs muss `setRestoringState(true)` und `closeDb()` aufgerufen werden (inkl. `PRAGMA wal_checkpoint(TRUNCATE)`), da Windows offene Dateihandles sperrt. Während des Entpackens blockiert der DB-Proxy parallele Zugriffe mit 503. Nach erfolgreichem Restore wird `initDb()` und `setRestoringState(false)` aufgerufen.
 3. **Cookie-Handling & HTTPS:**
    * `app.set('trust proxy', true)` ist aktiv. `setAuthCookie` prüft `req.secure` sowie `x-forwarded-proto === 'https'`. Bei reinem HTTP im LAN oder ohne SSL wird das `secure`-Flag dynamisch weggelassen, damit der Login auch ohne HTTPS reibungslos funktioniert.
 4. **Verzeichnisse:**
    * Alle persistenten Daten liegen ausschließlich unter `data/` (`manga.db` und `data/uploads/`).
    * Alles unter `data/` ist in `.gitignore`, damit keine privaten Daten oder Passwörter in GitHub landen.
+5. **Atomare Transaktionen (`runTransaction`):**
+   * Für mehrstufige Schreiboperationen (z. B. Bände anlegen/löschen + Zähleraktualisierung, Batch-Read, Lücken-Import) immer den universellen Helper `runTransaction(callback)` aus `db.js` nutzen statt rohem `db.exec('BEGIN TRANSACTION;')`. Dies verhindert Concurrency-Locks und unvollständige Kaskaden-Löschungen.
+6. **SSRF-Schutz für Remote-Bilder (`assertSafeRemoteUrl`):**
+   * Alle Downloads externer Bild-URLs (z. B. Cover-Uploads via URL) müssen vor dem HTTP-Aufruf mit `assertSafeRemoteUrl()` aus `utils/security.js` validiert werden, um Zugriffe auf interne Netzwerke (127.0.0.1, 192.168.x.x, Cloud-Metadata) abzuwehren.
 
 ---
 

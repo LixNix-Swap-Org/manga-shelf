@@ -252,6 +252,41 @@ function initDb() {
 // Initial connection
 initDb();
 
+// Database restore/maintenance state
+let isRestoring = false;
+
+function setRestoringState(active) {
+    isRestoring = Boolean(active);
+}
+
+/**
+ * Universal Atomic Transaction Runner.
+ * Supports both better-sqlite3 native transactions and node:sqlite BEGIN IMMEDIATE transactions.
+ */
+function runTransaction(fn) {
+    if (isRestoring) {
+        throw new Error('DATABASE_MAINTENANCE_RESTORE_IN_PROGRESS: Datenbank-Wiederherstellung läuft. Bitte kurz warten.');
+    }
+    if (!currentDb) {
+        initDb();
+    }
+    if (typeof currentDb.transaction === 'function') {
+        const tx = currentDb.transaction(fn);
+        return tx();
+    }
+    currentDb.exec('BEGIN IMMEDIATE;');
+    try {
+        const res = fn(currentDb);
+        currentDb.exec('COMMIT;');
+        return res;
+    } catch (err) {
+        try {
+            currentDb.exec('ROLLBACK;');
+        } catch (_) {}
+        throw err;
+    }
+}
+
 function closeDb() {
     if (currentDb) {
         try {
@@ -266,8 +301,14 @@ function closeDb() {
 
 const db = new Proxy({}, {
     get(target, prop) {
+        if (isRestoring) {
+            throw new Error('DATABASE_MAINTENANCE_RESTORE_IN_PROGRESS: Datenbank-Wiederherstellung läuft. Bitte kurz warten.');
+        }
         if (!currentDb) {
             initDb();
+        }
+        if (prop === 'transaction') {
+            return (fn) => (...args) => runTransaction(() => fn(...args));
         }
         const val = currentDb[prop];
         if (typeof val === 'function') {
@@ -282,4 +323,17 @@ function hasAdmin() {
     return row && row.count > 0;
 }
 
-module.exports = { db, initDb, closeDb, hasAdmin, uploadsDir, dataDir, dbPath, tempDir };
+module.exports = { 
+    db, 
+    initDb, 
+    closeDb, 
+    hasAdmin, 
+    uploadsDir, 
+    dataDir, 
+    dbPath, 
+    tempDir,
+    runTransaction,
+    setRestoringState,
+    isRestoring: () => isRestoring
+};
+

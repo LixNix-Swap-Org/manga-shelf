@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db } = require('./db.js');
+const { db, runTransaction } = require('./db.js');
+const { assertSafeRemoteUrl } = require('./utils/security');
 
 const USER_AGENT = 'MangaShelf/2.6.0';
 const HEADERS = {
@@ -27,7 +28,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
 async function downloadRemoteImageToUploads(url) {
   if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
   try {
-    const parsed = new URL(url);
+    const parsed = await assertSafeRemoteUrl(url);
     const ext = path.extname(parsed.pathname).toLowerCase() || '.jpg';
     const cleanExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
     
@@ -539,59 +540,65 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
   const importedIds = [];
   const updatedIds = [];
 
-  for (const volNumStr of gapVolumeNumbers) {
-    const cleanNum = String(volNumStr).trim();
-    const key = cleanNum.toLowerCase();
-    
-    // Find matching official volume data if available
-    const matchedOfficial = officialVolumes.find(ov => {
-      const ovNum = String(ov.volume_number || '').trim().toLowerCase();
-      const ovTitle = String(ov.title || '').trim().toLowerCase();
-      return ovNum === key || (ovTitle && ovTitle === key);
-    });
-    
-    const price = matchedOfficial && matchedOfficial.price !== null ? matchedOfficial.price : null;
-    const releaseDate = matchedOfficial && matchedOfficial.release_date ? matchedOfficial.release_date : null;
-    const coverImage = matchedOfficial && matchedOfficial.cover_image ? matchedOfficial.cover_image : null;
-    const mpVolId = matchedOfficial ? matchedOfficial.id : null;
-    const publisher = manga.publisher || null;
+  const updateStmt = db.prepare(`
+    UPDATE volumes 
+    SET status = ?,
+        price = COALESCE(price, ?),
+        release_date = COALESCE(release_date, ?),
+        cover_image = COALESCE(cover_image, ?),
+        type = COALESCE(type, ?),
+        notes = COALESCE(notes, ?),
+        manga_passion_volume_id = COALESCE(manga_passion_volume_id, ?)
+    WHERE id = ?
+  `);
 
-    const isSchuber = key.includes('schuber') || (matchedOfficial?.title && matchedOfficial.title.toLowerCase().includes('schuber')) || matchedOfficial?.specialType === 1;
-    const isSpecialEdition = !isSchuber && (/special\s*edition|limited\s*edition|collectors\s*edition/i.test(key) || (matchedOfficial?.title && /special\s*edition|limited\s*edition|collectors\s*edition/i.test(matchedOfficial.title)) || matchedOfficial?.specialType === 2);
-    const isSpecial = !isSchuber && !isSpecialEdition && (key === 'special' || (matchedOfficial?.title && /special|extra|guide/i.test(matchedOfficial.title)));
-    const targetType = isSchuber ? 'schuber' : (isSpecialEdition ? 'special_edition' : (isSpecial ? 'special' : 'volume'));
-    const notes = isSchuber ? (matchedOfficial?.title || cleanNum) : (matchedOfficial?.title || null);
+  const insertStmt = db.prepare(`
+    INSERT INTO volumes (
+      manga_id, volume_number, status, price, release_date, 
+      publisher, cover_image, type, notes, manga_passion_volume_id, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `);
 
-    const existing = existingMap.get(key);
-    if (existing) {
-      db.prepare(`
-        UPDATE volumes 
-        SET status = ?,
-            price = COALESCE(price, ?),
-            release_date = COALESCE(release_date, ?),
-            cover_image = COALESCE(cover_image, ?),
-            type = COALESCE(type, ?),
-            notes = COALESCE(notes, ?),
-            manga_passion_volume_id = COALESCE(manga_passion_volume_id, ?)
-        WHERE id = ?
-      `).run(targetStatus, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
-      updatedIds.push(existing.id);
-    } else {
-      const ins = db.prepare(`
-        INSERT INTO volumes (
-          manga_id, volume_number, status, price, release_date, 
-          publisher, cover_image, type, notes, manga_passion_volume_id, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).run(mangaId, cleanNum, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
-      importedIds.push(Number(ins.lastInsertRowid));
+  runTransaction(() => {
+    for (const volNumStr of gapVolumeNumbers) {
+      const cleanNum = String(volNumStr).trim();
+      const key = cleanNum.toLowerCase();
+      
+      // Find matching official volume data if available
+      const matchedOfficial = officialVolumes.find(ov => {
+        const ovNum = String(ov.volume_number || '').trim().toLowerCase();
+        const ovTitle = String(ov.title || '').trim().toLowerCase();
+        return ovNum === key || (ovTitle && ovTitle === key);
+      });
+      
+      const price = matchedOfficial && matchedOfficial.price !== null ? matchedOfficial.price : null;
+      const releaseDate = matchedOfficial && matchedOfficial.release_date ? matchedOfficial.release_date : null;
+      const coverImage = matchedOfficial && matchedOfficial.cover_image ? matchedOfficial.cover_image : null;
+      const mpVolId = matchedOfficial ? matchedOfficial.id : null;
+      const publisher = manga.publisher || null;
+
+      const isSchuber = key.includes('schuber') || (matchedOfficial?.title && matchedOfficial.title.toLowerCase().includes('schuber')) || matchedOfficial?.specialType === 1;
+      const isSpecialEdition = !isSchuber && (/special\s*edition|limited\s*edition|collectors\s*edition/i.test(key) || (matchedOfficial?.title && /special\s*edition|limited\s*edition|collectors\s*edition/i.test(matchedOfficial.title)) || matchedOfficial?.specialType === 2);
+      const isSpecial = !isSchuber && !isSpecialEdition && (key === 'special' || (matchedOfficial?.title && /special|extra|guide/i.test(matchedOfficial.title)));
+      const targetType = isSchuber ? 'schuber' : (isSpecialEdition ? 'special_edition' : (isSpecial ? 'special' : 'volume'));
+      const notes = isSchuber ? (matchedOfficial?.title || cleanNum) : (matchedOfficial?.title || null);
+
+      const existing = existingMap.get(key);
+      if (existing) {
+        updateStmt.run(targetStatus, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
+        updatedIds.push(existing.id);
+      } else {
+        const ins = insertStmt.run(mangaId, cleanNum, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
+        importedIds.push(Number(ins.lastInsertRowid));
+      }
     }
-  }
 
-  // Recalculate owned_volumes
-  const ownedCountRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mangaId);
-  const ownedCount = ownedCountRow ? ownedCountRow.count : 0;
-  db.prepare('UPDATE mangas SET owned_volumes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ownedCount, mangaId);
+    // Recalculate owned_volumes atomically
+    const ownedCountRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mangaId);
+    const ownedCount = ownedCountRow ? ownedCountRow.count : 0;
+    db.prepare('UPDATE mangas SET owned_volumes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ownedCount, mangaId);
+  });
 
   return {
     success: true,
@@ -990,8 +997,23 @@ async function autofillMangaVolumes(mangaId, options = {}) {
     WHERE id = ?
   `);
 
-  db.exec('BEGIN TRANSACTION;');
-  try {
+  // 1. Pre-download needed Schuber covers asynchronously BEFORE acquiring the DB transaction
+  const schuberCovers = new Map();
+  for (const uv of userVolumes) {
+    const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
+    if (isSchuber) {
+      const matched = matchSchuberVolume(officialVolumes, uv.volume_number, uv.price, uv.notes);
+      if (matched?.cover_image && (overwrite || !uv.cover_image || options.update_covers)) {
+        try {
+          const localCover = await downloadRemoteImageToUploads(matched.cover_image);
+          if (localCover) schuberCovers.set(uv.id, localCover);
+        } catch (_) {}
+      }
+    }
+  }
+
+  // 2. Run all database updates in an atomic, synchronous transaction
+  runTransaction(() => {
     for (const uv of userVolumes) {
       const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
       let matched = null;
@@ -1038,15 +1060,11 @@ async function autofillMangaVolumes(mangaId, options = {}) {
         changed = true;
       }
 
-      // For Schuber: Download real Schuber cover and update title if notes is empty or Band 1's title
-      if (isSchuber && matched.cover_image) {
-        // If current cover is missing or same as Band 1, download real Schuber cover
-        if (overwrite || !newCover || options.update_covers) {
-          const localCover = await downloadRemoteImageToUploads(matched.cover_image);
-          if (localCover) {
-            newCover = localCover;
-            changed = true;
-          }
+      // For Schuber: apply pre-downloaded cover and title
+      if (isSchuber) {
+        if (schuberCovers.has(uv.id)) {
+          newCover = schuberCovers.get(uv.id);
+          changed = true;
         }
         if ((overwrite || !newNotes || newNotes === 'Das Abenteuer beginnt') && matched.title) {
           newNotes = matched.title;
@@ -1059,11 +1077,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
         updatedCount++;
       }
     }
-    db.exec('COMMIT;');
-  } catch (err) {
-    try { db.exec('ROLLBACK;'); } catch (_) {}
-    throw err;
-  }
+  });
 
   return {
     success: true,

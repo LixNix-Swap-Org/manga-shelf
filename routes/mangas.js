@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, runTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const {
@@ -50,27 +50,42 @@ router.post('/mangas', requireEditor, (req, res) => {
             manga_passion_id = null
         } = req.body;
 
-        if (!title || !title.trim()) {
+        if (!title || typeof title !== 'string' || !title.trim()) {
             return res.status(400).json({ error: 'Titel darf nicht leer sein' });
         }
+
+        const cleanTitle = title.trim();
+        if (cleanTitle.length > 300) {
+            return res.status(400).json({ error: 'Titel ist zu lang (maximal 300 Zeichen)' });
+        }
+
+        let cleanTotal = null;
+        if (total_volumes !== null && total_volumes !== undefined && total_volumes !== '') {
+            const parsed = parseInt(total_volumes, 10);
+            if (!isNaN(parsed) && parsed >= 0 && parsed <= 5000) {
+                cleanTotal = parsed;
+            }
+        }
+
+        const cleanMpId = manga_passion_id ? (parseInt(manga_passion_id, 10) || null) : null;
 
         const stmt = db.prepare(`
             INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, updated_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const result = stmt.run(
-            title.trim(),
-            alt_title ? alt_title.trim() : null,
-            author ? author.trim() : null,
+            cleanTitle,
+            alt_title ? String(alt_title).trim().slice(0, 300) : null,
+            author ? String(author).trim().slice(0, 300) : null,
             publisher ? normalizePublisher(publisher) : null,
-            language || 'Deutsch',
+            language ? String(language).trim().slice(0, 50) : 'Deutsch',
             status || 'Laufend',
-            tags ? tags.trim() : null,
-            total_volumes ? (parseInt(total_volumes, 10) || null) : null,
-            description ? description.trim() : null,
-            cover_image || null,
-            banner_image || null,
-            manga_passion_id ? (parseInt(manga_passion_id, 10) || null) : null,
+            tags ? String(tags).trim().slice(0, 500) : null,
+            cleanTotal,
+            description ? String(description).trim() : null,
+            cover_image ? String(cover_image).trim() : null,
+            banner_image ? String(banner_image).trim() : null,
+            cleanMpId,
             req.user.id
         );
         res.json({ success: true, id: Number(result.lastInsertRowid) });
@@ -234,10 +249,15 @@ router.put('/mangas/:id', requireEditor, (req, res) => {
 
 router.delete('/mangas/:id', requireEditor, (req, res) => {
     try {
-        db.prepare('DELETE FROM volume_reads WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)').run(req.params.id);
-        db.prepare('DELETE FROM volumes WHERE manga_id = ?').run(req.params.id);
-        const result = db.prepare('DELETE FROM mangas WHERE id = ?').run(req.params.id);
-        if (result.changes === 0) return res.status(404).json({ error: 'Manga nicht gefunden' });
+        let deleted = false;
+        runTransaction(() => {
+            db.prepare('DELETE FROM volume_reads WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)').run(req.params.id);
+            db.prepare('DELETE FROM volumes WHERE manga_id = ?').run(req.params.id);
+            const result = db.prepare('DELETE FROM mangas WHERE id = ?').run(req.params.id);
+            deleted = result.changes > 0;
+        });
+
+        if (!deleted) return res.status(404).json({ error: 'Manga nicht gefunden' });
         res.json({ success: true });
     } catch (err) {
         console.error('Error deleting manga:', err);

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, runTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { lookupVolumeMetadata } = require('../mangaPassion');
@@ -9,13 +9,13 @@ const parsePrice = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const str = String(val).replace(',', '.').trim();
     const parsed = parseFloat(str);
-    return (isNaN(parsed) || parsed < 0) ? null : Math.round(parsed * 100) / 100;
+    return (isNaN(parsed) || parsed < 0 || parsed > 99999) ? null : Math.round(parsed * 100) / 100;
 };
 
 const parseNum = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const parsed = parseInt(val, 10);
-    return (isNaN(parsed) || parsed < 0) ? null : parsed;
+    return (isNaN(parsed) || parsed < 0 || parsed > 99999) ? null : parsed;
 };
 
 // --- VOLUMES API ---
@@ -39,13 +39,19 @@ router.post('/volumes', requireEditor, (req, res) => {
             type = 'volume'
         } = req.body;
 
-        if (!manga_id || volume_number === undefined || volume_number === '') {
-            return res.status(400).json({ error: 'manga_id und Bandnummer erforderlich' });
+        const mId = parseInt(manga_id, 10);
+        if (!mId || isNaN(mId) || volume_number === undefined || volume_number === '') {
+            return res.status(400).json({ error: 'Gültige manga_id und Bandnummer erforderlich' });
+        }
+
+        const volNumStr = String(volume_number).trim();
+        if (volNumStr.length > 80) {
+            return res.status(400).json({ error: 'Bandnummer ist zu lang (maximal 80 Zeichen)' });
         }
 
         let volType = type ? String(type).trim().toLowerCase() : 'volume';
         if (!['volume', 'special_edition', 'schuber', 'special'].includes(volType)) {
-            const vLower = String(volume_number).toLowerCase();
+            const vLower = volNumStr.toLowerCase();
             const nLower = notes ? String(notes).toLowerCase() : '';
             if (vLower.includes('schuber') || nLower.includes('schuber')) {
                 volType = 'schuber';
@@ -69,29 +75,34 @@ router.post('/volumes', requireEditor, (req, res) => {
             INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        const result = stmt.run(
-            parseInt(manga_id, 10),
-            String(volume_number).trim(),
-            isbn ? String(isbn).trim() : null,
-            parsePrice(price),
-            release_date ? String(release_date).trim() : null,
-            parseNum(release_year),
-            condition ? String(condition).trim() : null,
-            parseNum(pages),
-            publisher ? normalizePublisher(publisher) : null,
-            purchase_date ? String(purchase_date).trim() : null,
-            status || 'Vorhanden',
-            notes ? String(notes).trim() : null,
-            cover_image ? String(cover_image).trim() : null,
-            imagesVal,
-            volType
-        );
 
-        // Update owned count
-        const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(manga_id);
-        db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, manga_id);
+        let newVolumeId = null;
+        runTransaction(() => {
+            const result = stmt.run(
+                mId,
+                volNumStr,
+                isbn ? String(isbn).trim() : null,
+                parsePrice(price),
+                release_date ? String(release_date).trim() : null,
+                parseNum(release_year),
+                condition ? String(condition).trim() : null,
+                parseNum(pages),
+                publisher ? normalizePublisher(publisher) : null,
+                purchase_date ? String(purchase_date).trim() : null,
+                status || 'Vorhanden',
+                notes ? String(notes).trim() : null,
+                cover_image ? String(cover_image).trim() : null,
+                imagesVal,
+                volType
+            );
+            newVolumeId = Number(result.lastInsertRowid);
 
-        res.json({ success: true, id: Number(result.lastInsertRowid) });
+            // Update owned count atomically
+            const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mId);
+            db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, mId);
+        });
+
+        res.json({ success: true, id: newVolumeId });
     } catch (err) {
         console.error('Error adding volume:', err);
         res.status(500).json({ error: 'Fehler beim Hinzufügen des Bands' });
@@ -134,22 +145,16 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
         const rDate = release_date ? String(release_date).trim() : null;
         const year = parseNum(release_year);
 
-        db.exec('BEGIN TRANSACTION;');
-        try {
+        runTransaction(() => {
             for (let i = start; i <= end; i++) {
                 if (!existingSet.has(String(i))) {
                     insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, rDate, year);
                 }
             }
-            db.exec('COMMIT;');
-        } catch (txErr) {
-            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
-            throw txErr;
-        }
-
-        // Update owned count
-        const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mId);
-        db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, mId);
+            // Update owned count within the same transaction
+            const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mId);
+            db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, mId);
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -207,11 +212,14 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
                 status = ?, notes = ?, cover_image = ?, images = ?, type = ?
             WHERE id = ?
         `);
-        stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, req.params.id);
 
-        // Update owned count
-        const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
-        db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, vol.manga_id);
+        runTransaction(() => {
+            stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, req.params.id);
+
+            // Update owned count atomically
+            const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
+            db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, vol.manga_id);
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -225,12 +233,14 @@ router.delete('/volumes/:id', requireEditor, (req, res) => {
         const vol = db.prepare('SELECT manga_id FROM volumes WHERE id = ?').get(req.params.id);
         if (!vol) return res.status(404).json({ error: 'Band nicht gefunden' });
 
-        db.prepare('DELETE FROM volume_reads WHERE volume_id = ?').run(req.params.id);
-        db.prepare('DELETE FROM volumes WHERE id = ?').run(req.params.id);
+        runTransaction(() => {
+            db.prepare('DELETE FROM volume_reads WHERE volume_id = ?').run(req.params.id);
+            db.prepare('DELETE FROM volumes WHERE id = ?').run(req.params.id);
 
-        // Update owned count
-        const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
-        db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, vol.manga_id);
+            // Update owned count atomically
+            const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
+            db.prepare('UPDATE mangas SET owned_volumes = ? WHERE id = ?').run(countRow.count, vol.manga_id);
+        });
 
         res.json({ success: true });
     } catch (err) {
@@ -307,8 +317,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
         const insertStmt = db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
         const deleteStmt = db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?');
 
-        db.exec('BEGIN TRANSACTION;');
-        try {
+        runTransaction(() => {
             for (const v of targetVols) {
                 if (read) {
                     insertStmt.run(v.id, targetUserId);
@@ -316,11 +325,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
                     deleteStmt.run(v.id, targetUserId);
                 }
             }
-            db.exec('COMMIT;');
-        } catch (txErr) {
-            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
-            throw txErr;
-        }
+        });
 
         res.json({ success: true, count: targetVols.length });
     } catch (e) {

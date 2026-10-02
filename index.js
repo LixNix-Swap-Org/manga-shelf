@@ -64,6 +64,14 @@ app.use('/api', statsRoutes);
 app.use('/api', radarRoutes);
 app.use('/api', lookupRoutes);
 
+// Database maintenance / restore error handler for API requests
+app.use('/api', (err, req, res, next) => {
+    if (err && err.message && err.message.includes('DATABASE_MAINTENANCE_RESTORE_IN_PROGRESS')) {
+        return res.status(503).json({ error: 'Server wartet: Datenbank-Wiederherstellung läuft gerade. Bitte versuche es in wenigen Sekunden erneut.' });
+    }
+    next(err);
+});
+
 // Daily automated backup scheduler (runs after 10s on boot, then every 24 hours)
 initScheduler();
 

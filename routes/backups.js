@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
-const { db, dataDir, uploadsDir, closeDb, initDb } = require('../db');
+const { db, dataDir, uploadsDir, closeDb, initDb, setRestoringState } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { uploadBackup } = require('../middleware/upload');
 const { backupsDir, createBackupSnapshot } = require('../services/scheduler');
@@ -33,81 +33,88 @@ async function restoreFromZip(source) {
         throw new Error('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
     }
 
-    // 1. Flush WAL logs to disk then close active connection
-    try {
-        db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-    } catch (e) {}
-    closeDb();
-
-    // 2. Safety copy of current database
-    if (fs.existsSync(dbFilePath)) {
-        fs.copyFileSync(dbFilePath, backupBakPath);
-    }
-
-    // 3. Remove stale WAL and SHM journal files
-    if (fs.existsSync(walFilePath)) {
-        try { fs.unlinkSync(walFilePath); } catch (e) {}
-    }
-    if (fs.existsSync(shmFilePath)) {
-        try { fs.unlinkSync(shmFilePath); } catch (e) {}
-    }
+    // Set lock flag to prevent proxy from re-opening database during overwrite
+    setRestoringState(true);
 
     try {
-        // 4. Overwrite manga.db with restored database
-        fs.writeFileSync(dbFilePath, dbEntry.getData());
-
-        // 5. Restore uploads folder (cover images)
-        let restoredImagesCount = 0;
-        for (const entry of entries) {
-            if (entry.isDirectory) continue;
-
-            let relUploadPath = null;
-            if (entry.entryName.startsWith('uploads/')) {
-                relUploadPath = entry.entryName;
-            } else if (entry.entryName.includes('/uploads/')) {
-                relUploadPath = entry.entryName.substring(entry.entryName.indexOf('uploads/'));
-            }
-
-            if (relUploadPath) {
-                const targetFilePath = path.join(dataDir, relUploadPath);
-                // Security: Prevent Zip-Slip directory traversal
-                if (!path.resolve(targetFilePath).startsWith(path.resolve(uploadsDir))) {
-                    continue;
-                }
-                fs.mkdirSync(path.dirname(targetFilePath), { recursive: true });
-                fs.writeFileSync(targetFilePath, entry.getData());
-                restoredImagesCount++;
-            }
-        }
-
-        // 6. Reconnect to database and run migrations
-        initDb();
-
-        // 7. Verify restored database is functional
-        const mangaRow = db.prepare('SELECT count(*) as count FROM mangas').get();
-        const mangaCount = mangaRow ? mangaRow.count : 0;
-
-        // Cleanup temporary safety copy
-        if (fs.existsSync(backupBakPath)) {
-            try { fs.unlinkSync(backupBakPath); } catch (e) {}
-        }
-
-        return {
-            mangaCount,
-            restoredImagesCount
-        };
-    } catch (err) {
-        // Rollback safety copy if available
+        // 1. Flush WAL logs to disk then close active connection
         try {
+            db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
+        } catch (e) {}
+        closeDb();
+
+        // 2. Safety copy of current database
+        if (fs.existsSync(dbFilePath)) {
+            fs.copyFileSync(dbFilePath, backupBakPath);
+        }
+
+        // 3. Remove stale WAL and SHM journal files
+        if (fs.existsSync(walFilePath)) {
+            try { fs.unlinkSync(walFilePath); } catch (e) {}
+        }
+        if (fs.existsSync(shmFilePath)) {
+            try { fs.unlinkSync(shmFilePath); } catch (e) {}
+        }
+
+        try {
+            // 4. Overwrite manga.db with restored database
+            fs.writeFileSync(dbFilePath, dbEntry.getData());
+
+            // 5. Restore uploads folder (cover images)
+            let restoredImagesCount = 0;
+            for (const entry of entries) {
+                if (entry.isDirectory) continue;
+
+                let relUploadPath = null;
+                if (entry.entryName.startsWith('uploads/')) {
+                    relUploadPath = entry.entryName;
+                } else if (entry.entryName.includes('/uploads/')) {
+                    relUploadPath = entry.entryName.substring(entry.entryName.indexOf('uploads/'));
+                }
+
+                if (relUploadPath) {
+                    const targetFilePath = path.join(dataDir, relUploadPath);
+                    // Security: Prevent Zip-Slip directory traversal
+                    if (!path.resolve(targetFilePath).startsWith(path.resolve(uploadsDir))) {
+                        continue;
+                    }
+                    fs.mkdirSync(path.dirname(targetFilePath), { recursive: true });
+                    fs.writeFileSync(targetFilePath, entry.getData());
+                    restoredImagesCount++;
+                }
+            }
+
+            // 6. Reconnect to database and run migrations
+            initDb();
+
+            // 7. Verify restored database is functional
+            const mangaRow = db.prepare('SELECT count(*) as count FROM mangas').get();
+            const mangaCount = mangaRow ? mangaRow.count : 0;
+
+            // Cleanup temporary safety copy
             if (fs.existsSync(backupBakPath)) {
-                fs.copyFileSync(backupBakPath, dbFilePath);
                 try { fs.unlinkSync(backupBakPath); } catch (e) {}
             }
-            initDb();
-        } catch (rollbackErr) {
-            console.error('[Backup Restore] Rollback failed:', rollbackErr);
+
+            return {
+                mangaCount,
+                restoredImagesCount
+            };
+        } catch (err) {
+            // Rollback safety copy if available
+            try {
+                if (fs.existsSync(backupBakPath)) {
+                    fs.copyFileSync(backupBakPath, dbFilePath);
+                    try { fs.unlinkSync(backupBakPath); } catch (e) {}
+                }
+                initDb();
+            } catch (rollbackErr) {
+                console.error('[Backup Restore] Rollback failed:', rollbackErr);
+            }
+            throw err;
         }
-        throw err;
+    } finally {
+        setRestoringState(false);
     }
 }
 
