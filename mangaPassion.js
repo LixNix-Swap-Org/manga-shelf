@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const { db, uploadsDir, runTransaction, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
 
-const USER_AGENT = 'MangaShelf/2.6.0';
+const pkg = require('./package.json');
+const USER_AGENT = `MangaShelf/${pkg.version || '2.11.0'}`;
 const HEADERS = {
   'User-Agent': USER_AGENT,
   'Accept': 'application/ld+json'
@@ -58,14 +59,14 @@ async function downloadRemoteImageToUploads(url) {
 
 function scoreEdition(e, targetTitle, targetPub, targetTotal) {
   let score = 0;
-  const tNorm = (targetTitle || '').toLowerCase().replace(/[:–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const eNorm = (e.title || '').toLowerCase().replace(/[:–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tNorm = (targetTitle || '').toLowerCase().replace(/[:–—-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const eNorm = (e.title || '').toLowerCase().replace(/[:–—-]/g, ' ').replace(/\s+/g, ' ').trim();
   
   if (eNorm === tNorm) score += 100;
   else if (eNorm.includes(tNorm) || tNorm.includes(eNorm)) score += 50;
 
-  const tBase = (targetTitle || '').toLowerCase().split(/[:–—\-]/)[0].trim();
-  const eBase = (e.title || '').toLowerCase().split(/[:–—\-]/)[0].trim();
+  const tBase = (targetTitle || '').toLowerCase().split(/[:–—-]/)[0].trim();
+  const eBase = (e.title || '').toLowerCase().split(/[:–—-]/)[0].trim();
   if (tBase && eBase && tBase === eBase) score += 35;
 
   if (targetPub && e.publishers?.[0]?.name) {
@@ -126,7 +127,7 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
     title.replace(/[–—]/g, '-').trim(),
     title.replace(/[-–—:]/g, ' ').replace(/\s+/g, ' ').trim(),
     title.replace(/\./g, '. ').replace(/\s+/g, ' ').trim(),
-    title.split(/[:–—\-]/)[0].trim()
+    title.split(/[:–—-]/)[0].trim()
   ];
   const uniqueQueries = [...new Set(queries.map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length >= 2))];
 

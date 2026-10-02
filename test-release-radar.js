@@ -77,6 +77,14 @@ const path = require('path');
         console.log('Clicked Release-Radar tab button:', clicked);
         await new Promise(r => setTimeout(r, 1500));
 
+        // Switch to "Meine Vorbestellungen & Budget" tab
+        await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const tab = buttons.find(b => b.textContent.includes('Meine Vorbestellungen'));
+            if (tab) tab.click();
+        });
+        await new Promise(r => setTimeout(r, 1000));
+
         // Take a screenshot of the Release-Radar
         const scDir = path.join(__dirname, 'screenshots');
         if (!fs.existsSync(scDir)) fs.mkdirSync(scDir, { recursive: true });

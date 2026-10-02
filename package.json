@@ -13,6 +13,10 @@
     "package": "npm run build:frontend && node package.js",
     "release": "node release.js",
     "test": "node --test test/*.test.js",
+    "test:e2e": "node test-e2e-suite.js",
+    "test:radar": "node test-release-radar.js",
+    "test:perf": "node test-performance-suite.js",
+    "test:deep": "node test/deep-e2e.js",
     "lint": "eslint ."
   },
   "dependencies": {

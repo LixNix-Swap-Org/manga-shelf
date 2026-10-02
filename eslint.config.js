@@ -2,7 +2,7 @@ const js = require('@eslint/js');
 const globals = require('globals');
 
 module.exports = [
-    { ignores: ['node_modules/', 'frontend/', 'dist_pack/', 'data/', 'pterodactyl-manga-shelf/'] },
+    { ignores: ['node_modules/', 'frontend/', 'dist_pack/', 'dist/', 'data/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
     js.configs.recommended,
     {
         files: ['**/*.js'],
@@ -14,8 +14,7 @@ module.exports = [
         }
     },
     {
-        // Puppeteer scripts run snippets inside the browser page (page.evaluate)
-        files: ['test-*.js', 'verify-*.js', 'seed-remote.js', 'check-remote.js'],
+        files: ['test-*.js', 'test/**/*.js', 'scripts/**/*.js'],
         languageOptions: { globals: { ...globals.node, ...globals.browser } }
     }
 ];

@@ -1647,7 +1647,7 @@ export default function Dashboard({ user, onLogout }) {
       <span className="font-semibold text-slate-400">Manga Shelf</span>
       <span className="text-slate-600">•</span>
       <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60">
-        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0'}
+        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.11.0'}
       </span>
     </div>
     <div className="flex flex-wrap items-center justify-center gap-3 text-slate-400">

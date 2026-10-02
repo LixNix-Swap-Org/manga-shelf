@@ -9,7 +9,6 @@ const { upload } = require('../middleware/upload');
 const { fetchRemoteImage } = require('../utils/safeFetch');
 const { normalizePublisher } = require('../utils/publishers');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
-const { assertSafeRemoteUrl } = require('../utils/security');
 
 // AniList GraphQL Search Helper
 function searchAniList(queryTerm) {
@@ -170,7 +169,6 @@ router.post('/upload-remote', requireEditor, async (req, res) => {
 // Helper to fetch text via HTTPS with timeout
 function fetchTextHttps(url, timeoutMs = 7000) {
     return new Promise((resolve, reject) => {
-        const parsed = new URL(url);
         const req = https.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
             if (res.statusCode >= 400) {
                 return reject(new Error(`HTTP ${res.statusCode}`));
@@ -202,7 +200,7 @@ function parseMarc21Xml(xml, cleanIsbn, sourceName) {
     };
 
     let title = getField('245', 'a');
-    if (title) title = title.replace(/\s*[\/:]\s*$/, '').trim();
+    if (title) title = title.replace(/\s*[/:]\s*$/, '').trim();
 
     let volumeNumber = getField('245', 'n');
     if (volumeNumber) {

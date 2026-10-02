@@ -44,7 +44,14 @@ c:\Manga Webseite 2.0/
 ├── egg-manga-shelf.json       # Pterodactyl Egg Vorlage
 ├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
+├── release.js                 # GitHub Release Automatisierung & Asset-Upload
 ├── test-e2e-suite.js          # Automatisierte Puppeteer Browser E2E-Tests
+├── test-release-radar.js      # Headless E2E-Test für Release-Radar Ansicht
+├── test-performance-suite.js  # Performance-Benchmark Suite
+├── scripts/                   # Administrative Hilfsskripte (Remote-Prüfung, Seed)
+│   ├── check-remote.js
+│   ├── seed-remote.js
+│   └── verify-remote.js
 ├── middleware/                # Wiederverwendbare Express-Middlewares
 │   ├── auth.js                # Auth, Rollenprüfungen (requireAdmin, requireEditor) & JWT
 │   ├── rateLimit.js           # In-Memory Rate-Limiter (Login, Setup)
@@ -62,8 +69,12 @@ c:\Manga Webseite 2.0/
 ├── utils/                     # Hilfsfunktionen & Normalisierer
 │   ├── publishers.js          # Verlags-Normalisierung & Mappings
 │   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes)
-├── test/                      # node:test API-Tests (`npm test`) gegen temporäre DB (DATA_DIR)
+├── test/                      # node:test API-Tests (`npm test`) & Deep E2E Tests
+│   ├── api.test.js
+│   ├── deep-e2e.js
+│   └── helpers.js
 ├── .github/workflows/ci.yml   # CI: Lint, Tests, Docker-Build + Start-Test
+├── deploy/workflows/          # Vorlagen für Release-Workflows
 ├── data/                      # Persistente Anwendungsdaten (in .gitignore)
 │   ├── manga.db               # SQLite-Hauptdatenbank (WAL-Modus)
 │   ├── temp/                  # Temporäres Staging für Backup-Uploads (Anti-OOM)
