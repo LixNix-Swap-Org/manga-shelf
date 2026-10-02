@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db, uploadsDir } = require('./db.js');
+const { db, uploadsDir, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
 
 const USER_AGENT = 'MangaShelf/2.6.0';
@@ -534,6 +534,7 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
   const importedIds = [];
   const updatedIds = [];
 
+  withTransaction(() => {
   for (const volNumStr of gapVolumeNumbers) {
     const cleanNum = String(volNumStr).trim();
     const key = cleanNum.toLowerCase();
@@ -582,6 +583,8 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
       importedIds.push(Number(ins.lastInsertRowid));
     }
   }
+
+  });
 
   // Recalculate owned_volumes
   const ownedCountRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mangaId);
@@ -985,8 +988,9 @@ async function autofillMangaVolumes(mangaId, options = {}) {
     WHERE id = ?
   `);
 
-  db.exec('BEGIN TRANSACTION;');
-  try {
+  // Phase 1 (async): match volumes and download covers. No transaction is open while awaiting network I/O.
+  const pendingUpdates = [];
+  {
     for (const uv of userVolumes) {
       const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
       let matched = null;
@@ -1050,15 +1054,16 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       }
 
       if (changed) {
-        updateStmt.run(newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id);
-        updatedCount++;
+        pendingUpdates.push([newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id]);
       }
     }
-    db.exec('COMMIT;');
-  } catch (err) {
-    try { db.exec('ROLLBACK;'); } catch (_) {}
-    throw err;
   }
+
+  // Phase 2 (sync): apply all updates atomically
+  withTransaction(() => {
+    for (const params of pendingUpdates) updateStmt.run(...params);
+  });
+  updatedCount = pendingUpdates.length;
 
   return {
     success: true,

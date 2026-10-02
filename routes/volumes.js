@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, withTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { lookupVolumeMetadata } = require('../mangaPassion');
@@ -134,18 +134,13 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
         const rDate = release_date ? String(release_date).trim() : null;
         const year = parseNum(release_year);
 
-        db.exec('BEGIN TRANSACTION;');
-        try {
+        withTransaction(() => {
             for (let i = start; i <= end; i++) {
                 if (!existingSet.has(String(i))) {
                     insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, rDate, year);
                 }
             }
-            db.exec('COMMIT;');
-        } catch (txErr) {
-            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
-            throw txErr;
-        }
+        });
 
         // Update owned count
         const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mId);
@@ -307,8 +302,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
         const insertStmt = db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
         const deleteStmt = db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?');
 
-        db.exec('BEGIN TRANSACTION;');
-        try {
+        withTransaction(() => {
             for (const v of targetVols) {
                 if (read) {
                     insertStmt.run(v.id, targetUserId);
@@ -316,11 +310,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
                     deleteStmt.run(v.id, targetUserId);
                 }
             }
-            db.exec('COMMIT;');
-        } catch (txErr) {
-            try { db.exec('ROLLBACK;'); } catch (rbErr) {}
-            throw txErr;
-        }
+        });
 
         res.json({ success: true, count: targetVols.length });
     } catch (e) {
