@@ -1093,5 +1093,7 @@ module.exports = {
   syncMangaWithEdition,
   searchMangaPassionForLookup,
   lookupVolumeMetadata,
-  autofillMangaVolumes
+  autofillMangaVolumes,
+  scoreEdition,
+  matchSchuberVolume
 };
