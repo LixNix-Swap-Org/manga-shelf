@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db } = require('./db.js');
+const { db, uploadsDir } = require('./db.js');
+const { fetchRemoteImage } = require('./utils/safeFetch');
 
 const USER_AGENT = 'MangaShelf/2.6.0';
 const HEADERS = {
@@ -34,10 +35,6 @@ async function downloadRemoteImageToUploads(url) {
     // Deterministic filename based on MD5 hash of the URL to prevent duplicates
     const urlHash = crypto.createHash('md5').update(url.trim()).digest('hex').slice(0, 16);
     const filename = `mp-cov-${urlHash}${cleanExt}`;
-    const uploadsDir = path.join(__dirname, 'data', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
     const targetPath = path.join(uploadsDir, filename);
 
     // If already downloaded and valid, return existing local URL immediately
@@ -48,9 +45,7 @@ async function downloadRemoteImageToUploads(url) {
       }
     }
 
-    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': USER_AGENT } }, 8000);
-    if (!res.ok) return url;
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const { buffer } = await fetchRemoteImage(url);
     if (buffer.length < 500) return url; // Invalid image or empty
 
     fs.writeFileSync(targetPath, buffer);

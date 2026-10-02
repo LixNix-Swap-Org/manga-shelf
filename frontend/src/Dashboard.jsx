@@ -840,8 +840,8 @@ export default function Dashboard({ user, onLogout }) {
       setUserError('Bitte Benutzername und Passwort eingeben.');
       return;
     }
-    if (newUser.password.length < 4) {
-      setUserError('Passwort muss mindestens 4 Zeichen lang sein.');
+    if (newUser.password.length < 8) {
+      setUserError('Passwort muss mindestens 8 Zeichen lang sein.');
       return;
     }
 
@@ -3521,7 +3521,7 @@ export default function Dashboard({ user, onLogout }) {
                     </label>
                     <input 
                       type="password" 
-                      placeholder="Mind. 4 Zeichen" 
+                      placeholder="Mind. 8 Zeichen" 
                       className="input-field text-xs py-2"
                       required
                       value={newUser.password} 

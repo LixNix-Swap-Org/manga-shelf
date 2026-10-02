@@ -10,6 +10,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET=change-this-in-production-to-a-secure-random-secret
+      # Optional: eigenes Secret (mind. 32 Zeichen). Ohne Angabe wird automatisch ein
+      # zufälliges Secret erzeugt und in der Datenbank gespeichert.
+      # - JWT_SECRET=<mind. 32 zufällige Zeichen, z. B. via `openssl rand -hex 32`>
     volumes:
       - ./data:/app/data

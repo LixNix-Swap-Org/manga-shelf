@@ -2,21 +2,28 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { db } = require('../db');
 
-// Secure, persistent JWT Secret (stored in app_settings if not provided via environment)
-let JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    try {
-        const row = db.prepare("SELECT value FROM app_settings WHERE key = 'jwt_secret'").get();
-        if (row && row.value) {
-            JWT_SECRET = row.value;
-        } else {
-            JWT_SECRET = crypto.randomBytes(48).toString('hex');
-            db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', ?)").run(JWT_SECRET);
+// Secure, persistent JWT secret. An explicit JWT_SECRET is only accepted if it is long enough and not a
+// well-known placeholder from the repo; otherwise a random secret is generated and stored in app_settings.
+const MIN_SECRET_LENGTH = 32;
+const PLACEHOLDER_SECRET = /change[-_ ]?this|changeme|secret-key|your[-_ ]?secret|example/i;
+
+function resolveJwtSecret() {
+    const fromEnv = process.env.JWT_SECRET;
+    if (fromEnv) {
+        if (fromEnv.length >= MIN_SECRET_LENGTH && !PLACEHOLDER_SECRET.test(fromEnv)) {
+            return fromEnv;
         }
-    } catch (e) {
-        JWT_SECRET = 'manga-shelf-fallback-' + crypto.randomBytes(32).toString('hex');
+        console.warn(`[Auth] JWT_SECRET ist zu kurz (< ${MIN_SECRET_LENGTH} Zeichen) oder ein Platzhalter und wird ignoriert. Es wird ein zufälliges Secret aus der Datenbank verwendet.`);
     }
+    // No silent per-process fallback: if the DB is unusable the app must not start with a throwaway secret.
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'jwt_secret'").get();
+    if (row && row.value) return row.value;
+    const generated = crypto.randomBytes(48).toString('hex');
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', ?)").run(generated);
+    return generated;
 }
+
+const JWT_SECRET = resolveJwtSecret();
 
 // Helper for cookie options (supports direct HTTPS & reverse proxy / Cloudflare / Nginx)
 const setAuthCookie = (req, res, token) => {
@@ -37,15 +44,26 @@ const clearAuthCookie = (res) => {
 };
 
 const requireAuth = (req, res, next) => {
-    const token = req.cookies?.token || req.headers?.authorization?.split(' ')[1];
+    const bearer = req.headers?.authorization?.split(' ')[1];
+    const token = req.cookies?.token || bearer;
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded;
-        next();
+        decoded = jwt.verify(token, JWT_SECRET);
     } catch (e) {
-        res.status(401).json({ error: 'Invalid token' });
+        return res.status(401).json({ error: 'Invalid token' });
     }
+    // Role and existence are always taken from the DB so deleted or demoted users lose access immediately.
+    let user;
+    try {
+        user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(decoded.id);
+    } catch (e) {
+        console.error('[Auth] User lookup failed:', e);
+        return res.status(500).json({ error: 'Authentifizierung fehlgeschlagen' });
+    }
+    if (!user) return res.status(401).json({ error: 'Invalid token' });
+    req.user = { id: user.id, username: user.username, role: user.role };
+    next();
 };
 
 const requireAdmin = (req, res, next) => {

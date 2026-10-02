@@ -29,7 +29,8 @@ router.get('/stats', requireAuth, (req, res) => {
         // Settings / Start Date
         const settingRow = db.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get();
         const startDateStr = settingRow?.value || '2021-04-09';
-        const startDate = new Date(startDateStr);
+        let startDate = new Date(startDateStr);
+        if (isNaN(startDate.getTime())) startDate = new Date('2021-04-09');
         const now = new Date();
         const diffMs = Math.max(1, now.getTime() - startDate.getTime());
         const totalDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
@@ -155,9 +156,17 @@ router.get('/stats', requireAuth, (req, res) => {
 
 router.put('/stats/settings', requireAdmin, (req, res) => {
     try {
-        const dateVal = req.body.collection_start_date || req.body.start_date;
+        const dateVal = (req.body || {}).collection_start_date || (req.body || {}).start_date;
         if (dateVal) {
-            db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('collection_start_date', ?)").run(String(dateVal).trim());
+            const dateStr = String(dateVal).trim();
+            const parsed = new Date(dateStr);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateStr) {
+                return res.status(400).json({ error: 'Ungültiges Datum (erwartet: YYYY-MM-DD)' });
+            }
+            if (parsed.getTime() > Date.now()) {
+                return res.status(400).json({ error: 'Das Startdatum darf nicht in der Zukunft liegen' });
+            }
+            db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('collection_start_date', ?)").run(dateStr);
         }
         res.json({ success: true });
     } catch (e) {

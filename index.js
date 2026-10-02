@@ -162,6 +162,15 @@ const shutdown = () => {
         process.exit(0);
     });
 };
+// Last-resort safety nets: log and shut down in a controlled way instead of crashing mid-write
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Process] Uncaught exception:', err);
+    shutdown();
+    setTimeout(() => process.exit(1), 5000).unref();
+});
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
