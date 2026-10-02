@@ -13,7 +13,8 @@ export default function VolumeEditModal({
   manga,
   mangaId,
   canEdit,
-  onSuccess
+  onSuccess,
+  onPreviewImage
 }) {
   const [editVolForm, setEditVolForm] = useState({});
   const [savingVol, setSavingVol] = useState(false);
@@ -166,6 +167,28 @@ export default function VolumeEditModal({
     setEditVolForm(prev => ({
       ...prev,
       images: imgs
+    }));
+  };
+
+  const handleRemoveVolumeImage = (imgUrl) => {
+    if (!canEdit) return;
+    const nextImages = (editVolForm.images || []).filter(u => u !== imgUrl);
+    let nextCover = editVolForm.cover_image;
+    if (nextCover === imgUrl) {
+      nextCover = nextImages.length > 0 ? nextImages[0] : '';
+    }
+    setEditVolForm(prev => ({
+      ...prev,
+      images: nextImages,
+      cover_image: nextCover
+    }));
+  };
+
+  const handleSetVolumeCover = (imgUrl) => {
+    if (!canEdit) return;
+    setEditVolForm(prev => ({
+      ...prev,
+      cover_image: imgUrl
     }));
   };
 
@@ -619,7 +642,7 @@ export default function VolumeEditModal({
                             src={imgUrl} 
                             alt={`Foto ${idx + 1}`} 
                             className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                            onClick={() => setPreviewImage(imgUrl)}
+                            onClick={() => onPreviewImage?.(imgUrl)}
                           />
 
                           {/* Quick Actions (Move & Delete): Accessible on mobile and desktop */}
