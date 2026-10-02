@@ -12,7 +12,9 @@ const imageFileFilter = (req, file, cb) => {
     if (ALLOWED_IMAGE_MIMES.has(file.mimetype) && ALLOWED_IMAGE_EXTS.has(ext)) {
         cb(null, true);
     } else {
-        cb(new Error('Ungültiger Dateityp. Es sind ausschließlich Bilddateien (JPG, PNG, WebP, GIF, AVIF) erlaubt.'));
+        const err = new Error('Ungültiger Dateityp. Es sind ausschließlich Bilddateien (JPG, PNG, WebP, GIF, AVIF) erlaubt.');
+        err.status = 400;
+        cb(err);
     }
 };
 

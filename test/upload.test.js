@@ -52,8 +52,9 @@ test('upload: non-image type or extension is rejected and nothing is stored', as
     const before = fs.readdirSync(uploadsDir).length;
     const badMime = await post(editor, '/upload', form('image', [{ name: 'x.png', type: 'text/plain', data: Buffer.from('hi') }]));
     const badExt = await post(editor, '/upload', form('image', [{ name: 'x.html', type: 'image/png', data: Buffer.from('<b>') }]));
-    assert.ok(badMime.status >= 400, `bad mime status ${badMime.status}`);
-    assert.ok(badExt.status >= 400, `bad ext status ${badExt.status}`);
+    assert.equal(badMime.status, 400);
+    assert.equal(badExt.status, 400);
+    assert.match(badMime.body.error, /Ungültiger Dateityp/);
     assert.equal(fs.readdirSync(uploadsDir).length, before);
 });
 
@@ -73,7 +74,7 @@ test('upload/multiple: stores several images and returns all URLs', async () => 
 test('upload/multiple: more than 10 files are rejected', async () => {
     const files = Array.from({ length: 11 }, (_, i) => ({ name: `p${i}.png`, type: 'image/png', data: PNG }));
     const res = await post(editor, '/upload/multiple', form('images', files));
-    assert.ok(res.status >= 400);
+    assert.equal(res.status, 400);
 });
 
 test('upload: visitors are forbidden', async () => {

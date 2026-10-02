@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
+const { qstr } = require('../utils/query');
 const { searchMangaPassionEditions } = require('../mangaPassion');
 
 // --- SHOPPING LIST / WISHLIST API ---
@@ -488,8 +489,8 @@ router.post('/manga-passion/import', requireEditor, (req, res) => {
 // --- MANGA PASSION EDITION SEARCH ---
 router.get('/manga-passion/editions', requireAuth, async (req, res) => {
     try {
-        const title = req.query.title || '';
-        const publisher = req.query.publisher || '';
+        const title = qstr(req.query.title) || '';
+        const publisher = qstr(req.query.publisher) || '';
         const totalVolumes = parseInt(req.query.total_volumes, 10) || null;
         if (!title.trim()) {
             return res.status(400).json({ error: 'Titel-Parameter ist erforderlich' });

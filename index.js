@@ -41,6 +41,12 @@ app.set('trust proxy', true);
 app.use(compression());
 
 app.use(express.json());
+// Express 5 leaves req.body undefined for requests without a JSON body (Express 4 gave {}).
+// Handlers destructure req.body directly, so keep the old behaviour.
+app.use((req, res, next) => {
+    if (req.body === undefined) req.body = {};
+    next();
+});
 app.use(cookieParser());
 app.use(cors({
     origin: true,
@@ -83,6 +89,12 @@ app.use('/api', (err, req, res, next) => {
 });
 
 
+// Unknown API routes get a JSON 404 instead of falling through to the SPA's index.html
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Nicht gefunden' });
+});
+
+
 // --- SERVE FRONTEND ---
 let frontendPath = path.join(__dirname, 'frontend/dist');
 let indexPath = path.join(frontendPath, 'index.html');
@@ -116,9 +128,9 @@ app.use(express.static(frontendPath, {
     }
 }));
 
-app.get('*', (req, res) => {
+app.get('/{*splat}', (req, res) => {
     if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
+        res.sendFile(indexPath, { dotfiles: 'allow' }); // install path may contain dot-directories
     } else {
         res.status(500).send(`
             <h1>Frontend nicht gefunden</h1>
@@ -127,6 +139,18 @@ app.get('*', (req, res) => {
             <p>Aktuell gesuchter Pfad: ${indexPath}</p>
         `);
     }
+});
+
+// Last-resort error handler: log details server-side, never leak stack traces to clients
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    const isUpload = err.name === 'MulterError';
+    const status = isUpload ? 400 : (err.status >= 400 && err.status < 600 ? err.status : 500);
+    // Client errors (bad JSON, rejected upload, ...) keep their message; server errors stay generic.
+    const message = status < 500 ? err.message : 'Interner Serverfehler';
+    if (status >= 500) console.error('Unhandled error:', err);
+    if (req.path.startsWith('/api')) return res.status(status).json({ error: message });
+    res.status(status).type('text/plain').send(message);
 });
 
 // --- START SERVER --- (only when run directly; tests import the app without listening)

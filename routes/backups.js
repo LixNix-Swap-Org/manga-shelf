@@ -47,10 +47,7 @@ async function restoreFromZip(source) {
     setRestoringState(true);
 
     try {
-        // 2. Flush WAL logs to disk then close active connection
-        try {
-            db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-        } catch (e) { console.warn('WAL checkpoint before restore failed:', e.message); }
+        // 2. Close the active connection (closeDb() flushes the WAL itself; the db proxy is already locked here)
         closeDb();
 
         // 3. Safety copy of current database

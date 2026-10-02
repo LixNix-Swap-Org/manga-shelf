@@ -11,7 +11,7 @@
 * **Architektur:** Monolithisch für minimalen Deployment-Overhead (Backend serviert das vorkompilierte React-Frontend als statische Dateien unter `/`).
 * **Backend:**
   * **Runtime:** Node.js >= 22.5 (`node:sqlite` ist erforderlich; `engines` in `package.json`, Docker-Image `node:22-alpine`)
-  * **Framework:** Express.js (`index.js`)
+  * **Framework:** Express.js 5 (`index.js`)
   * **Datenbank:** SQLite (`manga.db` im WAL-Modus) via `node:sqlite` (`db.js`). `better-sqlite3` wird nur als optionaler Fallback geladen und ist **keine** Dependency
   * **Auth:** JSON Web Token (JWT) in `httpOnly`-Cookies (`token`), Kennwort-Hashing via asynchrones `bcryptjs`. Nutzer und Rolle werden bei **jedem** Request aus der DB geladen (`middleware/auth.js`), nicht aus dem Token
   * **Dateiverwaltung:** `multer` für Cover- & Bild-Uploads (gespeichert in `data/uploads/`)
@@ -512,6 +512,9 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
 16. **`DATA_DIR`:**
    * Optionale Umgebungsvariable für das Datenverzeichnis (Standard `./data`). Wird von den Tests für isolierte Temp-Datenbanken genutzt.
+17. **Express 5 (`index.js`):**
+   * Catch-all-Route heißt `app.get('/{*splat}', ...)` (ein nacktes `'*'` ist ungültig). `req.body` ist ohne Body `undefined`; eine Middleware setzt es auf `{}`, weil Handler direkt destrukturieren. `req.query` ist nur lesbar; Strings daraus immer über `qstr()` (`utils/query.js`) lesen, sonst werfen `?a=1&a=2` bzw. `?a[x]=1` bei `.trim()` einen 500.
+   * Unbekannte `/api/*`-Pfade liefern JSON-404; der letzte Error-Handler gibt bei 5xx nur eine generische Meldung aus (Details im Log), bei 4xx die Fehlermeldung (z. B. abgelehnter Upload).
 
 ---
 

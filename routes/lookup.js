@@ -8,6 +8,7 @@ const { requireAuth, requireEditor } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { fetchRemoteImage } = require('../utils/safeFetch');
 const { normalizePublisher } = require('../utils/publishers');
+const { qstr } = require('../utils/query');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
 
 // AniList GraphQL Search Helper
@@ -115,7 +116,7 @@ function searchAniList(queryTerm) {
 // 1. MANGA METADATA LOOKUP (Manga Passion First, AniList Fallback)
 router.get('/lookup/manga', requireAuth, async (req, res) => {
     try {
-        const queryTerm = req.query.q;
+        const queryTerm = qstr(req.query.q);
         if (!queryTerm || !queryTerm.trim()) {
             return res.status(400).json({ error: 'Suchbegriff erforderlich' });
         }
