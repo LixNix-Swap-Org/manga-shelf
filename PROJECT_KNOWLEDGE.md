@@ -2,7 +2,7 @@
 
 Die vollständige Wissensdatenbank und Architekturübersicht für Entwickler und KI-Agenten befindet sich in:
 
-👉 **[AGENTS.md](file:///c:/Manga%20Webseite%202.0/AGENTS.md)**
+👉 **[AGENTS.md](AGENTS.md)**
 
 Dort findest du:
 - Eine vollständige Datei- und Komponentenlandkarte

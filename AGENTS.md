@@ -29,7 +29,7 @@
 ## 2. Verzeichnis- & Datei-Landkarte
 
 ```text
-c:\Manga Webseite 2.0/
+manga-shelf/
 ├── AGENTS.md                  # <-- DIESE WISSENSDATENBANK
 ├── README.md                  # Setup- & Deployment-Anleitung für Nutzer/Admins
 ├── .env.example               # Vorlage für Umgebungsvariablen (Port, Host, Secrets)
@@ -45,9 +45,10 @@ c:\Manga Webseite 2.0/
 ├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
 ├── release.js                 # GitHub Release Automatisierung & Asset-Upload
-├── test-e2e-suite.js          # Automatisierte Puppeteer Browser E2E-Tests
-├── test-release-radar.js      # Headless E2E-Test für Release-Radar Ansicht
-├── test-performance-suite.js  # Performance-Benchmark Suite
+├── PROJECT_KNOWLEDGE.md       # Nur Verweis auf diese Datei
+├── test-e2e-suite.js          # Automatisierte Puppeteer Browser E2E-Tests (`npm run test:e2e`)
+├── test-release-radar.js      # Headless E2E-Test für Release-Radar Ansicht (`npm run test:radar`)
+├── test-performance-suite.js  # Performance-Benchmark Suite (`npm run test:perf`)
 ├── scripts/                   # Administrative Hilfsskripte (Remote-Prüfung, Seed)
 │   ├── check-remote.js
 │   ├── seed-remote.js
@@ -68,11 +69,22 @@ c:\Manga Webseite 2.0/
 │   └── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
 ├── utils/                     # Hilfsfunktionen & Normalisierer
 │   ├── publishers.js          # Verlags-Normalisierung & Mappings
+│   ├── isbn.js                # ISBN-10/13-Normalisierung & Prüfsummen
+│   ├── logger.js              # Zentraler Logger (`LOG_LEVEL`, `LOG_FORMAT`)
+│   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
+│   ├── staticHeaders.js       # Cache-Header für `index.html`, `sw.js`, `manifest.json`
+│   ├── volumeType.js          # `inferVolumeType` / `classifyOfficialVolume` (Backend)
+│   ├── security.js            # `isPrivateIp` / `assertSafeRemoteUrl` – von nichts eingebunden (Altlast, siehe Gotcha 7)
 │   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes)
-├── test/                      # node:test API-Tests (`npm test`) & Deep E2E Tests
-│   ├── api.test.js
-│   ├── deep-e2e.js
-│   └── helpers.js
+├── test/                      # node:test-Tests (`npm test` = `test/*.test.js`) & Deep-E2E
+│   ├── helpers.js             # Startet die App gegen eine temporäre DATA_DIR
+│   ├── api.test.js            # Auth, CRUD, Rollen, Backups
+│   ├── routing.test.js, upload.test.js, logger.test.js, isbn.test.js
+│   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
+│   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
+│   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
+│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js
+│   └── deep-e2e.js            # Visueller Browser-Regressionstest (`npm run test:deep`, nicht in `npm test`)
 ├── .github/workflows/ci.yml   # CI: Lint, Tests, Docker-Build + Start-Test
 ├── deploy/workflows/          # Vorlagen für Release-Workflows
 ├── data/                      # Persistente Anwendungsdaten (in .gitignore)
@@ -87,10 +99,16 @@ c:\Manga Webseite 2.0/
     └── src/
         ├── main.jsx           # React Root Mount
         ├── App.jsx            # Routing, Auth-Check & Setup-Check
-        ├── Dashboard.jsx      # Schlankes Hauptdashboard (Regal/Grid, Filter, Toolbar)
-        ├── MangaDetail.jsx    # Schlanke Manga-Detailansicht (Banner, Buchrücken-Regal, Bände)
+        ├── Dashboard.jsx      # Container des Dashboards: State, Hauptumschalter (`activeMainView`), Modals; Darstellung in `components/dashboard/`
+        ├── MangaDetail.jsx    # Container der Detailansicht: lädt Daten, hält State, Lücken-Erkennung; Darstellung in `components/detail/`
         ├── Login.jsx          # Login-Maske
         ├── Setup.jsx          # Initialer Einrichtungs-Assistent (Admin-Account)
+        ├── utils/
+        │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
+        │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
+        ├── utils/
+        │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
+        │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
         ├── index.css          # Globale Styles, Scrollbars, Glasmorphismus & Farbtöne
         └── components/        # Modulare Komponenten & Modals (Frontend-Refactoring)
             ├── modals/        # Dashboard-Modals
@@ -98,11 +116,23 @@ c:\Manga Webseite 2.0/
             │   ├── BackupRestoreModal.jsx   # Server-Snapshots, Uploads & 1-Klick Restore
             │   ├── StatsModal.jsx           # Finanz-KPIs, Charts, Leserranking & Leser-Details
             │   └── AddMangaModal.jsx        # Reihe anlegen mit Manga Passion/AniList Metadatensuche
+            ├── common/
+            │   └── BarcodeScannerButton.jsx # ISBN-Barcode per Foto (BarcodeDetector, Fallback ZXing)
             ├── dashboard/     # Dashboard Views
+            │   ├── DashboardHeader.jsx      # Kopfzeile, Hauptumschalter, Scanner
+            │   ├── CollectionToolbar.jsx    # Suche, Filter, Sortierung, Ansicht
+            │   ├── MangaCollectionGrid.jsx  # Regal-/Grid-Darstellung der Reihen
             │   ├── ShoppingListView.jsx     # Einkaufsliste, Buchladen-Modus & Schnellkauf
             │   └── ReleaseRadarView.jsx     # Neuheiten-Kalender & Monats-Release-Radar
             └── detail/        # Manga-Detailansicht Subkomponenten & Modals
-                ├── VolumeEditModal.jsx      # Band-Details, Fotogalerie-Manager & MP-Autofill
+                ├── MangaHeroCard.jsx        # Banner/Kopf der Reihe mit Metadaten & Fortschritt
+                ├── AddVolumeBar.jsx         # Schnelles Anlegen einzelner Bände
+                ├── VolumeFilterBar.jsx      # Filter-Chips (Alle/Bände/Special Editions/Schuber/Specials)
+                ├── VolumeShelfView.jsx      # Buchrücken-Regal inkl. Ghost-Spines für Lücken
+                ├── VolumeGridView.jsx       # Kartenansicht
+                ├── VolumeListView.jsx       # Listen-/Tabellenansicht
+                ├── VolumePhotoManager.jsx   # Foto-Manager (Upload, Sortieren, Löschen)
+                ├── VolumeEditModal.jsx      # Band-Details & MP-Autofill
                 ├── BatchAddModal.jsx        # Batch-Generator für Bandnummern 1..N
                 ├── BatchReadModal.jsx       # Batch-Lesestatus bis Band X für Leser
                 ├── GapFillModal.jsx         # 1-Klick-Lückenfüller mit MP-Preis/Cover
@@ -136,6 +166,8 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `tags` (TEXT) – z. B. kommagetrennte Genres / Tags
    * `total_volumes` (INTEGER) – Geplante / bekannte Gesamtbandanzahl
    * `owned_volumes` (INTEGER, DEFAULT 0) – Automatisch oder manuell gezählt
+   * `manga_passion_id` (INTEGER, NULL) – Verknüpfte deutsche Manga-Passion-Edition (Index `idx_mangas_passion_id`)
+   * `manga_passion_edition_data` (TEXT, NULL) – JSON-Metadaten der verknüpften Edition
    * `description` (TEXT)
    * `cover_image` (TEXT) – Relativer Pfad, z. B. `uploads/xyz.jpg`
    * `banner_image` (TEXT) – Optionales Bannerbild
@@ -180,7 +212,9 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
 
 7. **`schema_migrations`**
    * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
+   * `name` (TEXT, NOT NULL) – Name der Migration
    * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
+   * Aktuell Version 1–8 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
 
 ### Performance-Indizes
 Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):
@@ -216,6 +250,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 
 | Endpunkt | Methode | Middleware | Beschreibung |
 | :--- | :--- | :--- | :--- |
+| `/api/version` | GET | public | App-Version aus `package.json` |
 | `/api/health` | GET | public | Liveness-/Readiness-Probe (DB-Check, Version, Uptime); 503 wenn DB nicht erreichbar. Nutzt Docker-`HEALTHCHECK` und CI |
 | `/api/setup/status` | GET | public | Prüft ob initialer Admin existiert (`needsSetup`) |
 | `/api/setup` | POST | public | Erstellt initialen Admin-User bei Setup |
@@ -236,6 +271,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/volumes/:id` | DELETE | `requireEditor` | Einzelnen Band löschen |
 | `/api/volumes/:id/read` | POST | `requireEditor` | Lesestatus für Band umschalten (Toggle) |
 | `/api/volumes/batch-read` | POST | `requireEditor` | Bände 1 bis X auf einen Klick als gelesen markieren |
+| `/api/volumes/lookup` | GET | `requireAuth` | Metadaten (Datum, Seiten, ISBN, Preis, Cover) für einen Band via Manga Passion / DNB; akzeptiert auch MP-URL oder -ID (`manga_id`, `volume_number`) |
 | `/api/stats` | GET | `requireAuth` | Gesamte Sammlungs-Statistiken abrufen |
 | `/api/stats/settings` | PUT | `requireAdmin` | z. B. Sammelstartdatum aktualisieren |
 | `/api/upload` | POST | `requireEditor` | Einzelnes Bild hochladen (Multer -> `data/uploads`) |
@@ -251,9 +287,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (Status: Vorbestellt oder Fehlt) |
 | `/api/mangas/:id/gaps` | GET | `requireAuth` | Intelligente Lücken-Erkennung & Abgleich gegen offizielle deutsche Manga Passion Edition |
 | `/api/mangas/:id/sync-edition` | POST | `requireEditor` | 1-Klick-Synchronisation von `total_volumes` und Editions-Metadaten |
+| `/api/mangas/:id/autofill-volumes` | POST | `requireEditor` | Batch-Anreicherung aller Bände einer Reihe (Datum, Seiten, ISBN, Preis, Schuber-Cover) |
 | `/api/mangas/:id/batch-import-gaps` | POST | `requireEditor` | Batch-Übernahme aller echten Lücken auf die Einkaufsliste (inkl. Preisen & Covern) |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
-| `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder |
+| `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder (Alias: `POST /api/restore`) |
 | `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |
 | `/api/backups/create` | POST | `requireAdmin` | Erstellt sofort einen neuen Server-Snapshot |
 | `/api/backups/:filename/restore` | POST | `requireAdmin` | Stellt einen Server-Snapshot mit 1 Klick wieder her |
@@ -267,25 +304,26 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 ### 🔹 Fall A: Neues Feld für Mangas hinzufügen (z. B. "Demographie" oder "Originalsprache")
 1. **Datenbank (`db.js`):**
    * Im `CREATE TABLE IF NOT EXISTS mangas` das Feld ergänzen.
-   * In der Migrationssektion darunter prüfen: `PRAGMA table_info(mangas)` und `ALTER TABLE mangas ADD COLUMN ...` ausführen, damit bestehende Datenbanken das Feld erhalten.
+   * Zusätzlich eine **neue Migration** (nächste freie `version`) in `runSequentialMigrations()` anhängen: `PRAGMA table_info(mangas)` prüfen und `ALTER TABLE mangas ADD COLUMN ...` ausführen, damit bestehende Datenbanken das Feld erhalten. Die Migration läuft selbst in einer Transaktion – kein eigenes `BEGIN`.
 2. **Backend API (`routes/`):**
    * Im `POST /api/mangas` das Feld aus `req.body` entgegennehmen und im `INSERT INTO mangas` eintragen.
    * Im `PUT /api/mangas/:id` das Feld in das `UPDATE mangas SET ...` aufnehmen.
    * Im `GET /api/mangas` und `GET /api/mangas/:id` sicherstellen, dass das Feld selektiert wird (meist durch `SELECT *`).
 3. **Frontend UI:**
    * `frontend/src/components/modals/AddMangaModal.jsx`: Eingabefelder für neue Metadaten beim Anlegen ergänzen.
-   * `frontend/src/MangaDetail.jsx`: In den Metadaten der Detailansicht das Feld anzeigen und im Bearbeiten-Modal editierbar machen.
+   * `frontend/src/components/detail/MangaHeroCard.jsx`: Feld in der Detailansicht anzeigen und im Bearbeiten-Formular editierbar machen (State/Speichern in `frontend/src/MangaDetail.jsx`).
 
 ### 🔹 Fall B: Neues Feld für Bände/Volumes hinzufügen (z. B. "Edition", "Farbe", "Format")
 1. **Datenbank (`db.js`):**
    * In `CREATE TABLE IF NOT EXISTS volumes` Spalte ergänzen.
-   * Bei `volColNames.has('mein_feld')` ein `ALTER TABLE volumes ADD COLUMN ...` hinzufügen.
+   * Eine neue Migration (nächste freie `version`) anhängen, die per `PRAGMA table_info(volumes)` prüft und `ALTER TABLE volumes ADD COLUMN ...` ausführt.
+   * Feld ggf. in `GET /api/offline-snapshot` / `GET /api/mangas/:id` prüfen, damit auch die Offline-Kopie es enthält.
 2. **Backend API (`routes/`):**
    * In `POST /api/volumes`, `POST /api/volumes/batch` und `PUT /api/volumes/:id` das Feld berücksichtigen.
 3. **Frontend UI:**
    * `frontend/src/components/detail/VolumeEditModal.jsx`: Formularfelder im Band-Bearbeiten-Modal hinzufügen.
    * `frontend/src/components/detail/BatchAddModal.jsx`: Falls das Feld im Batch-Generator gesetzt werden soll, Eingabefeld hinzufügen.
-   * `frontend/src/MangaDetail.jsx`: Im Volume-Card, Tabellen- & Listen-Item rendern.
+   * `VolumeGridView.jsx`, `VolumeListView.jsx`, `VolumeShelfView.jsx` (alle in `components/detail/`): Feld in Karte, Liste und Regal rendern.
 
 ### 🔹 Fall C: Neues Statistik-Widget oder Auswertung hinzufügen
 1. **Backend API (`routes/`):**
@@ -300,10 +338,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 2. **Tailwind-Konfiguration:**
    * `frontend/tailwind.config.js`.
 3. **Komponenten:**
-   * Header, Regal-Ansicht, Grid-Ansicht: `frontend/src/Dashboard.jsx`.
+   * Header, Regal-Ansicht, Grid-Ansicht: `frontend/src/Dashboard.jsx` und `components/dashboard/` (`DashboardHeader`, `CollectionToolbar`, `MangaCollectionGrid`).
    * Dashboard-Modals: `frontend/src/components/modals/`.
    * Einkaufsliste & Release-Radar: `frontend/src/components/dashboard/`.
-   * Banner, Buchrücken-Regal, Bandkarten: `frontend/src/MangaDetail.jsx`.
+   * Banner, Buchrücken-Regal, Bandkarten: `frontend/src/components/detail/` (`MangaHeroCard`, `VolumeShelfView`, `VolumeGridView`, `VolumeListView`).
    * Band-Editor, Batch-Tools, Lückenfüller, Lightbox: `frontend/src/components/detail/`.
 
 ### 🔹 Fall E: Benutzerberechtigungen anpassen
@@ -326,9 +364,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Route `GET /api/lookup/isbn?isbn=...`: Fragt die SRU MARC21-XML-Schnittstelle der Deutschen Nationalbibliothek (DNB) ab.
    * Parst deutsche Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Seiten (`300$a`) und Festpreis in EUR (`020$c`).
    * Gleicht die gefundene Reihe und den Band automatisch mit der SQLite-Datenbank ab (`matched_manga`, `matched_volume`).
-2. **Architektur-Hinweis (Kamera-Feature):**
-   * Das experimentelle Kamera-Live-Scanning wurde ausgebaut, da mobile Web-Browser bei HTTP-Deployments ohne SSL (z. B. Standard-Pterodactyl-Ports) WebRTC-Kamerazugriff sicherheitsbedingt sperren.
-   * Der Fokus liegt auf superschneller, schlanker UI (Bundle-Größe um über 50 % reduziert).
+2. **Architektur-Hinweis (Barcode-Scan):**
+   * Kein Live-Kamerastream: Mobile Browser sperren WebRTC bei HTTP-Deployments ohne SSL (z. B. Standard-Pterodactyl-Ports). `frontend/src/components/common/BarcodeScannerButton.jsx` nutzt stattdessen ein `<input type="file" capture="environment">` und dekodiert das Foto mit dem nativen `BarcodeDetector` (Fallback: ZXing, dynamisch geladen). Funktioniert daher auch über HTTP.
+   * ISBN-Normalisierung (10→13, Prüfsumme) liegt in `utils/isbn.js`.
+   * Mit einer echten Handy-Kamera ist der Scan noch ungetestet.
 
 ### 🔹 Fall H: Backup-System & automatische Snapshots anpassen
 1. **Backend API (`routes/backups.js`) & Scheduler (`services/scheduler.js`):**
@@ -348,7 +387,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `type` entgegen, validieren gegen die erlaubten Typen und speichern ihn ab.
 3. **Frontend UI:**
    * `frontend/src/components/detail/VolumeEditModal.jsx`: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") mit dynamischen Feldern.
-   * `frontend/src/MangaDetail.jsx`: Filter-Chips `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]` und Badges in den Ansichten.
+   * `frontend/src/components/detail/VolumeFilterBar.jsx`: Filter-Chips `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]` und Badges in den Ansichten.
 
 ### 🔹 Fall J: Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7)
 1. **Datenbank (`db.js`):**
@@ -360,7 +399,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 3. **Frontend UI:**
    * `frontend/src/components/detail/LightboxGallery.jsx`: Moderne Vollbild-Galerie mit Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`) und 1-Klick-Cover-Festlegung.
    * `frontend/src/components/detail/VolumeEditModal.jsx`: Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
-   * `frontend/src/MangaDetail.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
+   * `frontend/src/components/detail/VolumeGridView.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
 
 ### 🔹 Fall K: Intelligente Lücken-Erkennung & Manga Passion Editions-Abgleich
 1. **Problem & Hintergrund:**
@@ -370,7 +409,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `GET /api/mangas/:id/gaps`: Liefert verifizierte echte Lücken mit offiziellen deutschen Preisen, Veröffentlichungsdaten und Cover-Bildern. Erkennt Diskrepanzen zwischen der DB-Gesamtzahl und der deutschen Editions-Bandzahl.
    * `POST /api/mangas/:id/sync-edition`: 1-Klick-Synchronisation der Gesamtbandzahl und Metadaten auf die offizielle deutsche Edition.
    * `POST /api/mangas/:id/batch-import-gaps`: Überträgt alle erkannten Lücken als `Fehlt` mit offiziellen Preisen und Covern direkt in die Einkaufsliste / Sammlung.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+3. **Frontend UI (`frontend/src/MangaDetail.jsx`, `components/detail/VolumeFilterBar.jsx`, `GapFillModal.jsx`, `MpEditionModal.jsx`):**
    * **Diskrepanz-Warnung:** Weist auffällig darauf hin, wenn AniList-Zahlen von der deutschen Ausgabe abweichen, und bietet 1-Klick-Anpassung.
    * **Regal Ghost-Spines:** Zeigt Lücken mit transluzentem Original-Cover, Bandnummer und offiziellem Preis in Euro an.
    * **Lücken-Füll-Modal:** Ermöglicht die Vorschau des offiziellen deutschen Covers, Preises und Datums vor der Übernahme in die Sammlung.
@@ -386,7 +425,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Endpunkte:
      * `GET /api/volumes/lookup?manga_id=...&volume_number=...`: Liefert Metadaten für das Bearbeiten-Modal.
      * `POST /api/mangas/:id/autofill-volumes`: Batch-Anreicherung aller Bände einer Reihe.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+3. **Frontend UI (`components/detail/VolumeEditModal.jsx`, `MpEditionModal.jsx`):**
    * **Band-Bearbeiten-Modal:** Auffälliges Banner `✨ Automatisch ausfüllen (Manga Passion)` sowie Schnell-Link `Auto-Ausfüllen` direkt neben dem Label "Erscheinungsdatum (Radar)". Füllt fehlende Felder aus, ohne bereits manuell gepflegte Daten zu überschreiben.
    * **Editions-Manager:** Button `⚡ Alle Bände mit Erscheinungsdaten anreichern` für 1-Klick-Batch-Vervollständigung der gesamten Serie.
 
@@ -398,19 +437,19 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `downloadRemoteImageToUploads(url)`: Lädt das Original-Cover von Manga Passion (`covers.manga-passion.de`) über HTTP-Fetch herunter, prüft die Mindestgröße (>500 Byte) und speichert es lokal unter `data/uploads/` als permanentes Cover ab.
    * Direkter URL- / ID-Lookup: `lookupVolumeMetadata` und die API `GET /api/volumes/lookup` akzeptieren auch direkte Manga Passion URLs (z. B. `https://www.manga-passion.de/volumes/9736/one-piece-east-blue-leerschuber`) oder IDs und laden Metadaten + Cover direkt herunter.
    * Batch-Anreicherung (`autofillMangaVolumes`): Gleicht alle Schuber einer Reihe mit der echten Schuber-Liste ab und versieht sie mit den korrekten Covern, Erscheinungsdaten, Preisen und Schuber-Titeln.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`):**
+3. **Frontend UI (`components/detail/VolumeEditModal.jsx`):**
    * **Schuber-Banner:** Beim Bearbeiten eines Eintrags vom Typ Schuber erscheint ein spezielles Banner `Schuber-Cover & Details automatisch laden (Manga Passion)` mit Aktions-Button `✨ Schuber laden`.
    * **Direkte URL-Erkennung:** Wird in das Feld "URL eingeben" eine Manga Passion Volume-URL oder Volume-ID eingefügt, wird automatisch der komplette Schuber-Datensatz samt lokalem Cover-Download geladen.
    * **Bereinigung fehlerhafter Band-1-Daten:** Überschreibt versehentlich zuvor eingetragene Band-1-Notizen ("Das Abenteuer beginnt"), falsche Seitenzahlen und falsche ISBNs mit den echten Schuber-Daten.
 
-### 🔹 Fall N: Intelligente Lücken- & Editions-Deduplizierung sowie Schuber-Erkennung (v2.9.9)
+### 🔹 Fall N: Intelligente Lücken- & Editions-Deduplizierung sowie Schuber-Erkennung
 1. **Problem & Hintergrund:**
    * Bei Reihen mit Schubern (z. B. One Piece) oder Sonderausgaben/Varianten desselben Bandes (z. B. Solo Leveling Band 14 Standard vs. Band 14 Collectors Edition) wurden früher Phantom-Lücken gemeldet oder doppelte Bandnummern im Banner angezeigt (`Band 14, 14, 15, 15` bzw. 6x `Special, Special, Special...`), selbst wenn der Nutzer die Schuber bereits besaß.
 2. **Backend Service (`mangaPassion.js`) & API (`routes/`):**
    * `reconcileMangaGaps`: Gleicht offizielle Bände nicht nur gegen `volume_number`, sondern auch intelligent gegen Notizen (`notes`), Titel und Saga-Namen (z. B. "East Blue", "Alabasta") ab. Bereits im Bestand befindliche Schuber werden als "Vorhanden" erkannt und erscheinen nicht als Lücke.
    * Sonderausgaben und Leerschuber mit `volume_number === 'Special'` erhalten ihren echten Titel als Bezeichner.
    * `batchImportGaps`: Erkennt bei der Übernahme von Lücken in die Einkaufsliste automatisch den korrekten Typ (`schuber`, `special_edition` oder `volume`) und speichert Notizen und Cover.
-3. **Frontend UI (`MangaDetail.jsx` & `Dashboard.jsx`):**
+3. **Frontend UI (`components/detail/VolumeFilterBar.jsx`, `MangaDetail.jsx` & `Dashboard.jsx`):**
    * **Lücken-Banner:** Listet Lücken differenziert mit Band-Präfix oder Volltitel auf (z. B. `Band 14, Band 14 (Collectors Edition), Band 15, Band 15 (Sammelschuber)` bzw. `Fischmenscheninsel Leerschuber`), ohne redundante "Special"-Wiederholungen.
    * **Custom-Scrollbars:** Sämtliche scrollbaren Modal-Bereiche (Statistik-Dashboard, Server-Snapshots, Benutzerverwaltung, Batch-Generatoren) nutzen jetzt die einheitliche `custom-scrollbar`-Klasse für ein modernes, dunkles Scroll-Design.
 
@@ -443,13 +482,16 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
   ```
 * Für vollständige visuelle Regressionstests, Bildschirmfoto-Generierung aller Modals und Mobile-Check:
   ```powershell
-  node test-deep-e2e.js
+  npm run test:deep    # = node test/deep-e2e.js
   ```
+* Weitere Skripte: `npm run test:radar` (Release-Radar), `npm run test:perf` (Performance-Benchmark).
+* **Nie gegen die echte Instanz schreiben:** Die produktive Datenbank (`data/`, Port 3000) nicht für Tests nutzen. Stattdessen `manga.db` kopieren und die Kopie mit eigenem `DATA_DIR`/`PORT` starten (eigener Test-Admin nur in der Kopie).
 
 ### Paketierung & GitHub Releases
 * **Regelmäßige Releases (WICHTIG!):**
   * Das Release wird **nach dem Merge** des Feature-/Fix-Branches auf dem Hauptbranch ausgeführt (nicht auf offenen PR-Branches), da `release.js` Commit, Tag und GitHub-Release pusht.
-  * Nach jeder abgeschlossenen Feature-Implementierung, Bugfix oder UI-Verbesserung **muss** ein Git-Release via `node release.js patch` (bzw. `minor` bei neuen Funktionen) erstellt und auf GitHub publiziert werden. So bleibt die Versionierung lückenlos und das Pterodactyl-ZIP auf GitHub stets aktuell.
+  * Nach einer abgeschlossenen Feature-Implementierung, einem Bugfix oder einer UI-Verbesserung wird ein Git-Release via `node release.js patch` (bzw. `minor` bei neuen Funktionen) erstellt, damit die Versionierung lückenlos und das Pterodactyl-ZIP auf GitHub aktuell bleibt. Läuft im Hauptordner auf `main`; **vor dem Release immer beim Maintainer nachfragen** (der Befehl pusht Tag und Release).
+  * Pull Requests dürfen bei grüner CI (Lint, Tests, Frontend-Build, Docker) per Squash-Merge gemergt werden. Arbeitsablauf: Branch → `npm run lint` + `npm test` + Frontend-Build → im Browser prüfen → PR → CI abwarten → mergen.
 * **Nur ZIP bauen:**
   ```powershell
   npm run package
@@ -495,40 +537,36 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 4. **Verzeichnisse:**
    * Alle persistenten Daten liegen ausschließlich unter `data/` (`manga.db` und `data/uploads/`).
    * Alles unter `data/` ist in `.gitignore`, damit keine privaten Daten oder Passwörter in GitHub landen.
-5. **Atomare Transaktionen (`runTransaction`):**
-   * Für mehrstufige Schreiboperationen (z. B. Bände anlegen/löschen + Zähleraktualisierung, Batch-Read, Lücken-Import) immer den universellen Helper `runTransaction(callback)` aus `db.js` nutzen statt rohem `db.exec('BEGIN TRANSACTION;')`. Dies verhindert Concurrency-Locks und unvollständige Kaskaden-Löschungen.
-6. **SSRF-Schutz für Remote-Bilder (`assertSafeRemoteUrl`):**
-   * Alle Downloads externer Bild-URLs (z. B. Cover-Uploads via URL) müssen vor dem HTTP-Aufruf mit `assertSafeRemoteUrl()` aus `utils/security.js` validiert werden, um Zugriffe auf interne Netzwerke (127.0.0.1, 192.168.x.x, Cloud-Metadata) abzuwehren.
-
-
-11. **JWT-Secret (`middleware/auth.js`):**
+5. **Transaktionen (`db.js`):**
+   * Es gibt nur **eine** SQLite-Connection. Für mehrstufige Schreiboperationen (Bände anlegen/löschen + Zähler, Batch-Read, Lücken-Import) immer einen Helper aus `db.js` nutzen statt rohem `db.exec('BEGIN')`: `runTransaction(fn)` (in den Routen; wirft 503-artigen Fehler während eines Restores) bzw. `withTransaction(fn)` (in `mangaPassion.js`; lehnt asynchrone Callbacks ausdrücklich ab).
+   * `fn` muss **synchron** sein – niemals `await` innerhalb einer Transaktion, sonst laufen fremde Requests darin. Netzwerk-I/O (z. B. Cover-Downloads) vorher erledigen.
+6. **JWT-Secret (`middleware/auth.js`):**
    * `JWT_SECRET` aus der Umgebung wird nur akzeptiert, wenn es mindestens 32 Zeichen lang und kein bekannter Platzhalter ist. Sonst wird ein zufälliges Secret in `app_settings.jwt_secret` erzeugt und genutzt. Es gibt bewusst keinen Prozess-Fallback.
-12. **Transaktionen (`db.js`):**
-   * Es gibt nur **eine** SQLite-Connection. Transaktionen ausschließlich über `withTransaction(fn)` mit synchronem `fn`. Niemals `await` innerhalb einer Transaktion (sonst laufen fremde Requests darin). Netzwerk-I/O (z. B. Cover-Downloads) vorher erledigen.
-13. **Externe Downloads:**
-   * Alle Remote-Bilder laufen über `utils/safeFetch.js` (`fetchRemoteImage`): SSRF-Schutz, 15-MB-Limit, Redirect-Limit, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
-14. **Passwörter & Rate-Limit:**
+7. **Externe Downloads / SSRF (`utils/safeFetch.js`):**
+   * Alle Remote-Bilder (Cover per URL, Manga-Passion-Cover) laufen über `fetchRemoteImage()`: SSRF-Schutz (nur öffentliche Hosts, DNS-Prüfung), 15-MB-Limit, Redirect-Limit, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
+   * `utils/security.js` (`assertSafeRemoteUrl`) wird aktuell von keinem Modul eingebunden – nicht darauf verlassen; bei Bedarf entfernen oder in `safeFetch` zusammenführen.
+8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
-15. **Restore (`routes/backups.js`):**
+9. **Restore (`routes/backups.js`):**
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
-16. **`DATA_DIR`:**
+10. **`DATA_DIR`:**
    * Optionale Umgebungsvariable für das Datenverzeichnis (Standard `./data`). Wird von den Tests für isolierte Temp-Datenbanken genutzt.
-17. **Express 5 (`index.js`):**
+11. **Express 5 (`index.js`):**
    * Catch-all-Route heißt `app.get('/{*splat}', ...)` (ein nacktes `'*'` ist ungültig). `req.body` ist ohne Body `undefined`; eine Middleware setzt es auf `{}`, weil Handler direkt destrukturieren. `req.query` ist nur lesbar; Strings daraus immer über `qstr()` (`utils/query.js`) lesen, sonst werfen `?a=1&a=2` bzw. `?a[x]=1` bei `.trim()` einen 500.
    * Unbekannte `/api/*`-Pfade liefern JSON-404; der letzte Error-Handler gibt bei 5xx nur eine generische Meldung aus (Details im Log), bei 4xx die Fehlermeldung (z. B. abgelehnter Upload).
-18. **Offline-Kopie (`frontend/src/utils/offlineStore.js`):**
+12. **Offline-Kopie (`frontend/src/utils/offlineStore.js`):**
    * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und die Reihen-Cover (nicht die Band-Cover, bei großen Sammlungen dutzende MB) vorgeladen und vom Service Worker gecached; `/uploads/*` ist dort cache-first, weil Dateinamen eindeutig und unveränderlich sind.
    * `App.jsx`: Antwortet `/api/auth/me` nicht (Netz/Gateway weg) und es gibt einen gespeicherten Benutzer, läuft die App als `{ role: 'visitor', realRole, offline: true }` weiter (alle Bearbeiten-Buttons verschwinden; Einkaufslisten-Schnellkauf nutzt `realRole` und die vorhandene Offline-Warteschlange). Alle 30 s und beim `online`-Event wird erneut geprüft. Bei 401 und beim Logout wird alles gelöscht (`clearOfflineData`) – nie Daten nach dem Abmelden lesbar lassen.
    * Nicht offline verfügbar: Statistiken, Release-Radar, alles Schreibende.
-19. **Logging (`utils/logger.js`):**
+13. **Logging (`utils/logger.js`):**
    * Backend-Code loggt ausschließlich über `const log = require('../utils/logger').child('name')` (`log.info/warn/error/debug(msg, ...args)`; ein `Error` als Argument wird mit Stack bzw. als `err`-Feld ausgegeben, ein Objekt als Kontextfelder). Kein neues `console.*` im Backend. `LOG_LEVEL` (debug|info|warn|error|silent) und `LOG_FORMAT` (text|json) per Umgebungsvariable; `debug` aktiviert das API-Zugriffs-Log, Anfragen > 2 s werden immer als Warnung geloggt.
    * **Ausnahme:** Die Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1/2`, `Server is online and ready.`) bleiben bewusst rohes `console.log`: Das Pterodactyl-Egg erkennt „Server gestartet“ an genau diesen Zeichenketten.
-   * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500.
-20. **Sonderausgaben / Lücken-Identität (`mangaPassion.js`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
+   * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500. Bekannte Lücke: ein kaputtes Server-Snapshot-ZIP liefert beim Restore noch 500 statt 400.
+14. **Sonderausgaben / Lücken-Identität (`mangaPassion.js`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
    * Eine Collectors-/Limited Edition oder ein Schuber trägt dieselbe Nummer wie der normale Band. Lücken werden deshalb über **Typ + Nummer** abgeglichen (`reconcileMangaGaps`, `isGapCovered`), nie nur über die Nummer. `classifyOfficialVolume()` bestimmt den Typ eines offiziellen Eintrags; ein generischer Titel („Collectors Edition“) oder eine nackte Zahl wird nie per Namenssuche zugeordnet.
    * `batchImportGaps` löst die UI-Beschriftungen auf (`"26 (Titel)"`, `"5 (Collectors Edition)"`, `"East Blue Leerschuber"`, reine Zahl = regulärer Band), speichert die saubere Nummer samt Preis/Datum/Cover und fasst vorhandene (`Vorhanden`/`Gelesen`) Einträge nie an. Ghost-Einträge im Regal gibt es nur für reguläre Bände (`detectedGapEntries` mit `type`).
    * Anzeigenamen: `getVolumeDisplayTitle()` / `getEditionLabel()` (Collectors, Limited, Special, Variant …, aus den Notizen) – überall verwenden (Karten, Liste, Regal, Einkaufsliste, Radar), keine eigenen „Band X“-Strings. `inferVolumeType` existiert in Backend und Frontend und wird per `test/specialeditions.test.js` synchron gehalten.
-21. **Fortschritt, Doppelte, Platzhalter (aus dem Test mit einer großen echten Sammlung):**
+15. **Fortschritt, Doppelte, Platzhalter (aus dem Test mit einer großen echten Sammlung):**
    * Fortschritt einer Reihe = **verschiedene numerierte reguläre Bände** (`regular_owned` in `GET /api/mangas`, `getSeriesProgress()` im Frontend); Schuber, Specials, Extras und nicht numerierte „Starter 1“-Einträge zählen als „+N“. Das Ziel wächst mit der höchsten besessenen Nummer (`max_regular_number`), weil die gespeicherte Gesamtzahl bei laufenden Reihen veraltet. „Band 14“ und „14“ sind derselbe Band (`volumeNumberOf`, Migration v8). Eine Reihe gilt in der Statistik nur als komplett, wenn die regulären Bände reichen.
    * `POST /api/volumes` verweist Doppelte (gleiche Reihe + Typ + Nummer, case-/whitespace-unabhängig) mit **409** ab; ein Collectors-Band mit gleicher Nummer ist erlaubt. Die Detailansicht zeigt schon vorhandene Doppelte als Banner, das Formular ignoriert einen zweiten Submit.
    * Manga Passion nutzt `2999-12-31` für „Termin nicht bekannt“: `cleanOfficialDate()` macht daraus `null` (Eintrag zählt als „kommt noch“), Migration v7 bereinigt Altdaten.
