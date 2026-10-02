@@ -498,19 +498,18 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 6. **SSRF-Schutz für Remote-Bilder (`assertSafeRemoteUrl`):**
    * Alle Downloads externer Bild-URLs (z. B. Cover-Uploads via URL) müssen vor dem HTTP-Aufruf mit `assertSafeRemoteUrl()` aus `utils/security.js` validiert werden, um Zugriffe auf interne Netzwerke (127.0.0.1, 192.168.x.x, Cloud-Metadata) abzuwehren.
 
----
 
-5. **JWT-Secret (`middleware/auth.js`):**
+11. **JWT-Secret (`middleware/auth.js`):**
    * `JWT_SECRET` aus der Umgebung wird nur akzeptiert, wenn es mindestens 32 Zeichen lang und kein bekannter Platzhalter ist. Sonst wird ein zufälliges Secret in `app_settings.jwt_secret` erzeugt und genutzt. Es gibt bewusst keinen Prozess-Fallback.
-6. **Transaktionen (`db.js`):**
+12. **Transaktionen (`db.js`):**
    * Es gibt nur **eine** SQLite-Connection. Transaktionen ausschließlich über `withTransaction(fn)` mit synchronem `fn`. Niemals `await` innerhalb einer Transaktion (sonst laufen fremde Requests darin). Netzwerk-I/O (z. B. Cover-Downloads) vorher erledigen.
-7. **Externe Downloads:**
+13. **Externe Downloads:**
    * Alle Remote-Bilder laufen über `utils/safeFetch.js` (`fetchRemoteImage`): SSRF-Schutz, 15-MB-Limit, Redirect-Limit, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
-8. **Passwörter & Rate-Limit:**
+14. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
-9. **Restore (`routes/backups.js`):**
+15. **Restore (`routes/backups.js`):**
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
-10. **`DATA_DIR`:**
+16. **`DATA_DIR`:**
    * Optionale Umgebungsvariable für das Datenverzeichnis (Standard `./data`). Wird von den Tests für isolierte Temp-Datenbanken genutzt.
 
 ---
