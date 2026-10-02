@@ -40,7 +40,7 @@ manga-shelf/
 ├── package.js                 # Packager-Skript: baut Frontend & packt Backend als ZIP
 ├── index.js                   # Schlanker Hauptserver: Express Initialisierung & Route-Mounting
 ├── db.js                      # DB-Verbindung, Schema, Indizes & sequentielle Migrationen
-├── mangaPassion.js            # Manga Passion API Client mit Timeout & Resilienz
+├── mangaPassion.js            # Re-Export von `services/mangaPassion/` (Dockerfile/package.js und alle `require('../mangaPassion')` bleiben so gültig)
 ├── egg-manga-shelf.json       # Pterodactyl Egg Vorlage
 ├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
@@ -66,7 +66,13 @@ manga-shelf/
 │   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar
 │   └── lookup.js              # DNB ISBN-Suche, Manga Passion / AniList Lookup & Uploads
 ├── services/                  # Hintergrund-Dienste
-│   └── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+│   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+│   └── mangaPassion/          # Manga-Passion-Anbindung
+│       ├── client.js          # API-Aufrufe (Timeout, Basis-URL), 12-h-Cache (nur vollständige Antworten), Editionssuche, Cover-Download
+│       ├── classify.js        # Reine Funktionen: scoreEdition, classifyOfficialVolume, matchSchuberVolume, cleanOfficialDate
+│       ├── gaps.js            # reconcileMangaGaps, batchImportGaps, syncMangaWithEdition
+│       ├── autofill.js        # lookupVolumeMetadata, autofillMangaVolumes, applyAutofillUpdates
+│       └── index.js           # bündelt die Exporte
 ├── utils/                     # Hilfsfunktionen & Normalisierer
 │   ├── publishers.js          # Verlags-Normalisierung & Mappings
 │   ├── isbn.js                # ISBN-10/13-Normalisierung & Prüfsummen
@@ -401,8 +407,8 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `frontend/src/components/detail/VolumeGridView.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
 
 ### 🔹 Fall K: Manga Passion – Editionsabgleich, Lücken, Autofill & Schuber
-Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`, 12-h-Cache in `manga_passion_cache`) ab. Alle Logik liegt in `mangaPassion.js`; Identitätsregeln für Sonderausgaben stehen in Gotcha 14.
-1. **Backend (`mangaPassion.js`, `routes/mangas.js`, `routes/volumes.js`):**
+Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`, 12-h-Cache in `manga_passion_cache`) ab. Alle Logik liegt in `services/mangaPassion/`; Identitätsregeln für Sonderausgaben stehen in Gotcha 14.
+1. **Backend (`services/mangaPassion/`, `routes/mangas.js`, `routes/volumes.js`):**
    * `GET /api/mangas/:id/gaps` → `reconcileMangaGaps`: echte Lücken mit deutschem Preis, Datum und Cover; erkennt Abweichungen zwischen DB-Gesamtzahl und deutscher Edition. Abgleich über **Typ + Nummer**, Notizen, Titel und Saga-Namen; vorhandene Schuber gelten nicht als Lücke.
    * `POST /api/mangas/:id/sync-edition` (`syncMangaWithEdition`): Gesamtbandzahl und Metadaten auf die deutsche Edition setzen.
    * `POST /api/mangas/:id/batch-import-gaps` (`batchImportGaps`): Lücken als `Fehlt` mit Typ (`schuber`/`special_edition`/`volume`), Preis, Datum, Notizen und Cover übernehmen.
@@ -520,7 +526,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * Backend-Code loggt ausschließlich über `const log = require('../utils/logger').child('name')` (`log.info/warn/error/debug(msg, ...args)`; ein `Error` als Argument wird mit Stack bzw. als `err`-Feld ausgegeben, ein Objekt als Kontextfelder). Kein neues `console.*` im Backend. `LOG_LEVEL` (debug|info|warn|error|silent) und `LOG_FORMAT` (text|json) per Umgebungsvariable; `debug` aktiviert das API-Zugriffs-Log, Anfragen > 2 s werden immer als Warnung geloggt.
    * **Ausnahme:** Die Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1/2`, `Server is online and ready.`) bleiben bewusst rohes `console.log`: Das Pterodactyl-Egg erkennt „Server gestartet“ an genau diesen Zeichenketten.
    * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500. Bekannte Lücke: ein kaputtes Server-Snapshot-ZIP liefert beim Restore noch 500 statt 400.
-14. **Sonderausgaben / Lücken-Identität (`mangaPassion.js`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
+14. **Sonderausgaben / Lücken-Identität (`services/mangaPassion/`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
    * Eine Collectors-/Limited Edition oder ein Schuber trägt dieselbe Nummer wie der normale Band. Lücken werden deshalb über **Typ + Nummer** abgeglichen (`reconcileMangaGaps`, `isGapCovered`), nie nur über die Nummer. `classifyOfficialVolume()` bestimmt den Typ eines offiziellen Eintrags; ein generischer Titel („Collectors Edition“) oder eine nackte Zahl wird nie per Namenssuche zugeordnet.
    * `batchImportGaps` löst die UI-Beschriftungen auf (`"26 (Titel)"`, `"5 (Collectors Edition)"`, `"East Blue Leerschuber"`, reine Zahl = regulärer Band), speichert die saubere Nummer samt Preis/Datum/Cover und fasst vorhandene (`Vorhanden`/`Gelesen`) Einträge nie an. Ghost-Einträge im Regal gibt es nur für reguläre Bände (`detectedGapEntries` mit `type`).
    * Anzeigenamen: `getVolumeDisplayTitle()` / `getEditionLabel()` (Collectors, Limited, Special, Variant …, aus den Notizen) – überall verwenden (Karten, Liste, Regal, Einkaufsliste, Radar), keine eigenen „Band X“-Strings. `inferVolumeType` existiert in Backend und Frontend und wird per `test/specialeditions.test.js` synchron gehalten.
