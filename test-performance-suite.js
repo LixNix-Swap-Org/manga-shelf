@@ -39,13 +39,24 @@ async function runPerformanceSuite() {
   // --- PART 1: Authenticate ---
   console.log('1. Authenticating as admin...');
   await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle0' });
-  await page.type('input[type="text"]', 'admin');
-  await page.type('input[type="password"]', 'password123');
+  await page.type('input[type="text"]', 'Moltres');
+  await page.type('input[type="password"]', 'Start1234!');
   await Promise.all([
     page.click('button[type="submit"]'),
     page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
   ]);
   await sleep(1000);
+  if (page.url().includes('/login')) {
+    await page.click('input[type="text"]', { clickCount: 3 });
+    await page.type('input[type="text"]', 'admin');
+    await page.click('input[type="password"]', { clickCount: 3 });
+    await page.type('input[type="password"]', 'password123');
+    await Promise.all([
+      page.click('button[type="submit"]'),
+      page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
+    ]);
+    await sleep(1000);
+  }
 
   // Helper to extract Performance & Web Vitals
   async function measurePagePerformance(url, pageName) {

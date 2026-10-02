@@ -95,13 +95,24 @@ async function runDeepTestSuite() {
     // Reload page to reset form state cleanly
     console.log('  Reloading and logging in with valid admin credentials...');
     await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle0' });
-    await page.type('input[type="text"], input[name="username"]', 'admin');
-    await page.type('input[type="password"]', 'password123');
+    await page.type('input[type="text"], input[name="username"]', 'Moltres');
+    await page.type('input[type="password"]', 'Start1234!');
     await Promise.all([
       page.click('button[type="submit"]'),
       page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
     ]);
     await sleep(1500);
+    if (page.url().includes('/login')) {
+      await page.click('input[type="text"], input[name="username"]', { clickCount: 3 });
+      await page.type('input[type="text"], input[name="username"]', 'admin');
+      await page.click('input[type="password"]', { clickCount: 3 });
+      await page.type('input[type="password"]', 'password123');
+      await Promise.all([
+        page.click('button[type="submit"]'),
+        page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
+      ]);
+      await sleep(1500);
+    }
 
     // ----------------------------------------------------
     // STEP 2: Dashboard Shelf View

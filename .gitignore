@@ -37,6 +37,7 @@ pnpm-debug.log*
 # Test artifacts & Screenshots
 screenshots/
 *_screenshots/
+reports/
 scratch/
 RELEASE_NOTES.tmp
 .nyc_output/

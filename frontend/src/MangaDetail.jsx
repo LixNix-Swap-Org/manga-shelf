@@ -2048,11 +2048,7 @@ export default function MangaDetail({ user }) {
             {canEdit && (
               <div className="flex flex-wrap items-center gap-2">
                 <button 
-                  onClick={() => {
-                    setBatchReadUpTo('');
-                    setBatchReadAction(true);
-                    setShowBatchReadModal(true);
-                  }} 
+                  onClick={() => setShowBatchReadModal(true)} 
                   className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
                   title="Mehrere Bände auf einmal als gelesen oder ungelesen markieren"
                 >

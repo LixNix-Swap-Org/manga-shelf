@@ -1,9 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
-import Dashboard from './Dashboard';
-import MangaDetail from './MangaDetail';
-import Setup from './Setup';
+
+const Login = lazy(() => import('./Login'));
+const Dashboard = lazy(() => import('./Dashboard'));
+const MangaDetail = lazy(() => import('./MangaDetail'));
+const Setup = lazy(() => import('./Setup'));
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 text-brand-400">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
+        <span className="text-xs font-medium text-slate-400">Manga Shelf wird geladen...</span>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -16,39 +28,66 @@ function App() {
 
   const checkStatus = async () => {
     try {
-      const setupRes = await fetch('/api/setup/status');
-      const setupData = await setupRes.json();
-      if (setupData.needsSetup) {
-        setNeedsSetup(true);
-        setLoading(false);
-        return;
+      // Parallelize setup status check and auth check for instant initial load
+      const [setupRes, authRes] = await Promise.all([
+        fetch('/api/setup/status').catch(() => null),
+        fetch('/api/auth/me').catch(() => null)
+      ]);
+
+      if (setupRes && setupRes.ok) {
+        const setupData = await setupRes.json();
+        if (setupData.needsSetup) {
+          setNeedsSetup(true);
+          setLoading(false);
+          return;
+        }
       }
-      
-      const authRes = await fetch('/api/auth/me');
-      if (authRes.ok) {
+
+      if (authRes && authRes.ok) {
         const authData = await authRes.json();
         setUser(authData.user);
+      } else {
+        setUser(null);
       }
     } catch (e) {
       console.error(e);
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+      console.error('Logout error:', e);
+    } finally {
+      setUser(null);
+    }
+  };
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
   if (needsSetup) {
-    return <Setup onComplete={() => { setNeedsSetup(false); checkStatus(); }} />;
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <Setup onComplete={() => { setNeedsSetup(false); checkStatus(); }} />
+      </Suspense>
+    );
   }
 
   return (
     <Router>
-      <Routes>
-        <Route path="/login" element={!user ? <Login onLogin={checkStatus} /> : <Navigate to="/" />} />
-        <Route path="/" element={user ? <Dashboard user={user} onLogout={() => { fetch('/api/auth/logout', {method:'POST'}); setUser(null); }} /> : <Navigate to="/login" />} />
-        <Route path="/manga/:id" element={user ? <MangaDetail user={user} /> : <Navigate to="/login" />} />
-      </Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/login" element={!user ? <Login onLogin={checkStatus} /> : <Navigate to="/" />} />
+          <Route path="/" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+          <Route path="/manga/:id" element={user ? <MangaDetail user={user} /> : <Navigate to="/login" />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

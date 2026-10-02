@@ -5,7 +5,7 @@ import BackupRestoreModal from './components/modals/BackupRestoreModal';
 import StatsModal from './components/modals/StatsModal';
 import AddMangaModal from './components/modals/AddMangaModal';
 import BarcodeScannerButton from './components/common/BarcodeScannerButton';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Search, Plus, Download, LogOut, BookOpen, Trash2, 
@@ -225,8 +225,14 @@ export default function Dashboard({ user, onLogout }) {
     fetchMangas();
     fetchShoppingList();
     fetchReleaseRadar();
-    fetchMangaPassionReleases(initialDate.getFullYear(), initialDate.getMonth() + 1);
   }, []);
+
+  // Fetch heavy Manga Passion monthly calendar releases only when radar view is active
+  useEffect(() => {
+    if (activeMainView === 'radar' && !mpData && !loadingMp) {
+      fetchMangaPassionReleases(mpYear, mpMonth);
+    }
+  }, [activeMainView, mpData, loadingMp, mpYear, mpMonth]);
 
   useEffect(() => {
     try { localStorage.setItem('mangashelf_status_filter', statusFilter); } catch (_) {}
@@ -612,7 +618,7 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   // Available publishers for filtering (deduplicated case-insensitively & canonicalized)
-  const availablePublishers = (() => {
+  const availablePublishers = useMemo(() => {
     const pubMap = new Map();
     mangas.forEach(m => {
       const raw = m.publisher && m.publisher.trim();
@@ -624,7 +630,7 @@ export default function Dashboard({ user, onLogout }) {
       }
     });
     return Array.from(pubMap.values()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
-  })();
+  }, [mangas]);
 
   // Helper for reading progress calculation (0 - 100%)
   const getMangaProgress = (m) => {
@@ -635,7 +641,7 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   // Status Filter Counts for badges
-  const filterCounts = {
+  const filterCounts = useMemo(() => ({
     ALL: mangas.length,
     Laufend: mangas.filter(m => m.status === 'Laufend').length,
     Abgeschlossen: mangas.filter(m => m.status === 'Abgeschlossen').length,
@@ -649,68 +655,83 @@ export default function Dashboard({ user, onLogout }) {
     }).length,
     Pausiert: mangas.filter(m => m.status === 'Pausiert').length,
     Geplant: mangas.filter(m => m.status === 'Geplant').length,
-  };
+  }), [mangas]);
 
   // Filter & sort logic
-  const filtered = mangas
-    .filter(m => {
-      const q = search.toLowerCase().trim();
-      const matchesSearch = 
-        !q ||
-        m.title.toLowerCase().includes(q) || 
-        (m.alt_title && m.alt_title.toLowerCase().includes(q)) ||
-        (m.author && m.author.toLowerCase().includes(q)) ||
-        (m.publisher && m.publisher.toLowerCase().includes(q));
-      
-      if (!matchesSearch) return false;
+  const filtered = useMemo(() => {
+    return mangas
+      .filter(m => {
+        const q = search.toLowerCase().trim();
+        const matchesSearch = 
+          !q ||
+          m.title.toLowerCase().includes(q) || 
+          (m.alt_title && m.alt_title.toLowerCase().includes(q)) ||
+          (m.author && m.author.toLowerCase().includes(q)) ||
+          (m.publisher && m.publisher.toLowerCase().includes(q));
+        
+        if (!matchesSearch) return false;
 
-      // Status Filter logic
-      if (statusFilter === 'UNREAD') {
-        const total = m.owned_volumes || m.volume_count || 0;
-        if (total === 0 || (m.read_volume_count || 0) >= total) return false;
-      } else if (statusFilter === 'READ_ALL') {
-        const total = m.owned_volumes || m.volume_count || 0;
-        if (total === 0 || (m.read_volume_count || 0) < total) return false;
-      } else if (statusFilter !== 'ALL' && m.status !== statusFilter) {
-        return false;
-      }
+        // Status Filter logic
+        if (statusFilter === 'UNREAD') {
+          const total = m.owned_volumes || m.volume_count || 0;
+          if (total === 0 || (m.read_volume_count || 0) >= total) return false;
+        } else if (statusFilter === 'READ_ALL') {
+          const total = m.owned_volumes || m.volume_count || 0;
+          if (total === 0 || (m.read_volume_count || 0) < total) return false;
+        } else if (statusFilter !== 'ALL' && m.status !== statusFilter) {
+          return false;
+        }
 
-      // Publisher Filter logic
-      if (publisherFilter !== 'ALL') {
-        const p = normalizePubName(m.publisher);
-        if (p.toLowerCase() !== publisherFilter.toLowerCase()) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'newest_first':
-          return (b.id || 0) - (a.id || 0);
-        case 'oldest_first':
-          return (a.id || 0) - (b.id || 0);
-        case 'progress_desc':
-          return getMangaProgress(b) - getMangaProgress(a) || (a.title || '').localeCompare(b.title || '');
-        case 'progress_asc':
-          return getMangaProgress(a) - getMangaProgress(b) || (a.title || '').localeCompare(b.title || '');
-        case 'title_desc':
-          return (b.title || '').localeCompare(a.title || '');
-        case 'publisher_asc':
-          return (a.publisher || 'ZZZ').localeCompare(b.publisher || 'ZZZ') || (a.title || '').localeCompare(b.title || '');
-        case 'volumes_desc':
-          return (b.owned_volumes || 0) - (a.owned_volumes || 0);
-        case 'value_desc':
-          return (b.total_value || 0) - (a.total_value || 0);
-        case 'title_asc':
-        default:
-          return (a.title || '').localeCompare(b.title || '');
-      }
-    });
+        // Publisher Filter logic
+        if (publisherFilter !== 'ALL') {
+          const p = normalizePubName(m.publisher);
+          if (p.toLowerCase() !== publisherFilter.toLowerCase()) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'newest_first':
+            return (b.id || 0) - (a.id || 0);
+          case 'oldest_first':
+            return (a.id || 0) - (b.id || 0);
+          case 'progress_desc':
+            return getMangaProgress(b) - getMangaProgress(a) || (a.title || '').localeCompare(b.title || '');
+          case 'progress_asc':
+            return getMangaProgress(a) - getMangaProgress(b) || (a.title || '').localeCompare(b.title || '');
+          case 'title_desc':
+            return (b.title || '').localeCompare(a.title || '');
+          case 'publisher_asc':
+            return (a.publisher || 'ZZZ').localeCompare(b.publisher || 'ZZZ') || (a.title || '').localeCompare(b.title || '');
+          case 'volumes_desc':
+            return (b.owned_volumes || 0) - (a.owned_volumes || 0);
+          case 'value_desc':
+            return (b.total_value || 0) - (a.total_value || 0);
+          case 'title_asc':
+          default:
+            return (a.title || '').localeCompare(b.title || '');
+        }
+      });
+  }, [mangas, search, statusFilter, publisherFilter, sortBy]);
 
   // Summary stats
   const totalSeries = mangas.length;
-  const totalOwnedVolumes = mangas.reduce((acc, m) => acc + (m.owned_volumes || 0), 0);
-  const totalCollectionValue = mangas.reduce((acc, m) => acc + (m.total_value || 0), 0);
-  const completedSeries = mangas.filter(m => m.status === 'Abgeschlossen').length;
+  const { totalOwnedVolumes, totalCollectionValue, completedSeries } = useMemo(() => {
+    let owned = 0;
+    let val = 0;
+    let completed = 0;
+    for (let i = 0; i < mangas.length; i++) {
+      const m = mangas[i];
+      owned += (m.owned_volumes || 0);
+      val += (m.total_value || 0);
+      if (m.status === 'Abgeschlossen') completed++;
+    }
+    return {
+      totalOwnedVolumes: owned,
+      totalCollectionValue: val,
+      completedSeries: completed
+    };
+  }, [mangas]);
 
   const getStatusBadge = (status) => {
     switch (status) {
