@@ -6,7 +6,7 @@ const {
   API_BASE, HEADERS, fetchWithTimeout, downloadRemoteImageToUploads,
   searchMangaPassionEditions, getEditionDetailsAndVolumes, saveEditionLink
 } = require('./client');
-const { cleanOfficialDate, matchSchuberVolume } = require('./classify');
+const { cleanOfficialDate, matchSchuberVolume, findRegularVolume } = require('./classify');
 
 /**
  * Looks up detailed metadata for a single volume or schuber (release_date, release_year, pages, isbn, price, cover, title)
@@ -91,27 +91,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
         } else if (options.type === 'special_edition' || String(volumeNumber || '').toLowerCase().includes('special edition') || String(volumeNumber || '').toLowerCase().includes('limited edition')) {
           matchedVolume = details.volumes.find(v => v.specialType === 2 || /special\s*edition|limited\s*edition/i.test(v.title || ''));
         } else {
-          // Regular volume matching - EXCLUDE Schuber so regular Band 1 never accidentally matches a Schuber
-          const regularVolumes = details.volumes.filter(v => v.specialType !== 1 && !/schuber|box|slipcase/i.test(v.title || ''));
-          const targetClean = String(volumeNumber || '').trim().toLowerCase();
-          const targetNumMatch = targetClean.match(/(\d+(\.\d+)?)/);
-          const targetNum = targetNumMatch ? parseFloat(targetNumMatch[1]) : null;
-
-          // 1. Exact volume_number string match
-          matchedVolume = regularVolumes.find(v => String(v.volume_number || '').trim().toLowerCase() === targetClean);
-
-          // 2. Numeric match (e.g. 1 === 1.0 or "01" === 1)
-          if (!matchedVolume && targetNum !== null) {
-            matchedVolume = regularVolumes.find(v => v.num === targetNum);
-          }
-
-          // 3. Substring match (e.g. "Band 1" or "Vol. 1")
-          if (!matchedVolume && targetNum !== null) {
-            matchedVolume = regularVolumes.find(v => {
-              const m = String(v.volume_number || '').match(/(\d+(\.\d+)?)/);
-              return m && parseFloat(m[1]) === targetNum;
-            });
-          }
+          matchedVolume = findRegularVolume(details.volumes, volumeNumber);
         }
       }
     } catch (e) {
@@ -244,20 +224,6 @@ async function autofillMangaVolumes(mangaId, options = {}) {
   const officialVolumes = details.volumes;
   const userVolumes = db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId);
 
-  const offByNumStr = new Map();
-  const offByNumFloat = new Map();
-
-  officialVolumes.forEach(ov => {
-    // Only index regular volumes by num so Schubers don't collide with Band 1
-    if (ov.specialType !== 1 && !/schuber/i.test(ov.title || '')) {
-      const cleanStr = String(ov.volume_number || '').trim().toLowerCase();
-      offByNumStr.set(cleanStr, ov);
-      if (ov.num !== null && ov.num !== undefined && ov.num < 99999) {
-        offByNumFloat.set(ov.num, ov);
-      }
-    }
-  });
-
   let updatedCount = 0;
   const overwrite = Boolean(options.overwrite);
 
@@ -284,10 +250,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       if (isSchuber) {
         matched = matchSchuberVolume(officialVolumes, uv.volume_number, uv.price, uv.notes);
       } else {
-        const cleanKey = String(uv.volume_number || '').trim().toLowerCase();
-        const numMatch = cleanKey.match(/(\d+(\.\d+)?)/);
-        const floatKey = numMatch ? parseFloat(numMatch[1]) : null;
-        matched = offByNumStr.get(cleanKey) || (floatKey !== null ? offByNumFloat.get(floatKey) : null);
+        matched = findRegularVolume(officialVolumes, uv.volume_number);
       }
 
       if (!matched) continue;

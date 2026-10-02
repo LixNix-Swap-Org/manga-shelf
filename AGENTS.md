@@ -69,7 +69,7 @@ manga-shelf/
 │   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
 │   └── mangaPassion/          # Manga-Passion-Anbindung
 │       ├── client.js          # API-Aufrufe (Timeout, Basis-URL), 12-h-Cache (nur vollständige Antworten), Editionssuche, Cover-Download
-│       ├── classify.js        # Reine Funktionen: scoreEdition, classifyOfficialVolume, matchSchuberVolume, cleanOfficialDate
+│       ├── classify.js        # Reine Funktionen: scoreEdition, classifyOfficialVolume, findRegularVolume, matchSchuberVolume, cleanOfficialDate
 │       ├── gaps.js            # reconcileMangaGaps, batchImportGaps, syncMangaWithEdition
 │       ├── autofill.js        # lookupVolumeMetadata, autofillMangaVolumes, applyAutofillUpdates
 │       └── index.js           # bündelt die Exporte

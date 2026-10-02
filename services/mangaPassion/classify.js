@@ -122,6 +122,26 @@ function resolveOfficialGap(entry, officialVolumes) {
   return sameNumber.find(ov => classifyOfficialVolume(ov) === 'volume') || sameNumber[0] || null;
 }
 
+/** A Schuber / box set entry of the official edition (never a regular volume). */
+function isSchuberEntry(v) {
+  return v.specialType === 1 || /schuber|box|slipcase/i.test(v.title || '');
+}
+
+/**
+ * Finds the regular (non-Schuber) official volume for a number as the user wrote it ("5", "05", "Band 5").
+ * Exact label first, then the first number in it. Schubers are excluded so Band 1 never matches a Schuber.
+ */
+function findRegularVolume(officialVolumes, volumeNumber) {
+  const regular = officialVolumes.filter(v => !isSchuberEntry(v));
+  const key = String(volumeNumber || '').trim().toLowerCase();
+  const exact = regular.find(v => String(v.volume_number || '').trim().toLowerCase() === key);
+  if (exact) return exact;
+  const m = key.match(/(\d+(\.\d+)?)/);
+  if (!m) return null;
+  const wanted = parseFloat(m[1]);
+  return regular.find(v => v.num === wanted && v.num < 99999) || null;
+}
+
 /**
  * Intelligently matches a Schuber (Sammelschuber or Leerschuber) by customArrangement, title, or index.
  */
@@ -169,5 +189,7 @@ module.exports = {
   classifyOfficialVolume,
   officialVolumeNumber,
   resolveOfficialGap,
-  matchSchuberVolume
+  matchSchuberVolume,
+  isSchuberEntry,
+  findRegularVolume
 };

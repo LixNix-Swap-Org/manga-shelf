@@ -254,3 +254,22 @@ test('applyAutofillUpdates: a volume deleted meanwhile is skipped', () => {
     db.prepare('DELETE FROM volumes WHERE id = ?').run(uv.id);
     assert.equal(mp.applyAutofillUpdates([{ uv, next: { ...uv, pages: 5 } }]), 0);
 });
+
+const { findRegularVolume, isSchuberEntry } = require('../services/mangaPassion/classify');
+
+test('findRegularVolume: exact label, then the number inside "Band 5" / "05"', () => {
+    const vols = [ov('1'), ov('5'), ov('12', { num: 12 })];
+    assert.equal(findRegularVolume(vols, '5').volume_number, '5');
+    assert.equal(findRegularVolume(vols, 'Band 12').volume_number, '12');
+    assert.equal(findRegularVolume(vols, '05').volume_number, '5');
+    assert.equal(findRegularVolume(vols, '99'), null);
+    assert.equal(findRegularVolume(vols, 'Special'), null);
+});
+
+test('findRegularVolume: a Schuber with the same number is never returned for a regular volume', () => {
+    const vols = [ov('1', { specialType: 1, title: 'East Blue Leerschuber' }), ov('1', { id: 7 })];
+    assert.equal(findRegularVolume(vols, '1').id, 7);
+    assert.equal(isSchuberEntry(vols[0]), true);
+    assert.equal(isSchuberEntry(vols[1]), false);
+    assert.equal(findRegularVolume([vols[0]], '1'), null);
+});
