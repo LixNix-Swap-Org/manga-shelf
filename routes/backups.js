@@ -97,6 +97,7 @@ async function restoreFromZip(source) {
 
             // 7. Reconnect to database and run migrations
             initDb();
+            setRestoringState(false);
 
             // 8. Verify restored database is functional
             const mangaRow = db.prepare('SELECT count(*) as count FROM mangas').get();

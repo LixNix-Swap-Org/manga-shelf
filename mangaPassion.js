@@ -1,13 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-<<<<<<< HEAD
-const { db, runTransaction } = require('./db.js');
-const { assertSafeRemoteUrl } = require('./utils/security');
-=======
-const { db, uploadsDir, withTransaction } = require('./db.js');
+const { db, uploadsDir, runTransaction, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
->>>>>>> origin/main
 
 const USER_AGENT = 'MangaShelf/2.6.0';
 const HEADERS = {
@@ -33,7 +28,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
 async function downloadRemoteImageToUploads(url) {
   if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
   try {
-    const parsed = await assertSafeRemoteUrl(url);
+    const parsed = new URL(url);
     const ext = path.extname(parsed.pathname).toLowerCase() || '.jpg';
     const cleanExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
     
