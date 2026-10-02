@@ -273,3 +273,86 @@ test('findRegularVolume: a Schuber with the same number is never returned for a 
     assert.equal(isSchuberEntry(vols[1]), false);
     assert.equal(findRegularVolume([vols[0]], '1'), null);
 });
+
+const { isConfidentMatch } = require('../services/mangaPassion/classify');
+
+test('isConfidentMatch: needs a high score and a clear lead over the runner-up', () => {
+    assert.equal(isConfidentMatch([]), false);
+    assert.equal(isConfidentMatch(undefined), false);
+    assert.equal(isConfidentMatch([{ score: 215 }]), true);
+    assert.equal(isConfidentMatch([{ score: 119 }]), false);          // too low (e.g. title differs)
+    assert.equal(isConfidentMatch([{ score: 185 }, { score: 115 }]), true);
+    assert.equal(isConfidentMatch([{ score: 154 }, { score: 150 }]), false); // spin-off almost as good
+    assert.equal(isConfidentMatch([{ score: 150 }, { score: 150 }]), false); // tie
+    assert.equal(isConfidentMatch([{ score: 140 }, { score: 120 }]), true);  // exactly the minimum lead
+});
+
+// Fake Manga Passion API: search results by title, details/volumes by edition id
+function fakeApi({ searchResults, editionVolumes = 3 }) {
+    return async (url) => {
+        const u = String(url);
+        const json = (body) => ({ ok: true, status: 200, json: async () => body });
+        if (u.includes('/editions?title=')) return json({ 'hydra:member': searchResults });
+        const vols = u.match(/\/editions\/(\d+)\/volumes/);
+        if (vols) {
+            return json({ 'hydra:member': Array.from({ length: editionVolumes }, (_, i) => ({ id: Number(vols[1]) * 10 + i, number: i + 1, numberDisplay: String(i + 1), price: 700, date: '2020-01-01T00:00:00+00:00' })) });
+        }
+        const ed = u.match(/\/editions\/(\d+)$/);
+        if (ed) return json({ id: Number(ed[1]), title: 'Edition ' + ed[1], numVolumes: editionVolumes, status: 1, publishers: [{ name: 'Carlsen Manga' }] });
+        return { ok: false, status: 404, json: async () => ({}) };
+    };
+}
+const linkOf = (id) => db.prepare('SELECT manga_passion_id AS v FROM mangas WHERE id = ?').get(id).v;
+function createUnlinkedManga(title, total) {
+    return Number(db.prepare('INSERT INTO mangas (title, publisher, total_volumes) VALUES (?, ?, ?)').run(title, 'Carlsen Manga', total).lastInsertRowid);
+}
+
+test('reconcileMangaGaps: an unambiguous search result is linked and reported as confirmed', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = fakeApi({ searchResults: [{ id: 6001, title: 'Eindeutige Reihe', numVolumes: 3, status: 1, publishers: [{ name: 'Carlsen Manga' }] }] });
+        const id = createUnlinkedManga('Eindeutige Reihe', 3);
+        const res = await mp.reconcileMangaGaps(id);
+        assert.equal(res.success, true);
+        assert.equal(res.link_confirmed, true);
+        assert.equal(linkOf(id), 6001);
+    } finally { global.fetch = realFetch; }
+});
+
+test('reconcileMangaGaps: an ambiguous search result is used for the answer but NOT stored', async () => {
+    const realFetch = global.fetch;
+    try {
+        const twin = (id) => ({ id, title: 'Zwillingsreihe', numVolumes: 3, status: 1, publishers: [{ name: 'Carlsen Manga' }] });
+        global.fetch = fakeApi({ searchResults: [twin(6002), twin(6003)] });
+        const id = createUnlinkedManga('Zwillingsreihe', 3);
+        const res = await mp.reconcileMangaGaps(id);
+        assert.equal(res.success, true);
+        assert.equal(res.matched, true);
+        assert.equal(res.link_confirmed, false);
+        assert.equal(linkOf(id), null);
+        assert.ok(res.candidate_editions.length >= 2, 'alternatives are offered so the user can pick');
+    } finally { global.fetch = realFetch; }
+});
+
+test('autofillMangaVolumes: refuses to write into every volume from an unconfirmed edition', async () => {
+    const realFetch = global.fetch;
+    try {
+        const twin = (id) => ({ id, title: 'Zwillingsreihe Zwei', numVolumes: 3, status: 1, publishers: [{ name: 'Carlsen Manga' }] });
+        global.fetch = fakeApi({ searchResults: [twin(6004), twin(6005)] });
+        const id = createUnlinkedManga('Zwillingsreihe Zwei', 3);
+        addVolume(id, '1', 'Vorhanden');
+        const res = await mp.autofillMangaVolumes(id);
+        assert.equal(res.success, false);
+        assert.equal(res.needs_confirmation, true);
+        assert.equal(res.updated_count, 0);
+        assert.equal(linkOf(id), null);
+        assert.equal(db.prepare('SELECT release_date FROM volumes WHERE manga_id = ?').get(id).release_date, null);
+    } finally { global.fetch = realFetch; }
+});
+
+test('reconcileMangaGaps: an already linked edition is always confirmed', async () => {
+    seedEdition([ov('1'), ov('2')]);
+    const id = createManga('Verknuepfte Reihe', 2);
+    const res = await mp.reconcileMangaGaps(id);
+    assert.equal(res.link_confirmed, true);
+});

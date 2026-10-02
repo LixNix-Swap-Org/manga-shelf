@@ -4,7 +4,7 @@ const { normalizeIsbn } = require('../../utils/isbn');
 const log = require('../../utils/logger').child('manga-passion');
 const {
   API_BASE, HEADERS, fetchWithTimeout, downloadRemoteImageToUploads,
-  searchMangaPassionEditions, getEditionDetailsAndVolumes, saveEditionLink
+  searchMangaPassionEditions, getEditionDetailsAndVolumes, linkRecommendedEdition
 } = require('./client');
 const { cleanOfficialDate, matchSchuberVolume, findRegularVolume } = require('./classify');
 
@@ -63,11 +63,9 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
 
   if (!editionId && manga) {
     try {
+      // a single volume lookup may use an unconfirmed edition: the user sees and checks the filled values
       const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
-      if (searchRes.recommended) {
-        editionId = searchRes.recommended.id;
-        saveEditionLink(manga, editionId);
-      }
+      editionId = linkRecommendedEdition(manga, searchRes).editionId;
     } catch (e) {
       log.warn('Error finding edition for volume lookup:', e.message);
     }
@@ -198,10 +196,17 @@ async function autofillMangaVolumes(mangaId, options = {}) {
   let editionId = options.edition_id || manga.manga_passion_id;
   if (!editionId) {
     const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
-    if (searchRes.recommended) {
-      editionId = searchRes.recommended.id;
-      saveEditionLink(manga, editionId);
+    const linked = linkRecommendedEdition(manga, searchRes);
+    if (linked.editionId && !linked.confident) {
+      // writing data into every volume from a guessed edition could corrupt them: ask first
+      return {
+        success: false,
+        needs_confirmation: true,
+        message: 'Die passende Manga-Passion-Edition ist nicht eindeutig (Vorschlag: "' + searchRes.recommended.title + '"). Bitte zuerst im Lücken-Abgleich die Edition bestätigen oder auswählen.',
+        updated_count: 0
+      };
     }
+    editionId = linked.editionId;
   }
 
   if (!editionId) {

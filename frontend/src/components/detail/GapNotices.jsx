@@ -3,10 +3,43 @@ import { AlertTriangle, AlertCircle, Check, Sparkles, Search, ShoppingCart } fro
 /** Banners above the volume list: duplicate entries, Manga-Passion discrepancy and the detected gaps. */
 export default function GapNotices({
   duplicateEntries, canEdit, showGaps, detectedGaps, detectedGapEntries, volumeFilter, volumeSearch,
-  mpGapData, mpGapLoading, fillingGapLoading, handleSyncTotalVolumes, handleBatchFillGaps, setShowMpEditionModal
+  mpGapData, mpGapLoading, fillingGapLoading, handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal
 }) {
   return (
     <>
+      {/* The edition was only guessed (ambiguous search result) and is not stored until the user confirms it */}
+      {mpGapData?.matched && mpGapData.link_confirmed === false && canEdit && (
+        <div className="mb-4 p-3 bg-sky-500/10 border border-sky-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-sky-100">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-sky-300 shrink-0" />
+            <div>
+              <div className="font-bold text-sky-200">Manga-Passion-Edition nicht bestätigt</div>
+              <div className="text-[11px] text-sky-100/90 leading-tight">
+                Vorschlag: <em>{mpGapData.edition?.title}</em> ({mpGapData.total_official_volumes} Bände). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSelectMpEdition(mpGapData.edition)}
+              disabled={mpGapLoading}
+              className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Edition bestätigen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMpEditionModal(true)}
+              className="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all cursor-pointer"
+            >
+              Andere wählen
+            </button>
+          </div>
+        </div>
+      )}
+
     {/* Duplicate entries (same type and number more than once), e.g. from an accidental double click */}
     {duplicateEntries.length > 0 && canEdit && (
       <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-200">

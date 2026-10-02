@@ -358,6 +358,7 @@ export default function MangaDetail({ user }) {
                 fillingGapLoading={fillingGapLoading}
                 handleSyncTotalVolumes={handleSyncTotalVolumes}
                 handleBatchFillGaps={handleBatchFillGaps}
+                handleSelectMpEdition={handleSelectMpEdition}
                 setShowMpEditionModal={setShowMpEditionModal}
               />
 

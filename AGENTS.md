@@ -196,7 +196,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `tags` (TEXT) – z. B. kommagetrennte Genres / Tags
    * `total_volumes` (INTEGER) – Geplante / bekannte Gesamtbandanzahl
    * `owned_volumes` (INTEGER, DEFAULT 0) – Automatisch oder manuell gezählt
-   * `manga_passion_id` (INTEGER, NULL) – Verknüpfte deutsche Manga-Passion-Edition (Index `idx_mangas_passion_id`)
+   * `manga_passion_id` (INTEGER, NULL) – Verknüpfte deutsche Manga-Passion-Edition (Index `idx_mangas_passion_id`); wird automatisch nur bei eindeutigem Treffer gesetzt (siehe Fall K)
    * `manga_passion_edition_data` (TEXT, NULL) – JSON-Metadaten der verknüpften Edition
    * `description` (TEXT)
    * `cover_image` (TEXT) – Relativer Pfad, z. B. `uploads/xyz.jpg`
@@ -435,6 +435,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`, 12-h-Cache in `manga_passion_cache`) ab. Alle Logik liegt in `services/mangaPassion/`; Identitätsregeln für Sonderausgaben stehen in Gotcha 14.
 1. **Backend (`services/mangaPassion/`, `routes/mangas.js`, `routes/volumes.js`):**
    * `GET /api/mangas/:id/gaps` → `reconcileMangaGaps`: echte Lücken mit deutschem Preis, Datum und Cover; erkennt Abweichungen zwischen DB-Gesamtzahl und deutscher Edition. Abgleich über **Typ + Nummer**, Notizen, Titel und Saga-Namen; vorhandene Schuber gelten nicht als Lücke.
+   * **Automatische Verknüpfung nur bei eindeutigem Treffer** (`isConfidentMatch` in `classify.js`: Score ≥ 120 und ≥ 20 Punkte vor Platz 2, kalibriert an einer echten Sammlung). Sonst wird die Edition nur für diese Antwort benutzt, **nicht** gespeichert (`link_confirmed: false` in `GET /api/mangas/:id/gaps`); die Detailansicht zeigt dann „Edition nicht bestätigt“ mit „Edition bestätigen“ (ruft `sync-edition`) bzw. „Andere wählen“. `autofillMangaVolumes` verweigert bei unbestätigter Edition (`needs_confirmation`), damit keine falschen Daten in alle Bände geschrieben werden.
    * `POST /api/mangas/:id/sync-edition` (`syncMangaWithEdition`): Gesamtbandzahl und Metadaten auf die deutsche Edition setzen.
    * `POST /api/mangas/:id/batch-import-gaps` (`batchImportGaps`): Lücken als `Fehlt` mit Typ (`schuber`/`special_edition`/`volume`), Preis, Datum, Notizen und Cover übernehmen.
    * `GET /api/volumes/lookup` (`lookupVolumeMetadata`, Fallback DNB) und `POST /api/mangas/:id/autofill-volumes` (`autofillMangaVolumes`, eine Transaktion): füllen nur **leere** Felder (`release_date`, `release_year`, `pages`, `isbn`, `price`, `publisher`); akzeptieren auch Manga-Passion-URLs oder -IDs.

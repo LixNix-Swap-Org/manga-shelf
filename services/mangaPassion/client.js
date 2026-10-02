@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { db, uploadsDir } = require('../../db.js');
 const { fetchRemoteImage } = require('../../utils/safeFetch');
 const { normalizePublisher } = require('../../utils/publishers');
-const { scoreEdition, cleanOfficialDate } = require('./classify');
+const { scoreEdition, cleanOfficialDate, isConfidentMatch } = require('./classify');
 
 const pkg = require('../../package.json');
 const log = require('../../utils/logger').child('manga-passion');
@@ -344,6 +344,18 @@ function saveEditionLink(manga, editionId) {
   } catch (e) { log.warn('Auto-saving Manga Passion edition id failed:', e.message); }
 }
 
+/**
+ * Picks the recommended edition of a search result and links it to the manga only when the match is unambiguous.
+ * An uncertain pick is still returned (so a single request can use it) but not stored: the user has to confirm it.
+ */
+function linkRecommendedEdition(manga, searchRes) {
+  const recommended = searchRes.recommended;
+  if (!recommended) return { editionId: null, confident: false };
+  const confident = isConfidentMatch(searchRes.candidates);
+  if (confident) saveEditionLink(manga, recommended.id);
+  return { editionId: recommended.id, confident };
+}
+
 module.exports = {
   API_BASE,
   HEADERS,
@@ -352,5 +364,6 @@ module.exports = {
   searchMangaPassionEditions,
   getEditionDetailsAndVolumes,
   searchMangaPassionForLookup,
-  saveEditionLink
+  saveEditionLink,
+  linkRecommendedEdition
 };

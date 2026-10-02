@@ -122,6 +122,19 @@ function resolveOfficialGap(entry, officialVolumes) {
   return sameNumber.find(ov => classifyOfficialVolume(ov) === 'volume') || sameNumber[0] || null;
 }
 
+// An edition is only linked to a series automatically when it clearly stands out: a high score and a lead over the
+// runner-up. Calibrated on a real collection: exact matches score 150+, spin-offs / second editions of the same title
+// land within a few points of the real series (e.g. "Magi" vs "Magilumiere Inc.", "Arifureta" vs its spin-off).
+const MIN_CONFIDENT_SCORE = 120;
+const MIN_CONFIDENT_LEAD = 20;
+
+/** Whether the best-scored candidate (candidates sorted by score, best first) is unambiguous enough to link without asking. */
+function isConfidentMatch(candidates) {
+  const [best, second] = candidates || [];
+  if (!best || best.score < MIN_CONFIDENT_SCORE) return false;
+  return !second || best.score - second.score >= MIN_CONFIDENT_LEAD;
+}
+
 /** A Schuber / box set entry of the official edition (never a regular volume). */
 function isSchuberEntry(v) {
   return v.specialType === 1 || /schuber|box|slipcase/i.test(v.title || '');
@@ -185,6 +198,7 @@ function matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes) {
 
 module.exports = {
   scoreEdition,
+  isConfidentMatch,
   cleanOfficialDate,
   classifyOfficialVolume,
   officialVolumeNumber,

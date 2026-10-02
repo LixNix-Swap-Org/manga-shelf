@@ -1,7 +1,7 @@
 const { db, runTransaction } = require('../../db.js');
 const { inferVolumeType, volumeNumberOf } = require('../../utils/volumeType');
 const log = require('../../utils/logger').child('manga-passion');
-const { searchMangaPassionEditions, getEditionDetailsAndVolumes, saveEditionLink } = require('./client');
+const { searchMangaPassionEditions, getEditionDetailsAndVolumes, linkRecommendedEdition } = require('./client');
 const { classifyOfficialVolume, officialVolumeNumber, resolveOfficialGap } = require('./classify');
 
 async function reconcileMangaGaps(mangaId, options = {}) {
@@ -12,17 +12,15 @@ async function reconcileMangaGaps(mangaId, options = {}) {
 
   let editionId = options.edition_id || manga.manga_passion_id;
   let candidateEditions = [];
-  let recommended = null;
+  // false: the edition was only guessed (not unambiguous), it is used for this answer but not stored
+  let linkConfirmed = true;
 
   if (!editionId) {
     const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
     candidateEditions = searchRes.candidates;
-    recommended = searchRes.recommended;
-    if (recommended) {
-      editionId = recommended.id;
-      // Auto-save matched edition ID if found
-      saveEditionLink(manga, editionId);
-    }
+    const linked = linkRecommendedEdition(manga, searchRes);
+    editionId = linked.editionId;
+    linkConfirmed = linked.confident;
   }
 
   if (!editionId) {
@@ -195,6 +193,7 @@ async function reconcileMangaGaps(mangaId, options = {}) {
     owned_count: userVolumes.filter(v => v.status === 'Vorhanden').length,
     user_volumes_count: userVolumes.length,
     incomplete: Boolean(details.incomplete),
+    link_confirmed: linkConfirmed,
     candidate_editions: candidateEditions
   };
 }
