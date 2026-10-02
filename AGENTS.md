@@ -88,7 +88,7 @@ manga-shelf/
 │   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
 │   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
-│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js
+│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js
 │   └── deep-e2e.js            # Visueller Browser-Regressionstest (`npm run test:deep`, nicht in `npm test`)
 ├── .github/workflows/ci.yml   # CI: Lint, Tests, Docker-Build + Start-Test
 ├── deploy/workflows/          # Vorlagen für Release-Workflows
@@ -104,11 +104,18 @@ manga-shelf/
     └── src/
         ├── main.jsx           # React Root Mount
         ├── App.jsx            # Routing, Auth-Check & Setup-Check
-        ├── Dashboard.jsx      # Container des Dashboards: State, Hauptumschalter (`activeMainView`), Modals; Darstellung in `components/dashboard/`
+        ├── Dashboard.jsx      # Schlanker Container des Dashboards: setzt die Hooks aus `hooks/` und die Komponenten aus `components/dashboard/` zusammen, hält Hauptumschalter (`activeMainView`) und Modal-Sichtbarkeit
         ├── MangaDetail.jsx    # Schlanker Container der Detailansicht: setzt die Hooks aus `hooks/` und die Komponenten aus `components/detail/` zusammen
         ├── Login.jsx          # Login-Maske
         ├── Setup.jsx          # Initialer Einrichtungs-Assistent (Admin-Account)
-        ├── hooks/             # Zustand & Aktionen der Detailansicht (je ein Thema)
+        ├── hooks/             # Zustand & Aktionen von Dashboard und Detailansicht (je ein Thema)
+        │   ├── useMangaList.js        # Dashboard: Reihenliste (Server/Offline-Kopie), Reihe löschen
+        │   ├── useCollectionFilters.js # Dashboard: Suche, Status-/Verlagsfilter, Sortierung, Ansicht (localStorage), Statistiken
+        │   ├── useShoppingList.js     # Dashboard: Einkaufsliste mit Offline-Cache, Schnellkauf, Offline-Kaufwarteschlange
+        │   ├── useReleaseRadar.js     # Dashboard: Release-Radar und Manga-Passion-Monatskalender
+        │   ├── useOfflineStatus.js    # Dashboard: Netzwerkstatus, Offline-Kopie; `onOnlineRef` wird beim Wiederverbinden aufgerufen
+        │   ├── usePwaInstall.js       # Dashboard: „App installieren“
+        │   ├── useDashboardKeyboard.js # Dashboard: `/`, Escape
         │   ├── useMangaData.js        # Reihe laden (Server/Offline-Kopie), Bearbeiten-Formular, Cover-Upload, Metadaten-Lookup
         │   ├── useVolumeFilters.js    # Filter, Suche, Sortierung, Typ-Zähler, Ansichtsmodus
         │   ├── useMpGaps.js           # Manga-Passion-Lückenabgleich, Lücken übernehmen, Edition wählen/synchronisieren, Autofill
@@ -118,7 +125,8 @@ manga-shelf/
         │   └── useDetailKeyboard.js   # Escape, Pfeiltasten, J/K/Leertaste/E
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
-        │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
+        │   ├── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`), `hasUserRead`, `buildDisplayVolumeItems`
+        │   └── collectionHelpers.js # Dashboard-Logik ohne React: Filter/Sortierung (`filterAndSortMangas`), Zähler, Summen, Datumsformat
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
         │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
@@ -132,6 +140,9 @@ manga-shelf/
             ├── common/
             │   └── BarcodeScannerButton.jsx # ISBN-Barcode per Foto (BarcodeDetector, Fallback ZXing)
             ├── dashboard/     # Dashboard Views
+            │   ├── MainViewSwitcher.jsx     # Tabs Sammlung / Einkaufsliste / Release-Radar
+            │   ├── CollectionStats.jsx      # Kennzahlen-Leiste (Reihen, Bände, Wert, abgeschlossen)
+            │   ├── DashboardFooter.jsx      # Version, Online-Status, Offline-Kopie, App-Installation
             │   ├── DashboardHeader.jsx      # Kopfzeile, Hauptumschalter, Scanner
             │   ├── CollectionToolbar.jsx    # Suche, Filter, Sortierung, Ansicht
             │   ├── MangaCollectionGrid.jsx  # Regal-/Grid-Darstellung der Reihen
