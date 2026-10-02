@@ -18,6 +18,9 @@ import {
   LayoutGrid, List, Menu, Wifi, WifiOff, Package, Bookmark, Truck,
   ChevronLeft, ChevronRight, Globe, ExternalLink, BookmarkCheck, Star
 } from 'lucide-react';
+import MangaCollectionGrid from './components/dashboard/MangaCollectionGrid';
+import CollectionToolbar from './components/dashboard/CollectionToolbar';
+import DashboardHeader from './components/dashboard/DashboardHeader';
 
 const GERMAN_MONTHS = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -721,312 +724,32 @@ export default function Dashboard({ user, onLogout }) {
   return (
     <div className="min-h-screen pb-16 overflow-x-hidden">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 py-3">
-        <div className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4 min-w-0">
-          
-          {/* Top Bar for Mobile & Tablet / Left item for Desktop */}
-          <div className="flex items-center justify-between gap-3 w-full xl:w-auto shrink-0 min-w-0">
-            {/* Logo & Title */}
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center shadow-lg shadow-brand-500/30 shrink-0">
-                <BookOpen className="w-5 h-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <h1 className="text-lg sm:text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight truncate">
-                    MangaShelf
-                  </h1>
-                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none shrink-0">
-                    v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.8.2'}
-                  </span>
-                </div>
-                <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block shrink-0`}></span>
-                  <span className="truncate">{isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Tablet & Mobile Quick Controls (< xl) */}
-            <div className="flex xl:hidden items-center gap-1 sm:gap-1.5 shrink-0">
-              <button 
-                id="btn-mobile-shopping"
-                onClick={() => {
-                  const next = activeMainView === 'shelf' ? 'shopping' : 'shelf';
-                  setActiveMainView(next);
-                  if (next === 'shopping') fetchShoppingList();
-                }}
-                className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
-                  activeMainView === 'shopping'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
-                    : 'btn-secondary text-slate-300'
-                }`}
-                title="Einkaufsliste umschalten"
-              >
-                <ShoppingCart className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="hidden sm:inline">Einkauf</span>
-                {shoppingData && shoppingData.total_missing > 0 && (
-                  <span className="bg-emerald-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono shrink-0">
-                    {shoppingData.total_missing}
-                  </span>
-                )}
-              </button>
-
-              <button 
-                id="btn-mobile-radar"
-                onClick={() => {
-                  const next = activeMainView === 'radar' ? 'shelf' : 'radar';
-                  setActiveMainView(next);
-                  if (next === 'radar') fetchReleaseRadar();
-                }}
-                className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
-                  activeMainView === 'radar'
-                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
-                    : 'btn-secondary text-slate-300'
-                }`}
-                title="Release-Radar umschalten"
-              >
-                <Calendar className="w-4 h-4 text-sky-400 shrink-0" />
-                <span className="hidden sm:inline">Radar</span>
-                {radarData && radarData.total_releases > 0 && (
-                  <span className="bg-sky-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-mono shrink-0">
-                    {radarData.total_releases}
-                  </span>
-                )}
-              </button>
-
-              {canEdit && (
-                <button 
-                  onClick={handleOpenModal}
-                  className="hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm shrink-0"
-                  title="Neuen Manga anlegen"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Neuer Manga</span>
-                </button>
-              )}
-
-              <button 
-                id="btn-mobile-menu-toggle"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
-                title="Menü öffnen"
-              >
-                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Search bar: Full width on < xl, Centered & spacious on >= xl */}
-          <div 
-            onClick={() => searchInputRef.current?.focus()}
-            className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 py-2.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[200px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all cursor-text shadow-inner"
-          >
-            <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" />
-            <input 
-              ref={searchInputRef}
-              id="main-search-input"
-              type="text" 
-              placeholder="Titel, Autor oder Verlag suchen..." 
-              className="w-full min-w-0 bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-sm" 
-              value={search} 
-              onChange={e => setSearch(e.target.value)} 
-            />
-            <div className="shrink-0 flex items-center gap-1">
-              <BarcodeScannerButton compact onDetected={handleBarcodeDetected} />
-              {search && (
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSearch('');
-                    searchInputRef.current?.focus();
-                  }}
-                  className="text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800 shrink-0 transition-colors"
-                  title="Suche zurücksetzen"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Desktop Action buttons (>= xl) */}
-          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0 flex-nowrap justify-end min-w-0">
-            <button 
-              id="btn-open-stats"
-              onClick={handleOpenStats} 
-              className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-              title="Statistik- & Finanz-Dashboard öffnen"
-            >
-              <BarChart3 className="w-4 h-4 text-emerald-400 shrink-0" /> 
-              <span>Statistiken<span className="hidden 2xl:inline"> & Finanzen</span></span>
-            </button>
-
-            {canEdit && (
-              <button 
-                id="btn-open-add-manga"
-                onClick={handleOpenModal} 
-                className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4 shrink-0" /> 
-                <span>Neuer Manga</span>
-              </button>
-            )}
-
-            {isInstallable && !isInstalledApp && (
-              <button
-                id="btn-install-pwa"
-                onClick={handleInstallClick}
-                className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-2.5 2xl:px-3 shadow-sm transition-all whitespace-nowrap"
-                title="Manga Shelf als native App auf deinem Gerät installieren"
-              >
-                <Download className="w-4 h-4 text-brand-400 shrink-0" />
-                <span className="hidden 2xl:inline">App installieren</span>
-              </button>
-            )}
-
-            {user?.role === 'admin' && (
-              <>
-                <button
-                  id="btn-open-users"
-                  onClick={handleOpenUsersModal}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title="Benutzer anlegen und verwalten"
-                >
-                  <Users className="w-4 h-4 text-brand-400 shrink-0" /> 
-                  <span>Benutzer</span>
-                </button>
-
-                <button
-                  id="btn-open-backups"
-                  onClick={handleOpenRestoreModal}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title="Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung"
-                >
-                  <UploadCloud className="w-4 h-4 text-emerald-400 shrink-0" /> 
-                  <span>Backups</span>
-                </button>
-              </>
-            )}
-
-            <div className="h-6 w-[1px] bg-slate-800 mx-0.5 shrink-0"></div>
-
-            <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2 py-1.5 2xl:px-2.5 rounded-xl border border-slate-700/50 shrink-0">
-              <span className="text-slate-400 hidden 2xl:inline">User:</span>
-              <span className="font-semibold text-slate-200 truncate max-w-[90px] 2xl:max-w-none">{user?.username}</span>
-              {user?.role === 'admin' ? (
-                <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
-                  Admin
-                </span>
-              ) : isVisitor ? (
-                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
-                  Gast
-                </span>
-              ) : (
-                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold uppercase shrink-0">
-                  Editor
-                </span>
-              )}
-            </div>
-
-            <button 
-              id="btn-logout"
-              onClick={onLogout} 
-              className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors shrink-0" 
-              title="Abmelden"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-
-        </div>
-
-        {/* Dropdown Menu Drawer for < xl */}
-        {mobileMenuOpen && (
-          <div className="xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto">
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">Angemeldet als:</span>
-                <span className="font-bold text-white">{user?.username}</span>
-              </div>
-              <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold">
-                {user?.role}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                id="btn-mobile-menu-stats"
-                onClick={() => { setMobileMenuOpen(false); handleOpenStats(); }}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30"
-              >
-                <BarChart3 className="w-4 h-4 text-emerald-400" /> Statistiken
-              </button>
-
-              <button 
-                id="btn-mobile-menu-radar"
-                onClick={() => { 
-                  setMobileMenuOpen(false); 
-                  setActiveMainView('radar'); 
-                  fetchReleaseRadar(); 
-                }}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
-              >
-                <Calendar className="w-4 h-4 text-sky-400" /> Release-Radar
-              </button>
-
-              {canEdit && (
-                <button 
-                  id="btn-mobile-menu-add"
-                  onClick={() => { setMobileMenuOpen(false); handleOpenModal(); }}
-                  className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Neuer Manga
-                </button>
-              )}
-
-              {user?.role === 'admin' && (
-                <>
-                  <button 
-                    id="btn-mobile-menu-users"
-                    onClick={() => { setMobileMenuOpen(false); handleOpenUsersModal(); }}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
-                  >
-                    <Users className="w-4 h-4 text-brand-400" /> Benutzer
-                  </button>
-
-                  <button 
-                    id="btn-mobile-menu-backups"
-                    onClick={() => { setMobileMenuOpen(false); handleOpenRestoreModal(); }}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
-                  >
-                    <UploadCloud className="w-4 h-4 text-emerald-400" /> Backups
-                  </button>
-                </>
-              )}
-            </div>
-
-            {isInstallable && !isInstalledApp && (
-              <button
-                id="btn-mobile-install-pwa"
-                onClick={() => { setMobileMenuOpen(false); handleInstallClick(); }}
-                className="w-full btn-secondary text-xs py-2 text-brand-300 bg-brand-500/10 border-brand-500/40 hover:bg-brand-500/20 flex items-center justify-center gap-2 font-medium"
-              >
-                <Download className="w-4 h-4 text-brand-400" /> MangaShelf als App installieren
-              </button>
-            )}
-
-            <button 
-              id="btn-mobile-menu-logout"
-              onClick={onLogout} 
-              className="w-full btn-secondary text-xs py-2 text-red-300 hover:bg-red-950/40 border-red-900/40 flex items-center justify-center gap-2"
-            >
-              <LogOut className="w-4 h-4 text-red-400" /> Abmelden
-            </button>
-          </div>
-        )}
-      </header>
+      <DashboardHeader
+        activeMainView={activeMainView}
+        canEdit={canEdit}
+        fetchReleaseRadar={fetchReleaseRadar}
+        fetchShoppingList={fetchShoppingList}
+        handleBarcodeDetected={handleBarcodeDetected}
+        handleInstallClick={handleInstallClick}
+        handleOpenModal={handleOpenModal}
+        handleOpenRestoreModal={handleOpenRestoreModal}
+        handleOpenStats={handleOpenStats}
+        handleOpenUsersModal={handleOpenUsersModal}
+        isInstallable={isInstallable}
+        isInstalledApp={isInstalledApp}
+        isOfflineMode={isOfflineMode}
+        isVisitor={isVisitor}
+        mobileMenuOpen={mobileMenuOpen}
+        onLogout={onLogout}
+        radarData={radarData}
+        search={search}
+        searchInputRef={searchInputRef}
+        setActiveMainView={setActiveMainView}
+        setMobileMenuOpen={setMobileMenuOpen}
+        setSearch={setSearch}
+        shoppingData={shoppingData}
+        user={user}
+      />
 
       {/* Main Container */}
       <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
@@ -1165,403 +888,39 @@ export default function Dashboard({ user, onLogout }) {
         </section>
 
         {/* Filter & Sort Toolbar */}
-        <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
-          {/* Status Tabs with Count Badges */}
-          <div className="w-full xl:w-auto flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
-            {[
-              { id: 'ALL', label: 'Alle', count: filterCounts.ALL },
-              { id: 'Laufend', label: 'Laufend', count: filterCounts.Laufend },
-              { id: 'Abgeschlossen', label: 'Abgeschlossen', count: filterCounts.Abgeschlossen },
-              { id: 'UNREAD', label: 'Ungelesen', count: filterCounts.UNREAD },
-              { id: 'READ_ALL', label: 'Gelesen', count: filterCounts.READ_ALL },
-              { id: 'Pausiert', label: 'Pausiert', count: filterCounts.Pausiert },
-              { id: 'Geplant', label: 'Geplant', count: filterCounts.Geplant },
-            ].filter(tab => tab.id === 'ALL' || tab.count > 0).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setStatusFilter(tab.id)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                  statusFilter === tab.id 
-                    ? 'bg-brand-600 text-white shadow-sm' 
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none ${
-                  statusFilter === tab.id ? 'bg-brand-700/90 text-white' : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Publisher, Sort, Reset & View Mode Controls */}
-          <div className="w-full xl:w-auto flex flex-wrap items-center justify-between xl:justify-start gap-2 text-xs">
-            {/* Publisher Filter */}
-            <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
-              <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-              <select
-                id="filter-publisher-select"
-                value={publisherFilter}
-                onChange={e => setPublisherFilter(e.target.value)}
-                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
-              >
-                <option value="ALL">Alle Verlage</option>
-                {availablePublishers.map(pub => (
-                  <option key={pub} value={pub}>{pub}</option>
-                ))}
-              </select>
-              <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
-            </label>
-
-            {/* Sort Control */}
-            <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
-              <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
-              >
-                <option value="newest_first">✨ Zuletzt hinzugefügt</option>
-                <option value="title_asc">🔤 Titel (A → Z)</option>
-                <option value="title_desc">🔤 Titel (Z → A)</option>
-                <option value="progress_desc">📈 Fortschritt (Höchster %)</option>
-                <option value="progress_asc">📖 Ungelesen zuerst</option>
-                <option value="volumes_desc">📚 Meiste Bände</option>
-                <option value="value_desc">💰 Höchster Wert (€)</option>
-                <option value="publisher_asc">🏢 Verlag (A → Z)</option>
-                <option value="oldest_first">⏳ Zuerst hinzugefügt</option>
-              </select>
-              <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
-            </label>
-
-            {/* Reset Filter Button (visible when filter active) */}
-            {(statusFilter !== 'ALL' || publisherFilter !== 'ALL' || search) && (
-              <button
-                onClick={() => {
-                  setStatusFilter('ALL');
-                  setPublisherFilter('ALL');
-                  setSearch('');
-                }}
-                className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"
-                title="Alle Filter und Suche zurücksetzen"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Zurücksetzen</span>
-              </button>
-            )}
-
-            {/* View Mode Toggle: Grid vs List */}
-            <div className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
-              <button
-                id="btn-view-grid"
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'grid'
-                    ? 'bg-brand-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Plakative Rasteransicht"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                id="btn-view-list"
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'list'
-                    ? 'bg-brand-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Kompakte Listenansicht"
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="text-xs text-slate-400 ml-1 hidden sm:inline">
-              {filtered.length} {filtered.length === 1 ? 'Manga' : 'Mangas'}
-            </div>
-          </div>
-        </div>
-
+        <CollectionToolbar
+          availablePublishers={availablePublishers}
+          filterCounts={filterCounts}
+          filtered={filtered}
+          publisherFilter={publisherFilter}
+          search={search}
+          setPublisherFilter={setPublisherFilter}
+          setSearch={setSearch}
+          setSortBy={setSortBy}
+          setStatusFilter={setStatusFilter}
+          setViewMode={setViewMode}
+          sortBy={sortBy}
+          statusFilter={statusFilter}
+          viewMode={viewMode}
+        />
         {/* Grid or Empty State */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-            <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm">Lade Sammlung...</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="glass-panel p-8 sm:p-12 rounded-3xl text-center max-w-lg mx-auto my-12 border border-slate-800 animate-fade-in">
-            <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-4">
-              <BookOpen className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">
-              {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL'
-                ? 'Keine Treffer gefunden'
-                : 'Deine Sammlung ist noch leer'}
-            </h3>
-            <p className="text-sm text-slate-400 mb-6">
-              {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL'
-                ? 'Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.'
-                : 'Füge deinen ersten Manga hinzu, um Bände und deinen Fortschritt zu verfolgen.'}
-            </p>
-            {search || statusFilter !== 'ALL' || publisherFilter !== 'ALL' ? (
-              <button 
-                onClick={() => {
-                  setSearch('');
-                  setStatusFilter('ALL');
-                  setPublisherFilter('ALL');
-                }} 
-                className="btn-secondary text-sm inline-flex items-center gap-2"
-              >
-                <X className="w-4 h-4" /> Filter & Suche zurücksetzen
-              </button>
-            ) : (
-              <button onClick={handleOpenModal} className="btn-primary text-sm inline-flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Ersten Manga anlegen
-              </button>
-            )}
-          </div>
-        ) : viewMode === 'list' ? (
-          /* COMPACT LIST VIEW */
-          <div className="glass-panel rounded-2xl border border-slate-800/80 overflow-hidden shadow-xl animate-fade-in">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="py-3 px-4 w-16">Cover</th>
-                    <th className="py-3 px-4">Titel & Autor</th>
-                    <th className="py-3 px-4 hidden sm:table-cell">Verlag</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Bände / Fortschritt</th>
-                    <th className="py-3 px-4 text-right hidden md:table-cell">Wert</th>
-                    <th className="py-3 px-4 text-right w-24">Aktion</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {filtered.map(manga => {
-                    const total = manga.total_volumes || 0;
-                    const owned = manga.owned_volumes || 0;
-                    const pct = total > 0 ? Math.min(100, Math.round((owned / total) * 100)) : null;
-
-                    return (
-                      <tr key={manga.id} className="hover:bg-slate-850/60 transition-colors group">
-                        <td className="py-2.5 px-4">
-                          <Link to={`/manga/${manga.id}`} className="block w-10 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0">
-                            {manga.cover_image && !failedImages[manga.id] ? (
-                              <img 
-                                src={manga.cover_image} 
-                                alt="" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                                onError={() => setFailedImages(prev => ({ ...prev, [manga.id]: true }))} 
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-slate-700">
-                                <BookOpen className="w-4 h-4" />
-                              </div>
-                            )}
-                          </Link>
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1">
-                            {manga.title}
-                          </Link>
-                          <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">
-                            {manga.author || 'Kein Autor'}
-                            {manga.alt_title && <span className="text-slate-500 ml-1.5">({manga.alt_title})</span>}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-4 hidden sm:table-cell text-slate-300">
-                          {manga.publisher ? (
-                            <span className="flex items-center gap-1">
-                              <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
-                              <span>{manga.publisher}</span>
-                            </span>
-                          ) : (
-                            <span className="text-slate-600">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${getStatusBadge(manga.status)}`}>
-                            {manga.status}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white font-mono">
-                              {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
-                            </span>
-                            {manga.read_volume_count > 0 ? (
-                              <span className={`text-[10px] font-mono ${
-                                manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0)
-                                  ? 'text-emerald-400 font-bold' 
-                                  : 'text-sky-300'
-                              }`}>
-                                ({manga.read_volume_count} gelesen • {Math.round(((manga.read_volume_count || 0) / (manga.owned_volumes || manga.volume_count || 1)) * 100)}%)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 font-mono">(Ungelesen)</span>
-                            )}
-                          </div>
-                          {pct !== null && (
-                            <div className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1">
-                              <div 
-                                className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 rounded-full" 
-                                style={{ width: `${pct}%` }} 
-                              />
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4 text-right hidden md:table-cell font-mono font-bold text-emerald-400">
-                          {manga.total_value > 0 
-                            ? `${manga.total_value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` 
-                            : '—'}
-                        </td>
-                        <td className="py-2.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Link 
-                              to={`/manga/${manga.id}`} 
-                              className="btn-secondary py-1 px-2.5 text-xs text-brand-400 hover:text-white"
-                            >
-                              Details
-                            </Link>
-                            {canEdit && (
-                              <button
-                                onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
-                                className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors"
-                                title="Manga löschen"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          /* POSTER / GRID VIEW */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-4 sm:gap-5 lg:gap-6 animate-fade-in">
-            {filtered.map(manga => {
-              const total = manga.total_volumes || 0;
-              const owned = manga.owned_volumes || 0;
-              const pct = total > 0 ? Math.min(100, Math.round((owned / total) * 100)) : null;
-
-              return (
-                <div key={manga.id} className="group relative flex flex-col">
-                  <Link 
-                    to={`/manga/${manga.id}`} 
-                    className="glass-card rounded-2xl overflow-hidden border border-slate-800 flex flex-col h-full hover:shadow-2xl hover:shadow-brand-500/10 hover:-translate-y-1.5 transition-all duration-300"
-                  >
-                    {/* Cover Aspect Container */}
-                    <div className="aspect-[2/3] bg-slate-950 relative overflow-hidden">
-                      {manga.cover_image && !failedImages[manga.id] ? (
-                        <img 
-                          src={manga.cover_image} 
-                          alt="" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                          loading="lazy"
-                          onError={() => setFailedImages(prev => ({ ...prev, [manga.id]: true }))}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
-                          <BookOpen className="w-10 h-10 mb-2 opacity-50" />
-                          <span className="text-xs text-slate-500">Kein Cover</span>
-                        </div>
-                      )}
-
-                      {/* Top Badges */}
-                      <div className="absolute top-2 left-2 right-2 flex justify-between items-start gap-1 pointer-events-none min-w-0">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider backdrop-blur-md border truncate shrink-0 max-w-[65%] ${getStatusBadge(manga.status)}`}>
-                          {manga.status}
-                        </span>
-
-                        <span className="bg-slate-950/80 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg backdrop-blur-md shrink-0">
-                          {owned} {total > 0 ? `/ ${total}` : 'Bde.'}
-                        </span>
-                      </div>
-
-                      {/* Reading Progress Badge */}
-                      {manga.read_volume_count > 0 && (
-                        <div className="absolute top-9 right-2 pointer-events-none">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1 border shadow-sm ${
-                            manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0)
-                              ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300'
-                              : 'bg-slate-950/85 border-sky-500/40 text-sky-300'
-                          }`}>
-                            <BookCheck className="w-2.5 h-2.5" />
-                            <span>{manga.read_volume_count}{manga.read_volume_count >= (manga.owned_volumes || manga.volume_count) && (manga.owned_volumes > 0 || manga.volume_count > 0) ? ' ✓' : `/${manga.owned_volumes || manga.volume_count}`}</span>
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Progress Bar at bottom of poster */}
-                      {pct !== null && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 backdrop-blur-xs">
-                          <div 
-                            className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500" 
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-3.5 flex flex-col flex-1 justify-between bg-slate-900/40">
-                      <div>
-                        <h3 className="font-bold text-sm text-white line-clamp-2 min-h-[2.5rem] leading-snug group-hover:text-brand-400 transition-colors" title={manga.title}>
-                          {manga.title}
-                        </h3>
-                        <p className="text-xs text-slate-400 truncate mt-0.5" title={manga.author || ''}>
-                          {manga.author || 'Kein Autor'}
-                        </p>
-                        {manga.publisher && (
-                          <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate" title={`Verlag: ${manga.publisher}`}>
-                            <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
-                            <span className="truncate">{manga.publisher}</span>
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-                        {manga.total_value > 0 ? (
-                          <span className="font-mono font-bold text-emerald-400 flex items-center gap-1">
-                            <Coins className="w-3 h-3 text-emerald-400" />
-                            {manga.total_value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">
-                            {pct !== null ? `${pct}% komplett` : `${owned} Bände`}
-                          </span>
-                        )}
-                        <span className="text-brand-400 font-semibold group-hover:translate-x-0.5 transition-transform">Details &rarr;</span>
-                      </div>
-                    </div>
-                  </Link>
-
-                  {/* Delete button (hover) */}
-                  {canEdit && (
-                    <button
-                      onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
-                      className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 bg-red-950/90 hover:bg-red-900 text-red-300 p-1.5 rounded-lg border border-red-700/50 backdrop-blur-md transition-all shadow-lg hover:scale-105 z-10"
-                      title="Manga löschen"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <MangaCollectionGrid
+          canEdit={canEdit}
+          failedImages={failedImages}
+          filtered={filtered}
+          getStatusBadge={getStatusBadge}
+          handleDeleteManga={handleDeleteManga}
+          handleOpenModal={handleOpenModal}
+          loading={loading}
+          publisherFilter={publisherFilter}
+          search={search}
+          setFailedImages={setFailedImages}
+          setPublisherFilter={setPublisherFilter}
+          setSearch={setSearch}
+          setStatusFilter={setStatusFilter}
+          statusFilter={statusFilter}
+          viewMode={viewMode}
+        />
       </>
     )}
 
