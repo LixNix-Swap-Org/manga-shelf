@@ -1,3 +1,12 @@
+// Browser test. Run it with `npm run <test:...>` (test/browser/run.js starts an isolated server and sets these variables).
+const BASE_URL = (process.env.BASE_URL || '').replace(/\/$/, '');
+const E2E_USER = process.env.E2E_USER;
+const E2E_PASSWORD = process.env.E2E_PASSWORD;
+if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
+  console.error('Set BASE_URL, E2E_USER and E2E_PASSWORD, or use the npm scripts (they start an isolated server).');
+  process.exit(2);
+}
+
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
@@ -38,25 +47,14 @@ async function runPerformanceSuite() {
 
   // --- PART 1: Authenticate ---
   console.log('1. Authenticating as admin...');
-  await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle0' });
-  await page.type('input[type="text"]', 'Moltres');
-  await page.type('input[type="password"]', 'Start1234!');
+  await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle0' });
+  await page.type('input[type="text"]', E2E_USER);
+  await page.type('input[type="password"]', E2E_PASSWORD);
   await Promise.all([
     page.click('button[type="submit"]'),
     page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
   ]);
   await sleep(1000);
-  if (page.url().includes('/login')) {
-    await page.click('input[type="text"]', { clickCount: 3 });
-    await page.type('input[type="text"]', 'admin');
-    await page.click('input[type="password"]', { clickCount: 3 });
-    await page.type('input[type="password"]', 'password123');
-    await Promise.all([
-      page.click('button[type="submit"]'),
-      page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
-    ]);
-    await sleep(1000);
-  }
 
   // Helper to extract Performance & Web Vitals
   async function measurePagePerformance(url, pageName) {
@@ -126,7 +124,7 @@ async function runPerformanceSuite() {
   }
 
   // --- PART 2: Measure Pages ---
-  const dashboardPerf = await measurePagePerformance('http://localhost:3000/', 'Dashboard (Shelf)');
+  const dashboardPerf = await measurePagePerformance(`${BASE_URL}/`, 'Dashboard (Shelf)');
   
   // Shopping list
   await page.evaluate(() => {
@@ -134,10 +132,10 @@ async function runPerformanceSuite() {
     if (shopBtn) shopBtn.click();
   });
   await sleep(800);
-  const shoppingPerf = await measurePagePerformance('http://localhost:3000/', 'Shopping List');
+  const shoppingPerf = await measurePagePerformance(`${BASE_URL}/`, 'Shopping List');
 
   // Detail page
-  const detailPerf = await measurePagePerformance('http://localhost:3000/manga/4', 'Manga Detail (One Piece)');
+  const detailPerf = await measurePagePerformance(`${BASE_URL}/manga/${process.env.PERF_MANGA_ID || 4}`, 'Manga Detail (One Piece)');
 
   // Get Cookies for API benchmarking
   const cookies = await page.cookies();
@@ -152,8 +150,8 @@ async function runPerformanceSuite() {
     return new Promise((resolve, reject) => {
       const start = process.hrtime.bigint();
       const req = http.request({
-        hostname: 'localhost',
-        port: 3000,
+        hostname: new URL(BASE_URL).hostname,
+        port: new URL(BASE_URL).port || 80,
         path,
         method: 'GET',
         headers: {
@@ -212,12 +210,12 @@ async function runPerformanceSuite() {
     mangasOverview: await benchmarkEndpoint('/api/mangas'),
     statsFull: await benchmarkEndpoint('/api/stats'),
     shoppingList: await benchmarkEndpoint('/api/shopping-list'),
-    mangaDetailWithVolumes: await benchmarkEndpoint('/api/mangas/4')
+    mangaDetailWithVolumes: await benchmarkEndpoint('/api/mangas/' + (process.env.PERF_MANGA_ID || 4))
   };
 
   // --- PART 4: Asset Bundle Breakdown ---
   console.log('\n3. Analyzing Frontend Bundle Sizes in frontend/dist...');
-  const distDir = path.resolve('frontend/dist');
+  const distDir = path.join(__dirname, '..', '..', 'frontend', 'dist');
   let bundleAssets = [];
   if (fs.existsSync(distDir)) {
     const files = fs.readdirSync(path.join(distDir, 'assets'));

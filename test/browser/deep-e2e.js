@@ -1,3 +1,12 @@
+// Browser test. Run it with `npm run <test:...>` (test/browser/run.js starts an isolated server and sets these variables).
+const BASE_URL = (process.env.BASE_URL || '').replace(/\/$/, '');
+const E2E_USER = process.env.E2E_USER;
+const E2E_PASSWORD = process.env.E2E_PASSWORD;
+if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
+  console.error('Set BASE_URL, E2E_USER and E2E_PASSWORD, or use the npm scripts (they start an isolated server).');
+  process.exit(2);
+}
+
 const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
@@ -76,14 +85,14 @@ async function runDeepTestSuite() {
     // STEP 1: Login & Auth Flow
     // ----------------------------------------------------
     console.log('\n--- Step 1: Testing Login Page & Validation ---');
-    await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle0' });
     await snap('01_login_page');
 
     // Test invalid credentials
     console.log('  Testing invalid password rejection...');
     const userInputs = await page.$$('input[type="text"], input[name="username"]');
     if (userInputs.length > 0) {
-      await userInputs[0].type('admin');
+      await userInputs[0].type(E2E_USER);
       const passInput = await page.$('input[type="password"]');
       if (passInput) await passInput.type('wrongpassword_test');
       const submitBtn = await page.$('button[type="submit"]');
@@ -94,25 +103,14 @@ async function runDeepTestSuite() {
 
     // Reload page to reset form state cleanly
     console.log('  Reloading and logging in with valid admin credentials...');
-    await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle0' });
-    await page.type('input[type="text"], input[name="username"]', 'Moltres');
-    await page.type('input[type="password"]', 'Start1234!');
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle0' });
+    await page.type('input[type="text"], input[name="username"]', E2E_USER);
+    await page.type('input[type="password"]', E2E_PASSWORD);
     await Promise.all([
       page.click('button[type="submit"]'),
       page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
     ]);
     await sleep(1500);
-    if (page.url().includes('/login')) {
-      await page.click('input[type="text"], input[name="username"]', { clickCount: 3 });
-      await page.type('input[type="text"], input[name="username"]', 'admin');
-      await page.click('input[type="password"]', { clickCount: 3 });
-      await page.type('input[type="password"]', 'password123');
-      await Promise.all([
-        page.click('button[type="submit"]'),
-        page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
-      ]);
-      await sleep(1500);
-    }
 
     // ----------------------------------------------------
     // STEP 2: Dashboard Shelf View

@@ -1,3 +1,12 @@
+// Browser test. Run it with `npm run <test:...>` (test/browser/run.js starts an isolated server and sets these variables).
+const BASE_URL = (process.env.BASE_URL || '').replace(/\/$/, '');
+const E2E_USER = process.env.E2E_USER;
+const E2E_PASSWORD = process.env.E2E_PASSWORD;
+if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
+  console.error('Set BASE_URL, E2E_USER and E2E_PASSWORD, or use the npm scripts (they start an isolated server).');
+  process.exit(2);
+}
+
 const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
@@ -72,24 +81,16 @@ async function runTestSuite() {
     // TEST 1: Navigation & Login
     // ----------------------------------------------------
     console.log('\n--- TEST 1: Navigation & Login ---');
-    await page.goto('http://localhost:3000', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await page.screenshot({ path: path.join(screenshotsDir, 'test1_initial.png') });
 
     if (page.url().includes('/login')) {
-      console.log('Logging in as Moltres / admin...');
-      await page.type('input[type="text"]', 'Moltres');
-      await page.type('input[type="password"]', 'Start1234!');
+      console.log('Logging in as ' + E2E_USER + '...');
+      await page.type('input[type="text"]', E2E_USER);
+      await page.type('input[type="password"]', E2E_PASSWORD);
       await page.click('button[type="submit"]');
       await new Promise(r => setTimeout(r, 1200));
 
-      if (page.url().includes('/login')) {
-        await page.click('input[type="text"]', { clickCount: 3 });
-        await page.type('input[type="text"]', 'admin');
-        await page.click('input[type="password"]', { clickCount: 3 });
-        await page.type('input[type="password"]', 'password123');
-        await page.click('button[type="submit"]');
-        await new Promise(r => setTimeout(r, 1200));
-      }
     }
     console.log('Current page title/url:', page.url());
     await page.screenshot({ path: path.join(screenshotsDir, 'test1_dashboard_loaded.png') });
@@ -198,11 +199,13 @@ async function runTestSuite() {
     // TEST 4: Backup Restore Modal & Live Restore Test
     // ----------------------------------------------------
     console.log('\n--- TEST 4: Backup Restore Modal & Live Restore Test ---');
-    const AdmZip = require('adm-zip');
-    const testZip = new AdmZip();
-    testZip.addFile('manga.db', fs.readFileSync(path.join(__dirname, 'data', 'manga.db')));
+    // the backup to restore is downloaded from the server under test (never read from a data folder on disk)
+    const backupBytes = await page.evaluate(async () => {
+      const r = await fetch('/api/backup');
+      return Array.from(new Uint8Array(await r.arrayBuffer()));
+    });
     const tempZipPath = path.join(screenshotsDir, 'test-upload-backup.zip');
-    testZip.writeZip(tempZipPath);
+    fs.writeFileSync(tempZipPath, Buffer.from(backupBytes));
 
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button'));

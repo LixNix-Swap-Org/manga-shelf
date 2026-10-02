@@ -46,9 +46,6 @@ manga-shelf/
 ├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
 ├── release.js                 # GitHub Release Automatisierung & Asset-Upload
 ├── PROJECT_KNOWLEDGE.md       # Nur Verweis auf diese Datei
-├── test-e2e-suite.js          # Automatisierte Puppeteer Browser E2E-Tests (`npm run test:e2e`)
-├── test-release-radar.js      # Headless E2E-Test für Release-Radar Ansicht (`npm run test:radar`)
-├── test-performance-suite.js  # Performance-Benchmark Suite (`npm run test:perf`)
 ├── scripts/                   # Administrative Hilfsskripte (Remote-Prüfung, Seed)
 │   ├── check-remote.js
 │   ├── seed-remote.js
@@ -89,7 +86,13 @@ manga-shelf/
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
 │   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
 │   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js
-│   └── deep-e2e.js            # Visueller Browser-Regressionstest (`npm run test:deep`, nicht in `npm test`)
+│   └── browser/               # Puppeteer-Browsertests (nicht in `npm test`), alle über `run.js` gegen einen isolierten Server
+│       ├── run.js             # Startet Server mit temporärem DATA_DIR + freiem Port + Wegwerf-Admin, führt das Skript aus, räumt auf
+│       ├── chrome.js          # Findet Chrome/Chromium/Edge (`CHROME_BIN` überschreibt)
+│       ├── e2e-suite.js       # Login, Dashboard, Benutzer, Backup-Restore, Reihe/Bände anlegen & löschen (`npm run test:e2e`)
+│       ├── release-radar.js   # Release-Radar (`npm run test:radar`)
+│       ├── performance-suite.js # Seitenladezeiten, API-Latenz, Bundle-Größen (`npm run test:perf`)
+│       └── deep-e2e.js        # Visueller Regressionstest mit Bildschirmfotos aller Modals + Mobile (`npm run test:deep`)
 ├── .github/workflows/ci.yml   # CI: Lint, Tests, Docker-Build + Start-Test
 ├── deploy/workflows/          # Vorlagen für Release-Workflows
 ├── data/                      # Persistente Anwendungsdaten (in .gitignore)
@@ -463,16 +466,16 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 * **CI (`.github/workflows/ci.yml`):** Lint + Tests (Node 22) und ein Docker-Job (Build + Start-Test über `/api/health`). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
 
 ### Automatisierte E2E Browser-Tests
-* Zum Validieren von UI, Logins, CRUD und Backups:
+* Voraussetzungen: gebautes Frontend (`npm run build:frontend`) und ein installierter Chrome/Chromium/Edge.
+* Jedes Skript läuft über `test/browser/run.js`: temporäre Datenbank, freier Port, Wegwerf-Admin (`BASE_URL`, `E2E_USER`, `E2E_PASSWORD` werden den Skripten per Umgebung übergeben). Die Tests legen Daten an, ändern, löschen und spielen Backups ein – **nie** `BASE_URL` auf eine echte Instanz zeigen lassen. Ohne diese Variablen brechen die Skripte ab.
   ```powershell
-  node test-e2e-suite.js
+  npm run test:e2e     # UI, Login, CRUD, Backups
+  npm run test:deep    # visuelle Regression, Bildschirmfotos aller Modals, Mobile-Check
+  npm run test:radar   # Release-Radar
+  npm run test:perf    # Performance-Benchmark
   ```
-* Für vollständige visuelle Regressionstests, Bildschirmfoto-Generierung aller Modals und Mobile-Check:
-  ```powershell
-  npm run test:deep    # = node test/deep-e2e.js
-  ```
-* Weitere Skripte: `npm run test:radar` (Release-Radar), `npm run test:perf` (Performance-Benchmark).
-* **Nie gegen die echte Instanz schreiben:** Die produktive Datenbank (`data/`, Port 3000) nicht für Tests nutzen. Stattdessen `manga.db` kopieren und die Kopie mit eigenem `DATA_DIR`/`PORT` starten (eigener Test-Admin nur in der Kopie).
+* Mit echten Daten testen: `npm run test:perf -- --db pfad\zu\manga.db` startet den isolierten Server mit einer **Kopie** dieser Datenbank (die Originaldatei wird nur gelesen); `PERF_MANGA_ID` wählt die Reihe für die Detailseiten-Messung.
+* Bildschirmfotos und Berichte landen in `test/browser/screenshots/`, `test/browser/test_screenshots/` bzw. `test/browser/reports/` (in `.gitignore`).
 
 ### Paketierung & GitHub Releases
 * **Regelmäßige Releases (WICHTIG!):**

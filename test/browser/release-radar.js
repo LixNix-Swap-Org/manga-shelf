@@ -1,4 +1,14 @@
+// Browser test. Run it with `npm run <test:...>` (test/browser/run.js starts an isolated server and sets these variables).
+const BASE_URL = (process.env.BASE_URL || '').replace(/\/$/, '');
+const E2E_USER = process.env.E2E_USER;
+const E2E_PASSWORD = process.env.E2E_PASSWORD;
+if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
+  console.error('Set BASE_URL, E2E_USER and E2E_PASSWORD, or use the npm scripts (they start an isolated server).');
+  process.exit(2);
+}
+
 const puppeteer = require('puppeteer-core');
+const { findChrome } = require('./chrome');
 const fs = require('fs');
 const path = require('path');
 
@@ -6,7 +16,7 @@ const path = require('path');
     console.log('--- TESTING RELEASE-RADAR FEATURE ---');
     const browser = await puppeteer.launch({
         headless: 'new',
-        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        executablePath: findChrome(),
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
@@ -15,13 +25,13 @@ const path = require('path');
 
     try {
         // Step 1: Login
-        console.log('Navigating to http://localhost:3000...');
-        await page.goto('http://localhost:3000/', { waitUntil: 'networkidle0' });
+        console.log('Navigating to ' + BASE_URL + '...');
+        await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle0' });
 
         if (page.url().includes('/login')) {
-            console.log('Logging in as Moltres / Start1234!...');
-            await page.type('input[type="text"]', 'Moltres');
-            await page.type('input[type="password"]', 'Start1234!');
+            console.log('Logging in as ' + E2E_USER + '...');
+            await page.type('input[type="text"]', E2E_USER);
+            await page.type('input[type="password"]', E2E_PASSWORD);
             await page.click('button[type="submit"]');
             await new Promise(r => setTimeout(r, 1500));
         }
@@ -61,7 +71,7 @@ const path = require('path');
         console.log('Volume 1 added as Vorbestellt (2026-10-25, 8.50€)');
 
         // Step 3: Switch to Release-Radar tab on Dashboard
-        await page.goto('http://localhost:3000/', { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle0' });
         await new Promise(r => setTimeout(r, 1000));
         
         // Click the Release-Radar tab button
