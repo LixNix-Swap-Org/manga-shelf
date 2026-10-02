@@ -12,6 +12,7 @@ const {
     requireAdmin 
 } = require('../middleware/auth');
 const { loginLimiter, setupLimiter } = require('../middleware/rateLimit');
+const log = require('../utils/logger').child('auth');
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything beyond 72 bytes
@@ -58,7 +59,7 @@ router.post('/setup', setupLimiter, async (req, res) => {
         setAuthCookie(req, res, token);
         res.json({ success: true, user: { id: newUserId, username: cleanUsername, role: 'admin' } });
     } catch (err) {
-        console.error('Setup error:', err);
+        log.error('Setup error:', err);
         res.status(500).json({ error: 'Fehler bei der Einrichtung' });
     }
 });
@@ -82,7 +83,7 @@ router.post('/auth/login', loginLimiter, async (req, res) => {
         setAuthCookie(req, res, token);
         res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
     } catch (err) {
-        console.error('Login error:', err);
+        log.error('Login error:', err);
         res.status(500).json({ error: 'Anmeldung fehlgeschlagen' });
     }
 });
@@ -102,7 +103,7 @@ router.get('/users', requireAdmin, (req, res) => {
         const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
         res.json(users);
     } catch (err) {
-        console.error('Error fetching users:', err);
+        log.error('Error fetching users:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
     }
 });
@@ -136,7 +137,7 @@ router.post('/users', requireAdmin, async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Error creating user:', err);
+        log.error('Error creating user:', err);
         res.status(500).json({ error: 'Fehler beim Anlegen des Benutzers' });
     }
 });
@@ -171,7 +172,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         }
         res.json({ success: true, user: { id: userId, username: user.username, role: newRole } });
     } catch (err) {
-        console.error('Error updating user:', err);
+        log.error('Error updating user:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Benutzers' });
     }
 });
@@ -200,7 +201,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
         res.json({ success: true });
     } catch (err) {
-        console.error('Error deleting user:', err);
+        log.error('Error deleting user:', err);
         res.status(500).json({ error: 'Fehler beim Löschen des Benutzers' });
     }
 });
@@ -252,7 +253,7 @@ router.get('/users/:id/stats', requireAuth, (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Error fetching user stats:', err);
+        log.error('Error fetching user stats:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Benutzer-Statistiken' });
     }
 });

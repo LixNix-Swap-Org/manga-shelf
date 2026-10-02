@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const log = require('../utils/logger').child('stats');
 
 router.get('/stats', requireAuth, (req, res) => {
     try {
@@ -149,7 +150,7 @@ router.get('/stats', requireAuth, (req, res) => {
             top_series: topSeries
         });
     } catch (err) {
-        console.error('Error calculating stats:', err);
+        log.error('Error calculating stats:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Statistiken' });
     }
 });
@@ -170,7 +171,7 @@ router.put('/stats/settings', requireAdmin, (req, res) => {
         }
         res.json({ success: true });
     } catch (e) {
-        console.error('Error saving stats settings:', e);
+        log.error('Error saving stats settings:', e);
         res.status(500).json({ error: 'Fehler beim Speichern der Einstellungen' });
     }
 });

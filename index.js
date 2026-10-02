@@ -30,6 +30,7 @@ const backupsRoutes = require('./routes/backups');
 const statsRoutes = require('./routes/stats');
 const radarRoutes = require('./routes/radar');
 const lookupRoutes = require('./routes/lookup');
+const log = require('./utils/logger').child('app');
 
 const app = express();
 
@@ -39,6 +40,20 @@ app.set('trust proxy', true);
 
 // Enable Gzip/Brotli response compression for blazing fast API responses
 app.use(compression());
+
+// Access log for the API: debug level (set LOG_LEVEL=debug), slow requests are always warned about.
+// Only method, path (no query string) and status are recorded - never bodies, cookies or user data.
+const accessLog = log.child('http');
+app.use('/api', (req, res, next) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+        const ms = Math.round(Number(process.hrtime.bigint() - start) / 1e6);
+        const ctx = { method: req.method, path: req.originalUrl.split('?')[0], status: res.statusCode, ms };
+        if (ms > 2000) accessLog.warn('Slow request', ctx);
+        else accessLog.debug('request', ctx);
+    });
+    next();
+});
 
 app.use(express.json());
 // Express 5 leaves req.body undefined for requests without a JSON body (Express 4 gave {}).
@@ -148,7 +163,7 @@ app.use((err, req, res, next) => {
     const status = isUpload ? 400 : (err.status >= 400 && err.status < 600 ? err.status : 500);
     // Client errors (bad JSON, rejected upload, ...) keep their message; server errors stay generic.
     const message = status < 500 ? err.message : 'Interner Serverfehler';
-    if (status >= 500) console.error('Unhandled error:', err);
+    if (status >= 500) log.error('Unhandled error:', err);
     if (req.path.startsWith('/api')) return res.status(status).json({ error: message });
     res.status(status).type('text/plain').send(message);
 });
@@ -171,9 +186,9 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
         };
         server = https.createServer(sslOptions, app);
         isNativeHttps = true;
-        console.log(`[SSL] Native HTTPS enabled using certificate from ${SSL_CERT_PATH}`);
+        log.info(`[SSL] Native HTTPS enabled using certificate from ${SSL_CERT_PATH}`);
     } catch (e) {
-        console.error('[SSL] Failed to load SSL certificates, falling back to HTTP:', e.message);
+        log.error('[SSL] Failed to load SSL certificates, falling back to HTTP:', e.message);
         server = http.createServer(app);
     }
 } else {
@@ -198,7 +213,7 @@ server.listen(PORT, '0.0.0.0', () => {
 
 // Graceful Shutdown
 const shutdown = () => {
-    console.log('Shutting down...');
+    log.info('Shutting down...');
     server.close(() => {
         closeDb();
         process.exit(0);
@@ -206,10 +221,10 @@ const shutdown = () => {
 };
 // Last-resort safety nets: log and shut down in a controlled way instead of crashing mid-write
 process.on('unhandledRejection', (reason) => {
-    console.error('[Process] Unhandled promise rejection:', reason);
+    log.error('[Process] Unhandled promise rejection:', reason);
 });
 process.on('uncaughtException', (err) => {
-    console.error('[Process] Uncaught exception:', err);
+    log.error('[Process] Uncaught exception:', err);
     shutdown();
     setTimeout(() => process.exit(1), 5000).unref();
 });

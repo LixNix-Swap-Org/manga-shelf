@@ -5,6 +5,7 @@ const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
 const { lookupVolumeMetadata } = require('../mangaPassion');
+const log = require('../utils/logger').child('volumes');
 
 const parsePrice = (val) => {
     if (val === null || val === undefined || val === '') return null;
@@ -105,7 +106,7 @@ router.post('/volumes', requireEditor, (req, res) => {
 
         res.json({ success: true, id: newVolumeId });
     } catch (err) {
-        console.error('Error adding volume:', err);
+        log.error('Error adding volume:', err);
         res.status(500).json({ error: 'Fehler beim Hinzufügen des Bands' });
     }
 });
@@ -159,7 +160,7 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Error batch adding volumes:', err);
+        log.error('Error batch adding volumes:', err);
         res.status(500).json({ error: 'Fehler beim Hinzufügen mehrerer Bände' });
     }
 });
@@ -224,7 +225,7 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Error updating volume:', err);
+        log.error('Error updating volume:', err);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Bands' });
     }
 });
@@ -245,7 +246,7 @@ router.delete('/volumes/:id', requireEditor, (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        console.error('Error deleting volume:', err);
+        log.error('Error deleting volume:', err);
         res.status(500).json({ error: 'Fehler beim Löschen des Bands' });
     }
 });
@@ -290,7 +291,7 @@ router.post('/volumes/:id/read', requireEditor, (req, res) => {
 
         res.json({ success: true, is_read: isRead, read_by: readBy, read_users: readRows });
     } catch (e) {
-        console.error('Error updating read status:', e);
+        log.error('Error updating read status:', e);
         res.status(500).json({ error: 'Fehler beim Aktualisieren des Lesestatus' });
     }
 });
@@ -330,7 +331,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
 
         res.json({ success: true, count: targetVols.length });
     } catch (e) {
-        console.error('Error batch updating read status:', e);
+        log.error('Error batch updating read status:', e);
         res.status(500).json({ error: 'Fehler beim Batch-Lesestatus' });
     }
 });
@@ -364,7 +365,7 @@ router.get('/volumes/lookup', requireAuth, async (req, res) => {
 
         res.json(result);
     } catch (err) {
-        console.error('Volume metadata lookup error:', err);
+        log.error('Volume metadata lookup error:', err);
         res.status(500).json({ error: 'Fehler beim Abrufen der Band-Metadaten: ' + err.message });
     }
 });

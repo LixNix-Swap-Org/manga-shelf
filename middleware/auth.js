@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { db } = require('../db');
+const log = require('../utils/logger').child('auth');
 
 // Secure, persistent JWT secret. An explicit JWT_SECRET is only accepted if it is long enough and not a
 // well-known placeholder from the repo; otherwise a random secret is generated and stored in app_settings.
@@ -13,7 +14,7 @@ function resolveJwtSecret() {
         if (fromEnv.length >= MIN_SECRET_LENGTH && !PLACEHOLDER_SECRET.test(fromEnv)) {
             return fromEnv;
         }
-        console.warn(`[Auth] JWT_SECRET ist zu kurz (< ${MIN_SECRET_LENGTH} Zeichen) oder ein Platzhalter und wird ignoriert. Es wird ein zufälliges Secret aus der Datenbank verwendet.`);
+        log.warn(`[Auth] JWT_SECRET ist zu kurz (< ${MIN_SECRET_LENGTH} Zeichen) oder ein Platzhalter und wird ignoriert. Es wird ein zufälliges Secret aus der Datenbank verwendet.`);
     }
     // No silent per-process fallback: if the DB is unusable the app must not start with a throwaway secret.
     const row = db.prepare("SELECT value FROM app_settings WHERE key = 'jwt_secret'").get();
@@ -58,7 +59,7 @@ const requireAuth = (req, res, next) => {
     try {
         user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(decoded.id);
     } catch (e) {
-        console.error('[Auth] User lookup failed:', e);
+        log.error('[Auth] User lookup failed:', e);
         return res.status(500).json({ error: 'Authentifizierung fehlgeschlagen' });
     }
     if (!user) return res.status(401).json({ error: 'Invalid token' });

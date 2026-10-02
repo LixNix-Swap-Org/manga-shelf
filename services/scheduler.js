@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const { db, dataDir, uploadsDir } = require('../db');
+const log = require('../utils/logger').child('scheduler');
 
 const backupsDir = path.join(dataDir, 'backups');
 if (!fs.existsSync(backupsDir)) {
@@ -30,7 +31,7 @@ function pruneBackups(maxSnapshots = 7) {
             }
         }
     } catch (e) {
-        console.warn('Pruning old backups failed:', e);
+        log.warn('Pruning old backups failed:', e);
     }
 }
 
@@ -41,7 +42,7 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup') {
     // Flush WAL checkpoint to ensure manga.db is fully consistent on disk
     try {
         db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-    } catch (e) { console.warn('WAL checkpoint before backup failed (snapshot may miss recent writes):', e.message); }
+    } catch (e) { log.warn('WAL checkpoint before backup failed (snapshot may miss recent writes):', e.message); }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${prefix}-${timestamp}.zip`;
@@ -84,22 +85,22 @@ function initScheduler() {
             const todayStr = new Date().toISOString().slice(0, 10);
             const existing = fs.readdirSync(backupsDir).filter(f => f.includes(todayStr));
             if (existing.length === 0) {
-                console.log('[Auto-Backup] Creating daily automatic manga shelf backup snapshot...');
+                log.info('[Auto-Backup] Creating daily automatic manga shelf backup snapshot...');
                 await createBackupSnapshot('daily-auto');
-                console.log('[Auto-Backup] Daily automatic backup completed successfully.');
+                log.info('[Auto-Backup] Daily automatic backup completed successfully.');
             }
         } catch (e) {
-            console.warn('[Auto-Backup] Initial daily backup check failed:', e.message);
+            log.warn('[Auto-Backup] Initial daily backup check failed:', e.message);
         }
     }, 10000);
 
     setInterval(async () => {
         try {
-            console.log('[Auto-Backup] Running scheduled daily backup snapshot...');
+            log.info('[Auto-Backup] Running scheduled daily backup snapshot...');
             await createBackupSnapshot('daily-auto');
-            console.log('[Auto-Backup] Scheduled daily backup completed.');
+            log.info('[Auto-Backup] Scheduled daily backup completed.');
         } catch (e) {
-            console.error('[Auto-Backup] Scheduled backup failed:', e);
+            log.error('[Auto-Backup] Scheduled backup failed:', e);
         }
     }, 24 * 60 * 60 * 1000);
 }

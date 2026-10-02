@@ -10,6 +10,7 @@ const { fetchRemoteImage } = require('../utils/safeFetch');
 const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
+const log = require('../utils/logger').child('lookup');
 
 // AniList GraphQL Search Helper
 function searchAniList(queryTerm) {
@@ -128,7 +129,7 @@ router.get('/lookup/manga', requireAuth, async (req, res) => {
         try {
             mpResults = await searchMangaPassionForLookup(trimmed);
         } catch (mpErr) {
-            console.warn('Manga Passion lookup error:', mpErr.message);
+            log.warn('Manga Passion lookup error:', mpErr.message);
         }
 
         // 2. AniList als Ergänzung und Fallback
@@ -136,14 +137,14 @@ router.get('/lookup/manga', requireAuth, async (req, res) => {
         try {
             aniListResults = await searchAniList(trimmed);
         } catch (alErr) {
-            console.warn('AniList lookup error:', alErr.message);
+            log.warn('AniList lookup error:', alErr.message);
         }
 
         // Manga Passion hat Vorrang (deutsche Verlage, korrekte deutsche Bandzahlen & Cover)
         const combined = [...mpResults, ...aniListResults];
         res.json(combined);
     } catch (err) {
-        console.error('Lookup endpoint error:', err);
+        log.error('Lookup endpoint error:', err);
         res.status(500).json({ error: 'Interner Serverfehler beim Metadaten-Lookup' });
     }
 });
@@ -161,7 +162,7 @@ router.post('/upload-remote', requireEditor, async (req, res) => {
         await fs.promises.writeFile(path.join(uploadsDir, filename), buffer);
         res.json({ url: '/uploads/' + filename });
     } catch (e) {
-        console.warn('Remote upload failed:', e.message);
+        log.warn('Remote upload failed:', e.message);
         if (res.headersSent) return;
         res.status(400).json({ error: 'Bild konnte nicht geladen werden: ' + e.message });
     }
@@ -279,7 +280,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
             const dnbXml = await fetchTextHttps(dnbUrl, 6000);
             book = parseMarc21Xml(dnbXml, cleanIsbn, 'DNB (Deutsche Nationalbibliothek)');
         } catch (dnbErr) {
-            console.warn('[Lookup] DNB request failed or timed out:', dnbErr.message);
+            log.warn('[Lookup] DNB request failed or timed out:', dnbErr.message);
         }
 
         // Step 2: K10plus (GBV / SWB Verbundkatalog) SRU MARC21 Fallback
@@ -289,7 +290,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
                 const k10Xml = await fetchTextHttps(k10Url, 6000);
                 book = parseMarc21Xml(k10Xml, cleanIsbn, 'K10plus (Gemeinsamer Bibliotheksverbund)');
             } catch (k10Err) {
-                console.warn('[Lookup] K10plus request failed or timed out:', k10Err.message);
+                log.warn('[Lookup] K10plus request failed or timed out:', k10Err.message);
             }
         }
 
@@ -325,7 +326,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
                     };
                 }
             } catch (gbErr) {
-                console.warn('[Lookup] Google Books request failed:', gbErr.message);
+                log.warn('[Lookup] Google Books request failed:', gbErr.message);
             }
         }
 
@@ -369,7 +370,7 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
             matched_volume: matchedVolume
         });
     } catch (err) {
-        console.error('Error during ISBN lookup:', err);
+        log.error('Error during ISBN lookup:', err);
         res.status(500).json({ error: 'Fehler beim ISBN-Lookup' });
     }
 });

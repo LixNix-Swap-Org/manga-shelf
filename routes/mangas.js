@@ -9,6 +9,7 @@ const {
     batchImportGaps,
     autofillMangaVolumes
 } = require('../mangaPassion');
+const log = require('../utils/logger').child('mangas');
 
 // --- MANGA API ---
 // Series list with aggregates for the dashboard (also reused by the offline snapshot)
@@ -31,7 +32,7 @@ router.get('/mangas', requireAuth, (req, res) => {
     try {
         res.json(listMangas(req.user.id));
     } catch (err) {
-        console.error('Error fetching mangas:', err);
+        log.error('Error fetching mangas:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Mangas' });
     }
 });
@@ -93,7 +94,7 @@ router.post('/mangas', requireEditor, (req, res) => {
         );
         res.json({ success: true, id: Number(result.lastInsertRowid) });
     } catch (err) {
-        console.error('Error creating manga:', err);
+        log.error('Error creating manga:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Mangas: ' + err.message });
     }
 });
@@ -201,7 +202,7 @@ router.get('/mangas/:id', requireAuth, (req, res) => {
         }
         res.json(manga);
     } catch (err) {
-        console.error('Error fetching manga:', err);
+        log.error('Error fetching manga:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Mangas' });
     }
 });
@@ -219,7 +220,7 @@ router.get('/offline-snapshot', requireAuth, (req, res) => {
             details
         });
     } catch (err) {
-        console.error('Error building offline snapshot:', err);
+        log.error('Error building offline snapshot:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen der Offline-Kopie' });
     }
 });
@@ -270,7 +271,7 @@ router.put('/mangas/:id', requireEditor, (req, res) => {
         );
         res.json({ success: true });
     } catch (err) {
-        console.error('Error updating manga:', err);
+        log.error('Error updating manga:', err);
         res.status(500).json({ error: 'Fehler beim Speichern: ' + err.message });
     }
 });
@@ -288,7 +289,7 @@ router.delete('/mangas/:id', requireEditor, (req, res) => {
         if (!deleted) return res.status(404).json({ error: 'Manga nicht gefunden' });
         res.json({ success: true });
     } catch (err) {
-        console.error('Error deleting manga:', err);
+        log.error('Error deleting manga:', err);
         res.status(500).json({ error: 'Fehler beim Löschen des Mangas' });
     }
 });
@@ -303,7 +304,7 @@ router.get('/mangas/:id/gaps', requireAuth, async (req, res) => {
         const result = await reconcileMangaGaps(mangaId, { edition_id: editionId, force_refresh: forceRefresh });
         res.json(result);
     } catch (err) {
-        console.error('Manga gaps check error:', err);
+        log.error('Manga gaps check error:', err);
         res.status(500).json({ error: 'Fehler beim Abgleich der Lücken: ' + err.message });
     }
 });
@@ -325,7 +326,7 @@ router.post('/mangas/:id/sync-edition', requireEditor, async (req, res) => {
 
         res.json({ success: true, manga: updatedManga });
     } catch (err) {
-        console.error('Sync edition error:', err);
+        log.error('Sync edition error:', err);
         res.status(500).json({ error: 'Fehler beim Synchronisieren der Edition: ' + err.message });
     }
 });
@@ -343,7 +344,7 @@ router.post('/mangas/:id/batch-import-gaps', requireEditor, async (req, res) => 
         const result = await batchImportGaps(mangaId, volume_numbers, target_status || 'Fehlt', edition_id);
         res.json(result);
     } catch (err) {
-        console.error('Batch import gaps error:', err);
+        log.error('Batch import gaps error:', err);
         res.status(500).json({ error: 'Fehler beim Erfassen der Lücken: ' + err.message });
     }
 });
@@ -361,7 +362,7 @@ router.post('/mangas/:id/autofill-volumes', requireEditor, async (req, res) => {
 
         res.json(result);
     } catch (err) {
-        console.error('Batch autofill volumes error:', err);
+        log.error('Batch autofill volumes error:', err);
         res.status(500).json({ error: 'Fehler beim automatischen Ausfüllen der Bände: ' + err.message });
     }
 });

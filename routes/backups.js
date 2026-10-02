@@ -8,6 +8,14 @@ const { db, dataDir, uploadsDir, closeDb, initDb, validateDbFile, setRestoringSt
 const { requireAdmin } = require('../middleware/auth');
 const { uploadBackup } = require('../middleware/upload');
 const { backupsDir, createBackupSnapshot } = require('../services/scheduler');
+const log = require('../utils/logger').child('backup');
+
+/** A backup file that cannot be restored because its content is invalid (client error, HTTP 400). */
+function invalidBackup(message) {
+    const err = new Error(message);
+    err.status = 400;
+    return err;
+}
 
 /**
  * Reusable restore implementation from a file path or Buffer.
@@ -23,14 +31,14 @@ async function restoreFromZip(source) {
     try {
         zip = new AdmZip(source);
     } catch (err) {
-        throw new Error('Ungültiges ZIP-Archiv: ' + err.message);
+        throw invalidBackup('Ungültiges ZIP-Archiv: ' + err.message);
     }
 
     const entries = zip.getEntries();
     const dbEntry = entries.find(e => e.entryName === 'manga.db' || e.entryName.endsWith('/manga.db'));
 
     if (!dbEntry) {
-        throw new Error('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
+        throw invalidBackup('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
     }
 
     // 1. Extract the new database next to the live one and validate it BEFORE touching anything
@@ -119,7 +127,7 @@ async function restoreFromZip(source) {
                 }
                 initDb();
             } catch (rollbackErr) {
-                console.error('[Backup Restore] Rollback failed:', rollbackErr);
+                log.error('[Backup Restore] Rollback failed:', rollbackErr);
             }
             throw err;
         }
@@ -134,7 +142,7 @@ router.get('/backup', requireAdmin, (req, res) => {
         // Flush WAL checkpoint to disk before streaming
         try {
             db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-        } catch (e) { console.warn('WAL checkpoint before backup download failed:', e.message); }
+        } catch (e) { log.warn('WAL checkpoint before backup download failed:', e.message); }
 
         res.attachment('manga-shelf-backup.zip');
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -151,7 +159,7 @@ router.get('/backup', requireAdmin, (req, res) => {
 
         archive.finalize();
     } catch (err) {
-        console.error('Error generating backup stream:', err);
+        log.error('Error generating backup stream:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Backups' });
     }
 });
@@ -174,7 +182,7 @@ router.get('/backups', requireAdmin, (req, res) => {
 
         res.json({ backups: files });
     } catch (err) {
-        console.error('Error listing backups:', err);
+        log.error('Error listing backups:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Backups' });
     }
 });
@@ -185,7 +193,7 @@ router.post('/backups/create', requireAdmin, async (req, res) => {
         const snapshot = await createBackupSnapshot('manual');
         res.json({ success: true, snapshot });
     } catch (err) {
-        console.error('Error creating snapshot:', err);
+        log.error('Error creating snapshot:', err);
         res.status(500).json({ error: 'Fehler beim Erstellen des Snapshots: ' + err.message });
     }
 });
@@ -202,14 +210,14 @@ router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
 
         const result = await restoreFromZip(filePath);
 
-        console.log(`[Backup Restore] Restored snapshot ${filename} (${result.mangaCount} Mangas)`);
+        log.info(`[Backup Restore] Restored snapshot ${filename} (${result.mangaCount} Mangas)`);
         res.json({
             success: true,
             message: `Snapshot "${filename}" erfolgreich wiederhergestellt! (${result.mangaCount} Mangas, ${result.restoredImagesCount} Uploads)`,
             ...result
         });
     } catch (err) {
-        console.error('Error restoring snapshot:', err);
+        log.error('Error restoring snapshot:', err);
         res.status(500).json({ error: 'Fehler beim Wiederherstellen: ' + err.message });
     }
 });
@@ -260,8 +268,10 @@ const handleUploadedBackupRestore = async (req, res) => {
             ...result
         });
     } catch (err) {
-        console.error('[Backup Restore] Error:', err);
-        res.status(500).json({ error: 'Fehler beim Wiederherstellen des Backups: ' + err.message });
+        const status = err.status || 500;
+        if (status >= 500) log.error('[Backup Restore] Error:', err);
+        else log.warn('[Backup Restore] Rejected uploaded backup:', err.message);
+        res.status(status).json({ error: 'Fehler beim Wiederherstellen des Backups: ' + err.message });
     } finally {
         // Clean up temporary staging file to free disk space
         if (uploadedPath && fs.existsSync(uploadedPath)) {

@@ -520,7 +520,10 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und bis zu 400 Cover vorgeladen, damit der Service Worker sie cached.
    * `App.jsx`: Antwortet `/api/auth/me` nicht (Netz/Gateway weg) und es gibt einen gespeicherten Benutzer, läuft die App als `{ role: 'visitor', realRole, offline: true }` weiter (alle Bearbeiten-Buttons verschwinden; Einkaufslisten-Schnellkauf nutzt `realRole` und die vorhandene Offline-Warteschlange). Alle 30 s und beim `online`-Event wird erneut geprüft. Bei 401 und beim Logout wird alles gelöscht (`clearOfflineData`) – nie Daten nach dem Abmelden lesbar lassen.
    * Nicht offline verfügbar: Statistiken, Release-Radar, alles Schreibende.
-
+19. **Logging (`utils/logger.js`):**
+   * Backend-Code loggt ausschließlich über `const log = require('../utils/logger').child('name')` (`log.info/warn/error/debug(msg, ...args)`; ein `Error` als Argument wird mit Stack bzw. als `err`-Feld ausgegeben, ein Objekt als Kontextfelder). Kein neues `console.*` im Backend. `LOG_LEVEL` (debug|info|warn|error|silent) und `LOG_FORMAT` (text|json) per Umgebungsvariable; `debug` aktiviert das API-Zugriffs-Log, Anfragen > 2 s werden immer als Warnung geloggt.
+   * **Ausnahme:** Die Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1/2`, `Server is online and ready.`) bleiben bewusst rohes `console.log`: Das Pterodactyl-Egg erkennt „Server gestartet“ an genau diesen Zeichenketten.
+   * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500.
 ---
 
 ## 9. Deutsche Manga-Spezifika & APIs

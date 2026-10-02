@@ -116,6 +116,34 @@ test('restore rejects invalid archives and keeps the live database', async () =>
     assert.equal(after.body.length, before.body.length);
 });
 
+test('uploaded backups that are not valid archives are rejected with 400 and keep the live database', async () => {
+    const before = (await admin('GET', '/mangas')).body.length;
+    const upload = async (name, data) => {
+        const fd = new FormData();
+        fd.append('backup', new Blob([data], { type: 'application/zip' }), name);
+        const res = await fetch(ctx.base + '/backup/restore', { method: 'POST', headers: { Cookie: admin.cookie }, body: fd });
+        return { status: res.status, body: await res.json() };
+    };
+
+    const notZip = await upload('x.zip', Buffer.from('definitely not a zip'));
+    assert.equal(notZip.status, 400);
+    assert.match(notZip.body.error, /Ungültiges ZIP-Archiv/);
+
+    const noDb = new AdmZip();
+    noDb.addFile('readme.txt', Buffer.from('no database in here'));
+    const missing = await upload('nodb.zip', noDb.toBuffer());
+    assert.equal(missing.status, 400);
+    assert.match(missing.body.error, /Keine manga\.db/);
+
+    const badDb = new AdmZip();
+    badDb.addFile('manga.db', Buffer.from('this is not a sqlite database'));
+    const garbage = await upload('bad.zip', badDb.toBuffer());
+    assert.equal(garbage.status, 400);
+    assert.match(garbage.body.error, /Ungültige Backup-Datenbank/);
+
+    assert.equal((await admin('GET', '/mangas')).body.length, before);
+});
+
 test('snapshot create + restore round-trip', async () => {
     const created = await admin('POST', '/backups/create');
     assert.equal(created.status, 200);

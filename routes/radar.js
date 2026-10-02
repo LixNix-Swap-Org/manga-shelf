@@ -5,6 +5,7 @@ const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
 const { searchMangaPassionEditions } = require('../mangaPassion');
+const log = require('../utils/logger').child('radar');
 
 // --- SHOPPING LIST / WISHLIST API ---
 router.get('/shopping-list', requireAuth, (req, res) => {
@@ -70,7 +71,7 @@ router.get('/shopping-list', requireAuth, (req, res) => {
             items: missingVols
         });
     } catch (err) {
-        console.error('Error fetching shopping list:', err);
+        log.error('Error fetching shopping list:', err);
         res.status(500).json({ error: 'Fehler beim Laden der Einkaufsliste' });
     }
 });
@@ -235,7 +236,7 @@ router.get('/release-radar', requireAuth, (req, res) => {
             publishers
         });
     } catch (err) {
-        console.error('Error fetching release radar:', err);
+        log.error('Error fetching release radar:', err);
         res.status(500).json({ error: 'Fehler beim Laden des Release-Radars' });
     }
 });
@@ -258,7 +259,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
         if (!forceRefresh) {
             try {
                 cachedRow = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
-            } catch (e) { console.warn('Release radar cache read failed:', e.message); }
+            } catch (e) { log.warn('Release radar cache read failed:', e.message); }
         }
 
         let rawItems = null;
@@ -267,7 +268,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
         if (cachedRow && cachedRow.json_data && (Date.now() - cachedRow.created_at < CACHE_TTL_MS)) {
             try {
                 rawItems = JSON.parse(cachedRow.json_data);
-            } catch (e) { console.warn('Release radar cache is corrupt:', e.message); }
+            } catch (e) { log.warn('Release radar cache is corrupt:', e.message); }
         }
 
         if (!rawItems) {
@@ -297,7 +298,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
                     if (allVolumes.length >= totalItems || members.length < 100) break;
                     page++;
                 } catch (fetchErr) {
-                    console.warn(`[Manga Passion Releases] Error on page ${page}:`, fetchErr.message);
+                    log.warn(`[Manga Passion Releases] Error on page ${page}:`, fetchErr.message);
                     if (allVolumes.length === 0) throw fetchErr;
                     break;
                 }
@@ -335,7 +336,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
                     ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
                 `).run(cacheKey, JSON.stringify(rawItems), Date.now());
             } catch (cacheErr) {
-                console.warn('Cache write failed:', cacheErr);
+                log.warn('Cache write failed:', cacheErr);
             }
         }
 
@@ -419,7 +420,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
             items: enrichedItems
         });
     } catch (err) {
-        console.error('Manga Passion releases error:', err);
+        log.error('Manga Passion releases error:', err);
         res.status(500).json({ error: 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen: ' + err.message });
     }
 });
@@ -481,7 +482,7 @@ router.post('/manga-passion/import', requireEditor, (req, res) => {
             status: effStatus
         });
     } catch (err) {
-        console.error('Import error:', err);
+        log.error('Import error:', err);
         res.status(500).json({ error: 'Fehler beim Übernehmen des Bands: ' + err.message });
     }
 });
@@ -498,7 +499,7 @@ router.get('/manga-passion/editions', requireAuth, async (req, res) => {
         const result = await searchMangaPassionEditions(title, publisher, totalVolumes);
         res.json(result);
     } catch (err) {
-        console.error('Manga Passion edition search error:', err);
+        log.error('Manga Passion edition search error:', err);
         res.status(500).json({ error: 'Fehler bei der Editionssuche: ' + err.message });
     }
 });

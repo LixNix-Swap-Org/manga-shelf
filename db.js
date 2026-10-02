@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const log = require('./utils/logger').child('db');
 
 // DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
 const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
@@ -129,10 +130,10 @@ function runSequentialMigrations(database) {
                 mig.up(database);
                 database.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(mig.version, mig.name);
                 database.exec('COMMIT;');
-                console.log(`[Database Migration] Applied migration v${mig.version}: ${mig.name}`);
+                log.info(`[Database Migration] Applied migration v${mig.version}: ${mig.name}`);
             } catch (err) {
                 database.exec('ROLLBACK;');
-                console.error(`[Database Migration] Failed migration v${mig.version} (${mig.name}):`, err);
+                log.error(`[Database Migration] Failed migration v${mig.version} (${mig.name}):`, err);
                 throw err;
             }
         }
@@ -169,7 +170,9 @@ function validateDbFile(file) {
         const admins = probe.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin'").get();
         if (!admins || admins.count < 1) throw new Error('Die Datenbank enthält keinen Administrator');
     } catch (err) {
-        throw new Error('Ungültige Backup-Datenbank: ' + err.message);
+        const invalid = new Error('Ungültige Backup-Datenbank: ' + err.message);
+        invalid.status = 400; // the uploaded file is at fault, not the server
+        throw invalid;
     } finally {
         try { probe && probe.close(); } catch (e) { /* ignore */ }
     }
@@ -181,7 +184,7 @@ function initDb() {
             currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
             currentDb.close();
         } catch (e) {
-            console.error('Error closing current db:', e);
+            log.error('Error closing current db:', e);
         }
     }
 
@@ -266,13 +269,13 @@ function initDb() {
 
     try {
         currentDb.exec("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('collection_start_date', '2021-04-09');");
-    } catch (e) { console.warn('Seeding collection_start_date failed:', e.message); }
+    } catch (e) { log.warn('Seeding collection_start_date failed:', e.message); }
 
     // Run Sequential Migrations Registry
     try {
         runSequentialMigrations(currentDb);
     } catch (migErr) {
-        console.error('[Database Migration] Fatal error running migrations:', migErr);
+        log.error('[Database Migration] Fatal error running migrations:', migErr);
     }
 
     return currentDb;
@@ -311,7 +314,7 @@ function runTransaction(fn) {
     } catch (err) {
         try {
             currentDb.exec('ROLLBACK;');
-        } catch (e) { console.warn('ROLLBACK failed:', e.message); }
+        } catch (e) { log.warn('ROLLBACK failed:', e.message); }
         throw err;
     }
 }
@@ -320,7 +323,7 @@ function closeDb() {
     if (currentDb) {
         try {
             currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-        } catch (e) { console.warn('WAL checkpoint before close failed:', e.message); }
+        } catch (e) { log.warn('WAL checkpoint before close failed:', e.message); }
         try {
             currentDb.close();
         } catch (e) {}
