@@ -658,7 +658,7 @@ export default function MangaDetail({ user }) {
     return volumes.filter(v => {
       const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
       const isReadByTarget = v.read_users 
-        ? v.read_users.some(u => String(u.user_id) === String(effUserId))
+        ? v.read_users.some(u => String(u.user_id ?? u.id) === String(effUserId))
         : (Boolean(v.is_read) && String(effUserId) === String(user?.id));
 
       if (volumeFilter === 'Vorhanden' && v.status !== 'Vorhanden') return false;

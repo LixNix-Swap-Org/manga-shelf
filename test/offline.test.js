@@ -57,3 +57,15 @@ test('offline-snapshot mirrors /mangas and /mangas/:id for the requesting user',
     assert.equal(edSnap.details[a].volumes.filter(v => v.is_read).length, 1);
     assert.equal(visSnap.details[a].volumes.filter(v => v.is_read).length, 0);
 });
+
+test('read_users entries expose the reader under both id and user_id (same shape as POST /volumes/:id/read)', async () => {
+    const m = (await editor('POST', '/mangas', { title: 'Reader Shape' })).body.id;
+    await editor('POST', '/volumes/batch', { manga_id: m, from: 1, to: 1, status: 'Vorhanden' });
+    const vol = (await editor('GET', `/mangas/${m}`)).body.volumes[0];
+    const toggled = await editor('POST', `/volumes/${vol.id}/read`, { read: true });
+    assert.equal(toggled.status, 200);
+    const reader = (await editor('GET', `/mangas/${m}`)).body.volumes[0].read_users[0];
+    assert.equal(reader.id, reader.user_id);
+    assert.equal(reader.username, 'ed');
+    assert.equal(toggled.body.read_users[0].user_id, reader.user_id);
+});

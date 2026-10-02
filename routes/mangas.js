@@ -140,7 +140,8 @@ function loadMangaDetail(mangaId, userId) {
     const readMap = {};
     for (const r of reads) {
         if (!readMap[r.volume_id]) readMap[r.volume_id] = [];
-        readMap[r.volume_id].push({ id: r.user_id, username: r.username });
+        // both keys: POST /volumes/:id/read answers with user_id, older clients read id
+        readMap[r.volume_id].push({ id: r.user_id, user_id: r.user_id, username: r.username });
     }
 
     let total_value = 0;
