@@ -91,31 +91,30 @@ async function main() {
   try {
     // Falls Release bereits existiert, überschreiben / anpassen
     const releaseTitle = `Manga Shelf ${tag}`;
-    const releaseNotes = `### Manga Shelf ${tag} 🚀 – Architecture & Production Hardening
+    const releaseNotes = `### Manga Shelf ${tag} 🚀 – Barcode Scanner, Multi-Tier DACH Lookup & Frontend Modularization
 
 #### Highlights & Neuerungen:
-- 🏗️ **Backend-Modularisierung:**
-  - Die monolithische \`index.js\` wurde in saubere Express-Router und Services aufgeteilt (\`routes/auth.js\`, \`routes/mangas.js\`, \`routes/volumes.js\`, \`routes/backups.js\`, \`routes/stats.js\`, \`routes/radar.js\`, \`routes/lookup.js\`, \`services/scheduler.js\`, \`middleware/\`, \`utils/\`).
-  - Schlanker Entrypoint mit vollständiger Abwärtskompatibilität und Erhaltung aller Pterodactyl Wings Startup-Hooks.
-- ⚡ **Datenbank-Performance & Migrationen:**
-  - Explizite Indizes für alle Fremdschlüssel und häufig gefilterte Spalten (\`manga_id\`, \`status\`, \`user_id\`, \`volume_id\`, \`manga_passion_id\`).
-  - Neue transaktionssichere, sequentielle Migrations-Registry (\`schema_migrations\`).
-  - SQLite WAL-Checkpoint vor Snapshots, Exporten und beim Herunterfahren.
-- 🛡️ **Memory-DoS Schutz bei Backups:**
-  - Umstellung von \`memoryStorage()\` auf \`diskStorage()\` mit Staging in \`data/temp/\`.
-  - Verhindert OOM-Crashes bei Uploads großer Backup-Archive (bis zu 500 MB) in ressourcenbeschränkten Containern.
-- 🌐 **Manga Passion API Resilienz:**
-  - Alle externen API-Aufrufe mit kontrolliertem Timeout (\`AbortSignal.timeout(8000)\`) abgesichert.
-  - Graceful Degraded-Mode bei externen Ausfällen/Timeouts ohne UI-Blockierung.
-- 🔒 **Security Hardening & Platform-Agnostic:**
-  - Hardcoded IPs und Test-Credentials bereinigt, vollständige \`.env.example\` bereitgestellt.
-  - Absolute Pfade in Testskripten durch plattformunabhängige Pfade ersetzt.
-- 🐳 **Containerisierung & CI/CD:**
-  - Multi-Stage \`Dockerfile\` und fertiges \`docker-compose.yml\` mit persistentem Data-Volume.
-  - GitHub Actions Workflow (\`.github/workflows/release.yml\`) für automatisierte Releases.
+- 📷 **HTTP-kompatibler Barcode-Scanner:**
+  - Barcode- und ISBN-Erkennung via nativem HTML5 \`capture="environment"\` und Dual-Engine (native \`BarcodeDetector\`-API + dynamischer \`ZXing\`-Fallback).
+  - Funktioniert zuverlässig auf unverschlüsselten HTTP-Deployments (z. B. Pterodactyl Port 3000), ohne von gesperrten WebRTC-Kamera-Streams blockiert zu werden.
+  - Voll integriert in die Hauptsuche, in den Band-Editor und in die Einkaufsliste (Laden-Modus mit Duplikatsprüfung).
+- 🌐 **Resiliente Multi-Tier DACH-Metadaten-Pipeline:**
+  - Automatische Fallback-Kette für ISBNs: Deutsche Nationalbibliothek (DNB SRU MARC21) ➔ K10plus (GBV / SWB Verbundkatalog MARC21) ➔ Google Books API.
+- 📚 **Dynamische Buchrückendicke im 3D-Regal:**
+  - Realistische Buchrückendicken basierend auf der tatsächlichen Seitenzahl (z. B. dickere Buchrücken bei 380+ Seiten Doppelbänden).
+- ⌨️ **Desktop Tastatur-Shortcuts:**
+  - Blitzschnelle Navigation im Regal via \`J\` / \`K\` (Band wechseln mit leuchtendem Fokus-Ring), \`Leertaste\` (Lesestatus umschalten) und \`E\` (Band-Editor öffnen).
+- 📳 **Haptisches Feedback:**
+  - Angenehmes haptisches Vibrations-Feedback (\`navigator.vibrate\`) beim Abhaken von Bänden im Laden und beim erfolgreichen Barcode-Scan.
+- ⚛️ **Frontend-Modularisierung:**
+  - Aufteilung der ehemals monolithischen Dateien (\`Dashboard.jsx\` & \`MangaDetail.jsx\`) in 12 modulare, wartbare Komponenten im neuen Ordner \`frontend/src/components/\`.
+- 🔒 **SSRF-Schutz & Sicherheits-Härtung:**
+  - Neuer DNS- und IP-Filter (\`utils/security.js\`) sperrt Zugriffe auf private Netze, Localhost und Cloud-Metadata beim Cover-Import per URL.
+- ⚡ **Atomare Transaktionen & Backup-Restore Lock:**
+  - Einführung von \`runTransaction\` mit \`BEGIN IMMEDIATE\` in \`db.js\` für atomare Band- und Zähler-Updates sowie Sperrung paralleler DB-Zugriffe (HTTP 503) während eines Backup-Restores.
 
 #### Deployment-Hinweis:
-Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und führen Sie \`npm install\` aus.`;
+Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.`;
 
     const notesFile = path.join(__dirname, 'RELEASE_NOTES.tmp');
     fs.writeFileSync(notesFile, releaseNotes, 'utf8');
