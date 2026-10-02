@@ -91,40 +91,15 @@ async function main() {
   try {
     // Falls Release bereits existiert, überschreiben / anpassen
     const releaseTitle = `Manga Shelf ${tag}`;
-    const releaseNotes = `### Manga Shelf ${tag} 🚀 – Performance-Turbo, Route-Splitting & Bugfix-Release
-
-#### ⚡ Highlights & Performance-Optimierungen:
-- 📦 **Route-basiertes Code-Splitting (React.lazy & Suspense):**
-  - Aufteilung der Web-App in dynamisch nachladbare Chunks für \`Login\`, \`Setup\`, \`Dashboard\` und \`MangaDetail\`.
-  - Reduzierung des initialen JavaScript-Downloads um über **60 %** (Login-Chunk nur noch 3.3 kB).
-- ⏱️ **Parallele Status-Prüfungen:**
-  - Setup-Status und Authentifizierung werden beim App-Start parallel via \`Promise.all()\` geladen, wodurch Latenz-Waterfalls entfallen.
-- 🧠 **Optimierte Filter- & Statistik-Memoization (\`useMemo\`):**
-  - Verlagsfilter, Suchergebnisse und Sammlungsstatistiken berechnen sich nur noch bei Datenänderungen neu, was das Tippen und Scrollen spürbar beschleunigt.
-- 📅 **Bedarfsgesteuertes Laden des Erscheinungskalenders:**
-  - Der monatliche Manga Passion Neuheiten-Kalender wird erst dann angefragt, wenn die Ansicht tatsächlich geöffnet wird.
-
-#### 🐛 Bugfixes & Resilienz:
-- 📚 **Batch-Lesestatus Fehler behoben:**
-  - Behebung eines \`ReferenceError\` (\`setBatchReadUpTo is not defined\`) beim Klick auf *„Bis Band X als gelesen“*.
-- 🎯 **Release-Radar Filter & Monatsnavigation gefixt:**
-  - Korrektur der Parameterübergabe an die Radar-Komponente zur Vermeidung von Fehlern beim Umschalten.
-- 🎨 **Kein ungestylter White-Flash mehr:**
-  - Eleganter, dunkler Lade-Spinner (\`bg-slate-950 text-brand-400\`) beim ersten Seitenstart.
-
-#### 🧹 Wartung & Qualität:
-- 🧹 Über 186 MB temporäre Altlasten aus dem Workspace bereinigt.
-- 🧼 ESLint Flat Config mit 0 Fehlern und 0 Warnungen über die gesamte Codebase.
-- 🧪 Alle 4 Testsuiten (Unit-, E2E-, Deep- und Performance-Tests) laufen zu 100 % erfolgreich durch.
-
-#### Deployment-Hinweis:
-Laden Sie einfach die beigefügte \`pterodactyl-manga-shelf.zip\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.`;
-
+    // Notes come from the merged PRs / commits since the previous tag; only the deploy hint is static.
+    const deployHint = 'Laden Sie einfach die beigefügte `pterodactyl-manga-shelf.zip` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.';
     const notesFile = path.join(__dirname, 'RELEASE_NOTES.tmp');
-    fs.writeFileSync(notesFile, releaseNotes, 'utf8');
+    fs.writeFileSync(notesFile, `### Deployment-Hinweis
+${deployHint}
+`, 'utf8');
 
     try {
-      run(`gh release create ${tag} "${zipPath}" --title "${releaseTitle}" --notes-file "${notesFile}"`);
+      run(`gh release create ${tag} "${zipPath}" --title "${releaseTitle}" --notes-file "${notesFile}" --generate-notes`);
     } catch (createErr) {
       console.log('Release existiert evtl. bereits, versuche Upload via `gh release upload`...');
       run(`gh release upload ${tag} "${zipPath}" --clobber`);
