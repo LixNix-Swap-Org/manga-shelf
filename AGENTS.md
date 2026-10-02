@@ -74,7 +74,6 @@ manga-shelf/
 │   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
 │   ├── staticHeaders.js       # Cache-Header für `index.html`, `sw.js`, `manifest.json`
 │   ├── volumeType.js          # `inferVolumeType` / `classifyOfficialVolume` (Backend)
-│   ├── security.js            # `isPrivateIp` / `assertSafeRemoteUrl` – von nichts eingebunden (Altlast, siehe Gotcha 7)
 │   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes)
 ├── test/                      # node:test-Tests (`npm test` = `test/*.test.js`) & Deep-E2E
 │   ├── helpers.js             # Startet die App gegen eine temporäre DATA_DIR
@@ -401,57 +400,17 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `frontend/src/components/detail/VolumeEditModal.jsx`: Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
    * `frontend/src/components/detail/VolumeGridView.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
 
-### 🔹 Fall K: Intelligente Lücken-Erkennung & Manga Passion Editions-Abgleich
-1. **Problem & Hintergrund:**
-   * Bei Importen aus internationalen Datenbanken (AniList) werden häufig japanische Tankōbon-Gesamtbandzahlen hinterlegt (z. B. 20th Century Boys: 22 japanische Bände vs. 11 deutsche Doppelbände der Ultimative Edition; Evangelion: 14 vs. 7 Perfect Edition Bände). Dadurch entstanden früher falsche Phantom-Lücken (z. B. Band 12–22).
-2. **Backend Service (`mangaPassion.js`) & API (`routes/`):**
-   * `mangaPassion.js` gleicht die Reihe intelligent mit der offiziellen deutschen Manga Passion API (`https://api.manga-passion.de`) ab (Caching für 12h in `manga_passion_cache`).
-   * `GET /api/mangas/:id/gaps`: Liefert verifizierte echte Lücken mit offiziellen deutschen Preisen, Veröffentlichungsdaten und Cover-Bildern. Erkennt Diskrepanzen zwischen der DB-Gesamtzahl und der deutschen Editions-Bandzahl.
-   * `POST /api/mangas/:id/sync-edition`: 1-Klick-Synchronisation der Gesamtbandzahl und Metadaten auf die offizielle deutsche Edition.
-   * `POST /api/mangas/:id/batch-import-gaps`: Überträgt alle erkannten Lücken als `Fehlt` mit offiziellen Preisen und Covern direkt in die Einkaufsliste / Sammlung.
-3. **Frontend UI (`frontend/src/MangaDetail.jsx`, `components/detail/VolumeFilterBar.jsx`, `GapFillModal.jsx`, `MpEditionModal.jsx`):**
-   * **Diskrepanz-Warnung:** Weist auffällig darauf hin, wenn AniList-Zahlen von der deutschen Ausgabe abweichen, und bietet 1-Klick-Anpassung.
-   * **Regal Ghost-Spines:** Zeigt Lücken mit transluzentem Original-Cover, Bandnummer und offiziellem Preis in Euro an.
-   * **Lücken-Füll-Modal:** Ermöglicht die Vorschau des offiziellen deutschen Covers, Preises und Datums vor der Übernahme in die Sammlung.
-   * **Editions-Manager:** Modal zum manuellen Durchsuchen und Auswählen von alternativen deutschen Ausgaben (z. B. Standard vs. Massiv vs. Deluxe).
-
-### 🔹 Fall L: Metadaten- & Erscheinungsdaten-Auto-Fill pro Band & Reihe (Manga Passion & DNB)
-1. **Zweck & Nutzen:**
-   * Automatische Vervollständigung von Band-Metadaten wie Erscheinungsdatum (Radar `release_date`), Erscheinungsjahr (`release_year`), Seitenzahl (`pages`), ISBN-13 (`isbn`), Preis (`price`) und Verlag (`publisher`).
-   * Verhindert manuelle Tipparbeit und Recherche im Browser.
-2. **Backend Service (`mangaPassion.js`) & API (`routes/`):**
-   * `lookupVolumeMetadata(mangaId, volumeNumber, options)`: Ermittelt die passende offizielle deutsche Manga Passion Edition (mit Paginierung für >100 Bände) und ruft Band-Details (`isbn13`, `date`, `pages`, `price`) ab. Fallback auf DNB MARC21 XML.
-   * `autofillMangaVolumes(mangaId, options)`: Reichert in einer atomaren SQLite-Transaktion alle Bände einer Reihe an, bei denen Felder noch leer sind.
-   * Endpunkte:
-     * `GET /api/volumes/lookup?manga_id=...&volume_number=...`: Liefert Metadaten für das Bearbeiten-Modal.
-     * `POST /api/mangas/:id/autofill-volumes`: Batch-Anreicherung aller Bände einer Reihe.
-3. **Frontend UI (`components/detail/VolumeEditModal.jsx`, `MpEditionModal.jsx`):**
-   * **Band-Bearbeiten-Modal:** Auffälliges Banner `✨ Automatisch ausfüllen (Manga Passion)` sowie Schnell-Link `Auto-Ausfüllen` direkt neben dem Label "Erscheinungsdatum (Radar)". Füllt fehlende Felder aus, ohne bereits manuell gepflegte Daten zu überschreiben.
-   * **Editions-Manager:** Button `⚡ Alle Bände mit Erscheinungsdaten anreichern` für 1-Klick-Batch-Vervollständigung der gesamten Serie.
-
-### 🔹 Fall M: Schuber- & Boxset-Bilderdownload & Auto-Matching (Manga Passion)
-1. **Problem & Hintergrund:**
-   * Bei Schuber-Einträgen (z. B. "Schuber 1" bis "Schuber 10" bei One Piece) wurde früher fälschlicherweise das Bild und die Daten von Band 1 (Tankōbon) geladen, da bei Ziffernextraktion aus "Schuber 1" die Zahl "1" gefunden wurde.
-2. **Backend Service (`mangaPassion.js`) & API (`routes/`):**
-   * `matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes)`: Erkennt gezielt Schuber (`type === 3` und `specialType === 1`) in der Manga Passion API. Unterscheidet Leerschuber (Ladenpreis ~12 € oder "leer") und gefüllte Sammelschuber (>25 € oder "sammel"). Ordnet "Schuber 1" exakt dem ersten Schuber (z. B. "East Blue Leerschuber" ID 9736) bis "Schuber 10" ("Wa No Kuni Leerschuber") zu.
-   * `downloadRemoteImageToUploads(url)`: Lädt das Original-Cover von Manga Passion (`covers.manga-passion.de`) über HTTP-Fetch herunter, prüft die Mindestgröße (>500 Byte) und speichert es lokal unter `data/uploads/` als permanentes Cover ab.
-   * Direkter URL- / ID-Lookup: `lookupVolumeMetadata` und die API `GET /api/volumes/lookup` akzeptieren auch direkte Manga Passion URLs (z. B. `https://www.manga-passion.de/volumes/9736/one-piece-east-blue-leerschuber`) oder IDs und laden Metadaten + Cover direkt herunter.
-   * Batch-Anreicherung (`autofillMangaVolumes`): Gleicht alle Schuber einer Reihe mit der echten Schuber-Liste ab und versieht sie mit den korrekten Covern, Erscheinungsdaten, Preisen und Schuber-Titeln.
-3. **Frontend UI (`components/detail/VolumeEditModal.jsx`):**
-   * **Schuber-Banner:** Beim Bearbeiten eines Eintrags vom Typ Schuber erscheint ein spezielles Banner `Schuber-Cover & Details automatisch laden (Manga Passion)` mit Aktions-Button `✨ Schuber laden`.
-   * **Direkte URL-Erkennung:** Wird in das Feld "URL eingeben" eine Manga Passion Volume-URL oder Volume-ID eingefügt, wird automatisch der komplette Schuber-Datensatz samt lokalem Cover-Download geladen.
-   * **Bereinigung fehlerhafter Band-1-Daten:** Überschreibt versehentlich zuvor eingetragene Band-1-Notizen ("Das Abenteuer beginnt"), falsche Seitenzahlen und falsche ISBNs mit den echten Schuber-Daten.
-
-### 🔹 Fall N: Intelligente Lücken- & Editions-Deduplizierung sowie Schuber-Erkennung
-1. **Problem & Hintergrund:**
-   * Bei Reihen mit Schubern (z. B. One Piece) oder Sonderausgaben/Varianten desselben Bandes (z. B. Solo Leveling Band 14 Standard vs. Band 14 Collectors Edition) wurden früher Phantom-Lücken gemeldet oder doppelte Bandnummern im Banner angezeigt (`Band 14, 14, 15, 15` bzw. 6x `Special, Special, Special...`), selbst wenn der Nutzer die Schuber bereits besaß.
-2. **Backend Service (`mangaPassion.js`) & API (`routes/`):**
-   * `reconcileMangaGaps`: Gleicht offizielle Bände nicht nur gegen `volume_number`, sondern auch intelligent gegen Notizen (`notes`), Titel und Saga-Namen (z. B. "East Blue", "Alabasta") ab. Bereits im Bestand befindliche Schuber werden als "Vorhanden" erkannt und erscheinen nicht als Lücke.
-   * Sonderausgaben und Leerschuber mit `volume_number === 'Special'` erhalten ihren echten Titel als Bezeichner.
-   * `batchImportGaps`: Erkennt bei der Übernahme von Lücken in die Einkaufsliste automatisch den korrekten Typ (`schuber`, `special_edition` oder `volume`) und speichert Notizen und Cover.
-3. **Frontend UI (`components/detail/VolumeFilterBar.jsx`, `MangaDetail.jsx` & `Dashboard.jsx`):**
-   * **Lücken-Banner:** Listet Lücken differenziert mit Band-Präfix oder Volltitel auf (z. B. `Band 14, Band 14 (Collectors Edition), Band 15, Band 15 (Sammelschuber)` bzw. `Fischmenscheninsel Leerschuber`), ohne redundante "Special"-Wiederholungen.
-   * **Custom-Scrollbars:** Sämtliche scrollbaren Modal-Bereiche (Statistik-Dashboard, Server-Snapshots, Benutzerverwaltung, Batch-Generatoren) nutzen jetzt die einheitliche `custom-scrollbar`-Klasse für ein modernes, dunkles Scroll-Design.
+### 🔹 Fall K: Manga Passion – Editionsabgleich, Lücken, Autofill & Schuber
+Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`, 12-h-Cache in `manga_passion_cache`) ab. Alle Logik liegt in `mangaPassion.js`; Identitätsregeln für Sonderausgaben stehen in Gotcha 14.
+1. **Backend (`mangaPassion.js`, `routes/mangas.js`, `routes/volumes.js`):**
+   * `GET /api/mangas/:id/gaps` → `reconcileMangaGaps`: echte Lücken mit deutschem Preis, Datum und Cover; erkennt Abweichungen zwischen DB-Gesamtzahl und deutscher Edition. Abgleich über **Typ + Nummer**, Notizen, Titel und Saga-Namen; vorhandene Schuber gelten nicht als Lücke.
+   * `POST /api/mangas/:id/sync-edition` (`syncMangaWithEdition`): Gesamtbandzahl und Metadaten auf die deutsche Edition setzen.
+   * `POST /api/mangas/:id/batch-import-gaps` (`batchImportGaps`): Lücken als `Fehlt` mit Typ (`schuber`/`special_edition`/`volume`), Preis, Datum, Notizen und Cover übernehmen.
+   * `GET /api/volumes/lookup` (`lookupVolumeMetadata`, Fallback DNB) und `POST /api/mangas/:id/autofill-volumes` (`autofillMangaVolumes`, eine Transaktion): füllen nur **leere** Felder (`release_date`, `release_year`, `pages`, `isbn`, `price`, `publisher`); akzeptieren auch Manga-Passion-URLs oder -IDs.
+   * Schuber: `matchSchuberVolume` erkennt sie gezielt (`type === 3`, `specialType === 1`), unterscheidet Leerschuber (~12 €) von Sammelschubern (>25 €) und ordnet „Schuber N“ dem N-ten Schuber zu – nie dem Band N. `downloadRemoteImageToUploads` lädt das Cover über `safeFetch` nach `data/uploads/`.
+2. **Frontend (`MangaDetail.jsx`, `components/detail/`):**
+   * Diskrepanz-Warnung mit 1-Klick-Anpassung, Ghost-Spines für Lücken im Regal (`VolumeShelfView`), Lücken-Banner mit Band-Präfix bzw. Volltitel (`VolumeFilterBar`), `GapFillModal` (Vorschau vor Übernahme), `MpEditionModal` (alternative Editionen wählen, „Alle Bände anreichern“).
+   * `VolumeEditModal`: Banner „Automatisch ausfüllen (Manga Passion)“, Schuber-Banner „Schuber laden“; eine eingefügte MP-Volume-URL/-ID lädt Datensatz und Cover und überschreibt fälschlich eingetragene Band-1-Daten.
 
 ---
 
@@ -544,7 +503,6 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `JWT_SECRET` aus der Umgebung wird nur akzeptiert, wenn es mindestens 32 Zeichen lang und kein bekannter Platzhalter ist. Sonst wird ein zufälliges Secret in `app_settings.jwt_secret` erzeugt und genutzt. Es gibt bewusst keinen Prozess-Fallback.
 7. **Externe Downloads / SSRF (`utils/safeFetch.js`):**
    * Alle Remote-Bilder (Cover per URL, Manga-Passion-Cover) laufen über `fetchRemoteImage()`: SSRF-Schutz (nur öffentliche Hosts, DNS-Prüfung), 15-MB-Limit, Redirect-Limit, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
-   * `utils/security.js` (`assertSafeRemoteUrl`) wird aktuell von keinem Modul eingebunden – nicht darauf verlassen; bei Bedarf entfernen oder in `safeFetch` zusammenführen.
 8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
 9. **Restore (`routes/backups.js`):**
