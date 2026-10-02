@@ -105,9 +105,17 @@ manga-shelf/
         ├── main.jsx           # React Root Mount
         ├── App.jsx            # Routing, Auth-Check & Setup-Check
         ├── Dashboard.jsx      # Container des Dashboards: State, Hauptumschalter (`activeMainView`), Modals; Darstellung in `components/dashboard/`
-        ├── MangaDetail.jsx    # Container der Detailansicht: lädt Daten, hält State, Lücken-Erkennung; Darstellung in `components/detail/`
+        ├── MangaDetail.jsx    # Schlanker Container der Detailansicht: setzt die Hooks aus `hooks/` und die Komponenten aus `components/detail/` zusammen
         ├── Login.jsx          # Login-Maske
         ├── Setup.jsx          # Initialer Einrichtungs-Assistent (Admin-Account)
+        ├── hooks/             # Zustand & Aktionen der Detailansicht (je ein Thema)
+        │   ├── useMangaData.js        # Reihe laden (Server/Offline-Kopie), Bearbeiten-Formular, Cover-Upload, Metadaten-Lookup
+        │   ├── useVolumeFilters.js    # Filter, Suche, Sortierung, Typ-Zähler, Ansichtsmodus
+        │   ├── useMpGaps.js           # Manga-Passion-Lückenabgleich, Lücken übernehmen, Edition wählen/synchronisieren, Autofill
+        │   ├── useVolumeActions.js    # Band anlegen, Besitz-/Lesestatus umschalten, bearbeiten, löschen
+        │   ├── useVolumeGallery.js    # Foto-Lightbox
+        │   ├── useShelfLayout.js      # Regal-Modus, Skalierung, Zeilenaufteilung, Tastatur-Fokus
+        │   └── useDetailKeyboard.js   # Escape, Pfeiltasten, J/K/Leertaste/E
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
         │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
@@ -131,6 +139,9 @@ manga-shelf/
             │   └── ReleaseRadarView.jsx     # Neuheiten-Kalender & Monats-Release-Radar
             └── detail/        # Manga-Detailansicht Subkomponenten & Modals
                 ├── MangaHeroCard.jsx        # Banner/Kopf der Reihe mit Metadaten & Fortschritt
+                ├── ReaderBar.jsx            # Leser-Umschalter mit Lese-Fortschritt
+                ├── GapNotices.jsx           # Banner: Doppelte, Editions-Abweichung, erkannte Lücken
+                ├── ShelfSpine.jsx           # Ein Buchrücken (oder Ghost-Spine) im Regal
                 ├── AddVolumeBar.jsx         # Schnelles Anlegen einzelner Bände
                 ├── VolumeFilterBar.jsx      # Filter-Chips (Alle/Bände/Special Editions/Schuber/Specials)
                 ├── VolumeShelfView.jsx      # Buchrücken-Regal inkl. Ghost-Spines für Lücken
@@ -316,7 +327,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Im `GET /api/mangas` und `GET /api/mangas/:id` sicherstellen, dass das Feld selektiert wird (meist durch `SELECT *`).
 3. **Frontend UI:**
    * `frontend/src/components/modals/AddMangaModal.jsx`: Eingabefelder für neue Metadaten beim Anlegen ergänzen.
-   * `frontend/src/components/detail/MangaHeroCard.jsx`: Feld in der Detailansicht anzeigen und im Bearbeiten-Formular editierbar machen (State/Speichern in `frontend/src/MangaDetail.jsx`).
+   * `frontend/src/components/detail/MangaHeroCard.jsx`: Feld in der Detailansicht anzeigen und im Bearbeiten-Formular editierbar machen (State/Speichern in `frontend/src/hooks/useMangaData.js`).
 
 ### 🔹 Fall B: Neues Feld für Bände/Volumes hinzufügen (z. B. "Edition", "Farbe", "Format")
 1. **Datenbank (`db.js`):**
@@ -354,7 +365,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Funktionen `requireAuth`, `requireAdmin`, `requireEditor`.
    * Neue Rollen oder feinere Rechte direkt in den entsprechenden Routen prüfen.
 2. **Frontend UI:**
-   * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx`, `MangaDetail.jsx` und den jeweiligen Modals in `components/`.
+   * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx`, `MangaDetail.jsx` (`canEdit` wird an Hooks und Komponenten durchgereicht) und den jeweiligen Modals in `components/`.
 
 ### 🔹 Fall F: Einkaufsliste / Buchladen-Modus anpassen
 1. **Backend API (`routes/`):**
@@ -414,7 +425,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * `POST /api/mangas/:id/batch-import-gaps` (`batchImportGaps`): Lücken als `Fehlt` mit Typ (`schuber`/`special_edition`/`volume`), Preis, Datum, Notizen und Cover übernehmen.
    * `GET /api/volumes/lookup` (`lookupVolumeMetadata`, Fallback DNB) und `POST /api/mangas/:id/autofill-volumes` (`autofillMangaVolumes`, eine Transaktion): füllen nur **leere** Felder (`release_date`, `release_year`, `pages`, `isbn`, `price`, `publisher`); akzeptieren auch Manga-Passion-URLs oder -IDs.
    * Schuber: `matchSchuberVolume` erkennt sie gezielt (`type === 3`, `specialType === 1`), unterscheidet Leerschuber (~12 €) von Sammelschubern (>25 €) und ordnet „Schuber N“ dem N-ten Schuber zu – nie dem Band N. `downloadRemoteImageToUploads` lädt das Cover über `safeFetch` nach `data/uploads/`.
-2. **Frontend (`MangaDetail.jsx`, `components/detail/`):**
+2. **Frontend (`hooks/useMpGaps.js`, `MangaDetail.jsx`, `components/detail/`):**
    * Diskrepanz-Warnung mit 1-Klick-Anpassung, Ghost-Spines für Lücken im Regal (`VolumeShelfView`), Lücken-Banner mit Band-Präfix bzw. Volltitel (`VolumeFilterBar`), `GapFillModal` (Vorschau vor Übernahme), `MpEditionModal` (alternative Editionen wählen, „Alle Bände anreichern“).
    * `VolumeEditModal`: Banner „Automatisch ausfüllen (Manga Passion)“, Schuber-Banner „Schuber laden“; eine eingefügte MP-Volume-URL/-ID lädt Datensatz und Cover und überschreibt fälschlich eingetragene Band-1-Daten.
 

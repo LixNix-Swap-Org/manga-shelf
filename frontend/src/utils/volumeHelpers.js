@@ -305,3 +305,75 @@ export const getSpinePublisherTheme = (publisherName) => {
     accentName: publisherName || 'Manga'
   };
 };
+
+/** Whether `userId` has read the volume; falls back to the caller's own flag when the API sent no reader list. */
+export const hasUserRead = (vol, userId, currentUserId) =>
+  vol.read_users
+    ? vol.read_users.some(u => String(u.user_id ?? u.id) === String(userId))
+    : (Boolean(vol.is_read) && String(userId) === String(currentUserId));
+
+/**
+ * Rows for the shelf / grid / list views: the filtered volumes with ghost entries for detected gaps interleaved
+ * (only when sorting by number without conflicting filters).
+ */
+export const buildDisplayVolumeItems = ({ filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort }) => {
+  const isNumberSort = volumeSort === 'number_asc' || volumeSort === 'number_desc';
+  const allowTypeFilter = volumeTypeFilter === 'ALL' || volumeTypeFilter === 'volume';
+  const allowStatusFilter = volumeFilter === 'ALL' || volumeFilter === 'Fehlt';
+
+  if (!showGaps || detectedGaps.length === 0 || !allowTypeFilter || !allowStatusFilter || volumeSearch.trim() || !isNumberSort) {
+    return filteredVolumes.map(v => ({ isGap: false, volume: v }));
+  }
+
+  const items = [];
+  // titled gaps ("26 (Titel)") must resolve to their volume number, otherwise no ghost entry is drawn for them
+  // only regular volumes get ghost entries; a Collectors Edition gap ("5 (Collectors Edition)") must not mask Band 5
+  const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
+  const sorted = [...filteredVolumes];
+
+  // Ensure no volume that actually exists in sorted is treated as a gap:
+  sorted.forEach(v => {
+    const match = String(v.volume_number).trim().match(/^(\d+)$/);
+    if (match) gapsSet.delete(parseInt(match[1], 10));
+  });
+
+  const maxTarget = Math.max(
+    ...Array.from(gapsSet).map(g => typeof g === 'number' ? g : 0),
+    ...sorted.map(v => {
+      const match = String(v.volume_number).trim().match(/^(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+  );
+
+  let volIndex = 0;
+  for (let i = 1; i <= maxTarget; i++) {
+    if (gapsSet.has(i)) {
+      const gapMeta = mpGapMap.get(String(i).toLowerCase());
+      items.push({ isGap: true, gapNumber: i, gapMeta });
+    }
+    while (volIndex < sorted.length) {
+      const v = sorted[volIndex];
+      const match = String(v.volume_number).trim().match(/^(\d+)$/);
+      const parsed = match ? parseInt(match[1], 10) : null;
+      if (parsed !== null && parsed === i) {
+        items.push({ isGap: false, volume: v });
+        volIndex++;
+      } else if (parsed !== null && parsed < i) {
+        items.push({ isGap: false, volume: v });
+        volIndex++;
+      } else {
+        break;
+      }
+    }
+  }
+  while (volIndex < sorted.length) {
+    items.push({ isGap: false, volume: sorted[volIndex] });
+    volIndex++;
+  }
+
+  if (volumeSort === 'number_desc') {
+    items.reverse();
+  }
+
+  return items;
+};

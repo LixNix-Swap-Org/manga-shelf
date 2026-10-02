@@ -81,3 +81,35 @@ test('normalizePubName: trailing "!" from Manga Passion does not create a second
     assert.equal(normalizePubName('Planet Manga'), 'Planet Manga');
     assert.equal(normalizePubName('Sonst Verlag!'), 'Sonst Verlag');
 });
+
+test('hasUserRead: uses the reader list when present, otherwise the caller own flag', async () => {
+    const { hasUserRead } = await load();
+    const withList = { read_users: [{ user_id: 2 }, { id: 5 }] };
+    assert.equal(hasUserRead(withList, 2, 1), true);
+    assert.equal(hasUserRead(withList, '5', 1), true);
+    assert.equal(hasUserRead(withList, 1, 1), false);
+    assert.equal(hasUserRead({ is_read: 1 }, 1, 1), true);
+    assert.equal(hasUserRead({ is_read: 1 }, 2, 1), false);
+    assert.equal(hasUserRead({}, 1, 1), false);
+});
+
+test('buildDisplayVolumeItems: gaps are interleaved by number, but only when sorting by number without filters', async () => {
+    const { buildDisplayVolumeItems } = await load();
+    const filteredVolumes = [{ id: 1, volume_number: '1' }, { id: 3, volume_number: '3' }, { id: 5, volume_number: '5' }];
+    const detectedGapEntries = [{ label: 2, type: 'volume' }, { label: 4, type: 'volume' }];
+    const base = {
+        filteredVolumes, detectedGapEntries, detectedGaps: detectedGapEntries.map(e => e.label), mpGapMap: new Map(),
+        showGaps: true, volumeTypeFilter: 'ALL', volumeFilter: 'ALL', volumeSearch: '', volumeSort: 'number_asc'
+    };
+    const shape = items => items.map(i => (i.isGap ? `gap${i.gapNumber}` : `v${i.volume.id}`));
+    assert.deepEqual(shape(buildDisplayVolumeItems(base)), ['v1', 'gap2', 'v3', 'gap4', 'v5']);
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, volumeSort: 'number_desc' })), ['v5', 'gap4', 'v3', 'gap2', 'v1']);
+    // not sorted by number, searching, hiding gaps or filtering by status: plain volumes only
+    for (const override of [{ volumeSort: 'price_asc' }, { volumeSearch: 'x' }, { showGaps: false }, { volumeFilter: 'Vorhanden' }, { volumeTypeFilter: 'schuber' }]) {
+        assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, ...override })), ['v1', 'v3', 'v5']);
+    }
+    // a gap that is actually present in the list is not drawn as a ghost
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [{ label: 3, type: 'volume' }], detectedGaps: [3] })), ['v1', 'v3', 'v5']);
+    // special-edition gaps never become ghost entries
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [{ label: '2 (Collectors Edition)', type: 'special_edition' }], detectedGaps: ['2 (Collectors Edition)'] })), ['v1', 'v3', 'v5']);
+});
