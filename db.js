@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data');
+// DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
+const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -138,6 +139,42 @@ function runSequentialMigrations(database) {
     }
 }
 
+/** Opens a SQLite file with node:sqlite (Node >= 22.5) or better-sqlite3 as fallback. */
+function openRawDb(file, options = {}) {
+    try {
+        const { DatabaseSync } = require('node:sqlite');
+        return new DatabaseSync(file, options.readOnly ? { readOnly: true } : {});
+    } catch (e) {
+        if (e && e.code !== 'MODULE_NOT_FOUND' && e.code !== 'ERR_UNKNOWN_BUILTIN_MODULE') throw e;
+        const Database = require('better-sqlite3');
+        return new Database(file, options.readOnly ? { readonly: true } : {});
+    }
+}
+
+/**
+ * Verifies that a SQLite file is intact and looks like a Manga Shelf database
+ * (integrity_check, required tables, at least one admin). Throws a descriptive Error otherwise.
+ */
+function validateDbFile(file) {
+    let probe;
+    try {
+        probe = openRawDb(file, { readOnly: true });
+        const check = probe.prepare('PRAGMA integrity_check').get();
+        const result = check && Object.values(check)[0];
+        if (result !== 'ok') throw new Error('Integritätsprüfung fehlgeschlagen: ' + result);
+        const tables = new Set(probe.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name));
+        for (const t of ['users', 'mangas', 'volumes']) {
+            if (!tables.has(t)) throw new Error(`Tabelle "${t}" fehlt in der Datenbank`);
+        }
+        const admins = probe.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin'").get();
+        if (!admins || admins.count < 1) throw new Error('Die Datenbank enthält keinen Administrator');
+    } catch (err) {
+        throw new Error('Ungültige Backup-Datenbank: ' + err.message);
+    } finally {
+        try { probe && probe.close(); } catch (e) { /* ignore */ }
+    }
+}
+
 function initDb() {
     if (currentDb) {
         try {
@@ -148,17 +185,9 @@ function initDb() {
         }
     }
 
-    try {
-        const { DatabaseSync } = require('node:sqlite');
-        currentDb = new DatabaseSync(dbPath);
-        currentDb.exec('PRAGMA journal_mode = WAL;');
-        currentDb.exec('PRAGMA foreign_keys = ON;');
-    } catch (e) {
-        const Database = require('better-sqlite3');
-        currentDb = new Database(dbPath);
-        currentDb.pragma('journal_mode = WAL');
-        currentDb.pragma('foreign_keys = ON');
-    }
+    currentDb = openRawDb(dbPath);
+    currentDb.exec('PRAGMA journal_mode = WAL;');
+    currentDb.exec('PRAGMA foreign_keys = ON;');
 
     // Base Schema Creation
     currentDb.exec(`
@@ -318,6 +347,27 @@ const db = new Proxy({}, {
     }
 });
 
+/**
+ * Runs fn inside a single SQLite transaction (commit on success, rollback on error).
+ * fn MUST be synchronous: there is only one connection, so awaiting inside a transaction would
+ * let unrelated requests run inside it. Do network I/O before calling this helper.
+ */
+function withTransaction(fn) {
+    const database = db;
+    database.exec('BEGIN TRANSACTION;');
+    try {
+        const result = fn();
+        if (result && typeof result.then === 'function') {
+            throw new Error('withTransaction: asynchrone Callbacks sind nicht erlaubt');
+        }
+        database.exec('COMMIT;');
+        return result;
+    } catch (err) {
+        try { database.exec('ROLLBACK;'); } catch (rbErr) { /* ignore */ }
+        throw err;
+    }
+}
+
 function hasAdmin() {
     const row = db.prepare('SELECT count(*) as count FROM users WHERE role = ?').get('admin');
     return row && row.count > 0;
@@ -333,6 +383,8 @@ module.exports = {
     dbPath, 
     tempDir,
     runTransaction,
+    withTransaction,
+    validateDbFile,
     setRestoringState,
     isRestoring: () => isRestoring
 };

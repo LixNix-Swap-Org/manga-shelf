@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db, runTransaction } = require('../db');
+const { db, runTransaction, withTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { lookupVolumeMetadata } = require('../mangaPassion');

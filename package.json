@@ -3,12 +3,17 @@
   "version": "2.10.0",
   "description": "Manga Shelf Backend for Pterodactyl",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
     "build:frontend": "cd frontend && npm install && npm run build",
     "package": "npm run build:frontend && node package.js",
-    "release": "node release.js"
+    "release": "node release.js",
+    "test": "node --test test/*.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
@@ -23,6 +28,9 @@
     "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0",
     "puppeteer-core": "^25.12.0"
   }
 }

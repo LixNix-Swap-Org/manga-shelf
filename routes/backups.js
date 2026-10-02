@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
-const { db, dataDir, uploadsDir, closeDb, initDb, setRestoringState } = require('../db');
+const { db, dataDir, uploadsDir, closeDb, initDb, validateDbFile, setRestoringState } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { uploadBackup } = require('../middleware/upload');
 const { backupsDir, createBackupSnapshot } = require('../services/scheduler');
@@ -33,22 +33,32 @@ async function restoreFromZip(source) {
         throw new Error('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
     }
 
+    // 1. Extract the new database next to the live one and validate it BEFORE touching anything
+    const stagedDbPath = path.join(dataDir, 'manga.db.restore-tmp');
+    try {
+        fs.writeFileSync(stagedDbPath, dbEntry.getData());
+        validateDbFile(stagedDbPath);
+    } catch (err) {
+        try { fs.unlinkSync(stagedDbPath); } catch (e) {}
+        throw err;
+    }
+
     // Set lock flag to prevent proxy from re-opening database during overwrite
     setRestoringState(true);
 
     try {
-        // 1. Flush WAL logs to disk then close active connection
+        // 2. Flush WAL logs to disk then close active connection
         try {
             db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
         } catch (e) {}
         closeDb();
 
-        // 2. Safety copy of current database
+        // 3. Safety copy of current database
         if (fs.existsSync(dbFilePath)) {
             fs.copyFileSync(dbFilePath, backupBakPath);
         }
 
-        // 3. Remove stale WAL and SHM journal files
+        // 4. Remove stale WAL and SHM journal files
         if (fs.existsSync(walFilePath)) {
             try { fs.unlinkSync(walFilePath); } catch (e) {}
         }
@@ -57,10 +67,10 @@ async function restoreFromZip(source) {
         }
 
         try {
-            // 4. Overwrite manga.db with restored database
-            fs.writeFileSync(dbFilePath, dbEntry.getData());
+            // 5. Atomically replace manga.db with the validated restored database
+            fs.renameSync(stagedDbPath, dbFilePath);
 
-            // 5. Restore uploads folder (cover images)
+            // 6. Restore uploads folder (cover images)
             let restoredImagesCount = 0;
             for (const entry of entries) {
                 if (entry.isDirectory) continue;
@@ -75,7 +85,8 @@ async function restoreFromZip(source) {
                 if (relUploadPath) {
                     const targetFilePath = path.join(dataDir, relUploadPath);
                     // Security: Prevent Zip-Slip directory traversal
-                    if (!path.resolve(targetFilePath).startsWith(path.resolve(uploadsDir))) {
+                    const relToUploads = path.relative(path.resolve(uploadsDir), path.resolve(targetFilePath));
+                    if (!relToUploads || relToUploads.startsWith('..') || path.isAbsolute(relToUploads)) {
                         continue;
                     }
                     fs.mkdirSync(path.dirname(targetFilePath), { recursive: true });
@@ -84,10 +95,10 @@ async function restoreFromZip(source) {
                 }
             }
 
-            // 6. Reconnect to database and run migrations
+            // 7. Reconnect to database and run migrations
             initDb();
 
-            // 7. Verify restored database is functional
+            // 8. Verify restored database is functional
             const mangaRow = db.prepare('SELECT count(*) as count FROM mangas').get();
             const mangaCount = mangaRow ? mangaRow.count : 0;
 
@@ -101,6 +112,7 @@ async function restoreFromZip(source) {
                 restoredImagesCount
             };
         } catch (err) {
+            try { fs.unlinkSync(stagedDbPath); } catch (e) {}
             // Rollback safety copy if available
             try {
                 if (fs.existsSync(backupBakPath)) {

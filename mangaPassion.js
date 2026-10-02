@@ -1,8 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+<<<<<<< HEAD
 const { db, runTransaction } = require('./db.js');
 const { assertSafeRemoteUrl } = require('./utils/security');
+=======
+const { db, uploadsDir, withTransaction } = require('./db.js');
+const { fetchRemoteImage } = require('./utils/safeFetch');
+>>>>>>> origin/main
 
 const USER_AGENT = 'MangaShelf/2.6.0';
 const HEADERS = {
@@ -35,10 +40,6 @@ async function downloadRemoteImageToUploads(url) {
     // Deterministic filename based on MD5 hash of the URL to prevent duplicates
     const urlHash = crypto.createHash('md5').update(url.trim()).digest('hex').slice(0, 16);
     const filename = `mp-cov-${urlHash}${cleanExt}`;
-    const uploadsDir = path.join(__dirname, 'data', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
     const targetPath = path.join(uploadsDir, filename);
 
     // If already downloaded and valid, return existing local URL immediately
@@ -49,9 +50,7 @@ async function downloadRemoteImageToUploads(url) {
       }
     }
 
-    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': USER_AGENT } }, 8000);
-    if (!res.ok) return url;
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const { buffer } = await fetchRemoteImage(url);
     if (buffer.length < 500) return url; // Invalid image or empty
 
     fs.writeFileSync(targetPath, buffer);
@@ -997,7 +996,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
     WHERE id = ?
   `);
 
-  // 1. Pre-download needed Schuber covers asynchronously BEFORE acquiring the DB transaction
+  // Phase 1 (async): pre-download needed Schuber covers and collect updates without holding a DB lock
   const schuberCovers = new Map();
   for (const uv of userVolumes) {
     const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
@@ -1012,8 +1011,7 @@ async function autofillMangaVolumes(mangaId, options = {}) {
     }
   }
 
-  // 2. Run all database updates in an atomic, synchronous transaction
-  runTransaction(() => {
+  const pendingUpdates = [];
     for (const uv of userVolumes) {
       const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
       let matched = null;
@@ -1073,11 +1071,15 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       }
 
       if (changed) {
-        updateStmt.run(newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id);
-        updatedCount++;
+        pendingUpdates.push([newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id]);
       }
     }
+
+  // Phase 2 (sync): apply all updates atomically
+  withTransaction(() => {
+    for (const params of pendingUpdates) updateStmt.run(...params);
   });
+  updatedCount = pendingUpdates.length;
 
   return {
     success: true,

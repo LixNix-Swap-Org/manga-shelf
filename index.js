@@ -72,8 +72,6 @@ app.use('/api', (err, req, res, next) => {
     next(err);
 });
 
-// Daily automated backup scheduler (runs after 10s on boot, then every 24 hours)
-initScheduler();
 
 // --- SERVE FRONTEND ---
 let frontendPath = path.join(__dirname, 'frontend/dist');
@@ -121,7 +119,9 @@ app.get('*', (req, res) => {
     }
 });
 
-// --- START SERVER ---
+// --- START SERVER --- (only when run directly; tests import the app without listening)
+if (require.main === module) {
+initScheduler(); // Daily automated backup scheduler (after 10s on boot, then every 24 hours)
 const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || path.join(__dirname, 'ssl', 'privkey.pem');
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || (fs.existsSync(path.join(__dirname, 'ssl', 'fullchain.pem')) ? path.join(__dirname, 'ssl', 'fullchain.pem') : path.join(__dirname, 'ssl', 'cert.pem'));
@@ -170,7 +170,17 @@ const shutdown = () => {
         process.exit(0);
     });
 };
+// Last-resort safety nets: log and shut down in a controlled way instead of crashing mid-write
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Process] Uncaught exception:', err);
+    shutdown();
+    setTimeout(() => process.exit(1), 5000).unref();
+});
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+}
 
 module.exports = app;
