@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import { 
   ShoppingCart, RefreshCw, Search, X, CheckCircle2, 
@@ -268,7 +269,7 @@ export default function ShoppingListView({
                     
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
-                        Band {item.volume_number}
+                        {getVolumeDisplayTitle(item)}
                       </span>
                       {item.price > 0 && (
                         <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono px-2 py-0.5 rounded-lg font-bold">

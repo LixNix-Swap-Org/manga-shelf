@@ -149,6 +149,22 @@ function runSequentialMigrations(database) {
                     if (normalized && normalized !== isbn) update.run(normalized, id);
                 }
             }
+        },
+        {
+            version: 6,
+            name: 'clean_labelled_volume_numbers',
+            up: (d) => {
+                // Older versions imported gaps under their UI label ("4 (Wolf im Schafspelz)") instead of the number "4".
+                const rows = d.prepare("SELECT id, manga_id, volume_number, notes FROM volumes WHERE COALESCE(type, 'volume') = 'volume' AND volume_number GLOB '[0-9]* (*)'").all();
+                const taken = d.prepare("SELECT 1 FROM volumes WHERE manga_id = ? AND volume_number = ? AND COALESCE(type, 'volume') = 'volume'");
+                const update = d.prepare('UPDATE volumes SET volume_number = ?, notes = COALESCE(notes, ?) WHERE id = ?');
+                for (const row of rows) {
+                    const match = String(row.volume_number).match(/^(\d+)\s*\((.+)\)\s*$/);
+                    if (!match) continue;
+                    if (taken.get(row.manga_id, match[1])) continue; // a clean volume with that number exists: leave both alone
+                    update.run(match[1], match[2].trim(), row.id);
+                }
+            }
         }
     ];
 

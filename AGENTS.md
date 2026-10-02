@@ -524,6 +524,11 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Backend-Code loggt ausschließlich über `const log = require('../utils/logger').child('name')` (`log.info/warn/error/debug(msg, ...args)`; ein `Error` als Argument wird mit Stack bzw. als `err`-Feld ausgegeben, ein Objekt als Kontextfelder). Kein neues `console.*` im Backend. `LOG_LEVEL` (debug|info|warn|error|silent) und `LOG_FORMAT` (text|json) per Umgebungsvariable; `debug` aktiviert das API-Zugriffs-Log, Anfragen > 2 s werden immer als Warnung geloggt.
    * **Ausnahme:** Die Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1/2`, `Server is online and ready.`) bleiben bewusst rohes `console.log`: Das Pterodactyl-Egg erkennt „Server gestartet“ an genau diesen Zeichenketten.
    * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500.
+20. **Sonderausgaben / Lücken-Identität (`mangaPassion.js`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
+   * Eine Collectors-/Limited Edition oder ein Schuber trägt dieselbe Nummer wie der normale Band. Lücken werden deshalb über **Typ + Nummer** abgeglichen (`reconcileMangaGaps`, `isGapCovered`), nie nur über die Nummer. `classifyOfficialVolume()` bestimmt den Typ eines offiziellen Eintrags; ein generischer Titel („Collectors Edition“) oder eine nackte Zahl wird nie per Namenssuche zugeordnet.
+   * `batchImportGaps` löst die UI-Beschriftungen auf (`"26 (Titel)"`, `"5 (Collectors Edition)"`, `"East Blue Leerschuber"`, reine Zahl = regulärer Band), speichert die saubere Nummer samt Preis/Datum/Cover und fasst vorhandene (`Vorhanden`/`Gelesen`) Einträge nie an. Ghost-Einträge im Regal gibt es nur für reguläre Bände (`detectedGapEntries` mit `type`).
+   * Anzeigenamen: `getVolumeDisplayTitle()` / `getEditionLabel()` (Collectors, Limited, Special, Variant …, aus den Notizen) – überall verwenden (Karten, Liste, Regal, Einkaufsliste, Radar), keine eigenen „Band X“-Strings. `inferVolumeType` existiert in Backend und Frontend und wird per `test/specialeditions.test.js` synchron gehalten.
+
 ---
 
 ## 9. Deutsche Manga-Spezifika & APIs

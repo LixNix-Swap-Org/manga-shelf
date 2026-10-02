@@ -1,5 +1,5 @@
 import { AlertCircle, BookCheck, BookOpen, Building2, Calendar, Camera, Check, Coins, Edit3, FileText, Package, Plus, Sparkles, Truck, X } from 'lucide-react';
-import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { getVolumeDisplayTitle, getEditionLabel, getSpecialEditionNumber } from '../../utils/volumeHelpers';
 
 /** Card grid view of a series' volumes (incl. official gaps). Purely presentational; all state and handlers come in via props. */
 export default function VolumeGridView({
@@ -190,7 +190,7 @@ export default function VolumeGridView({
                   )}
                 </button>
                 <div 
-                  className="font-bold text-white text-sm tracking-tight flex items-center gap-1.5 min-w-0 overflow-hidden"
+                  className="font-bold text-white text-sm tracking-tight flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0"
                   title={getVolumeDisplayTitle(vol)}
                 >
                   {vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber') ? (
@@ -198,7 +198,7 @@ export default function VolumeGridView({
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shrink-0 shadow-sm">
                         <Package className="w-2.5 h-2.5 text-indigo-400" /> Schuber
                       </span>
-                      <span className="truncate">{String(vol.volume_number).replace(/schuber\s*/i, '')}</span>
+                      <span className="min-w-0 break-words leading-tight">{String(vol.volume_number).replace(/^schuber\s*/i, '')}</span>
                     </>
                   ) : vol.type === 'special_edition' || (
                     vol.type !== 'schuber' && (
@@ -210,15 +210,10 @@ export default function VolumeGridView({
                   ) ? (
                     <>
                       <span className="shrink-0 font-bold">
-                        {(() => {
-                          const rawNum = String(vol.volume_number || '');
-                          const cleaned = rawNum.replace(/special\s*edition|limited\s*edition|spezial\s*edition/gi, '').trim();
-                          const match = (cleaned || rawNum).match(/\d+(\.\d+)?/);
-                          return match ? `Band ${match[0]}` : (cleaned || rawNum || 'Special');
-                        })()}
+                        {getSpecialEditionNumber(vol) ? `Band ${getSpecialEditionNumber(vol)}` : 'Special'}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 shrink-0 shadow-sm">
-                        <Sparkles className="w-2.5 h-2.5 text-fuchsia-400" /> Special Edition
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 max-w-full shadow-sm" title={getEditionLabel(vol).label}>
+                        <Sparkles className="w-2.5 h-2.5 text-fuchsia-400 shrink-0" /> <span className="truncate">{getEditionLabel(vol).label.replace(/ Edition$/, '')}</span>
                       </span>
                     </>
                   ) : vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') ? (

@@ -9,7 +9,7 @@ import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { loadMangaDetail, updateCachedManga } from './utils/offlineStore';
-import { normalizePubName, gapVolumeNumber, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
+import { normalizePubName, gapVolumeNumber, isGapCovered, getEditionLabel, getSpecialEditionNumber, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -955,61 +955,19 @@ export default function MangaDetail({ user }) {
   // Prioritizes verified Manga Passion official edition data if available;
   // falls back to local detection.
   // Filters out volumes already present in user's collection to avoid duplicates!
-  const detectedGaps = useMemo(() => {
-    // Collect all existing volume numbers and notes currently in the DB/collection:
-    const existingVolNums = new Set(
-      volumes.map(v => String(v.volume_number || '').trim().toLowerCase())
-    );
-    const existingNotes = new Set(
-      volumes.map(v => String(v.notes || '').trim().toLowerCase()).filter(Boolean)
-    );
-
-    // If Manga Passion matched the German edition, use the verified official missing volumes:
+  // Gaps as { label, type }: label is what the banner shows ("26 (Titel)", "5 (Collectors Edition)", 114),
+  // type decides how it is drawn (only regular volumes get ghost entries) and imported.
+  const detectedGapEntries = useMemo(() => {
+    // If Manga Passion matched the German edition, use the verified official missing entries:
     if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
       return mpGapData.gaps
-        .filter(g => {
-          const strNum = String(g.volume_number || '').trim().toLowerCase();
-          if (existingVolNums.has(strNum)) return false;
-
-          const cleanTitle = String(g.title || '').trim().toLowerCase();
-          if (cleanTitle && existingNotes.has(cleanTitle)) return false;
-          if (cleanTitle) {
-            const hasMatch = volumes.some(v => {
-              const vn = String(v.notes || '').trim().toLowerCase();
-              const vnum = String(v.volume_number || '').trim().toLowerCase();
-              return (vn && (vn.includes(cleanTitle) || cleanTitle.includes(vn))) ||
-                     (vnum && (vnum.includes(cleanTitle) || cleanTitle.includes(vnum)));
-            });
-            if (hasMatch) return false;
-          }
-
-          // Check range bundle (e.g. "21-25", "26-30")
-          const rangeMatch = strNum.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-          if (rangeMatch) {
-            const start = parseInt(rangeMatch[1], 10);
-            const end = parseInt(rangeMatch[2], 10);
-            let allOwned = true;
-            for (let k = start; k <= end; k++) {
-              if (!existingVolNums.has(String(k))) {
-                allOwned = false;
-                break;
-              }
-            }
-            if (allOwned) return false;
-          }
-
-          if (g.title && (g.title.toLowerCase().includes('schuber') || g.title.toLowerCase().includes('box')) && rangeMatch) {
-            return false;
-          }
-
-          return true;
-        })
+        .filter(g => !isGapCovered(g, volumes))
         .map(g => {
           const match = String(g.volume_number).trim().match(/^(\d+)$/);
-          if (match) {
-            return g.title ? `${match[1]} (${g.title.trim()})` : parseInt(match[1], 10);
-          }
-          return g.title || g.volume_number;
+          const label = match
+            ? (g.title ? `${match[1]} (${g.title.trim()})` : parseInt(match[1], 10))
+            : (g.title || g.volume_number);
+          return { label, type: g.type || 'volume' };
         });
     }
 
@@ -1039,11 +997,12 @@ export default function MangaDetail({ user }) {
     const gaps = [];
     for (let i = 1; i <= targetMax; i++) {
       if (!existingNums.has(i)) {
-        gaps.push(i);
+        gaps.push({ label: i, type: 'volume' });
       }
     }
     return gaps;
   }, [mpGapData, volumes, manga?.total_volumes]);
+  const detectedGaps = useMemo(() => detectedGapEntries.map(e => e.label), [detectedGapEntries]);
 
   // Items to render across Spine Shelf, Grid View, and Table View (interleaving gaps if showGaps is active)
   const displayVolumeItems = useMemo(() => {
@@ -1057,7 +1016,8 @@ export default function MangaDetail({ user }) {
 
     const items = [];
     // titled gaps ("26 (Titel)") must resolve to their volume number, otherwise no ghost entry is drawn for them
-    const gapsSet = new Set(detectedGaps.map(gapVolumeNumber).filter(n => n !== null));
+    // only regular volumes get ghost entries; a Collectors Edition gap ("5 (Collectors Edition)") must not mask Band 5
+    const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
     const sorted = [...filteredVolumes];
 
     // Ensure no volume that actually exists in sorted is treated as a gap:
@@ -1105,7 +1065,7 @@ export default function MangaDetail({ user }) {
     }
 
     return items;
-  }, [showGaps, detectedGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap]);
+  }, [showGaps, detectedGaps, detectedGapEntries, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap]);
 
   // Keep spineShelfItems as alias for Spine Shelf
   const spineShelfItems = displayVolumeItems;
@@ -1302,7 +1262,7 @@ export default function MangaDetail({ user }) {
           ...customWidthStyle,
           ...(isFlexFill ? { flexGrow: (isSchuber ? 1.8 : isSpecialEd ? 1.25 : 1.0) * pageFactor } : {})
         }}
-        className={`manga-spine ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
+        className={`manga-spine ${isSpecialEd ? 'manga-spine-special' : ''} ${isSchuber ? 'manga-spine-box' : ''} ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
           isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
         } ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
         title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
@@ -1330,15 +1290,15 @@ export default function MangaDetail({ user }) {
           {isSchuber ? (
             <div className="text-[9px] sm:text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
               <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-              <span className="truncate">{String(vol.volume_number).replace(/schuber\s*/i, '')}</span>
+              <span className="truncate">{String(vol.volume_number).replace(/^schuber\s*/i, '')}</span>
             </div>
           ) : isSpecialEd ? (
             <div className="flex flex-col items-center">
               <span className="text-xs sm:text-sm font-black text-fuchsia-300 drop-shadow">
-                {String(vol.volume_number).replace(/special\s*edition|limited\s*edition/gi, '').trim() || 'SE'}
+                {getSpecialEditionNumber(vol) || getEditionLabel(vol).short}
               </span>
-              <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40">
-                SPEC
+              <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40" title={getEditionLabel(vol).label}>
+                {getEditionLabel(vol).short}
               </span>
             </div>
           ) : isSpecial ? (
@@ -1646,7 +1606,7 @@ export default function MangaDetail({ user }) {
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                       <span>
-                        <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} entdeckt:</strong> {detectedGaps.slice(0, 8).map(g => typeof g === 'number' ? `Band ${g}` : (String(g).startsWith('Band') ? g : (String(g).match(/^\d+/) ? `Band ${g}` : g))).join(', ')}{detectedGaps.length > 8 ? ` (+ ${detectedGaps.length - 8} weitere)` : ''}
+                        <strong>{detectedGaps.length} Lücke{detectedGaps.length === 1 ? '' : 'n'} entdeckt:</strong> {detectedGaps.slice(0, 8).map(g => typeof g === 'number' ? `Band ${g}` : (String(g).startsWith('Band') ? g : (String(g).match(/^\d+/) ? `Band ${g}` : g))).join(', ')}{detectedGaps.length > 8 ? ` (+ ${detectedGaps.length - 8} weitere)` : ''}{detectedGapEntries.some(e => e.type !== 'volume') ? ` · davon ${detectedGapEntries.filter(e => e.type !== 'volume').length} Sonderausgaben/Schuber` : ''}
                         {mpGapData?.edition && (
                           <span className="ml-1.5 text-amber-300/80 text-[11px]">
                             (geprüft mit Manga-Passion: <em>{mpGapData.edition.title}</em>, {mpGapData.total_official_volumes} Bände)

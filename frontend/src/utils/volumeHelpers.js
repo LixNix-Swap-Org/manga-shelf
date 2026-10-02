@@ -43,6 +43,55 @@ export const inferVolumeType = (vol) => {
   return 'volume';
 };
 
+/** Trailing integer of a volume number: "5" -> 5, "Schuber 8" -> 8, "1-5" / "Special" -> null. */
+export const volumeNumberOf = (vol) => {
+  const m = String(vol.volume_number || '').trim().match(/^(?:\D*?\s)?(\d+)$/);
+  return m ? parseInt(m[1], 10) : null;
+};
+
+/**
+ * Is an official gap entry already covered by something in the collection? Type and number together decide:
+ * Collectors Edition 5 is not covered by Band 5, "Schuber 8" covers the official "8 (Schuber)".
+ */
+export const isGapCovered = (gap, volumes) => {
+  const type = gap.type || 'volume';
+  const key = String(gap.volume_number || '').trim().toLowerCase();
+  const numeric = /^\d+$/.test(key);
+  const sameType = volumes.filter(v => inferVolumeType(v) === type);
+
+  if (sameType.some(v => String(v.volume_number || '').trim().toLowerCase() === key)) return true;
+  if (type !== 'volume' && numeric && sameType.some(v => volumeNumberOf(v) === parseInt(key, 10))) return true;
+
+  // named entries / titled volumes: match by title in notes or number. A special edition's title ("Collectors
+  // Edition") is shared by many entries, and numbered schuber are handled above, so neither is matched by name.
+  const title = String(gap.title || '').trim().toLowerCase();
+  if (title && type !== 'special_edition' && !(type !== 'volume' && numeric)) {
+    // compare like with like (a Leerschuber is not covered by a regular volume); a bare number is no name match
+    const named = sameType.some(v => {
+      const notes = String(v.notes || '').trim().toLowerCase();
+      const num = String(v.volume_number || '').trim().toLowerCase();
+      return (notes && (notes.includes(title) || title.includes(notes)))
+        || (num && !/^\d+$/.test(num) && (num.includes(title) || title.includes(num)));
+    });
+    if (named) return true;
+  }
+
+  // range bundles ("21-25") are covered once every single volume of the range is owned; schuber ranges never count as gaps
+  const range = key.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (range) {
+    const start = parseInt(range[1], 10);
+    const end = parseInt(range[2], 10);
+    const regular = volumes.filter(v => inferVolumeType(v) === 'volume');
+    let allOwned = true;
+    for (let k = start; k <= end; k++) {
+      if (!regular.some(v => String(v.volume_number || '').trim() === String(k))) { allOwned = false; break; }
+    }
+    if (allOwned) return true;
+    if (type === 'schuber') return true;
+  }
+  return false;
+};
+
 /**
  * detectedGaps entries are either a plain volume number (114) or a label with the official title
  * ("26 (Abenteuer auf der Insel des Gottes)", "East Blue Leerschuber"). Returns the volume number
@@ -87,16 +136,49 @@ export const getVolumeSortInfo = (vol) => {
 
   return { rank, num, subRank, raw: String(vol.volume_number), type: rawType };
 };
+const EDITION_PATTERNS = [
+  [/collector'?s?\s*edition/i, 'Collectors Edition', 'COLL'],
+  [/limited\s*edition|limitierte?\s*edition/i, 'Limited Edition', 'LTD'],
+  [/special\s*edition|spezial\s*edition|sonderausgabe/i, 'Special Edition', 'SE'],
+  [/premium\s*edition/i, 'Premium Edition', 'PREM'],
+  [/deluxe/i, 'Deluxe Edition', 'DLX'],
+  [/variant/i, 'Variant', 'VAR']
+];
+
+/**
+ * Which kind of special edition is this? Looks at the volume number and notes ("Collectors Edition",
+ * "Limited Edition" ...). Falls back to the generic "Special Edition". Returns { label, short }.
+ */
+export const getEditionLabel = (vol) => {
+  const text = `${vol.volume_number || ''} ${vol.notes || ''}`;
+  for (const [pattern, label, short] of EDITION_PATTERNS) {
+    if (pattern.test(text)) return { label, short };
+  }
+  return { label: 'Special Edition', short: 'SE' };
+};
+
+/** The number part of a special edition's volume_number ("Band 5 Limited Edition" -> "5"), or the cleaned text. */
+export const getSpecialEditionNumber = (vol) => {
+  const raw = String(vol.volume_number || '');
+  const cleaned = raw.replace(/collector'?s?\s*edition|limited\s*edition|special\s*edition|spezial\s*edition|premium\s*edition|deluxe\s*edition|variant|band/gi, '').trim();
+  const match = cleaned.match(/\d+(\.\d+)?/);
+  return match ? match[0] : cleaned;
+};
+
 export const getVolumeDisplayTitle = (vol) => {
   const type = inferVolumeType(vol);
   const numStr = String(vol.volume_number || '').trim();
   if (type === 'schuber') {
-    return numStr.toLowerCase().startsWith('schuber') ? numStr : `Schuber ${numStr}`;
+    // "Vollschuber 1-5" / "Leerschuber 6-10" already say what they are; plain numbers become "Schuber 8",
+    // or "Sammelschuber 15" when the notes name the kind of slipcase
+    if (numStr.toLowerCase().includes('schuber')) return numStr;
+    const kind = String(vol.notes || '').match(/\b(\w*schuber)\b/i);
+    return `${kind ? kind[1].charAt(0).toUpperCase() + kind[1].slice(1) : 'Schuber'} ${numStr}`;
   }
   if (type === 'special_edition') {
-    return (numStr.toLowerCase().includes('special edition') || numStr.toLowerCase().includes('limited edition') || numStr.toLowerCase().includes('spezial edition'))
-      ? numStr
-      : `Band ${numStr} (Special Edition)`;
+    const { label } = getEditionLabel(vol);
+    const num = getSpecialEditionNumber(vol);
+    return num ? `Band ${num} (${label})` : label;
   }
   if (type === 'special') {
     return (numStr.toLowerCase().startsWith('special') || numStr.toLowerCase().startsWith('extra') || numStr.toLowerCase().startsWith('sonderband')) 

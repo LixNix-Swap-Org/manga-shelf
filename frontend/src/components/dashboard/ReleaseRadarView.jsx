@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import { 
   Globe, Package, ExternalLink, Calendar, ChevronLeft, ChevronRight,
   ChevronDown, Star, RefreshCw, Search, X, BookOpen, BookmarkCheck,
@@ -459,7 +460,7 @@ export default function ReleaseRadarView({
 
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                       <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
-                                        Band {item.volume_number}
+                                        {getVolumeDisplayTitle(item)}
                                       </span>
                                     </div>
 
@@ -756,10 +757,7 @@ export default function ReleaseRadarView({
                           {visibleItems.map(item => {
                             const isPreordered = ['Vorbestellt', 'Bestellt'].includes(item.status);
                             const isComingSoon = item.status === 'Erscheint bald';
-                            const displayTitle = item.type === 'schuber' ? `Schuber ${item.volume_number}` :
-                              item.type === 'special_edition' ? `Band ${item.volume_number} (Special Edition)` :
-                              item.type === 'special' ? `Special ${item.volume_number}` :
-                              `Band ${item.volume_number}`;
+                            const displayTitle = getVolumeDisplayTitle(item);
 
                             return (
                               <div

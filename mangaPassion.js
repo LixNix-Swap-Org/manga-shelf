@@ -5,6 +5,7 @@ const { db, uploadsDir, runTransaction, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
 const { normalizePublisher } = require('./utils/publishers');
 const { normalizeIsbn } = require('./utils/isbn');
+const { inferVolumeType, volumeNumberOf } = require('./utils/volumeType');
 
 const pkg = require('./package.json');
 const log = require('./utils/logger').child('manga-passion');
@@ -326,6 +327,25 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
   return result;
 }
 
+/**
+ * Entry type of an official Manga Passion volume: 'volume' | 'special_edition' | 'schuber' | 'special'.
+ * A Collectors/Limited Edition has the same number as the regular volume, so the type is part of its identity.
+ */
+function classifyOfficialVolume(ov) {
+  const key = String(ov.volume_number || '').trim().toLowerCase();
+  const titleKey = String(ov.title || '').trim().toLowerCase();
+  if (ov.specialType === 1 || titleKey.includes('schuber') || titleKey.includes('box')) return 'schuber';
+  if (ov.specialType === 2 || /edition|limited|collectors|variant/i.test(titleKey)) return 'special_edition';
+  if (key === 'special' || /special|extra|guide/i.test(titleKey)) return 'special';
+  return 'volume';
+}
+
+/** Volume number as stored for an official entry ("Special" entries use their title). */
+function officialVolumeNumber(ov) {
+  const key = String(ov.volume_number || '').trim().toLowerCase();
+  return key === 'special' && ov.title ? ov.title.trim() : ov.volume_number;
+}
+
 async function reconcileMangaGaps(mangaId, options = {}) {
   const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   if (!manga) throw new Error('Manga nicht gefunden');
@@ -375,12 +395,14 @@ async function reconcileMangaGaps(mangaId, options = {}) {
   }
   const { edition, volumes: officialVolumes } = details;
 
-  // Map user's volumes by cleaned volume_number and by notes
-  const userVolMap = new Map();
+  // Index the user's volumes by type AND number: Collectors Edition 5 is not Band 5.
+  const userByTypeNum = new Map();
   const userNotesMap = new Map();
   userVolumes.forEach(v => {
-    const key = String(v.volume_number || '').trim().toLowerCase();
-    userVolMap.set(key, v);
+    const type = inferVolumeType(v);
+    const num = String(v.volume_number || '').trim().toLowerCase();
+    const k = `${type}:${num}`;
+    if (!userByTypeNum.has(k) || v.status === 'Vorhanden') userByTypeNum.set(k, v);
     if (v.notes) {
       userNotesMap.set(String(v.notes).trim().toLowerCase(), v);
     }
@@ -392,17 +414,28 @@ async function reconcileMangaGaps(mangaId, options = {}) {
   officialVolumes.forEach(ov => {
     const key = String(ov.volume_number || '').trim().toLowerCase();
     const titleKey = String(ov.title || '').trim().toLowerCase();
-    let existing = userVolMap.get(key);
+    const inferredType = classifyOfficialVolume(ov);
+    let existing = userByTypeNum.get(`${inferredType}:${key}`);
 
-    // If no direct number match and this entry has a title, check notes/titles or Schuber names
-    if (!existing && titleKey) {
+    // Numbered schuber / special editions / specials: "Schuber 8" in the collection is official "8 (Schuber)"
+    if (!existing && inferredType !== 'volume' && /^\d+$/.test(key)) {
+      const wanted = parseInt(key, 10);
+      existing = userVolumes.find(uv => inferVolumeType(uv) === inferredType && volumeNumberOf(uv) === wanted);
+    }
+
+    // Named entries (e.g. "East Blue Leerschuber") and titled volumes: check notes/titles and Schuber saga names.
+    // A Special/Collectors/Limited Edition title is generic and shared by many entries, so it is never matched by name.
+    if (!existing && titleKey && inferredType !== 'special_edition' && !(inferredType !== 'volume' && /^\d+$/.test(key))) {
       existing = userNotesMap.get(titleKey);
       if (!existing) {
         existing = userVolumes.find(uv => {
+          // a Leerschuber is not covered by a regular volume or a Collectors Edition: compare like with like
+          if (inferVolumeType(uv) !== inferredType) return false;
           const uvNotes = String(uv.notes || '').trim().toLowerCase();
           const uvNum = String(uv.volume_number || '').trim().toLowerCase();
           if (uvNotes && (uvNotes.includes(titleKey) || titleKey.includes(uvNotes))) return true;
-          if (uvNum && (uvNum.includes(titleKey) || titleKey.includes(uvNum))) return true;
+          // a bare number ("1") is a substring of many titles ("... Bände 1-5") and must not count as a name match
+          if (uvNum && !/^\d+$/.test(uvNum) && (uvNum.includes(titleKey) || titleKey.includes(uvNum))) return true;
           return false;
         });
       }
@@ -419,20 +452,7 @@ async function reconcileMangaGaps(mangaId, options = {}) {
       }
     }
 
-    // Determine entry type and display title
-    let inferredType = 'volume';
-    if (ov.specialType === 1 || titleKey.includes('schuber') || titleKey.includes('box')) {
-      inferredType = 'schuber';
-    } else if (ov.specialType === 2 || /edition|limited|collectors|variant/i.test(titleKey)) {
-      inferredType = 'special_edition';
-    } else if (key === 'special' || /special|extra|guide/i.test(titleKey)) {
-      inferredType = 'special';
-    }
-
-    let finalVolNumber = ov.volume_number;
-    if (key === 'special' && ov.title) {
-      finalVolNumber = ov.title.trim();
-    }
+    const finalVolNumber = officialVolumeNumber(ov);
 
     const enrichedOv = {
       ...ov,
@@ -450,7 +470,7 @@ async function reconcileMangaGaps(mangaId, options = {}) {
         if (start < end && (end - start) <= 30) {
           let allOwned = true;
           for (let k = start; k <= end; k++) {
-            const constituent = userVolMap.get(String(k));
+            const constituent = userByTypeNum.get(`volume:${k}`);
             if (!constituent || constituent.status !== 'Vorhanden') {
               allOwned = false;
               break;
@@ -520,6 +540,33 @@ async function reconcileMangaGaps(mangaId, options = {}) {
   };
 }
 
+/**
+ * Resolves one gap entry sent by the client to an official Manga Passion volume. Accepts what the UI shows:
+ * a plain number ("14" -> the regular volume), a labelled entry ("26 (Abenteuer auf der Insel des Gottes)",
+ * "5 (Collectors Edition)") or a title ("East Blue Leerschuber").
+ */
+function resolveOfficialGap(entry, officialVolumes) {
+  const raw = String(entry).trim();
+  const key = raw.toLowerCase();
+  const labelled = raw.match(/^(\d+)\s*\((.+)\)\s*$/);
+
+  const byTitleKey = officialVolumes.find(ov => String(ov.title || '').trim().toLowerCase() === key);
+  if (byTitleKey) return byTitleKey;
+
+  if (labelled) {
+    const num = labelled[1];
+    const label = labelled[2].trim().toLowerCase();
+    const sameNumber = officialVolumes.filter(ov => String(ov.volume_number || '').trim() === num);
+    return sameNumber.find(ov => String(ov.title || '').trim().toLowerCase() === label)
+      || sameNumber.find(ov => classifyOfficialVolume(ov) === 'volume')
+      || sameNumber[0] || null;
+  }
+
+  const sameNumber = officialVolumes.filter(ov => String(ov.volume_number || '').trim().toLowerCase() === key);
+  // a bare number means the regular volume, never its Collectors Edition / Schuber
+  return sameNumber.find(ov => classifyOfficialVolume(ov) === 'volume') || sameNumber[0] || null;
+}
+
 async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt', editionId = null) {
   const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   if (!manga) throw new Error('Manga nicht gefunden');
@@ -533,12 +580,13 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
     } catch (e) { log.warn('Loading Manga Passion edition for gap import failed:', e.message); }
   }
 
-  const existingVolumes = db.prepare('SELECT id, volume_number, status, price, release_date, cover_image FROM volumes WHERE manga_id = ?').all(mangaId);
+  const existingVolumes = db.prepare('SELECT id, volume_number, status, type, notes, price, release_date, cover_image FROM volumes WHERE manga_id = ?').all(mangaId);
   const existingMap = new Map();
-  existingVolumes.forEach(v => existingMap.set(String(v.volume_number).trim().toLowerCase(), v));
+  existingVolumes.forEach(v => existingMap.set(`${inferVolumeType(v)}:${String(v.volume_number).trim().toLowerCase()}`, v));
 
   const importedIds = [];
   const updatedIds = [];
+  const skippedOwned = [];
 
   const updateStmt = db.prepare(`
     UPDATE volumes 
@@ -561,35 +609,41 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
   `);
 
   runTransaction(() => {
-    for (const volNumStr of gapVolumeNumbers) {
-      const cleanNum = String(volNumStr).trim();
-      const key = cleanNum.toLowerCase();
-      
-      // Find matching official volume data if available
-      const matchedOfficial = officialVolumes.find(ov => {
-        const ovNum = String(ov.volume_number || '').trim().toLowerCase();
-        const ovTitle = String(ov.title || '').trim().toLowerCase();
-        return ovNum === key || (ovTitle && ovTitle === key);
-      });
-      
+    const seen = new Set();
+    for (const entry of gapVolumeNumbers) {
+      const matchedOfficial = resolveOfficialGap(entry, officialVolumes);
+      const cleanLabel = String(entry).trim();
+
+      const targetType = matchedOfficial ? classifyOfficialVolume(matchedOfficial) : (() => {
+        const k = cleanLabel.toLowerCase();
+        if (k.includes('schuber')) return 'schuber';
+        if (/special\s*edition|limited\s*edition|collectors\s*edition/i.test(k)) return 'special_edition';
+        return k === 'special' ? 'special' : 'volume';
+      })();
+      // store the clean number ("26"), not the UI label ("26 (Titel)")
+      const volNumber = String(matchedOfficial ? officialVolumeNumber(matchedOfficial) : cleanLabel.replace(/\s*\(.*\)\s*$/, '')).trim();
+      const key = `${targetType}:${volNumber.toLowerCase()}`;
+      if (seen.has(key)) continue; // the same entry twice in one request
+      seen.add(key);
+
       const price = matchedOfficial && matchedOfficial.price !== null ? matchedOfficial.price : null;
       const releaseDate = matchedOfficial && matchedOfficial.release_date ? matchedOfficial.release_date : null;
       const coverImage = matchedOfficial && matchedOfficial.cover_image ? matchedOfficial.cover_image : null;
       const mpVolId = matchedOfficial ? matchedOfficial.id : null;
       const publisher = manga.publisher || null;
-
-      const isSchuber = key.includes('schuber') || (matchedOfficial?.title && matchedOfficial.title.toLowerCase().includes('schuber')) || matchedOfficial?.specialType === 1;
-      const isSpecialEdition = !isSchuber && (/special\s*edition|limited\s*edition|collectors\s*edition/i.test(key) || (matchedOfficial?.title && /special\s*edition|limited\s*edition|collectors\s*edition/i.test(matchedOfficial.title)) || matchedOfficial?.specialType === 2);
-      const isSpecial = !isSchuber && !isSpecialEdition && (key === 'special' || (matchedOfficial?.title && /special|extra|guide/i.test(matchedOfficial.title)));
-      const targetType = isSchuber ? 'schuber' : (isSpecialEdition ? 'special_edition' : (isSpecial ? 'special' : 'volume'));
-      const notes = isSchuber ? (matchedOfficial?.title || cleanNum) : (matchedOfficial?.title || null);
+      const notes = targetType === 'volume' ? (matchedOfficial?.title || null) : (matchedOfficial?.title || cleanLabel);
 
       const existing = existingMap.get(key);
       if (existing) {
+        // never touch something the user already owns / has read; only complete the data of listed entries
+        if (existing.status === 'Vorhanden' || existing.status === 'Gelesen') {
+          skippedOwned.push(existing.id);
+          continue;
+        }
         updateStmt.run(targetStatus, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
         updatedIds.push(existing.id);
       } else {
-        const ins = insertStmt.run(mangaId, cleanNum, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
+        const ins = insertStmt.run(mangaId, volNumber, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
         importedIds.push(Number(ins.lastInsertRowid));
       }
     }
@@ -604,6 +658,7 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
     success: true,
     imported_count: importedIds.length,
     updated_count: updatedIds.length,
+    skipped_owned_count: skippedOwned.length,
     total_processed: importedIds.length + updatedIds.length
   };
 }

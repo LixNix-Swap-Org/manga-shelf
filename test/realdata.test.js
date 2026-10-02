@@ -62,3 +62,12 @@ test('migration v4 normalizes publisher names that were stored before the fix', 
     assert.equal(db.prepare("SELECT publisher FROM volumes WHERE volume_number = '1' AND manga_id = (SELECT id FROM mangas WHERE title = 'Alt A')").get().publisher, 'Carlsen Manga');
     assert.ok(db.prepare('SELECT version FROM schema_migrations WHERE version = 4').get());
 });
+
+test('shopping list tells special editions and schuber apart from regular volumes', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Einkauf Typen' })).body.id;
+    for (const [n, type] of [['11', 'volume'], ['11', 'special_edition'], ['Leerschuber 1-5', 'schuber']]) {
+        assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: n, type, status: 'Fehlt' })).status, 200);
+    }
+    const items = (await admin('GET', '/shopping-list')).body.items.filter(i => i.manga_id === id);
+    assert.deepEqual(items.map(i => `${i.volume_number}|${i.type}`).sort(), ['11|special_edition', '11|volume', 'Leerschuber 1-5|schuber']);
+});

@@ -49,7 +49,7 @@ test('getVolumeDisplayTitle: adds prefixes without duplicating them', async () =
     assert.equal(getVolumeDisplayTitle({ type: 'schuber', volume_number: '2' }), 'Schuber 2');
     assert.equal(getVolumeDisplayTitle({ type: 'schuber', volume_number: 'Schuber 2' }), 'Schuber 2');
     assert.equal(getVolumeDisplayTitle({ type: 'special_edition', volume_number: '14' }), 'Band 14 (Special Edition)');
-    assert.equal(getVolumeDisplayTitle({ type: 'special_edition', volume_number: 'Limited Edition 14' }), 'Limited Edition 14');
+    assert.equal(getVolumeDisplayTitle({ type: 'special_edition', volume_number: 'Limited Edition 14' }), 'Band 14 (Limited Edition)');
     assert.equal(getVolumeDisplayTitle({ type: 'special', volume_number: 'Fanbook' }), 'Special Fanbook');
 });
 
