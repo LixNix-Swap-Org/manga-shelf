@@ -16,7 +16,7 @@ const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const http = require('http');
 const https = require('https');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const pkg = require('./package.json');
 const { closeDb, uploadsDir } = require('./db');
