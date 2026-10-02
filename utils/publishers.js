@@ -14,6 +14,7 @@ const CANONICAL_PUBLISHERS = {
     'panini verlag gmbh': 'Panini Verlags GmbH',
     'panini verlags gmbh': 'Panini Verlags GmbH',
     'panini': 'Panini Verlags GmbH',
+    'panini manga': 'Panini Verlags GmbH',
     'papertoons': 'Papertoons',
     'schreiber&leser': 'Schreiber&Leser',
     'schreiber & leser': 'Schreiber&Leser',
@@ -24,8 +25,9 @@ const normalizePublisher = (name) => {
     if (!name || typeof name !== 'string') return null;
     const trimmed = name.trim();
     if (!trimmed) return null;
-    const lower = trimmed.toLowerCase();
-    return CANONICAL_PUBLISHERS[lower] || trimmed;
+    // Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
+    const lower = trimmed.toLowerCase().replace(/\s*!+$/, '');
+    return CANONICAL_PUBLISHERS[lower] || trimmed.replace(/\s*!+$/, '');
 };
 
 module.exports = {

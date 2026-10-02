@@ -16,6 +16,7 @@ export const CANONICAL_PUBLISHERS = {
   'panini verlag gmbh': 'Panini Verlags GmbH',
   'panini verlags gmbh': 'Panini Verlags GmbH',
   'panini': 'Panini Verlags GmbH',
+  'panini manga': 'Panini Verlags GmbH',
   'papertoons': 'Papertoons',
   'schreiber&leser': 'Schreiber&Leser',
   'schreiber & leser': 'Schreiber&Leser',
@@ -25,8 +26,9 @@ export const CANONICAL_PUBLISHERS = {
 export const normalizePubName = (name) => {
   if (!name || typeof name !== 'string') return '';
   const trimmed = name.trim();
-  const lower = trimmed.toLowerCase();
-  return CANONICAL_PUBLISHERS[lower] || trimmed;
+  // Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
+  const lower = trimmed.toLowerCase().replace(/\s*!+$/, '');
+  return CANONICAL_PUBLISHERS[lower] || trimmed.replace(/\s*!+$/, '');
 };
 
 /** Derives the entry type from vol.type, falling back to keywords in volume_number / notes. */
@@ -39,6 +41,17 @@ export const inferVolumeType = (vol) => {
     || notes.includes('special edition') || notes.includes('limited edition')) return 'special_edition';
   if (num.includes('special') || num.includes('extra') || num.includes('sonderband')) return 'special';
   return 'volume';
+};
+
+/**
+ * detectedGaps entries are either a plain volume number (114) or a label with the official title
+ * ("26 (Abenteuer auf der Insel des Gottes)", "East Blue Leerschuber"). Returns the volume number
+ * of numbered entries and null for labels without one (schuber, specials).
+ */
+export const gapVolumeNumber = (gap) => {
+  if (typeof gap === 'number') return Number.isInteger(gap) ? gap : null;
+  const match = String(gap).trim().match(/^(\d+)(?:\s*\(.*\))?$/);
+  return match ? parseInt(match[1], 10) : null;
 };
 
 export const getVolumeSortInfo = (vol) => {

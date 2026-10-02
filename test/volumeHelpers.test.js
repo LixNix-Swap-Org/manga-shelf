@@ -61,3 +61,23 @@ test('getSpinePublisherTheme: known publishers get their accent, unknown ones th
     assert.equal(getSpinePublisherTheme('Irgendwer').accentName, 'Irgendwer');
     assert.equal(getSpinePublisherTheme('').accentName, 'Manga');
 });
+
+test('gapVolumeNumber: numbered gaps resolve to their number, labels without one to null', async () => {
+    const { gapVolumeNumber } = await load();
+    assert.equal(gapVolumeNumber(114), 114);
+    assert.equal(gapVolumeNumber('114'), 114);
+    assert.equal(gapVolumeNumber('26 (Abenteuer auf der Insel des Gottes)'), 26);
+    assert.equal(gapVolumeNumber('7 (Titel (mit Klammern))'), 7);
+    assert.equal(gapVolumeNumber('East Blue Leerschuber'), null);
+    assert.equal(gapVolumeNumber('Special'), null);
+    assert.equal(gapVolumeNumber(2.5), null);
+});
+
+test('normalizePubName: trailing "!" from Manga Passion does not create a second publisher', async () => {
+    const { normalizePubName } = await load();
+    assert.equal(normalizePubName('Carlsen Manga!'), 'Carlsen Manga');
+    assert.equal(normalizePubName('Carlsen Manga !'), 'Carlsen Manga');
+    assert.equal(normalizePubName('Panini Manga'), 'Panini Verlags GmbH');
+    assert.equal(normalizePubName('Planet Manga'), 'Planet Manga');
+    assert.equal(normalizePubName('Sonst Verlag!'), 'Sonst Verlag');
+});

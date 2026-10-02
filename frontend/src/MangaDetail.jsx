@@ -9,7 +9,7 @@ import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { loadMangaDetail, updateCachedManga } from './utils/offlineStore';
-import { normalizePubName, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
+import { normalizePubName, gapVolumeNumber, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -1056,7 +1056,8 @@ export default function MangaDetail({ user }) {
     }
 
     const items = [];
-    const gapsSet = new Set(detectedGaps.map(g => (typeof g === 'string' && /^\d+$/.test(g)) ? parseInt(g, 10) : g));
+    // titled gaps ("26 (Titel)") must resolve to their volume number, otherwise no ghost entry is drawn for them
+    const gapsSet = new Set(detectedGaps.map(gapVolumeNumber).filter(n => n !== null));
     const sorted = [...filteredVolumes];
 
     // Ensure no volume that actually exists in sorted is treated as a gap:

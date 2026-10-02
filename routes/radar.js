@@ -91,7 +91,9 @@ router.get('/release-radar', requireAuth, (req, res) => {
             FROM volumes v
             JOIN mangas m ON v.manga_id = m.id
             WHERE v.status IN ('Vorbestellt', 'Erscheint bald', 'Bestellt')
-               OR (v.release_date IS NOT NULL AND TRIM(v.release_date) != '' AND v.status NOT IN ('Vorhanden', 'Gelesen'))
+               OR (v.release_date IS NOT NULL AND TRIM(v.release_date) != '' AND v.status NOT IN ('Vorhanden', 'Gelesen')
+                   -- missing back-catalogue volumes (release in the past) belong on the shopping list, not on the radar
+                   AND SUBSTR(TRIM(v.release_date), 1, 7) >= strftime('%Y-%m', 'now', 'localtime'))
             ORDER BY 
                 CASE WHEN v.release_date IS NOT NULL AND TRIM(v.release_date) != '' THEN 0 ELSE 1 END ASC,
                 CASE 

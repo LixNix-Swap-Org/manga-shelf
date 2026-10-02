@@ -119,6 +119,22 @@ function runSequentialMigrations(database) {
                     CREATE INDEX IF NOT EXISTS idx_mangas_passion_id ON mangas (manga_passion_id);
                 `);
             }
+        },
+        {
+            version: 4,
+            name: 'normalize_manga_passion_publisher_names',
+            up: (d) => {
+                // Series/volumes created from Manga Passion carry names like "Carlsen Manga!" / "Panini Manga"
+                const { normalizePublisher } = require('./utils/publishers');
+                for (const table of ['mangas', 'volumes']) {
+                    const rows = d.prepare(`SELECT DISTINCT publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) != ''`).all();
+                    const update = d.prepare(`UPDATE ${table} SET publisher = ? WHERE publisher = ?`);
+                    for (const { publisher } of rows) {
+                        const normalized = normalizePublisher(publisher);
+                        if (normalized && normalized !== publisher) update.run(normalized, publisher);
+                    }
+                }
+            }
         }
     ];
 

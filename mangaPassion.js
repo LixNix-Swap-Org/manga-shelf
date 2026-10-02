@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { db, uploadsDir, runTransaction, withTransaction } = require('./db.js');
 const { fetchRemoteImage } = require('./utils/safeFetch');
+const { normalizePublisher } = require('./utils/publishers');
 
 const pkg = require('./package.json');
 const log = require('./utils/logger').child('manga-passion');
@@ -157,7 +158,7 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
 
   const scored = candidates.map(c => {
     const score = scoreEdition(c, title, publisher, totalVolumes);
-    const pubName = c.publishers?.[0]?.name || 'Unbekannt';
+    const pubName = normalizePublisher(c.publishers?.[0]?.name) || 'Unbekannt';
     return {
       id: c.id,
       title: c.title,
@@ -190,6 +191,8 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
           return parsed;
         }
         if (parsed?.edition && parsed.edition.author !== undefined) {
+          // cached before publisher names were normalized ("Carlsen Manga!")
+          parsed.edition.publisher = normalizePublisher(parsed.edition.publisher) || 'Unbekannt';
           return parsed;
         }
       }
@@ -230,7 +233,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
         tags,
         total_volumes: edData.numVolumes || null,
         status: edData.status === 2 ? 'Abgeschlossen' : (edData.status === 1 ? 'Laufend' : 'Unbekannt'),
-        publisher: edData.publishers?.[0]?.name || 'Unbekannt',
+        publisher: normalizePublisher(edData.publishers?.[0]?.name) || 'Unbekannt',
         cover_image: edData.cover || null,
         description: edData.description || null
       };
@@ -770,7 +773,7 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
         const localCover = await downloadRemoteImageToUploads(fullVol.cover);
         const relDate = fullVol.date ? fullVol.date.slice(0, 10) : null;
         const relYear = fullVol.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
-        const publisher = fullVol.edition?.publishers?.[0]?.name || manga?.publisher || null;
+        const publisher = normalizePublisher(fullVol.edition?.publishers?.[0]?.name) || manga?.publisher || null;
 
         return {
           success: true,
