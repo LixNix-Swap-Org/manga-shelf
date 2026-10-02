@@ -140,7 +140,9 @@ app.use(express.static(frontendPath, {
     setHeaders: setStaticHeaders
 }));
 
-app.get('/{*splat}', (req, res) => {
+// SPA fallback: serves index.html for all non-API GET/HEAD requests
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath, { dotfiles: 'allow' }); // install path may contain dot-directories
     } else {

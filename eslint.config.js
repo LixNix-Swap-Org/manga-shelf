@@ -3,7 +3,7 @@ const globals = require('globals');
 const react = require('eslint-plugin-react');
 
 module.exports = [
-    { ignores: ['node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/public/', 'frontend/*.js', 'dist_pack/', 'dist/', 'data/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
+    { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/public/', 'frontend/*.js', 'dist_pack/', 'dist/', 'data/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
     js.configs.recommended,
     {
         files: ['**/*.js'],
