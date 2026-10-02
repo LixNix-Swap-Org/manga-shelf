@@ -1576,7 +1576,7 @@ export default function Dashboard({ user, onLogout }) {
         setShoppingSearch={setShoppingSearch}
         shoppingPublisherFilter={shoppingPublisherFilter}
         setShoppingPublisherFilter={setShoppingPublisherFilter}
-        normalizePubName={normalizePublisherName}
+        normalizePubName={normalizePubName}
         setActiveMainView={setActiveMainView}
         canEdit={canEdit}
         handleQuickBuy={handleQuickBuy}
