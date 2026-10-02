@@ -69,8 +69,8 @@ test('filterAndSortMangas: search over title / alt title / author / publisher, f
     assert.deepEqual(titles({ sortBy: 'newest_first' }), ['Dragon Ball', 'One Piece', 'Akira', 'Berserk']);
     assert.deepEqual(titles({ sortBy: 'volumes_desc' }), ['Berserk', 'Akira', 'Dragon Ball', 'One Piece']);
     assert.deepEqual(titles({ sortBy: 'value_desc' }), ['Berserk', 'Akira', 'Dragon Ball', 'One Piece']);
-    // sorts by the raw publisher string (so 'carlsen manga' comes before 'Carlsen Manga'); series without publisher last
-    assert.deepEqual(titles({ sortBy: 'publisher_asc' }), ['Berserk', 'Akira', 'One Piece', 'Dragon Ball']);
+    // by canonical publisher name ('carlsen manga' = 'Carlsen Manga', then by title); series without publisher last
+    assert.deepEqual(titles({ sortBy: 'publisher_asc' }), ['Akira', 'Berserk', 'One Piece', 'Dragon Ball']);
     assert.deepEqual(titles({ sortBy: 'progress_desc' }), ['Berserk', 'Akira', 'Dragon Ball', 'One Piece']);
 });
 

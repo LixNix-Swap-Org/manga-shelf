@@ -67,6 +67,24 @@ test('manga + volumes CRUD keeps owned_volumes in sync', async () => {
     assert.equal((await editor('GET', `/mangas/${id}`)).status, 404);
 });
 
+test('manga detail lists every reader with their read counts (reader_stats)', async () => {
+    const { body } = await editor('POST', '/mangas', { title: 'Reader Manga' });
+    await editor('POST', '/volumes/batch', { manga_id: body.id, from: 1, to: 4 });
+    const volumes = (await editor('GET', `/mangas/${body.id}`)).body.volumes;
+    await editor('POST', `/volumes/${volumes[0].id}/read`, {});
+    await editor('POST', `/volumes/${volumes[1].id}/read`, {});
+
+    const stats = (await editor('GET', `/mangas/${body.id}`)).body.reader_stats;
+    assert.ok(Array.isArray(stats) && stats.length >= 2, 'every user is listed');
+    const mine = stats.find(r => r.read_count === 2);
+    assert.ok(mine, 'the reader with two read volumes is present');
+    assert.equal(mine.total_owned, 4);
+    assert.equal(mine.unread_count, 2);
+    assert.equal(mine.percentage, 50);
+    assert.ok(mine.user_id && mine.username);
+    assert.ok(stats.some(r => r.read_count === 0), 'other users have no reads');
+});
+
 test('batch volume creation is atomic and rejects invalid ranges', async () => {
     const { body } = await editor('POST', '/mangas', { title: 'Batch Manga' });
     assert.equal((await editor('POST', '/volumes/batch', { manga_id: body.id, from: 5, to: 1 })).status, 400);

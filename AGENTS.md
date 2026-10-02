@@ -289,7 +289,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/users/:id/stats` | GET | `requireAuth` | Persönliche Lesestatistiken eines Nutzers |
 | `/api/mangas` | GET | `requireAuth` | Alle Mangas für die Übersicht abrufen |
 | `/api/mangas` | POST | `requireEditor` | Neuen Manga anlegen |
-| `/api/mangas/:id` | GET | `requireAuth` | Details eines Mangas inkl. Bände & Lesestatus |
+| `/api/mangas/:id` | GET | `requireAuth` | Details eines Mangas inkl. Bände, Lesestatus (`read_users`, `is_read` für den Aufrufer) und `reader_stats` (je Benutzer: `read_count`, `total_owned`, `unread_count`, `percentage`; Quelle der Leser-Leiste) |
 | `/api/mangas/:id` | PUT | `requireEditor` | Manga Metadaten bearbeiten |
 | `/api/mangas/:id` | DELETE | `requireEditor` | Manga löschen (löscht kaskadierend Bände) |
 | `/api/volumes` | POST | `requireEditor` | Einzelnen Band anlegen |

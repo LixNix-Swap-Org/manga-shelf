@@ -117,7 +117,7 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
         case 'title_desc':
           return (b.title || '').localeCompare(a.title || '');
         case 'publisher_asc':
-          return (a.publisher || 'ZZZ').localeCompare(b.publisher || 'ZZZ') || (a.title || '').localeCompare(b.title || '');
+          return (normalizePubName(a.publisher) || 'ZZZ').localeCompare(normalizePubName(b.publisher) || 'ZZZ') || (a.title || '').localeCompare(b.title || '');
         case 'volumes_desc':
           return (b.owned_volumes || 0) - (a.owned_volumes || 0);
         case 'value_desc':
