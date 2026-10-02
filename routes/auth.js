@@ -11,6 +11,19 @@ const {
     requireAuth, 
     requireAdmin 
 } = require('../middleware/auth');
+const { loginLimiter, setupLimiter } = require('../middleware/rateLimit');
+
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything beyond 72 bytes
+const passwordError = (pw) => {
+    if (typeof pw !== 'string' || pw.length < MIN_PASSWORD_LENGTH) {
+        return `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`;
+    }
+    if (Buffer.byteLength(pw) > MAX_PASSWORD_LENGTH) {
+        return `Passwort darf höchstens ${MAX_PASSWORD_LENGTH} Bytes lang sein`;
+    }
+    return null;
+};
 
 // --- SYSTEM & VERSION ---
 router.get('/version', (req, res) => {
@@ -22,33 +35,56 @@ router.get('/setup/status', (req, res) => {
     res.json({ needsSetup: !hasAdmin(), version: pkg.version });
 });
 
-router.post('/setup', (req, res) => {
-    if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich' });
-    
-    const hash = bcrypt.hashSync(password, 10);
-    const stmt = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
-    const result = stmt.run(username.trim(), hash, 'admin');
-    const newUserId = Number(result.lastInsertRowid);
-    
-    // Auto-login on setup
-    const token = jwt.sign({ id: newUserId, username: username.trim(), role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-    setAuthCookie(req, res, token);
-    res.json({ success: true, user: { id: newUserId, username: username.trim(), role: 'admin' } });
+router.post('/setup', setupLimiter, async (req, res) => {
+    try {
+        if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
+        const { username, password } = req.body || {};
+        if (typeof username !== 'string' || !username.trim() || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich' });
+        }
+        const pwErr = passwordError(password);
+        if (pwErr) return res.status(400).json({ error: pwErr });
+
+        const cleanUsername = username.trim();
+        const hash = await bcrypt.hash(password, 10);
+
+        // Re-check right before the (synchronous) insert so two concurrent setups cannot both create an admin
+        if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
+        const result = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, 'admin');
+        const newUserId = Number(result.lastInsertRowid);
+
+        // Auto-login on setup
+        const token = jwt.sign({ id: newUserId, username: cleanUsername, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+        setAuthCookie(req, res, token);
+        res.json({ success: true, user: { id: newUserId, username: cleanUsername, role: 'admin' } });
+    } catch (err) {
+        console.error('Setup error:', err);
+        res.status(500).json({ error: 'Fehler bei der Einrichtung' });
+    }
 });
 
-router.post('/auth/login', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Bitte Benutzername und Passwort eingeben' });
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-        return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+// Pre-computed hash so unknown usernames cost the same time as wrong passwords (no user enumeration by timing)
+const DUMMY_HASH = bcrypt.hashSync('manga-shelf-dummy-password', 10);
+
+router.post('/auth/login', loginLimiter, async (req, res) => {
+    try {
+        const { username, password } = req.body || {};
+        if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+            return res.status(400).json({ error: 'Bitte Benutzername und Passwort eingeben' });
+        }
+        const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
+        const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+        if (!user || !valid) {
+            return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+        }
+
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        setAuthCookie(req, res, token);
+        res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Anmeldung fehlgeschlagen' });
     }
-    
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    setAuthCookie(req, res, token);
-    res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
 });
 
 router.post('/auth/logout', (req, res) => {
@@ -71,15 +107,14 @@ router.get('/users', requireAdmin, (req, res) => {
     }
 });
 
-router.post('/users', requireAdmin, (req, res) => {
+router.post('/users', requireAdmin, async (req, res) => {
     try {
-        const { username, password, role = 'editor' } = req.body;
-        if (!username || !username.trim()) {
+        const { username, password, role = 'editor' } = req.body || {};
+        if (typeof username !== 'string' || !username.trim()) {
             return res.status(400).json({ error: 'Benutzername darf nicht leer sein' });
         }
-        if (!password || password.length < 4) {
-            return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen lang sein' });
-        }
+        const pwErr = passwordError(password);
+        if (pwErr) return res.status(400).json({ error: pwErr });
         const cleanUsername = username.trim();
         const cleanRole = ['admin', 'visitor', 'guest'].includes(role) ? role : 'editor';
 
@@ -88,7 +123,7 @@ router.post('/users', requireAdmin, (req, res) => {
             return res.status(400).json({ error: 'Dieser Benutzername existiert bereits' });
         }
 
-        const hash = bcrypt.hashSync(password, 10);
+        const hash = await bcrypt.hash(password, 10);
         const stmt = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
         const result = stmt.run(cleanUsername, hash, cleanRole);
 
@@ -102,14 +137,14 @@ router.post('/users', requireAdmin, (req, res) => {
         });
     } catch (err) {
         console.error('Error creating user:', err);
-        res.status(500).json({ error: 'Fehler beim Anlegen des Benutzers: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Anlegen des Benutzers' });
     }
 });
 
-router.put('/users/:id', requireAdmin, (req, res) => {
+router.put('/users/:id', requireAdmin, async (req, res) => {
     try {
         const userId = parseInt(req.params.id, 10);
-        const { role, password } = req.body;
+        const { role, password } = req.body || {};
         const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
         if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
@@ -126,8 +161,10 @@ router.put('/users/:id', requireAdmin, (req, res) => {
             }
         }
 
-        if (password && password.length >= 4) {
-            const hash = bcrypt.hashSync(password, 10);
+        if (password) {
+            const pwErr = passwordError(password);
+            if (pwErr) return res.status(400).json({ error: pwErr });
+            const hash = await bcrypt.hash(password, 10);
             db.prepare('UPDATE users SET role = ?, password_hash = ? WHERE id = ?').run(newRole, hash, userId);
         } else {
             db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);

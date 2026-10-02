@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const http = require('http');
 const https = require('https');
 const { db, uploadsDir } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
-const { upload, ALLOWED_IMAGE_EXTS } = require('../middleware/upload');
+const { upload } = require('../middleware/upload');
+const { fetchRemoteImage } = require('../utils/safeFetch');
 const { normalizePublisher } = require('../utils/publishers');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
 
@@ -148,49 +148,21 @@ router.get('/lookup/manga', requireAuth, async (req, res) => {
 });
 
 // 2. Download remote image (e.g. from AniList) and save locally to data/uploads
+// SSRF-protected: public hosts only, size-capped, verified by magic bytes.
 router.post('/upload-remote', requireEditor, async (req, res) => {
     try {
-        const { url } = req.body;
-        if (!url || !url.startsWith('http')) {
+        const { url } = req.body || {};
+        if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
             return res.status(400).json({ error: 'Ungültige Bild-URL' });
         }
-        const parsedUrl = new URL(url);
-        const ext = path.extname(parsedUrl.pathname).toLowerCase() || '.jpg';
-        const cleanExt = ALLOWED_IMAGE_EXTS.has(ext) ? ext : '.jpg';
-        const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + cleanExt;
-        const targetPath = path.join(uploadsDir, filename);
-
-        const client = parsedUrl.protocol === 'https:' ? https : http;
-        const fileStream = fs.createWriteStream(targetPath);
-
-        const fetchReq = client.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (imgRes) => {
-            if (imgRes.statusCode !== 200) {
-                fileStream.close();
-                try { fs.unlinkSync(targetPath); } catch (e) {}
-                return res.status(400).json({ error: 'Bild konnte nicht geladen werden (Status ' + imgRes.statusCode + ')' });
-            }
-            imgRes.pipe(fileStream);
-            fileStream.on('finish', () => {
-                fileStream.close();
-                res.json({ url: '/uploads/' + filename });
-            });
-        });
-
-        fetchReq.on('error', (err) => {
-            fileStream.close();
-            try { fs.unlinkSync(targetPath); } catch (e) {}
-            res.status(500).json({ error: 'Fehler beim Herunterladen des Bildes: ' + err.message });
-        });
-
-        fetchReq.setTimeout(10000, () => {
-            fetchReq.destroy();
-            fileStream.close();
-            try { fs.unlinkSync(targetPath); } catch (e) {}
-            res.status(504).json({ error: 'Download-Zeitüberschreitung' });
-        });
+        const { buffer, ext } = await fetchRemoteImage(url);
+        const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + ext;
+        await fs.promises.writeFile(path.join(uploadsDir, filename), buffer);
+        res.json({ url: '/uploads/' + filename });
     } catch (e) {
-        console.error('Remote upload error:', e);
-        res.status(500).json({ error: 'Fehler beim Speichern des externen Bildes' });
+        console.warn('Remote upload failed:', e.message);
+        if (res.headersSent) return;
+        res.status(400).json({ error: 'Bild konnte nicht geladen werden: ' + e.message });
     }
 });
 

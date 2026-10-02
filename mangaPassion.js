@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db } = require('./db.js');
+const { db, uploadsDir, withTransaction } = require('./db.js');
+const { fetchRemoteImage } = require('./utils/safeFetch');
 
 const USER_AGENT = 'MangaShelf/2.6.0';
 const HEADERS = {
@@ -34,10 +35,6 @@ async function downloadRemoteImageToUploads(url) {
     // Deterministic filename based on MD5 hash of the URL to prevent duplicates
     const urlHash = crypto.createHash('md5').update(url.trim()).digest('hex').slice(0, 16);
     const filename = `mp-cov-${urlHash}${cleanExt}`;
-    const uploadsDir = path.join(__dirname, 'data', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
     const targetPath = path.join(uploadsDir, filename);
 
     // If already downloaded and valid, return existing local URL immediately
@@ -48,9 +45,7 @@ async function downloadRemoteImageToUploads(url) {
       }
     }
 
-    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': USER_AGENT } }, 8000);
-    if (!res.ok) return url;
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const { buffer } = await fetchRemoteImage(url);
     if (buffer.length < 500) return url; // Invalid image or empty
 
     fs.writeFileSync(targetPath, buffer);
@@ -539,6 +534,7 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
   const importedIds = [];
   const updatedIds = [];
 
+  withTransaction(() => {
   for (const volNumStr of gapVolumeNumbers) {
     const cleanNum = String(volNumStr).trim();
     const key = cleanNum.toLowerCase();
@@ -587,6 +583,8 @@ async function batchImportGaps(mangaId, gapVolumeNumbers, targetStatus = 'Fehlt'
       importedIds.push(Number(ins.lastInsertRowid));
     }
   }
+
+  });
 
   // Recalculate owned_volumes
   const ownedCountRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mangaId);
@@ -990,8 +988,9 @@ async function autofillMangaVolumes(mangaId, options = {}) {
     WHERE id = ?
   `);
 
-  db.exec('BEGIN TRANSACTION;');
-  try {
+  // Phase 1 (async): match volumes and download covers. No transaction is open while awaiting network I/O.
+  const pendingUpdates = [];
+  {
     for (const uv of userVolumes) {
       const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
       let matched = null;
@@ -1055,15 +1054,16 @@ async function autofillMangaVolumes(mangaId, options = {}) {
       }
 
       if (changed) {
-        updateStmt.run(newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id);
-        updatedCount++;
+        pendingUpdates.push([newDate, newYear, newPages, newPrice, newPub, newCover, newNotes, uv.id]);
       }
     }
-    db.exec('COMMIT;');
-  } catch (err) {
-    try { db.exec('ROLLBACK;'); } catch (_) {}
-    throw err;
   }
+
+  // Phase 2 (sync): apply all updates atomically
+  withTransaction(() => {
+    for (const params of pendingUpdates) updateStmt.run(...params);
+  });
+  updatedCount = pendingUpdates.length;
 
   return {
     success: true,

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t manga-shelf:ci .
+      - name: Smoke test (container starts and answers)
+        run: |
+          docker run -d --name ms -p 3000:3000 manga-shelf:ci
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:3000/api/version && exit 0
+            sleep 1
+          done
+          docker logs ms
+          exit 1
