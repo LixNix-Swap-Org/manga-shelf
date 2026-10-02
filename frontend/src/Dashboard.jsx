@@ -7,6 +7,7 @@ import AddMangaModal from './components/modals/AddMangaModal';
 import BarcodeScannerButton from './components/common/BarcodeScannerButton';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { normalizePubName } from './utils/volumeHelpers';
 import { 
   Search, Plus, Download, LogOut, BookOpen, Trash2, 
   Sparkles, CheckCircle2, Library, X, Upload, Layers,
@@ -586,35 +587,6 @@ export default function Dashboard({ user, onLogout }) {
 
   const handleOpenRestoreModal = () => {
     setShowRestoreModal(true);
-  };
-
-  // Known canonical German publishers map for clean display
-  const CANONICAL_PUBLISHERS = {
-    'altraverse': 'Altraverse',
-    'carlsen manga': 'Carlsen Manga',
-    'crunchyroll': 'Crunchyroll',
-    'dani books': 'Dani Books',
-    'dark horse manga': 'Dark Horse Manga',
-    'egmont manga': 'Egmont Manga',
-    'hayabusa': 'Hayabusa',
-    'kazé manga': 'Kazé Manga',
-    'kaze manga': 'Kazé Manga',
-    'manga cult': 'Manga Cult',
-    'manga jam session': 'Manga JAM Session',
-    'panini verlag gmbh': 'Panini Verlags GmbH',
-    'panini verlags gmbh': 'Panini Verlags GmbH',
-    'panini': 'Panini Verlags GmbH',
-    'papertoons': 'Papertoons',
-    'schreiber&leser': 'Schreiber&Leser',
-    'schreiber & leser': 'Schreiber&Leser',
-    'tokyopop': 'TOKYOPOP'
-  };
-
-  const normalizePubName = (name) => {
-    if (!name || typeof name !== 'string') return '';
-    const trimmed = name.trim();
-    const lower = trimmed.toLowerCase();
-    return CANONICAL_PUBLISHERS[lower] || trimmed;
   };
 
   // Available publishers for filtering (deduplicated case-insensitively & canonicalized)

@@ -5,6 +5,7 @@ import GapFillModal from './components/detail/GapFillModal';
 import LightboxGallery from './components/detail/LightboxGallery';
 import MpEditionModal from './components/detail/MpEditionModal';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { normalizePubName, getVolumeSortInfo, getVolumeDisplayTitle, getSpinePublisherTheme } from './utils/volumeHelpers';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Image as ImageIcon, Check, Plus, 
@@ -638,34 +639,6 @@ export default function MangaDetail({ user }) {
   const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read).length;
   const currentReaderUnreadCount = currentReaderStats ? currentReaderStats.unread_count : Math.max(0, ownedCount - currentReaderReadCount);
 
-  const CANONICAL_PUBLISHERS = {
-    'altraverse': 'Altraverse',
-    'carlsen manga': 'Carlsen Manga',
-    'crunchyroll': 'Crunchyroll',
-    'dani books': 'Dani Books',
-    'dark horse manga': 'Dark Horse Manga',
-    'egmont manga': 'Egmont Manga',
-    'hayabusa': 'Hayabusa',
-    'kazé manga': 'Kazé Manga',
-    'kaze manga': 'Kazé Manga',
-    'manga cult': 'Manga Cult',
-    'manga jam session': 'Manga JAM Session',
-    'panini verlag gmbh': 'Panini Verlags GmbH',
-    'panini verlags gmbh': 'Panini Verlags GmbH',
-    'panini': 'Panini Verlags GmbH',
-    'papertoons': 'Papertoons',
-    'schreiber&leser': 'Schreiber&Leser',
-    'schreiber & leser': 'Schreiber&Leser',
-    'tokyopop': 'TOKYOPOP'
-  };
-
-  const normalizePubName = (name) => {
-    if (!name || typeof name !== 'string') return '';
-    const trimmed = name.trim();
-    const lower = trimmed.toLowerCase();
-    return CANONICAL_PUBLISHERS[lower] || trimmed;
-  };
-
   // Available publishers for filtering (deduplicated case-insensitively & canonicalized)
   const availablePublishers = useMemo(() => {
     const pubMap = new Map();
@@ -683,69 +656,6 @@ export default function MangaDetail({ user }) {
 
   // Available conditions
   const conditionsList = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
-
-  const getVolumeSortInfo = (vol) => {
-    const rawType = vol.type || (
-      String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
-      String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
-      String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') || String(vol.volume_number).toLowerCase().includes('sonderband') ? 'special' :
-      'volume'
-    );
-    
-    // Check for number in volume_number
-    const match = String(vol.volume_number).match(/(\d+(\.\d+)?)/);
-    const num = match ? parseFloat(match[1]) : (parseFloat(vol.volume_number) || 999999);
-    
-    let rank = 1;
-    let subRank = 0;
-    if (rawType === 'volume') {
-      rank = 1;
-      subRank = 0;
-    } else if (rawType === 'special_edition') {
-      if (match) {
-        rank = 1;
-        subRank = 1;
-      } else {
-        rank = 1.5;
-        subRank = 1;
-      }
-    } else if (rawType === 'schuber') {
-      rank = 2;
-      subRank = 2;
-    } else if (rawType === 'special') {
-      rank = 3;
-      subRank = 3;
-    } else if (isNaN(parseFloat(vol.volume_number)) && !match) {
-      rank = 4;
-      subRank = 4;
-    }
-
-    return { rank, num, subRank, raw: String(vol.volume_number), type: rawType };
-  };
-
-  const getVolumeDisplayTitle = (vol) => {
-    const type = vol.type || (
-      String(vol.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
-      String(vol.volume_number).toLowerCase().includes('special edition') || String(vol.volume_number).toLowerCase().includes('limited edition') || String(vol.volume_number).toLowerCase().includes('spezial edition') || (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
-      String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') || String(vol.volume_number).toLowerCase().includes('sonderband') ? 'special' :
-      'volume'
-    );
-    const numStr = String(vol.volume_number || '').trim();
-    if (type === 'schuber') {
-      return numStr.toLowerCase().startsWith('schuber') ? numStr : `Schuber ${numStr}`;
-    }
-    if (type === 'special_edition') {
-      return (numStr.toLowerCase().includes('special edition') || numStr.toLowerCase().includes('limited edition') || numStr.toLowerCase().includes('spezial edition'))
-        ? numStr
-        : `Band ${numStr} (Special Edition)`;
-    }
-    if (type === 'special') {
-      return (numStr.toLowerCase().startsWith('special') || numStr.toLowerCase().startsWith('extra') || numStr.toLowerCase().startsWith('sonderband')) 
-        ? numStr 
-        : `Special ${numStr}`;
-    }
-    return numStr.toLowerCase().startsWith('band') ? numStr : `Band ${numStr}`;
-  };
 
   // Base volumes matching all filters EXCEPT the type filter (for computing accurate type badge counts)
   const baseVolumesForType = useMemo(() => {
@@ -1032,107 +942,6 @@ export default function MangaDetail({ user }) {
     } finally {
       setMpGapLoading(false);
     }
-  };
-
-  const getSpinePublisherTheme = (publisherName) => {
-    const pub = (publisherName || '').toLowerCase().trim();
-    if (pub.includes('carlsen')) {
-      return {
-        bg: 'from-blue-700 via-sky-900 to-slate-950',
-        border: 'border-blue-400/40',
-        text: 'text-blue-100',
-        accentBadge: 'bg-red-600 text-white font-bold',
-        accentName: 'Carlsen'
-      };
-    }
-    if (pub.includes('manga cult')) {
-      return {
-        bg: 'from-neutral-800 via-neutral-900 to-black',
-        border: 'border-neutral-500/50',
-        text: 'text-neutral-100',
-        accentBadge: 'bg-white text-black font-extrabold',
-        accentName: 'Manga Cult'
-      };
-    }
-    if (pub.includes('altraverse')) {
-      return {
-        bg: 'from-orange-600 via-amber-800 to-slate-950',
-        border: 'border-orange-400/40',
-        text: 'text-orange-100',
-        accentBadge: 'bg-orange-500 text-white font-bold',
-        accentName: 'Altraverse'
-      };
-    }
-    if (pub.includes('crunchyroll')) {
-      return {
-        bg: 'from-amber-600 via-orange-700 to-slate-950',
-        border: 'border-amber-400/40',
-        text: 'text-amber-100',
-        accentBadge: 'bg-amber-500 text-slate-950 font-bold',
-        accentName: 'Crunchyroll'
-      };
-    }
-    if (pub.includes('kazé') || pub.includes('kaze')) {
-      return {
-        bg: 'from-yellow-600 via-amber-800 to-slate-950',
-        border: 'border-yellow-400/40',
-        text: 'text-yellow-100',
-        accentBadge: 'bg-yellow-400 text-slate-950 font-bold',
-        accentName: 'Kazé'
-      };
-    }
-    if (pub.includes('tokyopop')) {
-      return {
-        bg: 'from-red-700 via-rose-900 to-slate-950',
-        border: 'border-red-400/40',
-        text: 'text-rose-100',
-        accentBadge: 'bg-red-600 text-white font-bold',
-        accentName: 'TOKYOPOP'
-      };
-    }
-    if (pub.includes('egmont') || pub.includes('ema')) {
-      return {
-        bg: 'from-red-800 via-slate-850 to-slate-950',
-        border: 'border-red-500/40',
-        text: 'text-red-100',
-        accentBadge: 'bg-red-700 text-white font-bold',
-        accentName: 'Egmont'
-      };
-    }
-    if (pub.includes('papertoons')) {
-      return {
-        bg: 'from-purple-800 via-violet-900 to-slate-950',
-        border: 'border-purple-400/40',
-        text: 'text-purple-100',
-        accentBadge: 'bg-purple-600 text-white font-bold',
-        accentName: 'Papertoons'
-      };
-    }
-    if (pub.includes('hayabusa')) {
-      return {
-        bg: 'from-pink-800 via-rose-950 to-slate-950',
-        border: 'border-pink-400/40',
-        text: 'text-pink-100',
-        accentBadge: 'bg-pink-600 text-white font-bold',
-        accentName: 'Hayabusa'
-      };
-    }
-    if (pub.includes('panini')) {
-      return {
-        bg: 'from-emerald-800 via-teal-950 to-slate-950',
-        border: 'border-emerald-400/40',
-        text: 'text-emerald-100',
-        accentBadge: 'bg-emerald-600 text-white font-bold',
-        accentName: 'Panini'
-      };
-    }
-    return {
-      bg: 'from-slate-700 via-slate-850 to-slate-950',
-      border: 'border-slate-600/40',
-      text: 'text-slate-100',
-      accentBadge: 'bg-brand-600 text-white font-bold',
-      accentName: publisherName || 'Manga'
-    };
   };
 
   // Map of Manga Passion gaps by volume_number for quick lookup of price, cover, date
