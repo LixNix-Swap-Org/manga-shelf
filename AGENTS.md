@@ -61,10 +61,12 @@ manga-shelf/
 │   ├── backups.js             # Server-Snapshots & Wiederherstellung (Disk-Staging)
 │   ├── stats.js               # Sammlungsstatistiken & Einstellungen
 │   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar (nur Routen + SQL, Logik in `services/radar.js` und `services/mangaPassionReleases.js`)
+│   ├── exchange.js            # CSV-Export (`GET /api/export/csv`) & -Import (`POST /api/import/csv`, `dry_run`)
 │   └── lookup.js              # Routen: ISBN-Suche, Manga Passion / AniList Lookup & Uploads (Logik der ISBN-Suche in `services/isbnLookup.js`)
 ├── services/                  # Hintergrund-Dienste
 │   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots); räumt nach dem Auto-Backup verwaiste Uploads auf
 │   ├── uploadCleanup.js       # `cleanOrphanUploads`: löscht Dateien in `uploads/`, die keine Reihe/kein Band mehr nennt und älter als 7 Tage sind (Test: `test/uploadCleanup.test.js`)
+│   ├── csvExchange.js         # Reine Funktionen: `toCsv`, `parseCsv`, `mapCsvRows` (Semikolon, BOM, Formel-Schutz; Test: `test/csvExchange.test.js`)
 │   ├── isbnLookup.js          # ISBN-Suche: DNB → K10plus → Google Books (`lookupBookByIsbn`, `parseMarc21Xml`), Abgleich mit der Sammlung (`matchCollection`)
 │   ├── radar.js               # Reine Funktionen: `countdownFor`, `buildShoppingList`, `buildReleaseRadar` (Monatsgruppen, Budgets)
 │   ├── mangaPassionReleases.js # Monatskalender von Manga Passion: Abruf mit Cache (`getMonthlyReleases`), Abgleich mit der Sammlung (`enrichReleases`)
@@ -334,6 +336,8 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/mangas/:id/sync-edition` | POST | `requireEditor` | 1-Klick-Synchronisation von `total_volumes` und Editions-Metadaten |
 | `/api/mangas/:id/autofill-volumes` | POST | `requireEditor` | Batch-Anreicherung aller Bände einer Reihe (Datum, Seiten, ISBN, Preis, Schuber-Cover) |
 | `/api/mangas/:id/batch-import-gaps` | POST | `requireEditor` | Batch-Übernahme aller echten Lücken auf die Einkaufsliste (inkl. Preisen & Covern) |
+| `/api/export/csv` | GET | `requireAuth` | Alle Bände als CSV (Semikolon, UTF-8 mit BOM) |
+| `/api/import/csv` | POST | `requireEditor` | CSV-Import (`{ csv, dry_run }`, 10 MB); legt Reihen/Bände an, vorhandene (Reihe + Typ + Nummer) bleiben unangetastet; Oberfläche: Reiter „CSV“ in `BackupRestoreModal` |
 | `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
 | `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder (Alias: `POST /api/restore`) |
 | `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |

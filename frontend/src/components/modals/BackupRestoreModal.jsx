@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   X, UploadCloud, Shield, Download, CheckCircle2, 
-  FileArchive, RefreshCw, Plus, Trash2, AlertTriangle 
+  FileArchive, RefreshCw, Plus, Trash2, AlertTriangle, FileSpreadsheet 
 } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 
@@ -14,6 +14,48 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [backupModalTab, setBackupModalTab] = useState('snapshots'); // 'snapshots' | 'upload'
   const [creatingSnapshot, setCreatingSnapshot] = useState(false);
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvPreview, setCsvPreview] = useState(null);
+  const [csvText, setCsvText] = useState('');
+  const [csvError, setCsvError] = useState('');
+
+  const sendCsv = async (text, dryRun) => {
+    setCsvBusy(true);
+    setCsvError('');
+    try {
+      const res = await fetch('/api/import/csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: text, dry_run: dryRun })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Import fehlgeschlagen');
+      if (dryRun) {
+        setCsvPreview(data);
+      } else {
+        setCsvPreview(null);
+        setCsvFile(null);
+        setCsvText('');
+        setRestoreSuccess(`Import fertig: ${data.created_volumes} Bände, ${data.created_series} neue Reihen, ${data.skipped_existing} schon vorhanden.`);
+        if (onRestoreSuccess) onRestoreSuccess();
+      }
+    } catch (err) {
+      setCsvError(err.message);
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
+  const handleCsvChosen = async (file) => {
+    setCsvFile(file);
+    setCsvPreview(null);
+    setCsvError('');
+    if (!file) return;
+    const text = await file.text();
+    setCsvText(text);
+    sendCsv(text, true);
+  };
 
   const fetchServerBackups = async () => {
     if (user?.role !== 'admin') return;
@@ -230,6 +272,17 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
             <UploadCloud className="w-3.5 h-3.5" />
             <span>ZIP-Datei hochladen</span>
           </button>
+          <button
+            onClick={() => setBackupModalTab('csv')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              backupModalTab === 'csv'
+                ? 'bg-emerald-600 text-white shadow'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>CSV</span>
+          </button>
         </div>
 
         {/* Body */}
@@ -409,6 +462,56 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                 </button>
               </div>
             </form>
+          )}
+
+          {/* TAB 3: CSV EXPORT / IMPORT */}
+          {backupModalTab === 'csv' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
+                <div className="text-sm font-semibold text-slate-200">Sammlung exportieren</div>
+                <p className="text-xs text-slate-400">Alle Bände als CSV (Semikolon, UTF-8). Öffnet sich direkt in Excel oder LibreOffice.</p>
+                <a id="btn-export-csv" href="/api/export/csv" download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-600 hover:!bg-emerald-500">
+                  <Download className="w-4 h-4" /> CSV herunterladen
+                </a>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-3">
+                <div className="text-sm font-semibold text-slate-200">Aus CSV importieren</div>
+                <p className="text-xs text-slate-400">
+                  Spalten: Reihe, Bandnummer (Pflicht) sowie Verlag, Autor, Typ, Status, ISBN, Preis, Erscheinungsdatum, Kaufdatum, Zustand, Seiten, Notizen.
+                  Bereits vorhandene Einträge (Reihe + Typ + Nummer) werden nie verändert. Am einfachsten: erst exportieren und die Datei als Vorlage nutzen.
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => handleCsvChosen(e.target.files?.[0] || null)}
+                  className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-slate-200"
+                />
+                {csvError && <div className="text-xs text-rose-400">{csvError}</div>}
+                {csvBusy && <div className="text-xs text-slate-400 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wird geprüft...</div>}
+                {csvPreview && !csvBusy && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-slate-200">
+                      Vorschau: {csvPreview.created_volumes} neue Bände ({csvPreview.created_series} neue Reihen), {csvPreview.skipped_existing} schon vorhanden, {csvPreview.errors.length} fehlerhafte Zeilen.
+                    </div>
+                    {csvPreview.errors.length > 0 && (
+                      <ul className="text-[11px] text-amber-300 max-h-28 overflow-y-auto custom-scrollbar space-y-0.5">
+                        {csvPreview.errors.slice(0, 20).map((e, i) => <li key={i}>Zeile {e.line}: {e.message}</li>)}
+                        {csvPreview.errors.length > 20 && <li>… und {csvPreview.errors.length - 20} weitere</li>}
+                      </ul>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => sendCsv(csvText, false)}
+                      disabled={csvBusy || csvPreview.created_volumes === 0}
+                      className="btn-primary text-xs !bg-emerald-600 hover:!bg-emerald-500 disabled:opacity-50"
+                    >
+                      {csvPreview.created_volumes} Bände importieren
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

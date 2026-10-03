@@ -31,6 +31,7 @@ const backupsRoutes = require('./routes/backups');
 const statsRoutes = require('./routes/stats');
 const radarRoutes = require('./routes/radar');
 const lookupRoutes = require('./routes/lookup');
+const exchangeRoutes = require('./routes/exchange');
 const log = require('./utils/logger').child('app');
 
 const app = express();
@@ -59,6 +60,7 @@ app.use('/api', (req, res, next) => {
     next();
 });
 
+app.use('/api/import/csv', express.json({ limit: '10mb' }));
 app.use(express.json());
 // Express 5 leaves req.body undefined for requests without a JSON body (Express 4 gave {}).
 // Handlers destructure req.body directly, so keep the old behaviour.
@@ -126,6 +128,7 @@ app.use('/api', backupsRoutes);
 app.use('/api', statsRoutes);
 app.use('/api', radarRoutes);
 app.use('/api', lookupRoutes);
+app.use('/api', exchangeRoutes);
 
 // Database maintenance / restore error handler for API requests
 app.use('/api', (err, req, res, next) => {
