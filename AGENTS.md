@@ -85,7 +85,7 @@ manga-shelf/
 │   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
 │   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
-│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js, radarHelpers.test.js
+│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js, radarHelpers.test.js, volumeFormHelpers.test.js
 │   └── browser/               # Puppeteer-Browsertests (nicht in `npm test`), alle über `run.js` gegen einen isolierten Server
 │       ├── run.js             # Startet Server mit temporärem DATA_DIR + freiem Port + Wegwerf-Admin, führt das Skript aus, räumt auf
 │       ├── chrome.js          # Findet Chrome/Chromium/Edge (`CHROME_BIN` überschreibt)
@@ -125,10 +125,12 @@ manga-shelf/
         │   ├── useVolumeActions.js    # Band anlegen, Besitz-/Lesestatus umschalten, bearbeiten, löschen
         │   ├── useVolumeGallery.js    # Foto-Lightbox
         │   ├── useShelfLayout.js      # Regal-Modus, Skalierung, Zeilenaufteilung, Tastatur-Fokus
-        │   └── useDetailKeyboard.js   # Escape, Pfeiltasten, J/K/Leertaste/E
+        │   ├── useDetailKeyboard.js   # Escape, Pfeiltasten, J/K/Leertaste/E
+        │   └── useVolumeEditForm.js   # Band-Editor: Formular, Foto-Upload/-URL/-Reihenfolge, MP-Autofill, Speichern, Löschen
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
         │   ├── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`), `hasUserRead`, `buildDisplayVolumeItems`
+        │   ├── volumeFormHelpers.js # Band-Editor ohne React: `buildVolumeForm` (Formularfelder), `applyLookupToForm` (Autofill-Regeln)
         │   ├── radarHelpers.js    # Release-Radar ohne React: `filterMpItems`, `groupMpItemsByDate`, `filterRadarItems`
         │   └── collectionHelpers.js # Dashboard-Logik ohne React: Filter/Sortierung (`filterAndSortMangas`), Zähler, Summen, Datumsformat
         ├── utils/
@@ -166,7 +168,8 @@ manga-shelf/
                 ├── VolumeGridView.jsx       # Kartenansicht
                 ├── VolumeListView.jsx       # Listen-/Tabellenansicht
                 ├── VolumePhotoManager.jsx   # Foto-Manager (Upload, Sortieren, Löschen)
-                ├── VolumeEditModal.jsx      # Band-Details & MP-Autofill
+                ├── VolumeEditModal.jsx      # Band-Editor (Rahmen); Zustand in `hooks/useVolumeEditForm.js`
+                ├── volumeEdit/              # Teile des Band-Editors: EditHeader, AutofillPanel, TypeNumberFields, StatusPriceFields, DetailFields, EditFooter
                 ├── BatchAddModal.jsx        # Batch-Generator für Bandnummern 1..N
                 ├── BatchReadModal.jsx       # Batch-Lesestatus bis Band X für Leser
                 ├── GapFillModal.jsx         # 1-Klick-Lückenfüller mit MP-Preis/Cover
@@ -355,7 +358,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 2. **Backend API (`routes/`):**
    * In `POST /api/volumes`, `POST /api/volumes/batch` und `PUT /api/volumes/:id` das Feld berücksichtigen.
 3. **Frontend UI:**
-   * `frontend/src/components/detail/VolumeEditModal.jsx`: Formularfelder im Band-Bearbeiten-Modal hinzufügen.
+   * Band-Editor: Feld in `frontend/src/utils/volumeFormHelpers.js` (`buildVolumeForm`) aufnehmen und im passenden Teil unter `frontend/src/components/detail/volumeEdit/` (`DetailFields.jsx`, `TypeNumberFields.jsx`, `StatusPriceFields.jsx`) als Eingabefeld ergänzen; die Form-Daten gehen unverändert per `PUT /api/volumes/:id` an den Server. Soll der Autofill das Feld füllen, `applyLookupToForm` erweitern (mit Test in `test/volumeFormHelpers.test.js`).
    * `frontend/src/components/detail/BatchAddModal.jsx`: Falls das Feld im Batch-Generator gesetzt werden soll, Eingabefeld hinzufügen.
    * `VolumeGridView.jsx`, `VolumeListView.jsx`, `VolumeShelfView.jsx` (alle in `components/detail/`): Feld in Karte, Liste und Regal rendern.
 
@@ -420,7 +423,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `GET /api/mangas/:id`: Sortiert per `ORDER BY CASE` reguläre Bände und nummerierte Special Editions an erster Stelle (Standard Band 1 -> Band 1 Special Edition -> Band 2). Unnummerierte Special Editions ordnen sich direkt dahinter ein (Rang 1.5), gefolgt von Schubern (Rang 2) und Specials/Extras (Rang 3).
    * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `type` entgegen, validieren gegen die erlaubten Typen und speichern ihn ab.
 3. **Frontend UI:**
-   * `frontend/src/components/detail/VolumeEditModal.jsx`: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") mit dynamischen Feldern.
+   * `frontend/src/components/detail/volumeEdit/TypeNumberFields.jsx`: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") mit dynamischen Feldern.
    * `frontend/src/components/detail/VolumeFilterBar.jsx`: Filter-Chips `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]` und Badges in den Ansichten.
 
 ### 🔹 Fall J: Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7)
@@ -432,7 +435,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `images` entgegen und serialisieren es als JSON in die DB.
 3. **Frontend UI:**
    * `frontend/src/components/detail/LightboxGallery.jsx`: Moderne Vollbild-Galerie mit Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`) und 1-Klick-Cover-Festlegung.
-   * `frontend/src/components/detail/VolumeEditModal.jsx`: Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
+   * `frontend/src/components/detail/VolumePhotoManager.jsx` (Zustand/Aktionen in `hooks/useVolumeEditForm.js`): Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
    * `frontend/src/components/detail/VolumeGridView.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
 
 ### 🔹 Fall K: Manga Passion – Editionsabgleich, Lücken, Autofill & Schuber
@@ -447,7 +450,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * Schuber: `matchSchuberVolume` erkennt sie gezielt (`type === 3`, `specialType === 1`), unterscheidet Leerschuber (~12 €) von Sammelschubern (>25 €) und ordnet „Schuber N“ dem N-ten Schuber zu – nie dem Band N. `downloadRemoteImageToUploads` lädt das Cover über `safeFetch` nach `data/uploads/`.
 2. **Frontend (`hooks/useMpGaps.js`, `MangaDetail.jsx`, `components/detail/`):**
    * Diskrepanz-Warnung mit 1-Klick-Anpassung, Ghost-Spines für Lücken im Regal (`VolumeShelfView`), Lücken-Banner mit Band-Präfix bzw. Volltitel (`VolumeFilterBar`), `GapFillModal` (Vorschau vor Übernahme), `MpEditionModal` (alternative Editionen wählen, „Alle Bände anreichern“).
-   * `VolumeEditModal`: Banner „Automatisch ausfüllen (Manga Passion)“, Schuber-Banner „Schuber laden“; eine eingefügte MP-Volume-URL/-ID lädt Datensatz und Cover und überschreibt fälschlich eingetragene Band-1-Daten.
+   * `volumeEdit/AutofillPanel.jsx` im Band-Editor: Banner „Automatisch ausfüllen (Manga Passion)“, Schuber-Banner „Schuber laden“; eine eingefügte MP-Volume-URL/-ID lädt Datensatz und Cover und überschreibt fälschlich eingetragene Band-1-Daten.
 
 ---
 
