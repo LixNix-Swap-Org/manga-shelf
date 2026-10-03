@@ -1,6 +1,14 @@
 import { Users } from 'lucide-react';
 
-/** Besitzer eines Bandes als Initialen-Marken; ab zwei Besitzern zusätzlich „2×“. Nichts, wenn es nur eine Person gibt. */
+const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
+
+/** Feste Farbe je Benutzer, damit Marken und Filter dieselbe Person gleich zeigen. */
+export function ownerColor(userId) {
+  const n = Math.abs(parseInt(userId, 10) || 0);
+  return OWNER_COLORS[n % OWNER_COLORS.length];
+}
+
+/** Besitzer eines Bandes als farbige Marken mit zwei Buchstaben; ab zwei Besitzern zusätzlich „2×“. Nichts, wenn es nur eine Person gibt. */
 export default function OwnerBadges({ vol, multiUser }) {
   const owners = vol?.owners || [];
   if (!multiUser || owners.length === 0) return null;
@@ -15,9 +23,10 @@ export default function OwnerBadges({ vol, multiUser }) {
       {owners.map(o => (
         <span
           key={o.user_id}
-          className="w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center border bg-slate-800 border-slate-600 text-slate-200"
+          className="px-1 h-4 min-w-4 rounded-full text-[9px] font-bold flex items-center justify-center text-slate-950"
+          style={{ background: ownerColor(o.user_id) }}
         >
-          {String(o.username).charAt(0).toUpperCase()}
+          {String(o.username).slice(0, 2).toLowerCase()}
         </span>
       ))}
     </span>

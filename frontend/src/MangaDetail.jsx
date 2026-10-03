@@ -14,6 +14,7 @@ import AddVolumeBar from './components/detail/AddVolumeBar';
 import VolumeFilterBar from './components/detail/VolumeFilterBar';
 import MangaHeroCard from './components/detail/MangaHeroCard';
 import ReaderBar from './components/detail/ReaderBar';
+import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import ShelfSpine from './components/detail/ShelfSpine';
 import useMangaData from './hooks/useMangaData';
@@ -63,6 +64,7 @@ export default function MangaDetail({ user }) {
     volumeViewMode, handleSetVolumeViewMode,
     availablePublishers, conditionsList, baseVolumesForType,
     schuberCount, specialEditionCount, specialCount, regularVolumeCount,
+    volumeOwnerFilter, setVolumeOwnerFilter, volumeOwnerMissing, setVolumeOwnerMissing,
     filteredVolumes, hasActiveFilters, handleResetFilters
   } = useVolumeFilters({ volumes, manga, user, selectedReaderId });
 
@@ -281,6 +283,16 @@ export default function MangaDetail({ user }) {
             ownedCount={ownedCount}
             currentReaderReadCount={currentReaderReadCount}
             currentReaderUnreadCount={currentReaderUnreadCount}
+          />
+
+          {/* Besitz pro Person (nur bei mehreren Nutzern) */}
+          <OwnerFilterBar
+            users={readers}
+            volumes={volumes}
+            ownerFilter={volumeOwnerFilter}
+            setOwnerFilter={setVolumeOwnerFilter}
+            ownerMissing={volumeOwnerMissing}
+            setOwnerMissing={setVolumeOwnerMissing}
           />
 
           {/* Filter, View & Sort Controls */}

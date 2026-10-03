@@ -10,6 +10,8 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
   const [volumeConditionFilter, setVolumeConditionFilter] = useState('ALL');
   const [volumeSort, setVolumeSort] = useState('number_asc');
   const [volumeSearch, setVolumeSearch] = useState('');
+  const [volumeOwnerFilter, setVolumeOwnerFilter] = useState('ALL'); // 'ALL' | Benutzer-ID: nur Bände dieser Person
+  const [volumeOwnerMissing, setVolumeOwnerMissing] = useState(false); // mit Person: stattdessen Bände, die ihr (noch) fehlen
   // View mode
   const [volumeViewMode, setVolumeViewMode] = useState(() => {
     return localStorage.getItem('mangashelf_volume_view_mode') || 'grid';
@@ -47,6 +49,11 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
         if (v.status !== 'Vorhanden' || isReadByTarget) return false;
       }
       
+      if (volumeOwnerFilter !== 'ALL') {
+        const ownedByPerson = (v.owners || []).some(o => String(o.user_id) === String(volumeOwnerFilter));
+        if (volumeOwnerMissing ? ownedByPerson : !ownedByPerson) return false;
+      }
+
       if (volumePublisherFilter !== 'ALL') {
         const rawPub = (v.publisher && v.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
         const pub = normalizePubName(rawPub);
@@ -72,7 +79,7 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
 
       return true;
     });
-  }, [volumes, selectedReaderId, user?.id, volumeFilter, volumePublisherFilter, volumeConditionFilter, volumeSearch, manga?.publisher]);
+  }, [volumes, selectedReaderId, user?.id, volumeFilter, volumeOwnerFilter, volumeOwnerMissing, volumePublisherFilter, volumeConditionFilter, volumeSearch, manga?.publisher]);
 
   // One rule for chips, counts and filter: the entry's type (inferVolumeType falls back to the name only without a stored type)
   const countOfType = (type) => baseVolumesForType.filter(v => inferVolumeType(v) === type).length;
@@ -128,7 +135,7 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
       });
   }, [baseVolumesForType, volumeTypeFilter, volumeSort, manga?.publisher]);
 
-  const hasActiveFilters = volumeFilter !== 'ALL' || volumeTypeFilter !== 'ALL' || volumePublisherFilter !== 'ALL' || volumeConditionFilter !== 'ALL' || Boolean(volumeSearch.trim());
+  const hasActiveFilters = volumeFilter !== 'ALL' || volumeTypeFilter !== 'ALL' || volumePublisherFilter !== 'ALL' || volumeConditionFilter !== 'ALL' || volumeOwnerFilter !== 'ALL' || Boolean(volumeSearch.trim());
 
   const handleResetFilters = () => {
     setVolumeFilter('ALL');
@@ -136,6 +143,8 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
     setVolumePublisherFilter('ALL');
     setVolumeConditionFilter('ALL');
     setVolumeSearch('');
+    setVolumeOwnerFilter('ALL');
+    setVolumeOwnerMissing(false);
   };
 
   const handleSetVolumeViewMode = (mode) => {
@@ -147,6 +156,7 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
     volumeFilter, setVolumeFilter, volumeTypeFilter, setVolumeTypeFilter,
     volumePublisherFilter, setVolumePublisherFilter, volumeConditionFilter, setVolumeConditionFilter,
     volumeSort, setVolumeSort, volumeSearch, setVolumeSearch,
+    volumeOwnerFilter, setVolumeOwnerFilter, volumeOwnerMissing, setVolumeOwnerMissing,
     volumeViewMode, handleSetVolumeViewMode,
     availablePublishers, conditionsList, baseVolumesForType,
     schuberCount, specialEditionCount, specialCount, regularVolumeCount,
