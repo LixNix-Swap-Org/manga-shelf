@@ -147,7 +147,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
                   in_collection: true,
                   user_manga_id: resData.manga_id,
                   user_volume_id: resData.volume_id,
-                  user_volume_status: targetStatus
+                  user_volume_status: resData.status || targetStatus
                 };
               }
               return it;

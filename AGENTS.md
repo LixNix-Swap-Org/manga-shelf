@@ -60,10 +60,12 @@ manga-shelf/
 │   ├── volumes.js             # Band CRUD, Batch-Generierung & Lese-Status
 │   ├── backups.js             # Server-Snapshots & Wiederherstellung (Disk-Staging)
 │   ├── stats.js               # Sammlungsstatistiken & Einstellungen
-│   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar
+│   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar (nur Routen + SQL, Logik in `services/radar.js` und `services/mangaPassionReleases.js`)
 │   └── lookup.js              # DNB ISBN-Suche, Manga Passion / AniList Lookup & Uploads
 ├── services/                  # Hintergrund-Dienste
 │   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+│   ├── radar.js               # Reine Funktionen: `countdownFor`, `buildShoppingList`, `buildReleaseRadar` (Monatsgruppen, Budgets)
+│   ├── mangaPassionReleases.js # Monatskalender von Manga Passion: Abruf mit Cache (`getMonthlyReleases`), Abgleich mit der Sammlung (`enrichReleases`)
 │   └── mangaPassion/          # Manga-Passion-Anbindung
 │       ├── client.js          # API-Aufrufe (Timeout, Basis-URL), 12-h-Cache (nur vollständige Antworten), Editionssuche, Cover-Download
 │       ├── classify.js        # Reine Funktionen: scoreEdition, classifyOfficialVolume, findRegularVolume, matchSchuberVolume, cleanOfficialDate
@@ -81,6 +83,8 @@ manga-shelf/
 ├── test/                      # node:test-Tests (`npm test` = `test/*.test.js`) & Deep-E2E
 │   ├── helpers.js             # Startet die App gegen eine temporäre DATA_DIR
 │   ├── api.test.js            # Auth, CRUD, Rollen, Backups
+│   ├── radar.test.js          # Import-Route (Validierung, Duplikate, Besitz bleibt) & Monatskalender (Cache, Ausfall, Duplikate)
+│   ├── radarServices.test.js  # Countdown, Gruppen, Budgets, Serien-Abgleich
 │   ├── routing.test.js, upload.test.js, logger.test.js, isbn.test.js
 │   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
@@ -321,7 +325,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
 | `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
 | `/api/manga-passion/editions` | GET | `requireAuth` | Suche & Auflistung passender Manga Passion Editionen nach Titel & Verlag |
-| `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (Status: Vorbestellt oder Fehlt) |
+| `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (`target_status`: Vorbestellt, Fehlt, Erscheint bald oder Bestellt; validiert Status/Preis/Datum/Titel). Serie + Band in einer Transaktion; vorhandene Einträge (gleiche Reihe + Typ `volume` + Nummer) werden aktualisiert, **Vorhanden/Gelesen bleibt unangetastet** (`skipped_owned: true`) |
 | `/api/mangas/:id/gaps` | GET | `requireAuth` | Intelligente Lücken-Erkennung & Abgleich gegen offizielle deutsche Manga Passion Edition |
 | `/api/mangas/:id/sync-edition` | POST | `requireEditor` | 1-Klick-Synchronisation von `total_volumes` und Editions-Metadaten |
 | `/api/mangas/:id/autofill-volumes` | POST | `requireEditor` | Batch-Anreicherung aller Bände einer Reihe (Datum, Seiten, ISBN, Preis, Schuber-Cover) |
@@ -471,6 +475,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 
 ### Tests, Lint & CI
 * **API-Tests (schnell, ohne Browser):** `npm test` (`node --test test/*.test.js`) startet die App gegen eine temporäre `DATA_DIR`. Neue Backend-Features sollten hier einen Test bekommen.
+* **Testdateien, die DB oder Services laden** (alles, was `db.js` direkt oder indirekt `require`t, z. B. `services/*`), müssen **vorher** `process.env.DATA_DIR` auf ein Temp-Verzeichnis setzen (Beispiel: `test/radarServices.test.js`); sonst landet die Datenbank im echten `data/`. API-Tests nutzen `startTestServer()` aus `test/helpers.js` und dürfen vorher nichts davon laden. Wer `global.fetch` für externe APIs fälscht, muss Aufrufe an den Testserver (`ctx.base`) durchreichen, weil auch der Testclient `fetch` nutzt.
 * **Lint:** `npm run lint` (ESLint). Fehler brechen die CI, Warnungen nicht.
 * **CI (`.github/workflows/ci.yml`):** vier Jobs: `test` (Lint + Tests, Node 22), `frontend` (Vite-Build), `docker` (Build + Start-Test über `/api/health`) und `browser` (Chrome vom Runner, `npm run test:e2e` + `npm run test:radar` gegen einen isolierten Server; Bildschirmfotos als Artefakt bei Fehlern). Die Browsertests prüfen mit `assert` und brechen bei Fehlern ab; neue Browsertests sollen das auch tun (kein reines `console.log` eines Booleans). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
 
@@ -564,7 +569,11 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * Eine Collectors-/Limited Edition oder ein Schuber trägt dieselbe Nummer wie der normale Band. Lücken werden deshalb über **Typ + Nummer** abgeglichen (`reconcileMangaGaps`, `isGapCovered`), nie nur über die Nummer. `classifyOfficialVolume()` bestimmt den Typ eines offiziellen Eintrags; ein generischer Titel („Collectors Edition“) oder eine nackte Zahl wird nie per Namenssuche zugeordnet.
    * `batchImportGaps` löst die UI-Beschriftungen auf (`"26 (Titel)"`, `"5 (Collectors Edition)"`, `"East Blue Leerschuber"`, reine Zahl = regulärer Band), speichert die saubere Nummer samt Preis/Datum/Cover und fasst vorhandene (`Vorhanden`/`Gelesen`) Einträge nie an. Ghost-Einträge im Regal gibt es nur für reguläre Bände (`detectedGapEntries` mit `type`).
    * Anzeigenamen: `getVolumeDisplayTitle()` / `getEditionLabel()` (Collectors, Limited, Special, Variant …, aus den Notizen) – überall verwenden (Karten, Liste, Regal, Einkaufsliste, Radar), keine eigenen „Band X“-Strings. `inferVolumeType` existiert in Backend und Frontend und wird per `test/specialeditions.test.js` synchron gehalten.
-15. **Fortschritt, Doppelte, Platzhalter (aus dem Test mit einer großen echten Sammlung):**
+15. **Manga-Passion-Kalender (`services/mangaPassionReleases.js`):**
+   * Die API-Seiten müssen eindeutig sortiert sein: `order[date]=asc` allein ist über Seiten hinweg nicht stabil (an einem Tag erscheinen viele Bände; im Test fehlten ~3 % der Einträge, andere kamen doppelt) – deshalb zusätzlich `order[id]=asc` und Dedupe nach `id`.
+   * Nur vollständige Monate werden 12 h gecacht; fällt eine spätere Seite aus, werden die Treffer gezeigt, aber nicht gespeichert. Ist die API nicht erreichbar, wird der letzte gespeicherte Monat geliefert (`stale: true`, die Oberfläche zeigt einen Hinweis).
+   * `countdownFor()` rechnet in Kalendertagen über UTC-Mitternächte (lokale Mitternächte sind über die Zeitumstellung 23/25 h auseinander) und in Kalendermonaten (Dezember → Januar = „Nächsten Monat“).
+16. **Fortschritt, Doppelte, Platzhalter (aus dem Test mit einer großen echten Sammlung):**
    * Fortschritt einer Reihe = **verschiedene numerierte reguläre Bände** (`regular_owned` in `GET /api/mangas`, `getSeriesProgress()` im Frontend); Schuber, Specials, Extras und nicht numerierte „Starter 1“-Einträge zählen als „+N“. Das Ziel wächst mit der höchsten besessenen Nummer (`max_regular_number`), weil die gespeicherte Gesamtzahl bei laufenden Reihen veraltet. „Band 14“ und „14“ sind derselbe Band (`volumeNumberOf`, Migration v8). Eine Reihe gilt in der Statistik nur als komplett, wenn die regulären Bände reichen.
    * `POST /api/volumes` verweist Doppelte (gleiche Reihe + Typ + Nummer, case-/whitespace-unabhängig) mit **409** ab; ein Collectors-Band mit gleicher Nummer ist erlaubt. Die Detailansicht zeigt schon vorhandene Doppelte als Banner, das Formular ignoriert einen zweiten Submit.
    * Manga Passion nutzt `2999-12-31` für „Termin nicht bekannt“: `cleanOfficialDate()` macht daraus `null` (Eintrag zählt als „kommt noch“), Migration v7 bereinigt Altdaten.

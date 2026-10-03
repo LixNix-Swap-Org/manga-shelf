@@ -91,6 +91,7 @@ export default function ReleaseRadarView({
             setMpSearch={setMpSearch}
           />
           <MpTimeline
+            mpData={mpData}
             loadingMp={loadingMp}
             mpYear={mpYear}
             mpMonth={mpMonth}

@@ -4,6 +4,7 @@ import { Package, Calendar, Star, RefreshCw, BookOpen, Building2, CheckCircle2, 
 
 /** Calendar entries grouped by release day, with loading and empty states. */
 export default function MpTimeline({
+  mpData,
   loadingMp,
   mpYear,
   mpMonth,
@@ -24,6 +25,13 @@ export default function MpTimeline({
 }) {
   return (
     <>
+      {/* Manga Passion was not reachable: the last saved month is shown */}
+      {mpData?.stale && (
+        <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+          Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.
+        </div>
+      )}
+
       {/* Loading State */}
       {loadingMp && (
         <div className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">

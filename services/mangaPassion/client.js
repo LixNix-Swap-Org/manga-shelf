@@ -123,7 +123,7 @@ async function searchMangaPassionEditions(title, publisher = '', totalVolumes = 
   };
 }
 
-function writeEditionCache(cacheKey, value) {
+function writeCache(cacheKey, value) {
   try {
     db.prepare(`
       INSERT INTO manga_passion_cache (cache_key, json_data, created_at)
@@ -131,6 +131,15 @@ function writeEditionCache(cacheKey, value) {
       ON CONFLICT(cache_key) DO UPDATE SET json_data = excluded.json_data, created_at = excluded.created_at
     `).run(cacheKey, JSON.stringify(value), Date.now());
   } catch (e) { log.warn('Manga Passion cache write failed:', e.message); }
+}
+
+/** Cached JSON for a key if it is younger than `ttlMs` (Infinity = any age), else null. */
+function readCache(cacheKey, ttlMs) {
+  try {
+    const row = db.prepare('SELECT json_data, created_at FROM manga_passion_cache WHERE cache_key = ?').get(cacheKey);
+    if (row && row.json_data && (Date.now() - row.created_at < ttlMs)) return JSON.parse(row.json_data);
+  } catch (e) { log.warn('Manga Passion cache read failed:', e.message); }
+  return null;
 }
 
 /** Last cached edition data regardless of age (used when Manga Passion is unreachable). */
@@ -172,7 +181,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     const edRes = await fetchWithTimeout(`${API_BASE}/editions/${editionId}`, { headers: HEADERS }, 8000);
     if (edRes.status === 404) {
       const notFoundResult = { notFound: true, edition: null, volumes: [] };
-      writeEditionCache(cacheKey, notFoundResult);
+      writeCache(cacheKey, notFoundResult);
       return notFoundResult;
     }
     if (edRes.ok) {
@@ -216,7 +225,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
       if (volRes.status === 404) {
         if (rawList.length === 0) {
           const notFoundResult = { notFound: true, edition, volumes: [] };
-          writeEditionCache(cacheKey, notFoundResult);
+          writeCache(cacheKey, notFoundResult);
           return notFoundResult;
         }
         break;
@@ -278,7 +287,7 @@ async function getEditionDetailsAndVolumes(editionId, forceRefresh = false) {
     return readStaleEditionCache(cacheKey) || { ...result, incomplete: true };
   }
 
-  writeEditionCache(cacheKey, result);
+  writeCache(cacheKey, result);
   return result;
 }
 
@@ -370,5 +379,7 @@ module.exports = {
   getEditionDetailsAndVolumes,
   searchMangaPassionForLookup,
   saveEditionLink,
-  linkRecommendedEdition
+  linkRecommendedEdition,
+  readCache,
+  writeCache
 };
