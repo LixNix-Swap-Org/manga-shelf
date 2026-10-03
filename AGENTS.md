@@ -19,7 +19,7 @@
 * **Frontend:**
   * **Tooling:** Vite + React 18 (`frontend/`)
   * **Styling:** Tailwind CSS + Lucide Icons + Custom CSS Animations (`frontend/src/index.css`)
-  * **Routing:** `react-router-dom` v6
+  * **Routing:** `react-router-dom` v7 (nur `BrowserRouter`, `Routes`, `Route`, `Navigate`, `Link`, `useNavigate`, `useParams` genutzt)
 * **Deployment-Target:**
   * Speziell für **Pterodactyl Panel** (Generic Node.js Egg oder Custom Egg `egg-manga-shelf.json`)
   * Reverse Proxy Unterstützung (Nginx, Caddy, Cloudflare) mit `trust proxy = true`
