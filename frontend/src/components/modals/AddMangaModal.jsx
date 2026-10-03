@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Sparkles, RefreshCw, AlertTriangle, BookOpen, Upload } from 'lucide-react';
+import { Plus, X, Sparkles, RefreshCw, AlertTriangle, BookOpen, Upload, ScanBarcode } from 'lucide-react';
+import { buildScanVolumePayload } from '../../utils/scanHelpers';
 
-export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
+// prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume
+export default function AddMangaModal({ isOpen, onClose, onSuccess, prefill = null }) {
   const [form, setForm] = useState({
     title: '',
     alt_title: '',
@@ -21,6 +23,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
   const [lookupResults, setLookupResults] = useState(null);
   const [lookupError, setLookupError] = useState('');
   const [failedImages, setFailedImages] = useState({});
+  const [scanVolume, setScanVolume] = useState(null);
+  const [createdMangaId, setCreatedMangaId] = useState(null); // manga exists but the scanned volume failed: retry only the volume
 
   useEffect(() => {
     if (isOpen) {
@@ -33,13 +37,39 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
         total_volumes: '',
         description: '',
         cover_image: '',
-        manga_passion_id: null
+        manga_passion_id: null,
+        ...(prefill?.form || {})
       });
+      setScanVolume(prefill?.volume || null);
+      setCreatedMangaId(null);
       setErrorMessage('');
       setCoverFile(null);
-      setCoverPreview('');
+      setCoverPreview(prefill?.form?.cover_image || '');
       setLookupResults(null);
       setLookupError('');
+
+      // Catalogue cover (Open Library): cache it locally; if there is none, drop it instead of saving a dead link
+      const remoteCover = prefill?.form?.cover_image;
+      if (remoteCover && remoteCover.startsWith('http')) {
+        let cancelled = false;
+        (async () => {
+          let local = '';
+          try {
+            const upRes = await fetch('/api/upload-remote', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: remoteCover })
+            });
+            if (upRes.ok) local = (await upRes.json()).url || '';
+          } catch (e) {
+            console.warn('Could not cache scanned cover:', e);
+          }
+          if (cancelled) return;
+          setForm(prev => (prev.cover_image === remoteCover ? { ...prev, cover_image: local } : prev));
+          setCoverPreview(prev => (prev === remoteCover ? local : prev));
+        })();
+        return () => { cancelled = true; };
+      }
     }
   }, [isOpen]);
 
@@ -51,6 +81,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
     setCoverPreview('');
     setLookupResults(null);
     setLookupError('');
+    setScanVolume(null);
+    setCreatedMangaId(null);
     onClose();
   };
 
@@ -144,11 +176,19 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
       setErrorMessage('Bitte gib einen Titel ein.');
       return;
     }
+    const withVolume = Boolean(scanVolume?.enabled);
+    if (withVolume && !String(scanVolume.volume_number).trim()) {
+      setErrorMessage('Bitte gib die Bandnummer des gescannten Buchs ein (oder deaktiviere „Gescannten Band anlegen“).');
+      return;
+    }
 
     setSubmitting(true);
     setErrorMessage('');
 
     try {
+      let mangaId = createdMangaId;
+      let data = { id: createdMangaId };
+      if (!mangaId) {
       let finalCover = form.cover_image.trim();
 
       if (coverFile) {
@@ -180,9 +220,24 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
         })
       });
 
-      const data = await res.json();
+      data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Fehler beim Erstellen des Mangas');
+      }
+      mangaId = data.id;
+      }
+
+      if (withVolume) {
+        const volRes = await fetch('/api/volumes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildScanVolumePayload(mangaId, scanVolume))
+        });
+        if (!volRes.ok) {
+          const volErr = await volRes.json().catch(() => ({}));
+          setCreatedMangaId(mangaId);
+          throw new Error(`Die Reihe wurde angelegt, der Band aber nicht: ${volErr.error || 'Fehler beim Anlegen des Bands'}. Mit „Band anlegen“ erneut versuchen.`);
+        }
       }
 
       handleClose();
@@ -466,6 +521,47 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
             />
           </div>
 
+          {scanVolume && (
+            <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-emerald-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={scanVolume.enabled}
+                  onChange={e => setScanVolume({ ...scanVolume, enabled: e.target.checked })}
+                />
+                <ScanBarcode className="w-4 h-4" /> Gescannten Band gleich anlegen
+              </label>
+              {scanVolume.enabled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Bandnummer <span className="text-red-400">*</span></label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="z.B. 1"
+                      value={scanVolume.volume_number}
+                      onChange={e => setScanVolume({ ...scanVolume, volume_number: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Status</label>
+                    <select
+                      className="input-field"
+                      value={scanVolume.status}
+                      onChange={e => setScanVolume({ ...scanVolume, status: e.target.value })}
+                    >
+                      <option value="Vorhanden">Vorhanden</option>
+                      <option value="Fehlt">Fehlt (Einkaufsliste)</option>
+                    </select>
+                  </div>
+                  <p className="col-span-2 text-[11px] text-slate-400">
+                    ISBN {scanVolume.isbn || '–'}{scanVolume.price ? ` · ${scanVolume.price} €` : ''}{scanVolume.pages ? ` · ${scanVolume.pages} Seiten` : ''}{scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''} werden mit übernommen.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
             <button 
@@ -489,7 +585,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess }) {
                 </>
               ) : (
                 <>
-                  <Plus className="w-4 h-4" /> Manga anlegen
+                  <Plus className="w-4 h-4" /> {createdMangaId ? 'Band anlegen' : 'Manga anlegen'}
                 </>
               )}
             </button>

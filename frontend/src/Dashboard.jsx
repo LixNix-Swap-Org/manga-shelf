@@ -13,6 +13,7 @@ import AddMangaModal from './components/modals/AddMangaModal';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { normalizePubName } from './utils/volumeHelpers';
+import { buildScanPrefill } from './utils/scanHelpers';
 import { GERMAN_MONTHS, formatGermanDate, getStatusBadge } from './utils/collectionHelpers';
 import usePwaInstall from './hooks/usePwaInstall';
 import useOfflineStatus from './hooks/useOfflineStatus';
@@ -43,6 +44,7 @@ export default function Dashboard({ user, onLogout }) {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [scanPrefill, setScanPrefill] = useState(null); // ISBN scan without a matching series: opens the add dialog prefilled
   const [failedImages, setFailedImages] = useState({});
 
   // Modal visibility states
@@ -106,6 +108,12 @@ export default function Dashboard({ user, onLogout }) {
         navigate(`/manga/${data.matched_manga.id}`);
       } else if (data && data.found && data.book) {
         setSearch(data.book.title);
+        // no (clear) series in the collection: offer to create it from the catalogue data; only when nothing similar exists
+        if (canEdit && !(data.matched_candidates?.length > 0)) {
+          setScanPrefill(buildScanPrefill(data.book, data.isbn || scannedCode));
+          setSearch('');
+          setShowAddModal(true);
+        }
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
@@ -305,8 +313,12 @@ export default function Dashboard({ user, onLogout }) {
       {/* MODALS */}
       <AddMangaModal 
         isOpen={showAddModal} 
-        onClose={() => setShowAddModal(false)} 
-        onSuccess={() => fetchMangas()} 
+        onClose={() => { setShowAddModal(false); setScanPrefill(null); }} 
+        onSuccess={(created) => {
+          fetchMangas();
+          if (scanPrefill && created?.id) navigate(`/manga/${created.id}`);
+        }}
+        prefill={scanPrefill}
       />
 
       <UserManagementModal 
