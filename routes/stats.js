@@ -4,6 +4,46 @@ const { db } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const log = require('../utils/logger').child('stats');
 
+/** Letzte `count` Monate (JJJJ-MM) bis einschließlich `now`, älteste zuerst. */
+function lastMonthKeys(now, count) {
+    const keys = [];
+    for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return keys;
+}
+
+const round2 = (n) => Math.round((n || 0) * 100) / 100;
+
+/** Ausgaben nach Kaufdatum: je Jahr, letzte 12 Monate (mit Nullen) und Bände ohne Kaufdatum. */
+function buildSpending(now = new Date()) {
+    const rows = db.prepare(`
+        SELECT SUBSTR(TRIM(purchase_date), 1, 7) AS month, count(*) AS volumes, sum(COALESCE(price, 0)) AS total
+        FROM volumes
+        WHERE status = 'Vorhanden' AND purchase_date IS NOT NULL AND TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'
+        GROUP BY month
+    `).all();
+    const byMonth = new Map(rows.map(r => [r.month, r]));
+    const years = new Map();
+    for (const r of rows) {
+        const y = r.month.slice(0, 4);
+        const cur = years.get(y) || { year: Number(y), volumes: 0, total: 0 };
+        cur.volumes += r.volumes;
+        cur.total += r.total || 0;
+        years.set(y, cur);
+    }
+    const none = db.prepare(`
+        SELECT count(*) AS volumes, sum(COALESCE(price, 0)) AS total FROM volumes
+        WHERE status = 'Vorhanden' AND (purchase_date IS NULL OR NOT TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*')
+    `).get();
+    return {
+        by_year: [...years.values()].sort((a, b) => a.year - b.year).map(y => ({ ...y, total: round2(y.total) })),
+        by_month: lastMonthKeys(now, 12).map(k => ({ month: k, volumes: byMonth.get(k)?.volumes || 0, total: round2(byMonth.get(k)?.total) })),
+        without_date: { volumes: none?.volumes || 0, total: round2(none?.total) }
+    };
+}
+
 router.get('/stats', requireAuth, (req, res) => {
     try {
         const totalSeriesRow = db.prepare('SELECT count(*) as count FROM mangas').get();
@@ -151,7 +191,8 @@ router.get('/stats', requireAuth, (req, res) => {
             avg_monthly_spending: avgMonthlySpending,
             publishers,
             user_reading_stats: userReadingStats,
-            top_series: topSeries
+            top_series: topSeries,
+            spending: buildSpending()
         });
     } catch (err) {
         log.error('Error calculating stats:', err);

@@ -321,7 +321,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/volumes/:id/read` | POST | `requireEditor` | Lesestatus für Band umschalten (Toggle) |
 | `/api/volumes/batch-read` | POST | `requireEditor` | Bände 1 bis X auf einen Klick als gelesen markieren |
 | `/api/volumes/lookup` | GET | `requireAuth` | Metadaten (Datum, Seiten, ISBN, Preis, Cover) für einen Band via Manga Passion / DNB; akzeptiert auch MP-URL oder -ID (`manga_id`, `volume_number`) |
-| `/api/stats` | GET | `requireAuth` | Gesamte Sammlungs-Statistiken abrufen |
+| `/api/stats` | GET | `requireAuth` | Gesamte Sammlungs-Statistiken abrufen (inkl. `spending`: Ausgaben nach Kaufdatum je Jahr / letzte 12 Monate / ohne Datum; Anzeige `SpendingCard.jsx`) |
 | `/api/stats/settings` | PUT | `requireAdmin` | z. B. Sammelstartdatum aktualisieren |
 | `/api/upload` | POST | `requireEditor` | Einzelnes Bild hochladen (Multer -> `data/uploads`) |
 | `/api/upload/multiple` | POST | `requireEditor` | Bis zu 10 Bilder auf einmal hochladen |

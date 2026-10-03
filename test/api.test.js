@@ -198,3 +198,20 @@ test('Wunschliste: Priorität und Zielpreis werden gespeichert, geprüft und in 
     assert.equal(item.priority, 1);
     assert.equal(item.target_price, null);
 });
+
+test('Statistik: Ausgaben nach Kaufdatum (Jahr, letzte 12 Monate, ohne Datum)', async () => {
+    const made = await editor('POST', '/mangas', { title: 'Ausgaben Reihe' });
+    const y = new Date().getFullYear();
+    const m = String(new Date().getMonth() + 1).padStart(2, '0');
+    const add = (n, extra) => editor('POST', '/volumes', { manga_id: made.body.id, volume_number: n, status: 'Vorhanden', ...extra });
+    await add('1', { price: 10, purchase_date: `${y}-${m}-01` });
+    await add('2', { price: 5, purchase_date: `${y}-${m}-15` });
+    await add('3', { price: 7 });
+    const sp = (await editor('GET', '/stats')).body.spending;
+    assert.equal(sp.by_month.length, 12);
+    const cur = sp.by_month.at(-1);
+    assert.equal(cur.month, `${y}-${m}`);
+    assert.ok(cur.total >= 15 && cur.volumes >= 2);
+    assert.ok(sp.by_year.find(r => r.year === y).total >= 15);
+    assert.ok(sp.without_date.volumes >= 1);
+});

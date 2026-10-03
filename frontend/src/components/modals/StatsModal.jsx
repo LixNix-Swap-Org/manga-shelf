@@ -4,6 +4,7 @@ import {
   TrendingUp, Coins, Building2, BookCheck, BookOpen, X, 
   Wallet, Calendar, Clock, Award, CheckCircle2 
 } from 'lucide-react';
+import SpendingCard from './SpendingCard';
 import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function StatsModal({ isOpen, onClose, user }) {
@@ -322,6 +323,8 @@ export default function StatsModal({ isOpen, onClose, user }) {
                             })}
                           </div>
                         </div>
+
+                        <SpendingCard spending={statsData.spending} />
 
                         {/* Top Publishers Quick View */}
                         <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
