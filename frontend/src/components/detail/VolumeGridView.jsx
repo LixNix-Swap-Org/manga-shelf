@@ -32,32 +32,32 @@ export default function VolumeGridView({
                   title={gapMeta?.price ? `Fehlender Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €) • Klicken zum schnellen Erfassen` : `Fehlender Band ${item.gapNumber} fehlt in der Sammlung • Klicken zum Erfassen`}
                 >
                   {/* Top Row: Gap Indicator & Number & Action */}
-                  <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-amber-500/20 w-full shrink-0">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5 pb-2 border-b border-amber-500/20 w-full shrink-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1 basis-24">
                       <div className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 border border-amber-500/50 text-amber-400 font-bold text-xs">
                         +
                       </div>
-                      <div className="font-bold text-amber-300 text-sm tracking-tight flex items-center gap-1.5 min-w-0">
-                        <span className="truncate">Band {item.gapNumber}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
-                          <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Fehlend
-                        </span>
-                      </div>
+                      <span className="font-bold text-amber-300 text-sm tracking-tight min-w-0 break-words leading-tight">Band {item.gapNumber}</span>
                     </div>
 
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFillingGapNumber(item.gapNumber);
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
-                        title="Band in Sammlung erfassen"
-                      >
-                        <Plus className="w-3 h-3" /> Erfassen
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Fehlend
+                      </span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFillingGapNumber(item.gapNumber);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+                          title="Band in Sammlung erfassen"
+                        >
+                          <Plus className="w-3 h-3" /> Erfassen
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Middle: Cover Ghost / Official Image & Metadata */}
