@@ -85,7 +85,7 @@ manga-shelf/
 │   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
 │   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
-│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js
+│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js, radarHelpers.test.js
 │   └── browser/               # Puppeteer-Browsertests (nicht in `npm test`), alle über `run.js` gegen einen isolierten Server
 │       ├── run.js             # Startet Server mit temporärem DATA_DIR + freiem Port + Wegwerf-Admin, führt das Skript aus, räumt auf
 │       ├── chrome.js          # Findet Chrome/Chromium/Edge (`CHROME_BIN` überschreibt)
@@ -129,6 +129,7 @@ manga-shelf/
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
         │   ├── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`), `hasUserRead`, `buildDisplayVolumeItems`
+        │   ├── radarHelpers.js    # Release-Radar ohne React: `filterMpItems`, `groupMpItemsByDate`, `filterRadarItems`
         │   └── collectionHelpers.js # Dashboard-Logik ohne React: Filter/Sortierung (`filterAndSortMangas`), Zähler, Summen, Datumsformat
         ├── utils/
         │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
@@ -150,7 +151,10 @@ manga-shelf/
             │   ├── CollectionToolbar.jsx    # Suche, Filter, Sortierung, Ansicht
             │   ├── MangaCollectionGrid.jsx  # Regal-/Grid-Darstellung der Reihen
             │   ├── ShoppingListView.jsx     # Einkaufsliste, Buchladen-Modus & Schnellkauf
-            │   └── ReleaseRadarView.jsx     # Neuheiten-Kalender & Monats-Release-Radar
+            │   ├── ReleaseRadarView.jsx     # Zusammenbau des Release-Radars (Reiter Manga-Passion-Kalender / Meine Vorbestellungen)
+            │   └── radar/                   # Teile des Radars
+            │       ├── RadarTabs.jsx, MpMonthNav.jsx, MpFilters.jsx, MpTimeline.jsx            # Manga-Passion-Monatskalender
+            │       └── PersonalSummary.jsx, PersonalFilters.jsx, PersonalTimeline.jsx          # Persönliche Vorbestellungen & Budget
             └── detail/        # Manga-Detailansicht Subkomponenten & Modals
                 ├── MangaHeroCard.jsx        # Banner/Kopf der Reihe mit Metadaten & Fortschritt
                 ├── ReaderBar.jsx            # Leser-Umschalter mit Lese-Fortschritt
