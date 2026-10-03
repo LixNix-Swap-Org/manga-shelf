@@ -173,6 +173,17 @@ test('snapshot create + restore round-trip', async () => {
     const restored = await admin('POST', `/backups/${created.body.snapshot.filename}/restore`);
     assert.equal(restored.status, 200);
     assert.equal((await admin('GET', '/mangas')).body.length, withExtra - 1);
+    const leftovers = fs.readdirSync(ctx.dataDir).filter(f => f.includes('restore-tmp'));
+    assert.deepEqual(leftovers, []);
+});
+
+test('series total and batch: negative totals are dropped, batch on a missing series is a 404', async () => {
+    const { body } = await editor('POST', '/mangas', { title: 'Total Check', total_volumes: 5 });
+    const put = await editor('PUT', `/mangas/${body.id}`, { title: 'Total Check', total_volumes: -4 });
+    assert.equal(put.status, 200);
+    assert.equal((await editor('GET', `/mangas/${body.id}`)).body.total_volumes, null);
+    const batch = await editor('POST', '/volumes/batch', { manga_id: 999999, from: 1, to: 3 });
+    assert.equal(batch.status, 404);
 });
 
 test('health: public readiness probe reports ok without authentication', async () => {

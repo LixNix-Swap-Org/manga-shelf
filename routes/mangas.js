@@ -248,7 +248,11 @@ router.put('/mangas/:id', requireEditor, (req, res) => {
         const language = body.language !== undefined ? body.language : manga.language;
         const status = body.status !== undefined ? body.status : manga.status;
         const tags = body.tags !== undefined ? body.tags : manga.tags;
-        const total_volumes = body.total_volumes !== undefined ? (parseInt(body.total_volumes, 10) || null) : manga.total_volumes;
+        let total_volumes = manga.total_volumes;
+        if (body.total_volumes !== undefined) {
+            const parsed = parseInt(body.total_volumes, 10);
+            total_volumes = parsed > 0 && parsed <= 5000 ? parsed : null;
+        }
         const owned_volumes = body.owned_volumes !== undefined ? (parseInt(body.owned_volumes, 10) || 0) : manga.owned_volumes;
         const description = body.description !== undefined ? body.description : manga.description;
         const cover_image = body.cover_image !== undefined ? body.cover_image : manga.cover_image;

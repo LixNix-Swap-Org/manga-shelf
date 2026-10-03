@@ -27,6 +27,11 @@ async function restoreFromZip(source) {
     const dbFilePath = path.join(dataDir, 'manga.db');
     const walFilePath = path.join(dataDir, 'manga.db-wal');
     const shmFilePath = path.join(dataDir, 'manga.db-shm');
+    const removeStagedFiles = () => {
+        for (const suffix of ['', '-wal', '-shm']) {
+            try { fs.unlinkSync(path.join(dataDir, 'manga.db.restore-tmp' + suffix)); } catch (e) { /* not there */ }
+        }
+    };
 
     let zip;
     try {
@@ -48,8 +53,12 @@ async function restoreFromZip(source) {
         fs.writeFileSync(stagedDbPath, dbEntry.getData());
         validateDbFile(stagedDbPath);
     } catch (err) {
-        try { fs.unlinkSync(stagedDbPath); } catch (e) {}
+        removeStagedFiles();
         throw err;
+    }
+    // Validating the staged file can leave -wal/-shm files behind; they would otherwise outlive the rename
+    for (const suffix of ['-wal', '-shm']) {
+        try { fs.unlinkSync(stagedDbPath + suffix); } catch (e) { /* not there */ }
     }
 
     // Set lock flag to prevent proxy from re-opening database during overwrite
@@ -120,7 +129,7 @@ async function restoreFromZip(source) {
                 restoredImagesCount
             };
         } catch (err) {
-            try { fs.unlinkSync(stagedDbPath); } catch (e) {}
+            removeStagedFiles();
             // Rollback safety copy if available
             try {
                 if (fs.existsSync(backupBakPath)) {

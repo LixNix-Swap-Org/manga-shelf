@@ -203,6 +203,10 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
             return res.status(400).json({ error: 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')' });
         }
 
+        if (!db.prepare('SELECT id FROM mangas WHERE id = ?').get(mId)) {
+            return res.status(404).json({ error: 'Manga nicht gefunden' });
+        }
+
         const existing = db.prepare('SELECT volume_number FROM volumes WHERE manga_id = ?').all(mId);
         const existingSet = new Set(existing.map(v => String(v.volume_number)));
 
