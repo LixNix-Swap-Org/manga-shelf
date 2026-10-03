@@ -47,3 +47,28 @@ jobs:
           done
           docker logs ms
           exit 1
+
+  browser:
+    # Real browser (Chrome from the runner image) against an isolated server, see test/browser/run.js
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: npm run test:e2e
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+      - run: npm run test:radar
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+      - name: Keep screenshots of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-screenshots
+          path: test/browser/screenshots

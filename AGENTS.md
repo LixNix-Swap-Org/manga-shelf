@@ -465,7 +465,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 ### Tests, Lint & CI
 * **API-Tests (schnell, ohne Browser):** `npm test` (`node --test test/*.test.js`) startet die App gegen eine temporäre `DATA_DIR`. Neue Backend-Features sollten hier einen Test bekommen.
 * **Lint:** `npm run lint` (ESLint). Fehler brechen die CI, Warnungen nicht.
-* **CI (`.github/workflows/ci.yml`):** Lint + Tests (Node 22) und ein Docker-Job (Build + Start-Test über `/api/health`). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
+* **CI (`.github/workflows/ci.yml`):** vier Jobs: `test` (Lint + Tests, Node 22), `frontend` (Vite-Build), `docker` (Build + Start-Test über `/api/health`) und `browser` (Chrome vom Runner, `npm run test:e2e` + `npm run test:radar` gegen einen isolierten Server; Bildschirmfotos als Artefakt bei Fehlern). Die Browsertests prüfen mit `assert` und brechen bei Fehlern ab; neue Browsertests sollen das auch tun (kein reines `console.log` eines Booleans). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
 
 ### Automatisierte E2E Browser-Tests
 * Voraussetzungen: gebautes Frontend (`npm run build:frontend`) und ein installierter Chrome/Chromium/Edge.

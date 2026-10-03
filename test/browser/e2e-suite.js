@@ -10,6 +10,7 @@ if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
 const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
+const assert = require('node:assert/strict');
 
 async function runTestSuite() {
   const screenshotsDir = path.join(__dirname, 'screenshots');
@@ -50,12 +51,16 @@ async function runTestSuite() {
       consoleErrors.push(msg.text());
     }
   });
+  const pageExceptions = [];
   page.on('pageerror', err => {
     console.error('  [Page Exception]:', err.message);
     consoleErrors.push(err.message);
+    pageExceptions.push(err.message);
   });
 
+  let restoreStatus = null;
   page.on('response', async res => {
+    if (res.url().includes('/backup/restore')) restoreStatus = res.status();
     if (res.url().includes('/api/')) {
       const status = res.status();
       if (status >= 400) {
@@ -93,6 +98,7 @@ async function runTestSuite() {
 
     }
     console.log('Current page title/url:', page.url());
+    assert.ok(!page.url().includes('/login'), 'login failed: still on the login page');
     await page.screenshot({ path: path.join(screenshotsDir, 'test1_dashboard_loaded.png') });
 
     // ----------------------------------------------------
@@ -179,6 +185,7 @@ async function runTestSuite() {
     // Verify user appears
     const hasUser = await page.evaluate(() => document.body.innerText.includes('autotest_user'));
     console.log('User created and visible in list:', hasUser);
+    assert.ok(hasUser, 'the created user is not listed');
 
     // Delete user
     console.log('Deleting test user...');
@@ -229,6 +236,7 @@ async function runTestSuite() {
       });
       await new Promise(r => setTimeout(r, 3000));
       await page.screenshot({ path: path.join(screenshotsDir, 'test4_restore_completed.png') });
+      assert.equal(restoreStatus, 200, 'backup restore was not accepted by the server (status ' + restoreStatus + ')');
     }
 
     if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
@@ -299,7 +307,7 @@ async function runTestSuite() {
 
     // Test Quick Add Single Volume with Price
     console.log('Testing Single Volume Quick Add with price...');
-    await page.type('input[placeholder*="Band-Nr."]', '6');
+    await page.type('input[placeholder*="Band-Nr."]', '99');
     await page.type('input[placeholder*="Preis"]', '8.50');
     await page.evaluate(() => {
       const addBtns = Array.from(document.querySelectorAll('button[type="submit"]'));
@@ -309,8 +317,9 @@ async function runTestSuite() {
     await new Promise(r => setTimeout(r, 1200));
 
     // Verify Band 6 exists
-    const hasBand6 = await page.evaluate(() => document.body.innerText.includes('Band 6'));
-    console.log('Band 6 added with price:', hasBand6);
+    const hasBand99 = await page.evaluate(() => document.body.innerText.includes('Band 99'));
+    console.log('Band 99 added with price:', hasBand99);
+    assert.ok(hasBand99, 'the quick-added volume (Band 99) is not shown');
 
     // Test Opening Edit Modal on Band 1
     console.log('Testing Edit Volume modal on Band 1...');
@@ -369,9 +378,11 @@ async function runTestSuite() {
 
     const isDeleted = await page.evaluate((t) => !document.body.innerText.includes(t), testMangaTitle);
     console.log(`Manga "${testMangaTitle}" successfully deleted:`, isDeleted);
+    assert.ok(isDeleted, 'the test series is still listed after deleting it');
+    assert.deepEqual(pageExceptions, [], 'uncaught exceptions in the page');
 
     console.log('\n======================================================');
-    console.log('🎉 ALL INTEGRATION TESTS PASSED WITH ZERO ERRORS! 🎉');
+    console.log('🎉 ALL INTEGRATION TESTS PASSED 🎉');
     console.log('Console Errors caught:', consoleErrors.length);
     console.log('Screenshots saved in:', screenshotsDir);
     console.log('======================================================');

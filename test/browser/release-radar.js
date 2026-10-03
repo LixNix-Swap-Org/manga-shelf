@@ -12,6 +12,12 @@ const { findChrome } = require('./chrome');
 const fs = require('fs');
 const path = require('path');
 
+// a release date 20 days from now, so the test keeps working as time passes
+const releaseDay = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+const releaseIso = releaseDay.toISOString().slice(0, 10);
+const releaseMonthYear = releaseDay.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+const releaseDotted = releaseIso.split('-').reverse().join('.');
+
 (async () => {
     console.log('--- TESTING RELEASE-RADAR FEATURE ---');
     const browser = await puppeteer.launch({
@@ -55,7 +61,7 @@ const path = require('path');
         console.log('Test Manga created with ID:', mangaId);
 
         // Add Volume 1 with Vorbestellt and date
-        await page.evaluate(async (mId) => {
+        await page.evaluate(async (mId, releaseDate) => {
             await fetch('/api/volumes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -64,11 +70,11 @@ const path = require('path');
                     volume_number: '1',
                     status: 'Vorbestellt',
                     price: 8.50,
-                    release_date: '2026-10-25'
+                    release_date: releaseDate
                 })
             });
-        }, mangaId);
-        console.log('Volume 1 added as Vorbestellt (2026-10-25, 8.50€)');
+        }, mangaId, releaseIso);
+        console.log(`Volume 1 added as Vorbestellt (${releaseIso}, 8.50€)`);
 
         // Step 3: Switch to Release-Radar tab on Dashboard
         await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle0' });
@@ -106,10 +112,11 @@ const path = require('path');
         const bodyText = await page.evaluate(() => document.body.innerText);
         const hasSeries = bodyText.includes('__RADAR_TEST_SERIES__');
         const hasBudget = bodyText.includes('8,50');
-        const hasDate = bodyText.includes('Oktober 2026') || bodyText.includes('25.10.2026') || bodyText.includes('2026-10-25');
+        const hasDate = bodyText.includes(releaseMonthYear) || bodyText.includes(releaseDotted) || bodyText.includes(releaseIso);
         console.log('Radar contains test series:', hasSeries);
         console.log('Radar shows 8,50 € budget:', hasBudget);
         console.log('Radar shows release date/group:', hasDate);
+        if (!hasDate) throw new Error('Release Radar does not show the release date / month group');
 
         if (!hasSeries || !hasBudget) {
             throw new Error('Release Radar failed to display test item or budget');
@@ -128,6 +135,7 @@ const path = require('path');
         const bodyTextAfter = await page.evaluate(() => document.body.innerText);
         const hasSeriesAfter = bodyTextAfter.includes('__RADAR_TEST_SERIES__');
         console.log('Item removed from radar after Geliefert click:', !hasSeriesAfter);
+        if (hasSeriesAfter) throw new Error('Delivered item is still shown in the radar');
 
         // Step 5: Clean up test manga
         await page.evaluate(async (mId) => {
