@@ -3,6 +3,7 @@ const path = require('path');
 const archiver = require('archiver');
 const { db, dataDir, uploadsDir, tempDir } = require('../db');
 const log = require('../utils/logger').child('scheduler');
+const { cleanOrphanUploads } = require('./uploadCleanup');
 
 const backupsDir = path.join(dataDir, 'backups');
 if (!fs.existsSync(backupsDir)) {
@@ -79,6 +80,11 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup') {
 
     // Prune backups: keep latest 7 snapshots
     pruneBackups(7);
+
+    // Only the automatic daily run tidies up: the fresh snapshot just taken still holds every file
+    if (prefix === 'daily-auto') {
+        try { cleanOrphanUploads(); } catch (e) { log.warn('Cleaning orphaned uploads failed:', e); }
+    }
 
     const stat = fs.statSync(targetFile);
     return { filename, size: stat.size, created_at: new Date().toISOString() };

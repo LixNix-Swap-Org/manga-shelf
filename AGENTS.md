@@ -63,7 +63,8 @@ manga-shelf/
 │   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar (nur Routen + SQL, Logik in `services/radar.js` und `services/mangaPassionReleases.js`)
 │   └── lookup.js              # Routen: ISBN-Suche, Manga Passion / AniList Lookup & Uploads (Logik der ISBN-Suche in `services/isbnLookup.js`)
 ├── services/                  # Hintergrund-Dienste
-│   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+│   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots); räumt nach dem Auto-Backup verwaiste Uploads auf
+│   ├── uploadCleanup.js       # `cleanOrphanUploads`: löscht Dateien in `uploads/`, die keine Reihe/kein Band mehr nennt und älter als 7 Tage sind (Test: `test/uploadCleanup.test.js`)
 │   ├── isbnLookup.js          # ISBN-Suche: DNB → K10plus → Google Books (`lookupBookByIsbn`, `parseMarc21Xml`), Abgleich mit der Sammlung (`matchCollection`)
 │   ├── radar.js               # Reine Funktionen: `countdownFor`, `buildShoppingList`, `buildReleaseRadar` (Monatsgruppen, Budgets)
 │   ├── mangaPassionReleases.js # Monatskalender von Manga Passion: Abruf mit Cache (`getMonthlyReleases`), Abgleich mit der Sammlung (`enrichReleases`)
@@ -141,9 +142,6 @@ manga-shelf/
         │   ├── scanHelpers.js     # ISBN-Scan ohne React: `buildScanPrefill` (Katalogtreffer → Formular der neuen Reihe + gescannter Band), `buildScanVolumePayload`
         │   ├── radarHelpers.js    # Release-Radar ohne React: `filterMpItems`, `groupMpItemsByDate`, `filterRadarItems`
         │   └── collectionHelpers.js # Dashboard-Logik ohne React: Filter/Sortierung (`filterAndSortMangas`), Zähler, Summen, Datumsformat
-        ├── utils/
-        │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
-        │   └── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`)
         ├── index.css          # Globale Styles, Scrollbars, Glasmorphismus & Farbtöne
         └── components/        # Modulare Komponenten & Modals (Frontend-Refactoring)
             ├── modals/        # Dashboard-Modals
@@ -561,7 +559,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
    * Zusätzlich sperrt `loginFailures` einen Benutzernamen nach 10 Fehlversuchen in 15 Min. (429, unabhängig von der IP). `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`, Standard `true`): Ohne Proxy davor lässt sich die IP per `X-Forwarded-For` fälschen, dann `TRUST_PROXY=false` setzen.
-   * Eine Passwortänderung durch den Admin setzt `users.password_changed_at`; ältere Sitzungen dieses Benutzers (JWT `iat` davor) werden mit 401 abgelehnt. Es gibt keine CORS-Freigabe außer für Ursprünge in `CORS_ORIGIN`; `index.js` setzt `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` (bewusst ohne CSP).
+   * Eine Passwortänderung durch den Admin setzt `users.password_changed_at`; ältere Sitzungen dieses Benutzers (JWT `iat` davor) werden mit 401 abgelehnt. Es gibt keine CORS-Freigabe außer für Ursprünge in `CORS_ORIGIN`; `index.js` setzt `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` und eine Content-Security-Policy (`CONTENT_SECURITY_POLICY` in `index.js`: Skripte nur von der eigenen Domain, Bilder auch von `http(s)`, weil ein Cover noch auf einen fremden Host zeigen kann, Inline-Styles erlaubt). Neue externe Skript-/API-Hosts müssen dort eingetragen werden, sonst blockt der Browser sie.
    * Benutzernamen sind unabhängig von Groß-/Kleinschreibung eindeutig (`COLLATE NOCASE` beim Anlegen und beim Login).
    * Rollen sind `admin`, `editor`, `visitor`, `guest`; eine unbekannte Rolle wird mit 400 abgelehnt. Volume-Status wird gegen `VOLUME_STATUSES` (`routes/volumes.js`) geprüft.
 9. **Restore (`routes/backups.js`):**

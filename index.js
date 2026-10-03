@@ -75,11 +75,28 @@ if (corsOrigins.length > 0) {
     app.use(cors({ origin: corsOrigins, credentials: true }));
 }
 
-// Basic hardening headers (no CSP: covers may come from other hosts and the build uses inline styles)
+// Basic hardening headers. The CSP allows https/http images because a cover may still point at another host,
+// and inline styles because the build and the React components use them; scripts only come from this server.
+const CONTENT_SECURITY_POLICY = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: http: https:",
+    "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'"
+].join('; ');
+
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'same-origin');
+    res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
     next();
 });
 

@@ -137,3 +137,11 @@ test('usernames are unique and log in regardless of case', async () => {
     assert.equal((await admin('POST', '/users', { username: 'caseuser', password: 'password123' })).status, 400);
     assert.equal((await ctx.client()('POST', '/auth/login', { username: 'CASEUSER', password: 'password123' })).status, 200);
 });
+
+test('responses carry a Content-Security-Policy without inline scripts', async () => {
+    const res = await fetch(ctx.base.replace(/\/api$/, '') + '/api/health');
+    const csp = res.headers.get('content-security-policy') || '';
+    assert.match(csp, /default-src 'self'/);
+    assert.match(csp, /script-src 'self'(;|$)/);
+    assert.match(csp, /object-src 'none'/);
+});

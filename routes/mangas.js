@@ -97,7 +97,7 @@ router.post('/mangas', requireEditor, (req, res) => {
         res.json({ success: true, id: Number(result.lastInsertRowid) });
     } catch (err) {
         log.error('Error creating manga:', err);
-        res.status(500).json({ error: 'Fehler beim Erstellen des Mangas: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Erstellen des Mangas' });
     }
 });
 
@@ -282,7 +282,7 @@ router.put('/mangas/:id', requireEditor, (req, res) => {
         res.json({ success: true });
     } catch (err) {
         log.error('Error updating manga:', err);
-        res.status(500).json({ error: 'Fehler beim Speichern: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Speichern' });
     }
 });
 
@@ -315,7 +315,7 @@ router.get('/mangas/:id/gaps', requireAuth, async (req, res) => {
         res.json(result);
     } catch (err) {
         log.error('Manga gaps check error:', err);
-        res.status(500).json({ error: 'Fehler beim Abgleich der Lücken: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Abgleich der Lücken' });
     }
 });
 
@@ -337,7 +337,7 @@ router.post('/mangas/:id/sync-edition', requireEditor, async (req, res) => {
         res.json({ success: true, manga: updatedManga });
     } catch (err) {
         log.error('Sync edition error:', err);
-        res.status(500).json({ error: 'Fehler beim Synchronisieren der Edition: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Synchronisieren der Edition' });
     }
 });
 
@@ -355,7 +355,7 @@ router.post('/mangas/:id/batch-import-gaps', requireEditor, async (req, res) => 
         res.json(result);
     } catch (err) {
         log.error('Batch import gaps error:', err);
-        res.status(500).json({ error: 'Fehler beim Erfassen der Lücken: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Erfassen der Lücken' });
     }
 });
 
@@ -373,7 +373,7 @@ router.post('/mangas/:id/autofill-volumes', requireEditor, async (req, res) => {
         res.json(result);
     } catch (err) {
         log.error('Batch autofill volumes error:', err);
-        res.status(500).json({ error: 'Fehler beim automatischen Ausfüllen der Bände: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim automatischen Ausfüllen der Bände' });
     }
 });
 

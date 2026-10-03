@@ -138,7 +138,7 @@ router.get('/manga-passion/releases', requireAuth, async (req, res) => {
         });
     } catch (err) {
         log.error('Manga Passion releases error:', err);
-        res.status(500).json({ error: 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen' });
     }
 });
 
@@ -248,7 +248,7 @@ router.get('/manga-passion/editions', requireAuth, async (req, res) => {
         res.json(result);
     } catch (err) {
         log.error('Manga Passion edition search error:', err);
-        res.status(500).json({ error: 'Fehler bei der Editionssuche: ' + err.message });
+        res.status(500).json({ error: 'Fehler bei der Editionssuche' });
     }
 });
 

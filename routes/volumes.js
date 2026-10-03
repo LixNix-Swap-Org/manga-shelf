@@ -412,7 +412,7 @@ router.get('/volumes/lookup', requireAuth, async (req, res) => {
         res.json(result);
     } catch (err) {
         log.error('Volume metadata lookup error:', err);
-        res.status(500).json({ error: 'Fehler beim Abrufen der Band-Metadaten: ' + err.message });
+        res.status(500).json({ error: 'Fehler beim Abrufen der Band-Metadaten' });
     }
 });
 
