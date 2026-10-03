@@ -1,6 +1,6 @@
 {
   "name": "manga-shelf-backend",
-  "version": "2.15.6",
+  "version": "2.15.7",
   "description": "Manga Shelf Backend for Pterodactyl",
   "main": "index.js",
   "engines": {
