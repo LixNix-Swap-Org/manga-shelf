@@ -26,6 +26,17 @@ function resolveJwtSecret() {
 
 const JWT_SECRET = resolveJwtSecret();
 
+/**
+ * Writes the secret that is in use back into app_settings. A restore replaces the whole database, including the
+ * `jwt_secret` of the backup; without this the next restart would pick up the old secret and every session
+ * (including the admin's own) would end with "Invalid token".
+ */
+function persistJwtSecret() {
+    const fromEnv = process.env.JWT_SECRET;
+    if (fromEnv && fromEnv === JWT_SECRET) return; // the environment is the source of truth
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', ?)").run(JWT_SECRET);
+}
+
 // Helper for cookie options (supports direct HTTPS & reverse proxy / Cloudflare / Nginx)
 const setAuthCookie = (req, res, token) => {
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.COOKIE_SECURE === 'true';
@@ -90,6 +101,7 @@ const requireEditor = (req, res, next) => {
 
 module.exports = {
     JWT_SECRET,
+    persistJwtSecret,
     setAuthCookie,
     clearAuthCookie,
     requireAuth,

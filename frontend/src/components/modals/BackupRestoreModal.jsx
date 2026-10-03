@@ -103,6 +103,23 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
     }
   };
 
+  // After a restore the users table may differ: the server keeps the admin signed in when the username still
+  // exists, otherwise the session is gone and the login must be shown (reload does that via the auth check).
+  const finishRestore = (data) => {
+    if (onRestoreSuccess) onRestoreSuccess();
+    setTimeout(() => {
+      if (data && data.relogin) {
+        window.location.reload();
+        return;
+      }
+      onClose();
+      setRestoreSuccess('');
+      setRestoreFile(null);
+    }, 2000);
+  };
+
+  const sessionExpiredMessage = 'Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.';
+
   const handleRestoreSnapshot = async (filename) => {
     if (!confirm(`Möchtest du den Snapshot "${filename}" wirklich wiederherstellen? Dies überschreibt die aktuelle Datenbank und Bilder mit diesem Stand.`)) {
       return;
@@ -115,13 +132,9 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       const data = await res.json();
       if (res.ok) {
         setRestoreSuccess(data.message || 'Snapshot erfolgreich wiederhergestellt!');
-        if (onRestoreSuccess) onRestoreSuccess();
-        setTimeout(() => {
-          onClose();
-          setRestoreSuccess('');
-        }, 2000);
+        finishRestore(data);
       } else {
-        setRestoreError(data.error || 'Fehler beim Wiederherstellen des Snapshots');
+        setRestoreError(res.status === 401 ? sessionExpiredMessage : data.error || 'Fehler beim Wiederherstellen des Snapshots');
       }
     } catch (e) {
       setRestoreError('Netzwerkfehler');
@@ -166,16 +179,11 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Fehler beim Wiederherstellen des Backups');
+        throw new Error(res.status === 401 ? sessionExpiredMessage : (data.error || 'Fehler beim Wiederherstellen des Backups'));
       }
 
       setRestoreSuccess(data.message || 'Backup erfolgreich eingespielt!');
-      if (onRestoreSuccess) onRestoreSuccess();
-      setTimeout(() => {
-        onClose();
-        setRestoreSuccess('');
-        setRestoreFile(null);
-      }, 2000);
+      finishRestore(data);
     } catch (err) {
       setRestoreError(err.message || 'Netzwerkfehler beim Wiederherstellen');
     } finally {

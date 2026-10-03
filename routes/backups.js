@@ -5,7 +5,8 @@ const fs = require('fs');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const { db, dataDir, uploadsDir, closeDb, initDb, validateDbFile, setRestoringState } = require('../db');
-const { requireAdmin } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const { requireAdmin, JWT_SECRET, persistJwtSecret, setAuthCookie, clearAuthCookie } = require('../middleware/auth');
 const { uploadBackup } = require('../middleware/upload');
 const { backupsDir, createBackupSnapshot, copyDatabaseToTemp } = require('../services/scheduler');
 const log = require('../utils/logger').child('backup');
@@ -103,6 +104,7 @@ async function restoreFromZip(source) {
             // 7. Reconnect to database and run migrations
             initDb();
             setRestoringState(false);
+            persistJwtSecret();
 
             // 8. Verify restored database is functional
             const mangaRow = db.prepare('SELECT count(*) as count FROM mangas').get();
@@ -134,6 +136,23 @@ async function restoreFromZip(source) {
     } finally {
         setRestoringState(false);
     }
+}
+
+/**
+ * A restore swaps the users table, so the admin's session may point at a user that no longer exists (other ids) or
+ * at no user at all. Keep the admin signed in when the restored database has the same username (new token with the
+ * restored id/role); otherwise end the session cleanly so the client sends the person to the login instead of
+ * failing every following request with "Invalid token".
+ */
+function sessionAfterRestore(req, res, previousUsername) {
+    const user = db.prepare('SELECT id, username, role FROM users WHERE username = ? COLLATE NOCASE').get(previousUsername);
+    if (user) {
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        setAuthCookie(req, res, token);
+        return { relogin: user.role !== 'admin' };
+    }
+    clearAuthCookie(res);
+    return { relogin: true };
 }
 
 // 1. Direct stream download of current backup
@@ -210,6 +229,7 @@ router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
         }
 
         const result = await restoreFromZip(filePath);
+        Object.assign(result, sessionAfterRestore(req, res, req.user.username));
 
         log.info(`[Backup Restore] Restored snapshot ${filename} (${result.mangaCount} Mangas)`);
         res.json({
@@ -266,6 +286,7 @@ const handleUploadedBackupRestore = async (req, res) => {
 
     try {
         const result = await restoreFromZip(uploadedPath);
+        Object.assign(result, sessionAfterRestore(req, res, req.user.username));
         res.json({
             success: true,
             message: `Backup erfolgreich eingespielt! (${result.mangaCount} Manga-Reihen und ${result.restoredImagesCount} Bilddateien wiederhergestellt)`,

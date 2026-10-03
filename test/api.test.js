@@ -215,3 +215,49 @@ test('Statistik: Ausgaben nach Kaufdatum (Jahr, letzte 12 Monate, ohne Datum)', 
     assert.ok(sp.by_year.find(r => r.year === y).total >= 15);
     assert.ok(sp.without_date.volumes >= 1);
 });
+
+// Restore swaps the users table and the stored JWT secret. These tests come last because the second one removes the admin.
+async function uploadModifiedBackup(client, mutate) {
+    const created = await client('POST', '/backups/create');
+    assert.equal(created.status, 200);
+    const zip = new AdmZip(path.join(ctx.dataDir, 'backups', created.body.snapshot.filename));
+    const tmpDb = path.join(ctx.dataDir, 'temp', 'modified-backup.db');
+    fs.mkdirSync(path.dirname(tmpDb), { recursive: true });
+    fs.writeFileSync(tmpDb, zip.getEntry('manga.db').getData());
+    const { DatabaseSync } = require('node:sqlite');
+    const old = new DatabaseSync(tmpDb);
+    mutate(old);
+    old.close();
+    zip.updateFile('manga.db', fs.readFileSync(tmpDb));
+    fs.unlinkSync(tmpDb);
+    const fd = new FormData();
+    fd.append('backup', new Blob([zip.toBuffer()], { type: 'application/zip' }), 'old.zip');
+    const res = await fetch(ctx.base + '/backup/restore', { method: 'POST', headers: { Cookie: client.cookie }, body: fd });
+    return { res, body: await res.json() };
+}
+
+test('restore: admin stays signed in with a new token and the live JWT secret survives a backup with another secret', async () => {
+    const { res, body } = await uploadModifiedBackup(admin, (d) => {
+        d.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', 'secret-of-the-old-installation')").run();
+        d.exec("PRAGMA foreign_keys = OFF; UPDATE users SET id = id + 100;"); // other ids than the live session token knows
+    });
+    assert.equal(res.status, 200);
+    assert.equal(body.relogin, false);
+    const set = res.headers.get('set-cookie');
+    assert.ok(set && set.startsWith('token='), 'a fresh session cookie is issued');
+    admin.cookie = set.split(';')[0];
+    assert.equal((await admin('GET', '/mangas')).status, 200);
+    const stored = require('../db').db.prepare("SELECT value FROM app_settings WHERE key = 'jwt_secret'").get();
+    assert.equal(stored.value, require('../middleware/auth').JWT_SECRET);
+});
+
+test('restore: backup without the current user ends the session cleanly instead of failing with "Invalid token"', async () => {
+    const { res, body } = await uploadModifiedBackup(admin, (d) => {
+        d.prepare("UPDATE users SET username = 'someone-else' WHERE role = 'admin'").run();
+    });
+    assert.equal(res.status, 200);
+    assert.equal(body.relogin, true);
+    assert.match(res.headers.get('set-cookie') || '', /token=;/);
+    const fresh = ctx.client();
+    assert.equal((await fresh('POST', '/auth/login', { username: 'someone-else', password: 'password123' })).status, 200);
+});
