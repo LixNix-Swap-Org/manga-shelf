@@ -9,7 +9,7 @@ const COLUMNS = [
     ['series', 'Reihe'], ['publisher', 'Verlag'], ['author', 'Autor'], ['type', 'Typ'],
     ['volume_number', 'Bandnummer'], ['status', 'Status'], ['isbn', 'ISBN'], ['price', 'Preis'],
     ['release_date', 'Erscheinungsdatum'], ['purchase_date', 'Kaufdatum'], ['condition', 'Zustand'],
-    ['pages', 'Seiten'], ['notes', 'Notizen']
+    ['pages', 'Seiten'], ['notes', 'Notizen'], ['owners', 'Besitzer']
 ];
 
 function escapeCell(value) {
@@ -66,7 +66,7 @@ const HEADER_ALIASES = {
     type: ['typ', 'type'], volume_number: ['bandnummer', 'band', 'nummer', 'volumenumber', 'volume'],
     status: ['status'], isbn: ['isbn'], price: ['preis', 'price'], release_date: ['erscheinungsdatum', 'releasedate'],
     purchase_date: ['kaufdatum', 'purchasedate'], condition: ['zustand', 'condition'], pages: ['seiten', 'pages'],
-    notes: ['notizen', 'notes']
+    notes: ['notizen', 'notes'], owners: ['besitzer', 'owners', 'owner']
 };
 
 const TYPE_ALIASES = {
@@ -128,7 +128,8 @@ function mapCsvRows(rows) {
             line, series, publisher: get(row, 'publisher') || null, author: get(row, 'author') || null,
             type, volume_number: volumeNumber, status: statusMatch, isbn: normalizeIsbn(get(row, 'isbn')) || null,
             price, release_date: release.value, purchase_date: purchase.value,
-            condition: get(row, 'condition') || null, pages, notes: get(row, 'notes') || null
+            condition: get(row, 'condition') || null, pages, notes: get(row, 'notes') || null,
+            owners: get(row, 'owners').split(/[,|]/).map(n => n.trim()).filter(Boolean)
         });
     });
     return { records, errors };

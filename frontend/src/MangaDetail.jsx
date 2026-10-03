@@ -449,6 +449,7 @@ export default function MangaDetail({ user }) {
         manga={manga}
         mangaId={id}
         canEdit={canEdit}
+        user={user}
         onSuccess={fetchManga}
         onPreviewImage={setPreviewImage}
       />

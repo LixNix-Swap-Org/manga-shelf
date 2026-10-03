@@ -122,3 +122,41 @@ test('owners: Löschen eines Benutzers übergibt seine Einzelbesitze an den Admi
     assert.deepEqual(v.owners.map(o => o.username), ['admin']);
     assert.equal(v.status, 'Vorhanden');
 });
+
+test('owners: CSV-Export enthält Besitzer, Import ordnet sie zu', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Owners CSV' })).body.id;
+    await editor('POST', '/volumes', { manga_id: id, volume_number: '1' });
+    const vol = (await detail(editor, id)).volumes[0];
+    await admin('POST', `/volumes/${vol.id}/owners`, { owned: true });
+
+    const csvRes = await fetch(`${ctx.base}/export/csv`, { headers: { Cookie: admin.cookie } });
+    const csv = await csvRes.text();
+    const header = csv.split('\r\n')[0];
+    assert.ok(header.endsWith(';Besitzer'));
+    const line = csv.split('\r\n').find(l => l.startsWith('Owners CSV;'));
+    assert.match(line, /(admin, ed|ed, admin)$/);
+
+    const imp = await editor('POST', '/import/csv', {
+        csv: 'Reihe;Bandnummer;Status;Besitzer\r\nImport Owners;1;Vorhanden;"admin, ed, niemand"\r\nImport Owners;2;Vorhanden;\r\nImport Owners;3;Fehlt;admin\r\n'
+    });
+    assert.equal(imp.status, 200);
+    const list = (await editor('GET', '/mangas')).body;
+    const mid = list.find(m => m.title === 'Import Owners').id;
+    const vols = (await detail(editor, mid)).volumes;
+    assert.deepEqual(vols[0].owners.map(o => o.username).sort(), ['admin', 'ed']);
+    assert.deepEqual(vols[1].owners.map(o => o.username), ['ed']);
+    assert.equal(vols[2].owners.length, 0);
+});
+
+test('owners: Statistik liefert Bände und Wert pro Besitzer', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Owners Stats' })).body.id;
+    await editor('POST', '/volumes', { manga_id: id, volume_number: '1', price: 8 });
+    const vol = (await detail(editor, id)).volumes[0];
+    await admin('POST', `/volumes/${vol.id}/owners`, { owned: true, price: 5 });
+    const stats = (await admin('GET', '/stats')).body;
+    const mine = stats.owner_stats.find(o => o.username === 'admin');
+    const ed = stats.owner_stats.find(o => o.username === 'ed');
+    assert.ok(mine.volume_count >= 1 && ed.volume_count >= 1);
+    assert.ok(mine.shared_count >= 1);
+    assert.ok(stats.owner_stats.every(o => typeof o.total_value === 'number'));
+});

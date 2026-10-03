@@ -131,6 +131,20 @@ router.get('/stats', requireAuth, (req, res) => {
             };
         });
 
+        // Besitz pro Benutzer: Bände und Wert (Preis des Besitzers, sonst Bandpreis); ein Band kann mehreren gehören
+        const ownerStats = db.prepare(`
+            SELECT u.id as user_id, u.username,
+                   count(vo.volume_id) as volume_count,
+                   COALESCE(SUM(COALESCE(vo.price, v.price, 0)), 0) as total_value,
+                   COUNT(DISTINCT v.manga_id) as series_count,
+                   COALESCE(SUM(CASE WHEN (SELECT count(*) FROM volume_owners o2 WHERE o2.volume_id = vo.volume_id) > 1 THEN 1 ELSE 0 END), 0) as shared_count
+            FROM users u
+            LEFT JOIN volume_owners vo ON vo.user_id = u.id
+            LEFT JOIN volumes v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
+            GROUP BY u.id
+            ORDER BY u.id
+        `).all().map(o => ({ ...o, total_value: Math.round((o.total_value || 0) * 100) / 100 }));
+
         // Top 5 Valuable series
         const topSeries = db.prepare(`
             SELECT 
@@ -191,6 +205,7 @@ router.get('/stats', requireAuth, (req, res) => {
             avg_monthly_spending: avgMonthlySpending,
             publishers,
             user_reading_stats: userReadingStats,
+            owner_stats: ownerStats,
             top_series: topSeries,
             spending: buildSpending()
         });

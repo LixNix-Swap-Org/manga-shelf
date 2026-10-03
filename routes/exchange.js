@@ -4,7 +4,7 @@ const { db, runTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { toCsv, parseCsv, mapCsvRows } = require('../services/csvExchange');
-const { syncOwnersWithStatus } = require('../utils/owners');
+const { addOwner, syncOwnersWithStatus } = require('../utils/owners');
 const log = require('../utils/logger').child('exchange');
 
 const MAX_IMPORT_ROWS = 20000;
@@ -14,7 +14,8 @@ router.get('/export/csv', requireAuth, (req, res) => {
         const rows = db.prepare(`
             SELECT m.title AS series, COALESCE(NULLIF(TRIM(v.publisher), ''), m.publisher) AS publisher, m.author,
                    COALESCE(v.type, 'volume') AS type, v.volume_number, v.status, v.isbn, v.price,
-                   v.release_date, v.purchase_date, v.condition, v.pages, v.notes
+                   v.release_date, v.purchase_date, v.condition, v.pages, v.notes,
+                   (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id) AS owners
             FROM volumes v JOIN mangas m ON m.id = v.manga_id
             ORDER BY m.title COLLATE NOCASE, m.id, CAST(v.volume_number AS REAL), v.volume_number
         `).all();
@@ -44,6 +45,7 @@ router.post('/import/csv', requireEditor, (req, res) => {
             INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, condition, pages, publisher, purchase_date, status, notes, type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
+        const findUser = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE');
         const recount = db.prepare("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes WHERE manga_id = ? AND status = 'Vorhanden') WHERE id = ?");
 
         const result = { created_series: 0, created_volumes: 0, skipped_existing: 0, errors };
@@ -74,7 +76,15 @@ router.post('/import/csv', requireEditor, (req, res) => {
                 if (dryRun || mangaId === -1) continue;
                 const ins = insertVolume.run(mangaId, r.volume_number, r.isbn, r.price, r.release_date, r.condition, r.pages,
                     r.publisher ? normalizePublisher(r.publisher) : null, r.purchase_date, r.status, r.notes, r.type);
-                syncOwnersWithStatus(db, Number(ins.lastInsertRowid), req.user.id);
+                const newVolumeId = Number(ins.lastInsertRowid);
+                // Besitzer aus der Spalte „Besitzer“ (unbekannte Namen werden ignoriert); ohne Treffer wird der Importierende Besitzer
+                if (r.status === 'Vorhanden') {
+                    for (const name of r.owners || []) {
+                        const u = findUser.get(name);
+                        if (u) addOwner(db, newVolumeId, u.id, { price: r.price, purchase_date: r.purchase_date, condition: r.condition });
+                    }
+                }
+                syncOwnersWithStatus(db, newVolumeId, req.user.id);
                 touched.add(mangaId);
             }
             for (const id of touched) recount.run(id, id);

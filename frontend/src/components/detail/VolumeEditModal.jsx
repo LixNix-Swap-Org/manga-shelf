@@ -5,6 +5,7 @@ import TypeNumberFields from './volumeEdit/TypeNumberFields';
 import StatusPriceFields from './volumeEdit/StatusPriceFields';
 import DetailFields from './volumeEdit/DetailFields';
 import EditFooter from './volumeEdit/EditFooter';
+import OwnersField from './volumeEdit/OwnersField';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
 import useDialogA11y from '../../hooks/useDialogA11y';
 
@@ -15,6 +16,7 @@ export default function VolumeEditModal({
   manga,
   mangaId,
   canEdit,
+  user,
   onSuccess,
   onPreviewImage
 }) {
@@ -81,6 +83,15 @@ export default function VolumeEditModal({
                   editVolForm={editVolForm}
                   setEditVolForm={setEditVolForm}
                 />
+                {canEdit && (
+                  <OwnersField
+                    volumeId={activeVolume.id}
+                    owners={activeVolume.owners}
+                    users={manga?.reader_stats}
+                    currentUser={user}
+                    onChanged={onSuccess}
+                  />
+                )}
 
                 {/* Volume Cover & Images Section */}
                 <VolumePhotoManager
