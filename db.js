@@ -207,6 +207,33 @@ function runSequentialMigrations(database) {
                 if (!cols.has('priority')) d.exec('ALTER TABLE volumes ADD COLUMN priority INTEGER DEFAULT 0;');
                 if (!cols.has('target_price')) d.exec('ALTER TABLE volumes ADD COLUMN target_price REAL DEFAULT NULL;');
             }
+        },
+        {
+            version: 11,
+            name: 'add_volume_owners',
+            up: (d) => {
+                // Besitz pro Benutzer: mehrere Personen können denselben Band besitzen. volumes.status = 'Vorhanden' bleibt
+                // "mindestens ein Besitzer"; bestehende Bände werden dem ältesten Admin zugeordnet.
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS volume_owners (
+                        volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        price REAL,
+                        purchase_date TEXT,
+                        condition TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (volume_id, user_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_volume_owners_user ON volume_owners (user_id);
+                `);
+                const owner = d.prepare("SELECT id FROM users ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id LIMIT 1").get();
+                if (owner) {
+                    d.prepare(`
+                        INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
+                        SELECT id, ?, price, purchase_date, condition FROM volumes WHERE status = 'Vorhanden'
+                    `).run(owner.id);
+                }
+            }
         }
     ];
 

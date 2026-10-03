@@ -78,6 +78,7 @@ manga-shelf/
 │       └── index.js           # bündelt die Exporte
 ├── utils/                     # Hilfsfunktionen & Normalisierer
 │   ├── publishers.js          # Verlags-Normalisierung & Mappings
+│   ├── owners.js              # Besitz pro Benutzer: `addOwner`, `syncOwnersWithStatus`, `syncStatusWithOwners` (Test: `test/owners.test.js`)
 │   ├── isbn.js                # ISBN-10/13-Normalisierung (`normalizeIsbn`) und Prüfziffern (`isValidIsbn`)
 │   ├── logger.js              # Zentraler Logger (`LOG_LEVEL`, `LOG_FORMAT`)
 │   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
@@ -248,7 +249,9 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `read_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP)
    * *PK: (`volume_id`, `user_id`)*
 
-5. **`app_settings`**
+5. **`volume_owners`** (Migration 11) – Besitz pro Benutzer: `volume_id`, `user_id` (beide FK, ON DELETE CASCADE, PK zusammen), `price`, `purchase_date`, `condition`, `created_at`. `volumes.status = 'Vorhanden'` bedeutet „mindestens ein Besitzer“; `utils/owners.js` hält beides synchron (Band mit Status Vorhanden ohne Besitzer → der Bearbeiter wird Besitzer; Status ≠ Vorhanden → alle Besitzer entfallen; letzter Besitzer weg → `Fehlt`). Bestehende Bände gehören nach der Migration dem ältesten Admin; beim Löschen eines Benutzers gehen seine Einzelbesitze an den löschenden Admin.
+
+6. **`app_settings`**
    * `key` (TEXT, PK)
    * `value` (TEXT)
    * z. B. `collection_start_date` (Default: `'2021-04-09'`) für die Berechnung der Sammeljahre
@@ -262,7 +265,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
    * `name` (TEXT, NOT NULL) – Name der Migration
    * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
-   * Aktuell Version 1–10 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`, `volumes.priority`/`target_price`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
+   * Aktuell Version 1–11 (`volume_owners`; Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`, `volumes.priority`/`target_price`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
 
 ### Performance-Indizes
 Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):
@@ -319,6 +322,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/volumes/:id` | PUT | `requireEditor` | Banddetails bearbeiten |
 | `/api/volumes/:id` | DELETE | `requireEditor` | Einzelnen Band löschen |
 | `/api/volumes/:id/read` | POST | `requireEditor` | Lesestatus für Band umschalten (Toggle) |
+| `/api/volumes/:id/owners` | POST | `requireEditor` | Eigenen Besitz umschalten (`{ owned?: bool }`, ohne Angabe Toggle); Admins dürfen mit `user_id` für andere eintragen. Antwort: `status`, `owners`, `owned_by_me`. `GET /api/mangas/:id` liefert je Band `owners` und `owned_by_me` |
 | `/api/volumes/batch-read` | POST | `requireEditor` | Bände 1 bis X auf einen Klick als gelesen markieren |
 | `/api/volumes/lookup` | GET | `requireAuth` | Metadaten (Datum, Seiten, ISBN, Preis, Cover) für einen Band via Manga Passion / DNB; akzeptiert auch MP-URL oder -ID (`manga_id`, `volume_number`) |
 | `/api/stats` | GET | `requireAuth` | Gesamte Sammlungs-Statistiken abrufen (inkl. `spending`: Ausgaben nach Kaufdatum je Jahr / letzte 12 Monate / ohne Datum; Anzeige `SpendingCard.jsx`) |
@@ -329,7 +333,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via Manga Passion API (Prio 1) & AniList GraphQL API (Fallback) |
 | `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
 | `/api/offline-snapshot` | GET | `requireAuth` | Gesamte Sammlung (Liste + alle Reihen-Details, Lesestatus des Aufrufers) in einer Antwort für die Offline-Kopie im Browser |
-| `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
+| `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück; mit `?include_others=1` zusätzlich `others`: Bände, die andere besitzen, der Aufrufer in einer von ihm gesammelten Reihe aber nicht (`owned_by_others`) |
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
 | `/api/release-radar/changes` | GET | `requireAuth` | Vorbestellungen, deren Termin im Manga-Passion-Kalender abweicht (`monthsToCheck`, `detectDateChanges` in `services/mangaPassionReleases.js`; nutzt den 12-h-Cache); Oberfläche: Banner `radar/PersonalDateChanges.jsx` mit „Termin übernehmen“ |
 | `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |

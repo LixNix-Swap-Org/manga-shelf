@@ -147,12 +147,31 @@ function loadMangaDetail(mangaId, userId) {
         readMap[r.volume_id].push({ id: r.user_id, user_id: r.user_id, username: r.username });
     }
 
+    // Besitzer pro Band (mehrere Personen können denselben Band besitzen)
+    const ownerRows = db.prepare(`
+        SELECT vo.volume_id, vo.user_id, u.username, vo.price, vo.purchase_date
+        FROM volume_owners vo
+        JOIN users u ON vo.user_id = u.id
+        JOIN volumes v ON vo.volume_id = v.id
+        WHERE v.manga_id = ?
+        ORDER BY vo.created_at, vo.user_id
+    `).all(mangaId);
+    const ownerMap = {};
+    for (const o of ownerRows) {
+        if (!ownerMap[o.volume_id]) ownerMap[o.volume_id] = [];
+        ownerMap[o.volume_id].push({ user_id: o.user_id, username: o.username, price: o.price, purchase_date: o.purchase_date });
+    }
+
     let total_value = 0;
     let full_value = 0;
     for (const v of manga.volumes) {
         const p = typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0);
         if (v.status === 'Vorhanden') total_value += p;
         full_value += p;
+
+        // Ownership info
+        v.owners = ownerMap[v.id] || [];
+        v.owned_by_me = v.owners.some(o => o.user_id === userId);
 
         // Reading info
         const usersWhoRead = readMap[v.id] || [];

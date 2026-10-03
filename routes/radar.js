@@ -47,6 +47,32 @@ router.get('/shopping-list', requireAuth, (req, res) => {
                 v.volume_number ASC
         `).all();
 
+        // ?include_others=1: Bände, die andere besitzen und der Aufrufer noch nicht, in Reihen, die er schon sammelt
+        if (qstr(req.query.include_others) === '1') {
+            const others = db.prepare(`
+                SELECT
+                    v.id, v.manga_id, v.volume_number, v.isbn, v.price,
+                    v.release_year, v.condition, v.publisher as vol_publisher,
+                    v.notes, v.status, v.type,
+                    m.title as manga_title,
+                    m.cover_image as manga_cover,
+                    COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher,
+                    (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id) as owned_by_others
+                FROM volumes v
+                JOIN mangas m ON v.manga_id = m.id
+                WHERE v.status = 'Vorhanden'
+                  AND NOT EXISTS (SELECT 1 FROM volume_owners vo WHERE vo.volume_id = v.id AND vo.user_id = ?)
+                  AND EXISTS (SELECT 1 FROM volume_owners vo WHERE vo.volume_id = v.id)
+                  AND m.id IN (
+                      SELECT v2.manga_id FROM volumes v2
+                      JOIN volume_owners vo2 ON vo2.volume_id = v2.id AND vo2.user_id = ?
+                  )
+                ORDER BY m.title ASC, CAST(v.volume_number AS REAL) ASC, v.volume_number ASC
+            `).all(req.user.id, req.user.id);
+            const result = buildShoppingList(missingVols);
+            return res.json({ ...result, others: others.map(o => ({ ...o, owned_by_others: o.owned_by_others || '' })) });
+        }
+
         res.json(buildShoppingList(missingVols));
     } catch (err) {
         log.error('Error fetching shopping list:', err);

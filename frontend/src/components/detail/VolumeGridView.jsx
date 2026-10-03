@@ -1,5 +1,6 @@
 import { AlertCircle, BookCheck, BookOpen, Building2, Calendar, Camera, Check, Coins, Edit3, FileText, Package, Plus, Sparkles, Truck, X } from 'lucide-react';
 import { getVolumeDisplayTitle, getEditionLabel, getSpecialEditionNumber } from '../../utils/volumeHelpers';
+import OwnerBadges from './OwnerBadges';
 
 /** Card grid view of a series' volumes (incl. official gaps). Purely presentational; all state and handlers come in via props. */
 export default function VolumeGridView({
@@ -226,6 +227,7 @@ export default function VolumeGridView({
                   ) : (
                     <span className="truncate">{getVolumeDisplayTitle(vol)}</span>
                   )}
+                  <OwnerBadges vol={vol} multiUser={readers.length > 1} />
                 </div>
               </div>
 

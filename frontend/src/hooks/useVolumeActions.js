@@ -79,6 +79,20 @@ export default function useVolumeActions({ id, user, canEdit, selectedReaderId, 
 
   const handleToggleVolume = async (vol) => {
     if (!canEdit) return;
+    // Hat der Band schon Besitzer, schaltet der Klick nur den eigenen Besitz um (Mehrbenutzer-Besitz)
+    if (vol.status === 'Vorhanden' && Array.isArray(vol.owners) && vol.owners.length > 0) {
+      try {
+        const res = await fetch(`/api/volumes/${vol.id}/owners`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (res.ok) await fetchManga();
+      } catch (err) {
+        console.error(err);
+      }
+      return;
+    }
     let nextStatus = 'Vorhanden';
     let purchaseDate = vol.purchase_date;
     if (vol.status === 'Vorhanden') {

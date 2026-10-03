@@ -383,6 +383,45 @@ export default function ShoppingListView({
             ))}
         </div>
       )}
+
+      {/* Bände, die andere Nutzer in Reihen besitzen, die ich auch sammle */}
+      {shoppingData?.others?.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-bold text-slate-200 mb-1">Bei anderen vorhanden</h3>
+          <p className="text-xs text-slate-400 mb-3">Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.</p>
+          <ul className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800 bg-slate-950/60">
+            {shoppingData.others.map(item => (
+              <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                <div className="min-w-0">
+                  <Link to={`/manga/${item.manga_id}`} className="font-semibold text-slate-100 hover:text-brand-300 truncate block">
+                    {item.manga_title} {getVolumeDisplayTitle({ volume_number: item.volume_number, type: item.type, notes: item.notes })}
+                  </Link>
+                  <span className="text-slate-400">Besitzt: {item.owned_by_others}</span>
+                </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/volumes/${item.id}/owners`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ owned: true })
+                        });
+                        if (res.ok) fetchShoppingList();
+                      } catch (_) { /* offline: bleibt in der Liste */ }
+                    }}
+                    className="shrink-0 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600 hover:text-white font-semibold"
+                    title="Ich besitze diesen Band auch"
+                  >
+                    Ich habe ihn auch
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

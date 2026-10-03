@@ -1,5 +1,6 @@
 import { Plus, Truck, Calendar, BookCheck, Edit3, Trash2 } from 'lucide-react';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import OwnerBadges from './OwnerBadges';
 
 /** Compact table view of a series' volumes (incl. official gaps). Purely presentational. */
 export default function VolumeListView({
@@ -153,6 +154,9 @@ export default function VolumeListView({
                 {/* Band / Title */}
                 <td className="py-2 px-3 font-bold text-white text-sm">
                   {getVolumeDisplayTitle(vol)}
+                  <span className="ml-1.5 align-middle">
+                    <OwnerBadges vol={vol} multiUser={(manga?.reader_stats?.length || 0) > 1} />
+                  </span>
                   {vol.isbn && (
                     <span className="block text-[10px] text-slate-500 font-mono font-normal">
                       ISBN: {vol.isbn}

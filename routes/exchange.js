@@ -4,6 +4,7 @@ const { db, runTransaction } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { normalizePublisher } = require('../utils/publishers');
 const { toCsv, parseCsv, mapCsvRows } = require('../services/csvExchange');
+const { syncOwnersWithStatus } = require('../utils/owners');
 const log = require('../utils/logger').child('exchange');
 
 const MAX_IMPORT_ROWS = 20000;
@@ -71,8 +72,9 @@ router.post('/import/csv', requireEditor, (req, res) => {
                     newSeries.set(key, mangaId);
                 }
                 if (dryRun || mangaId === -1) continue;
-                insertVolume.run(mangaId, r.volume_number, r.isbn, r.price, r.release_date, r.condition, r.pages,
+                const ins = insertVolume.run(mangaId, r.volume_number, r.isbn, r.price, r.release_date, r.condition, r.pages,
                     r.publisher ? normalizePublisher(r.publisher) : null, r.purchase_date, r.status, r.notes, r.type);
+                syncOwnersWithStatus(db, Number(ins.lastInsertRowid), req.user.id);
                 touched.add(mangaId);
             }
             for (const id of touched) recount.run(id, id);

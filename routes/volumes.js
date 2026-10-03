@@ -6,6 +6,7 @@ const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
 const { normalizeIsbn } = require('../utils/isbn');
 const { lookupVolumeMetadata } = require('../mangaPassion');
+const { addOwner, listOwners, syncOwnersWithStatus, syncStatusWithOwners, recountOwned } = require('../utils/owners');
 const log = require('../utils/logger').child('volumes');
 
 const parsePrice = (val) => {
@@ -165,6 +166,7 @@ router.post('/volumes', requireEditor, (req, res) => {
                 parsePrice(target_price)
             );
             newVolumeId = Number(result.lastInsertRowid);
+            syncOwnersWithStatus(db, newVolumeId, req.user.id);
 
             // Update owned count atomically
             const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(mId);
@@ -224,7 +226,8 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
         runTransaction(() => {
             for (let i = start; i <= end; i++) {
                 if (!existingSet.has(String(i))) {
-                    insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, rDate, year);
+                    const r = insertStmt.run(mId, String(i), status || 'Vorhanden', p, pub, cond, rDate, year);
+                    syncOwnersWithStatus(db, Number(r.lastInsertRowid), req.user.id);
                 }
             }
             // Update owned count within the same transaction
@@ -320,6 +323,7 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
 
         runTransaction(() => {
             stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, req.params.id);
+            syncOwnersWithStatus(db, vol.id, req.user.id);
 
             // Update owned count atomically
             const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);
@@ -351,6 +355,43 @@ router.delete('/volumes/:id', requireEditor, (req, res) => {
     } catch (err) {
         log.error('Error deleting volume:', err);
         res.status(500).json({ error: 'Fehler beim Löschen des Bands' });
+    }
+});
+
+// --- VOLUME OWNERSHIP (Multi-User): mehrere Personen können denselben Band besitzen ---
+router.post('/volumes/:id/owners', requireEditor, (req, res) => {
+    try {
+        const volumeId = parseInt(req.params.id, 10);
+        const body = req.body || {};
+        // Jeder ändert nur den eigenen Besitz; Admins dürfen für andere eintragen
+        const targetUserId = (body.user_id && req.user.role === 'admin') ? parseInt(body.user_id, 10) : req.user.id;
+        const vol = db.prepare('SELECT id, manga_id, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
+        if (!vol) return res.status(404).json({ error: 'Band nicht gefunden' });
+        if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(targetUserId)) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+
+        let status;
+        runTransaction(() => {
+            const exists = db.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? AND user_id = ?').get(volumeId, targetUserId);
+            const wantOwned = body.owned !== undefined ? !!body.owned : !exists;
+            if (wantOwned && !exists) {
+                const price = body.price !== undefined ? parsePrice(body.price) : vol.price;
+                addOwner(db, volumeId, targetUserId, {
+                    price,
+                    purchase_date: body.purchase_date ? String(body.purchase_date).trim() : vol.purchase_date,
+                    condition: vol.condition
+                });
+            } else if (!wantOwned && exists) {
+                db.prepare('DELETE FROM volume_owners WHERE volume_id = ? AND user_id = ?').run(volumeId, targetUserId);
+            }
+            status = syncStatusWithOwners(db, volumeId);
+            recountOwned(db, vol.manga_id);
+        });
+
+        const owners = listOwners(db, volumeId);
+        res.json({ success: true, status, owners, owned_by_me: owners.some(o => o.user_id === req.user.id) });
+    } catch (e) {
+        log.error('Error updating ownership:', e);
+        res.status(500).json({ error: 'Fehler beim Aktualisieren des Besitzes' });
     }
 });
 

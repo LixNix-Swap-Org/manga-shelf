@@ -56,7 +56,7 @@ export default function useShoppingList({ setNetworkOffline, fetchMangas }) {
   const fetchShoppingList = async () => {
     try {
       setLoadingShopping(true);
-      const res = await fetch('/api/shopping-list');
+      const res = await fetch('/api/shopping-list?include_others=1');
       if (res.ok) {
         const data = await res.json();
         setShoppingData(data);

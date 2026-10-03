@@ -248,6 +248,13 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         // volume_reads go with the user; mangas.updated_by is a plain foreign key and would block the delete otherwise
         runTransaction(() => {
             db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
+            // Bände, die nur dieser Benutzer besaß, gehen an den löschenden Admin, damit die Sammlung nicht schrumpft
+            db.prepare(`
+                INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
+                SELECT volume_id, ?, price, purchase_date, condition FROM volume_owners
+                WHERE user_id = ? AND volume_id NOT IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
+            `).run(req.user.id, userId, userId);
+            db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
             db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
             db.prepare('DELETE FROM users WHERE id = ?').run(userId);
         });
