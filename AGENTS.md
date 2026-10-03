@@ -557,6 +557,8 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * IPv6 wird in `isPrivateAddress` numerisch verglichen: Der URL-Parser schreibt `[::ffff:127.0.0.1]` als `[::ffff:7f00:1]`, ein reiner Textvergleich ließ das durch. Formen mit eingebetteter IPv4 (mapped, NAT64, 6to4) zählen nach dieser IPv4.
 8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
+   * Zusätzlich sperrt `loginFailures` einen Benutzernamen nach 10 Fehlversuchen in 15 Min. (429, unabhängig von der IP). `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`, Standard `true`): Ohne Proxy davor lässt sich die IP per `X-Forwarded-For` fälschen, dann `TRUST_PROXY=false` setzen.
+   * Rollen sind `admin`, `editor`, `visitor`, `guest`; eine unbekannte Rolle wird mit 400 abgelehnt. Volume-Status wird gegen `VOLUME_STATUSES` (`routes/volumes.js`) geprüft.
 9. **Restore (`routes/backups.js`):**
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
 10. **`DATA_DIR`:**

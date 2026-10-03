@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pkg = require('../package.json');
-const { db, hasAdmin } = require('../db');
+const { db, hasAdmin, runTransaction } = require('../db');
 const { 
     JWT_SECRET, 
     setAuthCookie, 
@@ -11,9 +11,10 @@ const {
     requireAuth, 
     requireAdmin 
 } = require('../middleware/auth');
-const { loginLimiter, setupLimiter } = require('../middleware/rateLimit');
+const { loginLimiter, setupLimiter, loginFailures } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('auth');
 
+const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything beyond 72 bytes
 const passwordError = (pw) => {
@@ -73,11 +74,18 @@ router.post('/auth/login', loginLimiter, async (req, res) => {
         if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
             return res.status(400).json({ error: 'Bitte Benutzername und Passwort eingeben' });
         }
+        const failureKey = username.trim().toLowerCase();
+        if (loginFailures.isLocked(failureKey)) {
+            res.setHeader('Retry-After', loginFailures.retryAfterSeconds(failureKey));
+            return res.status(429).json({ error: 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.' });
+        }
         const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
         const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
         if (!user || !valid) {
+            loginFailures.fail(failureKey);
             return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
         }
+        loginFailures.reset(failureKey);
 
         const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
         setAuthCookie(req, res, token);
@@ -111,13 +119,16 @@ router.get('/users', requireAdmin, (req, res) => {
 router.post('/users', requireAdmin, async (req, res) => {
     try {
         const { username, password, role = 'editor' } = req.body || {};
+        if (!ROLES.includes(role)) {
+            return res.status(400).json({ error: 'Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')' });
+        }
         if (typeof username !== 'string' || !username.trim()) {
             return res.status(400).json({ error: 'Benutzername darf nicht leer sein' });
         }
         const pwErr = passwordError(password);
         if (pwErr) return res.status(400).json({ error: pwErr });
         const cleanUsername = username.trim();
-        const cleanRole = ['admin', 'visitor', 'guest'].includes(role) ? role : 'editor';
+        const cleanRole = role;
 
         const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
         if (existing) {
@@ -151,7 +162,10 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
 
         let newRole = user.role;
         if (role) {
-            newRole = ['admin', 'visitor', 'guest'].includes(role) ? role : 'editor';
+            if (!ROLES.includes(role)) {
+                return res.status(400).json({ error: 'Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')' });
+            }
+            newRole = role;
         }
 
         // Prevent demoting the last remaining admin
@@ -196,9 +210,12 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             }
         }
 
-        // Clean up user volume_reads explicitly
-        db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
-        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        // volume_reads go with the user; mangas.updated_by is a plain foreign key and would block the delete otherwise
+        runTransaction(() => {
+            db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
+            db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
+            db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        });
         res.json({ success: true });
     } catch (err) {
         log.error('Error deleting user:', err);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 /** Release radar: personal pre-orders / upcoming volumes and the Manga-Passion monthly calendar. */
 export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList }) {
@@ -16,6 +16,8 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
   const [mpYear, setMpYear] = useState(initialDate.getFullYear());
   const [mpMonth, setMpMonth] = useState(initialDate.getMonth() + 1);
   const [mpData, setMpData] = useState(null);
+  const mpRequestRef = useRef(0);
+  const mpFailedKeyRef = useRef(null); // 'year-month' whose last load failed
   const [loadingMp, setLoadingMp] = useState(false);
   const [mpSearch, setMpSearch] = useState('');
   const [mpPublisherFilter, setMpPublisherFilter] = useState('ALL');
@@ -66,20 +68,32 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
   };
 
   const fetchMangaPassionReleases = async (year, month, forceRefresh = false) => {
+    const targetYear = year !== undefined ? year : mpYear;
+    const targetMonth = month !== undefined ? month : mpMonth;
+    const requestId = ++mpRequestRef.current; // only the newest request may update the view (month/year can change quickly)
     try {
       setLoadingMp(true);
-      const targetYear = year !== undefined ? year : mpYear;
-      const targetMonth = month !== undefined ? month : mpMonth;
       const url = `/api/manga-passion/releases?year=${targetYear}&month=${targetMonth}${forceRefresh ? '&force_refresh=true' : ''}`;
       const res = await fetch(url);
+      if (requestId !== mpRequestRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== mpRequestRef.current) return;
+        mpFailedKeyRef.current = null;
         setMpData(data);
+      } else {
+        // no data of another month under this month's heading; the effect below must not retry this month by itself
+        mpFailedKeyRef.current = `${targetYear}-${targetMonth}`;
+        setMpData(null);
       }
     } catch (err) {
       console.error('Error fetching Manga Passion releases:', err);
+      if (requestId === mpRequestRef.current) {
+        mpFailedKeyRef.current = `${targetYear}-${targetMonth}`;
+        setMpData(null);
+      }
     } finally {
-      setLoadingMp(false);
+      if (requestId === mpRequestRef.current) setLoadingMp(false);
     }
   };
 
@@ -171,7 +185,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
 
   // Fetch heavy Manga Passion monthly calendar releases only when radar view is active
   useEffect(() => {
-    if (activeMainView === 'radar' && !mpData && !loadingMp) {
+    if (activeMainView === 'radar' && !mpData && !loadingMp && mpFailedKeyRef.current !== `${mpYear}-${mpMonth}`) {
       fetchMangaPassionReleases(mpYear, mpMonth);
     }
   }, [activeMainView, mpData, loadingMp, mpYear, mpMonth]);

@@ -15,6 +15,12 @@ const parsePrice = (val) => {
     return (isNaN(parsed) || parsed < 0 || parsed > 99999) ? null : Math.round(parsed * 100) / 100;
 };
 
+// Statuses the app works with (volume editor, shopping list, release radar, Manga Passion import)
+const VOLUME_STATUSES = ['Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 'Bestellt', 'Gelesen'];
+
+// JSON booleans as well as "true"/"false"/"0"/"1" strings ("false" must not count as true)
+const parseFlag = (val) => !(val === false || val === 0 || val === null || /^(false|0|no|nein|)$/i.test(String(val).trim()));
+
 const parseNum = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const parsed = parseInt(val, 10);
@@ -45,6 +51,9 @@ router.post('/volumes', requireEditor, (req, res) => {
         const mId = parseInt(manga_id, 10);
         if (!mId || isNaN(mId) || volume_number === undefined || volume_number === '') {
             return res.status(400).json({ error: 'Gültige manga_id und Bandnummer erforderlich' });
+        }
+        if (!VOLUME_STATUSES.includes(status || 'Vorhanden')) {
+            return res.status(400).json({ error: 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')' });
         }
 
         const volNumStr = String(volume_number).trim();
@@ -146,6 +155,9 @@ router.post('/volumes/batch', requireEditor, (req, res) => {
         if (!mId || isNaN(start) || isNaN(end) || start < 0 || end < 0 || start > end || (end - start) > 300) {
             return res.status(400).json({ error: 'Ungültiger Bereich (maximal 300 Bände, positive Zahlen)' });
         }
+        if (!VOLUME_STATUSES.includes(status || 'Vorhanden')) {
+            return res.status(400).json({ error: 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')' });
+        }
 
         const existing = db.prepare('SELECT volume_number FROM volumes WHERE manga_id = ?').all(mId);
         const existingSet = new Set(existing.map(v => String(v.volume_number)));
@@ -185,6 +197,9 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
         if (!vol) return res.status(404).json({ error: 'Band nicht gefunden' });
 
         const body = req.body;
+        if (body.status !== undefined && body.status !== vol.status && !VOLUME_STATUSES.includes(body.status)) {
+            return res.status(400).json({ error: 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')' });
+        }
         const volume_number = body.volume_number !== undefined ? String(body.volume_number).trim() : vol.volume_number;
         const isbn = body.isbn !== undefined ? normalizeIsbn(body.isbn) : vol.isbn;
         const price = body.price !== undefined ? parsePrice(body.price) : vol.price;
@@ -219,6 +234,21 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
                 const parsed = JSON.parse(imagesVal);
                 if (Array.isArray(parsed) && parsed.length > 0) cover_image = parsed[0];
             } catch (e) {}
+        }
+
+        // Renumbering or retyping must not collide with another entry of the same series (same rule as POST)
+        if (volume_number !== vol.volume_number || volType !== (vol.type || 'volume')) {
+            const duplicate = db.prepare(`
+                SELECT id, status FROM volumes
+                WHERE manga_id = ? AND id != ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND COALESCE(type, 'volume') = ?
+            `).get(vol.manga_id, vol.id, volume_number, volType);
+            if (duplicate) {
+                const label = volType === 'volume' ? `Band ${volume_number}` : volume_number;
+                return res.status(409).json({
+                    error: `${label} existiert bereits (${duplicate.status}). Bitte den vorhandenen Eintrag bearbeiten.`,
+                    existing_id: duplicate.id
+                });
+            }
         }
 
         const stmt = db.prepare(`
@@ -272,13 +302,14 @@ router.post('/volumes/:id/read', requireEditor, (req, res) => {
         const targetUserId = (req.body.user_id && req.user.role === 'admin') ? parseInt(req.body.user_id, 10) : req.user.id;
         const vol = db.prepare('SELECT id FROM volumes WHERE id = ?').get(volumeId);
         if (!vol) return res.status(404).json({ error: 'Band nicht gefunden' });
+        if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(targetUserId)) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
         const existing = db.prepare('SELECT * FROM volume_reads WHERE volume_id = ? AND user_id = ?').get(volumeId, targetUserId);
         let isRead = false;
 
         const explicitRead = req.body.read !== undefined ? req.body.read : req.body.is_read;
         if (explicitRead !== undefined) {
-            if (explicitRead) {
+            if (parseFlag(explicitRead)) {
                 if (!existing) {
                     db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, targetUserId);
                 }
@@ -313,7 +344,7 @@ router.post('/volumes/:id/read', requireEditor, (req, res) => {
 router.post('/volumes/batch-read', requireEditor, (req, res) => {
     try {
         const readParam = req.body.read !== undefined ? req.body.read : req.body.is_read;
-        const read = readParam !== undefined ? Boolean(readParam) : true;
+        const read = readParam !== undefined ? parseFlag(readParam) : true;
         const { manga_id, up_to_volume, user_id } = req.body;
         const targetUserId = (user_id && req.user.role === 'admin') ? parseInt(user_id, 10) : req.user.id;
         const mId = parseInt(manga_id, 10);
@@ -322,6 +353,7 @@ router.post('/volumes/batch-read', requireEditor, (req, res) => {
         if (!mId || isNaN(maxVol)) {
             return res.status(400).json({ error: 'Ungültige Parameter' });
         }
+        if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(targetUserId)) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
         const volumes = db.prepare("SELECT id, volume_number, type FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").all(mId);
         const targetVols = volumes.filter(v => {

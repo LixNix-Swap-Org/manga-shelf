@@ -26,14 +26,22 @@ export default function useShoppingList({ setNetworkOffline, fetchMangas }) {
       const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
       if (!queue.length) return;
       console.log(`[PWA] Synchronisiere ${queue.length} offline getätigte Käufe...`);
+      // Only drop what the server accepted (or what no longer exists); a 401/5xx keeps the purchase queued for the next try
+      const remaining = [];
       for (const volId of queue) {
-        await fetch(`/api/volumes/${volId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'Vorhanden' })
-        });
+        try {
+          const res = await fetch(`/api/volumes/${volId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'Vorhanden' })
+          });
+          if (!res.ok && res.status !== 404) remaining.push(volId);
+        } catch (_) {
+          remaining.push(volId);
+        }
       }
-      localStorage.removeItem('mangashelf_pending_purchases');
+      if (remaining.length) localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(remaining));
+      else localStorage.removeItem('mangashelf_pending_purchases');
       fetchShoppingList();
       fetchMangas();
     } catch (err) {

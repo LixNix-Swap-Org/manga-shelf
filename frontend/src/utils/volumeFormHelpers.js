@@ -73,7 +73,7 @@ export const applyLookupToForm = (prev, d, { forceCover = false } = {}) => {
   }
   if (d.cover_image) {
     const shouldUpdateCover = isSchuber || !prev.cover_image || forceCover || prev.cover_image.includes('1790518007122');
-    if (shouldUpdateCover || prev.cover_image !== d.cover_image) {
+    if (shouldUpdateCover) {
       const oldCover = prev.cover_image;
       next.cover_image = d.cover_image;
       const otherImages = (prev.images || []).filter(u => u !== oldCover && u !== d.cover_image);

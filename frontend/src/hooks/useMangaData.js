@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadMangaDetail, updateCachedManga } from '../utils/offlineStore';
 
@@ -8,6 +8,7 @@ export default function useMangaData({ id, user, canEdit }) {
 
   const [manga, setManga] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadedIdRef = useRef(null); // the series shown right now: reloads after an action keep the page (no spinner, scroll stays)
   const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,6 +90,7 @@ export default function useMangaData({ id, user, canEdit }) {
   };
 
   const applyMangaData = (data) => {
+    loadedIdRef.current = id;
     setManga(data);
     setFormData({
       title: data.title || '',
@@ -107,7 +109,7 @@ export default function useMangaData({ id, user, canEdit }) {
 
   const fetchManga = async () => {
     try {
-      setLoading(true);
+      if (loadedIdRef.current !== id) setLoading(true);
       setNotFound(false);
       if (!user?.offline) {
         try {

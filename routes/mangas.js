@@ -233,6 +233,14 @@ router.put('/mangas/:id', requireEditor, (req, res) => {
         if (!manga) return res.status(404).json({ error: 'Manga nicht gefunden' });
 
         const body = req.body;
+        if (body.title !== undefined) {
+            if (typeof body.title !== 'string' || !body.title.trim()) {
+                return res.status(400).json({ error: 'Titel darf nicht leer sein' });
+            }
+            if (body.title.trim().length > 300) {
+                return res.status(400).json({ error: 'Titel ist zu lang (maximal 300 Zeichen)' });
+            }
+        }
         const title = body.title !== undefined ? body.title : manga.title;
         const alt_title = body.alt_title !== undefined ? body.alt_title : manga.alt_title;
         const author = body.author !== undefined ? body.author : manga.author;

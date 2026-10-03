@@ -36,8 +36,11 @@ const log = require('./utils/logger').child('app');
 const app = express();
 
 // Trust proxy for reverse proxies (Cloudflare, Nginx, Caddy, Traefik)
-// Allows Express to correctly identify HTTPS (req.secure) and client IPs behind proxies
-app.set('trust proxy', true);
+// Allows Express to correctly identify HTTPS (req.secure) and client IPs behind proxies.
+// Default `true` trusts any X-Forwarded-For header: without a proxy in front, a client can fake its IP (rate limit!).
+// TRUST_PROXY=false (direct access), a hop count (1 = one proxy) or a subnet list ("loopback, 172.16.0.0/12") narrows it.
+const { parseTrustProxy } = require('./utils/trustProxy');
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
 
 // Enable Gzip/Brotli response compression for blazing fast API responses
 app.use(compression());

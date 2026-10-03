@@ -69,3 +69,12 @@ test('applyLookupToForm: Schuber entries take the official data, wrong volume da
     const unchanged = applyLookupToForm({ type: 'volume', volume_number: '2', price: '7', notes: 'x', cover_image: '/c.jpg', images: ['/c.jpg'] }, {});
     assert.deepEqual(unchanged.updatedFields, []);
 });
+
+test('applyLookupToForm: keeps the user\'s own cover when the lookup cover differs', async () => {
+    const { applyLookupToForm } = await load();
+    const prev = { type: 'volume', volume_number: '5', price: '', notes: '', cover_image: '/uploads/mine.jpg', images: ['/uploads/mine.jpg', '/uploads/extra.jpg'] };
+    const { next, updatedFields } = applyLookupToForm(prev, { cover_image: '/uploads/official.jpg' });
+    assert.equal(next.cover_image, '/uploads/mine.jpg');
+    assert.deepEqual(next.images, ['/uploads/mine.jpg', '/uploads/extra.jpg']);
+    assert.ok(!updatedFields.includes('Cover-Bild'));
+});

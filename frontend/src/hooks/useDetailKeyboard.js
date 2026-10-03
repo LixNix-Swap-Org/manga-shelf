@@ -39,19 +39,8 @@ export default function useDetailKeyboard({
           setEditing(false);
           return;
         }
-      } else if (lightboxData && e.key === 'ArrowLeft') {
-        setLightboxData(prev => {
-          if (!prev || prev.images.length <= 1) return prev;
-          const nextIdx = (prev.currentIndex - 1 + prev.images.length) % prev.images.length;
-          return { ...prev, currentIndex: nextIdx };
-        });
-      } else if (lightboxData && e.key === 'ArrowRight') {
-        setLightboxData(prev => {
-          if (!prev || prev.images.length <= 1) return prev;
-          const nextIdx = (prev.currentIndex + 1) % prev.images.length;
-          return { ...prev, currentIndex: nextIdx };
-        });
       }
+      // Lightbox arrow keys are handled in LightboxGallery itself (a second handler here skipped every other image)
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
