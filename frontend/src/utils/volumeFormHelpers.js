@@ -22,6 +22,8 @@ export const buildVolumeForm = (vol) => {
     isbn: vol.isbn || '',
     purchase_date: vol.purchase_date || '',
     notes: vol.notes || '',
+    priority: String(vol.priority || 0),
+    target_price: vol.target_price !== null && vol.target_price !== undefined ? String(vol.target_price) : '',
     cover_image: vol.cover_image || (volImages.length > 0 ? volImages[0] : ''),
     images: volImages
   };

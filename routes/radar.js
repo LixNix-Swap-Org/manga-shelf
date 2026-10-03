@@ -16,7 +16,7 @@ router.get('/shopping-list', requireAuth, (req, res) => {
             SELECT 
                 v.id, v.manga_id, v.volume_number, v.isbn, v.price, 
                 v.release_year, v.condition, v.publisher as vol_publisher, 
-                v.notes, v.status, v.type,
+                v.notes, v.status, v.type, v.priority, v.target_price,
                 m.title as manga_title, 
                 m.cover_image as manga_cover,
                 COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher

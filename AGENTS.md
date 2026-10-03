@@ -236,6 +236,8 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `notes` (TEXT)
    * `cover_image` (TEXT)
    * `images` (TEXT) – JSON-String für Zusatzbilder / Galerie
+   * `priority` (INTEGER, DEFAULT 0) – Wunsch-Priorität für Bände mit Status `Fehlt`: 0 keine, 1 niedrig, 2 mittel, 3 hoch (Einkaufsliste: Badge + „Wichtigste zuerst“)
+   * `target_price` (REAL, NULL) – Zielpreis (z. B. gebraucht); wird in der Einkaufsliste als „Zielpreis“ gezeigt
    * `type` (TEXT, DEFAULT `'volume'`) – Werte: `'volume'` (Einzelband), `'special_edition'` (Special / Limited Edition), `'schuber'` (Sammelschuber / Box Set), `'special'` (Sonderband / Extra / Fanbook)
    * `created_at` (DATETIME)
 
@@ -260,7 +262,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
    * `name` (TEXT, NOT NULL) – Name der Migration
    * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
-   * Aktuell Version 1–9 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
+   * Aktuell Version 1–10 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`, `volumes.priority`/`target_price`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
 
 ### Performance-Indizes
 Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):

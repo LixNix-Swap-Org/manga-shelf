@@ -8,6 +8,8 @@ import {
   BookOpen, Building2, Check, WifiOff 
 } from 'lucide-react';
 
+const PRIORITY_LABELS = { 1: '★ niedrig', 2: '★★ mittel', 3: '★★★ hoch' };
+
 export default function ShoppingListView({
   shoppingData,
   loadingShopping,
@@ -30,6 +32,7 @@ export default function ShoppingListView({
   // Scan-Liste dieses Ladenbesuchs: mehrere Barcodes hintereinander, am Ende alle Treffer der Einkaufsliste auf einmal abhaken
   const [scanned, setScanned] = useState([]);
   const [booking, setBooking] = useState(false);
+  const [prioritySort, setPrioritySort] = useState(false);
 
   const addScanned = (entry) => setScanned(prev => (
     prev.some(e => e.isbn === entry.isbn) ? prev : [entry, ...prev]
@@ -202,6 +205,18 @@ export default function ShoppingListView({
           </div>
         </div>
 
+        <button
+          type="button"
+          id="btn-shop-priority-sort"
+          onClick={() => setPrioritySort(v => !v)}
+          className={`text-xs px-3 py-1.5 rounded-xl border font-semibold shrink-0 transition-colors ${
+            prioritySort ? 'bg-amber-500/20 text-amber-200 border-amber-500/50' : 'text-slate-400 border-slate-700 hover:text-slate-200'
+          }`}
+          title="Bände mit hoher Wunsch-Priorität zuerst zeigen"
+        >
+          ★ Wichtigste zuerst
+        </button>
+
         {/* Publisher Filter Chips */}
         {shoppingData?.publishers && shoppingData.publishers.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
@@ -278,6 +293,7 @@ export default function ShoppingListView({
                 (effectivePub && effectivePub.toLowerCase().includes(shoppingSearch.toLowerCase()));
               return matchPub && matchSearch;
             })
+            .sort((a, b) => (prioritySort ? (b.priority || 0) - (a.priority || 0) : 0))
             .map(item => (
               <div
                 key={item.id}
@@ -317,6 +333,11 @@ export default function ShoppingListView({
                       <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
                         {getVolumeDisplayTitle(item)}
                       </span>
+                      {item.priority > 0 && (
+                        <span className="bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-lg" title="Wunsch-Priorität">
+                          {PRIORITY_LABELS[item.priority]}
+                        </span>
+                      )}
                       {item.price > 0 && (
                         <span className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono px-2 py-0.5 rounded-lg font-bold">
                           {item.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
@@ -324,6 +345,11 @@ export default function ShoppingListView({
                       )}
                     </div>
 
+                    {item.target_price > 0 && (
+                      <p className="text-[11px] text-amber-300 mt-1">
+                        Zielpreis: max. {item.target_price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                      </p>
+                    )}
                     <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
                       <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
                       <span className="truncate">{item.effective_publisher}</span>

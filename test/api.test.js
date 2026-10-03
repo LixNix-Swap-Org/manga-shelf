@@ -183,3 +183,18 @@ test('health: public readiness probe reports ok without authentication', async (
     assert.equal(typeof res.body.version, 'string');
     assert.equal(typeof res.body.uptime, 'number');
 });
+
+test('Wunschliste: Priorität und Zielpreis werden gespeichert, geprüft und in der Einkaufsliste geliefert', async () => {
+    const made = await editor('POST', '/mangas', { title: 'Wunsch Reihe' });
+    const add = await editor('POST', '/volumes', { manga_id: made.body.id, volume_number: '1', status: 'Fehlt', priority: 3, target_price: '4,50' });
+    assert.equal(add.status, 200);
+    assert.equal((await editor('POST', '/volumes', { manga_id: made.body.id, volume_number: '2', status: 'Fehlt', priority: 9 })).status, 400);
+    let item = (await editor('GET', '/shopping-list')).body.items.find(i => i.id === add.body.id);
+    assert.equal(item.priority, 3);
+    assert.equal(item.target_price, 4.5);
+    assert.equal((await editor('PUT', `/volumes/${add.body.id}`, { priority: '1', target_price: '' })).status, 200);
+    assert.equal((await editor('PUT', `/volumes/${add.body.id}`, { priority: 'viel' })).status, 400);
+    item = (await editor('GET', '/shopping-list')).body.items.find(i => i.id === add.body.id);
+    assert.equal(item.priority, 1);
+    assert.equal(item.target_price, null);
+});

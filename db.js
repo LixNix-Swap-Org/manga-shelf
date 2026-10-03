@@ -197,6 +197,16 @@ function runSequentialMigrations(database) {
                 const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!cols.has('password_changed_at')) d.exec('ALTER TABLE users ADD COLUMN password_changed_at INTEGER DEFAULT NULL;');
             }
+        },
+        {
+            version: 10,
+            name: 'add_volumes_priority_target_price',
+            up: (d) => {
+                // Wunschliste: Priorität (0 keine, 1 niedrig, 2 mittel, 3 hoch) und Zielpreis für Käufe im Laden
+                const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!cols.has('priority')) d.exec('ALTER TABLE volumes ADD COLUMN priority INTEGER DEFAULT 0;');
+                if (!cols.has('target_price')) d.exec('ALTER TABLE volumes ADD COLUMN target_price REAL DEFAULT NULL;');
+            }
         }
     ];
 
@@ -326,6 +336,8 @@ function initDb() {
             cover_image TEXT,
             images TEXT,
             type TEXT DEFAULT 'volume',
+            priority INTEGER DEFAULT 0,
+            target_price REAL,
             manga_passion_volume_id INTEGER DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE

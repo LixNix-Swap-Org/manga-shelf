@@ -21,6 +21,13 @@ const VOLUME_STATUSES = ['Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 
 // JSON booleans as well as "true"/"false"/"0"/"1" strings ("false" must not count as true)
 const parseFlag = (val) => !(val === false || val === 0 || val === null || /^(false|0|no|nein|)$/i.test(String(val).trim()));
 
+/** 0 (keine) bis 3 (hoch); leer = 0, alles andere null (ungültig). */
+const parsePriority = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const n = Number(val);
+    return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
+};
+
 const parseNum = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const parsed = parseInt(val, 10);
@@ -66,7 +73,9 @@ router.post('/volumes', requireEditor, (req, res) => {
             notes = null,
             cover_image = null,
             images = null,
-            type = 'volume'
+            type = 'volume',
+            priority = 0,
+            target_price = null
         } = req.body;
 
         const mId = parseInt(manga_id, 10);
@@ -76,6 +85,9 @@ router.post('/volumes', requireEditor, (req, res) => {
         if (!VOLUME_STATUSES.includes(status || 'Vorhanden')) {
             return res.status(400).json({ error: 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')' });
         }
+
+        const prio = parsePriority(priority);
+        if (prio === null) return res.status(400).json({ error: 'Ungültige Priorität (0 bis 3)' });
 
         const volNumStr = String(volume_number).trim();
         if (volNumStr.length > 80) {
@@ -127,8 +139,8 @@ router.post('/volumes', requireEditor, (req, res) => {
         }
 
         const stmt = db.prepare(`
-            INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         let newVolumeId = null;
@@ -148,7 +160,9 @@ router.post('/volumes', requireEditor, (req, res) => {
                 notes ? String(notes).trim() : null,
                 cover_image ? String(cover_image).trim() : null,
                 imagesVal,
-                volType
+                volType,
+                prio,
+                parsePrice(target_price)
             );
             newVolumeId = Number(result.lastInsertRowid);
 
@@ -242,6 +256,10 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
         const status = body.status !== undefined ? body.status : vol.status;
         const notes = body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : vol.notes;
 
+        const priority = body.priority !== undefined ? parsePriority(body.priority) : (vol.priority || 0);
+        if (priority === null) return res.status(400).json({ error: 'Ungültige Priorität (0 bis 3)' });
+        const target_price = body.target_price !== undefined ? parsePrice(body.target_price) : vol.target_price;
+
         let volType = vol.type || 'volume';
         if (body.type !== undefined) {
             const rawType = String(body.type).trim().toLowerCase();
@@ -292,12 +310,12 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
             UPDATE volumes SET 
                 volume_number = ?, isbn = ?, price = ?, release_date = ?, release_year = ?, 
                 condition = ?, pages = ?, publisher = ?, purchase_date = ?, 
-                status = ?, notes = ?, cover_image = ?, images = ?, type = ?
+                status = ?, notes = ?, cover_image = ?, images = ?, type = ?, priority = ?, target_price = ?
             WHERE id = ?
         `);
 
         runTransaction(() => {
-            stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, req.params.id);
+            stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, req.params.id);
 
             // Update owned count atomically
             const countRow = db.prepare("SELECT count(*) as count FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").get(vol.manga_id);

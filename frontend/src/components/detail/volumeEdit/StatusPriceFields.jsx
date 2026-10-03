@@ -79,6 +79,36 @@ export default function StatusPriceFields({
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-emerald-500/70 font-bold pointer-events-none">€</span>
         </div>
       </div>
+
+      {editVolForm.status === 'Fehlt' && (
+        <>
+          <div className="sm:col-span-7">
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Wunsch-Priorität</label>
+            <select
+              id="vol-priority"
+              className="input-field py-2.5 text-sm"
+              value={editVolForm.priority ?? '0'}
+              onChange={e => setEditVolForm({ ...editVolForm, priority: e.target.value })}
+            >
+              <option value="0">Keine</option>
+              <option value="1">Niedrig</option>
+              <option value="2">Mittel</option>
+              <option value="3">Hoch</option>
+            </select>
+          </div>
+          <div className="sm:col-span-5">
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Zielpreis (€)</label>
+            <input
+              id="vol-target-price"
+              type="text"
+              placeholder="max. Preis, z. B. gebraucht"
+              className="input-field py-2.5 text-sm font-mono"
+              value={editVolForm.target_price ?? ''}
+              onChange={e => setEditVolForm({ ...editVolForm, target_price: e.target.value })}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
