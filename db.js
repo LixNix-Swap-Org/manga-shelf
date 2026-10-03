@@ -209,14 +209,21 @@ function runSequentialMigrations(database) {
     }
 }
 
-/** Opens a SQLite file with node:sqlite (Node >= 22.5) or better-sqlite3 as fallback. */
+/** Opens a SQLite file with node:sqlite (Node >= 22.13 without flag) or better-sqlite3 as fallback. */
 function openRawDb(file, options = {}) {
     try {
         const { DatabaseSync } = require('node:sqlite');
         return new DatabaseSync(file, options.readOnly ? { readOnly: true } : {});
     } catch (e) {
         if (e && e.code !== 'MODULE_NOT_FOUND' && e.code !== 'ERR_UNKNOWN_BUILTIN_MODULE') throw e;
-        const Database = require('better-sqlite3');
+        let Database;
+        try {
+            Database = require('better-sqlite3');
+        } catch (fallbackErr) {
+            if (fallbackErr && fallbackErr.code !== 'MODULE_NOT_FOUND') throw fallbackErr;
+            // e.g. a Pterodactyl egg still on Node 20: say what to change instead of "Cannot find module"
+            throw new Error(`Node.js ${process.versions.node} hat kein eingebautes node:sqlite. Manga Shelf braucht Node.js 22.13 oder neuer (im Pterodactyl-Panel unter Startup das Docker-Image "Node.js 22" wählen).`);
+        }
         return new Database(file, options.readOnly ? { readonly: true } : {});
     }
 }

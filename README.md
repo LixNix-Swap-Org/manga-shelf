@@ -8,7 +8,7 @@ Diese Anwendung ist ein leichtgewichtiges Manga-Verwaltungssystem, das speziell 
 Unter **[GitHub Releases](https://github.com/MoltresHD/manga-shelf/releases)** findest du für jede Version die fertig gepackte `pterodactyl-manga-shelf.zip` inklusive kompiliertem Frontend. Lade einfach die ZIP der gewünschten Version herunter und entpacke sie auf deinem Pterodactyl-Server!
 
 ### Option B: Lokales Bauen & Packen (ZIP-Erstellung)
-Um die Anwendung selbst zu bauen oder ein neues Release zu veröffentlichen, benötigst du Node.js (v18+) auf deinem PC.
+Um die Anwendung selbst zu bauen oder ein neues Release zu veröffentlichen, benötigst du Node.js 22.13 oder neuer auf deinem PC.
 
 1. Öffne ein Terminal im Projektordner.
 2. Installiere die Backend-Abhängigkeiten (nur für das Packaging Script nötig, optional falls du manuell zippst):
@@ -42,16 +42,17 @@ Du kannst entweder das **Generic Node.js Egg** deines Pterodactyl-Servers nutzen
 ## 3. Server anlegen & hochladen
 
 1. Erstelle einen neuen Server in Pterodactyl. Wähle als Egg das importierte "Manga Shelf App" oder das "Generic Node.js" Egg.
-2. Weise dem Server einen Port zu (Standard Pterodactyl Allocation).
-3. Stelle sicher, dass die Umgebungsvariable `SERVER_PORT` mit dem zugewiesenen Port übereinstimmt.
-4. Gehe auf den **File Manager** deines neuen Servers.
-5. Lösche eventuelle Standarddateien.
-6. Lade die generierte `pterodactyl-manga-shelf.zip` (oder dein manuelles ZIP) hoch.
-7. Mache einen Rechtsklick auf die ZIP-Datei und wähle **Unarchive**.
-8. Klicke auf **Start**.
+2. Wähle unter **Docker Image** „Node.js 22“ (oder neuer). Mit Node 20 oder 21 startet die App nicht, weil sie die eingebaute SQLite-Datenbank `node:sqlite` braucht (ab Node.js 22.13). Ein früher importiertes Egg bietet nur Node 20/21 an: dann das Egg neu importieren oder beim Server unter **Startup → Docker Image** von Hand `ghcr.io/parkervcp/yolks:nodejs_22` eintragen.
+3. Weise dem Server einen Port zu (Standard Pterodactyl Allocation).
+4. Stelle sicher, dass die Umgebungsvariable `SERVER_PORT` mit dem zugewiesenen Port übereinstimmt.
+5. Gehe auf den **File Manager** deines neuen Servers.
+6. Lösche eventuelle Standarddateien.
+7. Lade die generierte `pterodactyl-manga-shelf.zip` (oder dein manuelles ZIP) hoch.
+8. Mache einen Rechtsklick auf die ZIP-Datei und wähle **Unarchive**.
+9. Klicke auf **Start**.
 
 Beim ersten Start wird:
-- `npm install --production` ausgeführt (falls im Egg konfiguriert).
+- `npm install --omit=dev` ausgeführt (falls im Egg konfiguriert).
 - Die SQLite Datenbank in `./data/manga.db` im WAL-Modus angelegt.
 - Der Server auf dem konfigurierten Port lauschen.
 

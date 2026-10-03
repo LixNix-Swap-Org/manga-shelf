@@ -10,7 +10,7 @@
 * **Zweck:** Leichtgewichtiges, modernes Manga-Verwaltungssystem (Self-hosted) mit Multi-User-Support, Rollenmodell, Lese-Tracking, Statistiken und Backup-System.
 * **Architektur:** Monolithisch für minimalen Deployment-Overhead (Backend serviert das vorkompilierte React-Frontend als statische Dateien unter `/`).
 * **Backend:**
-  * **Runtime:** Node.js >= 22.5 (`node:sqlite` ist erforderlich; `engines` in `package.json`, Docker-Image `node:22-alpine`)
+  * **Runtime:** Node.js >= 22.13 (`node:sqlite` ohne `--experimental-sqlite`-Flag erst ab 22.13; `engines` in `package.json`, Docker-Image `node:22-alpine`, Pterodactyl-Egg `yolks:nodejs_22`)
   * **Framework:** Express.js 5 (`index.js`)
   * **Datenbank:** SQLite (`manga.db` im WAL-Modus) via `node:sqlite` (`db.js`). `better-sqlite3` wird nur als optionaler Fallback geladen und ist **keine** Dependency
   * **Auth:** JSON Web Token (JWT) in `httpOnly`-Cookies (`token`), Kennwort-Hashing via asynchrones `bcryptjs`. Nutzer und Rolle werden bei **jedem** Request aus der DB geladen (`middleware/auth.js`), nicht aus dem Token
@@ -80,7 +80,7 @@ manga-shelf/
 │   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
 │   ├── staticHeaders.js       # Cache-Header für `index.html`, `sw.js`, `manifest.json`
 │   ├── volumeType.js          # `inferVolumeType` / `classifyOfficialVolume` (Backend)
-│   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes)
+│   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes); Tests in `test/safeFetch.test.js`
 ├── test/                      # node:test-Tests (`npm test` = `test/*.test.js`) & Deep-E2E
 │   ├── helpers.js             # Startet die App gegen eine temporäre DATA_DIR
 │   ├── api.test.js            # Auth, CRUD, Rollen, Backups
@@ -551,7 +551,8 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 6. **JWT-Secret (`middleware/auth.js`):**
    * `JWT_SECRET` aus der Umgebung wird nur akzeptiert, wenn es mindestens 32 Zeichen lang und kein bekannter Platzhalter ist. Sonst wird ein zufälliges Secret in `app_settings.jwt_secret` erzeugt und genutzt. Es gibt bewusst keinen Prozess-Fallback.
 7. **Externe Downloads / SSRF (`utils/safeFetch.js`):**
-   * Alle Remote-Bilder (Cover per URL, Manga-Passion-Cover) laufen über `fetchRemoteImage()`: SSRF-Schutz (nur öffentliche Hosts, DNS-Prüfung), 15-MB-Limit, Redirect-Limit, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
+   * Alle Remote-Bilder (Cover per URL, Manga-Passion-Cover) laufen über `fetchRemoteImage()`: SSRF-Schutz (nur öffentliche Hosts, DNS-Prüfung, jede Weiterleitung neu geprüft), 15-MB-Limit, Redirect-Limit, 10 s Leerlauf- und 30 s Gesamt-Timeout, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
+   * IPv6 wird in `isPrivateAddress` numerisch verglichen: Der URL-Parser schreibt `[::ffff:127.0.0.1]` als `[::ffff:7f00:1]`, ein reiner Textvergleich ließ das durch. Formen mit eingebetteter IPv4 (mapped, NAT64, 6to4) zählen nach dieser IPv4.
 8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
 9. **Restore (`routes/backups.js`):**

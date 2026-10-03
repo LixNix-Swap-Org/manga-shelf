@@ -7,14 +7,13 @@
   "exported_at": "2024-03-24T12:00:00+00:00",
   "name": "Manga Shelf App",
   "author": "antigravity@mangashelf",
-  "description": "A lightweight Node.js Manga tracking application.",
+  "description": "A lightweight Node.js Manga tracking application. Requires Node.js 22.13 or newer (built-in node:sqlite).",
   "features": null,
   "docker_images": {
-    "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20",
-    "Node.js 21": "ghcr.io/parkervcp/yolks:nodejs_21"
+    "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
   },
   "file_denylist": [],
-  "startup": "if [ -f package.json ]; then npm install --production; fi; node index.js",
+  "startup": "if [ -f package.json ]; then npm install --omit=dev; fi; node index.js",
   "config": {
     "files": "{}",
     "startup": "{\r\n    \"done\": [\r\n        \"Manga Shelf running on http://0.0.0.0:\",\r\n        \"Server listening on port\",\r\n        \"change this text 1\"\r\n    ]\r\n}",
