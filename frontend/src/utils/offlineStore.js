@@ -72,7 +72,10 @@ export function saveSnapshot(snapshot) {
 export const updateCachedManga = (detail) => safe(() => put([[`manga:${detail.id}`, detail]]));
 
 /** Called on logout / invalid session. Also drops the old shopping-list cache (own data, same privacy rule). */
+let clearGeneration = 0; // bumped on logout/401: a sync that started before it must not store its snapshot afterwards
+
 export async function clearOfflineData() {
+  clearGeneration++;
   await safe(() => run('readwrite', (s) => { s.clear(); }));
   try {
     localStorage.removeItem('mangashelf_shopping_cache');
@@ -89,6 +92,7 @@ export async function syncOfflineCopy({ force = false } = {}) {
   const meta = await loadMeta();
   if (!force && meta?.synced_at && Date.now() - meta.synced_at < SYNC_MIN_INTERVAL_MS) return false;
 
+  const generation = clearGeneration;
   let snapshot;
   try {
     const res = await fetch('/api/offline-snapshot');
@@ -97,6 +101,7 @@ export async function syncOfflineCopy({ force = false } = {}) {
   } catch (_) {
     return false;
   }
+  if (generation !== clearGeneration) return false; // logged out while the download ran
   await saveSnapshot(snapshot);
   warmCaches(snapshot);
   return true;

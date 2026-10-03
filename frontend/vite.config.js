@@ -7,7 +7,18 @@ const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // the service worker is a plain file in public/: stamp the app version into its cache name
+      name: 'stamp-sw-version',
+      closeBundle() {
+        const swPath = path.resolve(__dirname, 'dist', 'sw.js')
+        if (!fs.existsSync(swPath)) return
+        fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf-8').replaceAll('__APP_VERSION__', pkg.version))
+      }
+    }
+  ],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version)
   },

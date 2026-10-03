@@ -84,7 +84,7 @@ export default function MangaCollectionGrid({
                       <td className="py-2.5 px-4">
                         <Link to={`/manga/${manga.id}`} className="block w-10 h-14 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0">
                           {manga.cover_image && !failedImages[manga.id] ? (
-                            <img 
+                            <img loading="lazy" 
                               src={manga.cover_image} 
                               alt="" 
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform" 

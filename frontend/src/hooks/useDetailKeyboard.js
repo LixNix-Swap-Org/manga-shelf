@@ -75,7 +75,8 @@ export default function useDetailKeyboard({
           return volList[nextIdx].id;
         });
       } else if (e.key === ' ' || e.code === 'Space') {
-        if (focusedVolumeId) {
+        // Space on a focused button/link/checkbox is that control's own key; only act on the shelf itself
+        if (focusedVolumeId && !e.target.closest?.('button, a, input, select, textarea, [role="button"]')) {
           e.preventDefault();
           const targetVol = volList.find(v => v.id === focusedVolumeId);
           if (targetVol && canEdit) {

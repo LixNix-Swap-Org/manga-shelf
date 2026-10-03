@@ -331,45 +331,30 @@ export const buildDisplayVolumeItems = ({ filteredVolumes, detectedGapEntries, d
   const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
   const sorted = [...filteredVolumes];
 
-  // Ensure no volume that actually exists in sorted is treated as a gap:
+  // A regular volume that exists is no gap (type + number: a Collectors Edition 5 does not cover Band 5)
   sorted.forEach(v => {
     const match = String(v.volume_number).trim().match(/^(\d+)$/);
-    if (match) gapsSet.delete(parseInt(match[1], 10));
+    if (match && inferVolumeType(v) === 'volume') gapsSet.delete(parseInt(match[1], 10));
   });
 
-  const maxTarget = Math.max(
-    ...Array.from(gapsSet).map(g => typeof g === 'number' ? g : 0),
-    ...sorted.map(v => {
-      const match = String(v.volume_number).trim().match(/^(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    })
-  );
-
-  let volIndex = 0;
-  for (let i = 1; i <= maxTarget; i++) {
-    if (gapsSet.has(i)) {
-      const gapMeta = mpGapMap.get(String(i).toLowerCase());
-      items.push({ isGap: true, gapNumber: i, gapMeta });
-    }
-    while (volIndex < sorted.length) {
-      const v = sorted[volIndex];
-      const match = String(v.volume_number).trim().match(/^(\d+)$/);
-      const parsed = match ? parseInt(match[1], 10) : null;
-      if (parsed !== null && parsed === i) {
-        items.push({ isGap: false, volume: v });
-        volIndex++;
-      } else if (parsed !== null && parsed < i) {
-        items.push({ isGap: false, volume: v });
-        volIndex++;
-      } else {
-        break;
-      }
-    }
+  // Ghost entries go in front of the first entry with a higher number; an equal number is a special edition of the
+  // missing volume, so the ghost comes first. Decimals ("12.5") are compared by value, Schuber and Specials count
+  // as "after everything".
+  const positionOf = (v) => {
+    const type = inferVolumeType(v);
+    if (type !== 'volume' && type !== 'special_edition') return Infinity;
+    const n = parseFloat(String(v.volume_number).trim());
+    return Number.isNaN(n) ? Infinity : n;
+  };
+  const gapList = Array.from(gapsSet).sort((x, y) => x - y);
+  let gapIndex = 0;
+  const pushGap = (n) => items.push({ isGap: true, gapNumber: n, gapMeta: mpGapMap.get(String(n).toLowerCase()) });
+  for (const v of sorted) {
+    const position = positionOf(v);
+    while (gapIndex < gapList.length && gapList[gapIndex] <= position) pushGap(gapList[gapIndex++]);
+    items.push({ isGap: false, volume: v });
   }
-  while (volIndex < sorted.length) {
-    items.push({ isGap: false, volume: sorted[volIndex] });
-    volIndex++;
-  }
+  while (gapIndex < gapList.length) pushGap(gapList[gapIndex++]);
 
   if (volumeSort === 'number_desc') {
     items.reverse();

@@ -180,7 +180,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
             const pwErr = passwordError(password);
             if (pwErr) return res.status(400).json({ error: pwErr });
             const hash = await bcrypt.hash(password, 10);
-            db.prepare('UPDATE users SET role = ?, password_hash = ? WHERE id = ?').run(newRole, hash, userId);
+            db.prepare('UPDATE users SET role = ?, password_hash = ?, password_changed_at = ? WHERE id = ?').run(newRole, hash, Date.now(), userId);
         } else {
             db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
         }

@@ -1,4 +1,8 @@
-const CACHE_NAME = 'mangashelf-v2.6.0';
+// __APP_VERSION__ is replaced with the app version at build time (vite.config.js), so every release starts a fresh app
+// cache and the old one is deleted. Covers live in their own cache because their file names never change content:
+// they stay across releases (the offline copy would otherwise have to download them all again).
+const CACHE_NAME = 'mangashelf-app-__APP_VERSION__';
+const UPLOADS_CACHE = 'mangashelf-uploads-v1';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -20,7 +24,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME && key !== UPLOADS_CACHE).map((key) => caches.delete(key))
       );
     })
   );
@@ -39,7 +43,7 @@ self.addEventListener('fetch', (event) => {
   // served as is - no re-download in the background (that used to cost tens of MB per sync on large collections)
   if (url.pathname.startsWith('/uploads/')) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
+      caches.open(UPLOADS_CACHE).then(async (cache) => {
         const cachedResponse = await cache.match(event.request);
         if (cachedResponse) return cachedResponse;
         const networkResponse = await fetch(event.request);

@@ -80,3 +80,36 @@ test('TRUST_PROXY values map to Express settings (unset keeps the old default)',
     assert.equal(parseTrustProxy('1'), 1);
     assert.equal(parseTrustProxy('loopback, 10.0.0.0/8'), 'loopback, 10.0.0.0/8');
 });
+
+test('a password reset ends older sessions of that user, a new login works', async () => {
+    const created = await admin('POST', '/users', { username: 'reset-me', password: 'password123', role: 'editor' });
+    const session = ctx.client();
+    assert.equal((await session('POST', '/auth/login', { username: 'reset-me', password: 'password123' })).status, 200);
+    assert.equal((await session('GET', '/auth/me')).status, 200);
+
+    await new Promise(resolve => setTimeout(resolve, 1100)); // JWT iat has second resolution
+    assert.equal((await admin('PUT', '/users/' + created.body.user.id, { password: 'newpassword123' })).status, 200);
+
+    assert.equal((await session('GET', '/auth/me')).status, 401);
+    const fresh = ctx.client();
+    assert.equal((await fresh('POST', '/auth/login', { username: 'reset-me', password: 'newpassword123' })).status, 200);
+    assert.equal((await fresh('GET', '/auth/me')).status, 200);
+});
+
+test('responses carry hardening headers and no blanket CORS', async () => {
+    const res = await fetch(ctx.base + '/health', { headers: { Origin: 'https://evil.example' } });
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
+    assert.equal(res.headers.get('access-control-allow-origin'), null);
+});
+
+test('server snapshots use a consistent database copy and leave no temp files behind', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const AdmZip = require('adm-zip');
+    const snap = await admin('POST', '/backups/create');
+    assert.equal(snap.status, 200);
+    const file = path.join(ctx.dataDir, 'backups', snap.body.snapshot.filename);
+    assert.ok(new AdmZip(file).getEntry('manga.db'), 'manga.db is in the snapshot');
+    assert.deepEqual(fs.readdirSync(path.join(ctx.dataDir, 'temp')).filter(f => f.startsWith('backup-db-')), []);
+});

@@ -137,6 +137,16 @@ export default function ShelfSpine({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={getVolumeDisplayTitle(vol)}
+      onFocus={() => setFocusedVolumeId(vol.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (canEdit) handleOpenEditVolume(vol);
+        }
+      }}
       onClick={() => {
         setFocusedVolumeId(vol.id);
         if (canEdit) handleOpenEditVolume(vol);

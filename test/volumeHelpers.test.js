@@ -113,3 +113,24 @@ test('buildDisplayVolumeItems: gaps are interleaved by number, but only when sor
     // special-edition gaps never become ghost entries
     assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [{ label: '2 (Collectors Edition)', type: 'special_edition' }], detectedGaps: ['2 (Collectors Edition)'] })), ['v1', 'v3', 'v5']);
 });
+
+test('buildDisplayVolumeItems: decimals keep the order, a special edition with the same number does not hide the gap', async () => {
+    const { buildDisplayVolumeItems } = await load();
+    const shape = items => items.map(i => (i.isGap ? `gap${i.gapNumber}` : `v${i.volume.id}`));
+    const base = {
+        mpGapMap: new Map(), showGaps: true, volumeTypeFilter: 'ALL', volumeFilter: 'ALL', volumeSearch: '', volumeSort: 'number_asc'
+    };
+    const gap = (n) => ({ label: n, type: 'volume' });
+
+    // 12, 12.5, 13, 15 with gap 14: the ghost sits between 13 and 15, not in front of 12.5
+    const decimals = [{ id: 12, volume_number: '12' }, { id: 125, volume_number: '12.5' }, { id: 13, volume_number: '13' }, { id: 15, volume_number: '15' }];
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, filteredVolumes: decimals, detectedGapEntries: [gap(14)], detectedGaps: [14] })), ['v12', 'v125', 'v13', 'gap14', 'v15']);
+
+    // Collectors Edition 5 is stored as "5" with its own type: Band 5 is still missing and shows a ghost in front of it
+    const withSpecial = [{ id: 4, volume_number: '4' }, { id: 50, volume_number: '5', type: 'special_edition' }, { id: 6, volume_number: '6' }];
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, filteredVolumes: withSpecial, detectedGapEntries: [gap(5)], detectedGaps: [5] })), ['v4', 'gap5', 'v50', 'v6']);
+
+    // schuber stay behind all numbered volumes, gaps beyond the last volume still show
+    const withSchuber = [{ id: 1, volume_number: '1' }, { id: 9, volume_number: 'Schuber 1', type: 'schuber' }];
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, filteredVolumes: withSchuber, detectedGapEntries: [gap(2)], detectedGaps: [2] })), ['v1', 'gap2', 'v9']);
+});

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
-const { db, dataDir, uploadsDir } = require('../db');
+const { db, dataDir, uploadsDir, tempDir } = require('../db');
 const log = require('../utils/logger').child('scheduler');
 
 const backupsDir = path.join(dataDir, 'backups');
@@ -36,37 +36,46 @@ function pruneBackups(maxSnapshots = 7) {
 }
 
 /**
+ * Writes a consistent copy of the live database to a temp file (VACUUM INTO) and returns its path.
+ * Zipping manga.db directly could read it while a write is in progress. The caller deletes the file afterwards.
+ */
+function copyDatabaseToTemp() {
+    fs.mkdirSync(tempDir, { recursive: true });
+    const target = path.join(tempDir, `backup-db-${Date.now()}-${Math.round(Math.random() * 1e9)}.db`);
+    db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+    return target;
+}
+
+/**
  * Creates a new ZIP backup snapshot of manga.db and uploads/
  */
 async function createBackupSnapshot(prefix = 'manga-shelf-backup') {
-    // Flush WAL checkpoint to ensure manga.db is fully consistent on disk
-    try {
-        db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-    } catch (e) { log.warn('WAL checkpoint before backup failed (snapshot may miss recent writes):', e.message); }
+    const dbCopy = copyDatabaseToTemp();
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${prefix}-${timestamp}.zip`;
     const targetFile = path.join(backupsDir, filename);
 
-    await new Promise((resolve, reject) => {
-        const output = fs.createWriteStream(targetFile);
-        const archive = archiver('zip', { zlib: { level: 9 } });
+    try {
+        await new Promise((resolve, reject) => {
+            const output = fs.createWriteStream(targetFile);
+            const archive = archiver('zip', { zlib: { level: 9 } });
 
-        output.on('close', resolve);
-        archive.on('error', reject);
-        archive.pipe(output);
+            output.on('close', resolve);
+            archive.on('error', reject);
+            archive.pipe(output);
 
-        const dbFile = path.join(dataDir, 'manga.db');
-        if (fs.existsSync(dbFile)) {
-            archive.file(dbFile, { name: 'manga.db' });
-        }
+            archive.file(dbCopy, { name: 'manga.db' });
 
-        if (fs.existsSync(uploadsDir)) {
-            archive.directory(uploadsDir, 'uploads');
-        }
+            if (fs.existsSync(uploadsDir)) {
+                archive.directory(uploadsDir, 'uploads');
+            }
 
-        archive.finalize();
-    });
+            archive.finalize();
+        });
+    } finally {
+        try { fs.unlinkSync(dbCopy); } catch (e) { /* temp file already gone */ }
+    }
 
     // Prune backups: keep latest 7 snapshots
     pruneBackups(7);
@@ -107,6 +116,7 @@ function initScheduler() {
 
 module.exports = {
     backupsDir,
+    copyDatabaseToTemp,
     createBackupSnapshot,
     pruneBackups,
     initScheduler

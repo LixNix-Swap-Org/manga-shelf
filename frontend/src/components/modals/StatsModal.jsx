@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   TrendingUp, Coins, Building2, BookCheck, BookOpen, X, 
@@ -13,6 +13,7 @@ export default function StatsModal({ isOpen, onClose, user }) {
   const [savingStartDate, setSavingStartDate] = useState(false);
   const [statsTab, setStatsTab] = useState('overview'); // 'overview' | 'publishers' | 'reading'
   const [detailedReaderStats, setDetailedReaderStats] = useState(null);
+  const readerRequestRef = useRef(0); // the newest click wins when reader details load out of order
   const [loadingDetailedStats, setLoadingDetailedStats] = useState(false);
   const [failedImages, setFailedImages] = useState({});
 
@@ -42,20 +43,23 @@ export default function StatsModal({ isOpen, onClose, user }) {
   }, [isOpen]);
 
   const fetchReaderDetailedStats = async (userId) => {
+    const requestId = ++readerRequestRef.current;
     try {
       setLoadingDetailedStats(true);
       const res = await fetch(`/api/users/${userId}/stats`);
+      if (requestId !== readerRequestRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== readerRequestRef.current) return;
         setDetailedReaderStats(data);
       } else {
         alert('Fehler beim Laden der Leser-Details');
       }
     } catch (e) {
       console.error(e);
-      alert('Netzwerkfehler');
+      if (requestId === readerRequestRef.current) alert('Netzwerkfehler');
     } finally {
-      setLoadingDetailedStats(false);
+      if (requestId === readerRequestRef.current) setLoadingDetailedStats(false);
     }
   };
 

@@ -103,6 +103,11 @@ export default function Dashboard({ user, onLogout }) {
     try {
       const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`);
       const data = await res.json();
+      if (!res.ok && data?.error) {
+        // e.g. wrong check digit: a misread barcode, scan again
+        alert(data.error);
+        return;
+      }
       if (data && data.found && data.matched_manga) {
         setSearch(data.matched_manga.title);
         navigate(`/manga/${data.matched_manga.id}`);

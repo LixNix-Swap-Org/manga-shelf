@@ -34,7 +34,7 @@ export default function ShoppingListView({
 
     if (matchedItem) {
       setShoppingSearch(matchedItem.title);
-      alert(`🎯 Treffer auf der Einkaufsliste: "${matchedItem.title} Band ${matchedItem.volume_number}" gefunden!`);
+      alert(`🎯 Treffer auf der Einkaufsliste: "${matchedItem.title} ${getVolumeDisplayTitle(matchedItem)}" gefunden!`);
       return;
     }
 
@@ -252,7 +252,7 @@ export default function ShoppingListView({
                 {/* Cover Thumbnail */}
                 <Link to={`/manga/${item.manga_id}`} className="shrink-0 relative group/cover">
                   {item.manga_cover && !failedImages[`shop-${item.id}`] ? (
-                    <img
+                    <img loading="lazy"
                       src={item.manga_cover}
                       alt={item.manga_title}
                       onError={() => setFailedImages(prev => ({ ...prev, [`shop-${item.id}`]: true }))}

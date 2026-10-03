@@ -128,7 +128,7 @@ export default function VolumeListView({
                       onClick={() => openVolumeGallery(vol)}
                       title="Fotogalerie öffnen"
                     >
-                      <img 
+                      <img loading="lazy" 
                         src={vol.cover_image} 
                         alt={vol.volume_number} 
                         className="w-8 h-12 object-cover rounded shadow border border-slate-800 group-hover/thumb:scale-110 transition-transform"

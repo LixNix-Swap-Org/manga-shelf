@@ -7,7 +7,7 @@ const AdmZip = require('adm-zip');
 const { db, dataDir, uploadsDir, closeDb, initDb, validateDbFile, setRestoringState } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { uploadBackup } = require('../middleware/upload');
-const { backupsDir, createBackupSnapshot } = require('../services/scheduler');
+const { backupsDir, createBackupSnapshot, copyDatabaseToTemp } = require('../services/scheduler');
 const log = require('../utils/logger').child('backup');
 
 /** A backup file that cannot be restored because its content is invalid (client error, HTTP 400). */
@@ -139,20 +139,21 @@ async function restoreFromZip(source) {
 // 1. Direct stream download of current backup
 router.get('/backup', requireAdmin, (req, res) => {
     try {
-        // Flush WAL checkpoint to disk before streaming
-        try {
-            db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
-        } catch (e) { log.warn('WAL checkpoint before backup download failed:', e.message); }
+        // consistent copy of the live database (zipping manga.db directly could catch a write half done)
+        const dbCopy = copyDatabaseToTemp();
+        const dropCopy = () => { try { fs.unlinkSync(dbCopy); } catch (e) { /* already gone */ } };
+        res.on('close', dropCopy);
 
         res.attachment('manga-shelf-backup.zip');
         const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.on('error', (err) => res.status(500).send({ error: err.message }));
+        archive.on('error', (err) => {
+            log.error('Backup stream failed:', err);
+            if (!res.headersSent) res.status(500).send({ error: err.message });
+            else res.destroy(err);
+        });
         archive.pipe(res);
 
-        const dbFile = path.join(dataDir, 'manga.db');
-        if (fs.existsSync(dbFile)) {
-            archive.file(dbFile, { name: 'manga.db' });
-        }
+        archive.file(dbCopy, { name: 'manga.db' });
         if (fs.existsSync(uploadsDir)) {
             archive.directory(uploadsDir, 'uploads');
         }

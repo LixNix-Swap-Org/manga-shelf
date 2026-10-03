@@ -34,11 +34,10 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         const res = await fetch('/api/upload', { method: 'POST', body: fd });
         if (res.ok) {
           const data = await res.json();
-          const currentImages = editVolForm.images || [];
-          const newImages = [...currentImages, data.url];
+          // built from the current form state: photos removed or reordered during the upload must stay that way
           setEditVolForm(prev => ({
             ...prev,
-            images: newImages,
+            images: [...(prev.images || []), data.url],
             cover_image: prev.cover_image || data.url
           }));
         } else {
@@ -52,11 +51,9 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         const res = await fetch('/api/upload/multiple', { method: 'POST', body: fd });
         if (res.ok) {
           const data = await res.json();
-          const currentImages = editVolForm.images || [];
-          const newImages = [...currentImages, ...(data.urls || [])];
           setEditVolForm(prev => ({
             ...prev,
-            images: newImages,
+            images: [...(prev.images || []), ...(data.urls || [])],
             cover_image: prev.cover_image || (data.urls && data.urls[0]) || ''
           }));
         } else {
@@ -94,10 +91,9 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         if (upRes.ok) {
           const upData = await upRes.json();
           if (upData.url) {
-            const currentImages = editVolForm.images || [];
             setEditVolForm(prev => ({
               ...prev,
-              images: [upData.url, ...currentImages.filter(u => u !== upData.url)],
+              images: [upData.url, ...(prev.images || []).filter(u => u !== upData.url)],
               cover_image: upData.url
             }));
             setManualImageUrl('');
@@ -108,10 +104,9 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
       }
     } catch (_) {}
 
-    const currentImages = editVolForm.images || [];
     setEditVolForm(prev => ({
       ...prev,
-      images: [...currentImages, url],
+      images: [...(prev.images || []), url],
       cover_image: prev.cover_image || url
     }));
     setManualImageUrl('');

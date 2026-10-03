@@ -258,7 +258,7 @@ Die SQLite-Datenbank befindet sich in `./data/manga.db`.
    * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
    * `name` (TEXT, NOT NULL) – Name der Migration
    * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
-   * Aktuell Version 1–8 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
+   * Aktuell Version 1–9 (Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
 
 ### Performance-Indizes
 Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):
@@ -419,7 +419,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 ### 🔹 Fall H: Backup-System & automatische Snapshots anpassen
 1. **Backend API (`routes/backups.js`) & Scheduler (`services/scheduler.js`):**
    * Server-Snapshots werden unter `data/backups/` im ZIP-Format gespeichert.
-   * `createBackupSnapshot(prefix)` sichert `manga.db` und den Ordner `uploads/` und löscht automatisch Snapshots, die älter als die neuesten 7 sind.
+   * `createBackupSnapshot(prefix)` sichert eine konsistente Kopie der DB (`copyDatabaseToTemp()` = `VACUUM INTO` nach `data/temp/`, wird danach gelöscht; auch `GET /api/backup` nutzt sie) und den Ordner `uploads/` und löscht automatisch Snapshots, die älter als die neuesten 7 sind.
    * Ein Scheduler prüft 10s nach Serverstart und danach alle 24h, ob für heute bereits ein Backup existiert (`daily-auto`).
    * `restoreFromZipBuffer` führt vor dem Entpacken einen SQLite-Checkpoint und ein Schließen der Verbindung durch und legt ein temporäres Rollback-Backup `manga.db.bak` an.
 2. **Frontend UI (`frontend/src/components/modals/BackupRestoreModal.jsx`):**
@@ -558,6 +558,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
 8. **Passwörter & Rate-Limit:**
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
    * Zusätzlich sperrt `loginFailures` einen Benutzernamen nach 10 Fehlversuchen in 15 Min. (429, unabhängig von der IP). `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`, Standard `true`): Ohne Proxy davor lässt sich die IP per `X-Forwarded-For` fälschen, dann `TRUST_PROXY=false` setzen.
+   * Eine Passwortänderung durch den Admin setzt `users.password_changed_at`; ältere Sitzungen dieses Benutzers (JWT `iat` davor) werden mit 401 abgelehnt. Es gibt keine CORS-Freigabe außer für Ursprünge in `CORS_ORIGIN`; `index.js` setzt `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` (bewusst ohne CSP).
    * Rollen sind `admin`, `editor`, `visitor`, `guest`; eine unbekannte Rolle wird mit 400 abgelehnt. Volume-Status wird gegen `VOLUME_STATUSES` (`routes/volumes.js`) geprüft.
 9. **Restore (`routes/backups.js`):**
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
@@ -567,7 +568,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * Catch-all-Route heißt `app.get('/{*splat}', ...)` (ein nacktes `'*'` ist ungültig). `req.body` ist ohne Body `undefined`; eine Middleware setzt es auf `{}`, weil Handler direkt destrukturieren. `req.query` ist nur lesbar; Strings daraus immer über `qstr()` (`utils/query.js`) lesen, sonst werfen `?a=1&a=2` bzw. `?a[x]=1` bei `.trim()` einen 500.
    * Unbekannte `/api/*`-Pfade liefern JSON-404; der letzte Error-Handler gibt bei 5xx nur eine generische Meldung aus (Details im Log), bei 4xx die Fehlermeldung (z. B. abgelehnter Upload).
 12. **Offline-Kopie (`frontend/src/utils/offlineStore.js`):**
-   * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und die Reihen-Cover (nicht die Band-Cover, bei großen Sammlungen dutzende MB) vorgeladen und vom Service Worker gecached; `/uploads/*` ist dort cache-first, weil Dateinamen eindeutig und unveränderlich sind.
+   * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und die Reihen-Cover (nicht die Band-Cover, bei großen Sammlungen dutzende MB) vorgeladen und vom Service Worker gecached; `/uploads/*` ist dort cache-first, weil Dateinamen eindeutig und unveränderlich sind. Der App-Cache heißt `mangashelf-app-<Version>` (`__APP_VERSION__` in `frontend/public/sw.js` wird beim Build per Vite-Plugin ersetzt, alte Versionen werden beim Aktivieren gelöscht); Cover liegen in `mangashelf-uploads-v1` und überleben Updates.
    * `App.jsx`: Antwortet `/api/auth/me` nicht (Netz/Gateway weg) und es gibt einen gespeicherten Benutzer, läuft die App als `{ role: 'visitor', realRole, offline: true }` weiter (alle Bearbeiten-Buttons verschwinden; Einkaufslisten-Schnellkauf nutzt `realRole` und die vorhandene Offline-Warteschlange). Alle 30 s und beim `online`-Event wird erneut geprüft. Bei 401 und beim Logout wird alles gelöscht (`clearOfflineData`) – nie Daten nach dem Abmelden lesbar lassen.
    * Nicht offline verfügbar: Statistiken, Release-Radar, alles Schreibende.
 13. **Logging (`utils/logger.js`):**

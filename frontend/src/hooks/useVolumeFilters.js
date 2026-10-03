@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { normalizePubName, getVolumeSortInfo, hasUserRead } from '../utils/volumeHelpers';
+import { normalizePubName, getVolumeSortInfo, hasUserRead, inferVolumeType } from '../utils/volumeHelpers';
 
 /** Filter, search, sort and view-mode state of the volume list plus the filtered/sorted result and the type counts. */
 export default function useVolumeFilters({ volumes, manga, user, selectedReaderId }) {
@@ -74,49 +74,18 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
     });
   }, [volumes, selectedReaderId, user?.id, volumeFilter, volumePublisherFilter, volumeConditionFilter, volumeSearch, manga?.publisher]);
 
-  const schuberCount = useMemo(() => baseVolumesForType.filter(v => v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber')).length, [baseVolumesForType]);
-
-  const specialEditionCount = useMemo(() => baseVolumesForType.filter(v => v.type === 'special_edition' || (
-    v.type !== 'schuber' && (
-      String(v.volume_number).toLowerCase().includes('special edition') ||
-      String(v.volume_number).toLowerCase().includes('limited edition') ||
-      String(v.volume_number).toLowerCase().includes('spezial edition') ||
-      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
-    )
-  )).length, [baseVolumesForType]);
-
-  const specialCount = useMemo(() => baseVolumesForType.filter(v => {
-    if (v.type === 'special_edition' || v.type === 'schuber') return false;
-    const vLower = String(v.volume_number).toLowerCase();
-    if (vLower.includes('special edition') || vLower.includes('limited edition') || vLower.includes('spezial edition') || vLower.includes('schuber')) return false;
-    return v.type === 'special' || vLower.includes('special') || vLower.includes('extra') || vLower.includes('sonderband');
-  }).length, [baseVolumesForType]);
-
-  const regularVolumeCount = useMemo(() => baseVolumesForType.filter(v => {
-    const isSchuber = v.type === 'schuber' || String(v.volume_number).toLowerCase().includes('schuber');
-    const isSpecialEd = v.type === 'special_edition' || (
-      String(v.volume_number).toLowerCase().includes('special edition') ||
-      String(v.volume_number).toLowerCase().includes('limited edition') ||
-      String(v.volume_number).toLowerCase().includes('spezial edition') ||
-      (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition')))
-    );
-    const isSpecial = v.type === 'special' || String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband');
-    return !isSchuber && !isSpecialEd && !isSpecial;
-  }).length, [baseVolumesForType]);
+  // One rule for chips, counts and filter: the entry's type (inferVolumeType falls back to the name only without a stored type)
+  const countOfType = (type) => baseVolumesForType.filter(v => inferVolumeType(v) === type).length;
+  const schuberCount = useMemo(() => countOfType('schuber'), [baseVolumesForType]);
+  const specialEditionCount = useMemo(() => countOfType('special_edition'), [baseVolumesForType]);
+  const specialCount = useMemo(() => countOfType('special'), [baseVolumesForType]);
+  const regularVolumeCount = useMemo(() => countOfType('volume'), [baseVolumesForType]);
 
   // Filter & sort volumes
   const filteredVolumes = useMemo(() => {
     return baseVolumesForType
       .filter(v => {
-        if (volumeTypeFilter !== 'ALL') {
-          const t = v.type || (
-            String(v.volume_number).toLowerCase().includes('schuber') ? 'schuber' :
-            String(v.volume_number).toLowerCase().includes('special edition') || String(v.volume_number).toLowerCase().includes('limited edition') || String(v.volume_number).toLowerCase().includes('spezial edition') || (v.notes && (v.notes.toLowerCase().includes('special edition') || v.notes.toLowerCase().includes('limited edition'))) ? 'special_edition' :
-            String(v.volume_number).toLowerCase().includes('special') || String(v.volume_number).toLowerCase().includes('extra') || String(v.volume_number).toLowerCase().includes('sonderband') ? 'special' :
-            'volume'
-          );
-          if (t !== volumeTypeFilter) return false;
-        }
+        if (volumeTypeFilter !== 'ALL' && inferVolumeType(v) !== volumeTypeFilter) return false;
         return true;
       })
       .sort((a, b) => {

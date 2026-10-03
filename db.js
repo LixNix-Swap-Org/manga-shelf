@@ -188,6 +188,15 @@ function runSequentialMigrations(database) {
                     update.run(match[1], row.id);
                 }
             }
+        },
+        {
+            version: 9,
+            name: 'add_users_password_changed_at',
+            up: (d) => {
+                // A password change ends older sessions: tokens issued before this moment are rejected (middleware/auth.js)
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('password_changed_at')) d.exec('ALTER TABLE users ADD COLUMN password_changed_at INTEGER DEFAULT NULL;');
+            }
         }
     ];
 
@@ -351,7 +360,9 @@ function initDb() {
     try {
         runSequentialMigrations(currentDb);
     } catch (migErr) {
+        // Running on with a half-migrated schema only fails later with unclear SQL errors: stop here with the real cause
         log.error('[Database Migration] Fatal error running migrations:', migErr);
+        throw migErr;
     }
 
     return currentDb;

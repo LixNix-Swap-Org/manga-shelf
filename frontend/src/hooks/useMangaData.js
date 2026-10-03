@@ -188,13 +188,21 @@ export default function useMangaData({ id, user, canEdit }) {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       if (res.ok) {
         const data = await res.json();
-        await fetch(`/api/mangas/${id}`, {
+        const saveRes = await fetch(`/api/mangas/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cover_image: data.url })
         });
+        if (!saveRes.ok) {
+          const saveErr = await saveRes.json().catch(() => ({}));
+          alert(saveErr.error || 'Das Cover konnte nicht gespeichert werden');
+          return;
+        }
         setFormData(prev => ({ ...prev, cover_image: data.url }));
         await fetchManga();
+      } else {
+        const upErr = await res.json().catch(() => ({}));
+        alert(upErr.error || 'Fehler beim Hochladen des Covers');
       }
     } catch (err) {
       alert('Fehler beim Hochladen des Covers');

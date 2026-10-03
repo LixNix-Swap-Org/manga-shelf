@@ -57,12 +57,16 @@ const requireAuth = (req, res, next) => {
     // Role and existence are always taken from the DB so deleted or demoted users lose access immediately.
     let user;
     try {
-        user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(decoded.id);
+        user = db.prepare('SELECT id, username, role, password_changed_at FROM users WHERE id = ?').get(decoded.id);
     } catch (e) {
         log.error('[Auth] User lookup failed:', e);
         return res.status(500).json({ error: 'Authentifizierung fehlgeschlagen' });
     }
     if (!user) return res.status(401).json({ error: 'Invalid token' });
+    // A password change/reset ends all sessions that were issued before it
+    if (user.password_changed_at && decoded.iat && decoded.iat < Math.floor(user.password_changed_at / 1000)) {
+        return res.status(401).json({ error: 'Invalid token' });
+    }
     req.user = { id: user.id, username: user.username, role: user.role };
     next();
 };

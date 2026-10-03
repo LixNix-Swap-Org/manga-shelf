@@ -67,10 +67,21 @@ app.use((req, res, next) => {
     next();
 });
 app.use(cookieParser());
-app.use(cors({
-    origin: true,
-    credentials: true
-}));
+
+// The app serves its own frontend, so no CORS headers are needed. Another origin (e.g. a separate dev server) must be
+// listed explicitly in CORS_ORIGIN (comma separated); reflecting every origin together with cookies was far too open.
+const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
+if (corsOrigins.length > 0) {
+    app.use(cors({ origin: corsOrigins, credentials: true }));
+}
+
+// Basic hardening headers (no CSP: covers may come from other hosts and the build uses inline styles)
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    next();
+});
 
 // Serve uploaded covers and volume images with 7-day browser caching
 app.use('/uploads', express.static(uploadsDir, {
