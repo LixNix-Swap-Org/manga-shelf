@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Sparkles, RefreshCw, AlertTriangle, BookOpen, Upload, ScanBarcode } from 'lucide-react';
 import { buildScanVolumePayload } from '../../utils/scanHelpers';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 // prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume
 export default function AddMangaModal({ isOpen, onClose, onSuccess, prefill = null }) {
@@ -249,12 +250,18 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, prefill = nu
     }
   };
 
+  const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
   return (
     <div 
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Neuen Manga anlegen"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
     >
       <div className="glass-panel w-full max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8 relative">
         

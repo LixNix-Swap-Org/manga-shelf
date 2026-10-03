@@ -6,6 +6,7 @@ import StatusPriceFields from './volumeEdit/StatusPriceFields';
 import DetailFields from './volumeEdit/DetailFields';
 import EditFooter from './volumeEdit/EditFooter';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function VolumeEditModal({
   isOpen,
@@ -39,11 +40,17 @@ export default function VolumeEditModal({
     handleDeleteVolume
   } = useVolumeEditForm({ activeVolume, mangaId, canEdit, onClose, onSuccess });
 
+  const dialogRef = useDialogA11y(isOpen && Boolean(activeVolume));
   if (!isOpen || !activeVolume) return null;
 
   return (
         <div 
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in overflow-hidden"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Band bearbeiten"
+          tabIndex={-1}
+          className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in overflow-hidden"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <div 

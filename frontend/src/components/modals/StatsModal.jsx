@@ -4,6 +4,7 @@ import {
   TrendingUp, Coins, Building2, BookCheck, BookOpen, X, 
   Wallet, Calendar, Clock, Award, CheckCircle2 
 } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function StatsModal({ isOpen, onClose, user }) {
   const [statsData, setStatsData] = useState(null);
@@ -87,12 +88,18 @@ export default function StatsModal({ isOpen, onClose, user }) {
     }
   };
 
+  const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
   return (
     <div 
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in overflow-y-auto"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Statistiken"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in overflow-y-auto"
     >
       <div className="glass-panel w-full max-w-4xl max-h-[90vh] rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl relative flex flex-col overflow-hidden">
         

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Coins, Calendar, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function GapFillModal({
   isOpen,
@@ -13,6 +14,7 @@ export default function GapFillModal({
 }) {
   const [loading, setLoading] = useState(false);
 
+  const dialogRef = useDialogA11y(isOpen && gapNumber !== null);
   if (!isOpen || gapNumber === null) return null;
 
   const meta = mpGapMap?.get(String(gapNumber).toLowerCase());
@@ -51,7 +53,12 @@ export default function GapFillModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Lücke füllen"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
       onClick={() => !loading && onClose()}
     >
       <div 

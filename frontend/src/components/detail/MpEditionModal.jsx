@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Globe, X, Check, RefreshCw, Sparkles, Search } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function MpEditionModal({
   isOpen,
@@ -42,6 +43,7 @@ export default function MpEditionModal({
     if (!mpGapData?.candidate_editions?.length) searchEditions(manga?.title);
   }, [isOpen]);
 
+  const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
   // the edition was only guessed by the search and is not stored until the user confirms it
@@ -54,7 +56,12 @@ export default function MpEditionModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Manga-Passion-Edition wählen"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
     >
       <div 

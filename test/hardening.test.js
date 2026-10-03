@@ -113,3 +113,27 @@ test('server snapshots use a consistent database copy and leave no temp files be
     assert.ok(new AdmZip(file).getEntry('manga.db'), 'manga.db is in the snapshot');
     assert.deepEqual(fs.readdirSync(path.join(ctx.dataDir, 'temp')).filter(f => f.startsWith('backup-db-')), []);
 });
+
+test('own password: needs the current one, ends other sessions, keeps the current one', async () => {
+    const created = await admin('POST', '/users', { username: 'self-change', password: 'password123', role: 'visitor' });
+    assert.equal(created.status, 200);
+    const phone = ctx.client();
+    const laptop = ctx.client();
+    assert.equal((await phone('POST', '/auth/login', { username: 'self-change', password: 'password123' })).status, 200);
+    assert.equal((await laptop('POST', '/auth/login', { username: 'self-change', password: 'password123' })).status, 200);
+
+    assert.equal((await laptop('PUT', '/auth/password', { current_password: 'falsch-falsch', new_password: 'brandnew123' })).status, 403);
+    assert.equal((await laptop('PUT', '/auth/password', { current_password: 'password123', new_password: 'short' })).status, 400);
+
+    await new Promise(resolve => setTimeout(resolve, 1100)); // JWT iat has second resolution
+    assert.equal((await laptop('PUT', '/auth/password', { current_password: 'password123', new_password: 'brandnew123' })).status, 200);
+    assert.equal((await laptop('GET', '/auth/me')).status, 200);
+    assert.equal((await phone('GET', '/auth/me')).status, 401);
+    assert.equal((await ctx.client()('POST', '/auth/login', { username: 'self-change', password: 'brandnew123' })).status, 200);
+});
+
+test('usernames are unique and log in regardless of case', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'CaseUser', password: 'password123' })).status, 200);
+    assert.equal((await admin('POST', '/users', { username: 'caseuser', password: 'password123' })).status, 400);
+    assert.equal((await ctx.client()('POST', '/auth/login', { username: 'CASEUSER', password: 'password123' })).status, 200);
+});

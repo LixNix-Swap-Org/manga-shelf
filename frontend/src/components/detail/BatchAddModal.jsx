@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Layers, X, Bookmark, Check, Coins, Plus } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess }) {
   const [batchFrom, setBatchFrom] = useState('1');
@@ -11,6 +12,7 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
   const [batchReleaseYear, setBatchReleaseYear] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
   const handleBatchAdd = async (e) => {
@@ -51,7 +53,12 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bände hinzufügen"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>

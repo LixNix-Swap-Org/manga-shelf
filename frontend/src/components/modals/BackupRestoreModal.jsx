@@ -3,6 +3,7 @@ import {
   X, UploadCloud, Shield, Download, CheckCircle2, 
   FileArchive, RefreshCw, Plus, Trash2, AlertTriangle 
 } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuccess }) {
   const [restoreFile, setRestoreFile] = useState(null);
@@ -140,12 +141,18 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
     }
   };
 
+  const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
   return (
     <div 
       onClick={(e) => { if (e.target === e.currentTarget && !restoring) onClose(); }}
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Backup und Wiederherstellung"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto"
     >
       <div className="glass-panel p-6 sm:p-7 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700/80 shadow-2xl relative overflow-hidden">
         <button 

@@ -1,5 +1,5 @@
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
-import { BarChart3, BookOpen, Calendar, Download, LogOut, Menu, Plus, Search, ShoppingCart, UploadCloud, Users, X } from 'lucide-react';
+import { BarChart3, BookOpen, Calendar, Download, Lock, LogOut, Menu, Plus, Search, ShoppingCart, UploadCloud, Users, X } from 'lucide-react';
 
 /** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational; all state and handlers come in via props. */
 export default function DashboardHeader({
@@ -10,6 +10,7 @@ export default function DashboardHeader({
   handleBarcodeDetected,
   handleInstallClick,
   handleOpenModal,
+  handleOpenPasswordModal,
   handleOpenRestoreModal,
   handleOpenStats,
   handleOpenUsersModal,
@@ -239,6 +240,18 @@ export default function DashboardHeader({
             )}
           </div>
 
+          {!user?.offline && (
+            <button
+              id="btn-change-password"
+              onClick={handleOpenPasswordModal}
+              className="btn-secondary p-2 text-slate-300 hover:text-brand-300 transition-colors shrink-0"
+              title="Eigenes Passwort ändern"
+              aria-label="Eigenes Passwort ändern"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+          )}
+
           <button 
             id="btn-logout"
             onClick={onLogout} 
@@ -324,6 +337,16 @@ export default function DashboardHeader({
               className="w-full btn-secondary text-xs py-2 text-brand-300 bg-brand-500/10 border-brand-500/40 hover:bg-brand-500/20 flex items-center justify-center gap-2 font-medium"
             >
               <Download className="w-4 h-4 text-brand-400" /> MangaShelf als App installieren
+            </button>
+          )}
+
+          {!user?.offline && (
+            <button
+              id="btn-mobile-menu-password"
+              onClick={() => { setMobileMenuOpen(false); handleOpenPasswordModal(); }}
+              className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
+            >
+              <Lock className="w-4 h-4 text-brand-400" /> Passwort ändern
             </button>
           )}
 

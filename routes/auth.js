@@ -79,7 +79,8 @@ router.post('/auth/login', loginLimiter, async (req, res) => {
             res.setHeader('Retry-After', loginFailures.retryAfterSeconds(failureKey));
             return res.status(429).json({ error: 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.' });
         }
-        const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
+        // "Max" and "max" are the same account; an exact match wins if old data has both
+        const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE ORDER BY (username = ?) DESC LIMIT 1').get(username.trim(), username.trim());
         const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
         if (!user || !valid) {
             loginFailures.fail(failureKey);
@@ -93,6 +94,32 @@ router.post('/auth/login', loginLimiter, async (req, res) => {
     } catch (err) {
         log.error('Login error:', err);
         res.status(500).json({ error: 'Anmeldung fehlgeschlagen' });
+    }
+});
+
+// Own password: needs the current one; ends all other sessions and keeps this one logged in with a fresh token
+router.put('/auth/password', loginLimiter, requireAuth, async (req, res) => {
+    try {
+        const { current_password, new_password } = req.body || {};
+        if (typeof current_password !== 'string' || !current_password) {
+            return res.status(400).json({ error: 'Bitte das aktuelle Passwort eingeben' });
+        }
+        const pwErr = passwordError(new_password);
+        if (pwErr) return res.status(400).json({ error: pwErr });
+
+        const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(req.user.id);
+        if (!user || !(await bcrypt.compare(current_password, user.password_hash))) {
+            return res.status(403).json({ error: 'Das aktuelle Passwort stimmt nicht' });
+        }
+        const hash = await bcrypt.hash(new_password, 10);
+        db.prepare('UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?').run(hash, Date.now(), user.id);
+
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        setAuthCookie(req, res, token);
+        res.json({ success: true });
+    } catch (err) {
+        log.error('Password change error:', err);
+        res.status(500).json({ error: 'Fehler beim Ändern des Passworts' });
     }
 });
 
@@ -130,7 +157,7 @@ router.post('/users', requireAdmin, async (req, res) => {
         const cleanUsername = username.trim();
         const cleanRole = role;
 
-        const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
+        const existing = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername);
         if (existing) {
             return res.status(400).json({ error: 'Dieser Benutzername existiert bereits' });
         }

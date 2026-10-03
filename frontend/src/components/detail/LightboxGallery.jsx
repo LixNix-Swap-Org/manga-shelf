@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Camera, Star, ExternalLink, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import useDialogA11y from '../../hooks/useDialogA11y';
 
 export default function LightboxGallery({
   lightboxData,
@@ -35,6 +36,7 @@ export default function LightboxGallery({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxData, onClose, setLightboxData]);
 
+  const dialogRef = useDialogA11y(Boolean(lightboxData));
   if (!lightboxData) return null;
 
   const handleSetCoverFromLightbox = async () => {
@@ -64,7 +66,12 @@ export default function LightboxGallery({
 
   return (
     <div 
-      className="fixed inset-0 z-60 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bildergalerie"
+      tabIndex={-1}
+      className="outline-none fixed inset-0 z-60 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
       onClick={onClose}
     >
       {/* Lightbox Top Header */}

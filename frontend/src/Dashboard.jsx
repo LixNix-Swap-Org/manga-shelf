@@ -7,6 +7,7 @@ import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import UserManagementModal from './components/modals/UserManagementModal';
+import ChangePasswordModal from './components/modals/ChangePasswordModal';
 import BackupRestoreModal from './components/modals/BackupRestoreModal';
 import StatsModal from './components/modals/StatsModal';
 import AddMangaModal from './components/modals/AddMangaModal';
@@ -50,6 +51,7 @@ export default function Dashboard({ user, onLogout }) {
   // Modal visibility states
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
 
   const { isInstallable, isInstalledApp, handleInstallClick } = usePwaInstall();
@@ -134,6 +136,10 @@ export default function Dashboard({ user, onLogout }) {
     setShowAddModal(true);
   };
 
+  const handleOpenPasswordModal = () => {
+    setShowPasswordModal(true);
+  };
+
   const handleOpenUsersModal = () => {
     setShowUsersModal(true);
   };
@@ -156,6 +162,7 @@ export default function Dashboard({ user, onLogout }) {
         handleOpenRestoreModal={handleOpenRestoreModal}
         handleOpenStats={handleOpenStats}
         handleOpenUsersModal={handleOpenUsersModal}
+        handleOpenPasswordModal={handleOpenPasswordModal}
         isInstallable={isInstallable}
         isInstalledApp={isInstalledApp}
         isOfflineMode={isOfflineMode}
@@ -325,6 +332,8 @@ export default function Dashboard({ user, onLogout }) {
         }}
         prefill={scanPrefill}
       />
+
+      <ChangePasswordModal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
 
       <UserManagementModal 
         isOpen={showUsersModal} 

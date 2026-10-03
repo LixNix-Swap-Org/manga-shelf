@@ -203,6 +203,23 @@ async function runTestSuite() {
     await new Promise(r => setTimeout(r, 500));
 
     // ----------------------------------------------------
+    // TEST 3b: Own password dialog (dialog semantics, focus, Escape)
+    // ----------------------------------------------------
+    console.log('\n--- TEST 3b: Change Password Dialog ---');
+    await page.click('#btn-change-password');
+    await new Promise(r => setTimeout(r, 300));
+    const dialogInfo = await page.evaluate(() => {
+      const dlg = document.querySelector('[role="dialog"][aria-label="Passwort ändern"]');
+      return { exists: Boolean(dlg), modal: dlg?.getAttribute('aria-modal'), focusInside: Boolean(dlg && dlg.contains(document.activeElement)) };
+    });
+    assert.ok(dialogInfo.exists, 'the password dialog did not open');
+    assert.equal(dialogInfo.modal, 'true');
+    assert.ok(dialogInfo.focusInside, 'focus did not move into the dialog');
+    await page.keyboard.press('Escape');
+    await new Promise(r => setTimeout(r, 300));
+    assert.ok(!(await page.$('[role="dialog"][aria-label="Passwort ändern"]')), 'Escape did not close the password dialog');
+
+    // ----------------------------------------------------
     // TEST 4: Backup Restore Modal & Live Restore Test
     // ----------------------------------------------------
     console.log('\n--- TEST 4: Backup Restore Modal & Live Restore Test ---');

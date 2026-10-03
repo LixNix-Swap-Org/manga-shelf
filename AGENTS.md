@@ -125,6 +125,7 @@ manga-shelf/
         │   ├── useOfflineStatus.js    # Dashboard: Netzwerkstatus, Offline-Kopie; `onOnlineRef` wird beim Wiederverbinden aufgerufen
         │   ├── usePwaInstall.js       # Dashboard: „App installieren“
         │   ├── useDashboardKeyboard.js # Dashboard: `/`, Escape
+        │   ├── useDialogA11y.js       # Modals: Fokus hinein/zurück, Tab-Falle; mit `role="dialog" aria-modal` am äußeren Element verwenden (alle Modals tun das)
         │   ├── useMangaData.js        # Reihe laden (Server/Offline-Kopie), Bearbeiten-Formular, Cover-Upload, Metadaten-Lookup
         │   ├── useVolumeFilters.js    # Filter, Suche, Sortierung, Typ-Zähler, Ansichtsmodus
         │   ├── useMpGaps.js           # Manga-Passion-Lückenabgleich, Lücken übernehmen, Edition wählen/synchronisieren, Autofill
@@ -147,6 +148,7 @@ manga-shelf/
         └── components/        # Modulare Komponenten & Modals (Frontend-Refactoring)
             ├── modals/        # Dashboard-Modals
             │   ├── UserManagementModal.jsx  # Benutzerverwaltung (Rollenwechsel, Anlegen, Löschen)
+            │   ├── ChangePasswordModal.jsx  # Eigenes Passwort ändern
             │   ├── BackupRestoreModal.jsx   # Server-Snapshots, Uploads & 1-Klick Restore
             │   ├── StatsModal.jsx           # Finanz-KPIs, Charts, Leserranking & Leser-Details
             │   └── AddMangaModal.jsx        # Reihe anlegen mit Manga Passion/AniList Metadatensuche
@@ -301,6 +303,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/auth/login` | POST | public | Login (setzt JWT `httpOnly` Cookie) |
 | `/api/auth/logout` | POST | public | Logout (löscht Cookie) |
 | `/api/auth/me` | GET | `requireAuth` | Gibt aktuell eingeloggten Benutzer zurück |
+| `/api/auth/password` | PUT | `requireAuth` | Eigenes Passwort ändern (`current_password`, `new_password`); beendet alle anderen Sitzungen, die aktuelle bekommt ein neues Token. Dialog: `ChangePasswordModal` (Schloss-Symbol im Header) |
 | `/api/users` | GET, POST | `requireAdmin` | Nutzer auflisten / neuen Nutzer anlegen |
 | `/api/users/:id` | PUT, DELETE | `requireAdmin` | Rolle/Passwort ändern / Nutzer löschen |
 | `/api/users/:id/stats` | GET | `requireAuth` | Persönliche Lesestatistiken eines Nutzers |
@@ -559,6 +562,7 @@ Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 
    * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
    * Zusätzlich sperrt `loginFailures` einen Benutzernamen nach 10 Fehlversuchen in 15 Min. (429, unabhängig von der IP). `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`, Standard `true`): Ohne Proxy davor lässt sich die IP per `X-Forwarded-For` fälschen, dann `TRUST_PROXY=false` setzen.
    * Eine Passwortänderung durch den Admin setzt `users.password_changed_at`; ältere Sitzungen dieses Benutzers (JWT `iat` davor) werden mit 401 abgelehnt. Es gibt keine CORS-Freigabe außer für Ursprünge in `CORS_ORIGIN`; `index.js` setzt `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` (bewusst ohne CSP).
+   * Benutzernamen sind unabhängig von Groß-/Kleinschreibung eindeutig (`COLLATE NOCASE` beim Anlegen und beim Login).
    * Rollen sind `admin`, `editor`, `visitor`, `guest`; eine unbekannte Rolle wird mit 400 abgelehnt. Volume-Status wird gegen `VOLUME_STATUSES` (`routes/volumes.js`) geprüft.
 9. **Restore (`routes/backups.js`):**
    * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
