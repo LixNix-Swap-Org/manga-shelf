@@ -7,20 +7,20 @@ export default function MainViewSwitcher({
 }) {
   return (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-        <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
+        <div className="flex items-center max-w-full overflow-x-auto bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
           <button
             id="btn-nav-shelf"
             onClick={() => {
               setActiveMainView('shelf');
               try { window.history.replaceState(null, '', window.location.pathname); } catch (_) {}
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
               activeMainView === 'shelf'
                 ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Library className="w-4 h-4" />
+            <Library className="w-4 h-4 hidden sm:block" />
             <span>Sammlung ({mangaCount})</span>
           </button>
           <button
@@ -30,13 +30,13 @@ export default function MainViewSwitcher({
               try { window.history.replaceState(null, '', '?view=shopping'); } catch (_) {}
               fetchShoppingList();
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
               activeMainView === 'shopping'
                 ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <ShoppingCart className="w-4 h-4 text-emerald-400" />
+            <ShoppingCart className="w-4 h-4 text-emerald-400 hidden sm:block" />
             <span>Einkaufsliste</span>
             {shoppingData && shoppingData.total_missing > 0 && (
               <span className="bg-emerald-500/30 text-emerald-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
@@ -52,13 +52,13 @@ export default function MainViewSwitcher({
               fetchReleaseRadar();
               fetchMangaPassionReleases();
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
               activeMainView === 'radar'
                 ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Calendar className="w-4 h-4 text-sky-400" />
+            <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" />
             <span>Release-Radar</span>
             {radarData && radarData.total_releases > 0 && (
               <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">

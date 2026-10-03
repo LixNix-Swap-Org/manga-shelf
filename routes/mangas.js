@@ -304,8 +304,16 @@ router.delete('/mangas/:id', requireEditor, (req, res) => {
     }
 });
 
+// 404 instead of a logged 500 when the series of a Manga Passion action does not exist
+const mangaExists = (req, res, next) => {
+    if (!db.prepare('SELECT id FROM mangas WHERE id = ?').get(parseInt(req.params.id, 10))) {
+        return res.status(404).json({ error: 'Manga nicht gefunden' });
+    }
+    next();
+};
+
 // --- MANGA GAPS CHECK (Manga Passion Live-Abgleich) ---
-router.get('/mangas/:id/gaps', requireAuth, async (req, res) => {
+router.get('/mangas/:id/gaps', requireAuth, mangaExists, async (req, res) => {
     try {
         const mangaId = parseInt(req.params.id, 10);
         const editionId = req.query.edition_id ? parseInt(req.query.edition_id, 10) : null;
@@ -320,7 +328,7 @@ router.get('/mangas/:id/gaps', requireAuth, async (req, res) => {
 });
 
 // --- SYNC MANGA WITH MANGA PASSION EDITION ---
-router.post('/mangas/:id/sync-edition', requireEditor, async (req, res) => {
+router.post('/mangas/:id/sync-edition', requireEditor, mangaExists, async (req, res) => {
     try {
         const mangaId = parseInt(req.params.id, 10);
         const { edition_id, update_total_volumes, update_status, update_publisher } = req.body;
@@ -342,7 +350,7 @@ router.post('/mangas/:id/sync-edition', requireEditor, async (req, res) => {
 });
 
 // --- BATCH IMPORT GAPS FROM MANGA PASSION ---
-router.post('/mangas/:id/batch-import-gaps', requireEditor, async (req, res) => {
+router.post('/mangas/:id/batch-import-gaps', requireEditor, mangaExists, async (req, res) => {
     try {
         const mangaId = parseInt(req.params.id, 10);
         const { volume_numbers, target_status, edition_id } = req.body;
@@ -360,7 +368,7 @@ router.post('/mangas/:id/batch-import-gaps', requireEditor, async (req, res) => 
 });
 
 // --- BATCH AUTOFILL MANGA VOLUMES (Release Dates, Year, Pages, Prices) ---
-router.post('/mangas/:id/autofill-volumes', requireEditor, async (req, res) => {
+router.post('/mangas/:id/autofill-volumes', requireEditor, mangaExists, async (req, res) => {
     try {
         const mangaId = parseInt(req.params.id, 10);
         const { overwrite, edition_id } = req.body;

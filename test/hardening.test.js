@@ -165,3 +165,10 @@ test('volume input is validated: unknown series, dates, photo list, username len
     const long = await admin('POST', '/users', { username: 'u'.repeat(65), password: 'password123', role: 'editor' });
     assert.equal(long.status, 400);
 });
+
+test('Manga Passion actions on an unknown series answer 404', async () => {
+    assert.equal((await admin('GET', '/mangas/987654/gaps')).status, 404);
+    assert.equal((await admin('POST', '/mangas/987654/sync-edition', { edition_id: 1 })).status, 404);
+    assert.equal((await admin('POST', '/mangas/987654/batch-import-gaps', { volume_numbers: ['1'] })).status, 404);
+    assert.equal((await admin('POST', '/mangas/987654/autofill-volumes', {})).status, 404);
+});
