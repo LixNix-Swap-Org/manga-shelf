@@ -167,8 +167,10 @@ app.use((err, req, res, next) => {
     res.status(status).type('text/plain').send(message);
 });
 
-// --- START SERVER --- (only when run directly; tests import the app without listening)
-if (require.main === module) {
+// --- START SERVER --- (tests set MANGA_SHELF_NO_LISTEN=1 to import the app without listening).
+// Bewusst kein `require.main === module`: Startet ein Loader (z. B. `ts-node --esm index.js` im generischen
+// Pterodactyl-Egg) die Datei, ist require.main ein anderes Modul und der Server würde sofort mit Exit-Code 0 enden.
+if (process.env.MANGA_SHELF_NO_LISTEN !== '1') {
 initScheduler(); // Daily automated backup scheduler (after 10s on boot, then every 24 hours)
 const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || path.join(__dirname, 'ssl', 'privkey.pem');

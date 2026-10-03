@@ -8,6 +8,7 @@ async function startTestServer() {
     process.env.DATA_DIR = dataDir;
     delete process.env.JWT_SECRET;
 
+    process.env.MANGA_SHELF_NO_LISTEN = '1';
     const app = require('../index.js');
     const server = await new Promise((resolve) => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
