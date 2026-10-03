@@ -145,3 +145,23 @@ test('responses carry a Content-Security-Policy without inline scripts', async (
     assert.match(csp, /script-src 'self'(;|$)/);
     assert.match(csp, /object-src 'none'/);
 });
+
+test('volume input is validated: unknown series, dates, photo list, username length', async () => {
+    const manga = await admin('POST', '/mangas', { title: 'Validierung' });
+    const mid = manga.body.id;
+    assert.equal((await admin('POST', '/volumes', { manga_id: 987654, volume_number: '1' })).status, 404);
+    assert.equal((await admin('POST', '/volumes', { manga_id: mid, volume_number: '1', release_date: 'morgen' })).status, 400);
+    assert.equal((await admin('POST', '/volumes', { manga_id: mid, volume_number: '1', purchase_date: '2024-13-01' })).status, 400);
+    assert.equal((await admin('POST', '/volumes', { manga_id: mid, volume_number: '1', images: 'kein json' })).status, 400);
+    assert.equal((await admin('POST', '/volumes', { manga_id: mid, volume_number: '1', images: [1, 2] })).status, 400);
+
+    const ok = await admin('POST', '/volumes', { manga_id: mid, volume_number: '1', release_date: '2024-05', purchase_date: '2024-05-17', images: ['/uploads/a.jpg'] });
+    assert.equal(ok.status, 200);
+    const vid = ok.body.id;
+    assert.equal((await admin('PUT', '/volumes/' + vid, { release_date: '2024-99-99' })).status, 400);
+    assert.equal((await admin('PUT', '/volumes/' + vid, { images: '["/uploads/b.jpg"]' })).status, 200);
+    assert.equal((await admin('PUT', '/volumes/' + vid, { status: 'Fehlt', release_date: '2024-05' })).status, 200);
+
+    const long = await admin('POST', '/users', { username: 'u'.repeat(65), password: 'password123', role: 'editor' });
+    assert.equal(long.status, 400);
+});

@@ -27,6 +27,27 @@ const parseNum = (val) => {
     return (isNaN(parsed) || parsed < 0 || parsed > 99999) ? null : parsed;
 };
 
+// Dates as the forms and imports write them: YYYY, YYYY-MM or YYYY-MM-DD (empty = not set)
+const isValidDate = (val) => {
+    if (val === null || val === undefined || val === '') return true;
+    const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(String(val).trim());
+    if (!m) return false;
+    const month = m[2] ? parseInt(m[2], 10) : 1;
+    const day = m[3] ? parseInt(m[3], 10) : 1;
+    return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+};
+
+// Photo list as a JSON array of strings, given as an array or a JSON string (empty = none)
+const parseImagesInput = (val) => {
+    if (val === null || val === undefined || val === '') return { value: null };
+    let list = val;
+    if (typeof val === 'string') {
+        try { list = JSON.parse(val); } catch (e) { return { error: true }; }
+    }
+    if (!Array.isArray(list) || list.length > 50 || !list.every(x => typeof x === 'string' && x.length <= 1000)) return { error: true };
+    return { value: JSON.stringify(list) };
+};
+
 // --- VOLUMES API ---
 router.post('/volumes', requireEditor, (req, res) => {
     try {
@@ -89,9 +110,18 @@ router.post('/volumes', requireEditor, (req, res) => {
             });
         }
 
+        if (!isValidDate(release_date) || !isValidDate(purchase_date)) {
+            return res.status(400).json({ error: 'Ungültiges Datum (erwartet: JJJJ-MM-TT)' });
+        }
+        if (!db.prepare('SELECT id FROM mangas WHERE id = ?').get(mId)) {
+            return res.status(404).json({ error: 'Manga nicht gefunden' });
+        }
+
         let imagesVal = null;
         if (images) {
-            imagesVal = Array.isArray(images) ? JSON.stringify(images) : String(images);
+            const parsedImages = parseImagesInput(images);
+            if (parsedImages.error) return res.status(400).json({ error: 'Ungültige Bilderliste' });
+            imagesVal = parsedImages.value;
         } else if (cover_image) {
             imagesVal = JSON.stringify([String(cover_image).trim()]);
         }
@@ -220,9 +250,16 @@ router.put('/volumes/:id', requireEditor, (req, res) => {
             }
         }
 
+        // Only values that change are checked: the app sends the whole row back on a status toggle, and older rows may hold odd dates
+        if ((release_date !== vol.release_date && !isValidDate(release_date)) || (purchase_date !== vol.purchase_date && !isValidDate(purchase_date))) {
+            return res.status(400).json({ error: 'Ungültiges Datum (erwartet: JJJJ-MM-TT)' });
+        }
+
         let imagesVal = vol.images;
         if (body.images !== undefined) {
-            imagesVal = Array.isArray(body.images) ? JSON.stringify(body.images) : (body.images ? String(body.images) : null);
+            const parsedImages = parseImagesInput(body.images);
+            if (parsedImages.error) return res.status(400).json({ error: 'Ungültige Bilderliste' });
+            imagesVal = parsedImages.value;
         }
 
         let cover_image = body.cover_image !== undefined 

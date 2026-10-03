@@ -37,6 +37,8 @@ router.get('/setup/status', (req, res) => {
     res.json({ needsSetup: !hasAdmin(), version: pkg.version });
 });
 
+const MAX_USERNAME_LENGTH = 64;
+
 router.post('/setup', setupLimiter, async (req, res) => {
     try {
         if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
@@ -48,6 +50,9 @@ router.post('/setup', setupLimiter, async (req, res) => {
         if (pwErr) return res.status(400).json({ error: pwErr });
 
         const cleanUsername = username.trim();
+        if (cleanUsername.length > MAX_USERNAME_LENGTH) {
+            return res.status(400).json({ error: `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)` });
+        }
         const hash = await bcrypt.hash(password, 10);
 
         // Re-check right before the (synchronous) insert so two concurrent setups cannot both create an admin
@@ -155,6 +160,9 @@ router.post('/users', requireAdmin, async (req, res) => {
         const pwErr = passwordError(password);
         if (pwErr) return res.status(400).json({ error: pwErr });
         const cleanUsername = username.trim();
+        if (cleanUsername.length > MAX_USERNAME_LENGTH) {
+            return res.status(400).json({ error: `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)` });
+        }
         const cleanRole = role;
 
         const existing = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername);
