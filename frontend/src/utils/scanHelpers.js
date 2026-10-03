@@ -40,3 +40,13 @@ export const buildScanVolumePayload = (mangaId, vol) => ({
   release_year: vol.release_year || null,
   publisher: vol.publisher || null
 });
+
+/**
+ * Total volumes to prefill from a catalogue hit. For a running series the catalogue only knows the volumes released so far
+ * (a fresh Dragon Maid scan listed "1"), which would show "1/1 complete"; leave it open instead.
+ */
+export const prefillTotalVolumes = (item, previous = '') => {
+  if (!item?.total_volumes) return previous;
+  if (/laufend|ongoing|releasing/i.test(String(item.status || ''))) return previous;
+  return String(item.total_volumes);
+};

@@ -24,3 +24,10 @@ test('scan volume payload carries the manga id and the cleaned fields', () => {
   const body = helpers.buildScanVolumePayload(5, { volume_number: ' 3 ', status: 'Fehlt', isbn: '978', price: '', pages: '', release_year: '', publisher: 'X' });
   assert.deepStrictEqual(body, { manga_id: 5, volume_number: '3', status: 'Fehlt', isbn: '978', price: null, pages: null, release_year: null, publisher: 'X' });
 });
+
+test('prefillTotalVolumes leaves the total open for running series', () => {
+  assert.strictEqual(helpers.prefillTotalVolumes({ total_volumes: 1, status: 'Laufend' }, ''), '');
+  assert.strictEqual(helpers.prefillTotalVolumes({ total_volumes: 1, status: 'Laufend' }, '5'), '5');
+  assert.strictEqual(helpers.prefillTotalVolumes({ total_volumes: 12, status: 'Abgeschlossen' }, ''), '12');
+  assert.strictEqual(helpers.prefillTotalVolumes({ status: 'Abgeschlossen' }, '3'), '3');
+});

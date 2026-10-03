@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Sparkles, RefreshCw, AlertTriangle, BookOpen, Upload, ScanBarcode } from 'lucide-react';
-import { buildScanVolumePayload } from '../../utils/scanHelpers';
+import { buildScanVolumePayload, prefillTotalVolumes } from '../../utils/scanHelpers';
 import useDialogA11y from '../../hooks/useDialogA11y';
 
 // prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume
@@ -144,7 +144,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, prefill = nu
       author: item.author || prev.author,
       publisher: item.publisher || prev.publisher,
       status: item.status || prev.status,
-      total_volumes: item.total_volumes ? String(item.total_volumes) : prev.total_volumes,
+      total_volumes: prefillTotalVolumes(item, prev.total_volumes),
       description: item.description || prev.description,
       cover_image: localCoverUrl || prev.cover_image,
       manga_passion_id: item.manga_passion_id || null
@@ -300,7 +300,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, prefill = nu
               <span>Titel <span className="text-red-400">*</span></span>
               <span className="text-[11px] text-brand-400 font-normal">Tipp: Titel eingeben & auf „Auto-Fill“ klicken</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="text" 
                 placeholder="z.B. One Piece, Chainsaw Man, Frieren..." 
