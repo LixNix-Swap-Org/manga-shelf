@@ -44,6 +44,9 @@ export default function MpEditionModal({
 
   if (!isOpen) return null;
 
+  // the edition was only guessed by the search and is not stored until the user confirms it
+  const unconfirmed = mpGapData?.link_confirmed === false;
+
   const handleSearchMpEditions = (e) => {
     if (e) e.preventDefault();
     return searchEditions(mpEditionSearchQuery.trim() || manga?.title);
@@ -77,10 +80,10 @@ export default function MpEditionModal({
             Verbinde diese Reihe mit der offiziellen deutschen Edition auf Manga-Passion, um Bandzahlen, Lücken, Veröffentlichungsdaten und Preise automatisch abzugleichen.
           </p>
 
-          {/* Currently linked edition */}
+          {/* Currently linked (or only suggested) edition */}
           {mpGapData?.edition && (
             <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Aktuell verknüpfte Edition</div>
+              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">{unconfirmed ? 'Vorgeschlagene Edition (noch nicht bestätigt)' : 'Aktuell verknüpfte Edition'}</div>
               <div className="flex gap-3 items-center">
                 {mpGapData.edition.cover_image && (
                   <img 
@@ -175,7 +178,7 @@ export default function MpEditionModal({
                       </div>
                     </div>
                     <div>
-                      {isCurrent ? (
+                      {isCurrent && !unconfirmed ? (
                         <span className="text-[10px] font-bold uppercase bg-brand-500/20 text-brand-300 px-2 py-1 rounded-md border border-brand-500/30">
                           Aktiv
                         </span>
@@ -186,7 +189,7 @@ export default function MpEditionModal({
                           disabled={mpGapLoading}
                           className="px-2.5 py-1 bg-slate-800 hover:bg-brand-600 text-slate-200 hover:text-white rounded-lg transition-all font-medium border border-slate-700 cursor-pointer"
                         >
-                          Übernehmen
+                          {isCurrent ? 'Bestätigen' : 'Übernehmen'}
                         </button>
                       )}
                     </div>
