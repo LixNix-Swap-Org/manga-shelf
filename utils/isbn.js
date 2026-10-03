@@ -26,4 +26,21 @@ function normalizeIsbn(value) {
     return compact || null;
 }
 
-module.exports = { normalizeIsbn, isbn13CheckDigit };
+/**
+ * True for a real ISBN: 13 digits starting with 978/979 with a correct check digit, or 10 characters with a correct
+ * ISBN-10 check digit. Hyphens and spaces are ignored. A misread barcode (or an EAN that is no book) is false.
+ */
+function isValidIsbn(value) {
+    const compact = String(value ?? '').replace(/[\s-]/g, '').toUpperCase();
+    if (/^\d{13}$/.test(compact)) {
+        return /^97[89]/.test(compact) && isbn13CheckDigit(compact.slice(0, 12)) === compact[12];
+    }
+    if (/^\d{9}[\dX]$/.test(compact)) {
+        let sum = 0;
+        for (let i = 0; i < 10; i++) sum += (compact[i] === 'X' ? 10 : Number(compact[i])) * (10 - i);
+        return sum % 11 === 0;
+    }
+    return false;
+}
+
+module.exports = { normalizeIsbn, isbn13CheckDigit, isValidIsbn };

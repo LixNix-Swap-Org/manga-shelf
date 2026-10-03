@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeIsbn } = require('../utils/isbn');
+const { normalizeIsbn, isbn13CheckDigit } = require('../utils/isbn');
 const { startTestServer } = require('./helpers');
 
 test('normalizeIsbn: hyphens, spaces and ISBN-10 all become the same ISBN-13', () => {
@@ -58,4 +58,33 @@ test('migration v5 rewrites existing hyphenated and ISBN-10 values', () => {
     initDb();
     const isbns = db.prepare('SELECT isbn FROM volumes WHERE manga_id = ? ORDER BY CAST(volume_number AS INTEGER)').all(mangaId).map(r => r.isbn);
     assert.deepEqual(isbns, ['9783551745811', '9783770428472', '9783551745811', '9783899213225']);
+});
+
+test('ISBN lookup: invalid input is rejected before any catalogue is asked', async () => {
+    assert.equal((await admin('GET', '/lookup/isbn')).status, 400);
+    assert.equal((await admin('GET', '/lookup/isbn?isbn=123')).status, 400);
+    const badCheckDigit = await admin('GET', '/lookup/isbn?isbn=9783551745812');
+    assert.equal(badCheckDigit.status, 400);
+    assert.match(badCheckDigit.body.error, /Prüfziffer/);
+    assert.equal((await admin('GET', '/lookup/isbn?isbn=4901234567894')).status, 400);
+    // a repeated parameter is read as one string (no 500)
+    assert.equal((await admin('GET', '/lookup/isbn?isbn=1234&isbn=5678')).status, 400);
+});
+
+test('ISBN lookup: an ISBN stored on a volume is recognised from the collection alone (no catalogue, works offline)', async () => {
+    const mangaId = (await admin('POST', '/mangas', { title: 'Bekannte Reihe' })).body.id;
+    const unique = '978408820053' + isbn13CheckDigit('978408820053'); // an ISBN no other test uses
+    const hyphenated = `${unique.slice(0, 3)}-${unique.slice(3, 4)}-${unique.slice(4, 6)}-${unique.slice(6, 12)}-${unique.slice(12)}`;
+    await admin('POST', '/volumes', { manga_id: mangaId, volume_number: '7', status: 'Vorhanden', isbn: hyphenated });
+    // other spellings of the same ISBN find it, too
+    for (const isbn of [unique, hyphenated]) {
+        const res = await admin('GET', '/lookup/isbn?isbn=' + encodeURIComponent(isbn));
+        assert.equal(res.status, 200, isbn);
+        assert.equal(res.body.found, true);
+        assert.equal(res.body.match_reason, 'isbn');
+        assert.equal(res.body.matched_manga.id, mangaId);
+        assert.equal(res.body.matched_volume.volume_number, '7');
+        assert.equal(res.body.matched_volume.status, 'Vorhanden');
+        assert.equal(res.body.book.title, 'Bekannte Reihe');
+    }
 });

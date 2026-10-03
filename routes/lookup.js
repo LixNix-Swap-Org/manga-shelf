@@ -7,10 +7,10 @@ const { db, uploadsDir } = require('../db');
 const { requireAuth, requireEditor } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { fetchRemoteImage } = require('../utils/safeFetch');
-const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
-const { normalizeIsbn } = require('../utils/isbn');
+const { normalizeIsbn, isValidIsbn } = require('../utils/isbn');
 const { searchMangaPassionForLookup } = require('../mangaPassion');
+const { lookupBookByIsbn, matchCollection } = require('../services/isbnLookup');
 const log = require('../utils/logger').child('lookup');
 
 // AniList GraphQL Search Helper
@@ -125,21 +125,11 @@ router.get('/lookup/manga', requireAuth, async (req, res) => {
 
         const trimmed = queryTerm.trim();
 
-        // 1. ZUERST: Deutsche Manga Passion API nach offiziellen deutschen Ausgaben durchsuchen
-        let mpResults = [];
-        try {
-            mpResults = await searchMangaPassionForLookup(trimmed);
-        } catch (mpErr) {
-            log.warn('Manga Passion lookup error:', mpErr.message);
-        }
-
-        // 2. AniList als Ergänzung und Fallback
-        let aniListResults = [];
-        try {
-            aniListResults = await searchAniList(trimmed);
-        } catch (alErr) {
-            log.warn('AniList lookup error:', alErr.message);
-        }
+        // Manga Passion (official German editions) and AniList run at the same time; one failing never blocks the other
+        const [mpResults, aniListResults] = await Promise.all([
+            searchMangaPassionForLookup(trimmed).catch(err => { log.warn('Manga Passion lookup error:', err.message); return []; }),
+            searchAniList(trimmed).catch(err => { log.warn('AniList lookup error:', err.message); return []; })
+        ]);
 
         // Manga Passion hat Vorrang (deutsche Verlage, korrekte deutsche Bandzahlen & Cover)
         const combined = [...mpResults, ...aniListResults];
@@ -169,169 +159,29 @@ router.post('/upload-remote', requireEditor, async (req, res) => {
     }
 });
 
-// Helper to fetch text via HTTPS with timeout
-function fetchTextHttps(url, timeoutMs = 7000) {
-    return new Promise((resolve, reject) => {
-        const req = https.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
-            if (res.statusCode >= 400) {
-                return reject(new Error(`HTTP ${res.statusCode}`));
-            }
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => resolve(data));
-        });
-        req.on('error', reject);
-        req.setTimeout(timeoutMs, () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-    });
-}
-
-function parseMarc21Xml(xml, cleanIsbn, sourceName) {
-    if (!xml || !xml.includes('<recordData>') && !xml.includes('<record>')) return null;
-
-    const getField = (tag, code) => {
-        const fieldRegex = new RegExp(`<datafield[^>]*tag="${tag}"[^>]*>[\\s\\S]*?<\\/datafield>`, 'g');
-        const matches = xml.match(fieldRegex) || [];
-        for (const f of matches) {
-            const subRegex = new RegExp(`<subfield[^>]*code="${code}"[^>]*>([^<]+)<\\/subfield>`);
-            const subMatch = f.match(subRegex);
-            if (subMatch) return subMatch[1].trim();
-        }
-        return null;
-    };
-
-    let title = getField('245', 'a');
-    if (title) title = title.replace(/\s*[/:]\s*$/, '').trim();
-
-    let volumeNumber = getField('245', 'n');
-    if (volumeNumber) {
-        volumeNumber = volumeNumber.replace(/\.$/, '').trim();
-        const numOnly = volumeNumber.match(/\d+(\.\d+)?/);
-        if (numOnly) volumeNumber = numOnly[0];
-    }
-
-    let subtitle = getField('245', 'p');
-    let author = getField('100', 'a');
-    if (author) {
-        const parts = author.split(',').map(s => s.trim());
-        if (parts.length === 2) author = `${parts[1]} ${parts[0]}`;
-    }
-
-    let publisher = getField('264', 'b') || getField('260', 'b');
-    if (publisher) publisher = normalizePublisher(publisher.replace(/\s*;\s*$/, '').trim());
-
-    const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
-    let releaseYear = null;
-    if (releaseYearRaw) {
-        const yMatch = releaseYearRaw.match(/\d{4}/);
-        if (yMatch) releaseYear = parseInt(yMatch[0], 10);
-    }
-
-    const pagesRaw = getField('300', 'a');
-    let pages = null;
-    if (pagesRaw) {
-        const pMatch = pagesRaw.match(/(\d+)/);
-        if (pMatch) pages = parseInt(pMatch[1], 10);
-    }
-
-    const priceRaw = getField('020', 'c');
-    let price = null;
-    if (priceRaw) {
-        const eurMatch = priceRaw.match(/EUR\s*([\d,.]+)/i);
-        if (eurMatch) price = parseFloat(eurMatch[1].replace(',', '.'));
-    }
-
-    if (title) {
-        return {
-            title,
-            volume_number: volumeNumber || '1',
-            subtitle,
-            author,
-            publisher,
-            release_year: releaseYear,
-            pages,
-            price,
-            source: sourceName,
-            cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
-        };
-    }
-    return null;
-}
-
 // 3. RESILIENT GERMAN MANGA ISBN LOOKUP (DNB -> K10plus -> Google Books)
 router.get('/lookup/isbn', requireAuth, async (req, res) => {
     try {
-        const rawIsbn = req.query.isbn;
-        if (!rawIsbn) {
+        const rawIsbn = qstr(req.query.isbn);
+        if (!rawIsbn || !rawIsbn.trim()) {
             return res.status(400).json({ error: 'ISBN erforderlich' });
         }
 
-        const cleanIsbn = String(rawIsbn).replace(/[^0-9X]/gi, '');
-        if (!cleanIsbn || (cleanIsbn.length !== 10 && cleanIsbn.length !== 13)) {
+        const cleanIsbn = rawIsbn.replace(/[^0-9X]/gi, '').toUpperCase();
+        if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
             return res.status(400).json({ error: 'Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)' });
         }
-
-        let book = null;
-
-        // Step 1: Deutsche Nationalbibliothek (DNB) SRU MARC21
-        try {
-            const dnbUrl = `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${encodeURIComponent(cleanIsbn)}&recordSchema=MARC21-xml`;
-            const dnbXml = await fetchTextHttps(dnbUrl, 6000);
-            book = parseMarc21Xml(dnbXml, cleanIsbn, 'DNB (Deutsche Nationalbibliothek)');
-        } catch (dnbErr) {
-            log.warn('[Lookup] DNB request failed or timed out:', dnbErr.message);
+        // a wrong check digit means a misread barcode (or no book at all): say so instead of three failing lookups
+        if (!isValidIsbn(cleanIsbn)) {
+            return res.status(400).json({ error: 'Das ist keine gültige ISBN (Prüfziffer stimmt nicht). Bitte den Barcode erneut scannen.' });
         }
 
-        // Step 2: K10plus (GBV / SWB Verbundkatalog) SRU MARC21 Fallback
-        if (!book) {
-            try {
-                const k10Url = `https://sru.k10plus.de/opac-de-627?version=1.1&operation=searchRetrieve&recordSchema=marcxml&maximumRecords=1&query=pica.isb%3D${encodeURIComponent(cleanIsbn)}`;
-                const k10Xml = await fetchTextHttps(k10Url, 6000);
-                book = parseMarc21Xml(k10Xml, cleanIsbn, 'K10plus (Gemeinsamer Bibliotheksverbund)');
-            } catch (k10Err) {
-                log.warn('[Lookup] K10plus request failed or timed out:', k10Err.message);
-            }
-        }
+        const isbn13 = normalizeIsbn(cleanIsbn);
 
-        // Step 3: Google Books API Fallback
-        if (!book) {
-            try {
-                const gbUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${encodeURIComponent(cleanIsbn)}`;
-                const gbJsonText = await fetchTextHttps(gbUrl, 6000);
-                const gbData = JSON.parse(gbJsonText);
-                if (gbData.items && gbData.items.length > 0) {
-                    const vi = gbData.items[0].volumeInfo || {};
-                    let volNum = '1';
-                    const numMatch = (vi.title || '').match(/(\d+)$/);
-                    if (numMatch) volNum = numMatch[1];
-
-                    let year = null;
-                    if (vi.publishedDate) {
-                        const yMatch = vi.publishedDate.match(/\d{4}/);
-                        if (yMatch) year = parseInt(yMatch[0], 10);
-                    }
-
-                    book = {
-                        title: vi.title || 'Unbekannter Titel',
-                        volume_number: volNum,
-                        subtitle: vi.subtitle || null,
-                        author: vi.authors && vi.authors.length > 0 ? vi.authors.join(', ') : null,
-                        publisher: vi.publisher ? normalizePublisher(vi.publisher) : null,
-                        release_year: year,
-                        pages: vi.pageCount || null,
-                        price: null,
-                        source: 'Google Books',
-                        cover_url: vi.imageLinks?.thumbnail ? vi.imageLinks.thumbnail.replace('http://', 'https://') : `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
-                    };
-                }
-            } catch (gbErr) {
-                log.warn('[Lookup] Google Books request failed:', gbErr.message);
-            }
-        }
-
-        if (!book) {
+        // a volume of the collection with this ISBN is certain and needs no catalogue (also works without internet)
+        const known = db.prepare('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1').get(isbn13);
+        const book = known ? null : await lookupBookByIsbn(cleanIsbn);
+        if (!book && !known) {
             return res.json({
                 isbn: cleanIsbn,
                 found: false,
@@ -339,36 +189,23 @@ router.get('/lookup/isbn', requireAuth, async (req, res) => {
             });
         }
 
-        // Cross reference existing mangas in SQLite
-        const mangas = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas').all();
-        let matchedManga = null;
-        const normTitle = book.title.toLowerCase().trim();
-
-        for (const m of mangas) {
-            const mNorm = m.title.toLowerCase().trim();
-            const altNorm = m.alt_title ? m.alt_title.toLowerCase().trim() : '';
-            if (normTitle === mNorm || normTitle.includes(mNorm) || mNorm.includes(normTitle) || (altNorm && (normTitle.includes(altNorm) || altNorm.includes(normTitle)))) {
-                matchedManga = m;
-                break;
-            }
-        }
-
-        let matchedVolume = null;
-        if (matchedManga) {
-            const vol = db.prepare(`
-                SELECT id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year
-                FROM volumes 
-                WHERE manga_id = ? AND (volume_number = ? OR isbn = ?)
-            `).get(matchedManga.id, book.volume_number, normalizeIsbn(cleanIsbn));
-            if (vol) matchedVolume = vol;
+        const bookData = book || { title: '', volume_number: '1', volume_number_known: false, source: 'Sammlung' };
+        const match = matchCollection(db, bookData, isbn13);
+        if (!book && match.volume) {
+            // no catalogue entry: describe the book from our own volume
+            bookData.title = match.manga ? match.manga.title : '';
+            bookData.volume_number = match.volume.volume_number;
+            bookData.volume_number_known = true;
         }
 
         res.json({
             isbn: cleanIsbn,
             found: true,
-            book,
-            matched_manga: matchedManga,
-            matched_volume: matchedVolume
+            book: bookData,
+            matched_manga: match.manga,
+            matched_volume: match.volume,
+            match_reason: match.reason,
+            matched_candidates: match.candidates
         });
     } catch (err) {
         log.error('Error during ISBN lookup:', err);

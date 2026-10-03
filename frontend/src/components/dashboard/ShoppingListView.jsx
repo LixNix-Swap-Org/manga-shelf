@@ -41,15 +41,27 @@ export default function ShoppingListView({
     try {
       const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(cleanIsbn)}`);
       const data = await res.json();
+      if (!res.ok && data?.error) {
+        // e.g. wrong check digit: a misread barcode, scan again
+        alert(data.error);
+        return;
+      }
       if (data && data.found) {
         if (data.matched_volume && data.matched_volume.status === 'Vorhanden') {
           alert(`✅ Bereits in deiner Sammlung: "${data.matched_manga.title} Band ${data.matched_volume.volume_number}" besitzt du bereits!`);
+        } else if (data.matched_manga && data.book?.volume_number_known === false && !data.matched_volume) {
+          // the catalogue gave no volume number: we cannot say whether this volume is owned
+          setShoppingSearch(data.matched_manga.title);
+          alert(`ℹ️ "${data.matched_manga.title}" ist in deiner Sammlung – die Bandnummer dieses Buchs steht im Katalog nicht, bitte selbst prüfen.`);
         } else if (data.matched_manga) {
           setShoppingSearch(data.matched_manga.title);
           alert(`ℹ️ "${data.matched_manga.title}" ist in deiner Sammlung – dieser Band (${data.book?.volume_number || ''}) fehlt dir noch.`);
+        } else if (data.matched_candidates?.length > 0) {
+          setShoppingSearch(data.book?.series || data.book?.title || cleanIsbn);
+          alert(`📖 "${data.book?.series || data.book?.title || 'Unbekannt'}" passt zu mehreren Reihen deiner Sammlung (${data.matched_candidates.map(c => c.title).join(', ')}). Bitte prüfen, zu welcher der Band gehört.`);
         } else {
-          setShoppingSearch(data.book?.title || cleanIsbn);
-          alert(`📖 Gefunden: "${data.book?.title || 'Unbekannt'}". Diese Reihe ist noch nicht in deiner Sammlung.`);
+          setShoppingSearch(data.book?.series || data.book?.title || cleanIsbn);
+          alert(`📖 Gefunden: "${data.book?.series || data.book?.title || 'Unbekannt'}". Diese Reihe ist noch nicht in deiner Sammlung.`);
         }
       } else {
         setShoppingSearch(cleanIsbn);

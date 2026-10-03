@@ -61,9 +61,10 @@ manga-shelf/
 │   ├── backups.js             # Server-Snapshots & Wiederherstellung (Disk-Staging)
 │   ├── stats.js               # Sammlungsstatistiken & Einstellungen
 │   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar (nur Routen + SQL, Logik in `services/radar.js` und `services/mangaPassionReleases.js`)
-│   └── lookup.js              # DNB ISBN-Suche, Manga Passion / AniList Lookup & Uploads
+│   └── lookup.js              # Routen: ISBN-Suche, Manga Passion / AniList Lookup & Uploads (Logik der ISBN-Suche in `services/isbnLookup.js`)
 ├── services/                  # Hintergrund-Dienste
 │   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots)
+│   ├── isbnLookup.js          # ISBN-Suche: DNB → K10plus → Google Books (`lookupBookByIsbn`, `parseMarc21Xml`), Abgleich mit der Sammlung (`matchCollection`)
 │   ├── radar.js               # Reine Funktionen: `countdownFor`, `buildShoppingList`, `buildReleaseRadar` (Monatsgruppen, Budgets)
 │   ├── mangaPassionReleases.js # Monatskalender von Manga Passion: Abruf mit Cache (`getMonthlyReleases`), Abgleich mit der Sammlung (`enrichReleases`)
 │   └── mangaPassion/          # Manga-Passion-Anbindung
@@ -74,7 +75,7 @@ manga-shelf/
 │       └── index.js           # bündelt die Exporte
 ├── utils/                     # Hilfsfunktionen & Normalisierer
 │   ├── publishers.js          # Verlags-Normalisierung & Mappings
-│   ├── isbn.js                # ISBN-10/13-Normalisierung & Prüfsummen
+│   ├── isbn.js                # ISBN-10/13-Normalisierung (`normalizeIsbn`) und Prüfziffern (`isValidIsbn`)
 │   ├── logger.js              # Zentraler Logger (`LOG_LEVEL`, `LOG_FORMAT`)
 │   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
 │   ├── staticHeaders.js       # Cache-Header für `index.html`, `sw.js`, `manifest.json`
@@ -85,6 +86,7 @@ manga-shelf/
 │   ├── api.test.js            # Auth, CRUD, Rollen, Backups
 │   ├── radar.test.js          # Import-Route (Validierung, Duplikate, Besitz bleibt) & Monatskalender (Cache, Ausfall, Duplikate)
 │   ├── radarServices.test.js  # Countdown, Gruppen, Budgets, Serien-Abgleich
+│   ├── isbnLookup.test.js     # MARC-Parser, Quellen-Reihenfolge, Titel-/ISBN-Abgleich
 │   ├── routing.test.js, upload.test.js, logger.test.js, isbn.test.js
 │   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
 │   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
@@ -401,10 +403,12 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
    * Hauptumschalter `activeMainView: 'shelf' | 'shopping' | 'radar'` in `Dashboard.jsx`.
 
 ### 🔹 Fall G: ISBN- & Metadaten-Lookup (DNB API)
-1. **Backend API (`routes/`):**
-   * Route `GET /api/lookup/isbn?isbn=...`: Fragt die SRU MARC21-XML-Schnittstelle der Deutschen Nationalbibliothek (DNB) ab.
-   * Parst deutsche Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Seiten (`300$a`) und Festpreis in EUR (`020$c`).
-   * Gleicht die gefundene Reihe und den Band automatisch mit der SQLite-Datenbank ab (`matched_manga`, `matched_volume`).
+1. **Backend (`routes/lookup.js` → `services/isbnLookup.js`):**
+   * `GET /api/lookup/isbn?isbn=...`: lehnt Eingaben ohne gültige Prüfziffer sofort mit 400 ab (falsch gescannter Barcode, EAN ohne 978/979), ohne Kataloge zu fragen. Danach: Ist die ISBN an einem gespeicherten Band, ist das der sichere Treffer (kein Netzwerk nötig, funktioniert offline im Laden). Sonst DNB-SRU (MARC21) → K10plus → Google Books; die erste Quelle mit Ergebnis gewinnt.
+   * `parseMarc21Xml` liest nur den **ersten** Datensatz (ein Treffer kann mehrere liefern, deren Felder sonst vermischt würden), dekodiert XML-Entities (`&amp;`) und liefert Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Jahr, Seiten (`300$a`) und Preis (`020$c`). Fehlt die Bandnummer, ist `volume_number` nur der Platzhalter „1“ und `volume_number_known` ist `false`.
+   * **DNB-Eigenheiten (in `parseMarc21Xml` abgefangen):** (1) Ein führender Artikel („Der“, „Die“, „A“ …) steht in Steuerzeichen `U+0098`/`U+009C` (im XML als `&#152;`/`&#156;`) – `stripMarcControls` entfernt sie, sonst passt kein Titel („A Returner's Magic“ wurde früher fälschlich „Magi“ zugeordnet) und sie erscheinen als Müll in der Anzeige. (2) `245$a` ist oft nur der **Bandtitel** („Mein kleiner Bruder!“); Reihe und Nummer stehen in `800 $t/$v` bzw. `490 $a/$v` (`series`, `series_number`) und gewinnen vor dem freien Text `245$n` („2021,16“ = Jahr, Band). Abgleich und Anzeige nutzen `series` vor `title`.
+   * `matchCollection` (Antwortfelder `matched_manga`, `matched_volume`, `match_reason`: `isbn` | `title`, `matched_candidates`): zuerst gleiche ISBN, sonst bester Titeltreffer (`titleMatchScore`: gleiche Wörter = 100, sonst kürzerer Titel auf Wortgrenzen mit mind. 4 Buchstaben), nur wenn er mit ≥ 15 Punkten Vorsprung heraussticht – sonst keine Reihe, aber Kandidaten. Der Band wird nur über die Nummer gesucht, wenn der Katalog sie kannte (sonst würde „du besitzt Band 1“ behauptet), und nur Typ `volume`.
+   * Beide Frontend-Aufrufer (`Dashboard.jsx` Barcode → Reihe öffnen, `ShoppingListView.jsx` Einkaufsmodus) nutzen diese Felder; im Einkaufsmodus wird bei unbekannter Bandnummer bzw. mehreren passenden Reihen ehrlich „bitte prüfen“ gemeldet statt falscher Besitz-/Fehlt-Aussagen.
 2. **Architektur-Hinweis (Barcode-Scan):**
    * Kein Live-Kamerastream: Mobile Browser sperren WebRTC bei HTTP-Deployments ohne SSL (z. B. Standard-Pterodactyl-Ports). `frontend/src/components/common/BarcodeScannerButton.jsx` nutzt stattdessen ein `<input type="file" capture="environment">` und dekodiert das Foto mit dem nativen `BarcodeDetector` (Fallback: ZXing, dynamisch geladen). Funktioniert daher auch über HTTP.
    * ISBN-Normalisierung (10→13, Prüfsumme) liegt in `utils/isbn.js`.
