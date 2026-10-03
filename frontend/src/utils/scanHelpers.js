@@ -50,3 +50,36 @@ export const prefillTotalVolumes = (item, previous = '') => {
   if (/laufend|ongoing|releasing/i.test(String(item.status || ''))) return previous;
   return String(item.total_volumes);
 };
+
+/**
+ * Einkaufsmodus: macht aus einer ISBN-Antwort (`/api/lookup/isbn`) einen Eintrag für die Scan-Liste.
+ * kind: `buy` (steht auf der Einkaufsliste, `itemId` zum Abhaken), `owned`, `check` (Reihe bekannt, Band unklar/andere Reihe),
+ * `new` (Reihe fehlt in der Sammlung), `unknown` (kein Katalogtreffer).
+ */
+export const classifyShopScan = (isbn, data, shoppingItems = []) => {
+  const digits = (s) => String(s || '').replace(/[^0-9X]/gi, '');
+  const clean = digits(isbn);
+  const fromList = shoppingItems.find((it) => digits(it.isbn) && digits(it.isbn) === clean);
+  const entry = (kind, label, extra = {}) => ({ isbn: clean, kind, label, ...extra });
+  if (fromList) return entry('buy', `${fromList.title} ${fromList.volume_number}`.trim(), { itemId: fromList.id, price: fromList.price ?? null });
+
+  const book = data?.book;
+  const name = scanSeriesTitle(book) || 'Unbekannt';
+  const mv = data?.matched_volume;
+  if (!data?.found) return entry('unknown', clean);
+  if (mv && mv.status === 'Vorhanden') return entry('owned', `${data.matched_manga?.title || name} Band ${mv.volume_number}`);
+  const onList = mv && shoppingItems.find((it) => it.id === mv.id);
+  if (onList) return entry('buy', `${onList.title} ${onList.volume_number}`.trim(), { itemId: onList.id, price: onList.price ?? null });
+  if (data.matched_manga && book?.volume_number_known === false && !mv) {
+    return entry('check', `${data.matched_manga.title}: Bandnummer im Katalog unbekannt, bitte selbst prüfen`);
+  }
+  if (data.matched_manga) {
+    return entry('check', mv
+      ? `${data.matched_manga.title} Band ${mv.volume_number} (Status ${mv.status})`
+      : `${data.matched_manga.title} Band ${book?.volume_number || ''}: fehlt noch und steht nicht auf der Einkaufsliste`);
+  }
+  if (data.matched_candidates?.length > 0) {
+    return entry('check', `${name} passt zu mehreren Reihen (${data.matched_candidates.map((c) => c.title).join(', ')})`);
+  }
+  return entry('new', `${name}: Reihe noch nicht in der Sammlung`);
+};

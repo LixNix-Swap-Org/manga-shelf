@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { classifyShopScan } from '../../utils/scanHelpers';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import { 
   ShoppingCart, RefreshCw, Search, X, CheckCircle2, 
@@ -25,19 +27,22 @@ export default function ShoppingListView({
   failedImages,
   setFailedImages
 }) {
+  // Scan-Liste dieses Ladenbesuchs: mehrere Barcodes hintereinander, am Ende alle Treffer der Einkaufsliste auf einmal abhaken
+  const [scanned, setScanned] = useState([]);
+  const [booking, setBooking] = useState(false);
+
+  const addScanned = (entry) => setScanned(prev => (
+    prev.some(e => e.isbn === entry.isbn) ? prev : [entry, ...prev]
+  ));
+
   const handleBarcodeScan = async (scannedCode) => {
     const cleanIsbn = scannedCode.replace(/[^0-9X]/gi, '');
-    const matchedItem = (shoppingData?.items || []).find(it => {
-      const itIsbn = (it.isbn || '').replace(/[^0-9X]/gi, '');
-      return itIsbn && itIsbn === cleanIsbn;
-    });
-
-    if (matchedItem) {
-      setShoppingSearch(matchedItem.title);
-      alert(`🎯 Treffer auf der Einkaufsliste: "${matchedItem.title} ${getVolumeDisplayTitle(matchedItem)}" gefunden!`);
+    const items = shoppingData?.items || [];
+    const local = classifyShopScan(cleanIsbn, { found: false }, items);
+    if (local.kind === 'buy') {
+      addScanned(local);
       return;
     }
-
     try {
       const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(cleanIsbn)}`);
       const data = await res.json();
@@ -46,29 +51,25 @@ export default function ShoppingListView({
         alert(data.error);
         return;
       }
-      if (data && data.found) {
-        if (data.matched_volume && data.matched_volume.status === 'Vorhanden') {
-          alert(`✅ Bereits in deiner Sammlung: "${data.matched_manga.title} Band ${data.matched_volume.volume_number}" besitzt du bereits!`);
-        } else if (data.matched_manga && data.book?.volume_number_known === false && !data.matched_volume) {
-          // the catalogue gave no volume number: we cannot say whether this volume is owned
-          setShoppingSearch(data.matched_manga.title);
-          alert(`ℹ️ "${data.matched_manga.title}" ist in deiner Sammlung – die Bandnummer dieses Buchs steht im Katalog nicht, bitte selbst prüfen.`);
-        } else if (data.matched_manga) {
-          setShoppingSearch(data.matched_manga.title);
-          alert(`ℹ️ "${data.matched_manga.title}" ist in deiner Sammlung – dieser Band (${data.book?.volume_number || ''}) fehlt dir noch.`);
-        } else if (data.matched_candidates?.length > 0) {
-          setShoppingSearch(data.book?.series || data.book?.title || cleanIsbn);
-          alert(`📖 "${data.book?.series || data.book?.title || 'Unbekannt'}" passt zu mehreren Reihen deiner Sammlung (${data.matched_candidates.map(c => c.title).join(', ')}). Bitte prüfen, zu welcher der Band gehört.`);
-        } else {
-          setShoppingSearch(data.book?.series || data.book?.title || cleanIsbn);
-          alert(`📖 Gefunden: "${data.book?.series || data.book?.title || 'Unbekannt'}". Diese Reihe ist noch nicht in deiner Sammlung.`);
-        }
-      } else {
-        setShoppingSearch(cleanIsbn);
-      }
+      addScanned(classifyShopScan(cleanIsbn, data, items));
     } catch (_) {
-      setShoppingSearch(cleanIsbn);
+      addScanned(classifyShopScan(cleanIsbn, { found: false }, items));
     }
+  };
+
+  const buyable = scanned.filter(e => e.kind === 'buy' && !e.done);
+  const bookAll = async () => {
+    setBooking(true);
+    for (const entry of buyable) {
+      await handleQuickBuy(entry.itemId);
+      setScanned(prev => prev.map(e => (e.isbn === entry.isbn ? { ...e, done: true } : e)));
+    }
+    setBooking(false);
+  };
+
+  const KIND_STYLE = {
+    buy: ['🛒', 'text-emerald-300'], owned: ['✅', 'text-slate-400'], check: ['ℹ️', 'text-amber-300'],
+    new: ['📖', 'text-sky-300'], unknown: ['❓', 'text-slate-400']
   };
 
   return (
@@ -104,6 +105,39 @@ export default function ShoppingListView({
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Verbindung prüfen</span>
           </button>
+        </div>
+      )}
+
+      {/* Scan-Liste des Ladenbesuchs */}
+      {scanned.length > 0 && (
+        <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3" id="shop-scan-list">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-white">Gescannt ({scanned.length})</p>
+            <div className="flex items-center gap-2">
+              {canEdit && buyable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={bookAll}
+                  disabled={booking}
+                  className="btn-primary text-xs !bg-emerald-600 hover:!bg-emerald-500 disabled:opacity-50"
+                >
+                  {booking ? 'Wird gebucht...' : `${buyable.length} als gekauft abhaken`}
+                </button>
+              )}
+              <button type="button" onClick={() => setScanned([])} className="btn-secondary text-xs px-3 py-1.5" disabled={booking}>Leeren</button>
+            </div>
+          </div>
+          <ul className="space-y-1.5">
+            {scanned.map(e => {
+              const [icon, color] = KIND_STYLE[e.kind] || KIND_STYLE.unknown;
+              return (
+                <li key={e.isbn} className={`text-xs flex items-start gap-2 ${color}`}>
+                  <span>{e.done ? '✔️' : icon}</span>
+                  <span className={e.done ? 'line-through opacity-60' : ''}>{e.label}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

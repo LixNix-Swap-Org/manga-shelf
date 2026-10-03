@@ -31,3 +31,16 @@ test('prefillTotalVolumes leaves the total open for running series', () => {
   assert.strictEqual(helpers.prefillTotalVolumes({ total_volumes: 12, status: 'Abgeschlossen' }, ''), '12');
   assert.strictEqual(helpers.prefillTotalVolumes({ status: 'Abgeschlossen' }, '3'), '3');
 });
+
+test('classifyShopScan: Einkaufsliste, vorhanden, prüfen, neu, unbekannt', () => {
+  const items = [{ id: 7, title: 'Naruto', volume_number: '3', isbn: '978-3-551-00003-1', price: 7 }];
+  const c = (data, isbn = '9780000000002') => helpers.classifyShopScan(isbn, data, items);
+  const buy = helpers.classifyShopScan('9783551000031', { found: true }, items);
+  assert.deepStrictEqual([buy.kind, buy.itemId], ['buy', 7]);
+  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, matched_volume: { id: 7, status: 'Fehlt', volume_number: '3' }, book: {} }).kind, 'buy');
+  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, matched_volume: { id: 9, status: 'Vorhanden', volume_number: '1' }, book: {} }).kind, 'owned');
+  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, matched_volume: { id: 9, status: 'Vorbestellt', volume_number: '2' }, book: {} }).kind, 'check');
+  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, book: { volume_number_known: false } }).kind, 'check');
+  assert.strictEqual(c({ found: true, book: { title: 'Neu' } }).kind, 'new');
+  assert.strictEqual(c({ found: false }).kind, 'unknown');
+});
