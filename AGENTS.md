@@ -329,6 +329,7 @@ Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 B
 | `/api/offline-snapshot` | GET | `requireAuth` | Gesamte Sammlung (Liste + alle Reihen-Details, Lesestatus des Aufrufers) in einer Antwort für die Offline-Kopie im Browser |
 | `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück |
 | `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
+| `/api/release-radar/changes` | GET | `requireAuth` | Vorbestellungen, deren Termin im Manga-Passion-Kalender abweicht (`monthsToCheck`, `detectDateChanges` in `services/mangaPassionReleases.js`; nutzt den 12-h-Cache); Oberfläche: Banner `radar/PersonalDateChanges.jsx` mit „Termin übernehmen“ |
 | `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
 | `/api/manga-passion/editions` | GET | `requireAuth` | Suche & Auflistung passender Manga Passion Editionen nach Titel & Verlag |
 | `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (`target_status`: Vorbestellt, Fehlt, Erscheint bald oder Bestellt; validiert Status/Preis/Datum/Titel). Serie + Band in einer Transaktion; vorhandene Einträge (gleiche Reihe + Typ `volume` + Nummer) werden aktualisiert, **Vorhanden/Gelesen bleibt unangetastet** (`skipped_owned: true`) |

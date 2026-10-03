@@ -131,3 +131,37 @@ test('releases: an entry the API repeats is shown once', async () => {
         assert.deepEqual(res.body.items.map(i => i.id), [1, 2, 3]);
     } finally { global.fetch = realFetch; }
 });
+
+test('Terminabgleich: verschobene Vorbestellung wird gemeldet, gleiche Monatsangabe nicht', async () => {
+    const { writeCache } = require('../services/mangaPassion/client');
+    const realFetch = global.fetch;
+    global.fetch = (url, opts) => (String(url).startsWith(ctx.base) ? realFetch(url, opts) : Promise.reject(new Error('offline')));
+    try {
+        const ym = (offset) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset); return [d.getFullYear(), d.getMonth() + 1]; };
+        const [y1, m1] = ym(1);
+        const [y2, m2] = ym(2);
+        const p2 = (n) => String(n).padStart(2, '0');
+        const a = await editor('POST', '/mangas', { title: 'Verschiebe Reihe' });
+        const mk = (n, date) => editor('POST', '/volumes', { manga_id: a.body.id, volume_number: n, status: 'Vorbestellt', release_date: date });
+        const moved = (await mk('1', `${y1}-${p2(m1)}-10`)).body.id;
+        await mk('2', `${y1}-${p2(m1)}`);
+        const entry = (n, date) => ({ id: Number(n), title: 'Verschiebe Reihe', volume_number: n, publisher: 'X', date, is_digital: false });
+        writeCache(`mp_releases_${y1}_${m1}`, [entry('2', `${y1}-${p2(m1)}-20`)]);
+        writeCache(`mp_releases_${y2}_${m2}`, [entry('1', `${y2}-${p2(m2)}-02`)]);
+        const res = await editor('GET', '/release-radar/changes');
+        assert.equal(res.status, 200);
+        const mine = res.body.changes.filter(c => c.manga_title === 'Verschiebe Reihe');
+        assert.deepEqual(mine.map(c => [c.volume_id, c.stored_date, c.new_date]), [[moved, `${y1}-${p2(m1)}-10`, `${y2}-${p2(m2)}-02`]]);
+    } finally {
+        global.fetch = realFetch;
+    }
+});
+
+test('monthsToCheck: vom aktuellen Monat bis zum spätesten Termin plus einen Monat, begrenzt', () => {
+    const { monthsToCheck } = require('../services/mangaPassionReleases');
+    const now = new Date(2026, 9, 15);
+    assert.deepEqual(monthsToCheck([], now), []);
+    assert.deepEqual(monthsToCheck([{ release_date: '2026-11-05' }], now).map(m => `${m.year}-${m.month}`), ['2026-10', '2026-11', '2026-12']);
+    assert.deepEqual(monthsToCheck([{ release_date: '2026-12' }], now).slice(-1)[0], { year: 2027, month: 1 });
+    assert.equal(monthsToCheck([{ release_date: '2099-01-01' }], now).length, 14);
+});

@@ -154,4 +154,47 @@ function enrichReleases(rawItems, userMangas, userVolumes) {
     });
 }
 
-module.exports = { getMonthlyReleases, enrichReleases, mapRelease };
+const MAX_CHECK_MONTHS = 14;
+
+/** Months (year, month) to compare against the calendar: from the earliest pending release (at most the current month) to the latest plus one. */
+function monthsToCheck(pending, now = new Date()) {
+    const key = (d) => /^\d{4}-\d{2}/.test(String(d || '').trim()) ? String(d).trim().slice(0, 7) : null;
+    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const keys = pending.map(p => key(p.release_date)).filter(Boolean);
+    if (!keys.length) return [];
+    const start = [cur, ...keys].sort()[0];
+    const end = [cur, ...keys].sort().slice(-1)[0];
+    const months = [];
+    let [y, m] = start.split('-').map(Number);
+    const [ey, em] = end.split('-').map(Number);
+    while ((y < ey || (y === ey && m <= em + 1) || (y === ey + 1 && m === 1 && em === 12)) && months.length < MAX_CHECK_MONTHS) {
+        months.push({ year: y, month: m });
+        if (++m > 12) { m = 1; y++; }
+    }
+    return months;
+}
+
+/**
+ * Pending volumes (pre-ordered / announced) whose stored date differs from the calendar. `enriched` are calendar entries after
+ * `enrichReleases`. A month-only stored date ("2026-11") only counts as changed when the month differs.
+ */
+function detectDateChanges(pending, enriched) {
+    const byId = new Map(pending.map(p => [p.id, p]));
+    const changes = new Map();
+    for (const it of enriched) {
+        const vol = byId.get(it.user_volume_id);
+        if (!vol || it.is_digital || !it.date || changes.has(vol.id)) continue;
+        const stored = String(vol.release_date || '').trim();
+        if (!stored) continue;
+        const same = stored.length <= 7 ? stored === it.date.slice(0, 7) : stored === it.date;
+        if (!same) {
+            changes.set(vol.id, {
+                volume_id: vol.id, manga_id: vol.manga_id, manga_title: vol.manga_title,
+                volume_number: vol.volume_number, status: vol.status, stored_date: stored, new_date: it.date
+            });
+        }
+    }
+    return [...changes.values()];
+}
+
+module.exports = { getMonthlyReleases, enrichReleases, mapRelease, monthsToCheck, detectDateChanges };

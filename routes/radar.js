@@ -6,7 +6,7 @@ const { normalizePublisher } = require('../utils/publishers');
 const { qstr } = require('../utils/query');
 const { searchMangaPassionEditions } = require('../mangaPassion');
 const { buildShoppingList, buildReleaseRadar } = require('../services/radar');
-const { getMonthlyReleases, enrichReleases } = require('../services/mangaPassionReleases');
+const { getMonthlyReleases, enrichReleases, monthsToCheck, detectDateChanges } = require('../services/mangaPassionReleases');
 const log = require('../utils/logger').child('radar');
 
 // --- SHOPPING LIST / WISHLIST API ---
@@ -96,6 +96,36 @@ router.get('/release-radar', requireAuth, (req, res) => {
 });
 
 // --- MANGA PASSION GERMAN RELEASE CALENDAR API ---
+// Vorbestellungen, deren Termin im Manga-Passion-Kalender inzwischen anders lautet (Verschiebungen)
+router.get('/release-radar/changes', requireAuth, async (req, res) => {
+    try {
+        const pending = db.prepare(`
+            SELECT v.id, v.manga_id, v.volume_number, v.status, v.release_date, m.title AS manga_title
+            FROM volumes v JOIN mangas m ON m.id = v.manga_id
+            WHERE v.status IN ('Vorbestellt', 'Erscheint bald', 'Bestellt')
+              AND v.release_date IS NOT NULL AND TRIM(v.release_date) != ''
+        `).all();
+        const months = monthsToCheck(pending);
+        const userMangas = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas').all();
+        const userVolumes = db.prepare('SELECT id, manga_id, volume_number, status, price, release_date FROM volumes').all();
+        const enriched = [];
+        let failed = 0;
+        for (const { year, month } of months) {
+            try {
+                const { items } = await getMonthlyReleases(year, month);
+                enriched.push(...enrichReleases(items, userMangas, userVolumes));
+            } catch (err) {
+                failed++;
+                log.warn(`Terminabgleich ${year}-${month} fehlgeschlagen:`, err.message);
+            }
+        }
+        res.json({ changes: detectDateChanges(pending, enriched), months_checked: months.length - failed, months_failed: failed });
+    } catch (err) {
+        log.error('Error checking release changes:', err);
+        res.status(500).json({ error: 'Fehler beim Terminabgleich' });
+    }
+});
+
 router.get('/manga-passion/releases', requireAuth, async (req, res) => {
     try {
         const now = new Date();

@@ -3,6 +3,7 @@ import MpMonthNav from './radar/MpMonthNav';
 import MpFilters from './radar/MpFilters';
 import MpTimeline from './radar/MpTimeline';
 import PersonalSummary from './radar/PersonalSummary';
+import PersonalDateChanges from './radar/PersonalDateChanges';
 import PersonalFilters from './radar/PersonalFilters';
 import PersonalTimeline from './radar/PersonalTimeline';
 import { filterMpItems, groupMpItemsByDate } from '../../utils/radarHelpers';
@@ -121,6 +122,7 @@ export default function ReleaseRadarView({
             loadingRadar={loadingRadar}
             fetchReleaseRadar={fetchReleaseRadar}
           />
+          <PersonalDateChanges canEdit={canEdit} fetchReleaseRadar={fetchReleaseRadar} />
           <PersonalFilters
             radarData={radarData}
             radarPublisherFilter={radarPublisherFilter}
