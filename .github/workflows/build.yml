@@ -231,7 +231,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           docker run --rm --platform linux/arm64 -e SMOKE_TIMEOUT_S=240 -v "$PWD:/repo:ro" \
-            node:22.23.3-bookworm-slim node /repo/scripts/server-bin/smoke.js /repo/dist/server/manga-shelf-server-linux-arm64
+            node:22.23.3-bookworm node /repo/scripts/server-bin/smoke.js /repo/dist/server/manga-shelf-server-linux-arm64
       - name: x64 part of the universal binary (Rosetta)
         if: runner.os == 'macOS'
         continue-on-error: true

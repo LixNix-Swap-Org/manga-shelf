@@ -75,7 +75,7 @@ A single program with Node.js built in, for a server, NAS, mini PC or a Windows 
 
 | System | File |
 |---|---|
-| Linux x64 / arm64 | `manga-shelf-server-linux-x64` / `manga-shelf-server-linux-arm64` |
+| Linux x64 / arm64 | `manga-shelf-server-linux-x64` / `manga-shelf-server-linux-arm64` (arm64 needs `libatomic1`: `apt install libatomic1`; the .deb/.rpm declare it) |
 | Debian/Ubuntu, Fedora/RHEL (amd64, arm64) | `manga-shelf-server_X.Y.Z-1_amd64.deb` / `manga-shelf-server-X.Y.Z-1.x86_64.rpm` and the arm64/aarch64 builds |
 | Windows | `manga-shelf-server-windows-x64.exe` |
 | macOS (Apple Silicon and Intel) | `manga-shelf-server-macos-universal` |

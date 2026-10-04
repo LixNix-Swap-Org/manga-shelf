@@ -753,6 +753,29 @@ describe('build-sea.js', () => {
         }
     });
 
+    test('dirnamePlugin strips a shebang behind the __dirname shim, with LF and with the CRLF of a Windows checkout', async () => {
+        const root = tmpDir('ms-shim-');
+        try {
+            fs.mkdirSync(path.join(root, 'scripts'));
+            const load = (name, text) => {
+                const file = path.join(root, 'scripts', name);
+                fs.writeFileSync(file, text);
+                let onLoad;
+                buildSea.dirnamePlugin(root).setup({ onLoad: (_filter, fn) => { onLoad = fn; } });
+                return onLoad({ path: file });
+            };
+            for (const [name, eol] of [['lf.js', '\n'], ['crlf.js', '\r\n']]) {
+                const out = await load(name, `#!/usr/bin/env node${eol}const here = __dirname;${eol}`);
+                assert.ok(out.contents.startsWith('var __dirname = require("path").join('), name);
+                assert.ok(!out.contents.includes('#!'), `${name}: shebang must not survive behind the shim`);
+                assert.match(out.contents, /const here = __dirname;/);
+            }
+            assert.equal(await load('plain.js', 'const x = 1;\n'), null, 'files without __dirname are left to esbuild');
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
     test('runtimeRequires finds every require the bundle leaves for run time', () => {
         const code = 'require("fs"); require("node:sqlite"); require(name); __require("x"); function __require() {}';
         assert.deepEqual(buildSea.runtimeRequires(code), ['require(name)', '__require("x")']);

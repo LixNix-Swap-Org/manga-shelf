@@ -76,7 +76,8 @@ function dirnamePlugin(root) {
                 if (!args.path.startsWith(root + path.sep) || args.path.includes(deps) || args.path.startsWith(own)) return null;
                 let contents = fs.readFileSync(args.path, 'utf8');
                 if (!/__dirname|__filename/.test(contents)) return null;
-                contents = contents.replace(/^#!.*\n/, '\n');
+                // a shebang would land behind the shim; `.` never matches \r, so allow the CRLF of a Windows checkout
+                contents = contents.replace(/^#![^\r\n]*\r?\n/, '\n');
                 const rel = path.relative(root, args.path).split(path.sep).join('/');
                 const base = 'globalThis.__MANGA_SHELF_APP_DIR__ || process.cwd()';
                 const shim = `var __dirname = require("path").join(${base}, ${JSON.stringify(path.posix.dirname(rel))}), ` +
