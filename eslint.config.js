@@ -52,6 +52,8 @@ function coreRules() {
 module.exports = [
     { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/dist-app/', 'desktop/dist/', 'desktop/node_modules/', 'mobile/node_modules/', 'mobile/www/', 'mobile/build/', 'mobile/ios/App/App/public/', 'mobile/android/app/src/main/assets/public/', 'mobile/android/**/build/', 'mobile/ios/App/Pods/', 'dist_pack/', 'dist/', 'data/', 'data-dev/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
     js.configs.recommended,
+    // new in the eslint 10 recommended set: warn until the existing sites are cleaned up
+    { rules: { 'no-useless-assignment': 'warn', 'preserve-caught-error': 'warn' } },
     {
         files: ['**/*.js'],
         languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: { ...globals.node } },
@@ -90,7 +92,7 @@ module.exports = [
             parserOptions: { ecmaFeatures: { jsx: true } },
             globals: { ...globals.browser, __APP_VERSION__: 'readonly' }
         },
-        settings: { react: { version: '18.3' } },
+        settings: { react: { version: '19.3' } },
         plugins: { react, 'react-hooks': reactHooks },
         rules: {
             ...react.configs.flat.recommended.rules,

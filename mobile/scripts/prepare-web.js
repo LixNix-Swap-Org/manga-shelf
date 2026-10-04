@@ -52,6 +52,8 @@ async function bundleBridge(outFile) {
     format: 'iife',
     platform: 'browser',
     target: ['es2020', 'safari14', 'chrome87'],
+    // esbuild >= 0.27 lists destructuring only from Safari 14.1 and cannot lower it; 0.25 passed it through unchanged
+    supported: { destructuring: true },
     minify: true,
     legalComments: 'none',
     logLevel: 'warning'

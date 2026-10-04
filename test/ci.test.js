@@ -77,7 +77,8 @@ describe('workflows', () => {
 
     test('ci.yml builds on every branch push, calls build.yml without publishing and keeps its jobs', () => {
         const ci = workflows['ci.yml'];
-        assert.deepEqual(ci.on.push.branches, ['**']);
+        assert.deepEqual(ci.on.push['branches-ignore'], ['dependabot/**'], 'bot branches run through their pull request only');
+        assert.equal(ci.on.push.branches, undefined);
         assert.ok('pull_request' in ci.on);
         for (const job of ['test', 'frontend', 'package', 'docker', 'browser']) assert.ok(ci.jobs[job], `ci.yml lost the ${job} job`);
         assert.equal(ci.jobs.build.uses, './.github/workflows/build.yml');

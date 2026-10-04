@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { Readable, Transform, Writable } = require('stream');
 const { pipeline } = require('stream/promises');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const { db, uploadsDir, tempDir } = require('../db');
 const pkg = require('../package.json');
 const log = require('../utils/logger').child('backup');
@@ -33,7 +33,7 @@ const MAX_MANIFEST_BYTES = 1024 * 1024;
 const STORED_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
 
 function createArchive() {
-    return archiver('zip', { zlib: { level: 6 } });
+    return new ZipArchive({ zlib: { level: 6 } });
 }
 
 /** Flat, non-hidden files in uploads/ (the only ones a restore brings back). */

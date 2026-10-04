@@ -3,7 +3,7 @@
 // Needs a built frontend: `npm run package` runs `build:frontend` first.
 const fs = require('fs');
 const path = require('path');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const { readManifest, shippedFiles } = require('./scripts/stage-backend');
 
 const ZIP_NAME = 'pterodactyl-manga-shelf.zip';
@@ -43,7 +43,7 @@ async function buildPackage({ root = __dirname, outDir = path.join(root, 'dist_p
   try {
     await new Promise((resolve, reject) => {
       const output = fs.createWriteStream(tmpPath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
+      const archive = new ZipArchive({ zlib: { level: 9 } });
       output.on('close', resolve);
       output.on('error', reject);
       archive.on('warning', reject);

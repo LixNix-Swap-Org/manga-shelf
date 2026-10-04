@@ -75,7 +75,7 @@ A single program with Node.js built in, for a server, NAS, mini PC or a Windows 
 
 | System | File |
 |---|---|
-| Linux x64 / arm64 | `manga-shelf-server-linux-x64` / `manga-shelf-server-linux-arm64` |
+| Linux x64 / arm64 | `manga-shelf-server-linux-x64` / `manga-shelf-server-linux-arm64` (arm64 needs `libatomic1`: `apt install libatomic1`; the .deb/.rpm declare it) |
 | Debian/Ubuntu, Fedora/RHEL (amd64, arm64) | `manga-shelf-server_X.Y.Z-1_amd64.deb` / `manga-shelf-server-X.Y.Z-1.x86_64.rpm` and the arm64/aarch64 builds |
 | Windows | `manga-shelf-server-windows-x64.exe` |
 | macOS (Apple Silicon and Intel) | `manga-shelf-server-macos-universal` |
@@ -345,7 +345,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 | `npm start` | production server (`node index.js`) |
 | `npm test` | backend tests (`node:test`: `test/`, `test/core/`, `test/anime/`) |
 | `npm run test:frontend` | Vitest component tests in `frontend/` |
-| `npm run lint` | ESLint 9 |
+| `npm run lint` | ESLint 10 |
 | `npm run build:frontend` | `npm ci` and the Vite build of `frontend/` |
 | `npm run check:bundle` | bundle budget (`frontend/bundle-budget.json`; `-- --update` after intended growth) |
 | `npm run package` | Pterodactyl ZIP |
@@ -369,12 +369,13 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 
 ### Release workflow
 
-* **Every push** runs `ci.yml` (lint, tests on Node 22.13.0/22/24, frontend build and budget, ZIP install check, Docker build, browser suites) and `build.yml`: artifacts for 14 days (Pterodactyl ZIP with SBOM, server binaries and packages; desktop installers and the phone smoke builds of `mobile.yml` only on `main` and in pull requests). Nothing is published. `codeql.yml` runs on `main`, in pull requests and weekly.
+* **Every push** runs `ci.yml` (lint, tests on Node 22.13.0/22/24, frontend build and budget, ZIP install check, Docker build, browser suites) and `build.yml`: artifacts for 14 days (Pterodactyl ZIP with SBOM, server binaries and packages; desktop installers and the phone smoke builds of `mobile.yml` only on `main` and in pull requests). Nothing is published. `codeql.yml` is wired for `main`, pull requests and a weekly run, but code scanning only works once the repository is public; while it is private the job is skipped.
 * **Publishing only by button:** Actions → **Release** → **Run workflow**, pick the branch and `action`:
   * `build`: build everything (signed when the secrets exist), publish nothing;
   * `release`: bump the version (`bump` = `patch`/`minor`/`major`; `none` takes the version from `package.json`, its tag must not exist), commit and tag `vX.Y.Z`, build everything including the apps, push the image to GHCR with `X.Y.Z` and `vX.Y.Z` (signed keyless with cosign), create the GitHub release with all files, `SHA256SUMS.txt` and generated notes; only then do `X.Y` and `latest` move to that image. A failed run never moves `latest`; a pushed tag alone publishes nothing.
 * **Locally:** `node release.js minor --dry-run` shows the next version, `node release.js minor` (or `patch`, `major`, `X.Y.Z`) needs a clean tree and a free tag and sets it in every `package.json`/`package-lock.json` and the native Android/iOS projects, without commit, tag or push; then commit, push and run the workflow with `bump = none`.
-* **Once:** with a protected branch, a fine-grained PAT with `Contents: Read and write` as the secret `RELEASE_TOKEN` (otherwise `GITHUB_TOKEN` is enough). Set the GHCR package `manga-shelf` to public after the first release.
+* **Once:** with a protected branch, a fine-grained PAT with `Contents: Read and write` as the secret `RELEASE_TOKEN` (otherwise `GITHUB_TOKEN` is enough). Set the GHCR package `manga-shelf` to public after the first release. While the repository itself is private, release downloads and the image are reachable only for collaborators and the in-app update notice gets no data; make the repository public for end users.
+* **Recovery:** `release` pushes the version commit and the tag before it builds; if a later job fails, use **Re-run failed jobs** on that run (a fresh run would need the next version). `release` only runs from the default branch; `build` runs from any branch.
 * **Update notice:** the server checks `releases/latest` of `LixNix-Swap-Org/manga-shelf`; never publish releases as pre-releases.
 
 **Signing** (repository secrets; missing groups are built unsigned):

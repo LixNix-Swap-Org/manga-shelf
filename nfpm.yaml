@@ -35,6 +35,15 @@ scripts:
   preremove: scripts/server-bin/packaging/preremove.sh
   postremove: scripts/server-bin/packaging/postremove.sh
 
+# the official Node binary inside the SEA links libatomic on arm64 (and loads it on amd64 when present)
+overrides:
+  deb:
+    depends:
+      - libatomic1
+  rpm:
+    depends:
+      - libatomic
+
 deb:
   fields:
     Bugs: https://github.com/LixNix-Swap-Org/manga-shelf/issues

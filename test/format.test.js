@@ -45,7 +45,7 @@ test('formatCount: singular only for exactly one', () => {
 test('formatDate: full, month-only and year-only dates without a UTC shift', () => {
   assert.equal(f.formatDate('2026-11-12'), '12.11.2026');
   assert.equal(f.formatDate('2026-01-01'), '01.01.2026');
-  assert.equal(f.formatDate('2026-11'), '11/2026');
+  assert.match(f.formatDate('2026-11'), /^11[./]2026$/, 'the separator follows the ICU version');
   assert.equal(f.formatDate('2026'), '2026');
   assert.equal(f.formatDate(' 2026-11-12 '), '12.11.2026');
   assert.equal(f.formatDate('2026-02-30'), '2026-02-30', 'impossible dates stay as typed');

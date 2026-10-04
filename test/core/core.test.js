@@ -1,5 +1,8 @@
 // Building blocks of core/: ctx, route table and dispatch, errors, schema, the pure helpers that replaced Node APIs.
 const test = require('node:test');
+// signals.js timers are unref'd; Node 22's runner otherwise drops an awaiting test once the loop drains
+const keepAlive = setInterval(() => {}, 1000);
+test.after(() => clearInterval(keepAlive));
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const { once, getEventListeners } = require('events');
