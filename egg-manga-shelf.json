@@ -4,27 +4,27 @@
     "version": "PTDL_v2",
     "update_url": null
   },
-  "exported_at": "2024-03-24T12:00:00+00:00",
+  "exported_at": "2026-10-03T12:00:00+00:00",
   "name": "Manga Shelf App",
   "author": "antigravity@mangashelf",
-  "description": "A lightweight Node.js Manga tracking application. Requires Node.js 22.13 or newer (built-in node:sqlite).",
+  "description": "Manga Shelf (https://github.com/LixNix-Swap-Org/manga-shelf): self-hosted manga collection. Needs Node.js 22.13 or newer (built-in node:sqlite). Upload and unpack pterodactyl-manga-shelf.zip from the releases; the setup code appears in the console at the first start.",
   "features": null,
   "docker_images": {
     "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
   },
   "file_denylist": [],
-  "startup": "if [ -f package.json ]; then npm install --omit=dev; fi; node index.js",
+  "startup": "if [ -f package.json ]; then npm install --omit=dev --ignore-scripts --no-audit --no-fund; fi; node index.js",
   "config": {
     "files": "{}",
-    "startup": "{\r\n    \"done\": [\r\n        \"Manga Shelf running on http://0.0.0.0:\",\r\n        \"Server listening on port\",\r\n        \"change this text 1\"\r\n    ]\r\n}",
+    "startup": "{\n    \"done\": [\n        \"Manga Shelf running on http://0.0.0.0:\",\n        \"Server listening on port\"\n    ]\n}",
     "logs": "{}",
     "stop": "^^C"
   },
   "scripts": {
     "installation": {
-      "script": "#!/bin/bash\n# Empty install script, as user uploads pre-built ZIP",
-      "container": "alpine:3.18",
-      "entrypoint": "bash"
+      "script": "#!/bin/ash\n# The server files come from the release ZIP (pterodactyl-manga-shelf.zip); nothing to download here.\nmkdir -p /mnt/server\necho \"Manga Shelf: upload and extract pterodactyl-manga-shelf.zip in the server files, then start the server.\"\n",
+      "container": "ghcr.io/parkervcp/installers:alpine",
+      "entrypoint": "ash"
     }
   },
   "variables": [
@@ -36,6 +36,16 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|numeric",
+      "field_type": "text"
+    },
+    {
+      "name": "Trust Proxy",
+      "description": "Which reverse proxies may set the client address via X-Forwarded-For. Default: loopback (only a proxy on the same host). Behind another proxy enter its address; proxy on the host in front of Pterodactyl: only the gateway of pterodactyl_nw (loopback, 172.18.0.1), never the whole subnet (other servers on the node could otherwise fake any address), otherwise all clients share one login limit. The allocation then has to be reachable only through the proxy (e.g. bound to 127.0.0.1), otherwise anyone can fake a foreign address directly and lock its login; that applies all the more to a hop count (1), which trusts every peer. IPv6 clients via docker-proxy appear as the gateway address (e.g. 172.17.0.1); so do not open up private networks wholesale. false = no proxy. Invalid values prevent the start.",
+      "env_variable": "TRUST_PROXY",
+      "default_value": "loopback",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:200",
       "field_type": "text"
     }
   ]

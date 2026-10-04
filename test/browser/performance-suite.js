@@ -1,16 +1,12 @@
-// Browser test. Run it with `npm run <test:...>` (test/browser/run.js starts an isolated server and sets these variables).
-const BASE_URL = (process.env.BASE_URL || '').replace(/\/$/, '');
-const E2E_USER = process.env.E2E_USER;
-const E2E_PASSWORD = process.env.E2E_PASSWORD;
-if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
-  console.error('Set BASE_URL, E2E_USER and E2E_PASSWORD, or use the npm scripts (they start an isolated server).');
-  process.exit(2);
-}
+// Performance benchmark. Run it with `npm run test:perf` (test/browser/run.js starts an isolated server; `-- --db <file>`
+// benchmarks a copy of a real database, PERF_MANGA_ID picks the series for the detail page).
+const { suiteEnv, loginViaUi, seedSeries, apiOk, api, benchmarkEndpoint } = require('./helpers');
+const { baseUrl: BASE_URL, user: E2E_USER, password: E2E_PASSWORD } = suiteEnv();
 
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 
 async function runPerformanceSuite() {
   const artifactDir = process.env.REPORT_DIR || path.join(__dirname, 'reports');
@@ -21,49 +17,48 @@ async function runPerformanceSuite() {
 
   console.log('⚡ Starting MangaShelf Performance Benchmark Suite...');
 
-  const chromePaths = [
-    process.env.CHROME_BIN,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-  ].filter(Boolean);
-  const executablePath = chromePaths.find(p => fs.existsSync(p));
-  if (!executablePath) throw new Error('No browser executable found!');
+  const executablePath = findChrome();
 
   const browser = await puppeteer.launch({
     executablePath,
     headless: 'new',
     defaultViewport: { width: 1440, height: 900 },
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: CHROME_ARGS
   });
 
   const page = await browser.newPage();
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   // --- PART 1: Authenticate ---
   console.log('1. Authenticating as admin...');
-  await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle0' });
-  await page.type('input[type="text"]', E2E_USER);
-  await page.type('input[type="password"]', E2E_PASSWORD);
-  await Promise.all([
-    page.click('button[type="submit"]'),
-    page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
-  ]);
-  await sleep(1000);
+  await loginViaUi(page, BASE_URL, E2E_USER, E2E_PASSWORD);
+  const me = await api(page, 'GET', '/api/auth/me');
+  if (me.status !== 200) throw new Error(`login check failed: /api/auth/me answered ${me.status}`);
+
+  // the detail page needs a real series: PERF_MANGA_ID must exist, otherwise the first series (or a seeded one) is used
+  let detailManga;
+  if (process.env.PERF_MANGA_ID) {
+    const res = await api(page, 'GET', `/api/mangas/${encodeURIComponent(process.env.PERF_MANGA_ID)}`);
+    if (res.status !== 200) throw new Error(`PERF_MANGA_ID=${process.env.PERF_MANGA_ID}: /api/mangas answered ${res.status}`);
+    detailManga = res.data;
+  } else {
+    const list = await apiOk(page, 'GET', '/api/mangas');
+    const id = list.length ? list[0].id : await seedSeries(page, {
+      title: 'Benchmark Reihe', publisher: 'Carlsen Manga', total_volumes: 30, volumes: { from: 1, to: 30, status: 'Vorhanden' }
+    });
+    detailManga = await apiOk(page, 'GET', `/api/mangas/${id}`);
+  }
 
   // Helper to extract Performance & Web Vitals
-  async function measurePagePerformance(url, pageName) {
+  async function measurePagePerformance(url, pageName, readySelector) {
     console.log(`Measuring performance for: ${pageName} (${url})...`);
     
     // Hard reload with cache disabled
     await page.setCacheEnabled(false);
     const startNav = Date.now();
     await page.goto(url, { waitUntil: 'networkidle0' });
+    // networkidle alone does not prove that the view rendered (the SPA answers every path with 200)
+    await page.waitForSelector(readySelector, { timeout: 15000 })
+      .catch(() => { throw new Error(`${pageName}: ${readySelector} did not render`); });
     const navDuration = Date.now() - startNav;
 
     // Collect Navigation Timing & Web Vitals from browser
@@ -124,18 +119,10 @@ async function runPerformanceSuite() {
   }
 
   // --- PART 2: Measure Pages ---
-  const dashboardPerf = await measurePagePerformance(`${BASE_URL}/`, 'Dashboard (Shelf)');
-  
-  // Shopping list
-  await page.evaluate(() => {
-    const shopBtn = document.querySelector('#btn-nav-shopping');
-    if (shopBtn) shopBtn.click();
-  });
-  await sleep(800);
-  const shoppingPerf = await measurePagePerformance(`${BASE_URL}/`, 'Shopping List');
-
-  // Detail page
-  const detailPerf = await measurePagePerformance(`${BASE_URL}/manga/${process.env.PERF_MANGA_ID || 4}`, 'Manga Detail (One Piece)');
+  const dashboardPerf = await measurePagePerformance(`${BASE_URL}/`, 'Dashboard (Shelf)', '#btn-view-grid');
+  // the main view comes from ?view=, a click followed by a reload would measure the shelf again
+  const shoppingPerf = await measurePagePerformance(`${BASE_URL}/?view=shopping`, 'Shopping List', '#btn-shop-priority-sort');
+  const detailPerf = await measurePagePerformance(`${BASE_URL}/manga/${detailManga.id}`, `Manga Detail (${detailManga.title})`, 'button[title="Reihe löschen"]');
 
   // Get Cookies for API benchmarking
   const cookies = await page.cookies();
@@ -146,71 +133,19 @@ async function runPerformanceSuite() {
   // --- PART 3: API Benchmark (Express + SQLite WAL) ---
   console.log('\n2. Benchmarking Backend API Latency (50 iterations each)...');
 
-  function requestApi(path) {
-    return new Promise((resolve, reject) => {
-      const start = process.hrtime.bigint();
-      const req = http.request({
-        hostname: new URL(BASE_URL).hostname,
-        port: new URL(BASE_URL).port || 80,
-        path,
-        method: 'GET',
-        headers: {
-          'Cookie': cookieHeader
-        }
-      }, res => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          const end = process.hrtime.bigint();
-          const latencyMs = Number(end - start) / 1e6;
-          resolve({ status: res.statusMessage, latencyMs, bytes: Buffer.byteLength(data) });
-        });
-      });
-      req.on('error', reject);
-      req.end();
-    });
-  }
-
-  async function benchmarkEndpoint(endpointPath, iterations = 50) {
+  async function benchmark(endpointPath, iterations = 50) {
     process.stdout.write(`  Benchmarking ${endpointPath} (${iterations} reqs)... `);
-    const latencies = [];
-    let bytesReceived = 0;
-
-    for (let i = 0; i < iterations; i++) {
-      const res = await requestApi(endpointPath);
-      latencies.push(res.latencyMs);
-      bytesReceived = res.bytes;
-    }
-
-    latencies.sort((a, b) => a - b);
-    const min = latencies[0];
-    const max = latencies[latencies.length - 1];
-    const mean = latencies.reduce((a, b) => a + b, 0) / latencies.length;
-    const p50 = latencies[Math.floor(latencies.length * 0.5)];
-    const p95 = latencies[Math.floor(latencies.length * 0.95)];
-    const p99 = latencies[Math.floor(latencies.length * 0.99)];
-
-    console.log(`avg: ${mean.toFixed(2)}ms | p95: ${p95.toFixed(2)}ms | min: ${min.toFixed(2)}ms`);
-
-    return {
-      endpoint: endpointPath,
-      iterations,
-      responseSizeBytes: bytesReceived,
-      minMs: parseFloat(min.toFixed(2)),
-      maxMs: parseFloat(max.toFixed(2)),
-      meanMs: parseFloat(mean.toFixed(2)),
-      p50Ms: parseFloat(p50.toFixed(2)),
-      p95Ms: parseFloat(p95.toFixed(2)),
-      p99Ms: parseFloat(p99.toFixed(2))
-    };
+    const result = await benchmarkEndpoint(BASE_URL, endpointPath, cookieHeader, iterations);
+    console.log(`avg: ${result.meanMs.toFixed(2)}ms | p95: ${result.p95Ms.toFixed(2)}ms | min: ${result.minMs.toFixed(2)}ms`);
+    return result;
   }
 
   const apiBenchmarks = {
-    authMe: await benchmarkEndpoint('/api/auth/me'),
-    mangasOverview: await benchmarkEndpoint('/api/mangas'),
-    statsFull: await benchmarkEndpoint('/api/stats'),
-    shoppingList: await benchmarkEndpoint('/api/shopping-list'),
-    mangaDetailWithVolumes: await benchmarkEndpoint('/api/mangas/' + (process.env.PERF_MANGA_ID || 4))
+    authMe: await benchmark('/api/auth/me'),
+    mangasOverview: await benchmark('/api/mangas'),
+    statsFull: await benchmark('/api/stats'),
+    shoppingList: await benchmark('/api/shopping-list'),
+    mangaDetailWithVolumes: await benchmark(`/api/mangas/${detailManga.id}`)
   };
 
   // --- PART 4: Asset Bundle Breakdown ---
@@ -235,7 +170,10 @@ async function runPerformanceSuite() {
       platform: process.platform,
       arch: process.arch,
       nodeVersion: process.version,
-      database: 'SQLite 3 (WAL Mode)'
+      database: 'SQLite 3 (WAL Mode)',
+      // numbers from an empty test database and from a copy of a real one are not comparable
+      databaseSource: process.env.E2E_DB_SOURCE || 'unknown',
+      detailManga: { id: detailManga.id, title: detailManga.title, volumes: (detailManga.volumes || []).length }
     },
     webVitals: [dashboardPerf, shoppingPerf, detailPerf],
     apiBenchmarks,

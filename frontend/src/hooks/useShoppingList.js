@@ -1,161 +1,258 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  loadUser, getClearGeneration, readShoppingCache, readShoppingCacheTimestamp, writeShoppingCache, updateShoppingCache
+} from '../utils/offlineStore';
+import { discardLegacyQueue, withoutVolumes, localToday } from '../utils/shoppingQueue';
+import {
+  getOutbox, outboxScope, submitChange, isPurchaseEntry, applyChangeToCaches, OUTBOX_SYNCED_EVENT
+} from '../utils/outbox';
+import { useOutboxPending } from '../app/useOutbox';
+import { PURCHASE_RECORDED_EVENT } from '../appShell';
+import { apiFetch, readJson, sessionEndAnnounced } from '../utils/api';
+import { notify } from '../utils/notify';
+import { haptic } from '../utils/haptics';
+import { t } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
-/** Shopping list (missing volumes) with offline cache, quick buy and the queue of purchases made offline. */
-export default function useShoppingList({ setNetworkOffline, fetchMangas }) {
-  // Shopping / Wishlist state with offline local storage cache
-  const [shoppingData, setShoppingData] = useState(() => {
-    try {
-      const cached = localStorage.getItem('mangashelf_shopping_cache');
-      return cached ? JSON.parse(cached) : null;
-    } catch (_) { return null; }
-  });
+async function errorText(res) {
+  return serverText(await readJson(res));
+}
+
+const browserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+// i18n
+const SESSION_EXPIRED = 'Sitzung abgelaufen – der Kauf ist vorgemerkt und wird nach der Anmeldung übertragen.';
+// i18n
+const BUY_FAILED = 'Fehler beim Aktualisieren des Bands';
+// i18n
+const QUEUE_FAILED = 'Der Kauf konnte nicht vorgemerkt werden (Speicher voll oder nicht verfügbar). Bitte erneut versuchen, sobald eine Verbindung besteht.';
+
+/** Why the list could not be loaded: 'offline' (no answer), 'auth' (401), 'server' (5xx/429) or 'error' (other 4xx). */
+export function shoppingErrorKind(status) {
+  if (status === null || status === undefined) return 'offline';
+  if (status === 401) return 'auth';
+  if (status === 429 || status >= 500) return 'server';
+  return 'error';
+}
+
+const addId = (set, id) => (set.has(id) ? set : new Set(set).add(id));
+const removeId = (set, id) => {
+  if (!set.has(id)) return set;
+  const next = new Set(set);
+  next.delete(id);
+  return next;
+};
+
+const mangaIdIn = (data, volumeId) => [...(data?.items || []), ...(data?.others || [])]
+  .find((item) => String(item?.id) === String(volumeId))?.manga_id ?? null;
+
+const pendingPurchaseIds = (id) => new Set(getOutbox().list(outboxScope(id)).filter(isPurchaseEntry).map((e) => e.volumeId));
+
+/**
+ * Shopping list (missing volumes) with offline cache and quick buy. Purchases go through the outbox: made while the
+ * server is unreachable they are kept per user and sent later. `user` has `offline: true` in App's offline mode.
+ */
+export default function useShoppingList({ user, setNetworkOffline, fetchMangas }) {
+  const userId = user?.id ?? null;
+  const [shoppingData, setShoppingData] = useState(() => withoutVolumes(readShoppingCache(), pendingPurchaseIds(userId)));
   const [loadingShopping, setLoadingShopping] = useState(false);
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
-  const [buyingId, setBuyingId] = useState(null);
-  const [offlineLastUpdated, setOfflineLastUpdated] = useState(() => {
-    try {
-      const meta = localStorage.getItem('mangashelf_shopping_meta');
-      return meta ? JSON.parse(meta)?.timestamp : null;
-    } catch (_) { return null; }
-  });
+  const [buyingIds, setBuyingIds] = useState(() => new Set());
+  const [shoppingError, setShoppingError] = useState(null);
+  const [offlineLastUpdated, setOfflineLastUpdated] = useState(readShoppingCacheTimestamp);
+  const [cacheWriteFailed, setCacheWriteFailed] = useState(false);
+  const [cachedUserId, setCachedUserId] = useState(null);
+  const pending = useOutboxPending(userId ?? cachedUserId);
+  const pendingPurchases = pending.purchases;
+  const [failedPurchases, setFailedPurchases] = useState([]);
+  const shoppingDataRef = useRef(shoppingData);
+  shoppingDataRef.current = shoppingData;
+  // set when a request failed or a purchase was queued: the next successful list fetch then sends the queue
+  const syncDueRef = useRef(false);
 
-  // Sync offline queued purchases once online
+  const resolveUserId = async () => {
+    if (userId !== null) return userId;
+    const cached = await loadUser();
+    return cached?.id ?? null;
+  };
+
+  /** Sends the outbox (purchases and other queued changes). Resolves to { synced, dropped, kept } or null. */
   const syncPendingPurchases = async () => {
-    try {
-      const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
-      if (!queue.length) return;
-      console.log(`[PWA] Synchronisiere ${queue.length} offline getätigte Käufe...`);
-      // Only drop what the server accepted (or what no longer exists); a 401/5xx keeps the purchase queued for the next try
-      const remaining = [];
-      for (const volId of queue) {
-        try {
-          const res = await fetch(`/api/volumes/${volId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'Vorhanden' })
-          });
-          if (!res.ok && res.status !== 404) remaining.push(volId);
-        } catch (_) {
-          remaining.push(volId);
-        }
-      }
-      if (remaining.length) localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(remaining));
-      else localStorage.removeItem('mangashelf_pending_purchases');
+    if (user?.offline || browserOffline()) return null;
+    const id = await resolveUserId();
+    if (id === null) return null;
+    syncDueRef.current = false;
+    const outbox = getOutbox();
+    await outbox.migrateLegacy(outboxScope(id));
+    const result = await outbox.flush(outboxScope(id), { force: true });
+    const dropped = result.dropped.filter(isPurchaseEntry);
+    if (dropped.length) {
+      console.warn(`[PWA] ${dropped.length} vorgemerkte Käufe vom Server abgelehnt`);
+      setFailedPurchases((prev) => [...prev, ...dropped]);
+    }
+    if (result.kept.length) syncDueRef.current = true;
+    return { synced: result.synced, dropped: result.dropped, kept: result.kept };
+  };
+
+  // On mount and whenever App leaves its offline mode (that happens without a browser 'online' event)
+  useEffect(() => {
+    const dropped = discardLegacyQueue();
+    if (dropped) console.warn(`[PWA] ${dropped} vorgemerkte Käufe ohne Benutzerzuordnung verworfen`);
+    let active = true;
+    resolveUserId().then((id) => {
+      if (!active || id === null) return;
+      if (userId === null) setCachedUserId(id);
+      getOutbox().migrateLegacy(outboxScope(id));
+    });
+    if (!user?.offline) syncPendingPurchases();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a user or offline change
+  }, [userId, user?.offline]);
+
+  // bought volumes leave the list as soon as they are in the outbox (also those of a replay on another view)
+  const pendingKey = [...pending.purchaseIds].sort((a, b) => a - b).join(',');
+  useEffect(() => {
+    if (!pending.purchaseIds.size) return;
+    setShoppingData((prev) => withoutVolumes(prev, pending.purchaseIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey stands for the set
+  }, [pendingKey]);
+
+  // a replay of queued changes (App, reconnect): the list and the shelf show the server state again
+  useEffect(() => {
+    const onSynced = () => {
       fetchShoppingList();
       fetchMangas();
-    } catch (err) {
-      console.warn('Sync pending purchases deferred:', err);
+    };
+    window.addEventListener(OUTBOX_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(OUTBOX_SYNCED_EVENT, onSynced);
+  });
+
+  const fallBackToCache = (unreachable) => {
+    const cached = readShoppingCache();
+    if (cached) setShoppingData((prev) => prev ?? cached);
+    if (unreachable) {
+      syncDueRef.current = true;
+      setNetworkOffline(true);
     }
   };
 
-  useEffect(() => {
-    if (navigator.onLine) syncPendingPurchases();
-  }, []);
-
   const fetchShoppingList = async () => {
+    const generation = getClearGeneration();
+    setLoadingShopping(true);
     try {
-      setLoadingShopping(true);
-      const res = await fetch('/api/shopping-list?include_others=1');
-      if (res.ok) {
-        const data = await res.json();
-        setShoppingData(data);
-        setNetworkOffline(false);
-        const now = new Date().toISOString();
-        setOfflineLastUpdated(now);
-        try {
-          localStorage.setItem('mangashelf_shopping_cache', JSON.stringify(data));
-          localStorage.setItem('mangashelf_shopping_meta', JSON.stringify({ timestamp: now }));
-        } catch (_) {}
-      } else {
-        // Fallback to cache if server error
-        const cached = localStorage.getItem('mangashelf_shopping_cache');
-        if (cached) {
-          setShoppingData(JSON.parse(cached));
-          setNetworkOffline(true);
+      const id = await resolveUserId();
+      const res = await apiFetch('/api/shopping-list?include_others=1');
+      if (!res.ok) {
+        if (generation === getClearGeneration()) {
+          setShoppingError(shoppingErrorKind(res.status));
+          fallBackToCache(res.status >= 500);
         }
+        return;
       }
+      const data = await readJson(res);
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
+      if (generation !== getClearGeneration()) return; // logged out meanwhile: keep nothing of it
+      await getOutbox().load();
+      if (generation !== getClearGeneration()) return;
+      const visible = withoutVolumes(data, pendingPurchaseIds(id));
+      setShoppingError(null);
+      setShoppingData(visible);
+      setNetworkOffline(false);
+      const savedAt = writeShoppingCache(visible, generation);
+      setCacheWriteFailed(!savedAt);
+      if (savedAt) setOfflineLastUpdated(savedAt);
+      if (syncDueRef.current && getOutbox().count(outboxScope(id))) syncPendingPurchases();
     } catch (e) {
       console.warn('Network issue fetching shopping list, using offline cache:', e);
-      try {
-        const cached = localStorage.getItem('mangashelf_shopping_cache');
-        if (cached) {
-          setShoppingData(JSON.parse(cached));
-          setNetworkOffline(true);
-        }
-      } catch (_) {}
+      if (generation === getClearGeneration()) {
+        setShoppingError(shoppingErrorKind(null));
+        fallBackToCache(true);
+      }
     } finally {
       setLoadingShopping(false);
     }
   };
 
-  const handleQuickBuy = async (volumeId) => {
-    setBuyingId(volumeId);
+  const dropItem = (volumeId) => {
+    const ids = new Set([volumeId]);
+    setShoppingData((prev) => withoutVolumes(prev, ids));
+    updateShoppingCache((cached) => withoutVolumes(cached, ids));
+  };
 
-    const updateLocalState = () => {
-      setShoppingData(prev => {
-        if (!prev) return prev;
-        const updatedItems = prev.items.filter(item => item.id !== volumeId);
-        const boughtItem = prev.items.find(item => item.id === volumeId);
-        const newCost = Math.max(0, prev.total_cost - (boughtItem?.price || 0));
-        const updated = {
-          ...prev,
-          total_missing: updatedItems.length,
-          total_cost: Math.round(newCost * 100) / 100,
-          items: updatedItems
-        };
-        try {
-          localStorage.setItem('mangashelf_shopping_cache', JSON.stringify(updated));
-        } catch (_) {}
-        if ('vibrate' in navigator) {
-          try { navigator.vibrate([25, 45, 25]); } catch (_) {}
-        }
-        return updated;
-      });
-    };
+  const markBought = (volumeId) => {
+    dropItem(volumeId);
+    haptic('success');
+  };
 
-    if (!navigator.onLine) {
-      // Offline mode: queue purchase in local storage
-      try {
-        const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
-        if (!queue.includes(volumeId)) queue.push(volumeId);
-        localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(queue));
-      } catch (_) {}
-      updateLocalState();
-      setBuyingId(null);
-      return;
-    }
+  /**
+   * Writes a sent or queued purchase into the stored copies (memory, offline detail, ISBN index) and fires
+   * PURCHASE_RECORDED_EVENT. Call before markBought: the series is looked up on the list.
+   */
+  const recordPurchaseLocally = (volumeId, change, ownerId, queued) => {
+    const mangaId = mangaIdIn(shoppingDataRef.current, volumeId) ?? mangaIdIn(readShoppingCache(), volumeId);
+    window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: queued ? { volumeId, queued: true } : { volumeId } }));
+    if (mangaId === null) return Promise.resolve(false);
+    const me = user?.id !== undefined && user?.id !== null ? user : { id: ownerId };
+    return applyChangeToCaches({ user: me, mangaId, change }).catch(() => false);
+  };
 
-    try {
-      const res = await fetch(`/api/volumes/${volumeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'Vorhanden' })
-      });
-      if (res.ok) {
-        updateLocalState();
-        fetchMangas();
-        fetchShoppingList();
-      } else {
-        alert('Fehler beim Aktualisieren des Bands');
+  /**
+   * Records the purchase as the user's ownership: 'ok', 'queued' (sent later) or 'failed' (user told why). With
+   * { batch: true } nothing is alerted or refetched and the result is { status, error, httpStatus }; a 404 drops the volume.
+   */
+  const handleQuickBuy = async (volumeId, { batch = false } = {}) => {
+    const done = (status, error = '', httpStatus = null) => {
+      if (!batch) {
+        if (status === 'failed' && error) notify.error(error);
+        return status;
       }
-    } catch (e) {
-      // Network drop: queue purchase offline
+      return { status, error, httpStatus };
+    };
+    setBuyingIds((prev) => addId(prev, volumeId));
+    try {
+      const id = userId !== null ? userId : await resolveUserId();
+      if (id === null) return done('failed', t(QUEUE_FAILED));
+      const offline = Boolean(user?.offline) || browserOffline();
+      const change = { kind: 'purchase', volumeId, value: true, purchase_date: localToday() };
+      let result;
       try {
-        const queue = JSON.parse(localStorage.getItem('mangashelf_pending_purchases') || '[]');
-        if (!queue.includes(volumeId)) queue.push(volumeId);
-        localStorage.setItem('mangashelf_pending_purchases', JSON.stringify(queue));
-      } catch (_) {}
-      updateLocalState();
-      setNetworkOffline(true);
+        result = await submitChange(change, { userId: id, offline });
+      } catch (_) {
+        return done('failed', t(QUEUE_FAILED));
+      }
+      const { status, res } = result;
+      if (result.reason === 'storage') return done('failed', t(QUEUE_FAILED));
+      if (status === 'queued' || status === 'auth') {
+        syncDueRef.current = true;
+        if (!offline && status === 'queued') setNetworkOffline(true);
+        const recorded = recordPurchaseLocally(volumeId, change, id, true);
+        markBought(volumeId);
+        if (status === 'auth' && !sessionEndAnnounced(res) && !batch) notify.info(t(SESSION_EXPIRED));
+        await recorded;
+        return done('queued');
+      }
+      if (status === 'sent' && res?.ok) {
+        const recorded = recordPurchaseLocally(volumeId, change, id, false);
+        markBought(volumeId);
+        await recorded;
+        if (!batch) {
+          fetchMangas();
+          fetchShoppingList();
+        }
+        return done('ok', '', res.status);
+      }
+      // 404: the volume no longer exists; other 4xx: the server refused the purchase
+      if (res?.status === 404) dropItem(volumeId);
+      return done('failed', (res && await errorText(res)) || t(BUY_FAILED), res?.status ?? null);
     } finally {
-      setBuyingId(null);
+      setBuyingIds((prev) => removeId(prev, volumeId));
     }
   };
 
   return {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
-    shoppingSearch, setShoppingSearch, buyingId, offlineLastUpdated,
-    fetchShoppingList, handleQuickBuy, syncPendingPurchases
+    shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed,
+    pendingPurchases, failedPurchases, fetchShoppingList, handleQuickBuy, syncPendingPurchases
   };
 }

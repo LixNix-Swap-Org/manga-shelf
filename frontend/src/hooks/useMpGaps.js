@@ -1,8 +1,30 @@
-import { useState, useMemo } from 'react';
-import { isGapCovered } from '../utils/volumeHelpers';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { buildMpGapMap, detectGapEntries, isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText } from '../utils/volumeHelpers';
+import { apiFetch, readJson, TIMEOUTS } from '../utils/api';
+import { notify, notifyResponseError } from '../utils/notify';
+import { formatCount } from '../utils/format';
+import { deleteVolumeRequest } from '../components/detail/volumeEdit/editorUtils';
+import { t } from '../i18n/index.js';
+import { payloadText, serverText } from '../i18n/serverText.js';
+import { statusLabel } from '../utils/enumLabels';
+import { isMpEdition } from '../utils/editions';
+import { readCache, cacheOwner, LIST_KEY } from '../utils/dataCache';
+
+/** Confirm text for importing the detected gaps; one gap is named as "den fehlenden Band". */
+export function gapFillConfirmText(gaps, targetStatus, editionTitle) {
+  const status = statusLabel(targetStatus);
+  const question = gaps.length === 1
+    ? t("Den fehlenden Band {volume} auf Status '{status}' erfassen?", { volume: gaps[0], status })
+    : t("{count} fehlende Bände auf Status '{status}' erfassen?", { count: gaps.length, status });
+  if (!editionTitle) return question;
+  return `${question} ${t('Preise, Termine und Cover kommen aus der Manga-Passion-Edition „{edition}“.', { edition: editionTitle })}`;
+}
+
+// i18n
+export const LONG_JOB_TIMEOUT_TEXT = 'Der Server hat nicht rechtzeitig geantwortet; der Auftrag kann trotzdem durchgelaufen sein. Der aktuelle Stand wurde neu geladen.';
 
 /** Manga-Passion gap check: official edition data, detected gaps and the actions that fix them. */
-export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal }) {
+export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal, user = null }) {
   const [showGaps, setShowGaps] = useState(() => {
     return localStorage.getItem('mangashelf_show_gaps') !== 'false';
   });
@@ -11,56 +33,111 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
   // Manga Passion Live Gap Reconciliation States
   const [mpGapData, setMpGapData] = useState(null);
   const [mpGapLoading, setMpGapLoading] = useState(false);
+  const [mpGapError, setMpGapError] = useState(null);
   const [batchAutofilling, setBatchAutofilling] = useState(false);
 
-  const handleBatchAutofillManga = async (overwrite = false) => {
+  // Only the latest gap request of the current series may write state: a slow first check must not overwrite the
+  // edition picked meanwhile, and series A's result must never show (or be imported) on series B.
+  const idRef = useRef(id);
+  const requestRef = useRef(0);
+  // a check asked for before the series language was known runs once the detail arrives
+  const deferredRef = useRef(false);
+  useEffect(() => {
+    idRef.current = id;
+    requestRef.current += 1;
+    deferredRef.current = false;
+    setMpGapData(null);
+    setMpGapError(null);
+    setMpGapLoading(false);
+  }, [id]);
+
+  const runAutofill = async () => {
+    const res = await apiFetch(`/api/mangas/${id}/autofill-volumes`, { method: 'POST', body: {}, timeout: TIMEOUTS.long });
+    const data = (await readJson(res)) ?? {};
+    return { ok: res.ok, data: data || {} };
+  };
+
+  // Never sends a guessed edition_id: the server only fills from the linked edition and asks for a confirmation otherwise
+  const handleBatchAutofillManga = async () => {
     if (!canEdit) return;
-    const confirmMsg = overwrite 
-      ? 'Möchtest du wirklich alle Bände dieser Reihe mit den offiziellen Daten (Erscheinungsdatum, Jahr, Seitenzahl, Preise) überschreiben?' 
-      : 'Möchtest du alle fehlenden Erscheinungsdaten, Jahre, Seitenzahlen und Preise für die Bände dieser Reihe automatisch ausfüllen?';
-    if (!confirm(confirmMsg)) return;
+    if (!confirm(t('Möchtest du alle fehlenden Erscheinungsdaten, Jahre, Seitenzahlen und Preise für die Bände dieser Reihe automatisch ausfüllen?'))) return;
 
     setBatchAutofilling(true);
     try {
-      const res = await fetch(`/api/mangas/${id}/autofill-volumes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ overwrite })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      let { ok, data } = await runAutofill();
+      if (data.needs_confirmation) {
+        const suggested = isGapEditionUnconfirmed(mpGapData) ? mpGapData.edition : null;
+        if (!suggested?.id) {
+          notify.error(payloadText(data, 'message') || t('Bitte zuerst die Manga-Passion-Edition bestätigen.'));
+          return;
+        }
+        if (!confirm(t('{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?', { reason: payloadText(data, 'message') || t('Die Manga-Passion-Edition ist nicht bestätigt.'), edition: suggested.title || suggested.id }))) return;
+        if (!(await handleSelectMpEdition(suggested))) return;
+        ({ ok, data } = await runAutofill());
+      }
+      if (ok && data.success) {
         await fetchManga();
-        alert(`Erfolg: ${data.updated_count} von ${data.total_user_volumes} Bänden wurden mit offiziellen Daten aktualisiert!`);
+        notify.success(t('{updated} von {volumes} mit offiziellen Daten aktualisiert.', { updated: data.updated_count, volumes: formatCount(data.total_user_volumes, 'Band', 'Bänden') }));
       } else {
-        alert(data.message || data.error || 'Fehler beim automatischen Ausfüllen');
+        notify.error(payloadText(data, 'message') || serverText(data) || t('Fehler beim automatischen Ausfüllen'));
       }
     } catch (err) {
-      alert('Netzwerkfehler beim automatischen Ausfüllen der Bände');
+      if (err?.isTimeout) {
+        notify.error(t(LONG_JOB_TIMEOUT_TEXT));
+        await fetchManga();
+      } else {
+        notify.error(err, { fallback: t('Fehler beim automatischen Ausfüllen') });
+      }
     } finally {
       setBatchAutofilling(false);
     }
   };
 
-  const fetchMpGaps = async (forcedEditionId = null, forceRefresh = false) => {
-    try {
-      setMpGapLoading(true);
-      let url = `/api/mangas/${id}/gaps`;
-      const params = [];
-      if (forcedEditionId) params.push(`edition_id=${forcedEditionId}`);
-      if (forceRefresh) params.push(`force_refresh=true`);
-      if (params.length > 0) url += `?${params.join('&')}`;
-
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setMpGapData(data);
-      }
-    } catch (e) {
-      console.warn('Manga Passion gaps fetch failed:', e);
-    } finally {
-      setMpGapLoading(false);
-    }
+  // the row that knows this series' language: the loaded detail, else the shelf's cached list row (null = unknown yet)
+  const languageRow = () => {
+    if (manga && (manga.id == null || String(manga.id) === String(id))) return manga;
+    return readCache(cacheOwner(user), LIST_KEY)?.data?.find?.((m) => String(m?.id) === String(id)) || null;
   };
+
+  const fetchMpGaps = async (forcedEditionId = null, forceRefresh = false) => {
+    // Manga Passion only knows German editions: never ask /gaps (409 MP_LANGUAGE) before the language is known
+    const row = languageRow();
+    if (!row) {
+      deferredRef.current = true;
+      return null;
+    }
+    if (!isMpEdition(row)) return null;
+    const requestId = ++requestRef.current;
+    const requestedFor = id;
+    const isCurrent = () => requestRef.current === requestId && idRef.current === requestedFor;
+    setMpGapLoading(true);
+    setMpGapError(null);
+    try {
+      const params = [];
+      if (forcedEditionId) params.push(`edition_id=${encodeURIComponent(forcedEditionId)}`);
+      if (forceRefresh) params.push('force_refresh=true');
+      const res = await apiFetch(`/api/mangas/${id}/gaps${params.length ? `?${params.join('&')}` : ''}`, { timeout: TIMEOUTS.long });
+      const data = await readJson(res);
+      if (!isCurrent()) return null;
+      if (res.ok && data) {
+        setMpGapData(data);
+        return data;
+      }
+      setMpGapError(serverText(data) || t('Manga-Passion-Abgleich fehlgeschlagen.'));
+    } catch {
+      if (isCurrent()) setMpGapError(t('Manga-Passion-Abgleich nicht möglich (Netzwerkfehler).'));
+    } finally {
+      if (isCurrent()) setMpGapLoading(false);
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (!deferredRef.current || !manga || String(manga.id) !== String(id)) return;
+    deferredRef.current = false;
+    fetchMpGaps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only once the deferred series' detail is there
+  }, [manga, id]);
 
   const handleToggleShowGaps = () => {
     setShowGaps(prev => {
@@ -70,159 +147,129 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
     });
   };
 
+  // Undo removes the new volumes; offered only when the import changed no existing ones (the server lists the new ids)
+  const notifyGapsImported = (result) => {
+    const created = Array.isArray(result.imported_ids) ? result.imported_ids : null;
+    const count = Number(result.imported_count ?? created?.length ?? 0) + Number(result.updated_count || 0);
+    const undoable = created && created.length > 0 && !Number(result.updated_count);
+    notify.success(t('{gaps} erfasst', { gaps: formatCount(count, 'Lücke', 'Lücken') }), undoable ? {
+      action: {
+        label: t('Rückgängig'),
+        onClick: async () => {
+          const results = [];
+          for (const volumeId of created) results.push(await deleteVolumeRequest(volumeId));
+          const failed = results.find((r) => !r.ok && !r.aborted);
+          if (failed) notify.error(failed.error);
+          await fetchManga();
+          await fetchMpGaps();
+        }
+      }
+    } : undefined);
+  };
+
   const handleBatchFillGaps = async (targetStatus = 'Fehlt') => {
-    if (!canEdit || detectedGaps.length === 0) return;
-    if (!confirm(`${detectedGaps.length} fehlende Bände auf Status '${targetStatus}' erfassen?`)) return;
+    if (!canEdit || detectedGaps.length === 0 || fillingGapLoading) return;
+    if (isGapEditionUnconfirmed(mpGapData)) {
+      notify.error(t('Die Manga-Passion-Edition „{edition}“ ist nicht bestätigt. Bitte zuerst „Edition bestätigen“ oder eine andere Edition wählen, sonst werden Bände dieser Vermutung erfasst.', { edition: mpGapData.edition?.title || '?' }));
+      return;
+    }
+    const edition = mpGapData?.matched ? mpGapData.edition : null;
+    if (!confirm(gapFillConfirmText(detectedGaps, targetStatus, edition?.title))) return;
+    const requestedFor = id;
     setFillingGapLoading(true);
     try {
-      const res = await fetch(`/api/mangas/${id}/batch-import-gaps`, {
+      const res = await apiFetch(`/api/mangas/${id}/batch-import-gaps`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           volume_numbers: detectedGaps.map(String),
           target_status: targetStatus,
-          edition_id: mpGapData?.edition?.id || null
-        })
+          edition_id: edition?.id || null
+        },
+        timeout: TIMEOUTS.long
       });
+      if (idRef.current !== requestedFor) return;
       if (res.ok) {
+        const result = (await readJson(res)) ?? {};
+        await fetchManga();
+        await fetchMpGaps();
+        notifyGapsImported(result);
+      } else {
+        await notifyResponseError(res, t('Fehler beim Erfassen der Lücken'));
+      }
+    } catch (err) {
+      // the import is not idempotent: show what the server committed instead of inviting a second click
+      if (err?.isTimeout && idRef.current === requestedFor) {
+        notify.error(t(LONG_JOB_TIMEOUT_TEXT));
         await fetchManga();
         await fetchMpGaps();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Fehler beim Erfassen der Lücken');
+        notify.error(err, { fallback: t('Fehler beim Erfassen der Lücken') });
       }
-    } catch (err) {
-      alert('Fehler beim Erfassen der Lücken');
     } finally {
       setFillingGapLoading(false);
     }
   };
 
-  const handleSyncTotalVolumes = async (officialTotal) => {
-    if (!canEdit || !mpGapData?.edition?.id) return;
+  const syncEdition = async (editionId, { closeModal = false, updateStatus = true, errorMessage }) => {
+    if (!canEdit || !editionId) return false;
+    const requestedFor = id;
     setMpGapLoading(true);
     try {
-      const res = await fetch(`/api/mangas/${id}/sync-edition`, {
+      const res = await apiFetch(`/api/mangas/${id}/sync-edition`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          edition_id: mpGapData.edition.id,
+        body: {
+          edition_id: editionId,
           update_total_volumes: true,
-          update_status: true,
+          update_status: updateStatus,
           update_publisher: false
-        })
+        },
+        timeout: TIMEOUTS.remote
       });
+      if (idRef.current !== requestedFor) return false;
       if (res.ok) {
+        if (closeModal) setShowMpEditionModal(false);
         await fetchManga();
-        await fetchMpGaps(mpGapData.edition.id, true);
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Fehler beim Abgleich');
+        await fetchMpGaps(editionId, true);
+        return true;
       }
+      await notifyResponseError(res, errorMessage);
     } catch (err) {
-      alert('Netzwerkfehler');
+      notify.error(err);
     } finally {
-      setMpGapLoading(false);
+      if (idRef.current === requestedFor) setMpGapLoading(false);
     }
+    return false;
   };
 
-  const handleSelectMpEdition = async (selectedEdition) => {
-    if (!canEdit || !selectedEdition) return;
-    setMpGapLoading(true);
-    try {
-      const res = await fetch(`/api/mangas/${id}/sync-edition`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          edition_id: selectedEdition.id,
-          update_total_volumes: true,
-          update_status: true,
-          update_publisher: false
-        })
-      });
-      if (res.ok) {
-        setShowMpEditionModal(false);
-        await fetchManga();
-        await fetchMpGaps(selectedEdition.id, true);
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Fehler beim Auswählen der Edition');
-      }
-    } catch (err) {
-      alert('Netzwerkfehler');
-    } finally {
-      setMpGapLoading(false);
+  // only promises the volume count: the series status stays as the user set it
+  const handleSyncTotalVolumes = async () => {
+    if (!canFixVolumeCount(mpGapData)) {
+      if (isGapEditionUnconfirmed(mpGapData)) notify.error(t('Die Manga-Passion-Edition ist nicht bestätigt. „Edition bestätigen“ verknüpft sie und übernimmt die Bandzahl.'));
+      return false;
     }
+    return syncEdition(mpGapData.edition.id, { updateStatus: false, errorMessage: t('Fehler beim Abgleich') });
   };
 
-  // Map of Manga Passion gaps by volume_number for quick lookup of price, cover, date
-  const mpGapMap = useMemo(() => {
-    const map = new Map();
-    if (mpGapData && mpGapData.gaps) {
-      mpGapData.gaps.forEach(g => {
-        map.set(String(g.volume_number).trim().toLowerCase(), g);
-      });
-    }
-    return map;
-  }, [mpGapData]);
+  const handleSelectMpEdition = async (selectedEdition) =>
+    syncEdition(selectedEdition?.id, { closeModal: true, errorMessage: t('Fehler beim Auswählen der Edition') });
 
-  // Gap Detection for numeric volumes:
-  // Prioritizes verified Manga Passion official edition data if available;
-  // falls back to local detection.
-  // Filters out volumes already present in user's collection to avoid duplicates!
-  // Gaps as { label, type }: label is what the banner shows ("26 (Titel)", "5 (Collectors Edition)", 114),
-  // type decides how it is drawn (only regular volumes get ghost entries) and imported.
-  const detectedGapEntries = useMemo(() => {
-    // If Manga Passion matched the German edition, use the verified official missing entries:
-    if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
-      return mpGapData.gaps
-        .filter(g => !isGapCovered(g, volumes))
-        .map(g => {
-          const match = String(g.volume_number).trim().match(/^(\d+)$/);
-          const label = match
-            ? (g.title ? `${match[1]} (${g.title.trim()})` : parseInt(match[1], 10))
-            : (g.title || g.volume_number);
-          return { label, type: g.type || 'volume' };
-        });
-    }
-
-    // Local fallback:
-    const existingNums = new Set();
-    let maxFound = 0;
-    
-    volumes.forEach(v => {
-      const isRegular = (!v.type || v.type === 'volume') && 
-        !String(v.volume_number).toLowerCase().includes('schuber') && 
-        !String(v.volume_number).toLowerCase().includes('special');
-      if (isRegular) {
-        const match = String(v.volume_number).trim().match(/^(\d+)$/);
-        if (match) {
-          const parsed = parseInt(match[1], 10);
-          if (parsed > 0 && parsed <= 300) {
-            existingNums.add(parsed);
-            if (parsed > maxFound) maxFound = parsed;
-          }
-        }
-      }
-    });
-
-    const targetMax = Math.min(200, Math.max(maxFound, parseInt(manga?.total_volumes, 10) || 0));
-    if (targetMax <= 1 || existingNums.size === 0) return [];
-
-    const gaps = [];
-    for (let i = 1; i <= targetMax; i++) {
-      if (!existingNums.has(i)) {
-        gaps.push({ label: i, type: 'volume' });
-      }
-    }
-    return gaps;
-  }, [mpGapData, volumes, manga?.total_volumes]);
+  // other edition languages: no Manga Passion data, notice or pill; the gaps come from the volume numbers alone
+  const mpEnabled = !manga || isMpEdition(manga);
+  const gapData = mpEnabled ? mpGapData : null;
+  const gapError = mpEnabled ? mpGapError : null;
+  const mpGapMap = useMemo(() => buildMpGapMap(gapData?.gaps), [gapData]);
+  const detectedGapEntries = useMemo(
+    () => detectGapEntries(gapData, volumes, manga?.total_volumes),
+    [gapData, volumes, manga?.total_volumes]
+  );
   const detectedGaps = useMemo(() => detectedGapEntries.map(e => e.label), [detectedGapEntries]);
+  const mpGapNotice = useMemo(() => gapStatusText(gapData, gapError), [gapData, gapError]);
 
   return {
     showGaps, handleToggleShowGaps, fillingGapLoading,
-    mpGapData, mpGapLoading, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
-    handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition,
+    mpGapData: gapData, mpGapLoading: mpEnabled && mpGapLoading, mpGapError: gapError, mpGapNotice, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
+    handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition, mpEnabled,
+    gapEditionUnconfirmed: isGapEditionUnconfirmed(gapData), canSyncVolumeCount: canFixVolumeCount(gapData),
     mpGapMap, detectedGapEntries, detectedGaps
   };
 }

@@ -1,6 +1,9 @@
 // Pure helpers shared by Dashboard and MangaDetail (no React / no component state).
+import { t } from '../i18n/index.js';
+import { payloadText } from '../i18n/serverText.js';
 
-// Known canonical German publishers map for clean display
+// Built-in names of core/lib/publishers.js: the fallback while the server's names (setPublisherNames) are not loaded
+// i18n-ignore: publisher names are data, never translated
 export const CANONICAL_PUBLISHERS = {
   'altraverse': 'Altraverse',
   'carlsen manga': 'Carlsen Manga',
@@ -23,12 +26,47 @@ export const CANONICAL_PUBLISHERS = {
   'tokyopop': 'TOKYOPOP'
 };
 
+// Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
+const publisherKey = (name) => (typeof name === 'string' ? name.trim().toLowerCase().replace(/\s*!+$/, '') : '');
+
+// own keys only ("constructor" is no publisher); Object.hasOwn is newer than the build's browser targets
+const builtInPublisher = (key) => (Object.prototype.hasOwnProperty.call(CANONICAL_PUBLISHERS, key) ? CANONICAL_PUBLISHERS[key] : undefined);
+
+let serverNames = new Map();
+let serverNamesVersion = 0;
+const serverNameListeners = new Set();
+
+/**
+ * Canonical names as the server resolves them (GET /api/publishers: { publishers: [{ name, canonical }], aliases:
+ * [{ alias, canonical }] }), including the aliases of merged publishers; null forgets them.
+ */
+export function setPublisherNames(data) {
+  const map = new Map();
+  const add = (name, canonical) => {
+    if (typeof name !== 'string' || typeof canonical !== 'string' || !name.trim() || !canonical.trim()) return;
+    map.set(publisherKey(name), canonical.trim());
+  };
+  for (const a of Array.isArray(data?.aliases) ? data.aliases : []) add(a?.alias, a?.canonical);
+  for (const p of Array.isArray(data?.publishers) ? data.publishers : []) add(p?.name, p?.canonical);
+  serverNames = map;
+  serverNamesVersion++;
+  for (const listener of [...serverNameListeners]) listener();
+}
+
+export const publisherNamesVersion = () => serverNamesVersion;
+
+export function subscribePublisherNames(listener) {
+  serverNameListeners.add(listener);
+  return () => { serverNameListeners.delete(listener); };
+}
+
 export const normalizePubName = (name) => {
   if (!name || typeof name !== 'string') return '';
   const trimmed = name.trim();
-  // Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
-  const lower = trimmed.toLowerCase().replace(/\s*!+$/, '');
-  return CANONICAL_PUBLISHERS[lower] || trimmed.replace(/\s*!+$/, '');
+  const key = publisherKey(trimmed);
+  const canonical = serverNames.get(key) || builtInPublisher(key) || trimmed.replace(/\s*!+$/, '');
+  // a built-in name the server merged into another one
+  return serverNames.get(publisherKey(canonical)) || canonical;
 };
 
 /** Derives the entry type from vol.type, falling back to keywords in volume_number / notes. */
@@ -46,6 +84,16 @@ export const inferVolumeType = (vol) => {
 /** Trailing integer of a volume number: "5" -> 5, "Schuber 8" -> 8, "1-5" / "Special" -> null. */
 export const volumeNumberOf = (vol) => {
   const m = String(vol.volume_number || '').trim().match(/^(?:\D*?\s)?(\d+)$/);
+  return m ? parseInt(m[1], 10) : null;
+};
+
+/**
+ * Number of a regular volume as the backend counts it: "5" and "Band 5" -> 5. "Starter 1", "Vol. 3" or a
+ * special edition -> null (volumeNumberOf is broader and would count those as regular volumes).
+ */
+export const regularVolumeNumber = (vol) => {
+  if (inferVolumeType(vol) !== 'volume') return null;
+  const m = String(vol.volume_number ?? '').trim().match(/^(?:band\s+)?(\d+)$/i);
   return m ? parseInt(m[1], 10) : null;
 };
 
@@ -93,9 +141,8 @@ export const isGapCovered = (gap, volumes) => {
 };
 
 /**
- * detectedGaps entries are either a plain volume number (114) or a label with the official title
- * ("26 (Abenteuer auf der Insel des Gottes)", "East Blue Leerschuber"). Returns the volume number
- * of numbered entries and null for labels without one (schuber, specials).
+ * detectedGaps entries are a volume number (114) or a label with the official title ("26 (Titel)", "East Blue
+ * Leerschuber"). Returns the volume number of numbered entries, null for labels without one.
  */
 export const gapVolumeNumber = (gap) => {
   if (typeof gap === 'number') return Number.isInteger(gap) ? gap : null;
@@ -104,20 +151,38 @@ export const gapVolumeNumber = (gap) => {
 };
 
 /**
- * Collection progress of a series. Only regular volumes count towards completion (schuber and extras are
- * "+N"), and the target grows with the highest owned volume number: an ongoing series whose stored total is
- * stale ("21 / 18") shows 21 / 21 instead of an impossible ratio.
- * Accepts the /api/mangas row (regular_owned, max_regular_number) or just the counts.
+ * Collection progress of a series. Only regular volumes count (schuber and extras are "+N"); the target grows with
+ * the highest owned number so a stale total never shows "21 / 18". Incomplete never 100 %, started never 0 %.
  */
-export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes }) => {
+export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes, extras_owned }) => {
   const all = owned_volumes || 0;
   const regular = regular_owned ?? all;
   const total = Math.max(total_volumes || 0, max_regular_number || 0);
+  let pct = null;
+  if (total > 0) {
+    pct = Math.min(100, Math.round((regular / total) * 100));
+    if (regular < total) pct = Math.min(pct, 99);
+    if (regular > 0) pct = Math.max(pct, 1);
+  }
+  const extras = extras_owned !== undefined && extras_owned !== null ? Number(extras_owned) || 0 : all - regular;
+  return { owned: regular, total, extras: Math.max(0, extras), pct };
+};
+
+/** The getSeriesProgress input for the volumes of one series (same rules as GET /api/mangas). */
+export const getVolumeProgressCounts = (volumes) => {
+  const owned = (volumes || []).filter(v => v.status === 'Vorhanden');
+  const regularNumbers = new Set();
+  let extras = 0;
+  for (const v of owned) {
+    const n = regularVolumeNumber(v);
+    if (n !== null && n >= 1) regularNumbers.add(n);
+    else extras++;
+  }
   return {
-    owned: regular,
-    total,
-    extras: Math.max(0, all - regular),
-    pct: total > 0 ? Math.min(100, Math.round((regular / total) * 100)) : null
+    regular_owned: regularNumbers.size,
+    max_regular_number: [...regularNumbers].reduce((max, n) => Math.max(max, n), 0),
+    extras_owned: extras,
+    owned_volumes: owned.length
   };
 };
 
@@ -154,6 +219,19 @@ export const getVolumeSortInfo = (vol) => {
 
   return { rank, num, subRank, raw: String(vol.volume_number), type: rawType };
 };
+
+/** Comparator of the "Band-Nr." sorts. Schuber and specials stay last in both directions. */
+export const compareVolumesByNumber = (a, b, descending = false) => {
+  const infoA = getVolumeSortInfo(a);
+  const infoB = getVolumeSortInfo(b);
+  if (infoA.rank !== infoB.rank) return infoA.rank - infoB.rank;
+  if (infoA.num !== infoB.num) return descending ? infoB.num - infoA.num : infoA.num - infoB.num;
+  if (infoA.subRank !== infoB.subRank) return infoA.subRank - infoB.subRank;
+  return descending
+    ? infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true })
+    : infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
+};
+// i18n
 const EDITION_PATTERNS = [
   [/collector'?s?\s*edition/i, 'Collectors Edition', 'COLL'],
   [/limited\s*edition|limitierte?\s*edition/i, 'Limited Edition', 'LTD'],
@@ -170,41 +248,58 @@ const EDITION_PATTERNS = [
 export const getEditionLabel = (vol) => {
   const text = `${vol.volume_number || ''} ${vol.notes || ''}`;
   for (const [pattern, label, short] of EDITION_PATTERNS) {
-    if (pattern.test(text)) return { label, short };
+    if (pattern.test(text)) return { label: t(label), short };
   }
-  return { label: 'Special Edition', short: 'SE' };
+  return { label: t('Special Edition'), short: 'SE' };
 };
 
-/** The number part of a special edition's volume_number ("Band 5 Limited Edition" -> "5"), or the cleaned text. */
+/** The number of a special edition ("Band 5 Limited Edition" -> "5"), or '' when its name has no number. */
 export const getSpecialEditionNumber = (vol) => {
-  const raw = String(vol.volume_number || '');
-  const cleaned = raw.replace(/collector'?s?\s*edition|limited\s*edition|special\s*edition|spezial\s*edition|premium\s*edition|deluxe\s*edition|variant|band/gi, '').trim();
-  const match = cleaned.match(/\d+(\.\d+)?/);
-  return match ? match[0] : cleaned;
+  const match = String(vol.volume_number ?? '').match(/\d+(\.\d+)?/);
+  return match ? match[0] : '';
 };
+
+const EDITION_WORDS = /collector'?s?\s*edition|limited\s*edition|limitierte?\s*edition|special\s*edition|spezial\s*edition|sonderausgabe|premium\s*edition|deluxe(\s*edition)?/gi;
 
 export const getVolumeDisplayTitle = (vol) => {
   const type = inferVolumeType(vol);
-  const numStr = String(vol.volume_number || '').trim();
+  const numStr = String(vol.volume_number ?? '').trim();
   if (type === 'schuber') {
     // "Vollschuber 1-5" / "Leerschuber 6-10" already say what they are; plain numbers become "Schuber 8",
     // or "Sammelschuber 15" when the notes name the kind of slipcase
     if (numStr.toLowerCase().includes('schuber')) return numStr;
     const kind = String(vol.notes || '').match(/\b(\w*schuber)\b/i);
-    return `${kind ? kind[1].charAt(0).toUpperCase() + kind[1].slice(1) : 'Schuber'} ${numStr}`;
+    return (kind ? `${kind[1].charAt(0).toUpperCase() + kind[1].slice(1)} ${numStr}` : t('Schuber {num}', { num: numStr })).trim();
   }
   if (type === 'special_edition') {
     const { label } = getEditionLabel(vol);
     const num = getSpecialEditionNumber(vol);
-    return num ? `Band ${num} (${label})` : label;
+    if (num) return t('Band {num} ({edition})', { num, edition: label });
+    const rest = numStr.replace(EDITION_WORDS, '').trim();
+    if (!rest) return label;
+    // a name that already says what it is ("Variant Cover") stays as typed
+    return EDITION_PATTERNS.some(([pattern]) => pattern.test(numStr)) ? numStr : `${numStr} (${label})`;
   }
   if (type === 'special') {
-    return (numStr.toLowerCase().startsWith('special') || numStr.toLowerCase().startsWith('extra') || numStr.toLowerCase().startsWith('sonderband')) 
-      ? numStr 
-      : `Special ${numStr}`;
+    const lower = numStr.toLowerCase();
+    if (!numStr) return t('Special');
+    return (lower.startsWith('special') || lower.startsWith('extra') || lower.startsWith('sonderband')) ? numStr : t('Special {num}', { num: numStr });
   }
-  return numStr.toLowerCase().startsWith('band') ? numStr : `Band ${numStr}`;
+  if (!numStr) return t('Band ?');
+  return /^\d+(\.\d+)?$/.test(numStr) ? t('Band {num}', { num: numStr }) : numStr;
 };
+
+// i18n-ignore: stored condition values; shown through conditionLabel (utils/enumLabels.js)
+export const VOLUME_CONDITIONS = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
+/** Filter value for "no condition recorded"; not a word, so it cannot collide with an imported condition. */
+export const CONDITION_NONE = '__NONE__';
+
+export const matchesConditionFilter = (vol, filter) => {
+  if (!filter || filter === 'ALL') return true;
+  const condition = vol.condition === null || vol.condition === undefined ? '' : String(vol.condition).trim();
+  return filter === CONDITION_NONE ? condition === '' : condition === filter;
+};
+
 export const getSpinePublisherTheme = (publisherName) => {
   const pub = (publisherName || '').toLowerCase().trim();
   if (pub.includes('carlsen')) {
@@ -213,7 +308,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-blue-400/40',
       text: 'text-blue-100',
       accentBadge: 'bg-red-600 text-white font-bold',
-      accentName: 'Carlsen'
+      accentName: 'Carlsen' // i18n-ignore: brand name
     };
   }
   if (pub.includes('manga cult')) {
@@ -222,7 +317,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-neutral-500/50',
       text: 'text-neutral-100',
       accentBadge: 'bg-white text-black font-extrabold',
-      accentName: 'Manga Cult'
+      accentName: 'Manga Cult' // i18n-ignore: brand name
     };
   }
   if (pub.includes('altraverse')) {
@@ -230,8 +325,8 @@ export const getSpinePublisherTheme = (publisherName) => {
       bg: 'from-orange-600 via-amber-800 to-slate-950',
       border: 'border-orange-400/40',
       text: 'text-orange-100',
-      accentBadge: 'bg-orange-500 text-white font-bold',
-      accentName: 'Altraverse'
+      accentBadge: 'bg-orange-700 text-white font-bold',
+      accentName: 'Altraverse' // i18n-ignore: brand name
     };
   }
   if (pub.includes('crunchyroll')) {
@@ -240,7 +335,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-amber-400/40',
       text: 'text-amber-100',
       accentBadge: 'bg-amber-500 text-slate-950 font-bold',
-      accentName: 'Crunchyroll'
+      accentName: 'Crunchyroll' // i18n-ignore: brand name
     };
   }
   if (pub.includes('kazé') || pub.includes('kaze')) {
@@ -249,7 +344,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-yellow-400/40',
       text: 'text-yellow-100',
       accentBadge: 'bg-yellow-400 text-slate-950 font-bold',
-      accentName: 'Kazé'
+      accentName: 'Kazé' // i18n-ignore: brand name
     };
   }
   if (pub.includes('tokyopop')) {
@@ -258,7 +353,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-red-400/40',
       text: 'text-rose-100',
       accentBadge: 'bg-red-600 text-white font-bold',
-      accentName: 'TOKYOPOP'
+      accentName: 'TOKYOPOP' // i18n-ignore: brand name
     };
   }
   if (pub.includes('egmont') || pub.includes('ema')) {
@@ -267,7 +362,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-red-500/40',
       text: 'text-red-100',
       accentBadge: 'bg-red-700 text-white font-bold',
-      accentName: 'Egmont'
+      accentName: 'Egmont' // i18n-ignore: brand name
     };
   }
   if (pub.includes('papertoons')) {
@@ -275,8 +370,8 @@ export const getSpinePublisherTheme = (publisherName) => {
       bg: 'from-purple-800 via-violet-900 to-slate-950',
       border: 'border-purple-400/40',
       text: 'text-purple-100',
-      accentBadge: 'bg-purple-600 text-white font-bold',
-      accentName: 'Papertoons'
+      accentBadge: 'bg-purple-700 text-white font-bold',
+      accentName: 'Papertoons' // i18n-ignore: brand name
     };
   }
   if (pub.includes('hayabusa')) {
@@ -284,8 +379,8 @@ export const getSpinePublisherTheme = (publisherName) => {
       bg: 'from-pink-800 via-rose-950 to-slate-950',
       border: 'border-pink-400/40',
       text: 'text-pink-100',
-      accentBadge: 'bg-pink-600 text-white font-bold',
-      accentName: 'Hayabusa'
+      accentBadge: 'bg-pink-700 text-white font-bold',
+      accentName: 'Hayabusa' // i18n-ignore: brand name
     };
   }
   if (pub.includes('panini')) {
@@ -293,16 +388,16 @@ export const getSpinePublisherTheme = (publisherName) => {
       bg: 'from-emerald-800 via-teal-950 to-slate-950',
       border: 'border-emerald-400/40',
       text: 'text-emerald-100',
-      accentBadge: 'bg-emerald-600 text-white font-bold',
-      accentName: 'Panini'
+      accentBadge: 'bg-emerald-700 text-white font-bold',
+      accentName: 'Panini' // i18n-ignore: brand name
     };
   }
   return {
     bg: 'from-slate-700 via-slate-850 to-slate-950',
     border: 'border-slate-600/40',
     text: 'text-slate-100',
-    accentBadge: 'bg-brand-600 text-white font-bold',
-    accentName: publisherName || 'Manga'
+    accentBadge: 'bg-brand-700 text-white font-bold',
+    accentName: publisherName || t('Manga')
   };
 };
 
@@ -312,53 +407,149 @@ export const hasUserRead = (vol, userId, currentUserId) =>
     ? vol.read_users.some(u => String(u.user_id ?? u.id) === String(userId))
     : (Boolean(vol.is_read) && String(userId) === String(currentUserId));
 
-/**
- * Rows for the shelf / grid / list views: the filtered volumes with ghost entries for detected gaps interleaved
- * (only when sorting by number without conflicting filters).
- */
-export const buildDisplayVolumeItems = ({ filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort }) => {
-  const isNumberSort = volumeSort === 'number_asc' || volumeSort === 'number_desc';
-  const allowTypeFilter = volumeTypeFilter === 'ALL' || volumeTypeFilter === 'volume';
-  const allowStatusFilter = volumeFilter === 'ALL' || volumeFilter === 'Fehlt';
+const gapMapKey = (volumeNumber) => {
+  const key = String(volumeNumber ?? '').trim().toLowerCase();
+  return /^\d+$/.test(key) ? String(parseInt(key, 10)) : key;
+};
 
-  if (!showGaps || detectedGaps.length === 0 || !allowTypeFilter || !allowStatusFilter || volumeSearch.trim() || !isNumberSort) {
+/**
+ * Official data (price, date, cover) of the missing regular volumes, keyed by number. Ghost entries and the gap
+ * dialog only stand for regular volumes, so a Collectors Edition or Schuber with the same number never lands here.
+ */
+export const buildMpGapMap = (gaps) => {
+  const map = new Map();
+  for (const g of Array.isArray(gaps) ? gaps : []) {
+    if ((g.type || 'volume') !== 'volume') continue;
+    const key = gapMapKey(g.volume_number);
+    if (key && !map.has(key)) map.set(key, g);
+  }
+  return map;
+};
+
+export const getRegularGapMeta = (mpGapMap, volumeNumber) => mpGapMap?.get(gapMapKey(volumeNumber));
+
+/** The gap check runs on an edition the search only guessed; its data must not be imported before confirming. */
+export const isGapEditionUnconfirmed = (mpGapData) => Boolean(mpGapData?.matched && mpGapData.link_confirmed === false);
+
+/** "Bandzahl anpassen" only for a confirmed edition; for a guess "Edition bestätigen" does the same and links it. */
+export const canFixVolumeCount = (mpGapData) =>
+  Boolean(mpGapData?.discrepancy && mpGapData.edition?.id && !isGapEditionUnconfirmed(mpGapData));
+
+/** Hint for the gap check state: request error, backend message without a match, stale or incomplete data. */
+export const gapStatusText = (mpGapData, error) => {
+  if (error) return error;
+  if (!mpGapData) return null;
+  if (mpGapData.success === false || mpGapData.matched === false) return payloadText(mpGapData, 'message') || null;
+  if (mpGapData.stale) return t('Daten evtl. veraltet – Manga Passion nicht erreichbar');
+  if (mpGapData.incomplete) return t('Manga-Passion-Daten evtl. unvollständig');
+  return null;
+};
+
+/**
+ * Gaps as { label, type }: label is shown in the banner, type decides drawing (only regular volumes get ghost
+ * entries) and import. Uses the Manga Passion edition when matched, else the volumes 1..max(total, highest owned).
+ */
+export const detectGapEntries = (mpGapData, volumes, totalVolumes) => {
+  if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
+    return mpGapData.gaps
+      .filter(g => !isGapCovered(g, volumes))
+      .map(g => {
+        const match = String(g.volume_number).trim().match(/^(\d+)$/);
+        const label = match
+          ? (g.title ? `${match[1]} (${g.title.trim()})` : parseInt(match[1], 10))
+          : (g.title || g.volume_number);
+        return { label, type: g.type || 'volume' };
+      });
+  }
+
+  const existing = new Set();
+  let maxFound = 0;
+  for (const v of volumes) {
+    const n = regularVolumeNumber(v);
+    if (n !== null && n > 0 && n <= 300) {
+      existing.add(n);
+      if (n > maxFound) maxFound = n;
+    }
+  }
+  const targetMax = Math.min(200, Math.max(maxFound, parseInt(totalVolumes, 10) || 0));
+  if (targetMax <= 1 || existing.size === 0) return [];
+  const gaps = [];
+  for (let i = 1; i <= targetMax; i++) {
+    if (!existing.has(i)) gaps.push({ label: i, type: 'volume' });
+  }
+  return gaps;
+};
+
+// read-state pseudo-values of the status filter: neutral ids, never shown (VolumeFilterBar labels its chips); the
+// other values are stored statuses. The old German ids are still accepted.
+export const READ_FILTER = 'read';
+export const UNREAD_FILTER = 'unread';
+// i18n-ignore: the old German filter ids, mapped to the neutral ones
+const LEGACY_VOLUME_FILTERS = { Gelesen: READ_FILTER, Ungelesen: UNREAD_FILTER };
+/** A status-filter value with the old German read-state ids mapped to their neutral ids. */
+export const normalizeVolumeFilter = (filter) => (Object.prototype.hasOwnProperty.call(LEGACY_VOLUME_FILTERS, filter) ? LEGACY_VOLUME_FILTERS[filter] : filter);
+
+/**
+ * Whether the active filters leave room for ghost entries: type "Bände", status "Fehlt" and "Bände, die ihr fehlen"
+ * fit a gap; search, publisher, condition and a person's owned volumes do not.
+ */
+export const filtersAllowGaps = ({
+  volumeTypeFilter = 'ALL', volumeFilter = 'ALL', volumeSearch = '', volumePublisherFilter = 'ALL',
+  volumeConditionFilter = 'ALL', volumeOwnerFilter = 'ALL', volumeOwnerMissing = false
+} = {}) =>
+  (volumeTypeFilter === 'ALL' || volumeTypeFilter === 'volume')
+  && (volumeFilter === 'ALL' || volumeFilter === 'Fehlt')
+  && !String(volumeSearch ?? '').trim()
+  && volumePublisherFilter === 'ALL'
+  && volumeConditionFilter === 'ALL'
+  && (volumeOwnerFilter === 'ALL' || Boolean(volumeOwnerMissing));
+
+/**
+ * Rows for the shelf/grid/list views: the sorted volumes plus ghost entries for gaps (only when sorting by number
+ * and filtersAllowGaps()). A ghost takes the slot of its regular volume, ahead of a special edition of that number.
+ */
+export const buildDisplayVolumeItems = ({
+  filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeSort, ...filters
+}) => {
+  const isNumberSort = volumeSort === 'number_asc' || volumeSort === 'number_desc';
+  if (!showGaps || detectedGaps.length === 0 || !isNumberSort || !filtersAllowGaps(filters)) {
     return filteredVolumes.map(v => ({ isGap: false, volume: v }));
+  }
+  const descending = volumeSort === 'number_desc';
+
+  // titled gaps ("26 (Titel)") resolve to their volume number; only regular volumes get ghost entries
+  const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
+  for (const v of filteredVolumes) {
+    const n = regularVolumeNumber(v);
+    if (n !== null) gapsSet.delete(n);
+  }
+  const gapList = Array.from(gapsSet).sort((x, y) => (descending ? y - x : x - y));
+
+  // same parser as the sort: "Limited Edition 14" sits at 14; schuber, specials and unnumbered entries have no slot
+  const positions = filteredVolumes.map(v => {
+    const info = getVolumeSortInfo(v);
+    return info.rank === 1 && info.num !== 999999 ? info.num : null;
+  });
+  const numbered = positions.map((p, i) => (p === null ? -1 : i)).filter(i => i >= 0);
+  const afterLastNumbered = numbered.length ? numbered[numbered.length - 1] + 1 : 0;
+
+  const ghostsBefore = new Map();
+  for (const n of gapList) {
+    const anchor = numbered.find(i => (descending ? positions[i] <= n : positions[i] >= n));
+    const index = anchor === undefined ? afterLastNumbered : anchor;
+    ghostsBefore.set(index, [...(ghostsBefore.get(index) || []), n]);
   }
 
   const items = [];
-  // titled gaps ("26 (Titel)") must resolve to their volume number, otherwise no ghost entry is drawn for them
-  // only regular volumes get ghost entries; a Collectors Edition gap ("5 (Collectors Edition)") must not mask Band 5
-  const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
-  const sorted = [...filteredVolumes];
-
-  // A regular volume that exists is no gap (type + number: a Collectors Edition 5 does not cover Band 5)
-  sorted.forEach(v => {
-    const match = String(v.volume_number).trim().match(/^(\d+)$/);
-    if (match && inferVolumeType(v) === 'volume') gapsSet.delete(parseInt(match[1], 10));
-  });
-
-  // Ghost entries go in front of the first entry with a higher number; an equal number is a special edition of the
-  // missing volume, so the ghost comes first. Decimals ("12.5") are compared by value, Schuber and Specials count
-  // as "after everything".
-  const positionOf = (v) => {
-    const type = inferVolumeType(v);
-    if (type !== 'volume' && type !== 'special_edition') return Infinity;
-    const n = parseFloat(String(v.volume_number).trim());
-    return Number.isNaN(n) ? Infinity : n;
+  const pushGhosts = (index) => {
+    for (const n of ghostsBefore.get(index) || []) {
+      items.push({ isGap: true, gapNumber: n, gapMeta: getRegularGapMeta(mpGapMap, n) });
+    }
   };
-  const gapList = Array.from(gapsSet).sort((x, y) => x - y);
-  let gapIndex = 0;
-  const pushGap = (n) => items.push({ isGap: true, gapNumber: n, gapMeta: mpGapMap.get(String(n).toLowerCase()) });
-  for (const v of sorted) {
-    const position = positionOf(v);
-    while (gapIndex < gapList.length && gapList[gapIndex] <= position) pushGap(gapList[gapIndex++]);
+  filteredVolumes.forEach((v, i) => {
+    pushGhosts(i);
     items.push({ isGap: false, volume: v });
-  }
-  while (gapIndex < gapList.length) pushGap(gapList[gapIndex++]);
-
-  if (volumeSort === 'number_desc') {
-    items.reverse();
-  }
-
+  });
+  pushGhosts(filteredVolumes.length);
   return items;
 };

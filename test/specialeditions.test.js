@@ -210,3 +210,106 @@ test('cleanOfficialDate: the 2999-12-31 "not announced yet" placeholder is no re
     assert.equal(mp.cleanOfficialDate(''), null);
     assert.equal(mp.cleanOfficialDate('kein datum'), null);
 });
+
+const notFoundFetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
+async function offline(fn) {
+    const realFetch = global.fetch;
+    global.fetch = notFoundFetch;
+    try { return await fn(); } finally { global.fetch = realFetch; }
+}
+const ceAt = (n, id, extra = {}) => ({ ...ce(n, id), ...extra });
+
+test('lookup of Collectors Edition 10 returns CE 10, not the first CE of the edition', () => offline(async () => {
+    seed([ov('1'), ov('10'), ceAt(1, 12, { price: 25 }), ceAt(10, 101, { price: 35, release_date: '2023-03-03' })]);
+    const id = newManga('Lookup CE');
+    const hit = await mp.lookupVolumeMetadata(id, '10', { type: 'special_edition' });
+    assert.equal(hit.data.mp_volume_id, 101);
+    assert.equal(hit.data.price, 35);
+    assert.equal((await mp.lookupVolumeMetadata(id, '5', { type: 'special_edition' })).matched, false);
+    assert.equal((await mp.lookupVolumeMetadata(id, '10 (Collectors Edition)', { type: 'special_edition' })).data.mp_volume_id, 101);
+    assert.equal((await mp.lookupVolumeMetadata(id, '10 Collectors Edition')).data.mp_volume_id, 101);
+    assert.equal((await mp.lookupVolumeMetadata(id, 'Limited Edition 10')).data.mp_volume_id, 101);
+    assert.equal((await mp.lookupVolumeMetadata(id, '10', { type: 'volume' })).data.mp_volume_id, 10);
+}));
+
+test('autofill fills each volume from the entry of its own type', () => offline(async () => {
+    const reg5 = ov('5', { id: 5, num: 5, price: 7.5, pages: 190, release_date: '2020-05-01' });
+    const ce5 = ceAt(5, 105, { price: 30, pages: 210, release_date: '2022-02-02' });
+    seed([ce5, reg5, ov('1', { id: 1, num: 1, price: 6, release_date: '2019-01-01' })]);
+    const id = newManga('Autofill Typen');
+    addVol(id, '5', 'special_edition', 'Vorhanden', 'Collectors Edition');
+    addVol(id, '5', 'volume');
+    addVol(id, 'Special 1', 'special');
+    addVol(id, '7', 'special_edition');
+
+    await mp.autofillMangaVolumes(id, { overwrite: true });
+    const got = db.prepare('SELECT volume_number, type, price, pages, release_date FROM volumes WHERE manga_id = ? ORDER BY id').all(id)
+        .map(r => `${r.volume_number}|${r.type}|${r.price}|${r.pages}|${r.release_date}`);
+    assert.deepEqual(got, [
+        '5|special_edition|30|210|2022-02-02',
+        '5|volume|7.5|190|2020-05-01',
+        'Special 1|special|null|null|null',
+        '7|special_edition|null|null|null'
+    ]);
+    const second = await mp.autofillMangaVolumes(id, { overwrite: true });
+    assert.equal(second.updated_count, 0, 'a correctly filled CE stays unchanged');
+}));
+
+test('autofill uses the stored Manga Passion link when it still fits the volume', () => offline(async () => {
+    seed([ov('3', { id: 3, num: 3, price: 7 }), ceAt(3, 103, { price: 30 }), ceAt(3, 203, { title: 'Limited Edition', price: 45 })]);
+    const id = newManga('Autofill Link');
+    const volId = Number(addVol(id, '3', 'special_edition').lastInsertRowid);
+    db.prepare('UPDATE volumes SET manga_passion_volume_id = 203 WHERE id = ?').run(volId);
+    await mp.autofillMangaVolumes(id);
+    assert.equal(db.prepare('SELECT price FROM volumes WHERE id = ?').get(volId).price, 45);
+}));
+
+test('reconcile and import: a regular volume titled "Der Boxer" is a volume, not a Schuber', async () => {
+    seed([ov('11'), ov('12', { title: 'Der Boxer', num: 12 }), ov('13', { title: 'Expedition ins Nichts', num: 13 })]);
+    const id = newManga('Boxer');
+    for (const n of ['11', '12', '13']) addVol(id, n, 'volume');
+    const res = await mp.reconcileMangaGaps(id);
+    assert.deepEqual(res.gaps, []);
+    const result = await mp.batchImportGaps(id, ['12'], 'Fehlt', EDITION_ID);
+    assert.equal(result.skipped_owned_count, 1);
+    assert.equal(rows(id).length, 3);
+});
+
+test('reconcile: an owned Sonderband named "... Edition" is not reported as a gap', async () => {
+    seed([ov('1'), ov('Special', { id: 950, title: 'Winter Edition', type: 0 })]);
+    const id = newManga('Sonderband');
+    addVol(id, '1', 'volume');
+    addVol(id, 'Winter Edition', 'special');
+    const res = await mp.reconcileMangaGaps(id);
+    assert.deepEqual(res.gaps, []);
+});
+
+test('cleanOfficialDate: a month-only release stays month-only, malformed dates are no dates', () => {
+    const { cleanOfficialDate, isOfficialReleased } = require('../services/mangaPassion/classify');
+    assert.equal(cleanOfficialDate({ year: 2026, month: 11, day: null, date: '2026-11-30T00:00:00+00:00' }), '2026-11');
+    assert.equal(cleanOfficialDate({ year: 2001, month: 1, day: null, date: '2001-01-31T00:00:00+00:00' }), '2001-01');
+    assert.equal(cleanOfficialDate({ year: 2026, month: 3, day: 3, date: '2026-03-03T00:00:00+00:00' }), '2026-03-03');
+    assert.equal(cleanOfficialDate({ date: '2026-03-03T00:00:00+00:00' }), '2026-03-03');
+    assert.equal(cleanOfficialDate({ year: 2999, month: 12, day: null, date: '2999-12-31T00:00:00+00:00' }), null);
+    assert.equal(cleanOfficialDate({ date: null }), null);
+    for (const bad of ['31.12.2026', '2026', '0000-00-00', '2026-13-01', '2026-02-30', '1850-01-01']) {
+        assert.equal(cleanOfficialDate(bad), null, bad);
+    }
+    assert.equal(cleanOfficialDate('2026-11'), '2026-11');
+
+    // month-only: released once the month is over
+    assert.equal(isOfficialReleased('2026-11', new Date('2026-11-15T12:00:00Z')), false);
+    assert.equal(isOfficialReleased('2026-11', new Date('2026-12-01T00:00:00Z')), true);
+    assert.equal(isOfficialReleased('2026-11-14', new Date('2026-11-15T00:00:00Z')), true);
+    assert.equal(isOfficialReleased(null), false);
+});
+
+test('lookup by Manga Passion volume id keeps a month-only date month-only', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: 1242, number: 5, numberDisplay: '5', year: 2001, month: 1, day: null, date: '2001-01-31T00:00:00+00:00' }) });
+        const res = await mp.lookupVolumeMetadata(null, '5', { mp_volume_id: '1242' });
+        assert.equal(res.data.release_date, '2001-01');
+        assert.equal(res.data.release_year, 2001);
+    } finally { global.fetch = realFetch; }
+});

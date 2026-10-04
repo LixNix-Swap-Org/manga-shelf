@@ -1,0 +1,102 @@
+# Desktop installers (spec-distribution D3). Signing only when the CI provides certificates (CSC_LINK /
+# CSC_KEY_PASSWORD per platform, see README "Release workflow"); without them CSC_IDENTITY_AUTO_DISCOVERY=false builds unsigned.
+appId: de.mangashelf.desktop
+productName: Manga Shelf
+copyright: Manga Shelf
+artifactName: manga-shelf-${version}-${os}-${arch}.${ext}
+directories:
+  output: dist/installers
+  buildResources: build
+files:
+  - package.json
+  - main.js
+  - preload.js
+  - menu.js
+  - tray.js
+  - modes.js
+  - lib/**
+  - ui/**
+  - assets/**
+extraResources:
+  - from: dist/stage/server
+    to: server
+    filter:
+      - "**/*"
+  # electron-builder leaves node_modules out of extraResources unless they are named explicitly
+  - from: dist/stage/server/node_modules
+    to: server/node_modules
+    filter:
+      - "**/*"
+  - from: dist/stage/app-frontend
+    to: app-frontend
+  - from: dist/stage/qr.mjs
+    to: qr.mjs
+asar: true
+protocols:
+  - name: Manga Shelf
+    schemes:
+      - manga-shelf
+publish: null
+
+mac:
+  target:
+    - target: dmg
+      arch: universal
+    - target: zip
+      arch: universal
+  icon: build/icons/icon.png
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Manga Shelf nutzt die Kamera zum Scannen von ISBN-Barcodes.
+    NSLocalNetworkUsageDescription: Manga Shelf stellt deine Sammlung anderen Geräten im Heimnetz bereit.
+dmg:
+  artifactName: manga-shelf-${version}-mac-universal.${ext}
+
+win:
+  target:
+    - target: nsis
+      arch: x64
+    - target: portable
+      arch: x64
+  icon: build/icons/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Manga Shelf
+  artifactName: manga-shelf-${version}-windows-x64-setup.${ext}
+portable:
+  artifactName: manga-shelf-${version}-windows-x64-portable.${ext}
+
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+  icon: build/icons
+  category: Office
+  executableName: manga-shelf
+  maintainer: Manga Shelf <noreply@manga-shelf.invalid>
+  synopsis: Manga-Sammlung verwalten
+  description: Manga Shelf verwaltet deine Manga-Sammlung lokal, als Client eines Servers oder als Server im Heimnetz.
+  desktop:
+    entry:
+      Name: Manga Shelf
+      Comment: Manga-Sammlung verwalten
+      StartupWMClass: Manga Shelf
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0

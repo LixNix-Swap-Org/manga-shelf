@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Manga Shelf
+Comment=Manga-Sammlung verwalten
+Exec=manga-shelf %U
+Icon=de.mangashelf.desktop
+Categories=Office;
+MimeType=x-scheme-handler/manga-shelf;
+StartupWMClass=Manga Shelf
+Terminal=false

@@ -1,23 +1,28 @@
+// Remote image download with SSRF protection: only public addresses, size cap, timeouts, magic-byte check.
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
 const net = require('net');
+const { detectImageExt } = require('../core/lib/imageCheck');
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 10000;
 const TOTAL_TIMEOUT_MS = 30000;
-const USER_AGENT = 'MangaShelf (+https://github.com/MoltresHD/manga-shelf)';
+const USER_AGENT = 'MangaShelf (+https://github.com/LixNix-Swap-Org/manga-shelf)';
 
 function isPrivateIPv4(address) {
-    const [a, b] = address.split('.').map(Number);
+    const [a, b, c] = address.split('.').map(Number);
     return a === 0 || a === 10 || a === 127 ||
         (a === 100 && b >= 64 && b <= 127) ||
         (a === 169 && b === 254) ||
         (a === 172 && b >= 16 && b <= 31) ||
         (a === 192 && b === 168) ||
-        (a === 192 && b === 0) ||
+        (a === 192 && b === 0 && (c === 0 || c === 2)) ||   // the rest of 192.0/16 is public (e.g. i0.wp.com)
+        (a === 192 && b === 88 && c === 99) ||
         (a === 198 && (b === 18 || b === 19)) ||
+        (a === 198 && b === 51 && c === 100) ||
+        (a === 203 && b === 0 && c === 113) ||
         a >= 224;
 }
 
@@ -40,10 +45,8 @@ function ipv6Groups(address) {
 const v4FromGroups = (hi, lo) => [hi >> 8, hi & 255, lo >> 8, lo & 255].join('.');
 
 /**
- * True for loopback, private, link-local, CGNAT, multicast and other non-public addresses.
- * IPv6 is compared numerically, because the URL parser and DNS write the same address in
- * different notations ("[::ffff:127.0.0.1]" becomes "[::ffff:7f00:1]"). IPv6 forms that carry
- * an IPv4 address (mapped, compatible, NAT64, 6to4) are judged by that IPv4 address.
+ * True for loopback, private, link-local, CGNAT, multicast and other non-public addresses. IPv6 is compared
+ * numerically (notations differ between URL parser and DNS); forms carrying an IPv4 address are judged by it.
  */
 function isPrivateAddress(address) {
     if (net.isIPv4(address)) return isPrivateIPv4(address);
@@ -85,16 +88,6 @@ function makeSafeLookup(isBlocked) {
             callback(null, list[0].address, list[0].family);
         });
     };
-}
-
-function detectImageExt(buf) {
-    if (buf.length < 12) return null;
-    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
-    if (buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return '.png';
-    if (buf.slice(0, 4).toString('ascii') === 'GIF8') return '.gif';
-    if (buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP') return '.webp';
-    if (buf.slice(4, 8).toString('ascii') === 'ftyp' && /avif|avis/.test(buf.slice(8, 12).toString('ascii'))) return '.avif';
-    return null;
 }
 
 function requestOnce(url, depthLeft, ctx) {
@@ -163,9 +156,8 @@ function requestOnce(url, depthLeft, ctx) {
 }
 
 /**
- * Downloads an image from a remote URL with SSRF protection (public addresses only), a size cap,
- * an idle timeout plus an overall deadline and magic-byte verification. Resolves with { buffer, ext }.
- * `options` exists for tests only; production callers pass just the URL.
+ * Downloads a remote image with SSRF protection (public addresses only), size cap, idle and overall timeouts and
+ * magic-byte verification; resolves { buffer, ext }. `options` is for tests only.
  */
 function fetchRemoteImage(url, options = {}) {
     const isBlocked = options.isBlockedAddress || isPrivateAddress;

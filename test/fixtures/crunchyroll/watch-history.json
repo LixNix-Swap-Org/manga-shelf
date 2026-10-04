@@ -1,0 +1,173 @@
+{
+    "total": 8,
+    "data": [
+        {
+            "id": "GTESTEP008",
+            "parent_id": "GTESTSEA01",
+            "parent_type": "season",
+            "date_played": "2026-10-03T20:15:00Z",
+            "playhead": 300,
+            "fully_watched": false,
+            "panel": {
+                "id": "GTESTEP008",
+                "type": "episode",
+                "title": "Test Episode Eight",
+                "slug_title": "test-episode-eight",
+                "episode_metadata": {
+                    "series_id": "GTESTSER01",
+                    "series_title": "Frieren: Beyond Journey's End",
+                    "series_slug_title": "frieren-beyond-journeys-end",
+                    "season_id": "GTESTSEA01",
+                    "season_number": 1,
+                    "season_sequence_number": 1,
+                    "episode_number": 8,
+                    "episode": "8",
+                    "sequence_number": 8,
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "id": "GTESTEP007",
+            "parent_id": "GTESTSEA01",
+            "parent_type": "season",
+            "date_played": "2026-10-02T20:15:00Z",
+            "playhead": 1420,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTEP007",
+                "type": "episode",
+                "title": "Test Episode Seven",
+                "slug_title": "test-episode-seven",
+                "episode_metadata": {
+                    "series_id": "GTESTSER01",
+                    "series_title": "Frieren: Beyond Journey's End",
+                    "season_id": "GTESTSEA01",
+                    "season_number": 1,
+                    "episode_number": 7,
+                    "episode": "7",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "id": "GTESTDUB05",
+            "parent_id": "GTESTSEA9D",
+            "parent_type": "season",
+            "date_played": "2026-09-20T18:00:00Z",
+            "playhead": 1440,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTDUB05",
+                "type": "episode",
+                "title": "Test Episode Five (Dub)",
+                "slug_title": "test-episode-five-dub",
+                "episode_metadata": {
+                    "series_id": "GTESTSER01",
+                    "series_title": "Frieren: Beyond Journey's End",
+                    "season_id": "GTESTSEA9D",
+                    "season_number": 1,
+                    "episode_number": 5,
+                    "episode": "5",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "id": "GTESTS2E02",
+            "parent_id": "GTESTSEA02",
+            "parent_type": "season",
+            "date_played": "2026-10-01T19:00:00Z",
+            "playhead": 1435,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTS2E02",
+                "type": "episode",
+                "title": "Test Season Two Episode Two",
+                "slug_title": "test-season-two-episode-two",
+                "episode_metadata": {
+                    "series_id": "GTESTSER01",
+                    "series_title": "Frieren: Beyond Journey's End",
+                    "season_id": "GTESTSEA02",
+                    "season_number": 2,
+                    "episode_number": 2,
+                    "episode": "2",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "id": "GTESTDG003",
+            "parent_id": "GTESTDGS01",
+            "parent_type": "season",
+            "date_played": "2026-09-30T21:00:00Z",
+            "playhead": 1350,
+            "fully_watched": false,
+            "panel": {
+                "id": "GTESTDG003",
+                "type": "episode",
+                "title": "Test Dungeon Three",
+                "slug_title": "test-dungeon-three",
+                "episode_metadata": {
+                    "series_id": "GTESTDNG01",
+                    "series_title": "Delicious in Dungeon",
+                    "season_id": "GTESTDGS01",
+                    "season_number": 1,
+                    "episode_number": 3,
+                    "episode": "3",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "id": "GTESTSPC01",
+            "parent_id": "GTESTDGS01",
+            "parent_type": "season",
+            "date_played": "2026-09-29T21:00:00Z",
+            "playhead": 600,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTSPC01",
+                "type": "episode",
+                "title": "Test Special",
+                "slug_title": "test-special",
+                "episode_metadata": {
+                    "series_id": "GTESTDNG01",
+                    "series_title": "Delicious in Dungeon",
+                    "season_number": 1,
+                    "episode_number": null,
+                    "episode": "SP",
+                    "duration_ms": 600000
+                }
+            }
+        },
+        {
+            "id": "GTESTMOV01",
+            "parent_id": "GTESTMVL01",
+            "parent_type": "movie_listing",
+            "date_played": "2026-09-28T21:00:00Z",
+            "playhead": 5400,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTMOV01",
+                "type": "movie",
+                "title": "Test Movie",
+                "slug_title": "test-movie",
+                "movie_metadata": { "movie_listing_id": "GTESTMVL01", "movie_listing_title": "Test Movie", "duration_ms": 5400000 }
+            }
+        },
+        {
+            "id": "GTESTBAD01",
+            "date_played": "2026-09-27T21:00:00Z",
+            "playhead": 1440,
+            "fully_watched": true,
+            "panel": {
+                "id": "GTESTBAD01",
+                "type": "episode",
+                "slug_title": "broken",
+                "episode_metadata": { "series_id": "../evil", "series_title": "Broken", "episode_number": 1 }
+            }
+        }
+    ],
+    "meta": { "total_before_filter": 8 }
+}

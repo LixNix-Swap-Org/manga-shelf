@@ -1,3 +1,4 @@
+// ISBN normalisation (utils/isbn.js) and ISBN lookups through the API.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeIsbn, isbn13CheckDigit } = require('../utils/isbn');
@@ -21,6 +22,15 @@ test('normalizeIsbn: empty input is null, odd input is kept without separators',
     assert.equal(normalizeIsbn('abc'), 'ABC');
 });
 
+test('normalizeIsbn: an ISBN-10 with a wrong check digit is kept as typed, not turned into another book', () => {
+    assert.equal(normalizeIsbn('1234567890'), '1234567890');
+    assert.equal(normalizeIsbn('3551745812'), '3551745812');
+    assert.equal(normalizeIsbn('355174581x'), '355174581X');
+    assert.equal(normalizeIsbn('3-551-74582-1'), '3551745821');
+    assert.equal(normalizeIsbn('3551745811'), '9783551745811');
+    assert.equal(normalizeIsbn('080442957x'), '9780804429573');
+});
+
 let ctx;
 let admin;
 
@@ -41,6 +51,9 @@ test('volumes store the canonical ISBN no matter how it was typed', async () => 
 
     assert.equal((await admin('PUT', `/volumes/${(await read()).id}`, { isbn: '3-551-74582-X' })).status, 200);
     assert.equal((await read()).isbn, '9783551745828');
+
+    assert.equal((await admin('PUT', `/volumes/${(await read()).id}`, { isbn: '1234567890' })).status, 200);
+    assert.equal((await read()).isbn, '1234567890');
 
     assert.equal((await admin('PUT', `/volumes/${(await read()).id}`, { isbn: '' })).status, 200);
     assert.equal((await read()).isbn, null);

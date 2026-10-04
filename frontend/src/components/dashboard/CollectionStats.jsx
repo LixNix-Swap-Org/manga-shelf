@@ -1,54 +1,74 @@
-import { Library, Layers, Coins, CheckCircle2 } from 'lucide-react';
+import { useId } from 'react';
+import { Library, Layers, Coins, CircleCheck } from 'lucide-react';
+import { formatEuro, formatMoney } from '../../utils/format';
+import { t } from '../../i18n/index.js';
 
-/** Quick stats bar: series, owned volumes, collection value, completed series. */
-export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries, handleOpenStats }) {
+/** Quick stats bar: series, owned volumes, collection value (euro; other currencies as a hint below), completed series. */
+// four columns from md: the icon tiles return at xl, below they would push the value past the card edge
+export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalCollectionValue, otherCurrencyTotals = [], completedSeries, handleOpenStats, isOfflineMode = false }) {
+  const valueText = formatEuro(totalCollectionValue ?? 0);
+  // the separator stays with the next amount when the line wraps
+  const otherText = otherCurrencyTotals.map((o) => formatMoney(o.value, o.currency)).join(' ·\u00a0');
+  const tileId = useId();
   return (
       <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
     <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
+      <div className="w-9 h-9 sm:w-11 sm:h-11 md:hidden xl:flex rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
         <Library className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400" />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Reihen</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium leading-tight break-words hyphens-auto">{t('Reihen')}</p>
         <p className="text-lg sm:text-2xl font-extrabold text-white">{totalSeries}</p>
       </div>
     </div>
 
     <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shrink-0">
+      <div className="w-9 h-9 sm:w-11 sm:h-11 md:hidden xl:flex rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shrink-0">
         <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Bände im Besitz</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium leading-tight break-words hyphens-auto">{t('Bände im Besitz')}</p>
         <p className="text-lg sm:text-2xl font-extrabold text-white">{totalOwnedVolumes}</p>
       </div>
     </div>
 
-    <div 
+    <button
+      type="button"
       onClick={handleOpenStats}
-      className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900/90 cursor-pointer transition-all duration-200 group"
-      title="Klicken für das vollständige Finanz- & Statistik-Dashboard"
+      disabled={isOfflineMode}
+      aria-labelledby={`${tileId}-label ${tileId}-value${otherText ? ` ${tileId}-other` : ''} ${tileId}-hint`}
+      title={isOfflineMode ? t('Offline nicht verfügbar') : t('Klicken für das vollständige Finanz- & Statistik-Dashboard')}
+      className="glass-panel w-full text-left p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 enabled:hover:border-emerald-500/50 enabled:hover:bg-slate-900/90 enabled:cursor-pointer disabled:cursor-default transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
     >
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-hover:scale-105 group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
-        <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+      <div className="w-9 h-9 sm:w-11 sm:h-11 md:hidden xl:flex rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-enabled:group-hover:scale-105 group-enabled:group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
+        <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" aria-hidden="true" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium truncate">Sammlungswert</p>
-          <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-semibold hidden sm:inline">Details ↗</span>
+        <div className="flex items-start justify-between gap-1.5">
+          <p id={`${tileId}-label`} className="min-w-0 text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium leading-tight break-words hyphens-auto">{t('Sammlungswert')}</p>
+          {!isOfflineMode && (
+            <span aria-hidden="true" className="shrink-0 text-[10px] leading-tight text-emerald-400 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity font-semibold hidden xl:inline">{t('Details ↗')}</span>
+          )}
         </div>
-        <p className="text-sm sm:text-xl lg:text-2xl font-extrabold text-emerald-400 font-mono tracking-tight whitespace-nowrap">
-          {totalCollectionValue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+        <p id={`${tileId}-value`} className="text-sm sm:text-xl lg:text-2xl font-extrabold text-emerald-400 font-mono tracking-tight whitespace-nowrap">
+          {valueText}
         </p>
+        {otherText && (
+          // wraps between the currencies: a truncated line hides amounts on phones (no tooltip on touch)
+          <p id={`${tileId}-other`} className="text-[10px] sm:text-xs text-emerald-300/80 font-mono break-words" title={t('Weitere Währungen (nicht umgerechnet): {amounts}', { amounts: otherText })}>
+            {'+\u00a0'}{otherText}
+          </p>
+        )}
+        <span id={`${tileId}-hint`} className="sr-only">– {isOfflineMode ? t('Statistik offline nicht verfügbar') : t('Statistik öffnen')}</span>
       </div>
-    </div>
+    </button>
 
     <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+      <div className="w-9 h-9 sm:w-11 sm:h-11 md:hidden xl:flex rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+        <CircleCheck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Abgeschlossen</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium leading-tight break-words hyphens-auto">{t('Komplett')}</p>
         <p className="text-lg sm:text-2xl font-extrabold text-white">{completedSeries}</p>
       </div>
     </div>

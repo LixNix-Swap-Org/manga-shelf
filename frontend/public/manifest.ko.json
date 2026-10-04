@@ -1,0 +1,101 @@
+{
+  "id": "/",
+  "name": "MangaShelf - 만화 컬렉션 & 트래커",
+  "short_name": "MangaShelf",
+  "description": "나만의 만화 컬렉션, 권 트래커, 읽음 상태, 쇼핑 목록",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "쇼핑 목록",
+      "short_name": "쇼핑",
+      "description": "매장에서 바로 미보유 권을 확인해요",
+      "url": "/?view=shopping",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "바코드 스캔",
+      "short_name": "스캔",
+      "description": "매장에서 사진으로 권을 스캔해 컬렉션과 대조해요",
+      "url": "/?view=shopping&scan=1",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Release Radar",
+      "short_name": "레이더",
+      "description": "예약 구매 & 신간",
+      "url": "/?view=radar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "통계",
+      "short_name": "통계",
+      "description": "컬렉션 가치 & 독서 통계",
+      "url": "/?view=stats",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "categories": [
+    "books",
+    "entertainment",
+    "lifestyle"
+  ],
+  "lang": "ko"
+}

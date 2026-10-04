@@ -2,26 +2,24 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Manga Shelf &amp; Tracker</title>
     <meta name="description" content="Elegante persönliche Manga-Sammlung, Bände-Tracker, Lesestatus und Einkaufsliste" />
     <meta name="theme-color" content="#0b0f19" />
+    <meta name="color-scheme" content="dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="MangaShelf" />
     
     <!-- Icons & Manifest -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#0b0f19] text-slate-100 min-h-screen selection:bg-sky-500 selection:text-white">
-    <div id="root"></div>
+  <body class="bg-[#0b0f19] text-slate-100 min-h-screen pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] selection:bg-sky-500 selection:text-white">
+    <!-- same markup as App's LoadingScreen: visible before the script has loaded, replaced by the first render -->
+    <div id="root"><div class="flex min-h-screen items-center justify-center bg-slate-950 text-brand-400"><div role="status" class="flex flex-col items-center gap-3"><div class="w-10 h-10 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" aria-hidden="true"></div><span class="text-xs font-medium text-slate-400">Manga Shelf wird geladen...</span></div></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

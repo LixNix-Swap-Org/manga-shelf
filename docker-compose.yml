@@ -1,17 +1,43 @@
+# Update: docker compose pull && docker compose up -d   (Daten in ./data bleiben erhalten)
 services:
   manga-shelf:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/lixnix-swap-org/manga-shelf:latest
+    # Selbst bauen statt das fertige Image zu laden: die image-Zeile durch diese ersetzen (docker compose up -d --build)
+    # build: .
     container_name: manga-shelf
     restart: unless-stopped
+    # Konsolenbefehle: docker exec -it -u node manga-shelf node scripts/admin.js status (immer -u node, sonst gehören
+    # neue Dateien root). Eingabe per `docker attach manga-shelf` nur mit diesen beiden Zeilen (danach
+    # docker compose up -d); verlassen mit Strg+P, Strg+Q, Strg+C beendet den Server.
+    # stdin_open: true
+    # tty: true
     ports:
       - "3000:3000"
+      # Mit einem Reverse Proxy auf demselben Host stattdessen nur lokal veröffentlichen (siehe TRUST_PROXY):
+      # - "127.0.0.1:3000:3000"
     environment:
+      # Alle Variablen mit Standardwerten: README „5. Configuration“ und .env.example
       - NODE_ENV=production
       - PORT=3000
-      # Optional: eigenes Secret (mind. 32 Zeichen). Ohne Angabe wird automatisch ein
-      # zufälliges Secret erzeugt und in der Datenbank gespeichert.
+      # Optional: eigenes Secret (mind. 32 Zeichen). Ohne Angabe wird beim ersten Start ein zufälliger
+      # Schlüssel in ./data/secret.key (Rechte 0600) erzeugt; er steckt in keinem Backup-ZIP.
       # - JWT_SECRET=<mind. 32 zufällige Zeichen, z. B. via `openssl rand -hex 32`>
+      # Hinter einem Reverse Proxy (Caddy/nginx/Traefik vor diesem Container): die Adresse oder das Subnetz des
+      # Proxys eintragen; nur er darf dann die Client-Adresse per X-Forwarded-For setzen (Login-Rate-Limit, Sperren).
+      # Ohne diese Zeile teilen sich hinter einem Proxy alle Clients ein Login-Limit; ohne Proxy auskommentiert
+      # lassen (Standard "loopback"). Port 3000 darf dann nur über den Proxy erreichbar sein: Proxy auf dem Host ->
+      # oben "127.0.0.1:3000:3000", Proxy-Container im selben Docker-Netz -> gar kein ports-Eintrag. Veröffentlichte
+      # Docker-Ports umgehen ufw/firewalld. Eine Hop-Zahl (TRUST_PROXY=1) vertraut jedem, der sich verbindet: bei
+      # öffentlich erreichbarem Port kann so jeder eine fremde Adresse vortäuschen und deren Login sperren.
+      # Proxy auf dem Host: nur die Gateway-Adresse dieses Docker-Netzes eintragen (`docker network inspect
+      # manga-shelf_default` -> Gateway); ein Subnetz nur für ein eigenes Netz, in dem allein Proxy-Container und App hängen.
+      # - TRUST_PROXY=loopback, 172.18.0.1
+      # Ersteinrichtung: der Einrichtungscode für das erste Admin-Konto steht beim Start im Log
+      # (`docker compose logs manga-shelf`). Optional fest vorgeben:
+      # - SETUP_TOKEN=<eigener Code>   # mindestens 12 Zeichen
+      # Optional: Zeitzone für das Release-Radar ("heute"), Standard Europe/Berlin
+      # - APP_TIMEZONE=Europe/Berlin
     volumes:
+      # Datenbank und Bilder liegen in ./data auf dem Host. Der Container übernimmt beim Start den Besitz
+      # des Ordners (uid 1000, Benutzer `node`), auch wenn Docker ihn als root angelegt hat.
       - ./data:/app/data

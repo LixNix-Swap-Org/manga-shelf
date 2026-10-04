@@ -1,111 +1,108 @@
-import { X, Calendar, Coins, Bookmark, Check, Truck } from 'lucide-react';
+import { useId } from 'react';
+import { X, Calendar, Coins, Bookmark, Check, Truck, ShoppingCart } from 'lucide-react';
+import { PRIORITY_OPTIONS } from '../../../utils/priority';
+import { t } from '../../../i18n/index.js';
+import { currencySymbol, formatNumber } from '../../../utils/format';
+
+const PILL_IDLE = 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent';
+
+// every status VOLUME_STATUSES (core/lib/validate.js) can store; 'Gelesen' is a read entry, not a status
+// i18n
+const STATUS_OPTIONS = [
+  { value: 'Vorhanden', label: 'Im Besitz', Icon: Check, iconClass: 'text-emerald-400', active: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30' },
+  { value: 'Bestellt', label: 'Bestellt', Icon: ShoppingCart, iconClass: 'text-amber-400', active: 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-950/40 ring-1 ring-amber-500/30' },
+  { value: 'Vorbestellt', label: 'Vorbestellt', Icon: Truck, iconClass: 'text-sky-400', active: 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm shadow-sky-950/40 ring-1 ring-sky-500/30' },
+  { value: 'Erscheint bald', label: 'Erscheint bald', Icon: Calendar, iconClass: 'text-purple-400', active: 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-950/40 ring-1 ring-purple-500/30' },
+  { value: 'Fehlt', label: 'Fehlt noch', Icon: X, iconClass: 'text-rose-400', active: 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30' }
+];
 
 /** Collector status switch and purchase price. */
 export default function StatusPriceFields({
   editVolForm,
-  setEditVolForm
+  setEditVolForm,
+  errors = {},
+  currency = 'EUR'
 }) {
+  const id = useId();
+  const symbol = currencySymbol(currency);
+  const setField = (key) => (e) => {
+    const value = e.target.value;
+    setEditVolForm(prev => ({ ...prev, [key]: value }));
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-3.5 items-end">
       <div className="sm:col-span-7">
-        <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-          <Bookmark className="w-3.5 h-3.5 text-brand-400" /> Sammler-Status
-        </label>
+        <span id={`${id}-status`} className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+          <Bookmark className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Sammler-Status')}
+        </span>
         {/* Segmented Switch Pill Control */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/90 rounded-xl border border-slate-800 shadow-inner">
-          <button
-            type="button"
-            onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorhanden' })}
-            className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
-              editVolForm.status === 'Vorhanden'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
-            }`}
-          >
-            <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5] shrink-0" />
-            <span className="truncate">Im Besitz</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditVolForm({ ...editVolForm, status: 'Vorbestellt' })}
-            className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
-              editVolForm.status === 'Vorbestellt'
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm shadow-sky-950/40 ring-1 ring-sky-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5] shrink-0" />
-            <span className="truncate">Vorbestellt</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditVolForm({ ...editVolForm, status: 'Erscheint bald' })}
-            className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
-              editVolForm.status === 'Erscheint bald'
-                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-950/40 ring-1 ring-purple-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5 text-purple-400 stroke-[2.5] shrink-0" />
-            <span className="truncate">Erscheint bald</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditVolForm({ ...editVolForm, status: 'Fehlt' })}
-            className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
-              editVolForm.status === 'Fehlt'
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-950/40 ring-1 ring-rose-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
-            }`}
-          >
-            <X className="w-3.5 h-3.5 text-rose-400 stroke-[2.5] shrink-0" />
-            <span className="truncate">Fehlt noch</span>
-          </button>
+        <div role="group" aria-labelledby={`${id}-status`} className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/90 rounded-xl border border-slate-800 shadow-inner">
+          {STATUS_OPTIONS.map(({ value, label, Icon, iconClass, active }, i) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={editVolForm.status === value}
+              onClick={() => setEditVolForm(prev => ({ ...prev, status: value }))}
+              className={`py-2 px-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 select-none truncate ${
+                i === STATUS_OPTIONS.length - 1 ? 'col-span-2' : ''
+              } ${editVolForm.status === value ? active : PILL_IDLE}`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${iconClass} stroke-[2.5] shrink-0`} aria-hidden="true" />
+              <span className="truncate">{t(label)}</span>
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="sm:col-span-5">
-        <label className="block text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
-          <Coins className="w-3.5 h-3.5" /> Kaufpreis (€)
+        <label htmlFor={`${id}-price`} className="block text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
+          <Coins className="w-3.5 h-3.5" aria-hidden="true" /> {t('Kaufpreis ({symbol})', { symbol })}
         </label>
         <div className="relative">
-          <input 
-            type="text" 
-            placeholder="0,00"
-            className="input-field border-emerald-500/40 focus:border-emerald-500 font-mono font-bold text-emerald-300 pr-8 py-2.5 text-sm" 
-            value={editVolForm.price} 
-            onChange={e => setEditVolForm({ ...editVolForm, price: e.target.value })} 
+          <input
+            id={`${id}-price`}
+            type="text"
+            inputMode="decimal"
+            placeholder={formatNumber(0, 2, { fixed: true })}
+            aria-invalid={errors.price ? true : undefined}
+            aria-describedby={errors.price ? `${id}-price-error` : undefined}
+            className={`input-field border-emerald-500/40 focus:border-emerald-500 font-mono font-bold text-emerald-300 ${symbol.length > 1 ? 'pr-14' : 'pr-8'} py-2.5 text-base sm:text-sm`}
+            value={editVolForm.price ?? ''}
+            onChange={setField('price')}
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-emerald-500/70 font-bold pointer-events-none">€</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-emerald-500/70 font-bold pointer-events-none" aria-hidden="true">{symbol}</span>
         </div>
+        {errors.price && <p id={`${id}-price-error`} className="text-[11px] text-red-400 mt-1">{errors.price}</p>}
       </div>
 
       {editVolForm.status === 'Fehlt' && (
         <>
           <div className="sm:col-span-7">
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Wunsch-Priorität</label>
+            <label htmlFor={`${id}-priority`} className="block text-xs font-semibold text-slate-300 mb-1.5">{t('Wunsch-Priorität')}</label>
             <select
-              id="vol-priority"
-              className="input-field py-2.5 text-sm"
+              id={`${id}-priority`}
+              className="input-field py-2.5 text-base sm:text-sm"
               value={editVolForm.priority ?? '0'}
-              onChange={e => setEditVolForm({ ...editVolForm, priority: e.target.value })}
+              onChange={setField('priority')}
             >
-              <option value="0">Keine</option>
-              <option value="1">Niedrig</option>
-              <option value="2">Mittel</option>
-              <option value="3">Hoch</option>
+              {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={String(o.value)}>{t(o.label)}</option>)}
             </select>
           </div>
           <div className="sm:col-span-5">
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Zielpreis (€)</label>
+            <label htmlFor={`${id}-target-price`} className="block text-xs font-semibold text-slate-300 mb-1.5">{t('Zielpreis ({symbol})', { symbol })}</label>
             <input
-              id="vol-target-price"
+              id={`${id}-target-price`}
               type="text"
-              placeholder="max. Preis, z. B. gebraucht"
-              className="input-field py-2.5 text-sm font-mono"
+              inputMode="decimal"
+              placeholder={t('max. Preis, z. B. gebraucht')}
+              aria-invalid={errors.target_price ? true : undefined}
+              aria-describedby={errors.target_price ? `${id}-target-price-error` : undefined}
+              className="input-field py-2.5 text-base sm:text-sm font-mono"
               value={editVolForm.target_price ?? ''}
-              onChange={e => setEditVolForm({ ...editVolForm, target_price: e.target.value })}
+              onChange={setField('target_price')}
             />
+            {errors.target_price && <p id={`${id}-target-price-error`} className="text-[11px] text-red-400 mt-1">{errors.target_price}</p>}
           </div>
         </>
       )}

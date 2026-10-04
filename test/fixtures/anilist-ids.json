@@ -1,0 +1,202 @@
+{
+ "data": {
+  "Page": {
+   "media": [
+    {
+     "id": 21,
+     "idMal": 21,
+     "type": "ANIME",
+     "format": "TV",
+     "status": "RELEASING",
+     "episodes": null,
+     "duration": 24,
+     "season": "FALL",
+     "seasonYear": 1999,
+     "siteUrl": "https://anilist.co/anime/21",
+     "startDate": {
+      "year": 1999,
+      "month": 10,
+      "day": 20
+     },
+     "endDate": {
+      "year": null,
+      "month": null,
+      "day": null
+     },
+     "title": {
+      "romaji": "ONE PIECE",
+      "english": "ONE PIECE",
+      "native": "ONE PIECE"
+     },
+     "synonyms": [
+      "ワンピース",
+      "海贼王",
+      "וואן פיס",
+      "ون بيس",
+      "วันพีซ",
+      "Vua Hải Tặc",
+      "All'arrembaggio!",
+      "Tutti all'arrembaggio!",
+      "Ντρέηκ, το Κυνήγι του Θησαυρού",
+      "OP",
+      "Ван-Пис"
+     ],
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21-ELSYx3yMPcKM.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21-ELSYx3yMPcKM.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/21-wf37VakJmZqs.jpg",
+     "genres": [
+      "Action",
+      "Adventure",
+      "Comedy",
+      "Drama",
+      "Fantasy"
+     ],
+     "averageScore": 87,
+     "meanScore": 87,
+     "studios": {
+      "nodes": [
+       {
+        "name": "Toei Animation"
+       }
+      ]
+     },
+     "nextAiringEpisode": {
+      "episode": 1181,
+      "airingAt": 1798985760
+     }
+    },
+    {
+     "id": 16498,
+     "idMal": 16498,
+     "type": "ANIME",
+     "format": "TV",
+     "status": "FINISHED",
+     "episodes": 25,
+     "duration": 24,
+     "season": "SPRING",
+     "seasonYear": 2013,
+     "siteUrl": "https://anilist.co/anime/16498",
+     "startDate": {
+      "year": 2013,
+      "month": 4,
+      "day": 7
+     },
+     "endDate": {
+      "year": 2013,
+      "month": 9,
+      "day": 28
+     },
+     "title": {
+      "romaji": "Shingeki no Kyojin",
+      "english": "Attack on Titan",
+      "native": "進撃の巨人"
+     },
+     "synonyms": [
+      "SnK",
+      "AoT",
+      "Ataque a los Titanes",
+      "Ataque dos Titãs",
+      "L'Attacco dei Giganti",
+      "מתקפת הטיטאנים",
+      "进击的巨人",
+      "L’Attaque des Titans",
+      "الهجوم على العمالقة",
+      "ผ่าพิภพไททัน",
+      "حمله به تایتان",
+      "Ataque de Titãs",
+      "Atak Tytanów",
+      "Атака титанов",
+      "Đại Chiến Titan"
+     ],
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-buvcRTBx4NSm.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx16498-buvcRTBx4NSm.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/16498-8jpFCOcDmneX.jpg",
+     "genres": [
+      "Action",
+      "Drama",
+      "Fantasy",
+      "Mystery"
+     ],
+     "averageScore": 85,
+     "meanScore": 85,
+     "studios": {
+      "nodes": [
+       {
+        "name": "WIT STUDIO"
+       }
+      ]
+     },
+     "nextAiringEpisode": null
+    },
+    {
+     "id": 154587,
+     "idMal": 52991,
+     "type": "ANIME",
+     "format": "TV",
+     "status": "FINISHED",
+     "episodes": 28,
+     "duration": 24,
+     "season": "FALL",
+     "seasonYear": 2023,
+     "siteUrl": "https://anilist.co/anime/154587",
+     "startDate": {
+      "year": 2023,
+      "month": 9,
+      "day": 29
+     },
+     "endDate": {
+      "year": 2024,
+      "month": 3,
+      "day": 22
+     },
+     "title": {
+      "romaji": "Sousou no Frieren",
+      "english": "Frieren: Beyond Journey’s End",
+      "native": "葬送のフリーレン"
+     },
+     "synonyms": [
+      "Frieren at the Funeral",
+      "장송의 프리렌",
+      "Frieren - Oltre la Fine del Viaggio",
+      "คำอธิษฐานในวันที่จากลา Frieren",
+      "Frieren e a Jornada para o Além",
+      "Frieren – Nach dem Ende der Reise",
+      "葬送的芙莉蓮",
+      "Frieren: Más allá del final del viaje",
+      "Frieren en el funeral",
+      "Sōsō no Furīren",
+      "Frieren. U kresu drogi",
+      "Frieren - Pháp sư tiễn táng",
+      "Фрирен, провожающая в последний путь",
+      "فريرن: ما وراء نهاية الرحلة",
+      "Frieren: Tras finalizar el viaje"
+     ],
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-qQTzQnEJJ3oB.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154587-qQTzQnEJJ3oB.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
+     "genres": [
+      "Adventure",
+      "Drama",
+      "Fantasy"
+     ],
+     "averageScore": 91,
+     "meanScore": 91,
+     "studios": {
+      "nodes": [
+       {
+        "name": "MADHOUSE"
+       }
+      ]
+     },
+     "nextAiringEpisode": null
+    }
+   ]
+  }
+ }
+}

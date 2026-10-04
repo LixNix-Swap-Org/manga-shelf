@@ -1,42 +1,37 @@
-# Nginx Konfiguration für Manga Shelf
-# Datei z.B. nach /etc/nginx/sites-available/manga-shelf kopieren und verlinken nach /etc/nginx/sites-enabled/
+# Nginx-Vorlage für Manga Shelf (Reverse Proxy vor Pterodactyl, Docker oder dem Headless-Server)
+# Nach /etc/nginx/sites-available/manga-shelf kopieren, server_name und den Port in proxy_pass anpassen, nach
+# /etc/nginx/sites-enabled/ verlinken, `nginx -t && systemctl reload nginx`. Danach richtet
+# `certbot --nginx -d manga.deinedomain.de --redirect` HTTPS ein: Certbot ergänzt in diesem Block `listen 443 ssl`
+# und die Zertifikate und legt die Weiterleitung von HTTP auf HTTPS an. Ohne Zertifikat startet nginx mit dieser
+# Datei bereits (reines HTTP), deshalb hier kein eigener 443-Block.
+#
+# Manga Shelf muss dem Proxy vertrauen, sonst teilen sich alle Besucher ein Login-Limit (README, „HTTPS and reverse proxy“):
+#   nginx auf demselben Host wie ein Node-Prozess (Headless-Server): TRUST_PROXY=loopback (Standard)
+#   Pterodactyl/Docker (die App sieht das Docker-Gateway): TRUST_PROXY=loopback, 172.18.0.1 (nur die Gateway-Adresse;
+#   172.18.0.1 ist das Gateway von Pterodactyl, `docker network inspect <netz>` zeigt das eigene unter "Gateway"; nie das
+#   ganze Subnetz, andere Container im selben Netz könnten sonst jede Adresse vortäuschen)
+# Der Port der App darf dann nur über nginx erreichbar sein (an 127.0.0.1 binden).
 
 server {
     listen 80;
     listen [::]:80;
-    server_name manga.deinedomain.de; # <-- Ersetze dies mit deiner Domain / Subdomain
+    server_name manga.deinedomain.de; # <-- deine Domain / Subdomain
 
-    # Weiterleitung aller HTTP-Anfragen auf sicheres HTTPS
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name manga.deinedomain.de; # <-- Ersetze dies mit deiner Domain / Subdomain
-
-    # SSL-Zertifikate (wird bei Certbot automatisch eingetragen)
-    # ssl_certificate /etc/letsencrypt/live/manga.deinedomain.de/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/manga.deinedomain.de/privkey.pem;
-
-    # WICHTIG: Erlaubt Uploads von großen Backups (.zip) und hochauflösenden Coverbildern
-    client_max_body_size 100M;
+    # Muss über der Grenze für Backup-Uploads der App liegen (500 MB), sonst antwortet nginx mit 413 statt der App
+    client_max_body_size 512M;
 
     location / {
-        # Lokaler Port deines Pterodactyl Servers (z. B. 25502)
+        # Port der App: Pterodactyl-Allocation (z. B. 25502), Docker/Headless-Server Standard 3000
         proxy_pass http://127.0.0.1:25502;
         proxy_http_version 1.1;
 
-        # Proxy Header für HTTPS und IP-Erkennung
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
+        # Überschreiben statt anhängen: eine vom Besucher mitgeschickte Adresse kommt nie bei der App an
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Timeouts für Backups & Restore
+        # Backups und Wiederherstellung können dauern
         proxy_connect_timeout 300;
         proxy_send_timeout 300;
         proxy_read_timeout 300;

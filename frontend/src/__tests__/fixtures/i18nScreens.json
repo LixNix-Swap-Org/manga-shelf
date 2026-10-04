@@ -1,0 +1,3959 @@
+{
+ "captured_at": "2026-10-04T13:20:49.927Z",
+ "manga_id": 3,
+ "responses": {
+  "GET /api/setup/status": {
+   "status": 200,
+   "body": {
+    "needsSetup": false,
+    "version": "2.19.1"
+   }
+  },
+  "GET /api/auth/me": {
+   "status": 200,
+   "body": {
+    "user": {
+     "id": 1,
+     "username": "admin",
+     "role": "admin",
+     "locale": null,
+     "default_language": "de"
+    }
+   }
+  },
+  "GET /api/mangas": {
+   "status": 200,
+   "body": [
+    {
+     "id": 3,
+     "title": "Academy Chainsaw 0003",
+     "alt_title": "ACADEMY CHAINSAW 0003",
+     "author": "Autor 101",
+     "publisher": "Crunchyroll",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": "Action, Fantasy",
+     "total_volumes": 17,
+     "owned_volumes": 16,
+     "cover_image": "/uploads/cover-2.jpg",
+     "banner_image": null,
+     "manga_passion_id": null,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 1,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 161.5,
+     "full_value": 176.5,
+     "volume_count": 17,
+     "regular_owned": 15,
+     "max_regular_number": 16,
+     "extras_owned": 1,
+     "read_volume_count": 11
+    },
+    {
+     "id": 8,
+     "title": "Attack Dragon 0008",
+     "alt_title": "ATTACK DRAGON 0008",
+     "author": "Autor 248",
+     "publisher": "Carlsen Manga",
+     "language": "Deutsch",
+     "status": "Abgeschlossen",
+     "tags": "Action, Fantasy",
+     "total_volumes": 6,
+     "owned_volumes": 5,
+     "cover_image": "/uploads/cover-7.jpg",
+     "banner_image": null,
+     "manga_passion_id": 10007,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 1,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 57.5,
+     "full_value": 68.5,
+     "volume_count": 6,
+     "regular_owned": 3,
+     "max_regular_number": 3,
+     "extras_owned": 2,
+     "read_volume_count": 2
+    },
+    {
+     "id": 5,
+     "title": "Detektiv Hearts 0005",
+     "alt_title": "DETEKTIV HEARTS 0005",
+     "author": "Autor 378",
+     "publisher": "Tokyopop",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": "Action, Fantasy",
+     "total_volumes": 11,
+     "owned_volumes": 10,
+     "cover_image": "/uploads/cover-4.jpg",
+     "banner_image": null,
+     "manga_passion_id": 10004,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 1,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 105.5,
+     "full_value": 112.5,
+     "volume_count": 11,
+     "regular_owned": 10,
+     "max_regular_number": 11,
+     "extras_owned": 0,
+     "read_volume_count": 5
+    },
+    {
+     "id": 6,
+     "title": "Hunter Sun 0006",
+     "alt_title": "HUNTER SUN 0006",
+     "author": "Autor 341",
+     "publisher": "Hayabusa",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": "Action, Fantasy",
+     "total_volumes": 8,
+     "owned_volumes": 7,
+     "cover_image": "/uploads/cover-5.jpg",
+     "banner_image": null,
+     "manga_passion_id": null,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 1,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 83.5,
+     "full_value": 91.5,
+     "volume_count": 8,
+     "regular_owned": 5,
+     "max_regular_number": 6,
+     "extras_owned": 2,
+     "read_volume_count": 5
+    },
+    {
+     "id": 4,
+     "title": "Kaiser Witch 0004",
+     "alt_title": null,
+     "author": "Autor 96",
+     "publisher": "Panini Manga",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": "Action, Fantasy",
+     "total_volumes": 13,
+     "owned_volumes": 13,
+     "cover_image": "/uploads/cover-3.jpg",
+     "banner_image": null,
+     "manga_passion_id": 10003,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 0,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 137.5,
+     "full_value": 137.5,
+     "volume_count": 13,
+     "regular_owned": 13,
+     "max_regular_number": 13,
+     "extras_owned": 0,
+     "read_volume_count": 10
+    },
+    {
+     "id": 1,
+     "title": "Moon Hero 0001",
+     "alt_title": "MOON HERO 0001",
+     "author": "Autor 148",
+     "publisher": "Panini Manga",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": "Action, Fantasy",
+     "total_volumes": 3,
+     "owned_volumes": 3,
+     "cover_image": "/uploads/cover-0.jpg",
+     "banner_image": null,
+     "manga_passion_id": null,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 0,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 36.5,
+     "full_value": 36.5,
+     "volume_count": 3,
+     "regular_owned": 3,
+     "max_regular_number": 3,
+     "extras_owned": 0,
+     "read_volume_count": 3
+    },
+    {
+     "id": 9,
+     "title": "Radar Demo",
+     "alt_title": null,
+     "author": "Demo Author",
+     "publisher": "Carlsen Manga",
+     "language": "Deutsch",
+     "status": "Laufend",
+     "tags": null,
+     "total_volumes": null,
+     "owned_volumes": 1,
+     "cover_image": null,
+     "banner_image": null,
+     "manga_passion_id": null,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 1,
+     "preorder_count": 2,
+     "wished": 0,
+     "total_value": 0,
+     "full_value": 15.5,
+     "volume_count": 5,
+     "regular_owned": 1,
+     "max_regular_number": 1,
+     "extras_owned": 0,
+     "read_volume_count": 0
+    },
+    {
+     "id": 2,
+     "title": "Returner Kingdom 0002",
+     "alt_title": "RETURNER KINGDOM 0002",
+     "author": "Autor 10",
+     "publisher": "Kazé Manga",
+     "language": "Deutsch",
+     "status": "Abgeschlossen",
+     "tags": "Action, Fantasy",
+     "total_volumes": 3,
+     "owned_volumes": 0,
+     "cover_image": "/uploads/cover-1.jpg",
+     "banner_image": null,
+     "manga_passion_id": 10001,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 2,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 0,
+     "full_value": 25.5,
+     "volume_count": 2,
+     "regular_owned": 0,
+     "max_regular_number": null,
+     "extras_owned": 0,
+     "read_volume_count": 0
+    },
+    {
+     "id": 7,
+     "title": "Sword Magic 0007",
+     "alt_title": null,
+     "author": "Autor 288",
+     "publisher": "Manga Cult",
+     "language": "Deutsch",
+     "status": "Abgeschlossen",
+     "tags": "Action, Fantasy",
+     "total_volumes": 9,
+     "owned_volumes": 6,
+     "cover_image": "/uploads/cover-6.jpg",
+     "banner_image": null,
+     "manga_passion_id": null,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "updated_by": 1,
+     "wish_priority": null,
+     "collecting": "aktiv",
+     "missing_count": 3,
+     "preorder_count": 0,
+     "wished": 0,
+     "total_value": 56,
+     "full_value": 81,
+     "volume_count": 9,
+     "regular_owned": 6,
+     "max_regular_number": 6,
+     "extras_owned": 0,
+     "read_volume_count": 4
+    }
+   ]
+  },
+  "GET /api/mangas/volume-search": {
+   "status": 200,
+   "body": [
+    {
+     "id": 1,
+     "volume_search": "9780632208747\n9780328056367"
+    },
+    {
+     "id": 2,
+     "volume_search": "9780736455137"
+    },
+    {
+     "id": 3,
+     "volume_search": "9780974566309\n9780693301883\n9780926186028\n9780722538838\n9780795792894\n9780839848356\n9780347577815\n9780519504205\n9780225438326\n9780551112468\n9780763670462\n9780645839457\n9780367233263\n9780196691379\nErstauflage mit Farbseiten"
+    },
+    {
+     "id": 4,
+     "volume_search": "9780510850346\n9780809961631\n9780478387559\n9780710495582\n9780185594357\n9780194511950\n9780407130615\n9780010805558\n9780266987469\n9780995034886"
+    },
+    {
+     "id": 5,
+     "volume_search": "9780770813969\n9780388861528\n9780565754189\n9780604636541\n9780732787704\n9780757928163\n9780585745173\n9780522215277"
+    },
+    {
+     "id": 6,
+     "volume_search": "9780238992959\n9780602696073\n9780968138496\n9780667097978\n9780401248574\n9780768389255\nErstauflage mit Farbseiten"
+    },
+    {
+     "id": 7,
+     "volume_search": "9780547408600\n9780357438414\n9780297600443\n9780052922930\n9780730311011\n9780328468807\n9780001040337\nErstauflage mit Farbseiten"
+    },
+    {
+     "id": 8,
+     "volume_search": "9780539412446\n9780485752001\n9780946748268\n9780961453797\n9780496995636"
+    }
+   ]
+  },
+  "GET /api/dashboard-summary": {
+   "status": 200,
+   "body": {
+    "total_missing": 10,
+    "total_releases": 4,
+    "preordered_count": 2
+   }
+  },
+  "GET /api/shopping-list": {
+   "status": 200,
+   "body": {
+    "total_missing": 10,
+    "total_cost": 91.5,
+    "total_wished_series": 0,
+    "publishers": [
+     {
+      "publisher": "Carlsen Manga",
+      "count": 2,
+      "total_price": 11,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Crunchyroll",
+      "count": 1,
+      "total_price": 15,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Hayabusa",
+      "count": 1,
+      "total_price": 8,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Kazé Manga",
+      "count": 2,
+      "total_price": 25.5,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Manga Cult",
+      "count": 3,
+      "total_price": 25,
+      "wished_count": 0
+     },
+     {
+      "publisher": "TOKYOPOP",
+      "count": 1,
+      "total_price": 7,
+      "wished_count": 0
+     }
+    ],
+    "items": [
+     {
+      "id": 67,
+      "manga_id": 8,
+      "volume_number": "1",
+      "isbn": "9780961453797",
+      "price": 11,
+      "release_year": 2019,
+      "condition": null,
+      "vol_publisher": "Carlsen Manga",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "special_edition",
+      "priority": 2,
+      "target_price": null,
+      "manga_title": "Attack Dragon 0008",
+      "manga_cover": "/uploads/cover-7.jpg",
+      "effective_publisher": "Carlsen Manga"
+     },
+     {
+      "id": 74,
+      "manga_id": 9,
+      "volume_number": "5",
+      "isbn": null,
+      "price": null,
+      "release_year": null,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_title": "Radar Demo",
+      "manga_cover": null,
+      "effective_publisher": "Carlsen Manga"
+     },
+     {
+      "id": 7,
+      "manga_id": 3,
+      "volume_number": "2",
+      "isbn": "9780693301883",
+      "price": 15,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Academy Chainsaw 0003",
+      "manga_cover": "/uploads/cover-2.jpg",
+      "effective_publisher": "Crunchyroll"
+     },
+     {
+      "id": 49,
+      "manga_id": 6,
+      "volume_number": "3",
+      "isbn": "9780968138496",
+      "price": 8,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Hunter Sun 0006",
+      "manga_cover": "/uploads/cover-5.jpg",
+      "effective_publisher": "Hayabusa"
+     },
+     {
+      "id": 4,
+      "manga_id": 2,
+      "volume_number": "1",
+      "isbn": null,
+      "price": 12,
+      "release_year": 2024,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Returner Kingdom 0002",
+      "manga_cover": "/uploads/cover-1.jpg",
+      "effective_publisher": "Kazé Manga"
+     },
+     {
+      "id": 5,
+      "manga_id": 2,
+      "volume_number": "1",
+      "isbn": "9780736455137",
+      "price": 13.5,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "special_edition",
+      "priority": 2,
+      "target_price": null,
+      "manga_title": "Returner Kingdom 0002",
+      "manga_cover": "/uploads/cover-1.jpg",
+      "effective_publisher": "Kazé Manga"
+     },
+     {
+      "id": 61,
+      "manga_id": 7,
+      "volume_number": "7",
+      "isbn": "9780328468807",
+      "price": 9.5,
+      "release_year": 2023,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 62,
+      "manga_id": 7,
+      "volume_number": "8",
+      "isbn": null,
+      "price": 8,
+      "release_year": 2018,
+      "condition": null,
+      "vol_publisher": "Manga Cult",
+      "notes": "Erstauflage mit Farbseiten",
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 63,
+      "manga_id": 7,
+      "volume_number": "9",
+      "isbn": "9780001040337",
+      "price": 7.5,
+      "release_year": 2022,
+      "condition": null,
+      "vol_publisher": "Manga Cult",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 44,
+      "manga_id": 5,
+      "volume_number": "9",
+      "isbn": "9780757928163",
+      "price": 7,
+      "release_year": 2021,
+      "condition": null,
+      "vol_publisher": "Tokyopop",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Detektiv Hearts 0005",
+      "manga_cover": "/uploads/cover-4.jpg",
+      "effective_publisher": "Tokyopop"
+     }
+    ],
+    "wished_series": []
+   }
+  },
+  "GET /api/shopping-list?include_others=1": {
+   "status": 200,
+   "body": {
+    "total_missing": 10,
+    "total_cost": 91.5,
+    "total_wished_series": 0,
+    "publishers": [
+     {
+      "publisher": "Carlsen Manga",
+      "count": 2,
+      "total_price": 11,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Crunchyroll",
+      "count": 1,
+      "total_price": 15,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Hayabusa",
+      "count": 1,
+      "total_price": 8,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Kazé Manga",
+      "count": 2,
+      "total_price": 25.5,
+      "wished_count": 0
+     },
+     {
+      "publisher": "Manga Cult",
+      "count": 3,
+      "total_price": 25,
+      "wished_count": 0
+     },
+     {
+      "publisher": "TOKYOPOP",
+      "count": 1,
+      "total_price": 7,
+      "wished_count": 0
+     }
+    ],
+    "items": [
+     {
+      "id": 67,
+      "manga_id": 8,
+      "volume_number": "1",
+      "isbn": "9780961453797",
+      "price": 11,
+      "release_year": 2019,
+      "condition": null,
+      "vol_publisher": "Carlsen Manga",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "special_edition",
+      "priority": 2,
+      "target_price": null,
+      "manga_title": "Attack Dragon 0008",
+      "manga_cover": "/uploads/cover-7.jpg",
+      "effective_publisher": "Carlsen Manga"
+     },
+     {
+      "id": 74,
+      "manga_id": 9,
+      "volume_number": "5",
+      "isbn": null,
+      "price": null,
+      "release_year": null,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_title": "Radar Demo",
+      "manga_cover": null,
+      "effective_publisher": "Carlsen Manga"
+     },
+     {
+      "id": 7,
+      "manga_id": 3,
+      "volume_number": "2",
+      "isbn": "9780693301883",
+      "price": 15,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Academy Chainsaw 0003",
+      "manga_cover": "/uploads/cover-2.jpg",
+      "effective_publisher": "Crunchyroll"
+     },
+     {
+      "id": 49,
+      "manga_id": 6,
+      "volume_number": "3",
+      "isbn": "9780968138496",
+      "price": 8,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Hunter Sun 0006",
+      "manga_cover": "/uploads/cover-5.jpg",
+      "effective_publisher": "Hayabusa"
+     },
+     {
+      "id": 4,
+      "manga_id": 2,
+      "volume_number": "1",
+      "isbn": null,
+      "price": 12,
+      "release_year": 2024,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Returner Kingdom 0002",
+      "manga_cover": "/uploads/cover-1.jpg",
+      "effective_publisher": "Kazé Manga"
+     },
+     {
+      "id": 5,
+      "manga_id": 2,
+      "volume_number": "1",
+      "isbn": "9780736455137",
+      "price": 13.5,
+      "release_year": 2025,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "special_edition",
+      "priority": 2,
+      "target_price": null,
+      "manga_title": "Returner Kingdom 0002",
+      "manga_cover": "/uploads/cover-1.jpg",
+      "effective_publisher": "Kazé Manga"
+     },
+     {
+      "id": 61,
+      "manga_id": 7,
+      "volume_number": "7",
+      "isbn": "9780328468807",
+      "price": 9.5,
+      "release_year": 2023,
+      "condition": null,
+      "vol_publisher": null,
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 62,
+      "manga_id": 7,
+      "volume_number": "8",
+      "isbn": null,
+      "price": 8,
+      "release_year": 2018,
+      "condition": null,
+      "vol_publisher": "Manga Cult",
+      "notes": "Erstauflage mit Farbseiten",
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 3,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 63,
+      "manga_id": 7,
+      "volume_number": "9",
+      "isbn": "9780001040337",
+      "price": 7.5,
+      "release_year": 2022,
+      "condition": null,
+      "vol_publisher": "Manga Cult",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_title": "Sword Magic 0007",
+      "manga_cover": "/uploads/cover-6.jpg",
+      "effective_publisher": "Manga Cult"
+     },
+     {
+      "id": 44,
+      "manga_id": 5,
+      "volume_number": "9",
+      "isbn": "9780757928163",
+      "price": 7,
+      "release_year": 2021,
+      "condition": null,
+      "vol_publisher": "Tokyopop",
+      "notes": null,
+      "status": "Fehlt",
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_title": "Detektiv Hearts 0005",
+      "manga_cover": "/uploads/cover-4.jpg",
+      "effective_publisher": "Tokyopop"
+     }
+    ],
+    "wished_series": [],
+    "others": []
+   }
+  },
+  "GET /api/release-radar": {
+   "status": 200,
+   "body": {
+    "total_releases": 4,
+    "preordered_count": 2,
+    "preordered_budget": 15.5,
+    "total_budget": 15.5,
+    "groups": [
+     {
+      "key": "2026-10",
+      "label": "Oktober 2026",
+      "count": 1,
+      "total_price": 8,
+      "preordered_count": 1,
+      "items": [
+       {
+        "id": 73,
+        "manga_id": 9,
+        "volume_number": "4",
+        "isbn": null,
+        "price": 8,
+        "purchase_date": null,
+        "release_date": "2026-10-28",
+        "release_year": null,
+        "condition": null,
+        "vol_publisher": null,
+        "notes": null,
+        "status": "Bestellt",
+        "type": "volume",
+        "vol_cover": null,
+        "vol_images": null,
+        "manga_title": "Radar Demo",
+        "manga_cover": null,
+        "manga_publisher": "Carlsen Manga",
+        "effective_publisher": "Carlsen Manga",
+        "days_until": 24,
+        "countdown_label": "In 24 Tagen"
+       }
+      ]
+     },
+     {
+      "key": "2026-11",
+      "label": "November 2026",
+      "count": 1,
+      "total_price": 7.5,
+      "preordered_count": 1,
+      "items": [
+       {
+        "id": 71,
+        "manga_id": 9,
+        "volume_number": "2",
+        "isbn": null,
+        "price": 7.5,
+        "purchase_date": null,
+        "release_date": "2026-11-15",
+        "release_year": null,
+        "condition": null,
+        "vol_publisher": null,
+        "notes": null,
+        "status": "Vorbestellt",
+        "type": "volume",
+        "vol_cover": null,
+        "vol_images": null,
+        "manga_title": "Radar Demo",
+        "manga_cover": null,
+        "manga_publisher": "Carlsen Manga",
+        "effective_publisher": "Carlsen Manga",
+        "days_until": 42,
+        "countdown_label": "Nächsten Monat"
+       }
+      ]
+     },
+     {
+      "key": "2026-12",
+      "label": "Dezember 2026",
+      "count": 1,
+      "total_price": 0,
+      "preordered_count": 0,
+      "items": [
+       {
+        "id": 72,
+        "manga_id": 9,
+        "volume_number": "3",
+        "isbn": null,
+        "price": null,
+        "purchase_date": null,
+        "release_date": "2026-12",
+        "release_year": null,
+        "condition": null,
+        "vol_publisher": null,
+        "notes": null,
+        "status": "Erscheint bald",
+        "type": "volume",
+        "vol_cover": null,
+        "vol_images": null,
+        "manga_title": "Radar Demo",
+        "manga_cover": null,
+        "manga_publisher": "Carlsen Manga",
+        "effective_publisher": "Carlsen Manga",
+        "days_until": null,
+        "countdown_label": "In 2 Monaten",
+        "date_precision": "month"
+       }
+      ]
+     },
+     {
+      "key": "2027-01",
+      "label": "Januar 2027",
+      "count": 1,
+      "total_price": 0,
+      "preordered_count": 0,
+      "items": [
+       {
+        "id": 74,
+        "manga_id": 9,
+        "volume_number": "5",
+        "isbn": null,
+        "price": null,
+        "purchase_date": null,
+        "release_date": "2027-01-02",
+        "release_year": null,
+        "condition": null,
+        "vol_publisher": null,
+        "notes": null,
+        "status": "Fehlt",
+        "type": "volume",
+        "vol_cover": null,
+        "vol_images": null,
+        "manga_title": "Radar Demo",
+        "manga_cover": null,
+        "manga_publisher": "Carlsen Manga",
+        "effective_publisher": "Carlsen Manga",
+        "days_until": 90,
+        "countdown_label": "In 3 Monaten"
+       }
+      ]
+     }
+    ],
+    "publishers": [
+     {
+      "publisher": "Carlsen Manga",
+      "count": 4
+     }
+    ]
+   }
+  },
+  "GET /api/anime": {
+   "status": 200,
+   "body": [
+    {
+     "id": 2,
+     "anilist_id": null,
+     "mal_id": null,
+     "title": "Dungeon Meshi",
+     "title_de": null,
+     "title_romaji": null,
+     "title_english": null,
+     "title_native": null,
+     "format": null,
+     "episodes": 24,
+     "duration": null,
+     "status": null,
+     "season": null,
+     "season_year": null,
+     "start_date": null,
+     "end_date": null,
+     "studios": [],
+     "genres": [],
+     "score": null,
+     "cover_image": null,
+     "banner_image": null,
+     "next_airing": null,
+     "manga_id": null,
+     "urls": {},
+     "notes": null,
+     "manual": true,
+     "meta_source": null,
+     "meta_fetched_at": null,
+     "stale": false,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "watch": {
+      "next_url": null,
+      "series_url": null,
+      "search_url": "https://www.crunchyroll.com/search?q=Dungeon%20Meshi"
+     },
+     "my_progress": {
+      "user_id": 1,
+      "status": "Schaue",
+      "episodes_watched": 5,
+      "score": null,
+      "notes": null,
+      "started_at": "2026-10-04",
+      "finished_at": null,
+      "updated_at": "2026-10-04 13:20:49",
+      "resume_url": null,
+      "resume_episode": null
+     },
+     "progress_users": [
+      {
+       "user_id": 1,
+       "username": "admin",
+       "status": "Schaue",
+       "episodes_watched": 5
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "anilist_id": null,
+     "mal_id": null,
+     "title": "Frieren",
+     "title_de": null,
+     "title_romaji": null,
+     "title_english": null,
+     "title_native": null,
+     "format": null,
+     "episodes": 28,
+     "duration": null,
+     "status": null,
+     "season": null,
+     "season_year": null,
+     "start_date": null,
+     "end_date": null,
+     "studios": [],
+     "genres": [],
+     "score": null,
+     "cover_image": null,
+     "banner_image": null,
+     "next_airing": null,
+     "manga_id": null,
+     "urls": {},
+     "notes": null,
+     "manual": true,
+     "meta_source": null,
+     "meta_fetched_at": null,
+     "stale": false,
+     "created_at": "2026-10-04 13:20:49",
+     "updated_at": "2026-10-04 13:20:49",
+     "watch": {
+      "next_url": null,
+      "series_url": null,
+      "search_url": "https://www.crunchyroll.com/search?q=Frieren"
+     },
+     "my_progress": null,
+     "progress_users": []
+    }
+   ]
+  },
+  "GET /api/anime/sources": {
+   "status": 200,
+   "body": {
+    "anilist": {
+     "enabled": true,
+     "name": "AniList",
+     "limit": 30,
+     "remaining": 30,
+     "reset_at": null,
+     "paused_until": null,
+     "circuit": "closed",
+     "used_last_hour": 0,
+     "slow_recently": false,
+     "own": null,
+     "key_disabled": false
+    },
+    "mal": {
+     "enabled": true,
+     "name": "MyAnimeList (Jikan)",
+     "limit": 60,
+     "remaining": 60,
+     "reset_at": null,
+     "paused_until": null,
+     "circuit": "closed",
+     "used_last_hour": 0,
+     "slow_recently": false,
+     "own": null,
+     "key_disabled": false,
+     "adapter": "jikan"
+    },
+    "credential": {
+     "anilist": "shared",
+     "mal": "shared"
+    },
+    "slow_recently": false,
+    "background_waiting": 0
+   }
+  },
+  "GET /api/anime/sync": {
+   "status": 200,
+   "body": {
+    "anilist": {
+     "enabled": false,
+     "external_user_id": null,
+     "last_synced_at": null,
+     "last_error": null,
+     "last_report": null,
+     "available": false
+    }
+   }
+  },
+  "GET /api/mangas/3": {
+   "status": 200,
+   "body": {
+    "id": 3,
+    "title": "Academy Chainsaw 0003",
+    "alt_title": "ACADEMY CHAINSAW 0003",
+    "author": "Autor 101",
+    "publisher": "Crunchyroll",
+    "language": "Deutsch",
+    "status": "Laufend",
+    "tags": "Action, Fantasy",
+    "total_volumes": 17,
+    "owned_volumes": 16,
+    "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ",
+    "cover_image": "/uploads/cover-2.jpg",
+    "banner_image": null,
+    "manga_passion_id": null,
+    "wish_priority": null,
+    "collecting": "aktiv",
+    "created_at": "2026-10-04 13:20:49",
+    "updated_at": "2026-10-04 13:20:49",
+    "updated_by": 1,
+    "volumes": [
+     {
+      "id": 6,
+      "manga_id": 3,
+      "volume_number": "1",
+      "isbn": "9780974566309",
+      "price": 13,
+      "release_date": "2015-10-22",
+      "release_year": 2015,
+      "condition": "Gut",
+      "pages": 204,
+      "publisher": null,
+      "purchase_date": "2023-12-08",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-1.jpg",
+      "images": [
+       "/uploads/vol-2-1.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 13,
+        "purchase_date": "2023-12-08",
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1
+      ],
+      "is_read": true
+     },
+     {
+      "id": 7,
+      "manga_id": 3,
+      "volume_number": "2",
+      "isbn": "9780693301883",
+      "price": 15,
+      "release_date": "2025-09-27",
+      "release_year": 2025,
+      "condition": null,
+      "pages": 191,
+      "publisher": null,
+      "purchase_date": null,
+      "status": "Fehlt",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 1,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [],
+      "owned_by_me": false,
+      "read_users": [],
+      "read_by": [],
+      "is_read": false
+     },
+     {
+      "id": 8,
+      "manga_id": 3,
+      "volume_number": "3",
+      "isbn": "9780926186028",
+      "price": 7.5,
+      "release_date": null,
+      "release_year": 2023,
+      "condition": "Neuwertig",
+      "pages": 223,
+      "publisher": null,
+      "purchase_date": null,
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-3.jpg",
+      "images": [
+       "/uploads/vol-2-3.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 7.5,
+        "purchase_date": null,
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       2
+      ],
+      "is_read": false
+     },
+     {
+      "id": 9,
+      "manga_id": 3,
+      "volume_number": "4",
+      "isbn": "9780722538838",
+      "price": 10,
+      "release_date": null,
+      "release_year": 2023,
+      "condition": "Sehr gut",
+      "pages": 197,
+      "publisher": null,
+      "purchase_date": "2025-08-17",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-4.jpg",
+      "images": [
+       "/uploads/vol-2-4.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 10,
+        "purchase_date": "2025-08-17",
+        "condition": "Sehr gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 3,
+        "user_id": 3,
+        "username": "ben",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       2,
+       3
+      ],
+      "is_read": false
+     },
+     {
+      "id": 10,
+      "manga_id": 3,
+      "volume_number": "5",
+      "isbn": "9780795792894",
+      "price": 9,
+      "release_date": "2021-11-15",
+      "release_year": 2021,
+      "condition": "Gut",
+      "pages": 187,
+      "publisher": null,
+      "purchase_date": null,
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-5.jpg",
+      "images": [
+       "/uploads/vol-2-5.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 9,
+        "purchase_date": null,
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       2
+      ],
+      "is_read": true
+     },
+     {
+      "id": 22,
+      "manga_id": 3,
+      "volume_number": "5",
+      "isbn": null,
+      "price": 6.5,
+      "release_date": "2022-01-13",
+      "release_year": 2022,
+      "condition": "Sehr gut",
+      "pages": 226,
+      "publisher": null,
+      "purchase_date": "2026-07-21",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "special_edition",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 6.5,
+        "purchase_date": "2026-07-21",
+        "condition": "Sehr gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       2
+      ],
+      "is_read": false
+     },
+     {
+      "id": 11,
+      "manga_id": 3,
+      "volume_number": "6",
+      "isbn": null,
+      "price": 7.5,
+      "release_date": null,
+      "release_year": 2015,
+      "condition": "Sehr gut",
+      "pages": 166,
+      "publisher": "Crunchyroll",
+      "purchase_date": "2024-04-23",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 7.5,
+        "purchase_date": "2024-04-23",
+        "condition": "Sehr gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       2
+      ],
+      "is_read": true
+     },
+     {
+      "id": 12,
+      "manga_id": 3,
+      "volume_number": "7",
+      "isbn": "9780839848356",
+      "price": 7.5,
+      "release_date": "2020-03-22",
+      "release_year": 2020,
+      "condition": "Gut",
+      "pages": 212,
+      "publisher": null,
+      "purchase_date": "2025-10-02",
+      "status": "Vorhanden",
+      "notes": "Erstauflage mit Farbseiten",
+      "cover_image": "/uploads/vol-2-7.jpg",
+      "images": [
+       "/uploads/vol-2-7.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 7.5,
+        "purchase_date": "2025-10-02",
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [],
+      "read_by": [],
+      "is_read": false
+     },
+     {
+      "id": 13,
+      "manga_id": 3,
+      "volume_number": "8",
+      "isbn": null,
+      "price": 11,
+      "release_date": "2015-10-05",
+      "release_year": 2015,
+      "condition": "Neuwertig",
+      "pages": 234,
+      "publisher": null,
+      "purchase_date": "2022-03-06",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/x.jpg",
+      "images": [
+       "/uploads/x.jpg",
+       "/uploads/y.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 11,
+        "purchase_date": "2022-03-06",
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 3,
+        "user_id": 3,
+        "username": "ben",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       3
+      ],
+      "is_read": true
+     },
+     {
+      "id": 14,
+      "manga_id": 3,
+      "volume_number": "9",
+      "isbn": "9780347577815",
+      "price": 11.5,
+      "release_date": null,
+      "release_year": 2023,
+      "condition": "Neuwertig",
+      "pages": 224,
+      "publisher": null,
+      "purchase_date": "2024-05-02",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 11.5,
+        "purchase_date": "2024-05-02",
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [],
+      "read_by": [],
+      "is_read": false
+     },
+     {
+      "id": 15,
+      "manga_id": 3,
+      "volume_number": "10",
+      "isbn": "9780519504205",
+      "price": 12.5,
+      "release_date": "2023-08-10",
+      "release_year": 2023,
+      "condition": "Neuwertig",
+      "pages": 195,
+      "publisher": null,
+      "purchase_date": "2023-08-19",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-10.jpg",
+      "images": [
+       "/uploads/vol-2-10.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 12.5,
+        "purchase_date": "2023-08-19",
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1
+      ],
+      "is_read": true
+     },
+     {
+      "id": 16,
+      "manga_id": 3,
+      "volume_number": "11",
+      "isbn": "9780225438326",
+      "price": 12,
+      "release_date": "2015-09-15",
+      "release_year": 2015,
+      "condition": "Neuwertig",
+      "pages": 229,
+      "publisher": null,
+      "purchase_date": "2022-12-02",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 12,
+        "purchase_date": "2022-12-02",
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1
+      ],
+      "is_read": true
+     },
+     {
+      "id": 17,
+      "manga_id": 3,
+      "volume_number": "12",
+      "isbn": "9780551112468",
+      "price": 7,
+      "release_date": null,
+      "release_year": 2023,
+      "condition": "Gut",
+      "pages": 216,
+      "publisher": null,
+      "purchase_date": "2021-06-19",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-12.jpg",
+      "images": [
+       "/uploads/vol-2-12.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 7,
+        "purchase_date": "2021-06-19",
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1
+      ],
+      "is_read": true
+     },
+     {
+      "id": 18,
+      "manga_id": 3,
+      "volume_number": "13",
+      "isbn": "9780763670462",
+      "price": 12,
+      "release_date": null,
+      "release_year": 2024,
+      "condition": "Sehr gut",
+      "pages": 218,
+      "publisher": null,
+      "purchase_date": "2025-07-22",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 12,
+        "purchase_date": "2025-07-22",
+        "condition": "Sehr gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       2
+      ],
+      "is_read": true
+     },
+     {
+      "id": 19,
+      "manga_id": 3,
+      "volume_number": "14",
+      "isbn": "9780645839457",
+      "price": 15,
+      "release_date": null,
+      "release_year": 2017,
+      "condition": "Neuwertig",
+      "pages": 186,
+      "publisher": "Crunchyroll",
+      "purchase_date": "2025-07-24",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": "/uploads/vol-2-14.jpg",
+      "images": [
+       "/uploads/vol-2-14.jpg"
+      ],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 15,
+        "purchase_date": "2025-07-24",
+        "condition": "Neuwertig",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       2
+      ],
+      "is_read": true
+     },
+     {
+      "id": 20,
+      "manga_id": 3,
+      "volume_number": "15",
+      "isbn": "9780367233263",
+      "price": 12.5,
+      "release_date": null,
+      "release_year": 2015,
+      "condition": "Gut",
+      "pages": 213,
+      "publisher": null,
+      "purchase_date": "2026-07-28",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 12.5,
+        "purchase_date": "2026-07-28",
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1
+      ],
+      "is_read": true
+     },
+     {
+      "id": 21,
+      "manga_id": 3,
+      "volume_number": "16",
+      "isbn": "9780196691379",
+      "price": 7,
+      "release_date": "2019-02-10",
+      "release_year": 2019,
+      "condition": "Gut",
+      "pages": 176,
+      "publisher": null,
+      "purchase_date": "2023-12-25",
+      "status": "Vorhanden",
+      "notes": null,
+      "cover_image": null,
+      "images": [],
+      "type": "volume",
+      "priority": 0,
+      "target_price": null,
+      "manga_passion_volume_id": null,
+      "created_at": "2026-10-04 13:20:49",
+      "owners": [
+       {
+        "user_id": 1,
+        "username": "admin",
+        "price": 7,
+        "purchase_date": "2023-12-25",
+        "condition": "Gut",
+        "created_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "owned_by_me": true,
+      "read_users": [
+       {
+        "id": 1,
+        "user_id": 1,
+        "username": "admin",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 2,
+        "user_id": 2,
+        "username": "anna",
+        "read_at": "2026-10-04 13:20:49"
+       },
+       {
+        "id": 3,
+        "user_id": 3,
+        "username": "ben",
+        "read_at": "2026-10-04 13:20:49"
+       }
+      ],
+      "read_by": [
+       1,
+       2,
+       3
+      ],
+      "is_read": true
+     }
+    ],
+    "wished": 0,
+    "total_value": 161.5,
+    "full_value": 176.5,
+    "reader_stats": [
+     {
+      "user_id": 1,
+      "username": "admin",
+      "role": "admin",
+      "read_count": 11,
+      "total_owned": 16,
+      "unread_count": 5,
+      "percentage": 69
+     },
+     {
+      "user_id": 2,
+      "username": "anna",
+      "role": "editor",
+      "read_count": 8,
+      "total_owned": 16,
+      "unread_count": 8,
+      "percentage": 50
+     },
+     {
+      "user_id": 3,
+      "username": "ben",
+      "role": "editor",
+      "read_count": 3,
+      "total_owned": 16,
+      "unread_count": 13,
+      "percentage": 19
+     }
+    ]
+   }
+  },
+  "GET /api/mangas/3/adaptations": {
+   "status": 200,
+   "body": {
+    "results": [],
+    "source": "anilist",
+    "cached": false
+   }
+  },
+  "GET /api/stats": {
+   "status": 200,
+   "body": {
+    "summary": {
+     "total_series": 9,
+     "completed_series": 2,
+     "total_owned_volumes": 61,
+     "total_missing_volumes": 10,
+     "total_volumes_recorded": 74,
+     "total_owned_value": 638,
+     "total_missing_value": 91.5,
+     "total_possible_value": 745,
+     "avg_price_per_volume": 10.63,
+     "priced_owned_volumes": 60,
+     "collection_start_date": "2021-02-21",
+     "collection_days": 2051,
+     "collection_months": 67,
+     "collection_years": 5.62,
+     "avg_monthly_spending": 9.52,
+     "wished_series": 0,
+     "wished_known_cost": 0
+    },
+    "publishers": [
+     {
+      "publisher": "Panini Manga",
+      "series_count": 2,
+      "volume_count": 16,
+      "total_value": 174,
+      "percentage": 26.2,
+      "value_percentage": 27.3,
+      "priced_count": 16,
+      "avg_price": 10.88,
+      "missing_count": 0,
+      "missing_value": 0
+     },
+     {
+      "publisher": "Crunchyroll",
+      "series_count": 1,
+      "volume_count": 16,
+      "total_value": 161.5,
+      "percentage": 26.2,
+      "value_percentage": 25.3,
+      "priced_count": 16,
+      "avg_price": 10.09,
+      "missing_count": 1,
+      "missing_value": 15
+     },
+     {
+      "publisher": "Tokyopop",
+      "series_count": 1,
+      "volume_count": 10,
+      "total_value": 105.5,
+      "percentage": 16.4,
+      "value_percentage": 16.5,
+      "priced_count": 10,
+      "avg_price": 10.55,
+      "missing_count": 1,
+      "missing_value": 7
+     },
+     {
+      "publisher": "Hayabusa",
+      "series_count": 1,
+      "volume_count": 7,
+      "total_value": 83.5,
+      "percentage": 11.5,
+      "value_percentage": 13.1,
+      "priced_count": 7,
+      "avg_price": 11.93,
+      "missing_count": 1,
+      "missing_value": 8
+     },
+     {
+      "publisher": "Carlsen Manga",
+      "series_count": 2,
+      "volume_count": 6,
+      "total_value": 57.5,
+      "percentage": 9.8,
+      "value_percentage": 9,
+      "priced_count": 5,
+      "avg_price": 11.5,
+      "missing_count": 2,
+      "missing_value": 11
+     },
+     {
+      "publisher": "Manga Cult",
+      "series_count": 1,
+      "volume_count": 6,
+      "total_value": 56,
+      "percentage": 9.8,
+      "value_percentage": 8.8,
+      "priced_count": 6,
+      "avg_price": 9.33,
+      "missing_count": 3,
+      "missing_value": 25
+     }
+    ],
+    "user_reading_stats": [
+     {
+      "user_id": 1,
+      "username": "admin",
+      "role": "admin",
+      "read_count": 40,
+      "unread_count": 21,
+      "total_owned": 61,
+      "read_pct": 65.6
+     },
+     {
+      "user_id": 2,
+      "username": "anna",
+      "role": "editor",
+      "read_count": 28,
+      "unread_count": 33,
+      "total_owned": 61,
+      "read_pct": 45.9
+     },
+     {
+      "user_id": 3,
+      "username": "ben",
+      "role": "editor",
+      "read_count": 13,
+      "unread_count": 48,
+      "total_owned": 61,
+      "read_pct": 21.3
+     }
+    ],
+    "owner_stats": [
+     {
+      "user_id": 1,
+      "username": "admin",
+      "volume_count": 58,
+      "total_value": 601.5,
+      "series_count": 7,
+      "shared_count": 0
+     },
+     {
+      "user_id": 2,
+      "username": "anna",
+      "volume_count": 0,
+      "total_value": 0,
+      "series_count": 0,
+      "shared_count": 0
+     },
+     {
+      "user_id": 3,
+      "username": "ben",
+      "volume_count": 3,
+      "total_value": 36.5,
+      "series_count": 1,
+      "shared_count": 0
+     }
+    ],
+    "owner_publishers": [
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Crunchyroll",
+      "volume_count": 16,
+      "total_value": 161.5
+     },
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Panini Manga",
+      "volume_count": 13,
+      "total_value": 137.5
+     },
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Tokyopop",
+      "volume_count": 10,
+      "total_value": 105.5
+     },
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Hayabusa",
+      "volume_count": 7,
+      "total_value": 83.5
+     },
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Carlsen Manga",
+      "volume_count": 6,
+      "total_value": 57.5
+     },
+     {
+      "user_id": 1,
+      "username": "admin",
+      "publisher": "Manga Cult",
+      "volume_count": 6,
+      "total_value": 56
+     },
+     {
+      "user_id": 3,
+      "username": "ben",
+      "publisher": "Panini Manga",
+      "volume_count": 3,
+      "total_value": 36.5
+     }
+    ],
+    "top_series": [
+     {
+      "id": 3,
+      "title": "Academy Chainsaw 0003",
+      "cover_image": "/uploads/cover-2.jpg",
+      "publisher": "Crunchyroll",
+      "owned_volumes": 16,
+      "owned_value": 161.5,
+      "total_value": 161.5,
+      "missing_value": 15,
+      "avg_price": 10.09,
+      "unpriced": 0
+     },
+     {
+      "id": 4,
+      "title": "Kaiser Witch 0004",
+      "cover_image": "/uploads/cover-3.jpg",
+      "publisher": "Panini Manga",
+      "owned_volumes": 13,
+      "owned_value": 137.5,
+      "total_value": 137.5,
+      "missing_value": 0,
+      "avg_price": 10.58,
+      "unpriced": 0
+     },
+     {
+      "id": 5,
+      "title": "Detektiv Hearts 0005",
+      "cover_image": "/uploads/cover-4.jpg",
+      "publisher": "Tokyopop",
+      "owned_volumes": 10,
+      "owned_value": 105.5,
+      "total_value": 105.5,
+      "missing_value": 7,
+      "avg_price": 10.55,
+      "unpriced": 0
+     },
+     {
+      "id": 6,
+      "title": "Hunter Sun 0006",
+      "cover_image": "/uploads/cover-5.jpg",
+      "publisher": "Hayabusa",
+      "owned_volumes": 7,
+      "owned_value": 83.5,
+      "total_value": 83.5,
+      "missing_value": 8,
+      "avg_price": 11.93,
+      "unpriced": 0
+     },
+     {
+      "id": 8,
+      "title": "Attack Dragon 0008",
+      "cover_image": "/uploads/cover-7.jpg",
+      "publisher": "Carlsen Manga",
+      "owned_volumes": 5,
+      "owned_value": 57.5,
+      "total_value": 57.5,
+      "missing_value": 11,
+      "avg_price": 11.5,
+      "unpriced": 0
+     },
+     {
+      "id": 7,
+      "title": "Sword Magic 0007",
+      "cover_image": "/uploads/cover-6.jpg",
+      "publisher": "Manga Cult",
+      "owned_volumes": 6,
+      "owned_value": 56,
+      "total_value": 56,
+      "missing_value": 25,
+      "avg_price": 9.33,
+      "unpriced": 0
+     },
+     {
+      "id": 1,
+      "title": "Moon Hero 0001",
+      "cover_image": "/uploads/cover-0.jpg",
+      "publisher": "Panini Manga",
+      "owned_volumes": 3,
+      "owned_value": 36.5,
+      "total_value": 36.5,
+      "missing_value": 0,
+      "avg_price": 12.17,
+      "unpriced": 0
+     }
+    ],
+    "spending": {
+     "by_year": [
+      {
+       "year": 2021,
+       "volumes": 4,
+       "total": 34.5
+      },
+      {
+       "year": 2022,
+       "volumes": 10,
+       "total": 108.5
+      },
+      {
+       "year": 2023,
+       "volumes": 8,
+       "total": 95
+      },
+      {
+       "year": 2024,
+       "volumes": 13,
+       "total": 148.5
+      },
+      {
+       "year": 2025,
+       "volumes": 7,
+       "total": 80.5
+      },
+      {
+       "year": 2026,
+       "volumes": 10,
+       "total": 91.5
+      }
+     ],
+     "by_month": [
+      {
+       "month": "2025-11",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2025-12",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-01",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-02",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-03",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-04",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-05",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-06",
+       "volumes": 1,
+       "total": 7
+      },
+      {
+       "month": "2026-07",
+       "volumes": 4,
+       "total": 40
+      },
+      {
+       "month": "2026-08",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-09",
+       "volumes": 0,
+       "total": 0
+      },
+      {
+       "month": "2026-10",
+       "volumes": 2,
+       "total": 18
+      }
+     ],
+     "year_only": {
+      "volumes": 0,
+      "total": 0
+     },
+     "without_date": {
+      "volumes": 9,
+      "total": 79.5
+     }
+    },
+    "anime": {
+     "total": 2,
+     "watching": 1,
+     "completed": 0,
+     "planned": 0,
+     "per_user": [
+      {
+       "user_id": 1,
+       "username": "admin",
+       "episodes_watched": 5,
+       "watch_minutes": 0,
+       "completed": 0
+      }
+     ]
+    }
+   }
+  },
+  "GET /api/stats/reading": {
+   "status": 200,
+   "body": {
+    "user": {
+     "id": 1,
+     "username": "admin"
+    },
+    "months": 24,
+    "by_month": [
+     {
+      "month": "2024-11",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2024-12",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-01",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-02",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-03",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-04",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-05",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-06",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-07",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-08",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-09",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-10",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-11",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2025-12",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-01",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-02",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-03",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-04",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-05",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-06",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-07",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-08",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-09",
+      "volumes": 0,
+      "pages": 0,
+      "series": 0
+     },
+     {
+      "month": "2026-10",
+      "volumes": 40,
+      "pages": 8142,
+      "series": 7
+     }
+    ],
+    "backlog_by_month": [
+     {
+      "month": "2024-11",
+      "owned": 41,
+      "read": 0,
+      "backlog": 41
+     },
+     {
+      "month": "2024-12",
+      "owned": 44,
+      "read": 0,
+      "backlog": 44
+     },
+     {
+      "month": "2025-01",
+      "owned": 44,
+      "read": 0,
+      "backlog": 44
+     },
+     {
+      "month": "2025-02",
+      "owned": 45,
+      "read": 0,
+      "backlog": 45
+     },
+     {
+      "month": "2025-03",
+      "owned": 45,
+      "read": 0,
+      "backlog": 45
+     },
+     {
+      "month": "2025-04",
+      "owned": 45,
+      "read": 0,
+      "backlog": 45
+     },
+     {
+      "month": "2025-05",
+      "owned": 46,
+      "read": 0,
+      "backlog": 46
+     },
+     {
+      "month": "2025-06",
+      "owned": 46,
+      "read": 0,
+      "backlog": 46
+     },
+     {
+      "month": "2025-07",
+      "owned": 48,
+      "read": 0,
+      "backlog": 48
+     },
+     {
+      "month": "2025-08",
+      "owned": 49,
+      "read": 0,
+      "backlog": 49
+     },
+     {
+      "month": "2025-09",
+      "owned": 50,
+      "read": 0,
+      "backlog": 50
+     },
+     {
+      "month": "2025-10",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2025-11",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2025-12",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-01",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-02",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-03",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-04",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-05",
+      "owned": 51,
+      "read": 0,
+      "backlog": 51
+     },
+     {
+      "month": "2026-06",
+      "owned": 52,
+      "read": 0,
+      "backlog": 52
+     },
+     {
+      "month": "2026-07",
+      "owned": 56,
+      "read": 0,
+      "backlog": 56
+     },
+     {
+      "month": "2026-08",
+      "owned": 56,
+      "read": 0,
+      "backlog": 56
+     },
+     {
+      "month": "2026-09",
+      "owned": 56,
+      "read": 0,
+      "backlog": 56
+     },
+     {
+      "month": "2026-10",
+      "owned": 58,
+      "read": 40,
+      "backlog": 18
+     }
+    ],
+    "this_year": {
+     "year": 2026,
+     "volumes": 40,
+     "pages": 8142
+    },
+    "last_year": {
+     "year": 2025,
+     "volumes": 0,
+     "pages": 0
+    },
+    "streak": {
+     "longest": 1,
+     "longest_end": "2026-10",
+     "current": 1
+    },
+    "unknown_date": 0,
+    "continue_reading": [
+     {
+      "manga_id": 8,
+      "title": "Attack Dragon 0008",
+      "cover_image": "/uploads/cover-7.jpg",
+      "last_read_at": "2026-10-04 13:20:49",
+      "next_volume": {
+       "id": 66,
+       "volume_number": "3",
+       "cover_image": "/uploads/vol-7-3.jpg"
+      },
+      "unread_after": 1
+     },
+     {
+      "manga_id": 5,
+      "title": "Detektiv Hearts 0005",
+      "cover_image": "/uploads/cover-4.jpg",
+      "last_read_at": "2026-10-04 13:20:49",
+      "next_volume": {
+       "id": 46,
+       "volume_number": "11",
+       "cover_image": "/uploads/vol-4-11.jpg"
+      },
+      "unread_after": 1
+     },
+     {
+      "manga_id": 4,
+      "title": "Kaiser Witch 0004",
+      "cover_image": "/uploads/cover-3.jpg",
+      "last_read_at": "2026-10-04 13:20:49",
+      "next_volume": {
+       "id": 35,
+       "volume_number": "13",
+       "cover_image": "/uploads/vol-3-13.jpg"
+      },
+      "unread_after": 1
+     },
+     {
+      "manga_id": 7,
+      "title": "Sword Magic 0007",
+      "cover_image": "/uploads/cover-6.jpg",
+      "last_read_at": "2026-10-04 13:20:49",
+      "next_volume": {
+       "id": 60,
+       "volume_number": "6",
+       "cover_image": null
+      },
+      "unread_after": 1
+     }
+    ]
+   }
+  },
+  "GET /api/sources/guides": {
+   "status": 200,
+   "body": [
+    {
+     "id": "anilist",
+     "name": "AniList",
+     "scope": "user",
+     "benefit": "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.",
+     "secretLabel": "Zugriffstoken",
+     "secretHint": "langer Text aus drei Teilen, beginnt mit „ey“",
+     "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+     "minLength": 100,
+     "formatError": "Das sieht nicht wie ein AniList-Token aus (drei durch Punkte getrennte Teile, mindestens 100 Zeichen).",
+     "warning": "Der Token erlaubt Zugriff auf dein AniList-Konto. Manga Shelf nutzt ihn für Suchen und Metadaten und, nur wenn du „AniList-Liste abgleichen“ einschaltest, zum Lesen und Schreiben deiner Anime-Liste. Er wird nie wieder angezeigt.",
+     "steps": [
+      {
+       "text": "Bei AniList anmelden und die Entwickler-Einstellungen öffnen.",
+       "link": "https://anilist.co/settings/developer"
+      },
+      {
+       "text": "„Create New Client“: Name „Manga Shelf“, Redirect URL genau so eintragen:",
+       "copy": "https://anilist.co/api/v2/oauth/pin"
+      },
+      {
+       "text": "Speichern und die Client-ID hier eintragen — daraus entsteht der Anmeldelink.",
+       "input": "client_id",
+       "inputLabel": "Client-ID",
+       "inputPattern": "^\\d{1,10}$"
+      },
+      {
+       "text": "Den Anmeldelink öffnen, Zugriff bestätigen und den angezeigten Token kopieren.",
+       "linkTemplate": "https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
+      },
+      {
+       "text": "Token unten einfügen und „Prüfen & speichern“ drücken."
+      }
+     ],
+     "check": "Anfrage „Viewer { name }“ mit dem Token; bei Erfolg wird dein AniList-Name angezeigt.",
+     "validity": "Der Token gilt ein Jahr; danach erscheint hier „abgelaufen“ und die Schritte 4–5 wiederholen sich."
+    },
+    {
+     "id": "mal",
+     "name": "MyAnimeList",
+     "scope": "both",
+     "benefit": "Suche und Daten über die offizielle MyAnimeList-API statt über Jikan, mit eigenem Limit.",
+     "secretLabel": "Client-ID",
+     "secretHint": "32 Zeichen aus 0–9 und a–f",
+     "pattern": "^[0-9a-fA-F]{32}$",
+     "minLength": 32,
+     "formatError": "Eine MyAnimeList-Client-ID besteht aus genau 32 Zeichen (0–9, a–f).",
+     "warning": null,
+     "steps": [
+      {
+       "text": "Bei MyAnimeList anmelden und die API-Einstellungen öffnen, dort „Create ID“ wählen.",
+       "link": "https://myanimelist.net/apiconfig"
+      },
+      {
+       "text": "App Name „Manga Shelf“, App Type „other“ (Client Secret bleibt optional), App Description frei."
+      },
+      {
+       "text": "App Redirect URL genau so eintragen:",
+       "copy": "http://localhost/"
+      },
+      {
+       "text": "Homepage URL, z. B.:",
+       "copy": "https://github.com/LixNix-Swap-Org/manga-shelf"
+      },
+      {
+       "text": "Commercial / Non-Commercial: „non-commercial“, Name/Company Name beliebig, Purpose of Use „hobbyist“, API License and Developer Agreement bestätigen und absenden."
+      },
+      {
+       "text": "Auf der Übersicht neben der App „Edit“ anklicken: dort steht die Client ID. Sie unten einfügen und „Prüfen & speichern“ drücken."
+      }
+     ],
+     "check": "Testsuche über die offizielle API mit der Client-ID; Antwort 200 bedeutet gültig.",
+     "validity": "Die Client-ID läuft nicht ab, solange die App bei MyAnimeList besteht."
+    },
+    {
+     "id": "google_books",
+     "name": "Google Books",
+     "scope": "instance",
+     "benefit": "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).",
+     "secretLabel": "API-Schlüssel",
+     "secretHint": "beginnt mit „AIza“, 39 Zeichen",
+     "pattern": "^AIza[0-9A-Za-z_-]{35}$",
+     "minLength": 39,
+     "formatError": "Ein Google-API-Schlüssel beginnt mit „AIza“ und hat 39 Zeichen.",
+     "warning": null,
+     "steps": [
+      {
+       "text": "Die Google Cloud Console öffnen und ein Projekt anlegen oder auswählen.",
+       "link": "https://console.cloud.google.com/"
+      },
+      {
+       "text": "Unter „APIs & Dienste“ die „Books API“ aktivieren.",
+       "link": "https://console.cloud.google.com/apis/library/books.googleapis.com"
+      },
+      {
+       "text": "„Anmeldedaten“ → „Anmeldedaten erstellen“ → „API-Schlüssel“.",
+       "link": "https://console.cloud.google.com/apis/credentials"
+      },
+      {
+       "text": "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen."
+      }
+     ],
+     "check": "ISBN-Abfrage bei Google Books mit dem Schlüssel; Antwort 200 bedeutet gültig.",
+     "validity": "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird."
+    }
+   ]
+  },
+  "GET /api/auth/api-keys": {
+   "status": 200,
+   "body": [
+    {
+     "provider": "anilist",
+     "name": "AniList",
+     "configured": false,
+     "from_env": false,
+     "label": null,
+     "last4": null,
+     "allow_background": false,
+     "last_ok_at": null,
+     "last_error": null
+    },
+    {
+     "provider": "mal",
+     "name": "MyAnimeList",
+     "configured": false,
+     "from_env": false,
+     "label": null,
+     "last4": null,
+     "allow_background": false,
+     "last_ok_at": null,
+     "last_error": null
+    }
+   ]
+  },
+  "GET /api/admin/api-keys": {
+   "status": 200,
+   "body": {
+    "keys": [
+     {
+      "provider": "mal",
+      "name": "MyAnimeList",
+      "configured": false,
+      "from_env": false,
+      "label": null,
+      "last4": null,
+      "allow_background": false,
+      "last_ok_at": null,
+      "last_error": null
+     },
+     {
+      "provider": "google_books",
+      "name": "Google Books",
+      "configured": false,
+      "from_env": false,
+      "label": null,
+      "last4": null,
+      "allow_background": false,
+      "last_ok_at": null,
+      "last_error": null
+     }
+    ],
+    "users_with_keys": 0
+   }
+  },
+  "GET /api/users": {
+   "status": 200,
+   "body": [
+    {
+     "id": 1,
+     "username": "admin",
+     "role": "admin",
+     "created_at": "2026-10-04 13:20:49"
+    },
+    {
+     "id": 2,
+     "username": "anna",
+     "role": "editor",
+     "created_at": "2026-10-04 13:20:49"
+    },
+    {
+     "id": 3,
+     "username": "ben",
+     "role": "editor",
+     "created_at": "2026-10-04 13:20:49"
+    }
+   ]
+  },
+  "GET /api/tags": {
+   "status": 200,
+   "body": {
+    "tags": [
+     {
+      "tag": "Action",
+      "count": 8
+     },
+     {
+      "tag": "Fantasy",
+      "count": 8
+     }
+    ]
+   }
+  },
+  "GET /api/trash": {
+   "status": 200,
+   "body": {
+    "items": [],
+    "retention_days": 30
+   }
+  },
+  "GET /api/publishers": {
+   "status": 200,
+   "body": {
+    "publishers": [
+     {
+      "name": "Panini Manga",
+      "series_count": 2,
+      "volume_count": 6,
+      "canonical": "Panini Verlags GmbH",
+      "known": true,
+      "outdated": true
+     },
+     {
+      "name": "Manga Cult",
+      "series_count": 1,
+      "volume_count": 5,
+      "canonical": "Manga Cult",
+      "known": true,
+      "outdated": false
+     },
+     {
+      "name": "Carlsen Manga",
+      "series_count": 2,
+      "volume_count": 3,
+      "canonical": "Carlsen Manga",
+      "known": true,
+      "outdated": false
+     },
+     {
+      "name": "Tokyopop",
+      "series_count": 1,
+      "volume_count": 3,
+      "canonical": "TOKYOPOP",
+      "known": true,
+      "outdated": true
+     },
+     {
+      "name": "Crunchyroll",
+      "series_count": 1,
+      "volume_count": 2,
+      "canonical": "Crunchyroll",
+      "known": true,
+      "outdated": false
+     },
+     {
+      "name": "Hayabusa",
+      "series_count": 1,
+      "volume_count": 2,
+      "canonical": "Hayabusa",
+      "known": true,
+      "outdated": false
+     },
+     {
+      "name": "Kazé Manga",
+      "series_count": 1,
+      "volume_count": 0,
+      "canonical": "Kazé Manga",
+      "known": true,
+      "outdated": false
+     }
+    ],
+    "aliases": [
+     {
+      "alias": "carlsen verlag",
+      "canonical": "Carlsen Manga",
+      "created_at": "2026-10-04 13:20:49"
+     },
+     {
+      "alias": "carlsen verlag gmbh",
+      "canonical": "Carlsen Manga",
+      "created_at": "2026-10-04 13:20:49"
+     },
+     {
+      "alias": "egmont manga & anime",
+      "canonical": "Egmont Manga",
+      "created_at": "2026-10-04 13:20:49"
+     },
+     {
+      "alias": "ema",
+      "canonical": "Egmont Manga",
+      "created_at": "2026-10-04 13:20:49"
+     },
+     {
+      "alias": "tokyopop gmbh",
+      "canonical": "TOKYOPOP",
+      "created_at": "2026-10-04 13:20:49"
+     }
+    ]
+   }
+  },
+  "GET /api/maintenance/quality": {
+   "status": 200,
+   "body": {
+    "generated_at": "2026-10-04T13:20:50.184Z",
+    "today": "2026-10-04",
+    "limit": 50,
+    "checks": [
+     {
+      "id": "duplicate_titles",
+      "count": 0,
+      "items": []
+     },
+     {
+      "id": "series_without_cover",
+      "count": 1,
+      "items": [
+       {
+        "id": 9,
+        "title": "Radar Demo",
+        "publisher": "Carlsen Manga",
+        "cover_image": null
+       }
+      ]
+     },
+     {
+      "id": "series_without_mp_link",
+      "count": 5,
+      "items": [
+       {
+        "id": 3,
+        "title": "Academy Chainsaw 0003",
+        "publisher": "Crunchyroll",
+        "cover_image": "/uploads/cover-2.jpg"
+       },
+       {
+        "id": 6,
+        "title": "Hunter Sun 0006",
+        "publisher": "Hayabusa",
+        "cover_image": "/uploads/cover-5.jpg"
+       },
+       {
+        "id": 1,
+        "title": "Moon Hero 0001",
+        "publisher": "Panini Manga",
+        "cover_image": "/uploads/cover-0.jpg"
+       },
+       {
+        "id": 9,
+        "title": "Radar Demo",
+        "publisher": "Carlsen Manga",
+        "cover_image": null
+       },
+       {
+        "id": 7,
+        "title": "Sword Magic 0007",
+        "publisher": "Manga Cult",
+        "cover_image": "/uploads/cover-6.jpg"
+       }
+      ]
+     },
+     {
+      "id": "series_without_author",
+      "count": 0,
+      "items": []
+     },
+     {
+      "id": "series_without_total",
+      "count": 1,
+      "items": [
+       {
+        "id": 9,
+        "title": "Radar Demo",
+        "publisher": "Carlsen Manga",
+        "cover_image": null
+       }
+      ]
+     },
+     {
+      "id": "volumes_without_price",
+      "count": 1,
+      "items": [
+       {
+        "id": 70,
+        "manga_id": 9,
+        "title": "Radar Demo",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       }
+      ]
+     },
+     {
+      "id": "volumes_without_purchase_date",
+      "count": 9,
+      "items": [
+       {
+        "id": 8,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780926186028",
+        "release_date": null
+       },
+       {
+        "id": 10,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780795792894",
+        "release_date": "2021-11-15"
+       },
+       {
+        "id": 66,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780946748268",
+        "release_date": null
+       },
+       {
+        "id": 40,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 43,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "8",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780732787704",
+        "release_date": "2024-07-04"
+       },
+       {
+        "id": 24,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780510850346",
+        "release_date": null
+       },
+       {
+        "id": 27,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780710495582",
+        "release_date": null
+       },
+       {
+        "id": 70,
+        "manga_id": 9,
+        "title": "Radar Demo",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 58,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "4",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780052922930",
+        "release_date": "2023-12-09"
+       }
+      ]
+     },
+     {
+      "id": "volumes_without_isbn",
+      "count": 15,
+      "items": [
+       {
+        "id": 22,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "5",
+        "type": "special_edition",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2022-01-13"
+       },
+       {
+        "id": 11,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "6",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 13,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "8",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2015-10-05"
+       },
+       {
+        "id": 68,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "2",
+        "type": "special_edition",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2022-07-04"
+       },
+       {
+        "id": 38,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 40,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 42,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "7",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2025-03-16"
+       },
+       {
+        "id": 53,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "1",
+        "type": "special_edition",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2017-01-20"
+       },
+       {
+        "id": 50,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "4",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2017-11-06"
+       },
+       {
+        "id": 23,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 32,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "10",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 33,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "11",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2016-07-01"
+       },
+       {
+        "id": 1,
+        "manga_id": 1,
+        "title": "Moon Hero 0001",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 70,
+        "manga_id": 9,
+        "title": "Radar Demo",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": null
+       },
+       {
+        "id": 59,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": null,
+        "release_date": "2023-02-22"
+       }
+      ]
+     },
+     {
+      "id": "invalid_isbns",
+      "count": 50,
+      "items": [
+       {
+        "id": 6,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780974566309",
+        "release_date": "2015-10-22"
+       },
+       {
+        "id": 7,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Fehlt",
+        "isbn": "9780693301883",
+        "release_date": "2025-09-27"
+       },
+       {
+        "id": 8,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780926186028",
+        "release_date": null
+       },
+       {
+        "id": 10,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780795792894",
+        "release_date": "2021-11-15"
+       },
+       {
+        "id": 14,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "9",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780347577815",
+        "release_date": null
+       },
+       {
+        "id": 15,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "10",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780519504205",
+        "release_date": "2023-08-10"
+       },
+       {
+        "id": 16,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "11",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780225438326",
+        "release_date": "2015-09-15"
+       },
+       {
+        "id": 17,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "12",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780551112468",
+        "release_date": null
+       },
+       {
+        "id": 18,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "13",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780763670462",
+        "release_date": null
+       },
+       {
+        "id": 19,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "14",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780645839457",
+        "release_date": null
+       },
+       {
+        "id": 20,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "15",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780367233263",
+        "release_date": null
+       },
+       {
+        "id": 21,
+        "manga_id": 3,
+        "title": "Academy Chainsaw 0003",
+        "volume_number": "16",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780196691379",
+        "release_date": "2019-02-10"
+       },
+       {
+        "id": 64,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780539412446",
+        "release_date": null
+       },
+       {
+        "id": 67,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "1",
+        "type": "special_edition",
+        "status": "Fehlt",
+        "isbn": "9780961453797",
+        "release_date": null
+       },
+       {
+        "id": 65,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780485752001",
+        "release_date": "2021-07-05"
+       },
+       {
+        "id": 66,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780946748268",
+        "release_date": null
+       },
+       {
+        "id": 69,
+        "manga_id": 8,
+        "title": "Attack Dragon 0008",
+        "volume_number": "3",
+        "type": "special_edition",
+        "status": "Vorhanden",
+        "isbn": "9780496995636",
+        "release_date": "2016-06-05"
+       },
+       {
+        "id": 36,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780770813969",
+        "release_date": "2023-06-06"
+       },
+       {
+        "id": 37,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780388861528",
+        "release_date": "2026-04-14"
+       },
+       {
+        "id": 39,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "4",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780565754189",
+        "release_date": "2025-11-13"
+       },
+       {
+        "id": 41,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "6",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780604636541",
+        "release_date": null
+       },
+       {
+        "id": 43,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "8",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780732787704",
+        "release_date": "2024-07-04"
+       },
+       {
+        "id": 44,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "9",
+        "type": "volume",
+        "status": "Fehlt",
+        "isbn": "9780757928163",
+        "release_date": null
+       },
+       {
+        "id": 45,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "10",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780585745173",
+        "release_date": "2021-10-13"
+       },
+       {
+        "id": 46,
+        "manga_id": 5,
+        "title": "Detektiv Hearts 0005",
+        "volume_number": "11",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780522215277",
+        "release_date": null
+       },
+       {
+        "id": 47,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780238992959",
+        "release_date": null
+       },
+       {
+        "id": 48,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780602696073",
+        "release_date": "2023-01-03"
+       },
+       {
+        "id": 54,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "4",
+        "type": "special_edition",
+        "status": "Vorhanden",
+        "isbn": "9780768389255",
+        "release_date": "2025-06-02"
+       },
+       {
+        "id": 51,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780667097978",
+        "release_date": "2023-12-18"
+       },
+       {
+        "id": 52,
+        "manga_id": 6,
+        "title": "Hunter Sun 0006",
+        "volume_number": "6",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780401248574",
+        "release_date": "2021-07-16"
+       },
+       {
+        "id": 24,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780510850346",
+        "release_date": null
+       },
+       {
+        "id": 25,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780809961631",
+        "release_date": "2021-08-24"
+       },
+       {
+        "id": 26,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "4",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780478387559",
+        "release_date": "2021-12-19"
+       },
+       {
+        "id": 27,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "5",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780710495582",
+        "release_date": null
+       },
+       {
+        "id": 28,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "6",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780185594357",
+        "release_date": "2015-02-11"
+       },
+       {
+        "id": 29,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "7",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780194511950",
+        "release_date": null
+       },
+       {
+        "id": 30,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "8",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780407130615",
+        "release_date": null
+       },
+       {
+        "id": 31,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "9",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780010805558",
+        "release_date": "2023-04-08"
+       },
+       {
+        "id": 34,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "12",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780266987469",
+        "release_date": null
+       },
+       {
+        "id": 35,
+        "manga_id": 4,
+        "title": "Kaiser Witch 0004",
+        "volume_number": "13",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780995034886",
+        "release_date": null
+       },
+       {
+        "id": 2,
+        "manga_id": 1,
+        "title": "Moon Hero 0001",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780632208747",
+        "release_date": "2019-12-20"
+       },
+       {
+        "id": 3,
+        "manga_id": 1,
+        "title": "Moon Hero 0001",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780328056367",
+        "release_date": "2016-11-27"
+       },
+       {
+        "id": 5,
+        "manga_id": 2,
+        "title": "Returner Kingdom 0002",
+        "volume_number": "1",
+        "type": "special_edition",
+        "status": "Fehlt",
+        "isbn": "9780736455137",
+        "release_date": null
+       },
+       {
+        "id": 55,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "1",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780547408600",
+        "release_date": "2020-07-06"
+       },
+       {
+        "id": 56,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "2",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780357438414",
+        "release_date": "2016-01-04"
+       },
+       {
+        "id": 57,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "3",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780297600443",
+        "release_date": null
+       },
+       {
+        "id": 58,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "4",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780052922930",
+        "release_date": "2023-12-09"
+       },
+       {
+        "id": 60,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "6",
+        "type": "volume",
+        "status": "Vorhanden",
+        "isbn": "9780730311011",
+        "release_date": "2015-03-15"
+       },
+       {
+        "id": 61,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "7",
+        "type": "volume",
+        "status": "Fehlt",
+        "isbn": "9780328468807",
+        "release_date": null
+       },
+       {
+        "id": 63,
+        "manga_id": 7,
+        "title": "Sword Magic 0007",
+        "volume_number": "9",
+        "type": "volume",
+        "status": "Fehlt",
+        "isbn": "9780001040337",
+        "release_date": null
+       }
+      ]
+     },
+     {
+      "id": "overdue_preorders",
+      "count": 0,
+      "items": []
+     },
+     {
+      "id": "legacy_read_status",
+      "count": 0,
+      "items": [],
+      "fix": "legacy_read"
+     },
+     {
+      "id": "publishers_outdated",
+      "count": 2,
+      "items": [
+       {
+        "name": "Panini Manga",
+        "series_count": 2,
+        "volume_count": 6,
+        "canonical": "Panini Verlags GmbH"
+       },
+       {
+        "name": "Tokyopop",
+        "series_count": 1,
+        "volume_count": 3,
+        "canonical": "TOKYOPOP"
+       }
+      ],
+      "fix": "normalize_publishers"
+     },
+     {
+      "id": "publishers_unknown",
+      "count": 0,
+      "items": []
+     }
+    ]
+   }
+  },
+  "GET /api/radar/feed-token": {
+   "status": 200,
+   "body": {
+    "active": false,
+    "path": null,
+    "url": null,
+    "created_at": null,
+    "last_used_at": null,
+    "unreadable": false
+   }
+  },
+  "GET /api/version": {
+   "status": 200,
+   "body": {
+    "version": "2.19.1"
+   }
+  }
+ }
+}

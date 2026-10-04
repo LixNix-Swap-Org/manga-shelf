@@ -1,0 +1,101 @@
+{
+  "id": "/",
+  "name": "MangaShelf - Mangacollectie en tracker",
+  "short_name": "MangaShelf",
+  "description": "Persoonlijke mangacollectie, deeltracker, leesstatus en kooplijst",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Kooplijst",
+      "short_name": "Kopen",
+      "description": "Ontbrekende delen direct in de boekwinkel openen",
+      "url": "/?view=shopping",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Barcode scannen",
+      "short_name": "Scannen",
+      "description": "Scan een deel in de winkel met een foto en vergelijk het met de collectie",
+      "url": "/?view=shopping&scan=1",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Release Radar",
+      "short_name": "Radar",
+      "description": "Voorbestellingen en nieuwe uitgaven",
+      "url": "/?view=radar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Statistieken",
+      "short_name": "Cijfers",
+      "description": "Collectiewaarde en leesstatistieken",
+      "url": "/?view=stats",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "categories": [
+    "books",
+    "entertainment",
+    "lifestyle"
+  ],
+  "lang": "nl"
+}

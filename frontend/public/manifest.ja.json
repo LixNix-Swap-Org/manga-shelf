@@ -1,0 +1,101 @@
+{
+  "id": "/",
+  "name": "MangaShelf - マンガコレクション＆トラッカー",
+  "short_name": "MangaShelf",
+  "description": "個人用のマンガコレクション、巻の管理、既読状況、買い物リスト",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "買い物リスト",
+      "short_name": "買い物",
+      "description": "書店で未所持の巻をそのまま開く",
+      "url": "/?view=shopping",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "バーコードをスキャン",
+      "short_name": "スキャン",
+      "description": "店頭で巻を写真でスキャンして、コレクションと照合します",
+      "url": "/?view=shopping&scan=1",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Release Radar",
+      "short_name": "レーダー",
+      "description": "予約と新刊",
+      "url": "/?view=radar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "統計",
+      "short_name": "統計",
+      "description": "コレクションの評価額と読書の統計",
+      "url": "/?view=stats",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "categories": [
+    "books",
+    "entertainment",
+    "lifestyle"
+  ],
+  "lang": "ja"
+}

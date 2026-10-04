@@ -1,0 +1,24 @@
+{
+  "name": "manga-shelf-desktop",
+  "productName": "Manga Shelf",
+  "version": "2.19.1",
+  "private": true,
+  "description": "Manga Shelf als Desktop-App (lokaler Server, Client oder Server im Heimnetz)",
+  "author": "Manga Shelf",
+  "main": "main.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "stage": "node scripts/stage.js",
+    "build:desktop": "node scripts/stage.js --build-frontend && node scripts/builder.js --publish never",
+    "build:dir": "node scripts/stage.js --build-frontend && node scripts/builder.js --dir --publish never",
+    "test": "node --test test/*.test.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { normalizePublisher } = require('../utils/publishers');
 const { startTestServer } = require('./helpers');
 
-// Findings from testing with real Manga Passion data (publisher spelling, radar contents).
+// Regressions found with real Manga Passion data (publisher spelling, radar contents).
 let ctx;
 let admin;
 
@@ -38,7 +38,8 @@ test('release radar lists upcoming and pre-ordered volumes, not missing back-cat
     assert.equal((await add('5', 'Vorhanden', `${nextYear}-05-01`)).status, 200); // owned never listed
 
     const radar = (await admin('GET', '/release-radar')).body;
-    assert.deepEqual(radar.items.map(i => i.volume_number).sort(), ['2', '3', '4']);
+    assert.deepEqual(radar.groups.flatMap(g => g.items).map(i => i.volume_number).sort(), ['2', '3', '4']);
+    assert.equal(radar.items, undefined, 'the flat list duplicated groups[].items');
     assert.equal(radar.preordered_count, 2);
 
     const shopping = (await admin('GET', '/shopping-list')).body;
@@ -88,15 +89,15 @@ test('list rows carry regular/extra counts; progress and completion count regula
 });
 
 test('a series is not "completed" because schuber and extras raise the owned count', async () => {
-    const before = (await admin('GET', '/stats')).body.completed_series;
+    const before = (await admin('GET', '/stats')).body.summary.completed_series;
     const id = (await admin('POST', '/mangas', { title: 'Nicht komplett', total_volumes: 3, status: 'Laufend' })).body.id;
     assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 1, status: 'Vorhanden' })).status, 200);
     for (const n of ['Schuber 1', 'Schuber 2']) {
         assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: n, type: 'schuber', status: 'Vorhanden' })).status, 200);
     }
-    assert.equal((await admin('GET', '/stats')).body.completed_series, before); // 3 owned entries, but only 1 of 3 volumes
+    assert.equal((await admin('GET', '/stats')).body.summary.completed_series, before); // 3 owned entries, but only 1 of 3 volumes
     assert.equal((await admin('POST', '/volumes/batch', { manga_id: id, from: 2, to: 3, status: 'Vorhanden' })).status, 200);
-    assert.equal((await admin('GET', '/stats')).body.completed_series, before + 1);
+    assert.equal((await admin('GET', '/stats')).body.summary.completed_series, before + 1);
 });
 
 test('the same type and number cannot be added twice, but a special edition of the same number can', async () => {
@@ -161,10 +162,10 @@ test('a duplicate entry does not raise the progress of a series', async () => {
 test('static headers: index.html, sw.js and manifest.json are revalidated, hashed assets are not touched', () => {
     const { setStaticHeaders } = require('../utils/staticHeaders');
     const headersFor = (file) => { const h = {}; setStaticHeaders({ setHeader: (k, v) => { h[k] = v; } }, file); return h; };
-    for (const file of ['C:\\app\\frontend\\dist\\index.html', '/app/frontend/dist/index.html', '/app/dist/sw.js', '/app/dist/manifest.json']) {
+    for (const file of ['C:\\app\\frontend\\dist\\index.html', '/app/frontend/dist/index.html', '/app/dist/sw.js', '/app/dist/manifest.json', '/app/dist/manifest.en.json', '/app/dist/manifest.pt-BR.json']) {
         assert.deepEqual(headersFor(file), { 'Cache-Control': 'no-cache' }, file);
     }
-    for (const file of ['/app/dist/assets/index-abc123.js', '/app/dist/assets/Dashboard-x.js', '/app/dist/favicon.svg', '/app/dist/assets/notindex.html.js']) {
+    for (const file of ['/app/dist/assets/index-abc123.js', '/app/dist/assets/Dashboard-x.js', '/app/dist/favicon.svg', '/app/dist/assets/notindex.html.js', '/app/dist/assets/en-abc123.js']) {
         assert.deepEqual(headersFor(file), {}, file);
     }
 });

@@ -1,124 +1,76 @@
-const fs = require('fs');
+#!/usr/bin/env node
+/**
+ * node release.js <patch|minor|major|X.Y.Z|vX.Y.Z> [--dry-run]: sets the next version in every package.json,
+ * lockfile and native mobile project of a clean tree, without commit, tag or push; --dry-run only shows changes.
+ */
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { resolveTargetVersion, compareVersions, readVersion, versionFiles, writeVersion, syncMobileVersion, tagFor } = require('./scripts/release/version');
 
-function run(cmd, options = {}) {
-  console.log(`\n> ${cmd}`);
-  return execSync(cmd, { stdio: 'inherit', ...options });
+const ROOT = __dirname;
+const ACTIONS_HINT = [
+    'Veröffentlicht wird im Actions-Tab von GitHub: Actions → „Release“ → „Run workflow“,',
+    'Branch wählen, action = release, bump = patch | minor | major (oder none, wenn die Version schon gesetzt ist).',
+    'Der Workflow setzt die Version, legt Commit und Tag an, baut alles und veröffentlicht den Release.'
+].join('\n');
+
+/** Paths from `git status --porcelain` output that are not in `allowed`. */
+function getReleaseBlockers(porcelain, allowed = []) {
+    return String(porcelain || '')
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => {
+            const p = line.slice(3);
+            const arrow = p.indexOf(' -> ');
+            return (arrow === -1 ? p : p.slice(arrow + 4)).replace(/^"|"$/g, '');
+        })
+        .filter(p => !allowed.includes(p));
 }
 
-function runOutput(cmd) {
-  return execSync(cmd, { encoding: 'utf8' }).trim();
+function git(args) {
+    return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-async function main() {
-  console.log('🚀 Starte Release-Prozess für Manga Shelf...');
-
-  // 1. Version bestimmen
-  const rootPkgPath = path.join(__dirname, 'package.json');
-  const frontendPkgPath = path.join(__dirname, 'frontend', 'package.json');
-
-  const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
-  const frontendPkg = JSON.parse(fs.readFileSync(frontendPkgPath, 'utf8'));
-
-  let targetVersion = process.argv[2];
-
-  if (!targetVersion) {
-    targetVersion = rootPkg.version;
-  } else if (targetVersion.startsWith('v')) {
-    targetVersion = targetVersion.slice(1);
-  } else if (targetVersion === 'patch' || targetVersion === 'minor' || targetVersion === 'major') {
-    const parts = rootPkg.version.split('.').map(Number);
-    if (targetVersion === 'patch') parts[2]++;
-    if (targetVersion === 'minor') { parts[1]++; parts[2] = 0; }
-    if (targetVersion === 'major') { parts[0]++; parts[1] = 0; parts[2] = 0; }
-    targetVersion = parts.join('.');
-  }
-
-  const tag = `v${targetVersion}`;
-  console.log(`📌 Ziel-Version: ${tag} (Package Version: ${targetVersion})`);
-
-  // 2. Versionen in package.json und frontend/package.json synchronisieren
-  rootPkg.version = targetVersion;
-  frontendPkg.version = targetVersion;
-
-  fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + '\n');
-  fs.writeFileSync(frontendPkgPath, JSON.stringify(frontendPkg, null, 2) + '\n');
-  console.log('✅ package.json & frontend/package.json aktualisiert.');
-
-  // 3. Frontend bauen & ZIP-Paket erzeugen
-  console.log('📦 Erzeuge pterodactyl-manga-shelf.zip...');
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  run(`${npmCmd} run package`);
-
-  const zipPath = path.join(__dirname, 'pterodactyl-manga-shelf.zip');
-  if (!fs.existsSync(zipPath)) {
-    throw new Error(`ZIP-Datei wurde nicht gefunden: ${zipPath}`);
-  }
-  const zipStats = fs.statSync(zipPath);
-  console.log(`✅ ZIP erfolgreich erstellt (${(zipStats.size / 1024).toFixed(1)} KB)`);
-
-  // 4. Git Status prüfen & Änderungen committen
-  const status = runOutput('git status --porcelain');
-  if (status) {
-    console.log('📝 Committe Änderungen vor dem Release...');
-    run('git add .');
+function tagExists(tag) {
     try {
-      run(`git commit -m "chore(release): bump version to ${tag}"`);
+        git(['rev-parse', '-q', '--verify', `refs/tags/${tag}`]);
+        return true;
     } catch (e) {
-      console.log('Keine neuen Commits nötig oder bereits committed.');
+        return false;
     }
-  }
-
-  // 5. Änderungen zu GitHub pushen
-  console.log('⬆️ Pushe main zu GitHub...');
-  run('git push origin main');
-
-  // 6. Prüfen ob Tag lokal oder remote existiert
-  const existingTags = runOutput('git tag -l').split('\n').map(t => t.trim());
-  if (existingTags.includes(tag)) {
-    console.log(`⚠️ Tag ${tag} existiert bereits. Erneuere Tag...`);
-    run(`git tag -d ${tag}`);
-    try { run(`git push origin :refs/tags/${tag}`); } catch (_) { }
-  }
-
-  console.log(`🏷️ Erstelle Git Tag ${tag}...`);
-  run(`git tag -a ${tag} -m "Release ${tag}"`);
-  run(`git push origin ${tag}`);
-
-  // 7. GitHub Release erstellen & ZIP hochladen via gh CLI
-  console.log(`🌐 Erstelle GitHub Release für ${tag} und lade ZIP hoch...`);
-  try {
-    // Falls Release bereits existiert, überschreiben / anpassen
-    const releaseTitle = `Manga Shelf ${tag}`;
-    // Notes come from the merged PRs / commits since the previous tag; only the deploy hint is static.
-    const deployHint = 'Laden Sie einfach die beigefügte `pterodactyl-manga-shelf.zip` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.';
-    const notesFile = path.join(__dirname, 'RELEASE_NOTES.tmp');
-    fs.writeFileSync(notesFile, `### Deployment-Hinweis
-${deployHint}
-`, 'utf8');
-
-    try {
-      run(`gh release create ${tag} "${zipPath}" --title "${releaseTitle}" --notes-file "${notesFile}" --generate-notes`);
-    } catch (createErr) {
-      console.log('Release existiert evtl. bereits, versuche Upload via `gh release upload`...');
-      run(`gh release upload ${tag} "${zipPath}" --clobber`);
-    }
-
-    if (fs.existsSync(notesFile)) {
-      fs.unlinkSync(notesFile);
-    }
-
-    console.log(`\n🎉 Release ${tag} erfolgreich auf GitHub veröffentlicht!`);
-    const releaseUrl = runOutput(`gh release view ${tag} --json url -q .url`);
-    console.log(`🔗 Release URL: ${releaseUrl}`);
-  } catch (err) {
-    console.error('❌ Fehler beim Erstellen des GitHub Releases via gh CLI:', err.message);
-    console.log('Hinweis: Der Git Tag wurde bereits gepusht. Falls GitHub Actions eingerichtet ist, wird der Release dort gebaut.');
-  }
 }
 
-main().catch(err => {
-  console.error('\n❌ Fehler im Release-Skript:', err);
-  process.exit(1);
-});
+function main(argv, out = (text) => process.stdout.write(text + '\n')) {
+    const dryRun = argv.includes('--dry-run');
+    const args = argv.filter(a => a !== '--dry-run');
+    const current = readVersion(ROOT);
+    const version = resolveTargetVersion(args[0], current);
+    const tag = tagFor(version);
+    const files = versionFiles(ROOT);
+    out(`Version ${current} → ${version} (${tag})`);
+    if (dryRun) {
+        out(`Probelauf, nichts geändert. Betroffene Dateien: ${files.join(', ')}`);
+        out(ACTIONS_HINT);
+        return 0;
+    }
+    const dirty = getReleaseBlockers(git(['status', '--porcelain', '--untracked-files=all']));
+    if (dirty.length) throw new Error(`Arbeitsverzeichnis nicht sauber, bitte zuerst committen oder entfernen:\n  ${dirty.join('\n  ')}`);
+    if (tagExists(tag)) throw new Error(`Tag ${tag} existiert bereits.`);
+    const changed = writeVersion(ROOT, version);
+    if (syncMobileVersion(ROOT)) changed.push('mobile/android/app/build.gradle', 'mobile/ios/App/App.xcodeproj/project.pbxproj');
+    out(`Version gesetzt in: ${changed.join(', ')}`);
+    out(`Weiter: git commit -am "${tag}" && git push`);
+    out(ACTIONS_HINT.replace('bump = patch | minor | major (oder none, wenn die Version schon gesetzt ist)', 'bump = none'));
+    return 0;
+}
+
+if (require.main === module) {
+    try {
+        process.exitCode = main(process.argv.slice(2));
+    } catch (err) {
+        process.stderr.write(`\nAbgebrochen: ${err.message}\n\n${ACTIONS_HINT}\n`);
+        process.exitCode = 1;
+    }
+}
+
+module.exports = { main, resolveTargetVersion, getReleaseBlockers, compareVersions, ACTIONS_HINT, ROOT: path.resolve(ROOT) };

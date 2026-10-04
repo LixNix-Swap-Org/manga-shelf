@@ -1,51 +1,80 @@
+// Builds the Pterodactyl ZIP: package.json, the lockfile, .env.example, the backend files listed in package.json
+// "files" (the same list the Docker image uses, see scripts/stage-backend.js) and the built frontend.
+// Needs a built frontend: `npm run package` runs `build:frontend` first.
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
+const { readManifest, shippedFiles } = require('./scripts/stage-backend');
 
-const outputDir = path.join(__dirname, 'dist_pack');
-if (!fs.existsSync(outputDir)) {
-  fs.mkdirSync(outputDir);
+const ZIP_NAME = 'pterodactyl-manga-shelf.zip';
+// package-lock.json makes the egg's `npm install --omit=dev` install the tested dependency tree
+const PACKAGE_FILES = ['package.json', 'package-lock.json', '.env.example'];
+const FRONTEND_DIST = 'frontend/dist';
+const FRONTEND_INDEX = `${FRONTEND_DIST}/index.html`;
+
+function missingInputs(root) {
+  const missing = [...PACKAGE_FILES, FRONTEND_INDEX].filter(rel => !fs.existsSync(path.join(root, rel)));
+  if (missing.includes('package.json')) return missing;
+  const declared = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).files || [];
+  readManifest(root).forEach((rel, i) => {
+    if (!fs.existsSync(path.join(root, rel))) missing.push(declared[i]);
+  });
+  return missing;
 }
 
-const outputPath = path.join(outputDir, 'pterodactyl-manga-shelf.zip');
-const output = fs.createWriteStream(outputPath);
-const archive = archiver('zip', {
-  zlib: { level: 9 } // Sets the compression level.
-});
+/**
+ * Writes the ZIP to a temp file and only replaces <outDir>/pterodactyl-manga-shelf.zip (and the copy in the root)
+ * when every input exists and the archive holds the required entries, so a failed run never clobbers the last good ZIP.
+ */
+async function buildPackage({ root = __dirname, outDir = path.join(root, 'dist_pack'), copyToRoot = true } = {}) {
+  const missing = missingInputs(root);
+  if (missing.length) {
+    throw new Error(`Fehlende Dateien für die ZIP: ${missing.join(', ')}` +
+      (missing.some(m => m.startsWith(FRONTEND_DIST)) ? ' (zuerst `npm run build:frontend`)' : ''));
+  }
+  const backend = shippedFiles(root);
+  const required = [...PACKAGE_FILES, ...backend, FRONTEND_INDEX];
 
-output.on('close', function() {
-  console.log('Packaging complete!');
-  console.log(`Created artifact at: ${outputPath} (${archive.pointer()} total bytes)`);
-  // Also copy to root for easy user access
-  fs.copyFileSync(outputPath, path.join(__dirname, 'pterodactyl-manga-shelf.zip'));
-  console.log('Also updated root pterodactyl-manga-shelf.zip');
-  console.log('You can now upload this ZIP to your Pterodactyl server.');
-});
+  fs.mkdirSync(outDir, { recursive: true });
+  const zipPath = path.join(outDir, ZIP_NAME);
+  const tmpPath = `${zipPath}.tmp`;
+  const entries = [];
 
-archive.on('error', function(err) {
-  throw err;
-});
+  try {
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(tmpPath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      output.on('close', resolve);
+      output.on('error', reject);
+      archive.on('warning', reject);
+      archive.on('error', reject);
+      archive.on('entry', entry => entries.push(entry.name));
+      archive.pipe(output);
+      for (const rel of [...PACKAGE_FILES, ...backend]) archive.file(path.join(root, rel), { name: rel });
+      archive.directory(path.join(root, FRONTEND_DIST), FRONTEND_DIST);
+      archive.finalize();
+    });
+    const absent = required.filter(name => !entries.includes(name));
+    if (absent.length) throw new Error(`Die ZIP enthält nicht alles Nötige: ${absent.join(', ')}`);
+    fs.renameSync(tmpPath, zipPath);
+  } finally {
+    fs.rmSync(tmpPath, { force: true });
+  }
 
-archive.pipe(output);
+  if (copyToRoot) fs.copyFileSync(zipPath, path.join(root, ZIP_NAME));
+  return { zipPath, entries };
+}
 
-// Add backend files
-archive.file('package.json', { name: 'package.json' });
-archive.file('index.js', { name: 'index.js' });
-archive.file('db.js', { name: 'db.js' });
-archive.file('mangaPassion.js', { name: 'mangaPassion.js' });
+if (require.main === module) {
+  buildPackage()
+    .then(({ zipPath, entries }) => {
+      console.log(`Packaging complete: ${zipPath} (${entries.length} Dateien, ${fs.statSync(zipPath).size} Bytes)`);
+      console.log(`Also updated ${path.join(__dirname, ZIP_NAME)}. Upload this ZIP to your Pterodactyl server.`);
+    })
+    .catch(err => {
+      console.error(`Packaging failed: ${err.message}`);
+      process.exitCode = 1;
+    });
+}
 
-// Add modularized backend folders
-archive.directory('routes/', 'routes');
-archive.directory('services/', 'services');
-archive.directory('middleware/', 'middleware');
-archive.directory('utils/', 'utils');
-
-// Add frontend build
-archive.directory('frontend/dist/', 'frontend/dist');
-
-// We don't include node_modules or data folder. Pterodactyl should run npm install.
-// If we want a standalone zip with all prod dependencies, we would run `npm install --production` here and include node_modules.
-// The user requirement says: "vorkompiliertes/produktionsfertiges Backend, alle Production-Dependencies gebündelt oder minimal installierbar."
-// We will just assume Pterodactyl Generic Node.js Egg which runs `npm install` on startup.
-
-archive.finalize();
+module.exports = { buildPackage, PACKAGE_FILES, FRONTEND_DIST, ZIP_NAME };

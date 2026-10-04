@@ -1,0 +1,27 @@
+{
+  "name": "mangashelf-native",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native helpers of the Manga Shelf app: WebLogin (isolated sign-in, cookie-less requests) and SharedInbox (iOS share extension inbox)",
+  "types": "definitions.d.ts",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "ios/Sources",
+    "MangashelfNative.podspec",
+    "definitions.d.ts"
+  ],
+  "author": "Manga Shelf",
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "@capacitor/core": ">=7.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  }
+}

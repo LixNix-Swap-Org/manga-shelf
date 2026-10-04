@@ -1,0 +1,24 @@
+{
+ "_note": "Built from the documented MyAnimeList API v2 shape (GET /v2/anime/{id}?fields=...,related_anime,related_manga).",
+ "id": 21,
+ "title": "One Piece",
+ "main_picture": { "medium": "https://cdn.myanimelist.net/images/anime/1244/138851.jpg", "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg" },
+ "alternative_titles": { "synonyms": ["OP"], "en": "One Piece", "ja": "ONE PIECE" },
+ "start_date": "1999-10-20",
+ "synopsis": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack.",
+ "mean": 8.73,
+ "media_type": "tv",
+ "status": "currently_airing",
+ "num_episodes": 0,
+ "start_season": { "year": 1999, "season": "fall" },
+ "broadcast": { "day_of_the_week": "sunday", "start_time": "23:15" },
+ "average_episode_duration": 1440,
+ "studios": [{ "id": 18, "name": "Toei Animation" }],
+ "genres": [{ "id": 1, "name": "Action" }, { "id": 2, "name": "Adventure" }],
+ "related_anime": [
+  { "node": { "id": 459, "title": "One Piece Movie 01", "main_picture": { "medium": "https://cdn.myanimelist.net/images/anime/1/459.jpg" } }, "relation_type": "side_story", "relation_type_formatted": "Side Story" }
+ ],
+ "related_manga": [
+  { "node": { "id": 13, "title": "One Piece" }, "relation_type": "adaptation", "relation_type_formatted": "Adaptation" }
+ ]
+}

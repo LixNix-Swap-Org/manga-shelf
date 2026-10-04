@@ -1,0 +1,134 @@
+{
+ "data": {
+  "Page": {
+   "media": []
+  },
+  "s1": {
+   "media": [
+    {
+     "id": 161645,
+     "idMal": 54492,
+     "type": "ANIME",
+     "format": "TV",
+     "status": "FINISHED",
+     "episodes": 24,
+     "duration": 23,
+     "season": "FALL",
+     "seasonYear": 2023,
+     "siteUrl": "https://anilist.co/anime/161645",
+     "startDate": {
+      "year": 2023,
+      "month": 10,
+      "day": 22
+     },
+     "endDate": {
+      "year": 2024,
+      "month": 3,
+      "day": 24
+     },
+     "title": {
+      "romaji": "Kusuriya no Hitorigoto",
+      "english": "The Apothecary Diaries",
+      "native": "薬屋のひとりごと"
+     },
+     "synonyms": [
+      "Drugstore Soliloquy",
+      "Les Carnets de l'Apothicaire",
+      "Zapiski zielarki",
+      "Diários de uma Apotecária",
+      "Il monologo della Speziale",
+      "Los diarios de la boticaria",
+      "สืบคดีปริศนา หมอยาตำรับโคมแดง",
+      "Записки аптекаря",
+      "Die Tagebücher der Apothekerin",
+      "يوميات الصيدلانيّة",
+      "藥師少女的獨語",
+      "药屋少女的呢喃",
+      "Монолог фармацевта",
+      "약사의 혼잣말",
+      "Dược sư tự sự"
+     ],
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx161645-QLbzHXiYRgV2.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx161645-QLbzHXiYRgV2.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/161645-oqzTZYIvviWI.jpg",
+     "genres": [
+      "Drama",
+      "Mystery"
+     ],
+     "averageScore": 88,
+     "meanScore": 88,
+     "studios": {
+      "nodes": [
+       {
+        "name": "OLM"
+       },
+       {
+        "name": "TOHO animation STUDIO"
+       }
+      ]
+     },
+     "nextAiringEpisode": null
+    },
+    {
+     "id": 176301,
+     "idMal": 58514,
+     "type": "ANIME",
+     "format": "TV",
+     "status": "FINISHED",
+     "episodes": 24,
+     "duration": 24,
+     "season": "WINTER",
+     "seasonYear": 2025,
+     "siteUrl": "https://anilist.co/anime/176301",
+     "startDate": {
+      "year": 2025,
+      "month": 1,
+      "day": 10
+     },
+     "endDate": {
+      "year": 2025,
+      "month": 7,
+      "day": 4
+     },
+     "title": {
+      "romaji": "Kusuriya no Hitorigoto 2nd Season",
+      "english": "The Apothecary Diaries Season 2",
+      "native": "薬屋のひとりごと 第2期"
+     },
+     "synonyms": [
+      "Die Tagebücher der Apothekerin Season 2",
+      "Diários de uma Apotecária 2ª Temporada",
+      "Монолог фармацевта 2",
+      "Les Carnets de l'apothicaire Saison 2",
+      "Los diarios de la boticaria temporada 2",
+      "Dược sư tự sự"
+     ],
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx176301-TIGmldLffQGX.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx176301-TIGmldLffQGX.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/176301-GkuTF1YTT6b2.jpg",
+     "genres": [
+      "Drama",
+      "Mystery"
+     ],
+     "averageScore": 88,
+     "meanScore": 88,
+     "studios": {
+      "nodes": [
+       {
+        "name": "TOHO animation STUDIO"
+       },
+       {
+        "name": "OLM"
+       }
+      ]
+     },
+     "nextAiringEpisode": null
+    }
+   ]
+  }
+ }
+}

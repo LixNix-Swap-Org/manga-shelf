@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
-const { fetchRemoteImage, isPrivateAddress, MAX_IMAGE_BYTES } = require('../utils/safeFetch');
+const { fetchRemoteImage, isPrivateAddress, detectImageExt, MAX_IMAGE_BYTES } = require('../utils/safeFetch');
 
 // smallest valid headers for each format the uploads accept
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(600, 1)]);
@@ -67,6 +67,31 @@ test('isPrivateAddress catches every notation of internal addresses', () => {
 
     const publicHosts = ['8.8.8.8', '1.1.1.1', '2606:4700:4700::1111', '2a00:1450:4001:80b::200e', '::ffff:808:808', '64:ff9b::808:808', '2002:808:808::1'];
     for (const a of publicHosts) assert.equal(isPrivateAddress(a), false, a);
+});
+
+test('isPrivateAddress blocks only the special /24s of 192.0.0.0/16, not public hosts like i0.wp.com', () => {
+    const internal = ['192.0.0.1', '192.0.0.8', '192.0.0.170', '192.0.2.1', '198.51.100.1', '203.0.113.1', '192.88.99.1',
+        '::ffff:192.0.0.170', '::ffff:192.0.2.1'];
+    for (const a of internal) assert.equal(isPrivateAddress(a), true, a);
+    const publicHosts = ['192.0.77.2', '192.0.78.9', '192.0.43.8', '192.0.1.1', '192.0.3.1', '::ffff:192.0.77.2', '2002:c000:4d02::1'];
+    for (const a of publicHosts) assert.equal(isPrivateAddress(a), false, a);
+});
+
+test('detectImageExt recognises AVIF by its major or a compatible brand', () => {
+    const ftyp = (major, compatible) => {
+        const brands = [major, '\0\0\0\0', ...compatible].join('');
+        const box = Buffer.alloc(8 + brands.length);
+        box.writeUInt32BE(box.length, 0);
+        box.write('ftyp', 4, 'ascii');
+        box.write(brands, 8, 'latin1');
+        return Buffer.concat([box, Buffer.alloc(32)]);
+    };
+    assert.equal(detectImageExt(ftyp('avif', ['mif1'])), '.avif');
+    assert.equal(detectImageExt(ftyp('mif1', ['miaf', 'avif'])), '.avif');
+    assert.equal(detectImageExt(ftyp('heic', ['mif1', 'heic'])), null);
+    assert.equal(detectImageExt(ftyp('isom', ['mp41'])), null);
+    assert.equal(detectImageExt(Buffer.from('<html><script>')), null);
+    assert.equal(detectImageExt(Buffer.alloc(4)), null);
 });
 
 test('blocks loopback in every URL notation by default', async () => {

@@ -1,0 +1,430 @@
+# Builds every deliverable as workflow artifacts and never publishes anything: publishing lives in release.yml, the
+# only workflow with write permissions (a called workflow cannot hold more rights than its caller, and CI stays
+# read-only). Called by ci.yml (every push and pull request) and release.yml (manual run).
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build (empty = the commit that triggered the caller)
+        type: string
+        default: ''
+      version:
+        description: Version being built (informational; package.json is the source)
+        type: string
+        default: ''
+      publish:
+        description: Release build (longer artifact retention; release.yml publishes afterwards)
+        type: boolean
+        default: false
+      installers:
+        description: Build the desktop installers (three runners)
+        type: boolean
+        default: true
+    secrets:
+      WIN_CSC_LINK:
+        required: false
+      WIN_CSC_KEY_PASSWORD:
+        required: false
+      MAC_CSC_LINK:
+        required: false
+      MAC_CSC_KEY_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  RETENTION_DAYS: ${{ inputs.publish && 30 || 14 }}
+
+jobs:
+  frontend:
+    name: Web portal (frontend/dist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  zip:
+    name: Pterodactyl ZIP
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - run: node package.js
+      - name: SBOM of the runtime dependencies (CycloneDX)
+        run: npm sbom --omit=dev --sbom-format cyclonedx > dist_pack/manga-shelf-sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pterodactyl-zip
+          path: |
+            dist_pack/pterodactyl-manga-shelf.zip
+            dist_pack/manga-shelf-sbom.cdx.json
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+  server-binaries:
+    name: Server binary (${{ matrix.artifact }})
+    needs: frontend
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: server-linux
+            targets: linux-x64,linux-arm64
+            smoke: manga-shelf-server-linux-x64
+          - os: windows-latest
+            artifact: server-windows
+            targets: windows-x64
+            smoke: manga-shelf-server-windows-x64.exe
+          - os: macos-latest
+            artifact: server-macos
+            targets: macos-universal
+            smoke: manga-shelf-server-macos-universal
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      # node --build-sea needs Node >= 25.5; the binaries embed exactly this Node version
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: esbuild from the frontend toolchain
+        run: npm ci
+        working-directory: frontend
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Detect signing
+        id: signing
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/signing.js
+      - name: Build (esbuild bundle + Node SEA)
+        shell: bash
+        run: node scripts/server-bin/build-sea.js --target ${{ matrix.targets }}
+      - name: Developer ID signature (macOS, only with a certificate)
+        if: runner.os == 'macOS' && steps.signing.outputs.macos == 'true'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZE: ${{ steps.signing.outputs.notarize }}
+          BINARY: dist/server/${{ matrix.smoke }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          kpass="$(openssl rand -hex 16)"
+          echo "$MAC_CSC_LINK" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kpass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$kpass" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MAC_CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kpass" "$keychain" > /dev/null
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')"
+          codesign --force --options runtime --timestamp --entitlements scripts/server-bin/entitlements.plist \
+            --keychain "$keychain" --sign "$identity" "$BINARY"
+          if [ "$NOTARIZE" = true ]; then
+            ditto -c -k "$BINARY" "$RUNNER_TEMP/notarize.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          fi
+          security delete-keychain "$keychain"
+      - name: Authenticode signature (Windows, only with a certificate)
+        if: runner.os == 'Windows' && steps.signing.outputs.windows == 'true'
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          BINARY: dist/server/${{ matrix.smoke }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CSC_LINK))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object FullName -match '\\x64\\' | Sort-Object FullName -Descending | Select-Object -First 1
+          & $signtool.FullName sign /f $pfx /p $env:WIN_CSC_KEY_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 $env:BINARY
+          $code = $LASTEXITCODE
+          Remove-Item $pfx
+          exit $code
+      - name: Smoke test (start, /api/health, portal, status)
+        shell: bash
+        run: node scripts/server-bin/smoke.js "dist/server/${{ matrix.smoke }}"
+      # install-service for real on the throwaway runner (Windows: LOCAL SERVICE + data folder ACL; Linux: 0750, UMask)
+      - name: Service probe (install-service, permissions, uninstall-service)
+        if: runner.os != 'macOS'
+        continue-on-error: true
+        shell: bash
+        env:
+          BINARY: dist/server/${{ matrix.smoke }}
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            node scripts/server-bin/service-probe.js "$BINARY"
+          else
+            sudo "$(command -v node)" scripts/server-bin/service-probe.js "$BINARY"
+          fi
+      - name: Set up QEMU (linux-arm64)
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - name: Smoke test linux-arm64 under QEMU
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm --platform linux/arm64 -e SMOKE_TIMEOUT_S=240 -v "$PWD:/repo:ro" \
+            node:22.23.3-bookworm-slim node /repo/scripts/server-bin/smoke.js /repo/dist/server/manga-shelf-server-linux-arm64
+      - name: x64 part of the universal binary (Rosetta)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: arch -x86_64 "dist/server/${{ matrix.smoke }}" --version
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/server/manga-shelf-server-*
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+  server-packages:
+    name: Server packages (.deb/.rpm)
+    needs: server-binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: server-linux
+          path: dist/server
+      - name: nfpm (deb + rpm, amd64 + arm64)
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          export VERSION
+          mkdir -p dist/packages
+          for arch in amd64 arm64; do
+            src=x64
+            [ "$arch" = arm64 ] && src=arm64
+            install -m 0755 "dist/server/manga-shelf-server-linux-$src" dist/server/manga-shelf-server-linux
+            for packager in deb rpm; do
+              docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -w /work -e VERSION -e ARCH="$arch" \
+                goreleaser/nfpm:v2.47.0 package --config nfpm.yaml --packager "$packager" --target dist/packages/
+            done
+          done
+          rm dist/server/manga-shelf-server-linux
+          ls -l dist/packages
+      - name: Install the .deb, check the service, remove it again
+        run: |
+          sudo apt-get install -y ./dist/packages/*_amd64.deb
+          systemctl is-enabled manga-shelf
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fs http://127.0.0.1:3000/api/health; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != 1 ]; then sudo journalctl -u manga-shelf --no-pager -n 100; exit 1; fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/)" = 200
+          sudo -u manga-shelf manga-shelf-server status --data-dir /var/lib/manga-shelf
+          test "$(stat -c %a /var/lib/manga-shelf)" = 750
+          case "$(sudo stat -c %a /var/lib/manga-shelf/manga.db)" in *0) ;; *) echo "::error::manga.db ist für alle lesbar"; exit 1 ;; esac
+          sudo apt-get remove -y manga-shelf-server
+          sudo test -f /var/lib/manga-shelf/manga.db
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: server-packages
+          path: dist/packages/*
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+  docker:
+    name: Docker image (amd64 + arm64, not pushed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: meta
+        run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ inputs.ref || github.sha }}
+          cache-from: type=gha,scope=manga-shelf-image
+          cache-to: type=gha,mode=max,scope=manga-shelf-image
+
+  desktop:
+    name: Desktop installers (${{ matrix.os }})
+    if: inputs.installers
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Desktop project present?
+        id: project
+        shell: bash
+        run: |
+          if [ -f desktop/package.json ] && node -e 'process.exit(require("./desktop/package.json").scripts?.["build:desktop"] ? 0 : 1)'; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::desktop/package.json hat kein Skript build:desktop, Desktop-Installer übersprungen"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Detect signing
+        id: signing
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/signing.js
+      - name: Dependencies
+        if: steps.project.outputs.present == 'true'
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          (cd frontend && npm ci)
+          (cd desktop && npm ci)
+      # electron-builder signs only when CSC_LINK is set; without certificates the variables stay unset
+      - name: Build installers
+        if: steps.project.outputs.present == 'true'
+        shell: bash
+        working-directory: desktop
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          SIGN_WINDOWS: ${{ steps.signing.outputs.windows }}
+          SIGN_MACOS: ${{ steps.signing.outputs.macos }}
+          NOTARIZE: ${{ steps.signing.outputs.notarize }}
+          NOTARIZE_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARIZE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          NOTARIZE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ "$RUNNER_OS" = Windows ] && [ "$SIGN_WINDOWS" = true ]; then
+            export CSC_LINK="$WIN_CSC_LINK" CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"
+          fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            if [ "$SIGN_MACOS" = true ]; then
+              export CSC_LINK="$MAC_CSC_LINK" CSC_KEY_PASSWORD="$MAC_CSC_KEY_PASSWORD"
+              if [ "$NOTARIZE" = true ]; then
+                export APPLE_ID="$NOTARIZE_APPLE_ID" APPLE_APP_SPECIFIC_PASSWORD="$NOTARIZE_PASSWORD" APPLE_TEAM_ID="$NOTARIZE_TEAM_ID"
+              fi
+            else
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+            fi
+          fi
+          unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD MAC_CSC_LINK MAC_CSC_KEY_PASSWORD NOTARIZE_APPLE_ID NOTARIZE_PASSWORD NOTARIZE_TEAM_ID
+          npm run build:desktop
+      - name: Flatpak (attempt)
+        if: steps.project.outputs.present == 'true' && runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        working-directory: desktop
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          npx electron-builder --linux dir --publish never
+          flatpak-builder --user --install-deps-from=flathub --force-clean --repo=dist/flatpak-repo dist/flatpak-build flatpak/de.mangashelf.desktop.yml
+          flatpak build-bundle dist/flatpak-repo "dist/installers/manga-shelf-$(node -p 'require("./package.json").version')-linux-x86_64.flatpak" de.mangashelf.desktop
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.project.outputs.present == 'true'
+        with:
+          name: desktop-${{ runner.os }}
+          path: |
+            desktop/dist/installers/*.exe
+            desktop/dist/installers/*.dmg
+            desktop/dist/installers/*.zip
+            desktop/dist/installers/*.AppImage
+            desktop/dist/installers/*.deb
+            desktop/dist/installers/*.rpm
+            desktop/dist/installers/*.flatpak
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error

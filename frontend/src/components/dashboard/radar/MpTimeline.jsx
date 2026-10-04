@@ -1,74 +1,213 @@
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
-import { Package, Calendar, Star, RefreshCw, BookOpen, Building2, CheckCircle2, ShoppingCart } from 'lucide-react';
+import { formatReleaseDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
+import { Package, Calendar, Star, RefreshCw, BookOpen, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
+import { formatCount, formatEuro } from '../../../utils/format';
+import CoverImage from '../../common/CoverImage';
+import { t, tc } from '../../../i18n/index.js';
+import { statusLabel } from '../../../utils/enumLabels';
 
-/** Calendar entries grouped by release day, with loading and empty states. */
+const EMPTY_SET = new Set();
+// i18n
+const LOADING_TEXT = 'Lade Neuerscheinungen von Manga Passion...';
+const COVER_FALLBACK = (
+  <div aria-hidden="true" className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500">
+    <BookOpen className="w-6 h-6" />
+  </div>
+);
+const BADGE = 'text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border';
+
+/** The series of the entry is no longer collected (mangas.collecting 'abgebrochen'): greyed, never "Einkaufsliste". */
+export const isDroppedSeries = (item) => Boolean(item?.in_collection) && item.user_manga_collecting === 'abgebrochen';
+
+// a component, not a module-level element: t() runs at render time
+function DroppedBadge() {
+  return (
+    <span className={`${BADGE} bg-slate-800 text-slate-400 border-slate-700`} title={t('Diese Reihe sammelst du nicht mehr')}>
+      <CircleOff className="w-2.5 h-2.5 text-slate-400" />
+      <span>{t('Nicht mehr gesammelt')}</span>
+    </span>
+  );
+}
+
+function StatusBadge({ item }) {
+  const status = item.user_volume_status;
+  const group = volumeStatusGroup(status);
+  if (isDroppedSeries(item) && group !== 'owned' && group !== 'ordered') return <DroppedBadge />;
+  if (group === 'missing' && item.user_manga_collecting === 'pausiert') {
+    return (
+      <span className={`${BADGE} bg-amber-500/10 text-amber-200 border-amber-500/30`} title={t('Die Reihe ist pausiert und steht nicht auf der Einkaufsliste')}>
+        <CirclePause className="w-2.5 h-2.5 text-amber-300" />
+        <span>{tc('collecting', 'Pausiert')}</span>
+      </span>
+    );
+  }
+  switch (group) {
+    case 'owned':
+      return (
+        <span className={`${BADGE} bg-emerald-500/20 text-emerald-300 border-emerald-500/40`}>
+          <CircleCheck className="w-2.5 h-2.5 text-emerald-400" />
+          <span>{status === 'Gelesen' ? t('Gelesen') : t('Im Besitz')}</span>
+        </span>
+      );
+    case 'ordered':
+      return (
+        <span className={`${BADGE} bg-sky-500/20 text-sky-300 border-sky-500/40`}>
+          <Package className="w-2.5 h-2.5 text-sky-400" />
+          <span>{statusLabel(status)}</span>
+        </span>
+      );
+    case 'upcoming':
+      return (
+        <span className={`${BADGE} bg-purple-500/20 text-purple-300 border-purple-500/40`}>
+          <Clock className="w-2.5 h-2.5 text-purple-400" />
+          <span>{t('Erscheint bald')}</span>
+        </span>
+      );
+    case 'missing':
+      return (
+        <span className={`${BADGE} bg-amber-500/20 text-amber-300 border-amber-500/40`}>
+          <ShoppingCart className="w-2.5 h-2.5 text-amber-400" />
+          <span>{t('Einkaufsliste')}</span>
+        </span>
+      );
+    default:
+      if (item.in_collection && item.match_kind === 'prefix') {
+        return (
+          <span
+            className={`${BADGE} bg-slate-800 text-slate-300 border-slate-700`}
+            title={item.user_manga_title ? t('Ähnlich wie „{title}“ in deiner Sammlung', { title: item.user_manga_title }) : t('Ähnlicher Titel in deiner Sammlung')}
+          >
+            <Star className="w-2.5 h-2.5 text-slate-400" />
+            <span>{t('Ähnlicher Titel')}</span>
+          </span>
+        );
+      }
+      if (item.in_collection && item.user_manga_wished) {
+        return (
+          <span className={`${BADGE} bg-rose-500/20 text-rose-300 border-rose-500/40`} title={t('Diese Reihe steht auf deiner Wunschliste')}>
+            <Heart className="w-2.5 h-2.5 text-rose-400" />
+            <span>{t('Auf Wunschliste')}</span>
+          </span>
+        );
+      }
+      if (item.in_collection) {
+        return (
+          <span className={`${BADGE} bg-brand-500/20 text-brand-300 border-brand-500/40`} title={t('Diese Reihe steht bereits in deiner Sammlung')}>
+            <Star className="w-2.5 h-2.5 text-brand-400" />
+            <span>{t('Reihe im Regal')}</span>
+          </span>
+        );
+      }
+      return <span className="text-[10px] text-slate-400 font-medium px-1">{t('Neuheit')}</span>;
+  }
+}
+
+const cardTone = (item) => {
+  const group = volumeStatusGroup(item.user_volume_status);
+  if (isDroppedSeries(item) && group !== 'owned' && group !== 'ordered') return 'border-slate-800/80 bg-slate-900/40 opacity-60 hover:opacity-100';
+  switch (group) {
+    case 'owned': return 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-emerald-950/20';
+    case 'ordered': return 'border-sky-500/40 bg-gradient-to-b from-sky-950/20 via-slate-900/60 to-slate-900/80 shadow-sky-950/20';
+    case 'upcoming': return 'border-purple-500/40 bg-gradient-to-b from-purple-950/20 via-slate-900/60 to-slate-900/80 shadow-purple-950/20';
+    default:
+      return item.in_collection && item.match_kind !== 'prefix'
+        ? 'border-brand-500/40 bg-gradient-to-b from-brand-950/20 via-slate-900/60 to-slate-900/80 shadow-brand-950/20'
+        : 'border-slate-800/80 hover:border-slate-700 bg-slate-900/60';
+  }
+};
+
+/** Calendar entries grouped by release day, with loading, error and empty states. */
 export default function MpTimeline({
   mpData,
   loadingMp,
+  mpError,
+  onRetry,
   mpYear,
   mpMonth,
-  setMpPrintOnly,
-  mpMySeriesOnly,
-  setMpMySeriesOnly,
-  mpPublisherFilter,
-  setMpPublisherFilter,
-  mpSearch,
-  setMpSearch,
   canEdit,
-  handleImportMangaPassion,
-  importingMpId,
-  failedImages,
-  setFailedImages,
+  onImport,
+  importingMpIds = EMPTY_SET,
   GERMAN_MONTHS,
-  mpDateGroups
+  mpDateGroups,
+  filtersActive,
+  onResetFilters
 }) {
+  const view = radarViewState({ loading: loadingMp, error: mpError, hasData: Boolean(mpData), count: mpDateGroups.length });
+  const monthLabel = `${GERMAN_MONTHS[mpMonth - 1]} ${mpYear}`;
+
+  // one live region that stays mounted whatever the view, so the loading text is announced
+  const status = <div role="status" className="sr-only">{view === 'loading' ? t(LOADING_TEXT) : ''}</div>;
+
+  if (view === 'idle') return <>{status}</>;
+
+  if (view === 'loading') {
+    return (
+      <>
+        {status}
+        <div aria-hidden="true" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
+          <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-semibold text-white">{t(LOADING_TEXT)}</p>
+          <p className="text-xs text-slate-400 mt-1">{t('Erscheinungstermine, Bände und Preise werden abgeglichen')}</p>
+        </div>
+      </>
+    );
+  }
+
+  if (view === 'error') {
+    return (
+      <>
+        {status}
+        <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
+            <CircleAlert className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1">{t('Neuerscheinungen für {month} nicht verfügbar', { month: monthLabel })}</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{mpError}</p>
+          <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
+            {t('Erneut versuchen')}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  const nothingThisMonth = (mpData.items || []).length === 0;
+
   return (
     <>
-      {/* Manga Passion was not reachable: the last saved month is shown */}
-      {mpData?.stale && (
+      {status}
+      {mpData.stale && (
         <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
-          Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.
+          {t('Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.')}
+        </div>
+      )}
+      {mpData.truncated && !mpData.stale && (
+        <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+          {t('Manga Passion hat nicht alle Einträge dieses Monats geliefert – die Liste kann unvollständig sein.')}
         </div>
       )}
 
-      {/* Loading State */}
-      {loadingMp && (
-        <div className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
-          <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
-          <p className="text-sm font-semibold text-white">Lade Neuerscheinungen von Manga Passion...</p>
-          <p className="text-xs text-slate-400 mt-1">Erscheinungstermine, Bände und Preise werden abgeglichen</p>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loadingMp && mpDateGroups.length === 0 && (
+      {view === 'empty' && (
         <div className="glass-panel p-10 rounded-2xl border border-slate-800/80 text-center">
           <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-4 text-sky-400">
             <Calendar className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-white mb-1">Keine Neuerscheinungen für diese Auswahl</h3>
+          <h3 className="text-base font-bold text-white mb-1">{t('Keine Neuerscheinungen für diese Auswahl')}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
-            Für {GERMAN_MONTHS[mpMonth - 1]} {mpYear} wurden mit den aktiven Filtern keine Bände gefunden. Probiere einen anderen Monat oder setze die Filter zurück.
+            {nothingThisMonth
+              ? t('Für {month} sind bei Manga Passion keine Neuerscheinungen eingetragen. Probiere einen anderen Monat.', { month: monthLabel })
+              : t('Für {month} wurden mit den aktiven Filtern keine Bände gefunden. Probiere einen anderen Monat oder setze die Filter zurück.', { month: monthLabel })}
           </p>
-          {(mpSearch || mpPublisherFilter !== 'ALL' || mpMySeriesOnly) && (
-            <button
-              onClick={() => {
-                setMpSearch('');
-                setMpPublisherFilter('ALL');
-                setMpPrintOnly(true);
-                setMpMySeriesOnly(false);
-              }}
-              className="btn-primary text-xs px-4 py-2"
-            >
-              Filter zurücksetzen
+          {filtersActive && !nothingThisMonth && (
+            <button type="button" onClick={onResetFilters} className="btn-primary text-xs px-4 py-2">
+              {t('Filter zurücksetzen')}
             </button>
           )}
         </div>
       )}
 
-      {/* Grouped by Date Timeline */}
-      {!loadingMp && mpDateGroups.length > 0 && (
+      {view === 'list' && (
         <div className="space-y-8">
           {mpDateGroups.map(group => (
             <div key={group.dateKey} className="space-y-3.5">
@@ -81,7 +220,7 @@ export default function MpTimeline({
                     <h3 className="text-base font-bold text-white flex items-center gap-2">
                       <span>{group.dateLabel}</span>
                       <span className="text-xs font-mono font-normal text-slate-400">
-                        ({group.items.length} {group.items.length === 1 ? 'Band' : 'Bände'})
+                        ({formatCount(group.items.length, 'Band', 'Bände')})
                       </span>
                     </h3>
                   </div>
@@ -90,51 +229,19 @@ export default function MpTimeline({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-4">
                 {group.items.map(item => {
-                  const isOwned = item.user_volume_status === 'Vorhanden';
-                  const isPreordered = item.user_volume_status === 'Vorbestellt';
-                  const isMissing = item.user_volume_status === 'Fehlt';
+                  const isOwned = volumeStatusGroup(item.user_volume_status) === 'owned';
+                  const actions = mpCardActions(item.user_volume_status);
+                  const busy = importingMpIds.has(item.id);
+                  const volumeName = t('{volume} von {title}', { volume: getVolumeDisplayTitle(item), title: item.title });
 
                   return (
                     <div
                       key={item.id}
-                      className={`glass-card rounded-2xl p-3.5 border transition-all flex flex-col justify-between group relative ${
-                        isOwned
-                          ? 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-emerald-950/20'
-                          : isPreordered
-                          ? 'border-sky-500/40 bg-gradient-to-b from-sky-950/20 via-slate-900/60 to-slate-900/80 shadow-sky-950/20'
-                          : item.in_collection
-                          ? 'border-brand-500/40 bg-gradient-to-b from-brand-950/20 via-slate-900/60 to-slate-900/80 shadow-brand-950/20'
-                          : 'border-slate-800/80 hover:border-slate-700 bg-slate-900/60'
-                      }`}
+                      className={`glass-card rounded-2xl p-3.5 border transition-all flex flex-col justify-between group relative ${cardTone(item)}`}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-1.5 mb-2.5">
-                          {isOwned ? (
-                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
-                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                              <span>Im Regal</span>
-                            </span>
-                          ) : isPreordered ? (
-                            <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
-                              <Package className="w-2.5 h-2.5 text-sky-400" />
-                              <span>Vorbestellt</span>
-                            </span>
-                          ) : isMissing ? (
-                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
-                              <ShoppingCart className="w-2.5 h-2.5 text-amber-400" />
-                              <span>Einkaufsliste</span>
-                            </span>
-                          ) : item.in_collection ? (
-                            <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1" title="Diese Reihe steht bereits in deiner Sammlung">
-                              <Star className="w-2.5 h-2.5 text-brand-400" />
-                              <span>Reihe im Regal</span>
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500 font-medium px-1">
-                              Neuheit
-                            </span>
-                          )}
-
+                          <StatusBadge item={item} />
                           {item.is_digital && (
                             <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
                               eBook
@@ -144,35 +251,24 @@ export default function MpTimeline({
 
                         <div className="flex gap-3">
                           <div className="shrink-0 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
-                            {item.cover_image && !failedImages[`radar-${item.id || item.manga_passion_id || item.title}`] ? (
-                              <img
-                                src={item.cover_image}
-                                alt={item.title}
-                                loading="lazy"
-                                onError={() => setFailedImages(prev => ({ ...prev, [`radar-${item.id || item.manga_passion_id || item.title}`]: true }))}
-                                className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-600">
-                                <BookOpen className="w-6 h-6" />
-                              </div>
-                            )}
+                            <CoverImage
+                              src={item.cover_image}
+                              className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
+                              fallback={COVER_FALLBACK}
+                            />
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            {item.in_collection && item.user_manga_id ? (
+                            {item.in_collection && item.user_manga_id && item.match_kind !== 'prefix' ? (
                               <Link
                                 to={`/manga/${item.user_manga_id}`}
-                                className="text-xs sm:text-sm font-bold text-white hover:text-sky-300 truncate block transition-colors leading-snug"
-                                title={`${item.title} (In deiner Sammlung ansehen)`}
+                                className="text-xs sm:text-sm font-bold text-white hover:text-sky-300 line-clamp-2 break-words hyphens-auto transition-colors leading-snug"
+                                title={t('{title} (In deiner Sammlung ansehen)', { title: item.title })}
                               >
                                 {item.title}
                               </Link>
                             ) : (
-                              <span 
-                                className="text-xs sm:text-sm font-bold text-white truncate block leading-snug"
-                                title={item.title}
-                              >
+                              <span className="text-xs sm:text-sm font-bold text-white line-clamp-2 break-words hyphens-auto leading-snug" title={item.title}>
                                 {item.title}
                               </span>
                             )}
@@ -184,15 +280,13 @@ export default function MpTimeline({
                             </div>
 
                             <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
-                              <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                              <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                               <span className="truncate">{item.publisher}</span>
                             </p>
 
                             <p className="text-[11px] text-slate-300 mt-1 flex items-center gap-1 font-mono">
                               <Calendar className="w-3 h-3 text-sky-400 shrink-0" />
-                              <span>
-                                {item.date ? item.date.split('-').reverse().join('.') : 'Datum offen'}
-                              </span>
+                              <span>{item.date ? formatReleaseDate(item.date) : t('Datum offen')}</span>
                             </p>
                           </div>
                         </div>
@@ -202,10 +296,10 @@ export default function MpTimeline({
                         <div className="font-mono">
                           {item.price > 0 ? (
                             <span className="text-sm font-extrabold text-emerald-400">
-                              {item.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                              {formatEuro(item.price)}
                             </span>
                           ) : (
-                            <span className="text-xs text-slate-500">Preis k.A.</span>
+                            <span className="text-xs text-slate-400">{t('Preis unbekannt')}</span>
                           )}
                         </div>
 
@@ -213,50 +307,52 @@ export default function MpTimeline({
                           {isOwned ? (
                             <Link
                               to={`/manga/${item.user_manga_id}`}
-                              className="p-1 px-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-semibold flex items-center gap-1 hover:bg-emerald-500/30 transition-colors"
+                              aria-label={t('Im Besitz: {volumeName}', { volumeName })}
+                              className="hit-44 p-1 px-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-semibold flex items-center gap-1 hover:bg-emerald-500/30 transition-colors"
                             >
-                              <span>Im Regal</span> ↗
+                              <span>{t('Im Besitz')}</span> <span aria-hidden="true">↗</span>
                             </Link>
                           ) : (
                             <>
-                              {canEdit && (
-                                <>
-                                  {!isPreordered && (
-                                    <button
-                                      type="button"
-                                      disabled={importingMpId === item.id}
-                                      onClick={() => handleImportMangaPassion(item, 'Vorbestellt')}
-                                      className="bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/40 hover:border-sky-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
-                                      title="Diesen Band als vorbestellt in deine Sammlung übernehmen"
-                                    >
-                                      {importingMpId === item.id ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <Package className="w-3 h-3 text-sky-400" />
-                                      )}
-                                      <span>Vorbestellen</span>
-                                    </button>
+                              {canEdit && actions.preorder && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => onImport(item, 'Vorbestellt')}
+                                  aria-label={t('{volume} vorbestellen', { volume: volumeName })}
+                                  className="hit-44 bg-sky-600/20 hover:bg-sky-700 text-sky-300 hover:text-white border border-sky-500/40 hover:border-sky-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                                  title={t('Diesen Band als vorbestellt in deine Sammlung übernehmen')}
+                                >
+                                  {busy ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Package className="w-3 h-3 text-sky-400" />
                                   )}
-                                  {!isMissing && !isPreordered && (
-                                    <button
-                                      type="button"
-                                      disabled={importingMpId === item.id}
-                                      onClick={() => handleImportMangaPassion(item, 'Fehlt')}
-                                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 py-1 px-2 rounded-xl text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
-                                      title="Diesen Band auf die Einkaufsliste setzen"
-                                    >
-                                      <ShoppingCart className="w-3 h-3 text-slate-400" />
-                                    </button>
-                                  )}
-                                </>
+                                  <span>{t('Vorbestellen')}</span>
+                                </button>
+                              )}
+                              {canEdit && actions.cart && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => onImport(item, 'Fehlt')}
+                                  className="hit-44 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 py-1 px-2 rounded-xl text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
+                                  title={t('Diesen Band auf die Einkaufsliste setzen')}
+                                  aria-label={t('{volumeName} auf die Einkaufsliste', { volumeName })}
+                                >
+                                  <ShoppingCart className="w-3 h-3 text-slate-400" />
+                                </button>
                               )}
                               {item.in_collection && item.user_manga_id && (
                                 <Link
                                   to={`/manga/${item.user_manga_id}`}
-                                  className="p-1 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-colors"
-                                  title="Zu den Manga-Details"
+                                  className="hit-44 p-1 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-colors"
+                                  title={item.match_kind === 'prefix' ? t('Zur ähnlichen Reihe in deiner Sammlung') : t('Zu den Manga-Details')}
+                                  aria-label={item.match_kind === 'prefix'
+                                    ? t('Zur ähnlichen Reihe in deiner Sammlung: {title}', { title: item.title })
+                                    : t('Zu den Manga-Details: {title}', { title: item.title })}
                                 >
-                                  ↗
+                                  <span aria-hidden="true">↗</span>
                                 </Link>
                               )}
                             </>

@@ -1,0 +1,190 @@
+# Android and iPhone apps (Capacitor project in mobile/). mode smoke: cap doctor + debug builds (CI on main and in
+# pull requests); mode build: release builds as artifacts (APK/AAB, IPA), signed when the secrets exist. Never publishes.
+name: Mobile
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+      mode:
+        description: smoke | build
+        type: string
+        default: smoke
+      publish:
+        type: boolean
+        default: false
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+      IOS_CERT_P12_BASE64:
+        required: false
+      IOS_CERT_PASSWORD:
+        required: false
+      IOS_PROVISIONING_PROFILE_BASE64:
+        required: false
+      # optional: profile of the share extension (de.mangashelf.app.ShareToMangaShelf); without it the signed IPA has no extension
+      IOS_SHARE_PROVISIONING_PROFILE_BASE64:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: smoke (debug builds) or build (release artifacts)
+        type: choice
+        options: [smoke, build]
+        default: build
+
+permissions:
+  contents: read
+
+env:
+  MODE: ${{ inputs.mode || 'build' }}
+  RETENTION_DAYS: ${{ inputs.publish && 30 || 14 }}
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Mobile project present?
+        id: project
+        run: |
+          if [ -f mobile/package.json ] && node -e 'const s = require("./mobile/package.json").scripts || {}; process.exit(s["build:android"] && s["smoke:android"] ? 0 : 1)'; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::mobile/package.json hat keine Skripte build:android/smoke:android, Android übersprungen"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        if: steps.project.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Dependencies
+        if: steps.project.outputs.present == 'true'
+        run: |
+          npm ci --ignore-scripts
+          (cd frontend && npm ci)
+          (cd mobile && npm ci)
+      - name: Tests (node:test, version of the native projects)
+        if: steps.project.outputs.present == 'true'
+        working-directory: mobile
+        run: npm test
+      # repository variable WATCH_CRUNCHYROLL: empty = Crunchyroll history on, 'off' = left out of the web part of the apps
+      - name: Smoke (cap doctor, assembleDebug)
+        if: steps.project.outputs.present == 'true' && env.MODE == 'smoke'
+        working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
+        run: npm run smoke:android
+      # build-android.js signs only when all four secrets are set; otherwise a debug-signed APK and an unsigned AAB
+      - name: Release build (APK + AAB)
+        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: npm run build:android
+      # with the release key the APK must exist and carry that certificate, never the debug key
+      - name: Check the release signature (apksigner)
+        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        working-directory: mobile
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          apk="$(ls build/out/*-android.apk)"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          certs="$("$tools/apksigner" verify --print-certs "$apk")"
+          echo "$certs" | grep -E 'certificate (DN|SHA-256)'
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            test -f build/out/*-android.aab
+            if echo "$certs" | grep -q 'CN=Android Debug'; then
+              echo "::error::APK mit dem Debug-Schlüssel signiert, obwohl Signier-Secrets gesetzt sind"
+              exit 1
+            fi
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        with:
+          name: mobile-android
+          path: |
+            mobile/build/out/*.apk
+            mobile/build/out/*.aab
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+  ios:
+    name: iPhone
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Mobile project present?
+        id: project
+        run: |
+          if [ -f mobile/package.json ] && node -e 'const s = require("./mobile/package.json").scripts || {}; process.exit(s["build:ios"] && s["smoke:ios"] ? 0 : 1)'; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::mobile/package.json hat keine Skripte build:ios/smoke:ios, iPhone übersprungen"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Dependencies
+        if: steps.project.outputs.present == 'true'
+        run: |
+          npm ci --ignore-scripts
+          (cd frontend && npm ci)
+          (cd mobile && npm ci)
+      - name: Smoke (simulator build without signing)
+        if: steps.project.outputs.present == 'true' && env.MODE == 'smoke'
+        working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
+        run: npm run smoke:ios
+      # build-ios.js signs only when all four secrets are set; otherwise an unsigned IPA zipped from the archive. The share
+      # extension is signed only with IOS_SHARE_PROVISIONING_PROFILE_BASE64, else the signed IPA leaves it out
+      - name: Release build (IPA)
+        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
+          IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_SHARE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run build:ios
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        with:
+          name: mobile-ios
+          path: mobile/build/out/*.ipa
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error

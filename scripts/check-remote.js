@@ -1,79 +1,50 @@
-const http = require('http');
-require('dotenv').config();
-
-const REMOTE_HOST = process.env.REMOTE_HOST || process.argv[2] || 'localhost';
-const REMOTE_PORT = parseInt(process.env.REMOTE_PORT || process.argv[3] || '3000', 10);
-const USERNAME = process.env.ADMIN_USER || process.env.REMOTE_USER || 'admin';
-const PASSWORD = process.env.ADMIN_PASS || process.env.REMOTE_PASS || '';
-
-if (!PASSWORD) {
-  console.warn('Hinweis: Kein Passwort angegeben. Setze ADMIN_PASS oder REMOTE_PASS in der .env oder als Umgebungsvariable.');
-}
+// Lists every series with its volumes from a running instance (read only).
+//   node scripts/check-remote.js https://manga.example.com
+//   node scripts/check-remote.js <host> [port]          (plain http, only for this machine unless REMOTE_ALLOW_HTTP=1)
+// Without arguments: REMOTE_URL, then REMOTE_HOST/REMOTE_PORT. Credentials: REMOTE_USER/REMOTE_PASS (or ADMIN_USER/ADMIN_PASS).
+require('dotenv').config({ quiet: true });
+const { resolveTarget, assertSecureTarget, credentials, RemoteClient } = require('./lib/remote');
 
 async function check() {
-  const baseUrl = `http://${REMOTE_HOST}:${REMOTE_PORT}`;
-  console.log(`Verbinde mit ${baseUrl} als Benutzer "${USERNAME}"...`);
+  const target = resolveTarget();
+  const { username, password } = credentials();
+  console.log(`Ziel: ${target.baseUrl} (aus ${target.source}), Benutzer "${username}"`);
+  assertSecureTarget(target);
+  if (!password) console.warn('Hinweis: Kein Passwort angegeben. Setze REMOTE_PASS (oder ADMIN_PASS).');
 
-  const loginRes = await new Promise(resolve => {
-    const req = http.request(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    }, res => {
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => resolve({ status: res.statusCode, cookie: res.headers['set-cookie'] ? res.headers['set-cookie'][0] : null, body }));
-    });
-    req.on('error', err => {
-      console.error(`Verbindungsfehler zu ${baseUrl}:`, err.message);
-      resolve({ status: 500, cookie: null });
-    });
-    req.write(JSON.stringify({ username: USERNAME, password: PASSWORD }));
-    req.end();
-  });
+  const client = new RemoteClient(target.baseUrl);
+  await client.login(username, password);
 
-  if (!loginRes.cookie) {
-    console.error('Login fehlgeschlagen! Status:', loginRes.status, loginRes.body || '');
-    return;
+  const list = await client.request('GET', '/api/mangas');
+  if (!list.ok || !Array.isArray(list.data)) {
+    throw new Error(`GET /api/mangas lieferte Status ${list.status}: ${list.data?.error || list.text.slice(0, 200)}`);
   }
 
-  const mangas = await new Promise(resolve => {
-    http.get(`${baseUrl}/api/mangas`, { headers: { Cookie: loginRes.cookie } }, res => {
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); } catch (e) { resolve([]); }
-      });
-    }).on('error', err => {
-      console.error('Fehler beim Abrufen der Mangas:', err.message);
-      resolve([]);
-    });
-  });
-
-  console.log('Total Mangas:', mangas.length);
-  for (const m of mangas) {
+  let failures = 0;
+  console.log('Total Mangas:', list.data.length);
+  for (const m of list.data) {
     console.log(`\n========================================`);
     console.log(`ID: ${m.id} | Titel: ${m.title}`);
     console.log(`Autor: ${m.author || '-'} | Verlag: ${m.publisher || '-'} | Status: ${m.status || '-'}`);
     console.log(`Fortschritt: ${m.owned_volumes} von ${m.total_volumes || '?'} Bänden | Gesamtwert: ${Number(m.total_value || 0).toFixed(2)} €`);
     console.log(`Cover: ${m.cover_image || '-'}`);
 
-    // fetch manga details with volumes
-    const detail = await new Promise(resolve => {
-      http.get(`${baseUrl}/api/mangas/${m.id}`, { headers: { Cookie: loginRes.cookie } }, res => {
-        let body = '';
-        res.on('data', c => body += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(body)); } catch (e) { resolve({}); }
-        });
-      }).on('error', () => resolve({}));
-    });
-
-    const vols = detail.volumes || [];
+    const detail = await client.request('GET', `/api/mangas/${m.id}`);
+    if (!detail.ok || !detail.data) {
+      failures++;
+      console.error(`  Details nicht lesbar (Status ${detail.status})`);
+      continue;
+    }
+    const vols = detail.data.volumes || [];
     console.log(`Bände in Datenbank (${vols.length} Bände):`);
     vols.forEach(v => {
       console.log(`  Band ${v.volume_number}: "${v.title || ''}" | Preis: ${Number(v.price || 0).toFixed(2)} € | Zustand: ${v.condition || '-'} | Jahr: ${v.release_year || '-'} | ISBN: ${v.isbn || '-'} | Status: ${v.status} ${v.notes ? '(' + v.notes + ')' : ''}`);
     });
   }
+  if (failures) throw new Error(`${failures} Reihe(n) konnten nicht gelesen werden`);
 }
 
-check().catch(console.error);
+check().catch(err => {
+  console.error(`Fehler: ${err.cause ? `${err.message} (${err.cause.code || err.cause.message})` : err.message}`);
+  process.exitCode = 1;
+});
