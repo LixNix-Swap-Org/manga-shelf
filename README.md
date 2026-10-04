@@ -345,7 +345,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 | `npm start` | production server (`node index.js`) |
 | `npm test` | backend tests (`node:test`: `test/`, `test/core/`, `test/anime/`) |
 | `npm run test:frontend` | Vitest component tests in `frontend/` |
-| `npm run lint` | ESLint 9 |
+| `npm run lint` | ESLint 10 |
 | `npm run build:frontend` | `npm ci` and the Vite build of `frontend/` |
 | `npm run check:bundle` | bundle budget (`frontend/bundle-budget.json`; `-- --update` after intended growth) |
 | `npm run package` | Pterodactyl ZIP |

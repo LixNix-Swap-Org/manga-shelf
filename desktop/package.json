@@ -22,5 +22,8 @@
   "devDependencies": {
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3"
+  },
+  "overrides": {
+    "http-cache-semantics": "^4.3.0"
   }
 }

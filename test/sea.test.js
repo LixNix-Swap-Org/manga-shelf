@@ -813,9 +813,11 @@ describe('esbuild bundle of the server', { skip: bundleSkip }, () => {
     });
     after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-    test('leaves no dynamic require except two that never run in the server', () => {
-        // express/lib/view.js loads template engines (no views here); db.js falls back to better-sqlite3 only without node:sqlite
-        assert.deepEqual(buildSea.runtimeRequires(fs.readFileSync(bundlePath, 'utf8')).sort(), ['require("better-sqlite3")', 'require(mod)']);
+    test('leaves no dynamic require except the known optional ones', () => {
+        // express/lib/view.js loads template engines (no views here); db.js falls back to better-sqlite3 only without node:sqlite;
+        // debug tries the optional supports-color inside try/catch (not installed since eslint 10 dropped chalk)
+        const dynamic = [...new Set(buildSea.runtimeRequires(fs.readFileSync(bundlePath, 'utf8')))].sort();
+        assert.deepEqual(dynamic, ['require("better-sqlite3")', 'require("supports-color")', 'require(mod)']);
     });
 
     test('contains the core route table, every core handler and every server route', () => {
