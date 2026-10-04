@@ -1,5 +1,6 @@
-# Android and iPhone apps (Capacitor project in mobile/). mode smoke: cap doctor + debug builds (CI on main and in
-# pull requests); mode build: release builds as artifacts (APK/AAB, IPA), signed when the secrets exist. Never publishes.
+# Android and iPhone apps (Capacitor project in mobile/). mode smoke: cap doctor + debug builds, kept 7 days as
+# mobile-android-debug / mobile-ios-simulator (CI on main and in pull requests); mode build: release builds as
+# mobile-android / mobile-ios (APK/AAB, IPA), signed when the secrets exist. Never publishes.
 name: Mobile
 
 on:
@@ -124,14 +125,15 @@ jobs:
               exit 1
             fi
           fi
+      # smoke: the debug-signed APK from assembleDebug; build: release APK + AAB
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        if: steps.project.outputs.present == 'true'
         with:
-          name: mobile-android
+          name: ${{ env.MODE == 'build' && 'mobile-android' || 'mobile-android-debug' }}
           path: |
             mobile/build/out/*.apk
             mobile/build/out/*.aab
-          retention-days: ${{ env.RETENTION_DAYS }}
+          retention-days: ${{ env.MODE == 'build' && env.RETENTION_DAYS || 7 }}
           if-no-files-found: error
 
   ios:
@@ -181,10 +183,13 @@ jobs:
           IOS_SHARE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run build:ios
+      # smoke: the simulator app (App.app) as a zip; build: the IPA
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: steps.project.outputs.present == 'true' && env.MODE == 'build'
+        if: steps.project.outputs.present == 'true'
         with:
-          name: mobile-ios
-          path: mobile/build/out/*.ipa
-          retention-days: ${{ env.RETENTION_DAYS }}
+          name: ${{ env.MODE == 'build' && 'mobile-ios' || 'mobile-ios-simulator' }}
+          path: |
+            mobile/build/out/*.ipa
+            mobile/build/out/*.zip
+          retention-days: ${{ env.MODE == 'build' && env.RETENTION_DAYS || 7 }}
           if-no-files-found: error

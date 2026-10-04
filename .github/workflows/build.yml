@@ -1,9 +1,16 @@
 # Builds every deliverable as workflow artifacts and never publishes anything: publishing lives in release.yml, the
 # only workflow with write permissions (a called workflow cannot hold more rights than its caller, and CI stays
-# read-only). Called by ci.yml (every push and pull request) and release.yml (manual run).
+# read-only). Called by ci.yml (every push and pull request) and release.yml (manual run), or started by hand
+# (Actions → Build → Run workflow on any branch: artifacts only, never signed, never published).
 name: Build
 
 on:
+  workflow_dispatch:
+    inputs:
+      installers:
+        description: Build the desktop installers (three runners)
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       ref:

@@ -1,11 +1,10 @@
 name: CI
 
-# Every push builds the artifacts (build.yml, nothing is published); the desktop installers and the mobile smoke
-# builds only run on main and in pull requests (Actions → Release → action build covers other branches).
+# One run per change: pull requests and pushes to main (a branch with an open pull request is not run twice). Builds
+# the artifacts through build.yml, nothing is published; other branches use Actions → Build or Mobile → Run workflow.
 on:
   push:
-    branches-ignore: ['dependabot/**']   # bot branches run through their pull request only
-    tags-ignore: ['**']
+    branches: [main]
   pull_request:
 
 permissions:

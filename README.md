@@ -209,7 +209,7 @@ The same step-by-step guide with a check against the provider is in the account 
 
 ## 4. Desktop and phone apps
 
-Installers and apps are attached to every release. CI runs on `main` and in pull requests keep the desktop installers as build artifacts for 14 days; the phone apps are only smoke-built there. Actions → **Release** with `action` = `build` gives every artifact, apps included, for any branch. Without signing secrets they are built unsigned; the release text says which parts are signed.
+Installers and apps are attached to every release. CI runs on `main` and in pull requests keep the desktop installers as build artifacts for 14 days and the phone smoke builds (debug APK, simulator app) for 7 days. Actions → **Release** with `action` = `build` gives every artifact, apps included, for any branch. Without signing secrets they are built unsigned; the release text says which parts are signed.
 
 ### Desktop app
 
@@ -369,7 +369,8 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 
 ### Release workflow
 
-* **Every push** runs `ci.yml` (lint, tests on Node 22.13.0/22/24, frontend build and budget, ZIP install check, Docker build, browser suites) and `build.yml`: artifacts for 14 days (Pterodactyl ZIP with SBOM, server binaries and packages; desktop installers and the phone smoke builds of `mobile.yml` only on `main` and in pull requests). Nothing is published. `codeql.yml` is wired for `main`, pull requests and a weekly run, but code scanning only works once the repository is public; while it is private the job is skipped.
+* **Every pull request and every push to `main`** runs `ci.yml` (lint, tests on Node 22.13.0/22/24, frontend build and budget, ZIP install check, Docker build, browser suites) and `build.yml`: artifacts for 14 days (Pterodactyl ZIP with SBOM, server binaries and packages; desktop installers and the phone smoke builds of `mobile.yml`, a debug APK and the simulator app for 7 days, not for Dependabot's pull requests). A branch without a pull request gets no run of its own. Nothing is published. `codeql.yml` is wired for `main`, pull requests and a weekly run, but code scanning only works once the repository is public; while it is private the job is skipped.
+* **Build by button:** Actions → **Build** → **Run workflow** on any branch builds every artifact (unsigned, nothing published; the desktop installers can be switched off); Actions → **Mobile** → **Run workflow** builds only the apps (`smoke`: debug APK and simulator app, `build`: APK/AAB and IPA).
 * **Publishing only by button:** Actions → **Release** → **Run workflow**, pick the branch and `action`:
   * `build`: build everything (signed when the secrets exist), publish nothing;
   * `release`: bump the version (`bump` = `patch`/`minor`/`major`; `none` takes the version from `package.json`, its tag must not exist), commit and tag `vX.Y.Z`, build everything including the apps, push the image to GHCR with `X.Y.Z` and `vX.Y.Z` (signed keyless with cosign), create the GitHub release with all files, `SHA256SUMS.txt` and generated notes; only then do `X.Y` and `latest` move to that image. A failed run never moves `latest`; a pushed tag alone publishes nothing.

@@ -12,7 +12,7 @@ const { SHARE_TARGET, SHARE_BUNDLE_ID, APP_GROUP } = require('../scripts/add-sha
 const { notes, detectSigning } = require('../../scripts/release/signing');
 const { signingEnv, ANDROID_SECRETS, keytoolSha256, apksignerCerts, checkReleaseSignature } = require('../scripts/build-android');
 const { secretsFrom, artifactName } = require('../scripts/lib');
-const { iosSimulatorArgs } = require('../scripts/smoke');
+const { iosSimulatorArgs, smokeArtifact } = require('../scripts/smoke');
 
 const MOBILE = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(MOBILE, rel), 'utf-8');
@@ -350,6 +350,18 @@ describe('mobile.yml', () => {
     }
     assert.equal((text.match(/VITE_WATCH_CRUNCHYROLL:/g) || []).length, 4);
     assert.doesNotMatch(text, /:\s*write\b/, 'read-only token');
+  });
+
+  it('smoke runs keep their debug builds as artifacts too, named apart from the release ones', () => {
+    assert.equal(path.basename(smokeArtifact('android', '2.19.1')), 'manga-shelf-2.19.1-android-debug.apk');
+    assert.equal(path.basename(smokeArtifact('ios', '2.19.1')), 'manga-shelf-2.19.1-ios-simulator.zip');
+    assert.equal(path.dirname(smokeArtifact('ios', '2.19.1')), path.join(MOBILE, 'build', 'out'));
+    const uploads = [...yml().matchAll(/- uses: actions\/upload-artifact@[^\n]*\n {8}if: ([^\n]*)\n {8}with:\n {10}name: ([^\n]*)\n/g)];
+    assert.deepEqual(uploads.map((m) => m[1]), Array(2).fill("steps.project.outputs.present == 'true'"));
+    assert.deepEqual(uploads.map((m) => m[2]), [
+      "${{ env.MODE == 'build' && 'mobile-android' || 'mobile-android-debug' }}",
+      "${{ env.MODE == 'build' && 'mobile-ios' || 'mobile-ios-simulator' }}"
+    ]);
   });
 });
 

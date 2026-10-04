@@ -204,7 +204,7 @@ test('§7 names every place that loads a .env file', () => {
 test('§7 says the desktop installers build only on main and in pull requests', () => {
     const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
     assert.match(ci, /installers: \$\{\{ github\.ref == 'refs\/heads\/main' \|\| \(github\.event_name == 'pull_request' && github\.actor != 'dependabot\[bot\]'\) \}\}/);
-    const line = AGENTS.split('\n').find(l => l.startsWith('* **Build on every push:**'));
+    const line = AGENTS.split('\n').find(l => l.startsWith('* **Build on every pull request and push to `main`:**'));
     assert.match(line, /`desktop-<OS>`.*?only on `main` and in pull requests/);
 });
 
