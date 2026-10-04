@@ -90,7 +90,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
     rerunMigration16();
     assert.equal(dbm.getConnectionGeneration(), generation + 1, 'reopening bumps the connection generation');
     const report = dbm.getLastMigrationReport();
-    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24]);
+    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
     assert.equal(report[0].changes, db().prepare('SELECT count(*) AS n FROM mangas').get().n, 'the backfill touched every series');
     for (const row of db().prepare("SELECT m.owned_volumes AS stored, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS counted FROM mangas m").all()) {
         assert.equal(row.stored, row.counted);
@@ -98,7 +98,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
 
     const snapshots = safetySnapshots();
     assert.equal(snapshots.length, 1);
-    assert.match(snapshots[0], /^vor-update-v15-auf-v24-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
+    assert.match(snapshots[0], /^vor-update-v15-auf-v25-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
     const zip = new AdmZip(path.join(backupsDir, snapshots[0]));
     assert.deepEqual(zip.getEntries().map(e => e.entryName), ['manga.db']);
     const extracted = path.join(dataDir, 'temp', 'check.db');
@@ -151,7 +151,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'migrate-dry-run.js'), original], {
         encoding: 'utf8', env: { ...process.env, DATA_DIR: '', LOG_LEVEL: 'silent' }
     });
-    assert.match(out, /Schema:\s+v14 -> v24/);
+    assert.match(out, /Schema:\s+v14 -> v25/);
     assert.match(out, /v15 add_volumes_number_sort: [\d.]+ Zeilen geändert, \d+ ms/);
     assert.match(out, /v16 maintain_mangas_owned_volumes_by_triggers: /);
     assert.match(out, /v17 add_mangas_wish_priority: /);
@@ -161,6 +161,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     assert.match(out, /v22 add_publisher_aliases: /);
     assert.match(out, /v23 add_publisher_identity_aliases: /);
     assert.match(out, /v24 clear_seeded_start_date: /);
+    assert.match(out, /v25 add_anime_watch: /);
     assert.match(out, /volumes\s+\d+ -> \d+/);
     assert.match(out, /integrity_check:\s+ok/);
     assert.match(out, /foreign_key_check: ok/);
@@ -206,7 +207,7 @@ test('no safety snapshot, no migration: the start stops unless MIGRATE_WITHOUT_S
         delete process.env.MIGRATE_WITHOUT_SNAPSHOT;
         failing.mock.restore();
     }
-    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24]);
+    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
     assert.deepEqual(safetySnapshots(), before, 'migrated without a snapshot');
     assert.equal(require('../utils/config').readConfig({ MIGRATE_WITHOUT_SNAPSHOT: 'vielleicht' }).warnings.length, 1);
 });
@@ -284,4 +285,53 @@ test('migration 24 removes the seeded start date 2021-04-09 unless a volume was 
         c.prepare("INSERT INTO app_settings (key, value) VALUES ('collection_start_date', '2023-01-15')").run();
         volume(c, m, '2024-02-01', '2024-02-01 08:00:00');
     }), '2023-01-15', 'a chosen date stays');
+});
+
+test('migration 25 adds resume links, link lists, anime_links (one per entry and service) and anime_sync (gone with the user)', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'anime-watch.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        conn.exec('PRAGMA foreign_keys = ON;');
+        schema.applySchema(conn);
+        const user = Number(conn.prepare("INSERT INTO users (username, password_hash) VALUES ('w25', 'x')").run().lastInsertRowid);
+        const anime = Number(conn.prepare("INSERT INTO animes (title, anilist_id) VALUES ('Frieren', 154587)").run().lastInsertRowid);
+        conn.prepare("INSERT INTO anime_progress (anime_id, user_id, episodes_watched) VALUES (?, ?, 7)").run(anime, user);
+        conn.exec(`
+            DELETE FROM schema_migrations WHERE version >= 25;
+            DROP TABLE anime_links;
+            DROP TABLE anime_sync;
+            ALTER TABLE anime_progress DROP COLUMN resume_url;
+            ALTER TABLE anime_progress DROP COLUMN resume_episode;
+            ALTER TABLE animes DROP COLUMN external_links;
+            ALTER TABLE animes DROP COLUMN streaming_episodes;
+        `);
+        schema.runSequentialMigrations(conn);
+        const cols = (table) => conn.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+        assert.ok(['resume_url', 'resume_episode'].every(c => cols('anime_progress').includes(c)));
+        assert.ok(['external_links', 'streaming_episodes'].every(c => cols('animes').includes(c)));
+        assert.deepEqual({ ...conn.prepare('SELECT episodes_watched, resume_url FROM anime_progress').get() }, { episodes_watched: 7, resume_url: null }, 'existing progress kept');
+
+        const link = conn.prepare("INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, 'crunchyroll', ?, NULL)");
+        link.run(anime, 'GG5H5XQ7D');
+        assert.throws(() => link.run(anime, 'OTHER1234'), /UNIQUE/, 'one link per entry and service');
+        const second = Number(conn.prepare("INSERT INTO animes (title) VALUES ('Frieren 2')").run().lastInsertRowid);
+        link.run(second, 'GG5H5XQ7D');
+        assert.equal(conn.prepare("SELECT count(*) AS n FROM anime_links WHERE external_id = 'GG5H5XQ7D'").get().n, 2, 'a series id may span entries');
+        conn.prepare('DELETE FROM animes WHERE id = ?').run(anime);
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_links').get().n, 1, 'links go with their entry');
+
+        conn.prepare("INSERT INTO anime_sync (user_id, service, enabled) VALUES (?, 'anilist', 1)").run(user);
+        assert.throws(() => conn.prepare("INSERT INTO anime_sync (user_id, service) VALUES (?, 'anilist')").run(user), /UNIQUE|PRIMARY/);
+        conn.prepare('DELETE FROM users WHERE id = ?').run(user);
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_sync').get().n, 0, 'sync state goes with the user');
+
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 25');
+        schema.runSequentialMigrations(conn);
+        assert.equal(schema.appliedSchemaVersion(conn), 25, 'a second run is harmless');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
 });

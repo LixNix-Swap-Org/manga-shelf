@@ -138,6 +138,108 @@ test('progress for another user: admins only; list and detail show everybody, mi
     await editor('PUT', `/anime/${id}/progress`, { episodes_watched: 2 });
 });
 
+test('watched from a shared link: never lowers, resume link and remembered series, the "Weiter" target; visitors refused', async () => {
+    const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
+    const shared = 'https://www.crunchyroll.com/de/watch/GG1U2Q0ZW/like-a-fairy-tale?utm_source=share';
+    const canonical = 'https://www.crunchyroll.com/watch/GG1U2Q0ZW/like-a-fairy-tale';
+    assert.equal((await visitor('POST', `/anime/${id}/watched`, { episode: 7 })).status, 403);
+    let res = await editor('POST', `/anime/${id}/watched`, { episode: 7, url: shared, remember: { service: 'crunchyroll', external_id: 'gg5h5xq7d' } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.anime_id, id);
+    assert.deepEqual([res.body.progress.status, res.body.progress.episodes_watched, res.body.progress.resume_url, res.body.progress.resume_episode],
+        ['Schaue', 7, canonical, 7]);
+    assert.deepEqual({ ...db.prepare('SELECT service, external_id, url FROM anime_links WHERE anime_id = ?').get(id) },
+        { service: 'crunchyroll', external_id: 'GG5H5XQ7D', url: 'https://www.crunchyroll.com/series/GG5H5XQ7D' });
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 5, url: 'https://www.crunchyroll.com/watch/GOLDER0001/x' });
+    assert.deepEqual([res.body.progress.episodes_watched, res.body.progress.resume_url], [7, canonical], 'an older episode changes nothing');
+    for (const [body, code] of [[{ episode: 8, url: 'http://www.crunchyroll.com/watch/GG1U2Q0ZW/x' }, 'UNSUPPORTED_LINK'],
+        [{ episode: 8, url: 'https://crunchyroll.com.evil.example/watch/GG1U2Q0ZW/x' }, 'UNSUPPORTED_LINK'],
+        [{ episode: 0 }, 'BAD_REQUEST'], [{ episode: 8, remember: { service: 'netflix', external_id: 'X' } }, 'BAD_REQUEST']]) {
+        const bad = await editor('POST', `/anime/${id}/watched`, body);
+        assert.deepEqual([bad.status, bad.body.code], [400, code], JSON.stringify(body));
+    }
+    await editor('POST', `/anime/${id}/watched`, { episode: 7, remember: { service: 'crunchyroll', external_id: 'GZZZZZZZ1' } });
+    assert.equal(db.prepare('SELECT count(*) AS n FROM anime_links WHERE anime_id = ?').get(id).n, 1, 'one link per entry and service');
+
+    const entry = (await editor('GET', '/anime')).body.find((a) => a.id === id);
+    assert.equal(entry.my_progress.resume_url, canonical, 'the same episode without url keeps the link');
+    assert.deepEqual(entry.watch, {
+        next_url: canonical,
+        series_url: 'https://www.crunchyroll.com/series/GG5H5XQ7D/frieren-beyond-journeys-end',
+        search_url: `https://www.crunchyroll.com/search?q=${encodeURIComponent(entry.title_english || entry.title_romaji || entry.title)}`
+    });
+    assert.equal(entry.external_links, undefined, 'the list stays slim');
+    res = await editor('PUT', `/anime/${id}/progress`, { episodes_watched: 2 });
+    assert.deepEqual([res.body.resume_url, res.body.resume_episode], [null, null], 'any other counter change drops the resume link');
+    const detail = (await editor('GET', `/anime/${id}`)).body;
+    assert.equal(detail.watch.next_url, 'https://www.crunchyroll.com/frieren-beyond-journeys-end/episode-3-killing-magic-911405', 'AniList knows episode 3');
+    assert.deepEqual([detail.external_links.length, detail.streaming_episodes.length], [3, 3]);
+    assert.equal((await visitor('GET', `/anime/${id}`)).body.watch.next_url, 'https://www.crunchyroll.com/frieren-beyond-journeys-end/episode-1-the-journeys-end-911401');
+});
+
+test('watched: previous progress for the undo, canonical episode links only, an episode above the total needs complete', async () => {
+    const created = await editor('POST', '/anime', { title: 'Geteilte Staffel', episodes: 12 });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.id;
+    let res = await editor('POST', `/anime/${id}/watched`, { episode: 3 });
+    assert.deepEqual([res.status, res.body.previous, res.body.entry_episodes, res.body.progress.episodes_watched], [200, null, 12, 3]);
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 5, url: 'https://crunchyroll.com/de/watch/GABC123456/folge-5?utm_source=x#t=10' });
+    assert.deepEqual([res.body.previous.status, res.body.previous.episodes_watched, res.body.previous.resume_url], ['Schaue', 3, null]);
+    assert.equal(res.body.progress.resume_url, 'https://www.crunchyroll.com/watch/GABC123456/folge-5', 'canonical, no query or fragment');
+
+    for (const url of ['https://www.crunchyroll.com/series/GABC123456/x', `https://crunchyroll.com/account/logout?redirect=${encodeURIComponent('https://evil.example')}`, 'https://www.crunchyroll.com/']) {
+        const bad = await editor('POST', `/anime/${id}/watched`, { episode: 6, url });
+        assert.deepEqual([bad.status, bad.body.code], [400, 'UNSUPPORTED_LINK'], url);
+    }
+    const above = await editor('POST', `/anime/${id}/watched`, { episode: 29, remember: { service: 'crunchyroll', external_id: 'GABC123456' } });
+    assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 12]);
+    assert.equal(db.prepare('SELECT episodes_watched FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()).episodes_watched, 5);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM anime_links WHERE anime_id = ?').get(id).n, 0, 'a refused share stores nothing');
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 29, complete: true });
+    assert.deepEqual([res.status, res.body.progress.status, res.body.progress.episodes_watched, res.body.previous.episodes_watched], [200, 'Gesehen', 12, 5]);
+
+    await editor('POST', `/anime/${id}/watched`, { episode: 12, url: 'https://www.crunchyroll.com/watch/GABC123499/finale' });
+    const mine = (await editor('GET', `/anime/${id}`)).body;
+    assert.equal(mine.progress.find((p) => p.username === 'kim').resume_url, 'https://www.crunchyroll.com/watch/GABC123499/finale');
+    for (const other of [visitor, admin]) {
+        const seen = (await other('GET', `/anime/${id}`)).body.progress.find((p) => p.username === 'kim');
+        assert.deepEqual([seen.episodes_watched, seen.resume_url, seen.resume_episode], [12, null, null], 'only the owner sees the resume link');
+    }
+    await editor('DELETE', `/anime/${id}`);
+});
+
+test('resolve-link and the AniList sync routes: editors only; without an own key the sync stays off', async () => {
+    const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
+    const url = 'https://www.crunchyroll.com/series/GZZZZZZZ1/frieren';
+    assert.equal((await visitor('POST', '/anime/resolve-link', { url })).status, 403);
+    const res = await editor('POST', '/anime/resolve-link', { url });
+    assert.deepEqual([res.status, res.body.anime_id, res.body.match, res.body.page_checked], [200, id, 'link', false]);
+    const mine = db.prepare('SELECT status, episodes_watched FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId());
+    assert.deepEqual(res.body.entry, { id, title: res.body.entry.title, episodes: 28, my_status: mine.status, my_episodes: mine.episodes_watched },
+        'the matched entry with my progress, also when there are no candidates');
+    assert.deepEqual([(await editor('POST', '/anime/resolve-link', { url: 'https://example.org/watch/X' })).body.code], ['UNSUPPORTED_LINK']);
+
+    for (const [method, path, body] of [['GET', '/anime/sync'], ['PUT', '/anime/sync', { anilist: { enabled: true } }], ['POST', '/anime/sync/run', {}]]) {
+        assert.equal((await visitor(method, path, body)).status, 403, `${method} ${path}`);
+    }
+    assert.deepEqual((await editor('GET', '/anime/sync')).body.anilist.available, false);
+    const enable = await editor('PUT', '/anime/sync', { anilist: { enabled: true } });
+    assert.deepEqual([enable.status, enable.body.code], [400, 'NO_TOKEN']);
+    assert.equal((await editor('POST', '/anime/sync/run', {})).body.anilist.ran, false);
+});
+
+test('demoting a user to visitor or guest switches their AniList list sync off', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'lea', password: 'password123', role: 'editor' })).status, 200);
+    const leaId = db.prepare("SELECT id FROM users WHERE username = 'lea'").get().id;
+    db.prepare("INSERT INTO anime_sync (user_id, service, enabled, external_user_id) VALUES (?, 'anilist', 1, '5')").run(leaId);
+    const enabled = () => db.prepare('SELECT enabled FROM anime_sync WHERE user_id = ?').get(leaId).enabled;
+    assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'admin' })).status, 200);
+    assert.equal(enabled(), 1);
+    assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'guest' })).status, 200);
+    assert.equal(enabled(), 0);
+    assert.equal((await admin('DELETE', `/users/${leaId}`)).status, 200);
+});
+
 test('stats: anime block only with entries, watch time from episodes x duration', async () => {
     const stats = await admin('GET', '/stats');
     const anime = stats.body.anime;

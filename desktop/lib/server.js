@@ -63,9 +63,12 @@ function createLockedWarning({ isLocked, show }) {
     };
 }
 
-/** Camera, clipboard and fullscreen only for a page of the app itself: app://manga-shelf or the running local server. */
+/**
+ * Camera, clipboard and fullscreen only for a page of the app itself: app://manga-shelf or the running local server.
+ * 'clipboard-read' serves the 'Link einfügen' button, which reads only on tap.
+ */
 function permissionAllowed({ permission, origin, appOrigin, localOrigin }) {
-    if (!['media', 'clipboard-sanitized-write', 'fullscreen'].includes(permission)) return false;
+    if (!['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(permission)) return false;
     if (!origin || origin === 'null') return false;
     return origin === appOrigin || (Boolean(localOrigin) && origin === localOrigin);
 }

@@ -1,10 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import { KeyRound, Lock, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
 import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
+import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
 import ApiKeyCard from './ApiKeyCard';
+import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
+
+// apps only (feature-detected): the Crunchyroll history card and its sync code load on demand; other builds drop them
+const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/CrunchyrollCard')) : null;
 
 /** Own password change (PUT /api/auth/password): current password, new password twice. Other devices are logged out. */
 function PasswordTab({ onClose }) {
@@ -78,32 +83,43 @@ function PasswordTab({ onClose }) {
   );
 }
 
+/** Tells a mounted anime tab the new sync state (switched off: its hint goes away). */
+const announceListSync = (sync) => window.dispatchEvent(new CustomEvent(ANIME_SYNC_EVENT, {
+  detail: { ran: false, changed: false, enabled: Boolean(sync.enabled), last_synced_at: sync.last_synced_at ?? null, last_error: sync.last_error ?? null }
+}));
+
 /**
- * Loads the guides and key states; `admin` adds the instance keys. Returns the cards' data and their actions
- * (shared by the account dialog and the setup assistant).
+ * Loads the guides and key states; `admin` adds the instance keys, `listSync` (editors) the AniList list sync state
+ * (GET /api/anime/sync). Returns the cards' data and their actions (shared by the account dialog and the setup assistant).
  */
-export function useApiKeys({ admin = false, user = true } = {}) {
+export function useApiKeys({ admin = false, user = true, listSync: withListSync = false } = {}) {
   const [guides, setGuides] = useState(null);
   const [userKeys, setUserKeys] = useState([]);
   const [instanceKeys, setInstanceKeys] = useState([]);
+  const [listSync, setListSync] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(null);
 
   const load = useCallback(async () => {
     setError('');
     try {
-      const [g, own, inst] = await Promise.all([
+      const [g, own, inst, sync] = await Promise.all([
         api.get('/api/sources/guides'),
         user ? api.get('/api/auth/api-keys') : Promise.resolve([]),
-        admin ? api.get('/api/admin/api-keys') : Promise.resolve(null)
+        admin ? api.get('/api/admin/api-keys') : Promise.resolve(null),
+        // optional: an older server without the route simply shows no switch
+        withListSync ? api.get('/api/anime/sync').catch(() => null) : Promise.resolve(null)
       ]);
       setGuides(Array.isArray(g) ? g : []);
       setUserKeys(Array.isArray(own) ? own : []);
       setInstanceKeys(Array.isArray(inst?.keys) ? inst.keys : []);
+      setListSync(sync?.anilist || null);
+      return sync?.anilist || null;
     } catch (err) {
       setError(err.message || 'Schlüssel konnten nicht geladen werden');
+      return null;
     }
-  }, [admin, user]);
+  }, [admin, user, withListSync]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -129,7 +145,9 @@ export function useApiKeys({ admin = false, user = true } = {}) {
     setBusy(`${scope}:${provider}`);
     try {
       await api.del(`${base(scope)}/${provider}`);
-      await load();
+      const sync = await load();
+      // the server switches the list sync off with the key; the anime tab drops its hint
+      if (scope === 'user' && provider === 'anilist' && sync) announceListSync(sync);
       notify.success('Schlüssel entfernt');
     } catch (err) {
       notify.error(err);
@@ -146,12 +164,65 @@ export function useApiKeys({ admin = false, user = true } = {}) {
     }
   };
 
+  /** PUT /api/anime/sync; the switch follows the answer (NO_TOKEN / TOKEN_REJECTED come back as a toast). */
+  const toggleListSync = async (on) => {
+    setBusy('sync:anilist');
+    try {
+      const data = await api.put('/api/anime/sync', { anilist: { enabled: on } }, { timeout: 30000 });
+      if (data?.anilist) {
+        setListSync(data.anilist);
+        announceListSync(data.anilist);
+      }
+    } catch (err) {
+      notify.error(err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** "Jetzt abgleichen": POST /api/anime/sync/run; a mounted anime tab reloads when something changed. */
+  const runListSync = async () => {
+    setBusy('sync:anilist');
+    try {
+      const data = await api.post('/api/anime/sync/run', {}, { timeout: 90000 });
+      const result = data?.anilist;
+      if (!result) return;
+      setListSync((cur) => ({
+        ...(cur || {}),
+        last_synced_at: result.last_synced_at ?? cur?.last_synced_at ?? null,
+        last_error: result.last_error ?? null,
+        last_report: result.ran ? { pulled: result.pulled, pushed: result.pushed, not_in_list: result.not_in_list } : (cur?.last_report ?? null)
+      }));
+      window.dispatchEvent(new CustomEvent(ANIME_SYNC_EVENT, { detail: result }));
+      if (result.last_error) notify.error(result.last_error);
+      else if (result.ran) notify.success('AniList-Liste abgeglichen');
+      else notify.info('Gerade erst abgeglichen – in einer Minute geht es wieder.');
+    } catch (err) {
+      notify.error(err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const guideOf = (id) => (guides || []).find((g) => g.id === id);
-  return { guides, guideOf, userKeys, instanceKeys, error, busy, save, remove, toggleBackground, reload: load };
+  return {
+    guides, guideOf, userKeys, instanceKeys, listSync, error, busy, save, remove, toggleBackground, toggleListSync, runListSync, reload: load
+  };
 }
 
-function KeysTab({ isAdmin }) {
-  const keys = useApiKeys({ admin: isAdmin });
+/** The list sync props of the personal AniList card (none for other providers or without the sync state). */
+export function listSyncProps(keys, provider) {
+  if (provider !== 'anilist' || !keys.listSync) return {};
+  return {
+    listSync: keys.listSync,
+    listSyncBusy: keys.busy === 'sync:anilist',
+    onToggleListSync: keys.toggleListSync,
+    onRunListSync: keys.runListSync
+  };
+}
+
+function KeysTab({ isAdmin, canEdit }) {
+  const keys = useApiKeys({ admin: isAdmin, listSync: canEdit });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
   if (!keys.guides) return <p className="text-sm text-slate-400" role="status">Wird geladen…</p>;
   return (
@@ -172,9 +243,15 @@ function KeysTab({ isAdmin }) {
             onSave={(secret, opts) => keys.save('user', state.provider, secret, opts)}
             onRemove={() => keys.remove('user', state.provider)}
             onToggleBackground={(on) => keys.toggleBackground(state.provider, on)}
+            {...listSyncProps(keys, state.provider)}
           />
         ) : null;
       })}
+      {CrunchyrollCard && canEdit && watchAvailable() && (
+        <Suspense fallback={null}>
+          <CrunchyrollCard headingLevel={3} />
+        </Suspense>
+      )}
       {isAdmin && keys.instanceKeys.length > 0 && (
         <div className="space-y-3 border-t border-slate-800 pt-4" data-testid="instance-keys">
           <h3 className="text-sm font-bold text-white">Für alle (Instanz)</h3>
@@ -257,7 +334,7 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
         </div>
 
         <div {...panelProps}>
-          {tab === 'password' ? <PasswordTab onClose={onClose} /> : <KeysTab isAdmin={user?.role === 'admin'} />}
+          {tab === 'password' ? <PasswordTab onClose={onClose} /> : <KeysTab isAdmin={user?.role === 'admin'} canEdit={!user?.offline && (user?.role === 'admin' || user?.role === 'editor')} />}
         </div>
       </div>
     </div>

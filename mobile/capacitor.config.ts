@@ -7,6 +7,8 @@ const config: CapacitorConfig = {
   webDir: 'www',
   // the WebView is dark before the first paint (no white flash at a cold start)
   backgroundColor: '#0b0f19',
+  // debug builds would otherwise print plugin calls and results (Crunchyroll cookie, bearer tokens) to Xcode and logcat
+  loggingBehavior: 'none',
   server: {
     androidScheme: 'https'
   },

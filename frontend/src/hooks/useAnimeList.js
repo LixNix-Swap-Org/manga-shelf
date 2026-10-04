@@ -3,8 +3,10 @@ import api, { isAbortError, TIMEOUTS } from '../utils/api';
 import { notify } from '../utils/notify';
 import { getClearGeneration } from '../utils/offlineStore';
 import {
-  readAnimeCache, writeAnimeCache, withProgress, predictProgress
+  readAnimeCache, writeAnimeCache, withProgress, predictProgress, predictWatched, listSyncDue, markListSync
 } from '../utils/animeHelpers';
+import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
+import { WATCH_SYNC_EVENT } from '../app/watch/watchState';
 import useLatestRequest from './useLatestRequest';
 
 /**
@@ -14,6 +16,7 @@ import useLatestRequest from './useLatestRequest';
 export default function useAnimeList({ user }) {
   const userId = user?.id ?? null;
   const offline = Boolean(user?.offline);
+  const canWrite = !offline && (user?.role === 'admin' || user?.role === 'editor');
   const [list, setList] = useState(() => readAnimeCache(userId)?.list || []);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,10 +24,13 @@ export default function useAnimeList({ user }) {
   const [cacheAt, setCacheAt] = useState(() => readAnimeCache(userId)?.timestamp || null);
   const [fromCache, setFromCache] = useState(false);
   const [sources, setSources] = useState(null);
+  const [listSync, setListSync] = useState(null);
   const beginList = useLatestRequest();
   const beginSources = useLatestRequest();
   const listRef = useRef(list);
   listRef.current = list;
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
 
   useEffect(() => {
     const cached = readAnimeCache(userId);
@@ -119,6 +125,14 @@ export default function useAnimeList({ user }) {
 
   const fetchDetail = useCallback((id, { signal } = {}) => api.get(`/api/anime/${id}`, { signal, fallback: 'Anime konnte nicht geladen werden' }), []);
 
+  // `watch` (the "Weiter" target) is computed by the server from the progress: after a change it is read again
+  const refreshWatch = useCallback(async (id) => {
+    try {
+      const detail = await api.get(`/api/anime/${id}`);
+      if (detail && 'watch' in detail) store(listRef.current.map((a) => (a.id === id ? { ...a, watch: detail.watch } : a)));
+    } catch (_) { /* the link keeps its old target until the next list load */ }
+  }, [store]);
+
   /** Optimistic: the list shows the predicted state at once and goes back when the server refuses. */
   const updateProgress = useCallback(async (id, change) => {
     const before = listRef.current.find((a) => a.id === id);
@@ -128,13 +142,87 @@ export default function useAnimeList({ user }) {
     try {
       const saved = await api.put(`/api/anime/${id}/progress`, change, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
       store(listRef.current.map((a) => (a.id === id ? withProgress(a, saved, user) : a)));
+      if (before.watch) refreshWatch(id);
       return saved;
     } catch (err) {
       setList((cur) => cur.map((a) => (a.id === id ? before : a)));
       notify.error(err, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
       return null;
     }
-  }, [store, user]);
+  }, [refreshWatch, store, user]);
+
+  /**
+   * "Ja, gesehen" of a shared link: POST /anime/:id/watched (never lowers the counter, remembers the page for "Weiter",
+   * `remember` links the streaming series to the entry, `complete` allows an episode above the total). Resolves with
+   * the answer ({ progress, previous, … }), null after an error toast; EPISODE_ABOVE_TOTAL is thrown to the dialog.
+   */
+  const markWatched = useCallback(async (id, { episode, url, remember, complete = false } = {}) => {
+    const before = listRef.current.find((a) => a.id === id);
+    // above the total without `complete` the server refuses: no optimistic "Gesehen"
+    if (before && (complete || !(before.episodes > 0 && episode > before.episodes))) {
+      const predicted = predictWatched(before.my_progress, { episode, url }, before.episodes);
+      setList((cur) => cur.map((a) => (a.id === id ? withProgress(a, predicted, user) : a)));
+    }
+    const body = { episode };
+    if (url) body.url = url;
+    if (remember) body.remember = remember;
+    if (complete) body.complete = true;
+    try {
+      const saved = await api.post(`/api/anime/${id}/watched`, body, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      const progress = saved?.progress ?? null;
+      if (listRef.current.some((a) => a.id === id)) {
+        store(listRef.current.map((a) => (a.id === id ? withProgress(a, progress, user) : a)));
+        refreshWatch(id);
+      } else fetchAnime();
+      return saved || { progress };
+    } catch (err) {
+      if (before) setList((cur) => cur.map((a) => (a.id === id ? before : a)));
+      if (err?.code === 'EPISODE_ABOVE_TOTAL') throw err;
+      notify.error(err, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      return null;
+    }
+  }, [fetchAnime, refreshWatch, store, user]);
+
+  /**
+   * AniList list sync when the tab loads (POST /anime/sync/run, at most every 15 min here, the server throttles too);
+   * reloads the list when the pull changed something. Errors only end up in `listSync.last_error`.
+   */
+  const syncList = useCallback(async ({ force = false } = {}) => {
+    if (!canWrite || userId === null) return null;
+    if (!force && !listSyncDue(userId)) return null;
+    markListSync(userId);
+    try {
+      const data = await api.post('/api/anime/sync/run', force ? {} : { auto: true }, { timeout: TIMEOUTS.lookup });
+      const result = data?.anilist || null;
+      setListSync(result);
+      if (result?.changed) await fetchAnime();
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }, [canWrite, fetchAnime, userId]);
+
+  // "Jetzt abgleichen" in the account dialog
+  useEffect(() => {
+    const onSynced = (event) => {
+      const result = event?.detail || null;
+      if (!result) return;
+      // the account dialog switched the sync off: no hint about its last error any more
+      setListSync(result.enabled === false ? null : result);
+      if (result.changed && loadedRef.current) fetchAnime();
+    };
+    window.addEventListener(ANIME_SYNC_EVENT, onSynced);
+    return () => window.removeEventListener(ANIME_SYNC_EVENT, onSynced);
+  }, [fetchAnime]);
+
+  // the apps' Crunchyroll history sync or its match dialog changed progress: the shown list reloads
+  useEffect(() => {
+    const onWatchSync = (event) => {
+      if (event?.detail?.changed && loadedRef.current) fetchAnime();
+    };
+    window.addEventListener(WATCH_SYNC_EVENT, onWatchSync);
+    return () => window.removeEventListener(WATCH_SYNC_EVENT, onWatchSync);
+  }, [fetchAnime]);
 
   const removeFromMyList = useCallback(async (id) => {
     const before = listRef.current.find((a) => a.id === id);
@@ -143,13 +231,32 @@ export default function useAnimeList({ user }) {
     try {
       await api.del(`/api/anime/${id}/progress`, { fallback: 'Konnte nicht von deiner Liste entfernt werden' });
       store(listRef.current);
+      if (before.watch) refreshWatch(id);
       return true;
     } catch (err) {
       setList((cur) => cur.map((a) => (a.id === id ? before : a)));
       notify.error(err);
       return false;
     }
-  }, [store, user]);
+  }, [refreshWatch, store, user]);
+
+  /**
+   * "Rückgängig" of a share: back to the server's progress from before the write (`previous`, null = no progress).
+   * Works without the entry in the list (not loaded yet or from an old cache).
+   */
+  const undoWatched = useCallback(async (id, previous) => {
+    const change = previous ? { status: previous.status, episodes_watched: previous.episodes_watched || 0 } : null;
+    if (listRef.current.some((a) => a.id === id)) return change ? Boolean(await updateProgress(id, change)) : removeFromMyList(id);
+    try {
+      if (change) await api.put(`/api/anime/${id}/progress`, change, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      else await api.del(`/api/anime/${id}/progress`, { fallback: 'Konnte nicht von deiner Liste entfernt werden' });
+      fetchAnime();
+      return true;
+    } catch (err) {
+      notify.error(err);
+      return false;
+    }
+  }, [fetchAnime, updateProgress, removeFromMyList]);
 
   const remove = useCallback(async (id) => {
     await api.del(`/api/anime/${id}`, { fallback: 'Anime konnte nicht gelöscht werden' });
@@ -166,7 +273,7 @@ export default function useAnimeList({ user }) {
   }, [replaceEntry, fetchSources]);
 
   return {
-    list, loaded, loading, error, cacheAt, fromCache, sources,
-    fetchAnime, fetchSources, search, adaptations, add, update, fetchDetail, updateProgress, removeFromMyList, remove, refresh
+    list, loaded, loading, error, cacheAt, fromCache, sources, listSync,
+    fetchAnime, fetchSources, syncList, search, adaptations, add, update, fetchDetail, updateProgress, markWatched, undoWatched, removeFromMyList, remove, refresh
   };
 }

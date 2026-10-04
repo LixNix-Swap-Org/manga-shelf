@@ -18,7 +18,7 @@ function releaseNotes(tag, env = process.env, repository = env.GITHUB_REPOSITORY
         '',
         'Prüfsummen: `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt --ignore-missing`).',
         '',
-        notes(detectSigning(env)),
+        notes(detectSigning(env), env),
         ''
     ].join('\n');
 }

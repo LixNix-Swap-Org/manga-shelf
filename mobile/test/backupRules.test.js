@@ -31,8 +31,9 @@ describe('Android backup rules', () => {
     assert.match(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
   });
 
-  it('cloud backup, device transfer and the old backup keep the secure storage, manga.db and the uploads out', () => {
-    const expected = ['sharedpref:WSSecureStorageSharedPreferences.xml', ...collectionFiles()];
+  it('cloud backup, device transfer and the old backup keep the secure storage, manga.db, the uploads and the WebView data out', () => {
+    // root:app_webview = cookies and storage of every WebView, incl. the WebLogin dialog (the app itself uses bearer tokens)
+    const expected = ['sharedpref:WSSecureStorageSharedPreferences.xml', 'root:app_webview', ...collectionFiles()];
     const found = [...sections(read(`${XML}/backup_rules.xml`)), ...sections(read(`${XML}/data_extraction_rules.xml`))];
     assert.deepEqual(found.map(([name]) => name), ['full-backup-content', 'cloud-backup', 'device-transfer']);
     for (const [name, body] of found) {

@@ -1,12 +1,13 @@
 import { memo, useId } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Clock, Plus, Tv } from 'lucide-react';
+import { BookOpen, Clock, Play, Plus, Tv } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import { ownerColor } from '../detail/OwnerBadges';
 import { langFor } from '../common/lang';
+import { openLinkOutside } from '../../app/openExternal';
 import {
   PROGRESS_STATUSES, displayTitle, formatYearLine, progressText, progressPercent, plusOneDisabled, countdownText, staleText,
-  initials, sourceBadges
+  initials, sourceBadges, continueTarget
 } from '../../utils/animeHelpers';
 
 const COVER_FALLBACK = (
@@ -32,6 +33,7 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
   const others = (anime.progress_users || []).filter((p) => p.user_id !== userId);
   const title = displayTitle(anime);
   const disabled = plusOneDisabled(mine, anime.episodes);
+  const next = continueTarget(anime, { search: false });
 
   return (
     <article
@@ -108,8 +110,22 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
           </div>
         )}
 
+        {next && (
+          <a
+            href={next.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(e) => openLinkOutside(e, { preferApp: true })}
+            aria-label={`${next.label}: ${title}`}
+            className="hit-44 mt-auto btn-secondary text-[11px] leading-tight py-1.5 px-2 flex items-center justify-center gap-1 min-w-0"
+          >
+            <Play className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <span className="text-center">{next.label}</span>
+          </a>
+        )}
+
         {canEdit && (
-          <div className="mt-auto flex items-center gap-1.5 pt-1">
+          <div className={`${next ? '' : 'mt-auto '}flex items-center gap-1.5 pt-1`}>
             <button
               type="button"
               onClick={() => onPlusOne(anime)}

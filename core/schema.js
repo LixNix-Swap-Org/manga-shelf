@@ -474,6 +474,43 @@ function migrationList(log = silentLog) {
                 `).get(SEEDED_START_DATE, SEEDED_START_DATE);
                 if (!earlier) d.prepare("DELETE FROM app_settings WHERE key = 'collection_start_date'").run();
             }
+        },
+        {
+            version: 25,
+            name: 'add_anime_watch',
+            up: (d) => {
+                // Watch progress from streaming links: resume link per user, AniList link lists, remembered service links
+                // (a Crunchyroll series spans several AniList entries, so external_id is not unique) and the list-sync state
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('resume_url')) d.exec('ALTER TABLE anime_progress ADD COLUMN resume_url TEXT;');
+                if (!progressCols.has('resume_episode')) d.exec('ALTER TABLE anime_progress ADD COLUMN resume_episode INTEGER;');
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('external_links')) d.exec('ALTER TABLE animes ADD COLUMN external_links TEXT;');
+                if (!animeCols.has('streaming_episodes')) d.exec('ALTER TABLE animes ADD COLUMN streaming_episodes TEXT;');
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS anime_links (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        anime_id INTEGER NOT NULL REFERENCES animes(id) ON DELETE CASCADE,
+                        service TEXT NOT NULL,
+                        external_id TEXT NOT NULL,
+                        url TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_links_anime_service ON anime_links (anime_id, service);
+                    CREATE INDEX IF NOT EXISTS idx_anime_links_lookup ON anime_links (service, external_id);
+                    CREATE TABLE IF NOT EXISTS anime_sync (
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        service TEXT NOT NULL,
+                        enabled INTEGER NOT NULL DEFAULT 0,
+                        external_user_id TEXT,
+                        last_synced_at INTEGER,
+                        last_error TEXT,
+                        last_report TEXT,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, service)
+                    );
+                `);
+            }
         }
     ];
 }

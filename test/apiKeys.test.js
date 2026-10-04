@@ -104,6 +104,25 @@ test('rate limit: 5 checks per minute and user', async () => {
     keyLimiter.reset();
 });
 
+test('AniList list sync follows the key: a new key resolves the account again, removing it switches the sync off', async () => {
+    const { keyLimiter } = require('../routes/apiKeys');
+    keyLimiter.reset();
+    const sync = () => db.prepare("SELECT enabled, external_user_id, last_error FROM anime_sync WHERE user_id = ? AND service = 'anilist'").get(kimId());
+    const on = await kim('PUT', '/anime/sync', { anilist: { enabled: true } });
+    assert.equal(on.status, 200, JSON.stringify(on.body));
+    db.prepare("UPDATE anime_sync SET last_error = 'alt' WHERE user_id = ?").run(kimId());
+    assert.equal((await kim('PUT', '/auth/api-keys/anilist', { secret: TOKEN })).status, 200);
+    assert.deepEqual({ ...sync() }, { enabled: 1, external_user_id: null, last_error: null });
+    assert.equal((await kim('PUT', '/auth/api-keys/mal', { secret: CLIENT_ID })).status, 200);
+    assert.equal(sync().enabled, 1, 'another provider leaves the sync alone');
+    assert.equal((await kim('DELETE', '/auth/api-keys/anilist')).body.removed, true);
+    assert.deepEqual({ ...sync() }, { enabled: 0, external_user_id: null, last_error: null });
+    assert.equal((await kim('GET', '/anime/sync')).body.anilist.enabled, false);
+    assert.equal((await kim('DELETE', '/auth/api-keys/mal')).body.removed, true);
+    assert.equal((await kim('PUT', '/auth/api-keys/anilist', { secret: TOKEN })).status, 200);
+    keyLimiter.reset();
+});
+
 test('delete own key; admins remove another user\'s key but cannot read it', async () => {
     assert.equal((await gast('PUT', '/auth/api-keys/mal', { secret: CLIENT_ID })).status, 200);
     assert.equal((await gast('DELETE', '/auth/api-keys/mal')).body.removed, true);

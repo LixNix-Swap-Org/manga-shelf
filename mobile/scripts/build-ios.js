@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Release build for iPhone/iPad into build/out/ (macOS, Xcode, CocoaPods). With IOS_CERT_* , IOS_PROVISIONING_PROFILE_BASE64
 // and APPLE_TEAM_ID it makes a signed IPA (IOS_EXPORT_METHOD); `--testflight` uploads it with the APP_STORE_CONNECT_API_KEY_*
-// variables. Without them it makes an unsigned IPA (CODE_SIGNING_ALLOWED=NO) for AltStore, Sideloadly or Xcode.
+// variables. The share extension is signed with IOS_SHARE_PROVISIONING_PROFILE_BASE64; without that profile the signed IPA
+// is built without the extension. Without the signing secrets it makes an unsigned IPA (CODE_SIGNING_ALLOWED=NO, extension
+// included) for AltStore, Sideloadly or Xcode.
 //   node scripts/build-ios.js [--skip-web | --from <app build dir>] [--testflight]
 const fs = require('fs');
 const os = require('os');
@@ -11,8 +13,10 @@ const { execFileSync } = require('child_process');
 const { MOBILE_DIR, OUT_DIR, run, secretsFrom, artifactName, rootVersion, writeSecretFile } = require('./lib');
 const { syncVersion } = require('./sync-version');
 const { prepareWeb } = require('./prepare-web');
+const { SHARE_BUNDLE_ID, EMBED_PHASE } = require('./add-share-extension');
 
 const IOS_SECRETS = ['IOS_CERT_P12_BASE64', 'IOS_CERT_PASSWORD', 'IOS_PROVISIONING_PROFILE_BASE64', 'APPLE_TEAM_ID'];
+const IOS_SHARE_SECRET = 'IOS_SHARE_PROVISIONING_PROFILE_BASE64';
 const TESTFLIGHT_SECRETS = ['APP_STORE_CONNECT_API_KEY_ID', 'APP_STORE_CONNECT_API_KEY_ISSUER_ID', 'APP_STORE_CONNECT_API_KEY_BASE64'];
 const BUNDLE_ID = 'de.mangashelf.app';
 const IOS_DIR = path.join(MOBILE_DIR, 'ios', 'App');
@@ -27,26 +31,50 @@ function archiveArgs(archivePath) {
     '-archivePath', archivePath, 'archive'];
 }
 
-/** Manual signing for the App target only (a global PROVISIONING_PROFILE_SPECIFIER would break the Pods targets). */
-function signingPatch(pbxproj, { team, profileUuid, identity = 'Apple Distribution' }) {
-  const anchor = `PRODUCT_BUNDLE_IDENTIFIER = ${BUNDLE_ID};`;
-  if (!pbxproj.includes(anchor)) throw new Error(`${anchor} nicht im Xcode-Projekt gefunden`);
-  const settings = [
-    'CODE_SIGN_STYLE = Manual;',
-    `DEVELOPMENT_TEAM = ${team};`,
-    `PROVISIONING_PROFILE_SPECIFIER = "${profileUuid}";`,
-    `"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "${identity}";`
+const profilesOf = ({ profiles, profileUuid }) => profiles || { [BUNDLE_ID]: profileUuid };
+
+/**
+ * Manual signing for the targets with a profile ({ bundleId: profileUuid }), matched by their bundle id (a global
+ * PROVISIONING_PROFILE_SPECIFIER would break the Pods targets).
+ */
+function signingPatch(pbxproj, { team, identity = 'Apple Distribution', ...rest }) {
+  let out = pbxproj;
+  for (const [bundleId, profileUuid] of Object.entries(profilesOf(rest))) {
+    const anchor = `PRODUCT_BUNDLE_IDENTIFIER = ${bundleId};`;
+    if (!out.includes(anchor)) throw new Error(`${anchor} nicht im Xcode-Projekt gefunden`);
+    const settings = [
+      'CODE_SIGN_STYLE = Manual;',
+      `DEVELOPMENT_TEAM = ${team};`,
+      `PROVISIONING_PROFILE_SPECIFIER = "${profileUuid}";`,
+      `"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "${identity}";`
+    ];
+    out = out.split('\n').map((line) => {
+      if (!line.trim().startsWith(anchor)) return line;
+      const indent = /^\s*/.exec(line)[0];
+      return [line, ...settings.map((s) => `${indent}${s}`)].join('\n');
+    }).join('\n');
+  }
+  return out;
+}
+
+/**
+ * The App target without the share extension: no embed phase, no target dependency, no App Group entitlement. For signed
+ * builds without the extension's profile (the app profile may lack the App Groups capability as well).
+ */
+function withoutShareExtension(pbxproj) {
+  const drop = [
+    new RegExp(`^\\s*[0-9A-F]{24} /\\* ${EMBED_PHASE} \\*/,$`),
+    /^\s*[0-9A-F]{24} \/\* PBXTargetDependency \*\/,$/,
+    /^\s*CODE_SIGN_ENTITLEMENTS = App\/App\.entitlements;$/
   ];
-  return pbxproj.split('\n').map((line) => {
-    if (!line.includes(anchor)) return line;
-    const indent = /^\s*/.exec(line)[0];
-    return [line, ...settings.map((s) => `${indent}${s}`)].join('\n');
-  }).join('\n');
+  return pbxproj.split('\n').filter((line) => !drop.some((re) => re.test(line))).join('\n');
 }
 
 const xmlEscape = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-function exportOptionsPlist({ method, team, profileUuid }) {
+function exportOptionsPlist({ method, team, ...rest }) {
+  const entries = Object.entries(profilesOf(rest))
+    .map(([bundleId, uuid]) => `<key>${xmlEscape(bundleId)}</key><string>${xmlEscape(uuid)}</string>`).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -55,7 +83,7 @@ function exportOptionsPlist({ method, team, profileUuid }) {
   <key>teamID</key><string>${xmlEscape(team)}</string>
   <key>signingStyle</key><string>manual</string>
   <key>provisioningProfiles</key>
-  <dict><key>${BUNDLE_ID}</key><string>${xmlEscape(profileUuid)}</string></dict>
+  <dict>${entries}</dict>
   <key>uploadSymbols</key><true/>
 </dict>
 </plist>
@@ -76,18 +104,42 @@ function plistValue(file, key) {
   return execFileSync('plutil', ['-extract', key, 'raw', '-o', '-', file], { encoding: 'utf-8' }).trim();
 }
 
-/** Temporary keychain with the certificate, installed profile; returns what cleanup() removes. */
-function installSigning(secrets) {
+/** TEAM.de.mangashelf.app.ShareToMangaShelf (or a wildcard TEAM.*) fits the bundle id. */
+function profileFits(applicationIdentifier, bundleId) {
+  const id = String(applicationIdentifier || '');
+  return id.endsWith(`.${bundleId}`) || /^[A-Z0-9]+\.\*$/.test(id);
+}
+
+/** Decodes and installs one provisioning profile; returns its UUID, application identifier and the files to remove. */
+function installProfile(base64, name) {
+  const profile = writeSecretFile(path.join(WORK_DIR, `${name}.mobileprovision`), base64);
+  const decoded = path.join(WORK_DIR, `${name}.plist`);
+  fs.writeFileSync(decoded, execFileSync('security', ['cms', '-D', '-i', profile]));
+  const uuid = plistValue(decoded, 'UUID');
+  const appId = plistValue(decoded, 'Entitlements.application-identifier');
+  const installed = path.join(os.homedir(), 'Library', 'MobileDevice', 'Provisioning Profiles', `${uuid}.mobileprovision`);
+  fs.mkdirSync(path.dirname(installed), { recursive: true });
+  fs.copyFileSync(profile, installed);
+  return { uuid, appId, files: [profile, decoded, installed] };
+}
+
+/** Temporary keychain with the certificate, installed profiles; returns { bundleId: uuid } and what cleanup() removes. */
+function installSigning(secrets, shareProfileBase64 = null) {
   const keychain = path.join(WORK_DIR, 'signing.keychain-db');
   const password = crypto.randomBytes(24).toString('hex');
   const p12 = writeSecretFile(path.join(WORK_DIR, 'cert.p12'), secrets.IOS_CERT_P12_BASE64);
-  const profile = writeSecretFile(path.join(WORK_DIR, 'profile.mobileprovision'), secrets.IOS_PROVISIONING_PROFILE_BASE64);
-  const decoded = path.join(WORK_DIR, 'profile.plist');
-  fs.writeFileSync(decoded, execFileSync('security', ['cms', '-D', '-i', profile]));
-  const profileUuid = plistValue(decoded, 'UUID');
-  const installed = path.join(os.homedir(), 'Library', 'MobileDevice', 'Provisioning Profiles', `${profileUuid}.mobileprovision`);
-  fs.mkdirSync(path.dirname(installed), { recursive: true });
-  fs.copyFileSync(profile, installed);
+  const app = installProfile(secrets.IOS_PROVISIONING_PROFILE_BASE64, 'profile');
+  const profiles = { [BUNDLE_ID]: app.uuid };
+  const files = [p12, ...app.files];
+  if (shareProfileBase64) {
+    const share = installProfile(shareProfileBase64, 'share-profile');
+    files.push(...share.files);
+    if (!profileFits(share.appId, SHARE_BUNDLE_ID)) {
+      for (const file of files) fs.rmSync(file, { force: true });
+      throw new Error(`IOS_SHARE_PROVISIONING_PROFILE_BASE64 gehört zu ${share.appId}, nicht zu ${SHARE_BUNDLE_ID}`);
+    }
+    profiles[SHARE_BUNDLE_ID] = share.uuid;
+  }
 
   const existing = execFileSync('security', ['list-keychains', '-d', 'user'], { encoding: 'utf-8' })
     .split('\n').map((l) => l.trim().replace(/^"|"$/g, '')).filter(Boolean);
@@ -100,12 +152,12 @@ function installSigning(secrets) {
   run('security', ['list-keychains', '-d', 'user', '-s', keychain, ...existing], { quiet: true });
 
   return {
-    profileUuid,
+    profiles,
     keychain,
     cleanup() {
       try { run('security', ['list-keychains', '-d', 'user', '-s', ...existing], { quiet: true }); } catch (_) { /* keep going */ }
       try { run('security', ['delete-keychain', keychain], { quiet: true }); } catch (_) { /* already gone */ }
-      for (const file of [p12, profile, decoded, installed]) fs.rmSync(file, { force: true });
+      for (const file of files) fs.rmSync(file, { force: true });
     }
   };
 }
@@ -155,13 +207,19 @@ async function buildIos({ skipWeb = false, from = null, testflight = false, env 
   }
 
   const original = fs.readFileSync(PBXPROJ, 'utf-8');
-  const signing = installSigning(secrets);
+  const shareProfile = secretsFrom(env, [IOS_SHARE_SECRET])?.[IOS_SHARE_SECRET] || null;
+  const signing = installSigning(secrets, shareProfile);
   try {
-    fs.writeFileSync(PBXPROJ, signingPatch(original, { team: secrets.APPLE_TEAM_ID, profileUuid: signing.profileUuid }));
+    let project = original;
+    if (!signing.profiles[SHARE_BUNDLE_ID]) {
+      console.log(`[mobile] ${IOS_SHARE_SECRET} fehlt: signierte IPA ohne Teilen-Ziel (iOS)`);
+      project = withoutShareExtension(project);
+    }
+    fs.writeFileSync(PBXPROJ, signingPatch(project, { team: secrets.APPLE_TEAM_ID, profiles: signing.profiles }));
     run('xcodebuild', [...archiveArgs(archivePath), `OTHER_CODE_SIGN_FLAGS=--keychain ${signing.keychain}`], { cwd: IOS_DIR, env: xenv });
     const optionsFile = path.join(WORK_DIR, 'ExportOptions.plist');
     fs.writeFileSync(optionsFile, exportOptionsPlist({
-      method: env.IOS_EXPORT_METHOD || 'app-store-connect', team: secrets.APPLE_TEAM_ID, profileUuid: signing.profileUuid
+      method: env.IOS_EXPORT_METHOD || 'app-store-connect', team: secrets.APPLE_TEAM_ID, profiles: signing.profiles
     }));
     const exportDir = path.join(WORK_DIR, 'export');
     fs.rmSync(exportDir, { recursive: true, force: true });
@@ -180,7 +238,9 @@ async function buildIos({ skipWeb = false, from = null, testflight = false, env 
   }
 }
 
-module.exports = { IOS_SECRETS, TESTFLIGHT_SECRETS, signingPatch, exportOptionsPlist, archiveArgs, toolEnv, buildIos };
+module.exports = {
+  IOS_SECRETS, IOS_SHARE_SECRET, TESTFLIGHT_SECRETS, signingPatch, withoutShareExtension, exportOptionsPlist, profileFits, archiveArgs, toolEnv, buildIos
+};
 
 if (require.main === module) {
   buildIos(parseArgs(process.argv.slice(2)))

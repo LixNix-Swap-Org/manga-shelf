@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { parseArgs, resolveRun, withMode, sameServer, localWindowUrl, parsePort, MODE_LABELS, MODE_DETAILS, MODES } = require('./modes');
+const { parseArgs, resolveRun, withMode, sameServer, localWindowUrl, parsePort, deepLinkAction, MODE_LABELS, MODE_DETAILS, MODES } = require('./modes');
 const { buildMenuTemplate } = require('./menu');
 const { createTray } = require('./tray');
 const { createSettings } = require('./lib/settings');
@@ -314,12 +314,17 @@ function deliverUrl(url) {
 }
 
 async function handleDeepLink(url) {
-    if (!url) return;
-    if (!settings || !run) {
+    const action = deepLinkAction({ url, ready: Boolean(settings && run), view: run?.view });
+    if (action === 'ignore') return;
+    if (action === 'pending') {
         pendingUrl = url;
         return;
     }
-    if (run.view !== 'remote') {
+    if (action === 'show') {
+        showWindow();
+        return;
+    }
+    if (action === 'confirm') {
         const { response } = await dialog.showMessageBox({
             type: 'question',
             title: 'Mit Server verbinden',

@@ -24,9 +24,9 @@ function thinBatches(body) {
     return json(data);
 }
 
-const kept = (core, id) => core.conn.prepare('SELECT description, relations, title, title_english, studios, genres FROM animes WHERE id = ?').get(id);
+const kept = (core, id) => core.conn.prepare('SELECT description, relations, title, title_english, studios, genres, external_links, streaming_episodes FROM animes WHERE id = ?').get(id);
 
-test('background refreshes never wipe data: sweep and stale-while-revalidate keep description, relations, English title, studios, genres', async () => {
+test('background refreshes never wipe data: sweep and stale-while-revalidate keep description, relations, English title, studios, genres, links', async () => {
     const http = fakeFetch({ anilist: thinBatches });
     const core = memoryWith(http.fetch);
     const created = await core.client('ed')('POST', '/anime', { anilist_id: 154587 });
@@ -36,6 +36,8 @@ test('background refreshes never wipe data: sweep and stale-while-revalidate kee
     assert.ok(before.description.length > 500);
     assert.ok(JSON.parse(before.relations).length > 0);
     assert.equal(before.studios, 'MADHOUSE');
+    assert.equal(JSON.parse(before.external_links).length, 3);
+    assert.equal(JSON.parse(before.streaming_episodes).length, 3);
 
     core.conn.prepare('UPDATE animes SET next_check_at = 1 WHERE id = ?').run(id);
     const report = await gateway.refreshDue(core.ctx);
@@ -43,6 +45,7 @@ test('background refreshes never wipe data: sweep and stale-while-revalidate kee
     const batch = http.calls.filter((c) => c.host === 'anilist').at(-1);
     assert.match(batch.body.query, /id_in/);
     assert.match(batch.body.query, /description\(asHtml: false\)/, 'the id batch asks for the description');
+    assert.match(batch.body.query, /externalLinks \{ site url type \} streamingEpisodes \{ title url site \}/, 'and for the links');
     assert.deepEqual(kept(core, id), before);
 
     core.conn.prepare('UPDATE animes SET next_check_at = 1 WHERE id = ?').run(id);
@@ -181,4 +184,42 @@ test('series lookup: a MyAnimeList hit of an AniList hit is merged into it (also
     assert.deepEqual(berserk.also_on, ['mal']);
     assert.equal(results.some((r) => r.id === 'mal_2'), false);
     assert.equal(results.filter((r) => r.source === 'anilist').length, 3);
+});
+
+test('an id batch AniList finds too complex is split in halves, not dropped', async () => {
+    const sizes = [];
+    const http = fakeFetch({
+        anilist: (body) => {
+            if (!body.query.includes('id_in')) return aniListFixtures(body);
+            sizes.push(body.variables.ids.length);
+            if (body.variables.ids.length > 1) return json({ data: null, errors: [{ message: 'Max query complexity' }] }, { status: 400 });
+            return aniListFixtures(body);
+        }
+    });
+    const core = memoryWith(http.fetch);
+    const insert = core.conn.prepare("INSERT INTO animes (title, anilist_id, next_check_at) VALUES (?, ?, 1)");
+    insert.run('A', 21);
+    insert.run('B', 16498);
+    insert.run('C', 154587);
+    const report = await gateway.refreshDue(core.ctx);
+    assert.deepEqual([report.due, report.updated, report.stopped], [3, 3, false]);
+    assert.deepEqual(sizes, [3, 2, 1, 1, 1]);
+});
+
+test('an interactive refresh answered only by the MyAnimeList side keeps the streaming links', async () => {
+    let aniListUp = true;
+    const http = fakeFetch({ anilist: (body) => (aniListUp ? aniListFixtures(body) : undefined), jikan: jikanFixtures });
+    const core = memoryWith(http.fetch);
+    const created = await core.client('ed')('POST', '/anime', { anilist_id: 154587 });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.id;
+    const before = kept(core, id);
+    assert.equal(JSON.parse(before.external_links).length, 3);
+    aniListUp = false;
+    const res = await core.client('ed')('POST', `/anime/${id}/refresh`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(core.conn.prepare('SELECT meta_source FROM animes WHERE id = ?').get(id).meta_source, 'jikan');
+    const after = kept(core, id);
+    assert.deepEqual([after.external_links, after.streaming_episodes], [before.external_links, before.streaming_episodes]);
+    assert.equal(res.body.external_links.length, 3);
 });

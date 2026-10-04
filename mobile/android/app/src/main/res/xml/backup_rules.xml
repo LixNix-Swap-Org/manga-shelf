@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- API keys and server tokens stay on the device: their Keystore key is never part of a backup. The collection
-     (manga.db with its save copies, uploads/) neither: its backup is the ZIP export ("Backups" in the app). -->
+     (manga.db with its save copies, uploads/) neither: its backup is the ZIP export ("Backups" in the app). app_webview
+     (WebView cookies and storage) stays out so a half-finished sign-in in the login dialog never reaches a backup. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="WSSecureStorageSharedPreferences.xml" />
     <exclude domain="file" path="manga.db" />
@@ -9,4 +10,5 @@
     <exclude domain="file" path="manga.db.tmp" />
     <exclude domain="file" path="manga.db.seq" />
     <exclude domain="file" path="uploads" />
+    <exclude domain="root" path="app_webview" />
 </full-backup-content>

@@ -4,7 +4,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const pkg = require('../package.json');
-const { db, hasAdmin, runTransaction, getInstanceId } = require('../db');
+const { db, hasAdmin, runTransaction, getInstanceId, createCtx } = require('../db');
 const {
     AUTH_ERRORS,
     signSessionToken,
@@ -24,6 +24,7 @@ const { config, normalizeSetupToken } = require('../utils/config');
 const { HttpError, badRequest, notFound, sendError } = require('../utils/httpError');
 const { purchaseDateFromRemainingOwners } = require('../utils/owners');
 const { revokeFeedTokens } = require('../core/handlers/radar');
+const listSync = require('../core/anime/listSync');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const MIN_PASSWORD_LENGTH = 8;
@@ -323,6 +324,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         if (hash && version === null) return { status: 409 };
         if (hash) revokeFeedTokens(db, userId);
         db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
+        listSync.onRoleChanged(createCtx(), userId, newRole);
         return { status: 200, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
     });
     if (outcome.status === 403) return sendError(res, 403, AUTH_ERRORS.FORBIDDEN, 'FORBIDDEN');

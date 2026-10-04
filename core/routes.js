@@ -14,6 +14,7 @@ const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
 const csv = require('./handlers/csv');
 const anime = require('./handlers/anime');
+const watch = require('./handlers/watch');
 const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
 const cleanup = require('./handlers/cleanup');
@@ -83,10 +84,18 @@ const routes = [
     { method: 'GET', path: '/anime/sources', role: 'auth', handler: anime.sources },
     { method: 'GET', path: '/anime', role: 'auth', handler: anime.list },
     { method: 'POST', path: '/anime', role: 'editor', handler: anime.create },
+    // before /anime/:id; the page fetch inside counts against 'lookup' only when it happens
+    { method: 'POST', path: '/anime/resolve-link', role: 'editor', handler: anime.resolveLink },
+    // results the app read from the user's streaming history on the device; never cookies or tokens
+    { method: 'POST', path: '/anime/watch-sync', role: 'editor', handler: watch.sync },
+    { method: 'GET', path: '/anime/sync', role: 'editor', handler: anime.syncState },
+    { method: 'PUT', path: '/anime/sync', role: 'editor', handler: anime.syncUpdate },
+    { method: 'POST', path: '/anime/sync/run', role: 'editor', handler: anime.syncRun },
     { method: 'GET', path: '/anime/:id', role: 'auth', handler: anime.detail },
     { method: 'PUT', path: '/anime/:id', role: 'editor', handler: anime.update },
     { method: 'DELETE', path: '/anime/:id', role: 'editor', handler: anime.remove },
     { method: 'PUT', path: '/anime/:id/progress', role: 'editor', handler: anime.updateProgress },
+    { method: 'POST', path: '/anime/:id/watched', role: 'editor', handler: anime.markWatched },
     { method: 'DELETE', path: '/anime/:id/progress', role: 'editor', handler: anime.removeProgress },
     { method: 'POST', path: '/anime/:id/refresh', role: 'editor', handler: anime.refresh },
     { method: 'GET', path: '/mangas/:id/adaptations', role: 'auth', limit: 'lookup', handler: anime.adaptations },

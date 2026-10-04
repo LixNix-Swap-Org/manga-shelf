@@ -6,7 +6,7 @@ const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_BYTES = 4 * 1024 * 1024;
 
 class SourceError extends Error {
-    /** kind: rate | auth | server | network | complexity | notfound | bad */
+    /** kind: rate | auth | server | network | complexity | notfound | bad | notoken (own-key-only call without a key) */
     /** graphql: the answer carried GraphQL error messages (a refused-like answer, see gateway refusedLike). */
     constructor(kind, message, { status = 0, retryAfterSec = null, resetAt = null, graphql = false } = {}) {
         super(message);

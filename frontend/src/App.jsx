@@ -7,7 +7,7 @@ import {
   dropRejectedToken, checkConnection, activateServer, startConnectionManager, subscribeConnection, getConnection
 } from './app/connection';
 import { loadServers, getActiveServer, getActiveServerId } from './app/serverStore';
-import { DEEP_LINK_EVENT, takePendingDeepLink } from './app/deepLink';
+import { DEEP_LINK_EVENT, SHARE_LINK_EVENT, hasPendingShare, takePendingDeepLink } from './app/deepLink';
 import { useActiveServer } from './app/useConnection';
 import { cancelAllDownloads } from './app/downloadManager';
 import { getLocalRuntime, resetLocalRuntime, onSourceBlocked } from './local/localTransport';
@@ -24,6 +24,7 @@ import {
 } from './appShell';
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import { useRevealFocusedField } from './hooks/useKeyboardOpen';
+import useWatchSync from './app/watch/useWatchSync';
 
 /** Starts loading a route chunk now; the lazy() factory reuses the request and retries once if it failed. */
 function preloadable(load, startNow) {
@@ -89,15 +90,27 @@ function LoginRoute({ user, onLogin, notice, onRetry, hasServer }) {
   return <Login onLogin={onLogin} notice={notice} onRetry={onRetry} />;
 }
 
-// app build: a manga-shelf://connect link opens the server screen, which takes the link from deepLink.js
+// app build: a manga-shelf://connect link opens the server screen, which takes the link from deepLink.js; a shared
+// streaming link opens the anime tab, whose dashboard takes it (the dashboard itself handles one while it is shown)
 function DeepLinkListener() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
   useEffect(() => {
     const open = () => navigate('/server', { state: { deepLink: Date.now() } });
+    const openShare = () => {
+      if (pathRef.current !== '/') navigate('/?view=anime', { state: { share: Date.now() } });
+    };
     const pending = takePendingDeepLink();
     if (pending) navigate('/server', { state: { link: pending } });
+    else if (hasPendingShare()) openShare();
     window.addEventListener(DEEP_LINK_EVENT, open);
-    return () => window.removeEventListener(DEEP_LINK_EVENT, open);
+    window.addEventListener(SHARE_LINK_EVENT, openShare);
+    return () => {
+      window.removeEventListener(DEEP_LINK_EVENT, open);
+      window.removeEventListener(SHARE_LINK_EVENT, openShare);
+    };
   }, [navigate]);
   return null;
 }
@@ -384,6 +397,9 @@ function App() {
   }, [handleUnauthorized]);
 
   useEffect(() => (isAppMode() ? startConnectionManager() : undefined), []);
+
+  // apps: the opt-in Crunchyroll history sync runs in the foreground for a signed-in user or the opened device collection
+  useWatchSync(user, localMode ? 'local' : activeServer?.id ?? 'server');
 
   // standalone in the browser build: a source without CORS headers is named once instead of failing silently
   useEffect(() => {

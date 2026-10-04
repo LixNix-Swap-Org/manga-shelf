@@ -86,6 +86,19 @@ describe('local runtime (standalone core on the device)', () => {
     expect(store.data.secrets.size).toBe(0);
   });
 
+  it('replacing the AniList key makes the list sync resolve the account again; removing it switches the sync off', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: { Viewer: { id: 7, name: 'felix_al' } } }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const rt = await newRuntime({ http: createBrowserHttp({ fetchImpl }) });
+    const token = (c) => `${c.repeat(40)}.${'b'.repeat(40)}.${'c'.repeat(40)}`;
+    expect((await rt.request('PUT', '/api/auth/api-keys/anilist', { secret: token('a') })).status).toBe(200);
+    const on = await rt.request('PUT', '/api/anime/sync', { anilist: { enabled: true } });
+    expect(on.body.anilist).toMatchObject({ enabled: true, external_user_id: '7' });
+    expect((await rt.request('PUT', '/api/auth/api-keys/anilist', { secret: token('d') })).status).toBe(200);
+    expect((await rt.request('GET', '/api/anime/sync')).body.anilist).toMatchObject({ enabled: true, external_user_id: null });
+    expect((await rt.request('DELETE', '/api/auth/api-keys/anilist')).body.removed).toBe(true);
+    expect((await rt.request('GET', '/api/anime/sync')).body.anilist).toMatchObject({ enabled: false, external_user_id: null, last_error: null });
+  });
+
   it('a source blocked by CORS fails with a German text and is reported once per host', async () => {
     const onBlocked = vi.fn();
     const http = createBrowserHttp({ fetchImpl: async () => { throw new TypeError('Failed to fetch'); }, onBlocked, isOnline: () => true });
@@ -95,6 +108,27 @@ describe('local runtime (standalone core on the device)', () => {
     const offlineHttp = createBrowserHttp({ fetchImpl: async () => { throw new TypeError('Failed to fetch'); }, onBlocked, isOnline: () => false });
     await expect(offlineHttp.fetch('https://x.example')).rejects.toBeInstanceOf(TypeError);
     await expect(http.fetchImage('http://bilder.example/a.png')).rejects.toThrow('Nur https-Adressen');
+  });
+
+  it('a quiet text fetch (the page of a shared link) fails without the CORS notice; a later normal call still reports', async () => {
+    const onBlocked = vi.fn();
+    const http = createBrowserHttp({ fetchImpl: async () => { throw new TypeError('Failed to fetch'); }, onBlocked, isOnline: () => true });
+    await expect(http.fetchText('https://www.crunchyroll.com/watch/GG1U2Q5MW', 6000, { quiet: true })).rejects.toMatchObject({ code: 'CORS_BLOCKED' });
+    expect(onBlocked).not.toHaveBeenCalled();
+    await expect(http.fetchText('https://www.crunchyroll.com/watch/GG1U2Q5MW')).rejects.toMatchObject({ code: 'CORS_BLOCKED' });
+    expect(onBlocked).toHaveBeenCalledWith('www.crunchyroll.com');
+  });
+
+  it('resolve-link runs in-process; in the browser build the blocked page read stays silent and only leaves the episode open', async () => {
+    const onBlocked = vi.fn();
+    const fetchImpl = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const rt = await newRuntime({ http: createBrowserHttp({ fetchImpl, onBlocked, isOnline: () => true }) });
+    const res = await rt.request('POST', '/api/anime/resolve-link', { url: 'https://www.crunchyroll.com/de/watch/GG1U2Q5MW/the-hero-party' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ service: 'crunchyroll', kind: 'episode', episode: null, page_checked: false, anime_id: null });
+    expect(onBlocked).not.toHaveBeenCalled();
+    const refused = await rt.request('POST', '/api/anime/resolve-link', { url: 'https://example.com/watch/1' });
+    expect([refused.status, refused.body.code]).toEqual([400, 'UNSUPPORTED_LINK']);
   });
 
   it('fetchText rejects an error answer with "HTTP <status>", the status and its first 4 KB as err.body', async () => {
@@ -629,6 +663,16 @@ describe('an imported server database keeps no server secrets on the device', ()
     for (const secret of SECRETS) expect(has(saved, secret), secret).toBe(false);
     expect(bcrypt(saved)).toBe(false);
     expect(sanitizeImportedDatabase(rt.getContext().db)).toBe(0);
+  });
+
+  it('an imported database loses the AniList list sync state (it belongs to the server\'s keys)', async () => {
+    const rt = await newRuntime();
+    rt.databaseCopy((conn) => {
+      conn.prepare('CREATE TABLE IF NOT EXISTS anime_sync (user_id INTEGER NOT NULL, service TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, service))').run();
+      conn.prepare("INSERT INTO anime_sync (user_id, service, enabled) VALUES (1, 'anilist', 1)").run();
+      expect(sanitizeImportedDatabase(conn)).toBe(1);
+      expect(conn.prepare('SELECT count(*) AS n FROM anime_sync').get().n).toBe(0);
+    });
   });
 
   it('leaves a database of the app itself as it is', async () => {

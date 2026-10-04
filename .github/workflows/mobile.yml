@@ -30,6 +30,9 @@ on:
         required: false
       IOS_PROVISIONING_PROFILE_BASE64:
         required: false
+      # optional: profile of the share extension (de.mangashelf.app.ShareToMangaShelf); without it the signed IPA has no extension
+      IOS_SHARE_PROVISIONING_PROFILE_BASE64:
+        required: false
       APPLE_TEAM_ID:
         required: false
   workflow_dispatch:
@@ -85,15 +88,19 @@ jobs:
         if: steps.project.outputs.present == 'true'
         working-directory: mobile
         run: npm test
+      # repository variable WATCH_CRUNCHYROLL: empty = Crunchyroll history on, 'off' = left out of the web part of the apps
       - name: Smoke (cap doctor, assembleDebug)
         if: steps.project.outputs.present == 'true' && env.MODE == 'smoke'
         working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
         run: npm run smoke:android
       # build-android.js signs only when all four secrets are set; otherwise a debug-signed APK and an unsigned AAB
       - name: Release-Build (APK + AAB)
         if: steps.project.outputs.present == 'true' && env.MODE == 'build'
         working-directory: mobile
         env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -158,15 +165,20 @@ jobs:
       - name: Smoke (Simulator-Build ohne Signatur)
         if: steps.project.outputs.present == 'true' && env.MODE == 'smoke'
         working-directory: mobile
+        env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
         run: npm run smoke:ios
-      # build-ios.js signs only when all four secrets are set; otherwise an unsigned IPA zipped from the archive
+      # build-ios.js signs only when all four secrets are set; otherwise an unsigned IPA zipped from the archive. The share
+      # extension is signed only with IOS_SHARE_PROVISIONING_PROFILE_BASE64, else the signed IPA leaves it out
       - name: Release-Build (IPA)
         if: steps.project.outputs.present == 'true' && env.MODE == 'build'
         working-directory: mobile
         env:
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
           IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
           IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_SHARE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run build:ios
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

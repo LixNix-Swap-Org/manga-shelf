@@ -254,3 +254,11 @@ test('permissions only for the app origin or the running local server, never for
     assert.equal(permissionAllowed({ ...local, permission: 'fullscreen', origin: 'http://127.0.0.1:37211' }), false);
     assert.equal(permissionAllowed({ ...local, permission: 'media', origin: 'https://example.com' }), false);
 });
+
+test('clipboard-read for the paste button: app and local server pages only', () => {
+    const local = { appOrigin: 'app://manga-shelf', localOrigin: 'http://127.0.0.1:37210' };
+    assert.equal(permissionAllowed({ ...local, permission: 'clipboard-read', origin: 'app://manga-shelf' }), true);
+    assert.equal(permissionAllowed({ ...local, permission: 'clipboard-read', origin: 'http://127.0.0.1:37210' }), true);
+    assert.equal(permissionAllowed({ ...local, permission: 'clipboard-read', origin: 'https://www.crunchyroll.com' }), false);
+    assert.equal(permissionAllowed({ ...local, permission: 'clipboard-read', origin: 'null' }), false);
+});

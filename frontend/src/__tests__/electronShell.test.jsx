@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installElectronShell, electronStorageAdapter, isElectronShell } from '../app/shell/electron';
 import { SERVERS_KEY, ACTIVE_KEY, getServers, getActiveServer, saveServer, setStorageAdapter, resetServers } from '../app/serverStore';
 import { openExternal, setOpenExternal } from '../app/openExternal';
-import { OPEN_URL_EVENT } from '../app/deepLink';
+import { OPEN_URL_EVENT, installDeepLinkBridge, buildShareLink, takePendingShare, takePendingDeepLink } from '../app/deepLink';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -97,6 +97,32 @@ describe('Electron shell (desktop client mode)', () => {
     window.removeEventListener(OPEN_URL_EVENT, onEvent);
     uninstall();
     expect(listeners.url).toHaveLength(0);
+  });
+
+  it('hands manga-shelf://share links the same way: a share, not a connect prompt', () => {
+    const { bridge, listeners } = fakeBridge();
+    window.mangashelfDesktop = bridge;
+    const offBridge = installDeepLinkBridge(window);
+    uninstall = installElectronShell(window);
+    try {
+      const opened = vi.spyOn(window, 'mangashelfOpenUrl');
+      const text = 'https://www.crunchyroll.com/de/watch/GX9UQE0WJ/the-journeys-end';
+      const link = buildShareLink({ text });
+      listeners.url[0](link);
+      expect(opened).toHaveBeenCalledWith(link);
+      expect(takePendingShare()).toMatchObject({ text });
+      expect(takePendingDeepLink()).toBeNull();
+    } finally {
+      offBridge();
+    }
+  });
+
+  it('preferApp needs nothing extra: the system browser already hands app links on', () => {
+    const { bridge } = fakeBridge();
+    window.mangashelfDesktop = bridge;
+    uninstall = installElectronShell(window);
+    expect(openExternal('https://www.crunchyroll.com/de/series/GG5H5XQX4/frieren', { preferApp: true })).toBe(true);
+    expect(bridge.openExternal).toHaveBeenCalledWith('https://www.crunchyroll.com/de/series/GG5H5XQX4/frieren');
   });
 
   it('checks the connection again after the computer wakes up', async () => {

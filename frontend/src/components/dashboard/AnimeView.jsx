@@ -1,13 +1,19 @@
-import { useMemo, useState, useEffect } from 'react';
-import { KeyRound, Plus, RefreshCw, Search, Tv, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useMemo, useState, useEffect } from 'react';
+import { ClipboardPaste, History, KeyRound, Plus, RefreshCw, Search, Tv, X } from 'lucide-react';
 import AnimeCard from './AnimeCard';
-import { formatRelative } from '../../utils/format';
+import { formatCount, formatRelative } from '../../utils/format';
+import { WATCH_BUILD, useWatchUnmatched } from '../../app/watch/watchState';
 import {
-  ANIME_FILTERS, ANIME_SORTS, filterAnime, filterCounts, slowHintAllowed, markSlowHint
+  ANIME_FILTERS, ANIME_SORTS, filterAnime, filterCounts, slowHintAllowed, markSlowHint, listSyncKeyError
 } from '../../utils/animeHelpers';
 
-/** The hint lines from GET /api/anime/sources: paused source, own key active or refused, slow shared pool. */
-function SourceHints({ sources, onOpenAccount }) {
+// apps only: other builds drop the Crunchyroll match dialog and the unmatched store
+const WatchMatchDialog = WATCH_BUILD ? lazy(() => import('../../app/watch/WatchMatchDialog')) : null;
+const NO_UNMATCHED = [];
+const useUnmatched = WATCH_BUILD ? useWatchUnmatched : () => NO_UNMATCHED;
+
+/** The hint lines from GET /api/anime/sources: paused source, own key active or refused, slow shared pool, paused list sync. */
+function SourceHints({ sources, listSync, onOpenAccount }) {
   const [slowHint, setSlowHint] = useState(false);
   const own = sources?.credential?.anilist === 'own';
   const slow = Boolean(sources?.slow_recently) && !own;
@@ -17,23 +23,33 @@ function SourceHints({ sources, onOpenAccount }) {
       markSlowHint();
     }
   }, [slow]);
-  if (!sources) return null;
+  const syncError = listSync?.last_error || null;
+  if (!sources && !syncError) return null;
   const down = (s) => s && s.enabled && (s.paused_until || s.circuit === 'open');
   const lines = [];
-  if (down(sources.anilist) && !down(sources.mal)) lines.push({ key: 'ani', text: 'AniList gerade nicht erreichbar, nur MyAnimeList' });
-  if (down(sources.mal) && !down(sources.anilist)) lines.push({ key: 'mal', text: 'MyAnimeList gerade nicht erreichbar, nur AniList' });
-  if (down(sources.mal) && down(sources.anilist)) lines.push({ key: 'both', text: 'AniList und MyAnimeList gerade nicht erreichbar – die Liste zeigt den gespeicherten Stand' });
+  if (sources && down(sources.anilist) && !down(sources.mal)) lines.push({ key: 'ani', text: 'AniList gerade nicht erreichbar, nur MyAnimeList' });
+  if (sources && down(sources.mal) && !down(sources.anilist)) lines.push({ key: 'mal', text: 'MyAnimeList gerade nicht erreichbar, nur AniList' });
+  if (sources && down(sources.mal) && down(sources.anilist)) lines.push({ key: 'both', text: 'AniList und MyAnimeList gerade nicht erreichbar – die Liste zeigt den gespeicherten Stand' });
   return (
     <div className="space-y-1.5 mb-4" aria-live="polite">
       {lines.map((l) => (
         <p key={l.key} className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">{l.text}</p>
       ))}
       {own && <p className="text-xs text-emerald-300 flex items-center gap-1.5"><KeyRound className="w-3.5 h-3.5" aria-hidden="true" /> Suche läuft über deinen AniList-Zugang</p>}
-      {(sources.anilist?.key_disabled || sources.mal?.key_disabled) && (
+      {(sources?.anilist?.key_disabled || sources?.mal?.key_disabled) && (
         <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
           Dein API-Schlüssel wurde vom Anbieter abgelehnt und ist pausiert.{' '}
           {onOpenAccount && <button type="button" className="underline font-semibold" onClick={onOpenAccount}>Schlüssel prüfen</button>}
         </p>
+      )}
+      {syncError && listSyncKeyError(syncError) && (
+        <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
+          AniList-Abgleich pausiert: {syncError}{' '}
+          {onOpenAccount && <button type="button" className="underline font-semibold" onClick={onOpenAccount}>Schlüssel prüfen</button>}
+        </p>
+      )}
+      {syncError && !listSyncKeyError(syncError) && (
+        <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">AniList-Abgleich: {syncError}</p>
       )}
       {slowHint && (
         <p className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-xl px-3 py-2 flex flex-wrap items-center gap-2">
@@ -59,7 +75,8 @@ function SourceHints({ sources, onOpenAccount }) {
  * Visitors and offline users only read.
  */
 export default function AnimeView({
-  list, loaded, loading, error, fromCache, cacheAt, sources, canEdit, user, onAdd, onOpen, onPlusOne, onStatusChange, onRetry, onOpenAccount
+  list, loaded, loading, error, fromCache, cacheAt, sources, listSync, canEdit, user, onAdd, onPasteLink, onOpen, onPlusOne, onStatusChange, onRetry,
+  onOpenAccount
 }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Alle');
@@ -67,6 +84,11 @@ export default function AnimeView({
   const counts = useMemo(() => filterCounts(list), [list]);
   const shown = useMemo(() => filterAnime(list, { search, filter, sort }), [list, search, filter, sort]);
   const offline = Boolean(user?.offline);
+  // apps only: series of the Crunchyroll history the server could not map (always empty elsewhere)
+  const unmatched = useUnmatched();
+  const [matching, setMatching] = useState(false);
+  const closeMatching = useCallback(() => setMatching(false), []);
+  const canMatch = canEdit && !offline && !fromCache;
 
   return (
     <section aria-labelledby="anime-view-heading" className="pb-6">
@@ -91,6 +113,17 @@ export default function AnimeView({
           <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5 min-w-0 flex-1 sm:flex-initial sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
             {ANIME_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
+          {canEdit && !offline && onPasteLink && (
+            <button
+              id="btn-anime-paste-link"
+              type="button"
+              onClick={() => onPasteLink()}
+              title="Link einfügen"
+              className="hit-44 btn-secondary text-xs py-2 px-2.5 sm:px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <ClipboardPaste className="w-4 h-4" aria-hidden="true" /> <span className="sr-only sm:not-sr-only">Link einfügen</span>
+            </button>
+          )}
           {canEdit && !offline && (
             <button id="btn-add-anime" type="button" onClick={() => onAdd()} className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
               <Plus className="w-4 h-4" aria-hidden="true" /> Anime hinzufügen
@@ -113,7 +146,21 @@ export default function AnimeView({
         ))}
       </div>
 
-      {!offline && <SourceHints sources={sources} onOpenAccount={onOpenAccount} />}
+      {!offline && <SourceHints sources={sources} listSync={listSync} onOpenAccount={onOpenAccount} />}
+      {WATCH_BUILD && canMatch && unmatched.length > 0 && (
+        <p className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-xl px-3 py-2 mb-4 flex items-start gap-2" data-testid="watch-unmatched">
+          <History className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+          <span>
+            {formatCount(unmatched.length, 'Serie', 'Serien')} aus deinem Crunchyroll-Verlauf noch nicht zugeordnet{' '}
+            <button type="button" id="btn-watch-match" className="hit-44 underline font-semibold" onClick={() => setMatching(true)}>Zuordnen</button>
+          </span>
+        </p>
+      )}
+      {WatchMatchDialog && matching && canMatch && (
+        <Suspense fallback={null}>
+          <WatchMatchDialog list={list} onClose={closeMatching} />
+        </Suspense>
+      )}
       {(offline || fromCache) && (
         <p className="text-xs text-amber-300 mb-4" role="status">
           {offline ? 'Offline: ' : 'Server nicht erreichbar: '}gespeicherte Liste{cacheAt ? ` (${formatRelative(cacheAt)})` : ''}, Änderungen erst wieder mit Verbindung.

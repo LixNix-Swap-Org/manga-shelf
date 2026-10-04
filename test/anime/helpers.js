@@ -1,10 +1,12 @@
 // Shared pieces of the anime tests: fixtures, a fake fetch per URL and a memory core whose ctx.http uses it.
+const fs = require('fs');
 const path = require('path');
 const { createMemoryCore } = require('../core/harness');
 const gateway = require('../../core/anime/gateway');
 const { setCredentialProvider } = require('../../core/sources/credentials');
 
 const fixture = (name) => JSON.parse(JSON.stringify(require(path.join(__dirname, '..', 'fixtures', name))));
+const textFixture = (name) => fs.readFileSync(path.join(__dirname, '..', 'fixtures', name), 'utf8');
 
 const json = (body, { status = 200, headers = {} } = {}) => new Response(JSON.stringify(body), {
     status,
@@ -47,9 +49,17 @@ function fakeFetch(handlers = {}) {
     return { fetch, calls, count: (host) => calls.filter((c) => c.host === host).length };
 }
 
-/** AniList answers from the recorded fixtures, by the shape of the query. */
+/** AniList answers from the recorded fixtures, by the shape of the query (list queries before Viewer). */
 function aniListFixtures(body) {
     const q = body.query;
+    if (q.includes('SaveMediaListEntry')) {
+        const saved = fixture('anilist-save-entry.json');
+        const v = body.variables || {};
+        Object.assign(saved.data.SaveMediaListEntry, { mediaId: v.m, progress: v.p, status: v.s });
+        return json(saved);
+    }
+    if (q.includes('MediaListCollection')) return json(fixture('anilist-medialist-collection.json'));
+    if (q.includes('MediaList(')) return json(fixture('anilist-medialist-entry.json'));
     if (q.includes('Viewer')) return json({ data: { Viewer: { id: 7, name: 'kim-anilist' } } });
     if (q.includes('id_in') || q.includes('idMal_in')) return json(fixture('anilist-ids.json'), { headers: { 'x-ratelimit-limit': '30', 'x-ratelimit-remaining': '25' } });
     if (q.includes('Media(')) return json(fixture('anilist-media-154587.json'), { headers: { 'x-ratelimit-limit': '30', 'x-ratelimit-remaining': '27' } });
@@ -88,4 +98,4 @@ function ctxAs(core, username) {
     return { ...core.ctx, user };
 }
 
-module.exports = { fixture, json, fakeFetch, aniListFixtures, jikanFixtures, memoryWith, ctxAs, offline };
+module.exports = { fixture, textFixture, json, fakeFetch, aniListFixtures, jikanFixtures, memoryWith, ctxAs, offline };

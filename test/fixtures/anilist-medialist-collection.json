@@ -1,0 +1,21 @@
+{
+ "data": {
+  "MediaListCollection": {
+   "lists": [
+    {
+     "entries": [
+      { "mediaId": 154587, "status": "CURRENT", "progress": 10, "updatedAt": 1759300000 },
+      { "mediaId": 21, "status": "PAUSED", "progress": 1000, "updatedAt": 1759200000 },
+      { "mediaId": 16498, "status": "COMPLETED", "progress": 25, "updatedAt": 1759100000 },
+      { "mediaId": 101922, "status": "PLANNING", "progress": 0, "updatedAt": 1759000000 }
+     ]
+    },
+    {
+     "entries": [
+      { "mediaId": 154587, "status": "CURRENT", "progress": 10, "updatedAt": 1759300000 }
+     ]
+    }
+   ]
+  }
+ }
+}

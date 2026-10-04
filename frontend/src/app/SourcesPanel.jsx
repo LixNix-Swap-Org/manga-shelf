@@ -1,11 +1,15 @@
+import { lazy, Suspense } from 'react';
 import { ShieldAlert } from 'lucide-react';
-import { useApiKeys } from '../components/modals/AccountModal';
+import { useApiKeys, listSyncProps } from '../components/modals/AccountModal';
 import ApiKeyCard from '../components/modals/ApiKeyCard';
 import { INSECURE_STORAGE_TEXT } from '../local/credentials';
+import { WATCH_BUILD, watchAvailable } from './watch/watchState';
+
+const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('./watch/CrunchyrollCard')) : null;
 
 /** "Quellen & Schlüssel" of the standalone mode (onboarding step 3 and the device screen): the AccountModal cards. */
 export default function SourcesPanel({ headingLevel = 3 }) {
-  const keys = useApiKeys({ admin: true });
+  const keys = useApiKeys({ admin: true, listSync: true });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
   if (!keys.guides) return <p className="text-sm text-slate-400" role="status">Wird geladen…</p>;
   const insecure = [...keys.userKeys, ...keys.instanceKeys].some((k) => k.insecure_storage);
@@ -23,6 +27,7 @@ export default function SourcesPanel({ headingLevel = 3 }) {
         onSave={(secret, opts) => keys.save(scope, state.provider, secret, opts)}
         onRemove={() => keys.remove(scope, state.provider)}
         onToggleBackground={scope === 'user' ? (on) => keys.toggleBackground(state.provider, on) : undefined}
+        {...(scope === 'user' ? listSyncProps(keys, state.provider) : {})}
       />
     );
   };
@@ -41,6 +46,11 @@ export default function SourcesPanel({ headingLevel = 3 }) {
       )}
       {keys.userKeys.map((state) => card('user', state))}
       {keys.instanceKeys.filter((state) => !userProviders.has(state.provider)).map((state) => card('instance', state))}
+      {CrunchyrollCard && watchAvailable() && (
+        <Suspense fallback={null}>
+          <CrunchyrollCard headingLevel={headingLevel} />
+        </Suspense>
+      )}
     </div>
   );
 }

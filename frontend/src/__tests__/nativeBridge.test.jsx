@@ -1,10 +1,11 @@
 // Capacitor native bridge: secure storage, standalone adapters, downloads and shell.
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { useEffect, useRef } from 'react';
 import initSqlJs from 'sql.js/dist/sql-wasm.js';
 import {
   createServerStorage, migrateLocalStorage, installExternalLinks, installLinkClicks, backButtonHandler, installHaptics,
-  saveFile, installCapacitorShell, nativeBridge, installObjectUrls, TOKEN_PREFIX
+  saveFile, installCapacitorShell, installShareIntent, installSharedInbox, nativeBridge, installObjectUrls, TOKEN_PREFIX
 } from '../app/shell/capacitor.js';
 import { createNativeStore, createNativeFiles, createNativeHttp, createCapacitorAdapters, bytesToBase64, base64ToBytes, SECRET_PREFIX } from '../local/capacitor.js';
 import { createLocalRuntime } from '../local/runtime.js';
@@ -13,7 +14,11 @@ import {
 } from '../app/serverStore.js';
 import { setToken, checkConnection } from '../app/connection.js';
 import { openExternal, setOpenExternal } from '../app/openExternal.js';
-import { takePendingDeepLink } from '../app/deepLink.js';
+import { takePendingDeepLink, takePendingShare, installDeepLinkBridge, buildShareLink, SHARE_LINK_EVENT } from '../app/deepLink.js';
+import useAnimeList from '../hooks/useAnimeList';
+import useShareIntake from '../hooks/useShareIntake';
+import ShareLinkDialog from '../components/modals/ShareLinkDialog';
+import { fakeResponse } from './fakeResponse';
 import LiveScanner, { scanNative, NATIVE_TEXTS } from '../components/common/LiveScanner';
 import BarcodeScannerButton from '../components/common/BarcodeScannerButton';
 
@@ -76,6 +81,9 @@ function fakeBridge({ platform = 'ios' } = {}) {
       getUri: vi.fn(async ({ path, directory }) => ({ uri: `file:///${at(directory, path)}` }))
     },
     Browser: { open: vi.fn(async () => {}), addListener: on('Browser') },
+    AppLauncher: { openUrl: vi.fn(async () => ({ completed: true })) },
+    ...(platform === 'android' ? { ShareIntent: { addListener: on('ShareIntent') } } : {}),
+    ...(platform === 'ios' ? { SharedInbox: { addListener: on('SharedInbox') } } : {}),
     App: { addListener: on('App'), getLaunchUrl: vi.fn(async () => null), minimizeApp: vi.fn(async () => {}), exitApp: vi.fn() },
     Network: { addListener: on('Network') },
     Share: { share: vi.fn(async () => ({})) },
@@ -90,7 +98,7 @@ function fakeBridge({ platform = 'ios' } = {}) {
     CapacitorHttp: {}
   };
   const bridge = {
-    version: 1,
+    version: 3,
     platform,
     convertFileSrc: (uri) => uri,
     plugins,
@@ -100,7 +108,8 @@ function fakeBridge({ platform = 'ios' } = {}) {
       ImpactStyle: { Light: 'LIGHT' },
       NotificationType: { Success: 'SUCCESS', Error: 'ERROR' },
       StatusBarStyle: { Dark: 'DARK' },
-      BarcodeFormat: { Ean13: 'EAN_13', Ean8: 'EAN_8', UpcA: 'UPC_A' }
+      BarcodeFormat: { Ean13: 'EAN_13', Ean8: 'EAN_8', UpcA: 'UPC_A' },
+      KeychainAccess: { whenUnlocked: 0, whenUnlockedThisDeviceOnly: 1, afterFirstUnlock: 2, afterFirstUnlockThisDeviceOnly: 3, whenPasscodeSetThisDeviceOnly: 4 }
     }
   };
   const emit = (key, payload) => Promise.all((listeners[key] || []).map((fn) => fn(payload)));
@@ -362,6 +371,48 @@ describe('links, downloads, back button, haptics', () => {
     }
   });
 
+  it('preferApp hands the link to the system (an installed app), with the in-app browser as fallback', async () => {
+    const { bridge, plugins } = fakeBridge();
+    const links = installExternalLinks(bridge, { doc: document });
+    const url = 'https://www.crunchyroll.com/de/watch/GX9UQE0WJ/the-journeys-end';
+    try {
+      expect(openExternal(url, { preferApp: true })).toBe(true);
+      await vi.waitFor(() => expect(plugins.AppLauncher.openUrl).toHaveBeenCalledWith({ url }));
+      expect(plugins.Browser.open).not.toHaveBeenCalled();
+
+      plugins.AppLauncher.openUrl.mockRejectedValueOnce(new Error('No Activity found'));
+      openExternal(url, { preferApp: true });
+      await vi.waitFor(() => expect(plugins.Browser.open).toHaveBeenCalledWith({ url }));
+
+      plugins.Browser.open.mockClear();
+      plugins.AppLauncher.openUrl.mockResolvedValueOnce({ completed: false });
+      openExternal(url, { preferApp: true });
+      await vi.waitFor(() => expect(plugins.Browser.open).toHaveBeenCalledWith({ url }));
+
+      plugins.Browser.open.mockClear();
+      plugins.AppLauncher.openUrl.mockClear();
+      openExternal('https://anilist.co/settings/developer');
+      await vi.waitFor(() => expect(plugins.Browser.open).toHaveBeenCalledWith({ url: 'https://anilist.co/settings/developer' }));
+      expect(plugins.AppLauncher.openUrl).not.toHaveBeenCalled();
+    } finally {
+      links.stop();
+      setOpenExternal((u) => window.open(u, '_blank', 'noopener,noreferrer'));
+    }
+  });
+
+  it('preferApp without the AppLauncher plugin (older app build) uses the in-app browser', async () => {
+    const { bridge, plugins } = fakeBridge();
+    delete plugins.AppLauncher;
+    const links = installExternalLinks(bridge, { doc: document });
+    try {
+      openExternal('https://www.crunchyroll.com/de/series/GG5H5XQX4/frieren', { preferApp: true });
+      await vi.waitFor(() => expect(plugins.Browser.open).toHaveBeenCalledWith({ url: 'https://www.crunchyroll.com/de/series/GG5H5XQX4/frieren' }));
+    } finally {
+      links.stop();
+      setOpenExternal((u) => window.open(u, '_blank', 'noopener,noreferrer'));
+    }
+  });
+
   it('a click the app handled itself is left alone', () => {
     const { bridge, plugins } = fakeBridge();
     const unlisten = installLinkClicks(bridge, { doc: document, win: window });
@@ -505,6 +556,170 @@ describe('installCapacitorShell', () => {
     expect(plugins.StatusBar.setStyle).toHaveBeenCalledWith({ style: 'DARK' });
     await vi.waitFor(() => expect(plugins.StatusBar.setOverlaysWebView).toHaveBeenCalledWith({ overlay: false }));
     expect(Object.keys(await import('../local/localTransport.js'))).toContain('setLocalAdapters');
+  });
+});
+
+describe('Android share intent', () => {
+  const SHARED = 'Schau dir Frieren an https://www.crunchyroll.com/de/watch/GX9UQE0WJ/the-journeys-end';
+
+  afterEach(() => {
+    takePendingShare();
+    takePendingDeepLink();
+    delete window.mangashelfOpenUrl;
+  });
+
+  it('a shared link reaches mangashelfOpenUrl as a share link, never the server screen', async () => {
+    const { bridge, emit } = fakeBridge({ platform: 'android' });
+    const uninstall = installDeepLinkBridge(window);
+    const opened = vi.spyOn(window, 'mangashelfOpenUrl');
+    window.mangashelfNative = bridge;
+    try {
+      expect(await installCapacitorShell({ win: window, doc: document })).toBe(true);
+      await emit('ShareIntent:shareReceived', { text: SHARED, subject: 'Frieren' });
+      expect(opened).toHaveBeenCalledWith(buildShareLink({ text: SHARED, subject: 'Frieren' }));
+      expect(opened.mock.calls[0][0]).toMatch(/^manga-shelf:\/\/share\?/);
+      expect(takePendingShare()).toEqual({ text: SHARED, url: '', subject: 'Frieren' });
+      expect(takePendingDeepLink()).toBeNull();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it('without mangashelfOpenUrl the share still lands in the pending slot', async () => {
+    const { bridge, emit } = fakeBridge({ platform: 'android' });
+    expect(installShareIntent(bridge, window)).toBe(true);
+    await emit('ShareIntent:shareReceived', { text: SHARED });
+    expect(takePendingShare()).toMatchObject({ text: SHARED });
+    expect(takePendingDeepLink()).toBeNull();
+  });
+
+  it('iOS (no ShareIntent) and an Android build without the plugin install nothing and still start', async () => {
+    const ios = fakeBridge({ platform: 'ios' });
+    expect(ios.plugins.ShareIntent).toBeUndefined();
+    expect(installShareIntent(ios.bridge, window)).toBe(false);
+    window.mangashelfNative = ios.bridge;
+    expect(await installCapacitorShell({ win: window, doc: document })).toBe(true);
+
+    const old = fakeBridge({ platform: 'android' });
+    delete old.plugins.ShareIntent;
+    expect(installShareIntent(old.bridge, window)).toBe(false);
+    const ignored = fakeBridge({ platform: 'ios' });
+    ignored.plugins.ShareIntent = { addListener: vi.fn() };
+    expect(installShareIntent(ignored.bridge, window)).toBe(false);
+    expect(ignored.plugins.ShareIntent.addListener).not.toHaveBeenCalled();
+  });
+});
+
+describe('iOS share extension inbox', () => {
+  const URL_ONLY = 'https://www.crunchyroll.com/de/watch/GX9UQE0WJ/the-journeys-end';
+
+  afterEach(() => {
+    while (takePendingShare());
+    takePendingDeepLink();
+    delete window.mangashelfOpenUrl;
+    vi.unstubAllGlobals();
+  });
+
+  /** The share part of Dashboard.jsx: the pending shares on mount, later ones by event, one dialog at a time. */
+  function InboxConsumer() {
+    const user = { id: 3, role: 'editor', username: 'kim' };
+    const anime = useAnimeList({ user });
+    useEffect(() => { anime.fetchAnime(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once
+    const share = useShareIntake({ anime, user, canEdit: true });
+    const startRef = useRef(share.start);
+    startRef.current = share.start;
+    useEffect(() => {
+      const onShare = () => {
+        const pending = takePendingShare();
+        if (pending) startRef.current(pending);
+      };
+      const timer = setTimeout(onShare, 0);
+      window.addEventListener(SHARE_LINK_EVENT, onShare);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener(SHARE_LINK_EVENT, onShare);
+      };
+    }, []);
+    if (!share.state) return null;
+    return (
+      <ShareLinkDialog
+        state={share.state} list={anime.list} listLoaded={anime.loaded} canAdd onClose={share.close} onSubmitPaste={share.submitPaste}
+        onRetry={share.retry} onChoose={share.choose} onAddToList={vi.fn()} onConfirm={share.confirm}
+      />
+    );
+  }
+
+  it('three shares retained by the inbox before the app listened: three dialogs, in order', async () => {
+    const { bridge, emit } = fakeBridge({ platform: 'ios' });
+    const resolved = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      if (String(url).endsWith('/api/anime')) {
+        return fakeResponse(200, [{ id: 1, title: 'Frieren', episodes: 28, my_progress: { status: 'Schaue', episodes_watched: 2 }, progress_users: [] }]);
+      }
+      if (String(url).endsWith('/api/anime/resolve-link')) {
+        const body = JSON.parse(init.body);
+        const episode = Number(/Folge (\d+)/.exec(body.text)[1]);
+        resolved.push(episode);
+        return fakeResponse(200, {
+          service: 'crunchyroll', kind: 'episode', external_id: `GEP${episode}`, series_id: 'GSERIES001', series_title: 'Frieren', episode,
+          episode_source: 'text', anime_id: 1, match: 'link', candidates: [], url: body.url, page_checked: false
+        });
+      }
+      return fakeResponse(404, { error: 'unbekannt' });
+    }));
+    const uninstall = installDeepLinkBridge(window);
+    try {
+      expect(installSharedInbox(bridge, window)).toBe(true);
+      // SharedInbox.load() drains the App Group defaults: one retained event each, before the dashboard is mounted
+      for (const n of [3, 4, 5]) await emit('SharedInbox:shareReceived', { text: `Frieren – Folge ${n}`, url: `${URL_ONLY}-${n}` });
+      render(<InboxConsumer />);
+      for (const n of [3, 4, 5]) {
+        expect(await screen.findByRole('heading', { name: `Frieren, Folge ${n} gesehen?` })).toBeTruthy();
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      }
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(resolved).toEqual([3, 4, 5]);
+      expect(takePendingShare()).toBeNull();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it('a share left by the extension reaches mangashelfOpenUrl as a share link, never the server screen', async () => {
+    const { bridge, emit, plugins } = fakeBridge({ platform: 'ios' });
+    const uninstall = installDeepLinkBridge(window);
+    const opened = vi.spyOn(window, 'mangashelfOpenUrl');
+    window.mangashelfNative = bridge;
+    try {
+      expect(await installCapacitorShell({ win: window, doc: document })).toBe(true);
+      expect(plugins.SharedInbox.addListener).toHaveBeenCalledWith('shareReceived', expect.any(Function));
+      await emit('SharedInbox:shareReceived', { text: 'Frieren – Folge 7', url: URL_ONLY });
+      expect(opened).toHaveBeenCalledWith(buildShareLink({ text: 'Frieren – Folge 7', url: URL_ONLY }));
+      expect(takePendingShare()).toEqual({ text: 'Frieren – Folge 7', url: URL_ONLY, subject: '' });
+      expect(takePendingDeepLink()).toBeNull();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it('a bare URL (Safari) is enough; an empty item is dropped; no mangashelfOpenUrl still fills the pending slot', async () => {
+    const { bridge, emit } = fakeBridge({ platform: 'ios' });
+    expect(installSharedInbox(bridge, window)).toBe(true);
+    await emit('SharedInbox:shareReceived', { text: '', url: '' });
+    expect(takePendingShare()).toBeNull();
+    await emit('SharedInbox:shareReceived', { url: URL_ONLY });
+    expect(takePendingShare()).toMatchObject({ url: URL_ONLY });
+    expect(takePendingDeepLink()).toBeNull();
+  });
+
+  it('only on iOS and only with the plugin (older iOS builds have none)', () => {
+    const android = fakeBridge({ platform: 'android' });
+    android.plugins.SharedInbox = { addListener: vi.fn() };
+    expect(installSharedInbox(android.bridge, window)).toBe(false);
+    expect(android.plugins.SharedInbox.addListener).not.toHaveBeenCalled();
+    const old = fakeBridge({ platform: 'ios' });
+    delete old.plugins.SharedInbox;
+    expect(installSharedInbox(old.bridge, window)).toBe(false);
   });
 });
 

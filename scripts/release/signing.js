@@ -11,6 +11,8 @@ const GROUPS = {
     android: ['ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'],
     ios: ['IOS_CERT_P12_BASE64', 'IOS_CERT_PASSWORD', 'IOS_PROVISIONING_PROFILE_BASE64', 'APPLE_TEAM_ID']
 };
+// optional on top of the ios group: the share extension's profile (mobile/scripts/build-ios.js leaves the extension out without it)
+const IOS_SHARE_SECRET = 'IOS_SHARE_PROVISIONING_PROFILE_BASE64';
 
 function detectSigning(env = process.env) {
     const has = (names) => names.every((name) => typeof env[name] === 'string' && env[name].trim() !== '');
@@ -19,14 +21,17 @@ function detectSigning(env = process.env) {
     return state;
 }
 
-function notes(state) {
+function notes(state, env = process.env) {
     const yes = (flag, text) => (flag ? text : 'unsigniert');
+    // only a step that passes the variable (empty when the secret is missing) knows about the extension
+    const shareKnown = typeof env[IOS_SHARE_SECRET] === 'string';
+    const iosSigned = !shareKnown ? 'signiert' : env[IOS_SHARE_SECRET].trim() ? 'signiert, mit Teilen-Ziel (iOS)' : 'signiert, ohne Teilen-Ziel (iOS)';
     return [
         '### Signierung',
         `- Windows (Installer, portable .exe, Server-.exe): ${yes(state.windows, 'signiert')}`,
         `- macOS (.dmg/.zip, Server-Binärdatei): ${yes(state.macos, state.notarize ? 'signiert und notarisiert' : 'signiert, nicht notarisiert')}`,
         `- Android (APK/AAB): ${yes(state.android, 'signiert')}${state.android ? '' : ' (APK mit Debug-Schlüssel)'}`,
-        `- iPhone (IPA): ${yes(state.ios, 'signiert')}`,
+        `- iPhone (IPA): ${yes(state.ios, iosSigned)}`,
         '- Linux (AppImage, .deb, .rpm, Server-Binärdateien): unsigniert, Prüfsummen in SHA256SUMS.txt',
         '- Docker-Image: keyless mit cosign signiert (sofern der Schritt gelang)'
     ].join('\n');
@@ -43,4 +48,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { detectSigning, notes, GROUPS };
+module.exports = { detectSigning, notes, GROUPS, IOS_SHARE_SECRET };

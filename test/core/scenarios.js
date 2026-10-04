@@ -9,6 +9,9 @@ function monthFromNow(offset) {
     return `${m.getFullYear()}-${pad(m.getMonth() + 1)}`;
 }
 
+// both harnesses run in this process: forgets the per-user watch-sync throttle (30 s) between steps
+const watchSyncAgain = () => require('../../core/anime/gateway').state().watchSync?.clear();
+
 async function newSeries(api, title, extra = {}) {
     const res = await api('POST', '/mangas', { title, ...extra });
     assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -306,6 +309,67 @@ const scenarios = [
             assert.equal((await ed('DELETE', `/anime/${id}/progress`)).status, 200);
             assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
             assert.equal((await vis('GET', `/anime/${id}`)).status, 404);
+        }
+    },
+    {
+        name: 'anime watch: shared link without network, monotonic watched, resume link, sync state',
+        async run({ ed, vis }) {
+            const created = await ed('POST', '/anime', { title: 'Kern Frieren', episodes: 28 });
+            const id = created.body.id;
+            const url = 'https://www.crunchyroll.com/kern-frieren/episode-7-like-a-fairy-tale-911417';
+            assert.equal((await vis('POST', '/anime/resolve-link', { url })).status, 403);
+            const resolved = await ed('POST', '/anime/resolve-link', { url });
+            assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
+            assert.deepEqual([resolved.body.kind, resolved.body.episode, resolved.body.episode_source, resolved.body.anime_id, resolved.body.page_checked],
+                ['legacy', 7, 'slug', id, false]);
+            assert.equal((await ed('POST', '/anime/resolve-link', { url: 'https://example.org/x' })).body.code, 'UNSUPPORTED_LINK');
+
+            const watched = await ed('POST', `/anime/${id}/watched`, { episode: 7, url, remember: { service: 'crunchyroll', external_id: 'GKERN0001' } });
+            assert.deepEqual([watched.status, watched.body.progress.episodes_watched, watched.body.progress.resume_episode], [200, 7, 7]);
+            assert.deepEqual([watched.body.previous, watched.body.entry_episodes], [null, 28]);
+            const again = await ed('POST', `/anime/${id}/watched`, { episode: 3 });
+            assert.deepEqual([again.body.progress.episodes_watched, again.body.previous.episodes_watched], [7, 7]);
+            assert.deepEqual(resolved.body.entry, { id, title: 'Kern Frieren', episodes: 28, my_status: null, my_episodes: null });
+            const above = await ed('POST', `/anime/${id}/watched`, { episode: 29 });
+            assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
+            assert.equal((await ed('POST', `/anime/${id}/watched`, { episode: 8, url: 'https://www.crunchyroll.com/series/GKERN0001' })).body.code, 'UNSUPPORTED_LINK');
+            assert.equal((await vis('GET', `/anime/${id}`)).body.progress[0].resume_url, null);
+            const entry = (await ed('GET', '/anime')).body.find(a => a.id === id);
+            assert.deepEqual(entry.watch, { next_url: url, series_url: 'https://www.crunchyroll.com/series/GKERN0001', search_url: 'https://www.crunchyroll.com/search?q=Kern%20Frieren' });
+            assert.equal((await ed('PUT', `/anime/${id}/progress`, { episodes_watched: 8 })).body.resume_url, null);
+            assert.deepEqual((await ed('GET', '/anime/sync')).body.anilist.enabled, false);
+            assert.equal((await ed('POST', '/anime/sync/run', {})).body.anilist.ran, false);
+            assert.equal((await ed('DELETE', `/anime/${id}`)).status, 200);
+        }
+    },
+    {
+        name: 'anime watch-sync: history items from the app, monotonic, unmatched with candidates, season link from a confirmation',
+        async run({ ed, vis }) {
+            const id = (await ed('POST', '/anime', { title: 'Kern Verlauf Serie', episodes: 12 })).body.id;
+            const other = (await ed('POST', '/anime', { title: 'Das Kern Verlaufsbuch Zwei', episodes: 12 })).body.id;
+            const item = (fields) => ({ external_id: 'GKERNVERL1', series_title: 'Kern Verlauf Serie', season: 1, episode: 4, fully_watched: false,
+                resume_url: 'https://www.crunchyroll.com/watch/GKERNVEP04/folge-vier', resume_episode: 4, watched_at: '2026-10-01T20:00:00Z', ...fields });
+            assert.equal((await vis('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [item({})] })).status, 403);
+            assert.equal((await ed('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [{ episode: 1 }] })).status, 400);
+
+            const first = await ed('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [item({}), item({ external_id: 'GKERNBUCH1', series_title: 'Kern Verlaufsbuch', episode: 2, fully_watched: true, resume_url: null })] });
+            assert.equal(first.status, 200, JSON.stringify(first.body));
+            assert.deepEqual(first.body.applied, [{ anime_id: id, episodes_watched: 3, status: 'Schaue' }]);
+            assert.deepEqual(first.body.unmatched.map(u => [u.external_id, u.reason, u.episodes_watched, u.candidates.map(c => c.id)]), [['GKERNBUCH1', 'no_match', 2, [other]]]);
+            assert.deepEqual(first.body.unmatched[0].candidates.map(c => c.season), [1]);
+            const mine = (await ed('GET', `/anime/${id}`)).body.my_progress;
+            assert.deepEqual([mine.episodes_watched, mine.resume_url, mine.resume_episode], [3, 'https://www.crunchyroll.com/watch/GKERNVEP04/folge-vier', 4]);
+            const lower = { service: 'crunchyroll', items: [item({ episode: 2, fully_watched: true, resume_url: null })] };
+            assert.deepEqual((await ed('POST', '/anime/watch-sync', lower)).body, { applied: [], unmatched: [], throttled: true });
+            watchSyncAgain();
+            assert.deepEqual((await ed('POST', '/anime/watch-sync', lower)).body, { applied: [], unmatched: [], unchanged: 1 });
+
+            await ed('POST', `/anime/${other}/watched`, { episode: 2, remember: { service: 'crunchyroll', external_id: 'GKERNBUCH1', season: 1 } });
+            watchSyncAgain();
+            const mapped = await ed('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [item({ external_id: 'GKERNBUCH1', series_title: 'Kern Verlaufsbuch', episode: 12, fully_watched: true, resume_url: null })] });
+            assert.deepEqual(mapped.body, { applied: [{ anime_id: other, episodes_watched: 12, status: 'Gesehen' }], unmatched: [], unchanged: 0 });
+            assert.equal((await ed('DELETE', `/anime/${id}`)).status, 200);
+            assert.equal((await ed('DELETE', `/anime/${other}`)).status, 200);
         }
     },
     {

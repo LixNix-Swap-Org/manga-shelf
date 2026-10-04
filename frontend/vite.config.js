@@ -1,5 +1,5 @@
 // Vite config for the web build and `--mode app` (shell build); stamps the service worker and precompresses assets.
-import { defineConfig } from 'vite'
+import { defineConfig, parseAst } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
@@ -66,6 +66,83 @@ export const webBuildWithoutLocalCore = () => ({
   }
 })
 
+const CORE_DIR = path.resolve(import.meta.dirname, '../core')
+
+function walkAst(node, visit) {
+  if (!node || typeof node.type !== 'string') return
+  visit(node)
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach((child) => walkAst(child, visit))
+    else if (value && typeof value.type === 'string') walkAst(value, visit)
+  }
+}
+
+const isModuleExports = (node) => node?.type === 'MemberExpression' && !node.computed &&
+  node.object.type === 'Identifier' && node.object.name === 'module' && node.property.name === 'exports'
+
+/** A relative require of a core file as a path the browser and Node's ESM loader both find (with its .js ending). */
+function esmSpecifier(spec, file) {
+  if (!file || !spec.startsWith('.')) return spec
+  const base = path.resolve(path.dirname(file), spec)
+  for (const [candidate, suffix] of [[base, ''], [`${base}.js`, '.js'], [path.join(base, 'index.js'), '/index.js']]) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return spec + suffix
+  }
+  return spec
+}
+
+/**
+ * A CommonJS core module as ESM: `require('./x')` becomes an import, `export default` is module.exports, and the keys
+ * of a literal `module.exports = { … }` become named exports. Every module hands out its `module` object through a
+ * hoisted function, so a require cycle sees the partly filled exports as in Node. Lines stay where they were.
+ */
+export function cjsToEsm(code, file = null) {
+  const ast = parseAst(code)
+  const requires = []
+  walkAst(ast, (node) => {
+    if (node.type !== 'CallExpression' || node.callee.type !== 'Identifier' || node.callee.name !== 'require') return
+    const [arg] = node.arguments
+    if (node.arguments.length === 1 && arg.type === 'Literal' && typeof arg.value === 'string') requires.push({ start: node.start, end: node.end, spec: arg.value })
+  })
+  let names = []
+  for (const statement of ast.body) {
+    const expr = statement.type === 'ExpressionStatement' ? statement.expression : null
+    if (expr?.type !== 'AssignmentExpression' || !isModuleExports(expr.left) || expr.right.type !== 'ObjectExpression') continue
+    names = expr.right.properties
+      .filter((p) => p.type === 'Property' && !p.computed)
+      .map((p) => (p.key.type === 'Identifier' ? p.key.name : String(p.key.value)))
+      .filter((name) => /^[A-Za-z_$][\w$]*$/.test(name) && name !== 'default')
+  }
+  const specs = [...new Set(requires.map((r) => r.spec))]
+  const local = new Map(specs.map((spec, i) => [spec, `__cjs_dep${i}`]))
+  let body = code
+  for (const r of [...requires].sort((a, b) => b.start - a.start)) body = `${body.slice(0, r.start)}${local.get(r.spec)}().exports${body.slice(r.end)}`
+  const head = specs.map((spec) => `import { __cjsModule as ${local.get(spec)} } from ${JSON.stringify(esmSpecifier(spec, file))};`)
+  const tail = [
+    'var __cjs_m;',
+    'export function __cjsModule() { return __cjs_m || (__cjs_m = { exports: {} }); }',
+    'export default module.exports;',
+    ...names.map((name, i) => `const __cjs_named${i} = module.exports[${JSON.stringify(name)}]; export { __cjs_named${i} as ${name} };`)
+  ]
+  return `${head.join(' ')} var module = __cjsModule(), exports = module.exports; ${body}\n${tail.join('\n')}\n`
+}
+
+export const isCoreCommonjs = (file, code) => path.resolve(file).startsWith(CORE_DIR + path.sep) && file.endsWith('.js') &&
+  /\b(?:module\.exports|require\s*\()/.test(code)
+
+/**
+ * `vite` (dev server) serves files unbundled, so the CommonJS core the main bundle imports (core/watch/links.js) would
+ * fail to link in the browser; builds convert it through build.commonjsOptions instead.
+ */
+export const coreCommonjsInDev = () => ({
+  name: 'core-commonjs-in-dev',
+  apply: 'serve',
+  enforce: 'pre',
+  transform(code, id) {
+    const file = id.split('?')[0]
+    return isCoreCommonjs(file, code) ? { code: cjsToEsm(code, file), map: null } : null
+  }
+})
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   // `vite build --mode app`: bundle for the Electron/Capacitor shells (server address and bearer token, see src/utils/api.js)
@@ -76,6 +153,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       ...(appMode ? [appCspPlugin()] : [webBuildWithoutLocalCore()]),
+      // Vitest runs the core as CommonJS itself
+      ...(mode === 'test' ? [] : [coreCommonjsInDev()]),
       {
         name: 'build-out-dir',
         apply: 'build',

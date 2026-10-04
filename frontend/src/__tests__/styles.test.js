@@ -224,7 +224,7 @@ describe('dialog overlays', () => {
     'components/detail/GapFillModal.jsx', 'components/detail/BatchAddModal.jsx', 'components/detail/BatchReadModal.jsx',
     'components/detail/MpEditionModal.jsx', 'components/modals/AnimeDetailModal.jsx',
     'components/dashboard/ScanCandidatesDialog.jsx', 'components/dashboard/CsvExchangeModal.jsx',
-    'components/common/ConnectQr.jsx'
+    'components/common/ConnectQr.jsx', 'components/modals/ShareLinkDialog.jsx', 'app/watch/WatchMatchDialog.jsx'
   ];
   const rule = (selector) => css.match(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] || '';
 

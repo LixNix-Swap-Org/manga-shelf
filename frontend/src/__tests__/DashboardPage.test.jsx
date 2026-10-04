@@ -57,6 +57,7 @@ vi.mock('../components/dashboard/ReleaseRadarView', () => ({ default: () => <div
 import Dashboard from '../Dashboard';
 import Toaster from '../components/common/Toaster';
 import { fakeResponse, htmlResponse } from './fakeResponse';
+import { buildShareLink, receiveDeepLink } from '../app/deepLink';
 
 const json = (status, body) => fakeResponse(status, body);
 
@@ -373,6 +374,76 @@ describe('Dashboard: local scan and share target', () => {
     expect(currentUrl()).toBe('/');
     fireEvent.click(screen.getByRole('button', { name: 'Reihe anlegen' }));
     expect(await screen.findByText('Anlegen-Dialog leer')).toBeTruthy();
+  });
+
+  const CR_TEXT = 'Frieren E7 auf Crunchyroll https://www.crunchyroll.com/de/watch/GG1U2Q5MW/the-hero-party';
+  const animeApi = (calls) => vi.fn(async (url, init = {}) => {
+    calls.push(`${init.method || 'GET'} ${url}`);
+    if (url === '/api/anime') return json(200, [{ id: 1, title: 'Frieren', episodes: 28, my_progress: { status: 'Schaue', episodes_watched: 6 }, progress_users: [] }]);
+    if (url === '/api/anime/resolve-link') {
+      return json(200, { service: 'crunchyroll', kind: 'episode', external_id: 'GG1U2Q5MW', series_id: null, series_title: 'Frieren', episode: 7, episode_source: 'text', anime_id: 1, match: 'title', candidates: [], url: 'https://www.crunchyroll.com/watch/GG1U2Q5MW/the-hero-party', page_checked: false });
+    }
+    return json(200, {});
+  });
+
+  it('a shared Crunchyroll link opens the anime tab and asks "Frieren, Folge 7 gesehen?" instead of looking for an ISBN', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', animeApi(calls));
+    renderDashboard('/?share_text=' + encodeURIComponent(CR_TEXT));
+    expect(await screen.findByRole('heading', { name: 'Frieren, Folge 7 gesehen?' })).toBeTruthy();
+    expect(currentUrl()).toBe('/?view=anime');
+    expect(calls).toContain('POST /api/anime/resolve-link');
+    expect(screen.queryByText('Im geteilten Text wurde keine ISBN gefunden.')).toBeNull();
+  });
+
+  it('"Zur Liste hinzufügen" searches the series title; the added entry is then the one the episode is saved for', async () => {
+    const calls = [];
+    let list = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const method = init.method || 'GET';
+      calls.push(`${method} ${url}`);
+      if (url === '/api/anime' && method === 'POST') {
+        list = [{ id: 5, title: 'Frieren', episodes: 28, my_progress: null, progress_users: [] }];
+        return json(200, { ...list[0], progress: [] });
+      }
+      if (url === '/api/anime') return json(200, list);
+      if (url === '/api/anime/resolve-link') {
+        return json(200, { service: 'crunchyroll', kind: 'episode', external_id: 'GG1U2Q5MW', series_id: 'GG5H5XQX4', series_title: 'Frieren', episode: 7, episode_source: 'text', anime_id: null, match: null, candidates: [], url: 'https://www.crunchyroll.com/watch/GG1U2Q5MW/the-hero-party', page_checked: false });
+      }
+      if (url.startsWith('/api/anime/search')) return json(200, { results: [{ anilist_id: 154587, mal_id: null, title: { preferred: 'Frieren' }, in_collection_id: null }], sources_used: ['anilist'], partial: false });
+      if (url === '/api/anime/5/watched') return json(200, { anime_id: 5, progress: { status: 'Schaue', episodes_watched: 7, resume_url: null, resume_episode: 7 } });
+      return json(200, {});
+    }));
+    renderDashboard('/?share_text=' + encodeURIComponent(CR_TEXT));
+    fireEvent.click(await screen.findByRole('button', { name: /Zur Liste hinzufügen/ }));
+    expect(await screen.findByDisplayValue('Frieren')).toBeTruthy();
+    await waitFor(() => expect(calls.some((c) => c.startsWith('GET /api/anime/search?q=Frieren'))).toBe(true));
+    fireEvent.click(await screen.findByRole('button', { name: /^Hinzufügen/ }));
+    expect(await screen.findByRole('heading', { name: 'Frieren, Folge 7 gesehen?' })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /Anime hinzufügen/ })).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Ja, gesehen' }));
+    await waitFor(() => expect(calls).toContain('POST /api/anime/5/watched'));
+  });
+
+  it('visitors get a note for a shared streaming link and no request', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', animeApi(calls));
+    renderDashboard('/?share_text=' + encodeURIComponent(CR_TEXT), { id: 3, username: 'vera', role: 'visitor' });
+    expect(await screen.findByText('Nur Bearbeiter können ihren Fortschritt speichern.')).toBeTruthy();
+    expect(calls).not.toContain('POST /api/anime/resolve-link');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a share from the app shell (deep link) reaches the mounted dashboard; a share without a streaming link is read for an ISBN', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', animeApi(calls));
+    renderDashboard('/');
+    act(() => { receiveDeepLink(buildShareLink({ text: CR_TEXT })); });
+    expect(await screen.findByRole('heading', { name: 'Frieren, Folge 7 gesehen?' })).toBeTruthy();
+    expect(currentUrl()).toBe('/?view=anime');
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    act(() => { receiveDeepLink(buildShareLink({ text: 'Notiz ohne Nummer' })); });
+    expect(await screen.findByText('Im geteilten Text wurde keine ISBN gefunden.')).toBeTruthy();
   });
 });
 

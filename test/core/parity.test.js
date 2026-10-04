@@ -85,8 +85,12 @@ test('a seeded collection reads the same through Express and the in-memory core'
     await pair('ed', 'POST', '/volumes/bulk', { revert: dropA.undo_token }, { revert: dropB.undo_token });
     await both('admin', 'POST', '/volumes/bulk', { ids: [vol('5')], owners: { add: [1] }, set: { purchase_date: '2024-09-09' } });
 
+    const anime = (await both('ed', 'POST', '/anime', { title: 'Parität Anime', episodes: 12 })).id;
+    await both('ed', 'POST', `/anime/${anime}/watched`, { episode: 4, url: 'https://www.crunchyroll.com/de/watch/GPARITY01/a-title', remember: { service: 'crunchyroll', external_id: 'GPARITY99' } });
+    await both('ed', 'POST', '/anime/resolve-link', { url: 'https://www.crunchyroll.com/series/GPARITY99/paritaet-anime' });
+
     const reads = [
-        '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
+        '/anime', `/anime/${anime}`, '/anime/sync', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
         '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
         '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
         '/maintenance/quality'

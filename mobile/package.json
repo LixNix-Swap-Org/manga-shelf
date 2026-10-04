@@ -23,6 +23,7 @@
     "@capacitor-mlkit/barcode-scanning": "^7.5.0",
     "@capacitor/android": "^7.6.9",
     "@capacitor/app": "^7.1.2",
+    "@capacitor/app-launcher": "^7.0.4",
     "@capacitor/browser": "^7.0.5",
     "@capacitor/core": "^7.6.9",
     "@capacitor/filesystem": "^7.1.9",
@@ -31,7 +32,8 @@
     "@capacitor/network": "^7.0.4",
     "@capacitor/preferences": "^7.0.4",
     "@capacitor/share": "^7.0.4",
-    "@capacitor/status-bar": "^7.0.6"
+    "@capacitor/status-bar": "^7.0.6",
+    "mangashelf-native": "file:plugins/mangashelf-native"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.6.9",

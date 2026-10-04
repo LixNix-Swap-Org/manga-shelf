@@ -25,12 +25,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- manga-shelf://connect?url=…&name=… from the QR code of the server footer or the desktop menu -->
+            <!-- manga-shelf://connect?url=…&name=… from the QR code of the server footer or the desktop menu;
+                 manga-shelf://share?text=… only opens a confirmation dialog, never writes -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="manga-shelf" android:host="connect" />
+                <data android:scheme="manga-shelf" android:host="share" />
+            </intent-filter>
+
+            <!-- links shared from other apps (e.g. a Crunchyroll episode), delivered by ShareIntentPlugin -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
 
         </activity>

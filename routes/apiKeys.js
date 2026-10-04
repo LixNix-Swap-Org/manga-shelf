@@ -12,6 +12,7 @@ const { setCredentialProvider } = require('../core/sources/credentials');
 const { guideFor, formatError, userProviders, instanceProviders } = require('../core/sources/guides');
 const animeSettings = require('../core/anime/settings');
 const gateway = require('../core/anime/gateway');
+const listSync = require('../core/anime/listSync');
 const { SourceError } = require('../core/anime/request');
 
 const MIN_SECRET = 10;
@@ -164,6 +165,7 @@ async function saveCredential(userId, provider, rawSecret, { allowBackground = f
             INSERT INTO user_api_credentials (user_id, provider, secret_enc, label, last4, allow_background, last_ok_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(userId, provider, enc, label || null, secret.slice(-4), userId === null ? 0 : (allowBackground ? 1 : 0), Date.now());
+        if (userId !== null) listSync.onCredentialChanged(createCtx(), userId, provider);
     });
     plainCache.clear();
     if (userId !== null) gateway.forgetAccess(userId, provider);
@@ -175,6 +177,7 @@ function removeCredential(userId, provider) {
     const removed = (userId === null
         ? db.prepare('DELETE FROM user_api_credentials WHERE user_id IS NULL AND provider = ?').run(provider)
         : db.prepare('DELETE FROM user_api_credentials WHERE user_id = ? AND provider = ?').run(userId, provider)).changes > 0;
+    if (userId !== null) listSync.onCredentialChanged(createCtx(), userId, provider, { removed: true });
     plainCache.clear();
     if (userId !== null) gateway.forgetAccess(userId, provider);
     if (removed) log.info(`${guideFor(provider)?.name || provider}-Schlüssel ${userId === null ? 'der Instanz' : `von Benutzer ${userId}`} entfernt`);

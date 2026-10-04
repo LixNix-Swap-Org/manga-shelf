@@ -23,20 +23,23 @@ export function sourcesNote(result) {
 /**
  * Add an anime: search AniList/MyAnimeList over the server (on the button, not while typing) and take a hit, or a
  * manual entry with title and episodes. Optional link to a series of the collection (prefilled from ?add=<id>).
+ * `initialQuery` (the series title of a shared link) fills the search and runs it once.
  */
-export default function AddAnimeModal({ isOpen, onClose, search, loadAdaptations, onAdd, onOpenExisting, mangas = [], initialMangaId = null }) {
+export default function AddAnimeModal({
+  isOpen, onClose, search, loadAdaptations, onAdd, onOpenExisting, mangas = [], initialMangaId = null, initialQuery = '', returnFocusRef
+}) {
   const [tab, setTab] = useState('search');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery || '');
   const [result, setResult] = useState(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(null);
   const [mangaId, setMangaId] = useState(initialMangaId ? String(initialMangaId) : '');
-  const [manualTitle, setManualTitle] = useState('');
+  const [manualTitle, setManualTitle] = useState(initialQuery || '');
   const [manualEpisodes, setManualEpisodes] = useState('');
   const abortRef = useRef(null);
   const titleId = useId();
-  const dialogRef = useDialogA11y(isOpen, { onClose });
+  const dialogRef = useDialogA11y(isOpen, { onClose, returnFocusRef });
   const { tabListProps, tabProps, panelProps } = useTabList({ tabs: TAB_KEYS, selected: tab, onSelect: (key) => { setTab(key); setError(''); } });
 
   const linkedManga = useMemo(() => mangas.find((m) => String(m.id) === String(initialMangaId)), [mangas, initialMangaId]);
@@ -60,6 +63,10 @@ export default function AddAnimeModal({ isOpen, onClose, search, loadAdaptations
     return () => controller.abort();
   }, [isOpen, initialMangaId, loadAdaptations]);
   useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => {
+    if (isOpen && initialQuery && initialQuery.trim().length >= 2 && !initialMangaId) runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on open with a prefilled title
+  }, [isOpen]);
 
   const sortedMangas = useMemo(() => [...mangas].sort((a, b) => compareNatural(a.title, b.title)), [mangas]);
 

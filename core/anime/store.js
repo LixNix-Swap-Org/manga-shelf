@@ -2,6 +2,7 @@
 // the answer shapes of the list and the detail.
 const { fetchImage } = require('../lib/imageCheck');
 const { nextCheckAt, preferredTitle } = require('./normalize');
+const { SERVICES, isAllowedUrl, linkOf } = require('../watch/links');
 
 const parseJson = (text, fallback) => {
     if (!text) return fallback;
@@ -34,6 +35,8 @@ function snapshotColumns(meta, nowMs) {
         next_airing_estimated: next && meta.next_airing_estimated ? 1 : 0,
         relations: JSON.stringify(meta.relations || []),
         urls: JSON.stringify(meta.urls || {}),
+        external_links: JSON.stringify(meta.external_links || []),
+        streaming_episodes: JSON.stringify(meta.streaming_episodes || []),
         meta_source: meta.source,
         meta_fetched_at: nowMs,
         next_check_at: nextCheckAt(meta, nowMs)
@@ -76,12 +79,13 @@ function updateRow(ctx, id, columns) {
 }
 
 // a partial snapshot (AniList id batches) never clears what the full answer stored
-const KEEP_WHEN_EMPTY = ['description', 'relations', 'title_english', 'studios', 'genres'];
+const KEEP_WHEN_EMPTY = ['description', 'relations', 'title_english', 'studios', 'genres', 'external_links', 'streaming_episodes'];
+const ANILIST_ONLY = ['external_links', 'streaming_episodes'];
 const emptyColumn = (value) => value === null || value === undefined || value === '' || value === '[]';
 
 /**
  * Writes a fresh snapshot (synchronous). The display title follows the source only while the user has not changed
- * it. `partial` (background batch): empty description, relations, English title, studios and genres keep stored values.
+ * it. `partial` (background batch): empty description, relations, English title, studios, genres and links keep stored values.
  */
 function applySnapshot(ctx, id, meta, images = {}, { partial = false } = {}) {
     const row = ctx.db.prepare('SELECT * FROM animes WHERE id = ?').get(id);
@@ -90,6 +94,10 @@ function applySnapshot(ctx, id, meta, images = {}, { partial = false } = {}) {
     const columns = { ...snapshotColumns(meta, nowMs), ...images };
     if (partial) {
         for (const key of KEEP_WHEN_EMPTY) if (emptyColumn(columns[key]) && !emptyColumn(row[key])) delete columns[key];
+    }
+    // only AniList knows the streaming links: an answer without it (MAL/Jikan alone) must not clear them
+    if (meta.source !== 'anilist' && meta.source !== 'merged') {
+        for (const key of ANILIST_ONLY) if (emptyColumn(columns[key]) && !emptyColumn(row[key])) delete columns[key];
     }
     const autoTitle = preferredTitle({ english: row.title_english, romaji: row.title_romaji, native: row.title_native });
     const nextTitle = preferredTitle({
@@ -172,9 +180,40 @@ const progressOf = (row) => (row ? {
     notes: row.notes,
     started_at: row.started_at,
     finished_at: row.finished_at,
-    updated_at: row.updated_at
+    updated_at: row.updated_at,
+    resume_url: row.resume_url ?? null,
+    resume_episode: row.resume_episode ?? null
 } : null);
 
+/** The stored link lists of a row: { external_links, streaming_episodes } (arrays). */
+const linksOf = (row) => ({
+    external_links: parseJson(row.external_links, []).filter((l) => l && typeof l.url === 'string'),
+    streaming_episodes: parseJson(row.streaming_episodes, []).filter((e) => e && typeof e.url === 'string')
+});
+
+/**
+ * Where "Weiter" leads for one user: next_url (streaming episode episodes_watched+1, else a resume link that is not
+ * older than the counter), series_url (service link from AniList, else the remembered one) and search_url.
+ */
+function watchOf(row, progress, rememberedUrl = null) {
+    const service = SERVICES[0];
+    const { external_links: external, streaming_episodes: streaming } = linksOf(row);
+    const watched = progress ? progress.episodes_watched || 0 : 0;
+    const next = streaming.find((e) => e.episode === watched + 1 && isAllowedUrl(e.url));
+    let nextUrl = next ? next.url : null;
+    if (!nextUrl && progress && progress.resume_url && progress.resume_episode !== null && progress.resume_episode !== undefined
+        && progress.resume_episode >= watched && isAllowedUrl(progress.resume_url)) nextUrl = progress.resume_url;
+    const site = external.find((l) => String(l.site || '').toLowerCase() === service.externalLinkSite.toLowerCase() && isAllowedUrl(l.url));
+    const fromSite = site ? (linkOf(site.url) || { url: site.url }).url : null;
+    const remembered = rememberedUrl && isAllowedUrl(rememberedUrl) ? rememberedUrl : null;
+    return {
+        next_url: nextUrl,
+        series_url: fromSite || remembered,
+        search_url: service.searchUrl(row.title_english || row.title_romaji || row.title)
+    };
+}
+
 module.exports = {
-    snapshotColumns, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, isStale, parseJson, splitList, joinList
+    snapshotColumns, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, linksOf, watchOf, isStale, parseJson,
+    splitList, joinList
 };

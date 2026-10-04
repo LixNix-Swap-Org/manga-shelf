@@ -1,0 +1,63 @@
+{
+    "total": 3,
+    "data": [
+        {
+            "playhead": 300,
+            "fully_watched": false,
+            "never_watched": false,
+            "date_played": "2026-10-03T20:15:00Z",
+            "panel": {
+                "id": "GTESTEP008",
+                "type": "episode",
+                "title": "Test Episode Eight",
+                "slug_title": "test-episode-eight",
+                "episode_metadata": {
+                    "series_id": "GTESTSER01",
+                    "series_title": "Frieren: Beyond Journey's End",
+                    "season_number": 1,
+                    "episode_number": 8,
+                    "episode": "8",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "playhead": 0,
+            "fully_watched": false,
+            "never_watched": true,
+            "panel": {
+                "id": "GTESTDG004",
+                "type": "episode",
+                "title": "Test Dungeon Four",
+                "slug_title": "test-dungeon-four",
+                "episode_metadata": {
+                    "series_id": "GTESTDNG01",
+                    "series_title": "Delicious in Dungeon",
+                    "season_number": 1,
+                    "episode_number": 4,
+                    "episode": "4",
+                    "duration_ms": 1440000
+                }
+            }
+        },
+        {
+            "playhead": 0,
+            "fully_watched": false,
+            "never_watched": true,
+            "panel": {
+                "id": "GTESTNEW01",
+                "type": "episode",
+                "title": "Test New Show One",
+                "slug_title": "test-new-show-one",
+                "episode_metadata": {
+                    "series_id": "GTESTNEW99",
+                    "series_title": "Test New Show",
+                    "season_number": 1,
+                    "episode_number": 1,
+                    "episode": "1",
+                    "duration_ms": 1440000
+                }
+            }
+        }
+    ]
+}

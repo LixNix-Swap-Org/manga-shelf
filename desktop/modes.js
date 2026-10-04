@@ -157,6 +157,18 @@ const serverOrigin = (port, host) => `http://${hostInUrl(windowHost(host))}:${po
 /** The URL the window shows for a local view. */
 const localWindowUrl = (port, host) => `${serverOrigin(port, host)}/`;
 
+/**
+ * What handleDeepLink does with a link: 'pending' before the first run is resolved (macOS open-url at cold start),
+ * 'deliver' in the remote view, 'show' for a share link elsewhere (only the remote view receives shares),
+ * 'confirm' for a connect link elsewhere.
+ */
+function deepLinkAction({ url, ready, view }) {
+    if (!url) return 'ignore';
+    if (!ready) return 'pending';
+    if (view === 'remote') return 'deliver';
+    return /^manga-shelf:\/\/share/i.test(String(url)) ? 'show' : 'confirm';
+}
+
 module.exports = {
     MODES,
     MODE_LABELS,
@@ -169,6 +181,7 @@ module.exports = {
     normalizeSettings,
     parseArgs,
     parsePort,
+    deepLinkAction,
     resolveRun,
     withMode,
     sameServer,

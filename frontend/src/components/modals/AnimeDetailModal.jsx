@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ExternalLink, Minus, Plus, RefreshCw, Trash, Tv, X } from 'lucide-react';
+import { BookOpen, ExternalLink, Minus, Play, Plus, RefreshCw, Trash, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
 import { langFor } from '../common/lang';
+import { openLinkOutside } from '../../app/openExternal';
 import { isAbortError } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
-  PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription
+  PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
+  continueTarget
 } from '../../utils/animeHelpers';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -187,6 +189,7 @@ export default function AnimeDetailModal({
   const countdown = anime ? countdownText(anime.next_airing) : null;
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
   const relations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
+  const next = continueTarget(anime);
 
   return (
     <div
@@ -236,6 +239,19 @@ export default function AnimeDetailModal({
                   </MetaRow>
                 </dl>
                 <div className="space-y-2">
+                  {next && (
+                    <a
+                      id="anime-continue-link"
+                      href={next.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      onClick={(e) => openLinkOutside(e, { preferApp: true })}
+                      aria-label={`${next.label}: ${displayTitle(anime)}`}
+                      className="btn-primary text-xs inline-flex items-center gap-1.5"
+                    >
+                      <Play className="w-3.5 h-3.5" aria-hidden="true" /> {next.label}
+                    </a>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {anime.urls?.anilist && <a href={anime.urls.anilist} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">AniList <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}
                     {anime.urls?.mal && <a href={anime.urls.mal} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">MyAnimeList <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}

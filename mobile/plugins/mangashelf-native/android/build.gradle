@@ -1,0 +1,31 @@
+// Local plugin module; the app's root build.gradle provides the Android Gradle plugin (no buildscript block, so offline builds work).
+apply plugin: 'com.android.library'
+
+android {
+    namespace "de.mangashelf.nativeplugin"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 35
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 23
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 35
+    }
+    lintOptions {
+        abortOnError false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:${project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.0'}"
+    implementation "androidx.webkit:webkit:${project.hasProperty('androidxWebkitVersion') ? rootProject.ext.androidxWebkitVersion : '1.12.1'}"
+    // WebLogin.request: its own cookie jar instead of HttpURLConnection, which reads the process-wide CookieHandler
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}

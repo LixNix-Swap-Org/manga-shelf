@@ -1,6 +1,8 @@
-// Covers launch-mode argument parsing, run resolution, settings normalisation and server/window URL helpers.
+// Covers launch-mode argument parsing, run resolution, settings normalisation, server/window URL helpers and deep-link routing.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const modes = require('../modes');
 
 const { parseArgs, resolveRun, normalizeSettings, withMode, sameServer, windowHost, serverOrigin, localWindowUrl, DEFAULT_LOCAL_PORT, DEFAULT_SERVER_PORT } = modes;
@@ -115,4 +117,31 @@ test('sameServer, windowHost and the window URL', () => {
     assert.equal(windowHost('192.168.1.10'), '192.168.1.10');
     assert.equal(serverOrigin(3000, 'fd00::1'), 'http://[fd00::1]:3000');
     assert.equal(localWindowUrl(37210, '127.0.0.1'), 'http://127.0.0.1:37210/');
+});
+
+test('deepLinkAction: a share link at cold start waits, then reaches the remote view or only shows the window', () => {
+    const share = 'manga-shelf://share?text=https%3A%2F%2Fwww.crunchyroll.com%2Fwatch%2FX';
+    assert.equal(modes.deepLinkAction({ url: share, ready: false, view: undefined }), 'pending');
+    assert.equal(modes.deepLinkAction({ url: share, ready: true, view: 'remote' }), 'deliver');
+    assert.equal(modes.deepLinkAction({ url: share, ready: true, view: 'local' }), 'show');
+    assert.equal(modes.deepLinkAction({ url: 'MANGA-SHELF://share?text=x', ready: true, view: null }), 'show');
+    assert.equal(modes.deepLinkAction({ url: null, ready: true, view: 'remote' }), 'ignore');
+});
+
+test('deepLinkAction: connect links keep their path', () => {
+    const connect = 'manga-shelf://connect?server=http%3A%2F%2F192.168.1.5%3A3000';
+    assert.equal(modes.deepLinkAction({ url: connect, ready: false }), 'pending');
+    assert.equal(modes.deepLinkAction({ url: connect, ready: true, view: 'local' }), 'confirm');
+    assert.equal(modes.deepLinkAction({ url: connect, ready: true, view: null }), 'confirm');
+    assert.equal(modes.deepLinkAction({ url: connect, ready: true, view: 'remote' }), 'deliver');
+});
+
+test('main.js routes every deep link through deepLinkAction before it reads run', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    const body = source.slice(source.indexOf('async function handleDeepLink(url) {'));
+    const firstLine = body.split('\n')[1].trim();
+    assert.match(firstLine, /^const action = deepLinkAction\(\{ url, ready: Boolean\(settings && run\), view: run\?\.view \}\);$/);
+    // the startup path re-routes a pending link outside the remote view; applyRun delivers it in the remote view
+    assert.match(source, /if \(startLink && run\?\.view !== 'remote'\) \{\s*pendingUrl = null;\s*await handleDeepLink\(startLink\);/);
+    assert.match(source, /if \(pendingUrl && run\.view === 'remote'\) deliverUrl\(pendingUrl\);/);
 });

@@ -2,6 +2,7 @@ import { ANIME_CACHE_KEY, ANIME_META_KEY } from './storageKeys';
 import { compareNatural, createSearch } from './search';
 import { formatRelative, formatTime } from './format';
 import { OFFLINE_SYNCED_EVENT, getClearGeneration } from './offlineStore';
+import links from '../../../core/watch/links.js';
 
 export const PROGRESS_STATUSES = ['Geplant', 'Schaue', 'Gesehen', 'Pausiert', 'Abgebrochen'];
 export const NO_STATUS = 'Ohne Status';
@@ -147,13 +148,54 @@ export function predictProgress(current, change, total) {
   if (change.status === 'Gesehen' && total > 0) episodes = total;
   if (change.episodes_watched !== undefined && change.status === undefined && total > 0 && episodes >= total) status = 'Gesehen';
   if (change.episodes_watched !== undefined && change.status === undefined && status === 'Geplant' && episodes > 0) status = 'Schaue';
-  return {
+  const next = {
     ...base,
     status,
     episodes_watched: episodes,
     score: change.score !== undefined ? change.score : base.score,
     notes: change.notes !== undefined ? change.notes : base.notes
   };
+  // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
+  if (episodes !== (base.episodes_watched ?? 0)) {
+    next.resume_url = null;
+    next.resume_episode = null;
+  }
+  return next;
+}
+
+/**
+ * The optimistic answer of "Ja, gesehen" (POST /anime/:id/watched): the counter never goes down, the shared page is
+ * the new "Weiter" target, raising the counter moves Geplant/Pausiert/Abgebrochen to "Schaue".
+ */
+export function predictWatched(current, { episode, url = null }, total) {
+  const base = current || { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
+  const had = base.episodes_watched || 0;
+  let episodes = Math.max(had, Number(episode) || 0);
+  if (total > 0 && episodes > total) episodes = total;
+  let status = base.status;
+  if (total > 0 && episodes >= total) status = 'Gesehen';
+  else if (episodes > had && status !== 'Gesehen') status = 'Schaue';
+  return { ...base, status, episodes_watched: episodes, resume_url: url, resume_episode: url ? Number(episode) || null : null };
+}
+
+const crunchyroll = () => links.SERVICES.find((s) => s.id === 'crunchyroll');
+
+/**
+ * Target of "Weiter auf Crunchyroll" by the core's chain (watch.next_url, then watch.series_url, then the search) or
+ * null when there is nothing left to watch. The card passes `search: false`: a search alone is no reason for a button.
+ */
+export function continueTarget(anime, { search = true } = {}) {
+  if (!anime) return null;
+  const mine = anime.my_progress;
+  if (mine?.status === 'Gesehen') return null;
+  if (anime.episodes > 0 && (mine?.episodes_watched || 0) >= anime.episodes) return null;
+  const watch = anime.watch || {};
+  if (watch.next_url) return { url: watch.next_url, kind: 'episode', label: 'Weiter auf Crunchyroll' };
+  if (watch.series_url) return { url: watch.series_url, kind: 'series', label: 'Weiter auf Crunchyroll' };
+  if (!search) return null;
+  const title = anime.title_english || anime.title_romaji || anime.title;
+  const url = watch.search_url || (title ? crunchyroll()?.searchUrl(title) : null);
+  return url ? { url, kind: 'search', label: 'Auf Crunchyroll suchen' } : null;
 }
 
 /** The stored list for the offline view (only for the same user and only when no logout happened since `generation`). */
@@ -195,6 +237,27 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 }
 
 export const SLOW_HINT_KEY = 'mangashelf_anime_slow_hint';
+/** True for a list sync error about the own AniList key (missing or refused); 'AniList ist gerade nicht erreichbar' passes. */
+export const listSyncKeyError = (text) => /\b(?:Token|Schlüssel)\b/i.test(String(text || ''));
+
+export const LIST_SYNC_KEY = 'mangashelf_anime_list_sync';
+export const LIST_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+
+/** The AniList list sync of the tab runs at most every 15 minutes per user and browser session. */
+export function listSyncDue(userId, now = Date.now()) {
+  try {
+    const last = Number(sessionStorage.getItem(`${LIST_SYNC_KEY}:${userId}`)) || 0;
+    return now - last >= LIST_SYNC_INTERVAL_MS;
+  } catch (_) {
+    return true;
+  }
+}
+
+export function markListSync(userId, now = Date.now()) {
+  try {
+    sessionStorage.setItem(`${LIST_SYNC_KEY}:${userId}`, String(now));
+  } catch (_) { /* storage unavailable */ }
+}
 
 /** The "search is slow" hint shows once per session and can be switched off for good. */
 export function slowHintAllowed() {

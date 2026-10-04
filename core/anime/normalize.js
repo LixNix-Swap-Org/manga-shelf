@@ -22,13 +22,14 @@ function foldUmlauts(text) {
 const searchKey = (text) => titleKey(foldUmlauts(text));
 
 /** 0..1: how well one of `titles` matches the query (same idea as the Manga Passion title keys). */
-function titleScore(query, titles) {
-    const q = searchKey(query);
+const titleScore = (query, titles) => keyScore(searchKey(query), titles.map(searchKey));
+
+/** titleScore on keys made once by searchKey (matching many items against the same rows). */
+function keyScore(q, keys) {
     if (!q) return 0;
     const qWords = new Set(q.split(' '));
     let best = 0;
-    for (const raw of titles) {
-        const t = searchKey(raw);
+    for (const t of keys) {
         if (!t) continue;
         let score;
         if (t === q || t.replace(/ /g, '') === q.replace(/ /g, '')) score = 1;
@@ -165,7 +166,7 @@ function mergeMeta(base, extra) {
         urls: { anilist: pick(base.urls?.anilist, extra.urls?.anilist), mal: pick(base.urls?.mal, extra.urls?.mal) }
     };
     for (const key of ['format', 'episodes', 'duration', 'status', 'season', 'season_year', 'start_date', 'end_date', 'cover_url',
-        'banner_url', 'genres', 'studios', 'score', 'description', 'relations']) {
+        'banner_url', 'genres', 'studios', 'score', 'description', 'relations', 'external_links', 'streaming_episodes']) {
         merged[key] = pick(base[key], extra[key]);
     }
     if (!base.next_airing && extra.next_airing) {
@@ -203,12 +204,13 @@ function emptyMeta(fields) {
         format: null, episodes: null, duration: null, status: null, season: null, season_year: null, start_date: null, end_date: null,
         cover_url: null, banner_url: null, genres: [], studios: [], score: null, description: null,
         next_airing: null, next_airing_estimated: false, relations: [], urls: { anilist: null, mal: null },
+        external_links: [], streaming_episodes: [],
         source: null, fetched_at: null,
         ...fields
     };
 }
 
 module.exports = {
-    STATUSES, FORMATS, MINUTE, HOUR, DAY, foldUmlauts, searchKey, titleScore, rankByTitle, allTitles, fuzzyDate, isoDay,
+    STATUSES, FORMATS, MINUTE, HOUR, DAY, foldUmlauts, searchKey, titleScore, keyScore, rankByTitle, allTitles, fuzzyDate, isoDay,
     cleanDescription, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta
 };

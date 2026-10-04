@@ -1,5 +1,5 @@
 // AniList adapter (GraphQL): search with aliases (several terms in one request), ids in batches of 50, relations,
-// the manga search of the series lookup and the Viewer check of a personal token.
+// the manga search of the series lookup, the Viewer check of a personal token and the user's anime list (read and write).
 const { requestJson, SourceError } = require('./request');
 const { emptyMeta, fuzzyDate, cleanDescription, preferredTitle, FORMATS, STATUSES } = require('./normalize');
 const { mapAniListMedia } = require('../anilist');
@@ -15,12 +15,13 @@ const MEDIA_FIELDS = `
     coverImage { extraLarge large } bannerImage genres averageScore meanScore
     studios(isMain: true) { nodes { name } }
     nextAiringEpisode { episode airingAt }`;
+const LINK_FIELDS = 'externalLinks { site url type } streamingEpisodes { title url site }';
 const DETAIL_FIELDS = `${MEDIA_FIELDS}
-    description(asHtml: false)
+    description(asHtml: false) ${LINK_FIELDS}
     relations { edges { relationType(version: 2) node { id idMal type format status episodes seasonYear title { romaji english native } coverImage { large } } } }`;
-// the id batches of the background refresh carry the description too, so a sweep never empties it
+// the id batches of the background refresh carry the description and links too, so a sweep never empties them
 const BATCH_FIELDS = `${MEDIA_FIELDS}
-    description(asHtml: false)`;
+    description(asHtml: false) ${LINK_FIELDS}`;
 const MANGA_FIELDS = `
     id idMal title { romaji english native } description(asHtml: false) coverImage { extraLarge large medium }
     bannerImage status volumes genres staff(perPage: 5) { edges { role node { name { full } } } }`;
@@ -56,6 +57,25 @@ function relationsOf(media) {
     }));
 }
 
+const https = (url) => String(url).replace(/^http:\/\//i, 'https://');
+
+/** externalLinks (https only) and streamingEpisodes (http upgraded, episode number from "Episode N - …"). */
+function linksOf(media) {
+    const external = Array.isArray(media.externalLinks) ? media.externalLinks : [];
+    const streaming = Array.isArray(media.streamingEpisodes) ? media.streamingEpisodes : [];
+    return {
+        external_links: external
+            .filter((l) => l && typeof l.url === 'string' && /^https?:\/\//i.test(l.url))
+            .map((l) => ({ site: l.site || null, url: https(l.url), type: l.type || null })),
+        streaming_episodes: streaming
+            .filter((e) => e && typeof e.url === 'string' && /^https?:\/\//i.test(e.url))
+            .map((e) => {
+                const m = /^\s*Episode\s+(\d{1,4})\b/i.exec(e.title || '');
+                return { title: e.title || null, url: https(e.url), site: e.site || null, episode: m ? Number(m[1]) : null };
+            })
+    };
+}
+
 /** AniList Media -> AnimeMeta. */
 function normalize(media, nowMs = Date.now()) {
     const title = { romaji: media.title?.romaji || null, english: media.title?.english || null, native: media.title?.native || null };
@@ -85,6 +105,7 @@ function normalize(media, nowMs = Date.now()) {
         next_airing: next,
         next_airing_estimated: false,
         relations: relationsOf(media),
+        ...linksOf(media),
         urls: { anilist: media.siteUrl || (media.id ? `https://anilist.co/anime/${media.id}` : null), mal: media.idMal ? `https://myanimelist.net/anime/${media.idMal}` : null },
         source: 'anilist',
         fetched_at: nowMs
@@ -158,4 +179,49 @@ async function viewer(ctx, secret, { timeoutMs, signal } = {}) {
     return { id: data.Viewer.id, name: data.Viewer.name };
 }
 
-module.exports = { search, byId, byIds, adaptations, viewer, normalize, BATCH_SIZE, API_URL, LABEL };
+const listEntryOf = (e) => ({
+    mediaId: e.mediaId,
+    status: e.status || null,
+    progress: Number.isInteger(e.progress) ? e.progress : 0,
+    updatedAt: Number.isInteger(e.updatedAt) ? e.updatedAt : null
+});
+
+/** The anime list of an AniList user: { entries: [{ mediaId, status, progress, updatedAt (unix s) }], rate }. */
+async function listCollection(ctx, userId, { credential, timeoutMs, signal } = {}) {
+    const query = 'query ($u: Int) { MediaListCollection(userId: $u, type: ANIME) { lists { entries { mediaId status progress updatedAt } } } }';
+    const { data, rate } = await post(ctx, query, { u: Number(userId) }, { credential, timeoutMs, signal });
+    const lists = data.MediaListCollection && Array.isArray(data.MediaListCollection.lists) ? data.MediaListCollection.lists : [];
+    const seen = new Set();
+    const entries = [];
+    for (const list of lists) {
+        for (const e of (list && Array.isArray(list.entries) ? list.entries : [])) {
+            // custom lists repeat entries of the status lists
+            if (!e || !Number.isInteger(e.mediaId) || seen.has(e.mediaId)) continue;
+            seen.add(e.mediaId);
+            entries.push(listEntryOf(e));
+        }
+    }
+    return { entries, rate };
+}
+
+/** One list entry of an AniList user: { entry: { status, progress, updatedAt } | null, rate }. */
+async function listEntry(ctx, userId, mediaId, { credential, timeoutMs, signal } = {}) {
+    const query = 'query ($u: Int, $m: Int) { MediaList(userId: $u, mediaId: $m) { mediaId status progress updatedAt } }';
+    try {
+        const { data, rate } = await post(ctx, query, { u: Number(userId), m: Number(mediaId) }, { credential, timeoutMs, signal });
+        return { entry: data.MediaList ? listEntryOf({ mediaId: Number(mediaId), ...data.MediaList }) : null, rate };
+    } catch (err) {
+        if (err.kind === 'notfound') return { entry: null, rate: null };
+        throw err;
+    }
+}
+
+/** Creates or updates the token owner's list entry: { entry, rate }. */
+async function saveListEntry(ctx, { mediaId, progress, status }, { credential, timeoutMs, signal } = {}) {
+    const query = 'mutation ($m: Int, $p: Int, $s: MediaListStatus) { SaveMediaListEntry(mediaId: $m, progress: $p, status: $s) { id mediaId status progress updatedAt } }';
+    const { data, rate } = await post(ctx, query, { m: Number(mediaId), p: progress, s: status }, { credential, timeoutMs, signal });
+    const saved = data.SaveMediaListEntry;
+    return { entry: saved ? listEntryOf({ mediaId: Number(mediaId), ...saved }) : null, rate };
+}
+
+module.exports = { search, byId, byIds, adaptations, viewer, listCollection, listEntry, saveListEntry, normalize, BATCH_SIZE, API_URL, LABEL };

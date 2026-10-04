@@ -23,6 +23,7 @@ const SEARCH_GROUP_MAX = 3;
 const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList', jikan: 'MyAnimeList (Jikan)' };
 // a personal key is disabled after its second refused-looking answer within this window that the pool answered properly
 const SUSPECT_WINDOW_MS = 10 * 60 * 1000;
+const OWN_BACKGROUND_WAIT_MS = 60 * 1000;
 
 let state = null;
 
@@ -53,6 +54,7 @@ function resetGatewayState() {
     if (state) {
         state.background.clear();
         if (state.refreshOpen) clearTimeout(state.refreshOpen.timer);
+        if (state.listSync) for (const timer of state.listSync.pushTimers.values()) clearTimeout(timer);
     }
     state = freshState();
 }
@@ -100,11 +102,18 @@ function malSide(ctx, userId, priority = 'interactive') {
     return 'jikan';
 }
 
-/** The accesses a request may use, in order: personal key (interactive), shared pool, volunteers (background). */
-function accessesFor(ctx, provider, { userId, priority }) {
+/**
+ * The accesses a request may use, in order: personal key (interactive), shared pool, volunteers (background). ownOnly
+ * (the user's own AniList list): the personal key alone, at any priority.
+ */
+function accessesFor(ctx, provider, { userId, priority, ownOnly = false }) {
     const creds = credentialsOf(ctx);
     const out = [];
     const credProvider = provider === 'jikan' ? null : provider;
+    if (ownOnly) {
+        const own = credProvider && userId ? creds.get(userId, credProvider) : null;
+        return own && own.secret ? [{ bucket: `user:${userId}:${provider}`, credential: own, kind: 'own', userId }] : [];
+    }
     if (credProvider && priority === 'interactive' && userId) {
         const own = creds.get(userId, credProvider);
         if (own && own.secret) out.push({ bucket: `user:${userId}:${provider}`, credential: own, kind: 'own', userId });
@@ -134,16 +143,20 @@ const unavailable = (provider, reason = 'unavailable') => new SourceError(reason
 
 /**
  * One source request through budget and accesses. exec(credential) does the request and resolves with an object that
- * may carry `rate` (headers). Resolves with { ...result, credential_used }; rejects with a SourceError.
+ * may carry `rate` (headers). Resolves with { ...result, credential_used }; rejects with a SourceError. ownOnly: only
+ * the caller's own key (kind 'notoken' without one), no pool to fall back to and so no suspect strikes.
  */
-async function call(ctx, provider, { priority = 'interactive', userId = null, signal, probe = false } = {}, exec) {
+async function call(ctx, provider, { priority = 'interactive', userId = null, signal, probe = false, ownOnly = false } = {}, exec) {
     const s = remember(ctx);
     const creds = credentialsOf(ctx);
     const options = bucketOptions(ctx, provider);
-    const accesses = accessesFor(ctx, provider, { userId, priority });
+    const accesses = accessesFor(ctx, provider, { userId, priority, ownOnly });
+    if (ownOnly && !accesses.length) throw new SourceError('notoken', `Kein eigener ${SOURCE_LABELS[provider] || provider}-Schlüssel hinterlegt`);
     const plan = [];
     for (const access of accesses) {
-        if (probe) {
+        if (ownOnly) {
+            plan.push({ access, deadlineMs: priority === 'interactive' ? INTERACTIVE_WAIT_MS : OWN_BACKGROUND_WAIT_MS });
+        } else if (probe) {
             if (access.kind === 'shared') plan.push({ access, deadlineMs: 0 });
         } else {
             plan.push({ access, deadlineMs: priority === 'interactive' && access.kind === 'shared' ? INTERACTIVE_WAIT_MS : 0 });
@@ -571,6 +584,22 @@ async function refreshEntry(ctx, id, { priority = 'interactive', skipAniList = f
     return true;
 }
 
+/** One id batch over AniList; a "max query complexity" answer splits it in halves (recursively). */
+async function byIdsSplit(ctx, kind, rows) {
+    try {
+        return await call(ctx, 'anilist', { priority: 'refresh' }, (credential) => anilist.byIds(ctx, kind === 'mal'
+            ? { mal: rows.map((r) => r.mal_id) }
+            : { anilist: rows.map((r) => r.anilist_id) }, { credential }));
+    } catch (err) {
+        if (!(err instanceof SourceError) || err.kind !== 'complexity' || rows.length < 2) throw err;
+        logger().info(`AniList: Abfrage mit ${rows.length} IDs zu komplex, sie wird geteilt`);
+        const half = Math.ceil(rows.length / 2);
+        const a = await byIdsSplit(ctx, kind, rows.slice(0, half));
+        const b = await byIdsSplit(ctx, kind, rows.slice(half));
+        return { metas: [...a.metas, ...b.metas], rate: b.rate || a.rate };
+    }
+}
+
 /** Due rows in AniList id batches: anilist_id groups first, then MAL-only rows by idMal. */
 function idGroups(rows) {
     const groups = [];
@@ -608,9 +637,7 @@ async function refreshRows(ctx, rows, report, { generation, maxGroups = Infinity
         }
         let result;
         try {
-            result = await call(ctx, 'anilist', { priority: 'refresh' }, (credential) => anilist.byIds(ctx, group.kind === 'mal'
-                ? { mal: group.rows.map((r) => r.mal_id) }
-                : { anilist: group.rows.map((r) => r.anilist_id) }, { credential }));
+            result = await byIdsSplit(ctx, group.kind, group.rows);
         } catch (err) {
             if (!(err instanceof SourceError)) throw err;
             logger().info(`Anime-Aktualisierung angehalten: ${err.message}`);
@@ -894,6 +921,12 @@ async function validateCredential(ctx, provider, secret) {
     throw new HttpError(400, 'Unbekannter Anbieter', 'UNKNOWN_PROVIDER');
 }
 
+/** A deduplicated background job by key; fn gets the host ctx (no caller, no abort signal). False when not queued. */
+function runInBackground(ctx, key, priority, fn) {
+    const s = remember(ctx);
+    return s.background.add(key, priority, () => fn(s.hostCtx));
+}
+
 /** Drops the budget of a personal key (deleted or replaced). */
 function forgetAccess(userId, provider) {
     S().budget.drop(`user:${userId}:${provider}`);
@@ -901,6 +934,6 @@ function forgetAccess(userId, provider) {
 
 module.exports = {
     searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, refreshDue,
-    adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown,
+    adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf,
     state: () => S(), MANUAL_REFRESH_MS
 };

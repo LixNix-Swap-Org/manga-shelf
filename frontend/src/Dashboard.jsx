@@ -28,6 +28,9 @@ import useCollectionFilters, { loadPublisherNames } from './hooks/useCollectionF
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
 import useAnimeList from './hooks/useAnimeList';
+import useShareIntake from './hooks/useShareIntake';
+import { findStreamingLink } from './utils/shareIntake';
+import { SHARE_LINK_EVENT, takePendingShare } from './app/deepLink';
 import useDashboardKeyboard from './hooks/useDashboardKeyboard';
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
@@ -39,6 +42,7 @@ const UserManagementModal = lazy(() => import('./components/modals/UserManagemen
 const AccountModal = lazy(() => import('./components/modals/AccountModal'));
 const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
 const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
+const ShareLinkDialog = lazy(() => import('./components/modals/ShareLinkDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
 const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
@@ -97,7 +101,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [accountTab, setAccountTab] = useState('password');
-  const [animeAdd, setAnimeAdd] = useState(null); // { mangaId } while the add dialog is open
+  const [animeAdd, setAnimeAdd] = useState(null); // { mangaId, query?, share? } while the add dialog is open
   const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -146,6 +150,15 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline) });
 
   const anime = useAnimeList({ user });
+  const activeViewRef = useRef(activeMainView);
+  activeViewRef.current = activeMainView;
+  const setViewRef = useRef(null);
+  const showAnimeView = useCallback(() => {
+    if (activeViewRef.current !== ANIME_VIEW) setViewRef.current?.(ANIME_VIEW);
+  }, []);
+  const shareDialogRef = useRef(null);
+  const openShareAdd = useCallback((query) => setAnimeAdd({ mangaId: null, query, share: true }), []);
+  const share = useShareIntake({ anime, user, canEdit, showAnime: showAnimeView, openAddAnime: openShareAdd });
 
   onOnlineRef.current = () => {
     syncPendingPurchases();
@@ -166,6 +179,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     if (activeMainView === ANIME_VIEW) {
       anime.fetchAnime();
       anime.fetchSources();
+      anime.syncList();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount and on an offline change
   }, [user?.offline]);
@@ -192,6 +206,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     if (view === ANIME_VIEW) {
       anime.fetchAnime();
       anime.fetchSources();
+      anime.syncList();
     }
     if (view === 'radar') {
       fetchReleaseRadar();
@@ -230,6 +245,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     if (next !== activeMainView) scrollResetRef.current = next;
     navigate({ search: nextSearch });
   };
+  setViewRef.current = setView;
 
   const closeAddModal = useCallback(() => {
     setShowAddModal(false);
@@ -320,24 +336,44 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     }
   };
 
-  // share target (manifest share_text / share_url): an ISBN is looked up like a scan, then the parameters are removed
+  // a shared text: a streaming link goes to the anime tab's confirmation, else an ISBN is looked up like a scan
+  const handleSharedRef = useRef(null);
+  handleSharedRef.current = (input, options) => {
+    if (share.start(input, options)) return;
+    const shared = parseSharedScan({ text: input.text || '', url: input.url || '' });
+    if (shared?.isbn) handleBarcodeDetected(shared.isbn);
+    else if (shared?.mpUrl && canEdit) {
+      showScanToast('info', SHARED_MP_LINK_MESSAGE, { duration: 0, action: { label: 'Reihe anlegen', onClick: () => openAddWithPrefill(null) } });
+    } else showScanToast('info', SHARED_NO_ISBN_MESSAGE, { duration: 8000 });
+  };
+
+  // share target (manifest share_text / share_url): the parameters are removed at once, a streaming link opens ?view=anime
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (!params.has('share_text') && !params.has('share_url')) return;
-    const shared = parseSharedScan({ text: params.get('share_text') || '', url: params.get('share_url') || '' });
+    const input = { text: params.get('share_text') || '', url: params.get('share_url') || '' };
     params.delete('share_text');
     params.delete('share_url');
-    const rest = params.toString();
-    navigate({ search: rest ? `?${rest}` : '' }, { replace: true });
+    const rest = params.toString() ? `?${params}` : '';
+    navigate({ search: findStreamingLink(input.text, input.url) ? viewSearch(rest, ANIME_VIEW) : rest }, { replace: true });
     // after the first paint: a toast stack mounted after the dashboard would miss a message sent during mount
-    const timer = setTimeout(() => {
-      if (shared?.isbn) handleBarcodeDetected(shared.isbn);
-      else if (shared?.mpUrl && canEdit) {
-        showScanToast('info', SHARED_MP_LINK_MESSAGE, { duration: 0, action: { label: 'Reihe anlegen', onClick: () => openAddWithPrefill(null) } });
-      } else showScanToast('info', SHARED_NO_ISBN_MESSAGE, { duration: 8000 });
-    }, 0);
+    const timer = setTimeout(() => handleSharedRef.current(input, { switchView: false }), 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
+  }, []);
+
+  // app shells: a share that arrived before the dashboard mounted waits in deepLink.js, later ones come as an event
+  useEffect(() => {
+    const onShare = () => {
+      const pending = takePendingShare();
+      if (pending) handleSharedRef.current(pending);
+    };
+    const timer = setTimeout(onShare, 0);
+    window.addEventListener(SHARE_LINK_EVENT, onShare);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(SHARE_LINK_EVENT, onShare);
+    };
   }, []);
 
   const handleOpenStats = useCallback(() => {
@@ -584,9 +620,11 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         fromCache={anime.fromCache}
         cacheAt={anime.cacheAt}
         sources={anime.sources}
+        listSync={anime.listSync}
         canEdit={canEdit}
         user={user}
         onAdd={() => setAnimeAdd({ mangaId: null })}
+        onPasteLink={share.paste}
         onOpen={handleOpenAnime}
         onPlusOne={handleAnimePlusOne}
         onStatusChange={handleAnimeStatus}
@@ -671,18 +709,41 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
         {showPasswordModal && <AccountModal isOpen onClose={() => setShowPasswordModal(false)} user={user} initialTab={accountTab} />}
 
-        {animeAdd && (
-          <AddAnimeModal
-            isOpen
-            onClose={() => setAnimeAdd(null)}
-            search={anime.search}
-            loadAdaptations={anime.adaptations}
-            onAdd={anime.add}
-            onOpenExisting={(id) => setAnimeDetailId(id)}
-            mangas={mangas}
-            initialMangaId={animeAdd.mangaId}
-          />
-        )}
+        {/* own boundaries: a dialog whose chunk is still loading must not hide the open share dialog (focus would leave it) */}
+        <Suspense fallback={null}>
+          {share.state && (
+            <ShareLinkDialog
+              state={share.state}
+              list={anime.list}
+              listLoaded={anime.loaded}
+              canAdd={canEdit && !user?.offline}
+              rootRef={shareDialogRef}
+              onClose={share.close}
+              onSubmitPaste={share.submitPaste}
+              onRetry={share.retry}
+              onChoose={share.choose}
+              onAddToList={share.addToList}
+              onConfirm={share.confirm}
+            />
+          )}
+        </Suspense>
+
+        <Suspense fallback={null}>
+          {animeAdd && (
+            <AddAnimeModal
+              isOpen
+              onClose={() => setAnimeAdd(null)}
+              search={anime.search}
+              loadAdaptations={anime.adaptations}
+              onAdd={animeAdd.share ? async (body) => { const added = await anime.add(body); share.choose(added?.id ?? null); return added; } : anime.add}
+              onOpenExisting={animeAdd.share ? share.choose : (id) => setAnimeDetailId(id)}
+              mangas={mangas}
+              initialMangaId={animeAdd.mangaId}
+              initialQuery={animeAdd.query || ''}
+              returnFocusRef={animeAdd.share ? shareDialogRef : undefined}
+            />
+          )}
+        </Suspense>
 
         {animeDetailId !== null && (
           <AnimeDetailModal

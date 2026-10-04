@@ -4,6 +4,7 @@ import errors from '../../../core/errors.js';
 import guides from '../../../core/sources/guides.js';
 import gateway from '../../../core/anime/gateway.js';
 import sourceRequest from '../../../core/anime/request.js';
+import listSync from '../../../core/anime/listSync.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import { corsText } from './http.js';
 
@@ -79,7 +80,11 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
     const secret = cleanSecret(provider, body?.secret);
     const { label } = await checkLive(provider, secret);
     const entry = await credentials.save(userId, provider, { secret, label: label || null, allowBackground: allowBackgroundOf(body) });
-    if (userId !== null) gateway.forgetAccess(userId, provider);
+    if (userId !== null) {
+      gateway.forgetAccess(userId, provider);
+      // a new key may belong to another AniList account: the list sync resolves it again
+      listSync.onCredentialChanged(getCtx(), userId, provider, { removed: false });
+    }
     return masked(provider, entry);
   }
 
@@ -122,6 +127,7 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
       const provider = providerParam(m[1], guides.userProviders());
       const removed = await credentials.remove(getProfile().id, provider);
       gateway.forgetAccess(getProfile().id, provider);
+      if (removed) listSync.onCredentialChanged(getCtx(), getProfile().id, provider, { removed: true });
       return json({ success: true, removed });
     }],
     ['GET', /^\/admin\/api-keys$/, () => json({

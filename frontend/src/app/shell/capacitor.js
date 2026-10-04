@@ -6,7 +6,7 @@ import {
 } from '../serverStore.js';
 import { checkConnection } from '../connection.js';
 import { setOpenExternal, openExternal } from '../openExternal.js';
-import { receiveDeepLink } from '../deepLink.js';
+import { receiveDeepLink, buildShareLink } from '../deepLink.js';
 import { setLocalAdapters } from '../../local/localTransport.js';
 import { createCapacitorAdapters, bytesToBase64 } from '../../local/capacitor.js';
 import { notify } from '../../utils/notify.js';
@@ -108,11 +108,12 @@ export async function migrateLocalStorage(adapter, storage = globalThis.localSto
 const keyFieldNear = (el) => el?.closest?.('[data-provider]')?.querySelector?.('input[type="password"]') || null;
 
 /**
- * Links leave through @capacitor/browser (in-app Safari / Custom Tab). Opened from an API key card, the key field has
- * the focus again when the browser closes; the clipboard is never read.
+ * Links leave through @capacitor/browser (in-app Safari / Custom Tab); `{ preferApp: true }` uses AppLauncher so app links
+ * reach an installed app (in-app browser as fallback). From an API key card the key field gets the focus back when the
+ * browser closes. The shell never reads the clipboard; only the 'Link einfügen' button does, on tap.
  */
 export function installExternalLinks(bridge, { doc = globalThis.document } = {}) {
-  const { Browser, App } = bridge.plugins;
+  const { Browser, App, AppLauncher } = bridge.plugins;
   let lastTarget = null;
   let returnFocus = null;
   const refocus = () => {
@@ -120,9 +121,14 @@ export function installExternalLinks(bridge, { doc = globalThis.document } = {})
     returnFocus = null;
     if (field?.isConnected) field.focus();
   };
-  setOpenExternal((url) => {
-    returnFocus = keyFieldNear(lastTarget) || keyFieldNear(doc.activeElement);
-    Promise.resolve(Browser.open({ url })).catch((err) => {
+  const inAppBrowser = (url) => Browser.open({ url });
+  // openUrl resolves { completed: false } when no app or browser took the link
+  const systemOpener = (url) => Promise.resolve().then(() => AppLauncher.openUrl({ url }))
+    .then((res) => (res?.completed === false ? inAppBrowser(url) : res), () => inAppBrowser(url));
+  setOpenExternal((url, options) => {
+    const viaApp = Boolean(options?.preferApp && typeof AppLauncher?.openUrl === 'function');
+    returnFocus = viaApp ? null : keyFieldNear(lastTarget) || keyFieldNear(doc.activeElement);
+    Promise.resolve(viaApp ? systemOpener(url) : inAppBrowser(url)).catch((err) => {
       returnFocus = null;
       notify.error(`Link ließ sich nicht öffnen: ${err?.message || url}`);
     });
@@ -279,6 +285,36 @@ async function styleStatusBar(bridge) {
   for (const step of steps) await Promise.resolve().then(step).catch(() => {});
 }
 
+function deliverShare(share, win) {
+  const link = buildShareLink(share);
+  if (typeof win.mangashelfOpenUrl === 'function') win.mangashelfOpenUrl(link);
+  else receiveDeepLink(link, win);
+}
+
+/** Android: text shared to the app (ShareIntentPlugin, retained until this listener subscribes) as a share link. */
+export function installShareIntent(bridge, win = globalThis.window) {
+  const { ShareIntent } = bridge.plugins;
+  if (bridge.platform !== 'android' || typeof ShareIntent?.addListener !== 'function') return false;
+  Promise.resolve(ShareIntent.addListener('shareReceived', ({ text, subject } = {}) => {
+    deliverShare({ text: text || '', subject: subject || '' }, win);
+  })).catch((err) => console.warn('[App] Teilen-Empfang nicht verfügbar:', err?.message || err));
+  return true;
+}
+
+/**
+ * iOS: what the share extension left in the App Group (SharedInbox drains it when the app becomes active, retained
+ * until this listener subscribes), as a share link like on Android.
+ */
+export function installSharedInbox(bridge, win = globalThis.window) {
+  const { SharedInbox } = bridge.plugins;
+  if (bridge.platform !== 'ios' || typeof SharedInbox?.addListener !== 'function') return false;
+  Promise.resolve(SharedInbox.addListener('shareReceived', ({ text, url } = {}) => {
+    if (!text && !url) return;
+    deliverShare({ text: text || '', url: url || '' }, win);
+  })).catch((err) => console.warn('[App] Teilen-Empfang nicht verfügbar:', err?.message || err));
+  return true;
+}
+
 /**
  * Wires the native plugins into the app; resolves to false outside Capacitor. Storage adapter (+ hydrated server
  * list), standalone adapters, links, downloads, back button, deep links, network and foreground checks.
@@ -302,6 +338,8 @@ export async function installCapacitorShell({ win = globalThis.window, doc = glo
 
   App.addListener('backButton', backButtonHandler(bridge, win));
   App.addListener('appUrlOpen', ({ url } = {}) => { receiveDeepLink(url, win); });
+  installShareIntent(bridge, win);
+  installSharedInbox(bridge, win);
   App.addListener('appStateChange', ({ isActive } = {}) => { if (isActive) checkConnection(); });
   Network.addListener('networkStatusChange', () => { checkConnection(); });
   const launch = await Promise.resolve(App.getLaunchUrl?.()).catch(() => null);

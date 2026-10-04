@@ -5,7 +5,7 @@ const anilist = require('../../core/anime/anilist');
 const jikan = require('../../core/anime/jikan');
 const mal = require('../../core/anime/mal');
 const {
-    mergeResults, foldUmlauts, estimateNextAiring, rankByTitle, nextCheckAt, DAY, HOUR, MINUTE
+    mergeResults, mergeMeta, emptyMeta, foldUmlauts, estimateNextAiring, rankByTitle, nextCheckAt, DAY, HOUR, MINUTE
 } = require('../../core/anime/normalize');
 const { fixture } = require('./helpers');
 
@@ -119,4 +119,38 @@ test('broadcast estimate: next weekly slot in the broadcast time zone, null with
     assert.equal(est.episode, 2);
     assert.equal(estimateNextAiring({ day: null, time: null }, null, NOW), null);
     assert.equal(estimateNextAiring({ day: 'Fridays', time: '23:00' }, '2026-01-02T14:00:00Z', NOW, 12), null, 'past the last episode');
+});
+
+test('AniList: external links and streaming episodes (http upgraded, episode number from the title); mergeMeta keeps them', () => {
+    const meta = anilist.normalize(fixture('anilist-media-154587.json').data.Media, NOW);
+    assert.deepEqual(meta.external_links[1], { site: 'Crunchyroll', url: 'https://www.crunchyroll.com/series/GG5H5XQ7D/frieren-beyond-journeys-end', type: 'STREAMING' });
+    assert.deepEqual(meta.streaming_episodes[0], {
+        title: 'Episode 1 - The Journey\'s End', url: 'https://www.crunchyroll.com/frieren-beyond-journeys-end/episode-1-the-journeys-end-911401', site: 'Crunchyroll', episode: 1
+    });
+    assert.deepEqual(meta.streaming_episodes.map((e) => e.episode), [1, 2, 3]);
+    const odd = anilist.normalize({ id: 1, title: { romaji: 'X' }, externalLinks: [null, { site: 'X', url: 'ftp://x' }], streamingEpisodes: [{ title: 'Special', url: 'https://x' }] }, NOW);
+    assert.deepEqual([odd.external_links, odd.streaming_episodes[0].episode], [[], null]);
+    const bare = anilist.normalize({ id: 2, title: { romaji: 'Y' } }, NOW);
+    assert.deepEqual([bare.external_links, bare.streaming_episodes], [[], []]);
+    const merged = mergeMeta(emptyMeta({ anilist_id: 154587, title: { romaji: 'F' } }), meta);
+    assert.equal(merged.external_links.length, 3, 'gaps filled from the other side');
+    assert.equal(mergeMeta(meta, emptyMeta({ title: { romaji: 'F' } })).streaming_episodes.length, 3);
+});
+
+test('AniList list: collection without duplicates of custom lists, a missing entry is null, the save mutation', async () => {
+    const { fakeFetch, aniListFixtures, memoryWith, json } = require('./helpers');
+    const http = fakeFetch({
+        anilist: (body) => (body.query.includes('MediaList(') && body.variables.m === 1 ? json({ data: { MediaList: null }, errors: [{ message: 'Not Found.', status: 404 }] }, { status: 404 }) : aniListFixtures(body))
+    });
+    const ctx = memoryWith(http.fetch).ctx;
+    const credential = { secret: 'tok' };
+    const { entries } = await anilist.listCollection(ctx, 7, { credential });
+    assert.deepEqual(entries.map((e) => e.mediaId), [154587, 21, 16498, 101922]);
+    assert.deepEqual(entries[0], { mediaId: 154587, status: 'CURRENT', progress: 10, updatedAt: 1759300000 });
+    assert.deepEqual((await anilist.listEntry(ctx, 7, 154587, { credential })).entry, { mediaId: 154587, status: 'CURRENT', progress: 6, updatedAt: 1759300000 });
+    assert.equal((await anilist.listEntry(ctx, 7, 1, { credential })).entry, null);
+    const saved = await anilist.saveListEntry(ctx, { mediaId: 154587, progress: 7, status: 'CURRENT' }, { credential });
+    assert.deepEqual([saved.entry.progress, saved.entry.status], [7, 'CURRENT']);
+    assert.deepEqual(http.calls.at(-1).body.variables, { m: 154587, p: 7, s: 'CURRENT' });
+    assert.ok(http.calls.every((c) => c.headers.Authorization === 'Bearer tok'));
 });

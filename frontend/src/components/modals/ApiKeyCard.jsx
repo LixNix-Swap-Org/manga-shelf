@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, KeyRound } from 'lucide-react';
-import { formatRelative } from '../../utils/format';
+import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { formatCount, formatRelative } from '../../utils/format';
 import { openExternal } from '../../app/openExternal';
 
 // through openExternal, so the shells open the system browser instead of a web view
@@ -57,11 +57,49 @@ function CopyButton({ text }) {
   );
 }
 
+/** 'zuletzt abgeglichen vor 5 Minuten', 'noch nicht abgeglichen', or the error of the last run. */
+export function listSyncText(sync, now = Date.now()) {
+  if (sync?.last_error) return sync.last_error;
+  const at = sync?.last_synced_at ? formatRelative(sync.last_synced_at, now) : null;
+  if (!at) return 'noch nicht abgeglichen';
+  const missing = Number(sync.last_report?.not_in_list) || 0;
+  return `zuletzt abgeglichen ${at}${missing ? ` · ${formatCount(missing, 'Eintrag', 'Einträge')} von AniList nicht in der Liste` : ''}`;
+}
+
+/** "AniList-Liste abgleichen" (W3): the switch, the state line and "Jetzt abgleichen". */
+function ListSync({ sync, busy, onToggle, onRun, ids }) {
+  const on = Boolean(sync.enabled);
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5" data-testid="list-sync">
+      <div className="flex items-center gap-2 text-[11px] text-slate-300">
+        <input id={`${ids}-sync`} type="checkbox" checked={on} disabled={busy} aria-describedby={`${ids}-sync-hint`} onChange={(e) => onToggle(e.target.checked)} />
+        <label htmlFor={`${ids}-sync`}>AniList-Liste abgleichen</label>
+      </div>
+      <p id={`${ids}-sync-hint`} className="text-[11px] text-slate-400">
+        Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.
+      </p>
+      {(on || sync.last_error) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p aria-live="polite" className={`text-[11px] ${sync.last_error ? 'text-rose-300' : 'text-slate-300'}`}>{listSyncText(sync)}</p>
+          {on && (
+            <button type="button" className="btn-secondary text-[11px] py-1 px-2 inline-flex items-center gap-1" onClick={onRun} disabled={busy}>
+              <RefreshCw className="w-3 h-3" aria-hidden="true" /> {busy ? 'Gleiche ab…' : 'Jetzt abgleichen'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * One provider: guide, key field with format check, "Prüfen & speichern" and "Entfernen". `onSave(secret,
- * { allowBackground })` resolves true when stored. `headingLevel`: 3 below a dialog's h2, 4 below an h3.
+ * { allowBackground })` resolves true when stored. `headingLevel`: 3 below a dialog's h2, 4 below an h3. `listSync`
+ * (personal AniList card of an editor) adds the list sync switch.
  */
-export default function ApiKeyCard({ guide, state, scope = 'user', headingLevel, onSave, onRemove, onToggleBackground, busy }) {
+export default function ApiKeyCard({
+  guide, state, scope = 'user', headingLevel, onSave, onRemove, onToggleBackground, busy, listSync, listSyncBusy, onToggleListSync, onRunListSync
+}) {
   const ids = useId();
   const Heading = `h${headingLevel || (scope === 'instance' ? 4 : 3)}`;
   const [open, setOpen] = useState(false);
@@ -171,6 +209,9 @@ export default function ApiKeyCard({ guide, state, scope = 'user', headingLevel,
           )}
           {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
         </form>
+      )}
+      {listSync && scope === 'user' && state?.configured && onToggleListSync && (
+        <ListSync sync={listSync} busy={Boolean(listSyncBusy)} onToggle={onToggleListSync} onRun={onRunListSync} ids={ids} />
       )}
     </section>
   );

@@ -64,7 +64,7 @@ import {
 } from '../appShell';
 import { getToken, setToken, setActiveBase, resetConnection, activateServer } from '../app/connection';
 import { resetServers, saveServer, setStorageAdapter, getActiveServer, getServer, getPendingLogouts } from '../app/serverStore';
-import { receiveDeepLink } from '../app/deepLink';
+import { receiveDeepLink, takePendingShare } from '../app/deepLink';
 import { getOutbox, outboxScope, resetOutbox, WEB_SERVER_ID } from '../utils/outbox';
 import { notify } from '../utils/notify';
 import { startDownload, downloadsRunning } from '../app/downloadManager';
@@ -986,6 +986,25 @@ describe('App in the app build', () => {
     expect(screen.getByLabelText('Name').value).toBe('Laden');
     expect(screen.getByRole('link', { name: 'Zurück zur Sammlung' })).toBeTruthy();
   });
+
+  it('a shared Crunchyroll link never opens the server screen: from a series page it leads to the anime tab', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    go('/manga/3');
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    await screen.findByText(/Reihe 3/);
+    act(() => { receiveDeepLink('https://www.crunchyroll.com/de/watch/GG1U2Q5MW/the-hero-party'); });
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-wiring').textContent).toContain('?view=anime');
+    expect(screen.queryByRole('heading', { name: 'Server hinzufügen' })).toBeNull();
+    takePendingShare();
+  });
+
   it('a logout cancels a running backup download, so it never completes for the signed-out user', async () => {
     const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
     activateServer(s.id);

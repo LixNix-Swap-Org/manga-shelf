@@ -31,7 +31,7 @@ const GUIDES = [
         pattern: '^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$',
         minLength: 100,
         formatError: 'Das sieht nicht wie ein AniList-Token aus (drei durch Punkte getrennte Teile, mindestens 100 Zeichen).',
-        warning: 'Der Token erlaubt Zugriff auf dein AniList-Konto. Manga Shelf nutzt ihn nur für Suchen und Metadaten und zeigt ihn nie wieder an.',
+        warning: 'Der Token erlaubt Zugriff auf dein AniList-Konto. Manga Shelf nutzt ihn für Suchen und Metadaten und, nur wenn du „AniList-Liste abgleichen“ einschaltest, zum Lesen und Schreiben deiner Anime-Liste. Er wird nie wieder angezeigt.',
         steps: [
             { text: 'Bei AniList anmelden und die Entwickler-Einstellungen öffnen.', link: 'https://anilist.co/settings/developer' },
             { text: '„Create New Client“: Name „Manga Shelf“, Redirect URL genau so eintragen:', copy: ANILIST_PIN_URL },

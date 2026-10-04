@@ -2,9 +2,12 @@
 export const LOCAL_PASSWORD_HASH = '!local-profile';
 const SERVER_ONLY_SETTINGS = "substr(key, 1, 14) = 'calendar_feed:' OR key IN ('revoked_sessions', 'jwt_secret')";
 
+const tableExists = (conn, name) => Boolean(conn.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+
 /**
- * Strips server-only data from an imported database: password hashes become the local marker, API keys, calendar
- * feed tokens, revoked sessions and the signing secret go. `conn` needs prepare(). Returns the changed row count.
+ * Strips server-only data from an imported database: password hashes become the local marker, API keys, the AniList
+ * list sync state (it belongs to those keys), calendar feed tokens, revoked sessions and the signing secret go.
+ * `conn` needs prepare(). Returns the changed row count.
  */
 export function sanitizeImportedDatabase(conn) {
   const before = Number(Object.values(conn.prepare('PRAGMA secure_delete').get() || {})[0]) || 0;
@@ -13,9 +16,8 @@ export function sanitizeImportedDatabase(conn) {
   try {
     let changed = conn.prepare('UPDATE users SET password_hash = ? WHERE password_hash IS NULL OR password_hash <> ?')
       .run(LOCAL_PASSWORD_HASH, LOCAL_PASSWORD_HASH).changes || 0;
-    if (conn.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'user_api_credentials'").get()) {
-      changed += conn.prepare('DELETE FROM user_api_credentials').run().changes || 0;
-    }
+    if (tableExists(conn, 'user_api_credentials')) changed += conn.prepare('DELETE FROM user_api_credentials').run().changes || 0;
+    if (tableExists(conn, 'anime_sync')) changed += conn.prepare('DELETE FROM anime_sync').run().changes || 0;
     changed += conn.prepare(`DELETE FROM app_settings WHERE ${SERVER_ONLY_SETTINGS}`).run().changes || 0;
     return changed;
   } finally {

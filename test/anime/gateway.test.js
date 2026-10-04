@@ -318,3 +318,32 @@ test('a hanging second source costs at most the grace period, not its timeout', 
     const meta = await gateway.getAnime(ctx, { anilist_id: 154587 });
     assert.equal(meta.anilist_id, 154587, 'AniList alone when MyAnimeList hangs');
 });
+
+test('ownOnly calls use the own key alone: no pool, no volunteers, no strikes; without a key kind notoken', async () => {
+    const refused = (body, init) => (init.headers.Authorization === 'Bearer eigener'
+        ? json({ data: null, errors: [{ message: 'Private list', status: 403 }] }, { status: 403 })
+        : aniListFixtures(body));
+    const http = fakeFetch({ anilist: refused });
+    const failed = [];
+    const credentials = {
+        get: (userId, provider) => (userId === 2 && provider === 'anilist' ? { secret: 'eigener', allowBackground: false } : null),
+        background: () => [{ userId: 3, secret: 'freiwillig' }],
+        failed: (...args) => failed.push(args)
+    };
+    const core = memoryWith(http.fetch, { credentials });
+    const exec = (credential) => require('../../core/anime/anilist').listCollection(core.ctx, 7, { credential });
+    for (const priority of ['interactive', 'refresh']) {
+        await assert.rejects(gateway.call(core.ctx, 'anilist', { priority, userId: 2, ownOnly: true }, exec), (err) => err.kind === 'auth');
+    }
+    assert.deepEqual(http.calls.map((c) => c.headers.Authorization), ['Bearer eigener', 'Bearer eigener'], 'never the pool or a volunteer');
+    assert.equal(failed.length, 2, 'a 403 on the own key disables it like elsewhere');
+    await assert.rejects(gateway.call(core.ctx, 'anilist', { userId: 1, ownOnly: true }, exec), (err) => err.kind === 'notoken');
+    assert.equal(http.calls.length, 2);
+
+    const bad = fakeFetch({ anilist: () => json({ data: null, errors: [{ message: 'Validation error', status: 400 }] }, { status: 400 }) });
+    const quiet = memoryWith(bad.fetch, { credentials: { ...credentials, failed: (...args) => failed.push(args) } });
+    await assert.rejects(gateway.call(quiet.ctx, 'anilist', { userId: 2, ownOnly: true }, (credential) => require('../../core/anime/anilist').listCollection(quiet.ctx, 7, { credential })),
+        (err) => err.kind === 'bad');
+    assert.equal(bad.calls.length, 1);
+    assert.equal(failed.length, 2, 'a refused-looking answer is no strike without a pool to compare');
+});

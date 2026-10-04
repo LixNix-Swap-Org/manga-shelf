@@ -9,7 +9,9 @@ vi.mock('../utils/api', async (importOriginal) => ({ ...(await importOriginal())
 
 import AccountModal from '../components/modals/AccountModal';
 import { setOpenExternal } from '../app/openExternal';
-import { keyFormatError, stepLink } from '../components/modals/ApiKeyCard';
+import { keyFormatError, stepLink, listSyncText } from '../components/modals/ApiKeyCard';
+import { recordToasts } from './toastLog';
+import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
 
 // the real guides as the server sends them (GET /api/sources/guides)
 const GUIDES = JSON.parse(JSON.stringify(createRequire(import.meta.url)('../../../core/sources/guides.js').GUIDES));
@@ -119,6 +121,127 @@ describe('AccountModal: API keys', () => {
     expect(keyFormatError(GUIDES[1], '0123456789abcdef0123456789abcdef')).toBeNull();
     expect(keyFormatError(GUIDES[1], '')).toBe('Bitte Client-ID eingeben.');
     expect(stepLink(GUIDES[0].steps.find((st) => st.linkTemplate), { client_id: 'x1' }, GUIDES[0].steps)).toBeNull();
+  });
+});
+
+describe('AccountModal: AniList list sync', () => {
+  const sync = (extra = {}) => ({ anilist: { enabled: false, external_user_id: null, last_synced_at: null, last_error: null, last_report: null, available: true, ...extra } });
+  const withSync = (handlers = {}) => serve((url, init) => {
+    if (url === '/api/auth/api-keys') return fakeResponse(200, [state('anilist', { configured: true, label: 'kim-al' }), state('mal')]);
+    const key = `${init.method || 'GET'} ${url}`;
+    return handlers[key] ? handlers[key](init) : undefined;
+  });
+
+  it('the switch sits in the configured personal AniList card only; switching it on sends PUT /api/anime/sync', async () => {
+    const fetchMock = withSync({
+      'GET /api/anime/sync': () => fakeResponse(200, sync()),
+      'PUT /api/anime/sync': () => fakeResponse(200, sync({ enabled: true, external_user_id: 77 }))
+    });
+    const card = await openKeys({ id: 2, role: 'editor' });
+    const box = await within(card).findByLabelText('AniList-Liste abgleichen');
+    expect(box.getAttribute('aria-describedby')).toBeTruthy();
+    expect(document.getElementById(box.getAttribute('aria-describedby')).textContent).toMatch(/nie rückwärts/);
+    expect(screen.getAllByLabelText('AniList-Liste abgleichen')).toHaveLength(1);
+    expect(within(card).queryByRole('button', { name: /Jetzt abgleichen/ })).toBeNull();
+    fireEvent.click(box);
+    expect(await within(card).findByText('noch nicht abgeglichen')).toBeTruthy();
+    expect(box.checked).toBe(true);
+    const put = fetchMock.mock.calls.find(([u, i]) => u === '/api/anime/sync' && i?.method === 'PUT');
+    expect(JSON.parse(put[1].body)).toEqual({ anilist: { enabled: true } });
+  });
+
+  it('a refused switch shows the server message and stays off; visitors never ask for the sync state', async () => {
+    const toasts = recordToasts();
+    try {
+      withSync({
+        'GET /api/anime/sync': () => fakeResponse(200, sync()),
+        'PUT /api/anime/sync': () => fakeResponse(400, { error: 'AniList lehnt den Token ab – bitte im Konto neu eintragen', code: 'TOKEN_REJECTED' })
+      });
+      const card = await openKeys({ id: 2, role: 'editor' });
+      const box = await within(card).findByLabelText('AniList-Liste abgleichen');
+      fireEvent.click(box);
+      await waitFor(() => expect(toasts.messages('error')).toEqual(['AniList lehnt den Token ab – bitte im Konto neu eintragen']));
+      expect(box.checked).toBe(false);
+    } finally {
+      toasts.stop();
+    }
+    const fetchMock = withSync({ 'GET /api/anime/sync': () => fakeResponse(200, sync()) });
+    document.body.innerHTML = '';
+    await openKeys({ id: 3, role: 'visitor' });
+    expect(fetchMock.mock.calls.some(([u]) => u === '/api/anime/sync')).toBe(false);
+    expect(screen.queryByLabelText('AniList-Liste abgleichen')).toBeNull();
+  });
+
+  it('"Jetzt abgleichen" runs the sync, shows when it ran and tells the anime tab', async () => {
+    const events = [];
+    const onSync = (e) => events.push(e.detail);
+    window.addEventListener(ANIME_SYNC_EVENT, onSync);
+    try {
+      const now = Date.now();
+      const fetchMock = withSync({
+        'GET /api/anime/sync': () => fakeResponse(200, sync({ enabled: true, last_synced_at: now - 3 * 3600000, last_report: { pulled: 0, pushed: 0, not_in_list: 0 } })),
+        'POST /api/anime/sync/run': () => fakeResponse(200, { anilist: { ran: true, pulled: 2, pushed: 1, not_in_list: 3, changed: true, last_synced_at: now, last_error: null } })
+      });
+      const card = await openKeys({ id: 2, role: 'editor' });
+      expect(await within(card).findByText(/^zuletzt abgeglichen vor 3 Std/)).toBeTruthy();
+      fireEvent.click(within(card).getByRole('button', { name: /Jetzt abgleichen/ }));
+      expect(await within(card).findByText('zuletzt abgeglichen gerade eben · 3 Einträge von AniList nicht in der Liste')).toBeTruthy();
+      const run = fetchMock.mock.calls.find(([u]) => u === '/api/anime/sync/run');
+      expect(JSON.parse(run[1].body)).toEqual({});
+      expect(events).toEqual([expect.objectContaining({ ran: true, changed: true })]);
+    } finally {
+      window.removeEventListener(ANIME_SYNC_EVENT, onSync);
+    }
+  });
+
+  it('switching the sync off, or removing the AniList key, tells the anime tab the new state', async () => {
+    const events = [];
+    const onSync = (e) => events.push(e.detail);
+    window.addEventListener(ANIME_SYNC_EVENT, onSync);
+    try {
+      let current = sync({ enabled: true, external_user_id: 77, last_error: 'AniList lehnt den Token ab – bitte im Konto neu eintragen' });
+      let configured = true;
+      serve((url, init) => {
+        const key = `${init.method || 'GET'} ${url}`;
+        if (key === 'GET /api/auth/api-keys') return fakeResponse(200, [state('anilist', { configured, label: configured ? 'kim-al' : null }), state('mal')]);
+        if (key === 'GET /api/anime/sync') return fakeResponse(200, current);
+        if (key === 'PUT /api/anime/sync') {
+          current = sync({ enabled: JSON.parse(init.body).anilist.enabled, external_user_id: 77 });
+          return fakeResponse(200, current);
+        }
+        if (key === 'DELETE /api/auth/api-keys/anilist') {
+          configured = false;
+          current = sync({ enabled: false });
+          return fakeResponse(200, { success: true, removed: true });
+        }
+        return undefined;
+      });
+      const card = await openKeys({ id: 2, role: 'editor' });
+      const box = await within(card).findByLabelText('AniList-Liste abgleichen');
+      fireEvent.click(box);
+      await waitFor(() => expect(events).toEqual([{ ran: false, changed: false, enabled: false, last_synced_at: null, last_error: null }]));
+      fireEvent.click(box);
+      await waitFor(() => expect(events.at(-1)).toMatchObject({ enabled: true }));
+      fireEvent.click(within(card).getByRole('button', { name: 'Entfernen' }));
+      await waitFor(() => expect(events).toHaveLength(3));
+      expect(events.at(-1)).toMatchObject({ enabled: false, last_error: null });
+    } finally {
+      window.removeEventListener(ANIME_SYNC_EVENT, onSync);
+    }
+  });
+
+  it('a sync that AniList switched off keeps its reason visible next to the switch', async () => {
+    withSync({ 'GET /api/anime/sync': () => fakeResponse(200, sync({ enabled: false, last_error: 'AniList lehnt den Token ab – bitte im Konto neu eintragen' })) });
+    const card = await openKeys({ id: 2, role: 'editor' });
+    const line = await within(card).findByText('AniList lehnt den Token ab – bitte im Konto neu eintragen');
+    expect(line.className).toContain('text-rose-300');
+    expect(within(card).queryByRole('button', { name: /Jetzt abgleichen/ })).toBeNull();
+  });
+
+  it('the state line shows a paused sync in its own words', () => {
+    expect(listSyncText({ last_error: 'AniList lehnt den Token ab', last_synced_at: 1 })).toBe('AniList lehnt den Token ab');
+    expect(listSyncText({ last_synced_at: null })).toBe('noch nicht abgeglichen');
+    expect(listSyncText({ last_synced_at: 1_000_000 - 5 * 60000, last_report: { not_in_list: 1 } }, 1_000_000)).toMatch(/^zuletzt abgeglichen vor 5 Min.* · 1 Eintrag von AniList nicht in der Liste$/);
   });
 });
 

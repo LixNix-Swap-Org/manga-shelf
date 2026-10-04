@@ -1,5 +1,5 @@
 // Backups (snapshots with retention and restore test), startup cleanup and the timers for daily jobs: backup,
-// trash purge, metadata stripping and anime refresh. Snapshots are ZIPs in data/backups with a JSON sidecar.
+// trash purge, metadata stripping, anime refresh and AniList list sync. Snapshots are ZIPs in data/backups with a JSON sidecar.
 const fs = require('fs');
 const path = require('path');
 const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb } = require('../db');
@@ -479,6 +479,25 @@ function runAnimeRefreshIfDue(now = new Date(), schedule = backupSchedule(), { s
     return animeRun;
 }
 
+let listSyncRun = null;
+
+/**
+ * AniList list sync (core/anime/listSync.js runDue) of every enabled user whose last sync is older than 6 h and who
+ * allowed background use of their key. Resolves with { due, ran }.
+ */
+function runAnimeListSyncIfDue({ shouldStop = () => false } = {}) {
+    if (listSyncRun) return listSyncRun;
+    listSyncRun = (async () => {
+        const listSync = require('../core/anime/listSync');
+        const { createCtx } = require('../db');
+        const stop = () => shouldStop() || lifecycle.isShuttingDown();
+        const report = await lifecycle.trackJob('AniList-Abgleich', listSync.runDue(createCtx(), { shouldStop: stop }));
+        if (report.ran) log.info(`[Anime] AniList-Listen von ${report.ran} Benutzer${report.ran === 1 ? '' : 'n'} abgeglichen`);
+        return report;
+    })().finally(() => { listSyncRun = null; });
+    return listSyncRun;
+}
+
 /**
  * Starts the daily backup: a check 10 s after boot, then hourly, snapshots once BACKUP_HOUR has passed with no
  * verified one for the local day (so restarts cannot skip a day). Returns a stop function that clears the timers.
@@ -503,6 +522,11 @@ function initScheduler() {
             await runAnimeRefreshIfDue(new Date(), backupSchedule(), { shouldStop: () => stopped });
         } catch (e) {
             log.warn('[Anime] Aktualisierung fehlgeschlagen:', e);
+        }
+        try {
+            await runAnimeListSyncIfDue({ shouldStop: () => stopped });
+        } catch (e) {
+            log.warn('[Anime] AniList-Abgleich fehlgeschlagen:', e);
         }
     };
     const first = setTimeout(check, 10000);
@@ -537,6 +561,7 @@ module.exports = {
     needsDailyBackup,
     runDailyBackupIfDue,
     runAnimeRefreshIfDue,
+    runAnimeListSyncIfDue,
     purgeTrashIfDue,
     sweepTempArtefacts,
     stripExistingUploadsOnce,
