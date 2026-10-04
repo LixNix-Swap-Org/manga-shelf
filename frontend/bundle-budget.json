@@ -1,0 +1,22 @@
+{
+  "tolerance": 0.15,
+  "newChunkLimit": 20480,
+  "minSlack": 512,
+  "chunks": {
+    "_arrow-right.js": 185,
+    "_book-open.js": 246,
+    "_info.js": 199,
+    "_sparkles.js": 316,
+    "_useMangaData.js": 16858,
+    "_user.js": 294,
+    "index.html": 70967,
+    "index.html (css)": 14731,
+    "initial-load": 85698,
+    "node_modules/@zxing/browser/esm/index.js": 7045,
+    "node_modules/@zxing/library/esm/index.js": 118869,
+    "src/Dashboard.jsx": 56805,
+    "src/Login.jsx": 1689,
+    "src/MangaDetail.jsx": 44529,
+    "src/Setup.jsx": 1711
+  }
+}

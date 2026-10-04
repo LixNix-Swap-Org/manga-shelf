@@ -103,7 +103,8 @@ test('buildDisplayVolumeItems: gaps are interleaved by number, but only when sor
     };
     const shape = items => items.map(i => (i.isGap ? `gap${i.gapNumber}` : `v${i.volume.id}`));
     assert.deepEqual(shape(buildDisplayVolumeItems(base)), ['v1', 'gap2', 'v3', 'gap4', 'v5']);
-    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, volumeSort: 'number_desc' })), ['v5', 'gap4', 'v3', 'gap2', 'v1']);
+    // useVolumeFilters hands number_desc over already sorted descending
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, filteredVolumes: [...filteredVolumes].reverse(), volumeSort: 'number_desc' })), ['v5', 'gap4', 'v3', 'gap2', 'v1']);
     // not sorted by number, searching, hiding gaps or filtering by status: plain volumes only
     for (const override of [{ volumeSort: 'price_asc' }, { volumeSearch: 'x' }, { showGaps: false }, { volumeFilter: 'Vorhanden' }, { volumeTypeFilter: 'schuber' }]) {
         assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, ...override })), ['v1', 'v3', 'v5']);
@@ -133,4 +134,224 @@ test('buildDisplayVolumeItems: decimals keep the order, a special edition with t
     // schuber stay behind all numbered volumes, gaps beyond the last volume still show
     const withSchuber = [{ id: 1, volume_number: '1' }, { id: 9, volume_number: 'Schuber 1', type: 'schuber' }];
     assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, filteredVolumes: withSchuber, detectedGapEntries: [gap(2)], detectedGaps: [2] })), ['v1', 'gap2', 'v9']);
+});
+
+const shapeOf = items => items.map(i => (i.isGap ? `gap${i.gapNumber}` : String(i.volume.volume_number)));
+const gapBase = { mpGapMap: new Map(), showGaps: true, volumeTypeFilter: 'ALL', volumeFilter: 'ALL', volumeSearch: '' };
+const gapEntries = (...numbers) => ({ detectedGapEntries: numbers.map(n => ({ label: n, type: 'volume' })), detectedGaps: numbers });
+
+test('buildDisplayVolumeItems: number_desc keeps the hook order, ghosts between the volumes and schuber last', async () => {
+    const { buildDisplayVolumeItems, compareVolumesByNumber } = await load();
+    const sorted = (vols, desc) => [...vols].sort((a, b) => compareVolumesByNumber(a, b, desc));
+    const vols = [{ volume_number: '1' }, { volume_number: '3' }, { volume_number: '5' }, { volume_number: 'Schuber 1', type: 'schuber' }];
+    const run = (desc, gaps, list = vols) => shapeOf(buildDisplayVolumeItems({
+        ...gapBase, ...gapEntries(...gaps), filteredVolumes: sorted(list, desc), volumeSort: desc ? 'number_desc' : 'number_asc'
+    }));
+    assert.deepEqual(run(true, [2, 4]), ['5', 'gap4', '3', 'gap2', '1', 'Schuber 1']);
+    assert.deepEqual(run(false, [2, 4]), ['1', 'gap2', '3', 'gap4', '5', 'Schuber 1']);
+    // gaps beyond the highest volume come first in desc, gaps below the lowest after it
+    assert.deepEqual(run(true, [6, 7]), ['gap7', 'gap6', '5', '3', '1', 'Schuber 1']);
+    assert.deepEqual(run(true, [2], [{ volume_number: '3' }, { volume_number: '4' }]), ['4', '3', 'gap2']);
+
+    // a ghost takes the slot of the regular volume: in front of the same-numbered special edition in both directions
+    const withSe = [{ volume_number: '4' }, { volume_number: '5', type: 'special_edition' }, { volume_number: '6' }];
+    assert.deepEqual(run(true, [5], withSe), ['6', 'gap5', '5', '4']);
+    assert.deepEqual(run(false, [5], withSe), ['4', 'gap5', '5', '6']);
+
+    const decimals = [{ volume_number: '12' }, { volume_number: '12.5' }, { volume_number: '13' }, { volume_number: '15' }];
+    assert.deepEqual(run(true, [14], decimals), ['15', 'gap14', '13', '12.5', '12']);
+
+    // with the ghosts removed, the order is exactly what the user sees with gaps off
+    const mixed = [...vols, ...decimals, { volume_number: 'Artbook', type: 'special' }, { volume_number: 'Fanbook' }];
+    for (const desc of [true, false]) {
+        const input = sorted(mixed, desc);
+        const items = buildDisplayVolumeItems({ ...gapBase, ...gapEntries(2, 4, 14), filteredVolumes: input, volumeSort: desc ? 'number_desc' : 'number_asc' });
+        assert.deepEqual(items.filter(i => !i.isGap).map(i => i.volume), input);
+        assert.equal(items.filter(i => i.isGap).length, 3);
+    }
+});
+
+test('buildDisplayVolumeItems: a special edition stored as text sits at its number, not after all ghosts', async () => {
+    const { buildDisplayVolumeItems, compareVolumesByNumber } = await load();
+    const vols = [{ volume_number: '13' }, { volume_number: '14' }, { volume_number: 'Limited Edition 14', type: 'special_edition' }, { volume_number: '16' }, { volume_number: '18' }];
+    const run = (desc, list, gaps) => shapeOf(buildDisplayVolumeItems({
+        ...gapBase, ...gapEntries(...gaps), filteredVolumes: [...list].sort((a, b) => compareVolumesByNumber(a, b, desc)), volumeSort: desc ? 'number_desc' : 'number_asc'
+    }));
+    assert.deepEqual(run(false, vols, [15, 17]), ['13', '14', 'Limited Edition 14', 'gap15', '16', 'gap17', '18']);
+    assert.deepEqual(run(true, vols, [15, 17]), ['18', 'gap17', '16', 'gap15', '14', 'Limited Edition 14', '13']);
+    assert.deepEqual(run(false, [{ volume_number: '2' }, { volume_number: 'Band 5 Limited Edition', type: 'special_edition' }, { volume_number: '13' }], [3]),
+        ['2', 'gap3', 'Band 5 Limited Edition', '13']);
+    // no stored type: the name decides
+    assert.deepEqual(run(false, [{ volume_number: '13' }, { volume_number: 'Limited Edition 14' }, { volume_number: '16' }], [15]),
+        ['13', 'Limited Edition 14', 'gap15', '16']);
+});
+
+test('buildDisplayVolumeItems: "Band 2" covers gap 2; ghosts carry the regular volume metadata', async () => {
+    const { buildDisplayVolumeItems, buildMpGapMap } = await load();
+    const vols = [{ volume_number: '1' }, { volume_number: 'Band 2' }, { volume_number: '4' }];
+    assert.deepEqual(shapeOf(buildDisplayVolumeItems({ ...gapBase, ...gapEntries(2, 3), filteredVolumes: vols, volumeSort: 'number_asc' })),
+        ['1', 'Band 2', 'gap3', '4']);
+
+    const gaps = [
+        { volume_number: '3', type: 'volume', price: 7, cover_image: '/reg3.jpg' },
+        { volume_number: '3', type: 'special_edition', price: 25, cover_image: '/ce3.jpg' },
+        { volume_number: '3', type: 'schuber', price: 12, cover_image: '/schuber.jpg' }
+    ];
+    for (const order of [gaps, [...gaps].reverse()]) {
+        const items = buildDisplayVolumeItems({ ...gapBase, ...gapEntries(3), mpGapMap: buildMpGapMap(order), filteredVolumes: vols, volumeSort: 'number_asc' });
+        const ghost = items.find(i => i.isGap);
+        assert.equal(ghost.gapMeta.price, 7);
+        assert.equal(ghost.gapMeta.type, 'volume');
+    }
+});
+
+test('buildMpGapMap: only regular volumes, whatever the order; lookups by plain number keep working', async () => {
+    const { buildMpGapMap, getRegularGapMeta } = await load();
+    const gaps = [
+        { volume_number: '5', type: 'volume', price: 8 },
+        { volume_number: '5', type: 'special_edition', price: 32 },
+        { volume_number: '6', type: 'schuber', price: 12 },
+        { volume_number: '07', price: 9 }
+    ];
+    for (const order of [gaps, [...gaps].reverse()]) {
+        const map = buildMpGapMap(order);
+        assert.equal(map.get('5').price, 8);
+        assert.equal(getRegularGapMeta(map, 5).price, 8);
+        assert.equal(map.get('6'), undefined);
+        assert.equal(getRegularGapMeta(map, 7).price, 9);
+        assert.equal(map.size, 2);
+    }
+    assert.equal(buildMpGapMap(undefined).size, 0);
+});
+
+test('buildDisplayVolumeItems: publisher, condition and owner filters hide the ghosts', async () => {
+    const { buildDisplayVolumeItems, filtersAllowGaps } = await load();
+    const vols = [{ volume_number: '1' }, { volume_number: '3' }];
+    const base = { ...gapBase, ...gapEntries(2), filteredVolumes: vols, volumeSort: 'number_asc' };
+    for (const extra of [{ volumeConditionFilter: 'Akzeptabel' }, { volumePublisherFilter: 'Carlsen Manga' }, { volumeOwnerFilter: 'u1' }, { volumeSearch: '  x ' }]) {
+        assert.equal(buildDisplayVolumeItems({ ...base, ...extra }).some(i => i.isGap), false, JSON.stringify(extra));
+        assert.equal(filtersAllowGaps(extra), false);
+    }
+    // the person's missing volumes, status "Fehlt" and type "Bände" still show gaps
+    for (const extra of [{}, { volumeOwnerFilter: 'u1', volumeOwnerMissing: true }, { volumeFilter: 'Fehlt' }, { volumeTypeFilter: 'volume' }, { volumeSearch: '   ' }]) {
+        assert.deepEqual(shapeOf(buildDisplayVolumeItems({ ...base, ...extra })), ['1', 'gap2', '3'], JSON.stringify(extra));
+        assert.equal(filtersAllowGaps(extra), true);
+    }
+});
+
+test('detectGapEntries: local fallback counts "Band N" but not "Starter 1"; MP gaps check type and number', async () => {
+    const { detectGapEntries } = await load();
+    const labels = (entries) => entries.map(e => e.label);
+    assert.deepEqual(detectGapEntries(null, [{ volume_number: '1' }, { volume_number: 'Band 2' }, { volume_number: '3' }], 3), []);
+    assert.deepEqual(labels(detectGapEntries(null, [{ volume_number: 'Starter 1' }, { volume_number: '2' }, { volume_number: '3' }], 3)), [1]);
+    assert.deepEqual(labels(detectGapEntries({ matched: false, message: 'x' }, [{ volume_number: '1' }, { volume_number: '4', type: 'special_edition' }], 3)), [2, 3]);
+    assert.deepEqual(detectGapEntries(null, [], 10), []);
+
+    const mp = { matched: true, gaps: [
+        { volume_number: '2', type: 'volume', title: 'Titel' },
+        { volume_number: '3', type: 'volume' },
+        { volume_number: '3', type: 'special_edition', title: 'Collectors Edition' }
+    ] };
+    assert.deepEqual(detectGapEntries(mp, [{ volume_number: 'Band 3' }], 5), [
+        { label: '2 (Titel)', type: 'volume' },
+        { label: '3 (Collectors Edition)', type: 'special_edition' }
+    ]);
+});
+
+test('regularVolumeNumber: only "N" and "Band N" of regular volumes', async () => {
+    const { regularVolumeNumber } = await load();
+    assert.equal(regularVolumeNumber({ volume_number: '5' }), 5);
+    assert.equal(regularVolumeNumber({ volume_number: ' band 14 ' }), 14);
+    assert.equal(regularVolumeNumber({ volume_number: 'Starter 1' }), null);
+    assert.equal(regularVolumeNumber({ volume_number: 'Vol. 3' }), null);
+    assert.equal(regularVolumeNumber({ volume_number: '5', type: 'special_edition' }), null);
+    assert.equal(regularVolumeNumber({ volume_number: '12.5' }), null);
+});
+
+test('getSeriesProgress: an incomplete series never shows 100 %, a started one never 0 %', async () => {
+    const { getSeriesProgress } = await load();
+    const pct = (regular, total) => getSeriesProgress({ regular_owned: regular, max_regular_number: regular, total_volumes: total, owned_volumes: regular }).pct;
+    assert.equal(pct(199, 200), 99);
+    assert.equal(pct(399, 400), 99);
+    assert.equal(pct(107, 108), 99);
+    assert.equal(pct(200, 200), 100);
+    assert.equal(pct(2, 3), 67);
+    assert.equal(pct(1, 300), 1);
+    assert.equal(pct(0, 300), 0);
+    assert.equal(getSeriesProgress({ regular_owned: 0, total_volumes: 0, owned_volumes: 0 }).pct, null);
+    assert.equal(getSeriesProgress({ regular_owned: 6, max_regular_number: 6, total_volumes: 5, owned_volumes: 6 }).pct, 100);
+});
+
+test('getSeriesProgress / getVolumeProgressCounts: a duplicate regular volume is no extra', async () => {
+    const { getSeriesProgress, getVolumeProgressCounts } = await load();
+    assert.deepEqual(getSeriesProgress({ regular_owned: 5, extras_owned: 0, max_regular_number: 5, total_volumes: 5, owned_volumes: 6 }),
+        { owned: 5, total: 5, extras: 0, pct: 100 });
+    // rows without extras_owned (older offline snapshots) keep the old rule
+    assert.equal(getSeriesProgress({ regular_owned: 4, max_regular_number: 4, total_volumes: 4, owned_volumes: 6 }).extras, 2);
+
+    const owned = (volume_number, type) => ({ volume_number, type, status: 'Vorhanden' });
+    const volumes = [owned('1'), owned('2'), owned('Band 2'), owned('3'), owned('3'), owned('Schuber 1', 'schuber'), owned('Starter 1'),
+        { volume_number: '4', status: 'Fehlt' }];
+    const counts = getVolumeProgressCounts(volumes);
+    assert.deepEqual(counts, { regular_owned: 3, max_regular_number: 3, extras_owned: 2, owned_volumes: 7 });
+    assert.deepEqual(getSeriesProgress({ ...counts, total_volumes: 5 }), { owned: 3, total: 5, extras: 2, pct: 60 });
+});
+
+test('getVolumeDisplayTitle: "Band" only in front of a number', async () => {
+    const { getVolumeDisplayTitle, getSpecialEditionNumber } = await load();
+    const title = (volume_number, type, notes) => getVolumeDisplayTitle({ volume_number, type, notes });
+    assert.equal(title('Collectors', 'special_edition'), 'Collectors (Special Edition)');
+    assert.equal(title('Artbook', 'special_edition'), 'Artbook (Special Edition)');
+    assert.equal(title('Variant Cover', 'special_edition'), 'Variant Cover');
+    assert.equal(title('Collectors Edition', 'special_edition'), 'Collectors Edition');
+    assert.equal(title('Bandana Box', 'special_edition'), 'Bandana Box (Special Edition)');
+    assert.equal(title('14', 'special_edition'), 'Band 14 (Special Edition)');
+    assert.equal(title('Limited Edition 14', 'special_edition'), 'Band 14 (Limited Edition)');
+    assert.equal(title('Band 5 Limited Edition', 'special_edition'), 'Band 5 (Limited Edition)');
+    assert.equal(title('5.5', 'volume'), 'Band 5.5');
+    assert.equal(title('Artbook', 'volume'), 'Artbook');
+    assert.equal(title('Starter 1', 'volume'), 'Starter 1');
+    assert.equal(title('  ', 'volume'), 'Band ?');
+    assert.equal(title('', 'special'), 'Special');
+    assert.equal(title('', 'schuber'), 'Schuber');
+    for (const [n, type] of [['Collectors', 'special_edition'], ['Artbook', 'volume'], ['', 'volume'], ['', 'special_edition'], ['x', 'special']]) {
+        const t = title(n, type);
+        assert.doesNotMatch(t, /^Band \D(?!$)/);
+        assert.equal(t, t.trim());
+    }
+    assert.equal(getSpecialEditionNumber({ volume_number: 'Collectors' }), '');
+    assert.equal(getSpecialEditionNumber({ volume_number: 'Band 5 Limited Edition' }), '5');
+});
+
+test('matchesConditionFilter: the none-sentinel keeps volumes without a condition', async () => {
+    const { matchesConditionFilter, CONDITION_NONE } = await load();
+    assert.equal(matchesConditionFilter({ condition: null }, CONDITION_NONE), true);
+    assert.equal(matchesConditionFilter({ condition: '  ' }, CONDITION_NONE), true);
+    assert.equal(matchesConditionFilter({}, CONDITION_NONE), true);
+    assert.equal(matchesConditionFilter({ condition: 'Gut' }, CONDITION_NONE), false);
+    assert.equal(matchesConditionFilter({ condition: 'Ohne' }, CONDITION_NONE), false);
+    assert.equal(matchesConditionFilter({ condition: 'Gut' }, 'Gut'), true);
+    assert.equal(matchesConditionFilter({ condition: 'Sehr gut' }, 'Gut'), false);
+    assert.equal(matchesConditionFilter({ condition: 'Gut' }, 'ALL'), true);
+});
+
+test('gap edition guards and status text', async () => {
+    const { isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText } = await load();
+    const discrepancy = { official_total: 3, db_total: 5 };
+    const guessed = { matched: true, link_confirmed: false, edition: { id: 7, title: 'X' }, discrepancy };
+    const linked = { ...guessed, link_confirmed: true };
+    assert.equal(isGapEditionUnconfirmed(guessed), true);
+    assert.equal(isGapEditionUnconfirmed(linked), false);
+    assert.equal(isGapEditionUnconfirmed(null), false);
+    assert.equal(canFixVolumeCount(guessed), false);
+    assert.equal(canFixVolumeCount(linked), true);
+    assert.equal(canFixVolumeCount({ ...linked, edition: null }), false);
+    assert.equal(canFixVolumeCount({ ...linked, discrepancy: null }), false);
+
+    assert.equal(gapStatusText(null, null), null);
+    assert.equal(gapStatusText(linked, 'Netzfehler'), 'Netzfehler');
+    assert.equal(gapStatusText({ matched: false, message: 'Keine passende deutsche Edition' }, null), 'Keine passende deutsche Edition');
+    assert.match(gapStatusText({ ...linked, stale: true }, null), /veraltet/);
+    assert.match(gapStatusText({ ...linked, incomplete: true }, null), /unvollständig/);
+    assert.equal(gapStatusText(linked, null), null);
 });

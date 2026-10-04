@@ -29,57 +29,82 @@ export const buildVolumeForm = (vol) => {
   };
 };
 
+/** Notes left by old demo data; a lookup replaces them like an empty note. Same list as services/mangaPassion/autofill.js. */
+export const PLACEHOLDER_NOTES = ['Das Abenteuer beginnt'];
+
+/** Upload names of covers known to be wrong (from an earlier import); a lookup replaces and drops them. */
+export const STALE_COVER_MARKERS = ['1790518007122'];
+
+const isStaleCover = (url) => STALE_COVER_MARKERS.some(marker => String(url || '').includes(marker));
+
+const sameText = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();
+const sameIsbn = (a, b) => String(a ?? '').replace(/[^0-9X]/gi, '').toUpperCase() === String(b ?? '').replace(/[^0-9X]/gi, '').toUpperCase();
+const samePrice = (a, b) => {
+  const num = (v) => Number(String(v ?? '').replace(',', '.').replace(/[€\s]/g, ''));
+  const x = num(a);
+  const y = num(b);
+  return String(a ?? '').trim() !== '' && String(b ?? '').trim() !== '' && Number.isFinite(x) && Number.isFinite(y) ? x === y : sameText(a, b);
+};
+
 /**
- * Merges the data found by the Manga-Passion lookup into the form. Existing input is only replaced where that is safe
- * (empty price / placeholder note, Schuber entries, a missing or stale cover). Returns the new form and what changed.
+ * Merges the data of a Manga-Passion lookup into the form. Returns the new form and the labels of the fields that
+ * actually changed (an identical value is neither written nor reported).
+ * - Always taken when the lookup has a value: release_date, release_year, pages, isbn, publisher.
+ * - Price: only when the form has none (empty or 0) or for Schuber entries. Notes (title): only when empty, a
+ *   PLACEHOLDER_NOTES entry, or for Schuber entries.
+ * - Schuber entries: a bare number becomes the official "Schuber N"; pages and ISBN the lookup does not know are
+ *   cleared (they usually were copied from volume 1) and reported as removed.
+ * - Cover: replaced when the form has none, for Schuber entries, with `forceCover` (MP URL/ID import) or when it is a
+ *   STALE_COVER_MARKERS cover. The previous cover stays in the gallery as a further image (only a stale one is
+ *   dropped); a regular volume's own cover is otherwise kept.
  */
 export const applyLookupToForm = (prev, d, { forceCover = false } = {}) => {
   const updatedFields = [];
   const next = { ...prev };
-  const isSchuber = prev.type === 'schuber' || String(prev.volume_number || '').toLowerCase().includes('schuber');
+  const prevNumber = String(prev.volume_number || '');
+  const isSchuber = prev.type === 'schuber' || prevNumber.toLowerCase().includes('schuber');
 
-  if (d.volume_number && isSchuber && !prev.volume_number.toLowerCase().includes('schuber')) {
-    next.volume_number = d.volume_number;
+  const setField = (key, value, label, same = sameText) => {
+    if (same(prev[key], value)) return;
+    next[key] = String(value);
+    updatedFields.push(label);
+  };
+  const clearField = (key, label) => {
+    if (String(prev[key] ?? '').trim() === '') return;
+    next[key] = '';
+    updatedFields.push(label);
+  };
+
+  if (d.volume_number && isSchuber && !prevNumber.toLowerCase().includes('schuber')) {
+    setField('volume_number', d.volume_number, `Nummer (${d.volume_number})`);
   }
-  if (d.release_date) {
-    next.release_date = d.release_date;
-    updatedFields.push(`Erscheinungsdatum (${d.release_date})`);
-  }
-  if (d.release_year) {
-    next.release_year = String(d.release_year);
-    updatedFields.push(`Jahr (${d.release_year})`);
-  }
+  if (d.release_date) setField('release_date', d.release_date, `Erscheinungsdatum (${d.release_date})`);
+  if (d.release_year) setField('release_year', d.release_year, `Jahr (${d.release_year})`);
   if (d.pages !== undefined && d.pages !== null) {
-    next.pages = String(d.pages);
-    updatedFields.push(`Seitenzahl (${d.pages})`);
+    setField('pages', d.pages, `Seitenzahl (${d.pages})`);
   } else if (isSchuber) {
-    next.pages = '';
+    clearField('pages', 'Seitenzahl entfernt');
   }
   if (d.isbn) {
-    next.isbn = d.isbn;
-    updatedFields.push('ISBN');
+    setField('isbn', d.isbn, 'ISBN', sameIsbn);
   } else if (isSchuber) {
-    next.isbn = '';
+    clearField('isbn', 'ISBN entfernt');
   }
-  if (d.price && (!prev.price || prev.price === '0' || prev.price === '0,00' || prev.price === '0.00' || isSchuber)) {
-    next.price = String(d.price);
-    updatedFields.push(`Kaufpreis (${d.price} €)`);
+  const hasPrice = prev.price && !samePrice(prev.price, '0');
+  if (d.price && (!hasPrice || isSchuber)) {
+    setField('price', d.price, `Kaufpreis (${d.price} €)`, samePrice);
   }
-  if (d.publisher) {
-    next.publisher = d.publisher;
-    updatedFields.push('Verlag');
+  if (d.publisher) setField('publisher', d.publisher, 'Verlag');
+  if (d.notes && (!prev.notes || isSchuber || PLACEHOLDER_NOTES.includes(prev.notes))) {
+    setField('notes', d.notes, `Titel (${d.notes})`);
   }
-  if (d.notes && (!prev.notes || isSchuber || prev.notes === 'Das Abenteuer beginnt')) {
-    next.notes = d.notes;
-    updatedFields.push(`Titel (${d.notes})`);
-  }
-  if (d.cover_image) {
-    const shouldUpdateCover = isSchuber || !prev.cover_image || forceCover || prev.cover_image.includes('1790518007122');
+  if (d.cover_image && d.cover_image !== prev.cover_image) {
+    const oldCover = prev.cover_image;
+    const shouldUpdateCover = isSchuber || !oldCover || forceCover || isStaleCover(oldCover);
     if (shouldUpdateCover) {
-      const oldCover = prev.cover_image;
       next.cover_image = d.cover_image;
-      const otherImages = (prev.images || []).filter(u => u !== oldCover && u !== d.cover_image);
-      next.images = Array.from(new Set([d.cover_image, ...otherImages]));
+      const kept = [oldCover, ...(prev.images || [])].filter(u => u && !isStaleCover(u));
+      next.images = Array.from(new Set([d.cover_image, ...kept]));
       updatedFields.push('Cover-Bild');
     }
   }

@@ -1,7 +1,9 @@
-import { Library, Layers, Coins, CheckCircle2 } from 'lucide-react';
+import { Library, Layers, Coins, CircleCheck } from 'lucide-react';
+import { formatEuro } from '../../utils/format';
 
 /** Quick stats bar: series, owned volumes, collection value, completed series. */
-export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries, handleOpenStats }) {
+export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries, handleOpenStats, isOfflineMode = false }) {
+  const valueText = formatEuro(totalCollectionValue ?? 0);
   return (
       <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
     <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
@@ -24,28 +26,33 @@ export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalC
       </div>
     </div>
 
-    <div 
+    <button
+      type="button"
       onClick={handleOpenStats}
-      className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 hover:border-emerald-500/50 hover:bg-slate-900/90 cursor-pointer transition-all duration-200 group"
-      title="Klicken für das vollständige Finanz- & Statistik-Dashboard"
+      disabled={isOfflineMode}
+      aria-label={`Sammlungswert ${valueText} – ${isOfflineMode ? 'Statistik offline nicht verfügbar' : 'Statistik öffnen'}`}
+      title={isOfflineMode ? 'Offline nicht verfügbar' : 'Klicken für das vollständige Finanz- & Statistik-Dashboard'}
+      className="glass-panel w-full text-left p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 enabled:hover:border-emerald-500/50 enabled:hover:bg-slate-900/90 enabled:cursor-pointer disabled:cursor-default transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
     >
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-hover:scale-105 group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
-        <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-enabled:group-hover:scale-105 group-enabled:group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
+        <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" aria-hidden="true" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium truncate">Sammlungswert</p>
-          <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-semibold hidden sm:inline">Details ↗</span>
+          {!isOfflineMode && (
+            <span aria-hidden="true" className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity font-semibold hidden sm:inline">Details ↗</span>
+          )}
         </div>
         <p className="text-sm sm:text-xl lg:text-2xl font-extrabold text-emerald-400 font-mono tracking-tight whitespace-nowrap">
-          {totalCollectionValue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          {valueText}
         </p>
       </div>
-    </div>
+    </button>
 
     <div className="glass-panel p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80">
       <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+        <CircleCheck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
       </div>
       <div className="min-w-0">
         <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Abgeschlossen</p>

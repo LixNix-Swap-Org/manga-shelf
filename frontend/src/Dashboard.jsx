@@ -6,16 +6,17 @@ import DashboardHeader from './components/dashboard/DashboardHeader';
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
 import DashboardFooter from './components/dashboard/DashboardFooter';
-import UserManagementModal from './components/modals/UserManagementModal';
-import ChangePasswordModal from './components/modals/ChangePasswordModal';
-import BackupRestoreModal from './components/modals/BackupRestoreModal';
-import StatsModal from './components/modals/StatsModal';
-import AddMangaModal from './components/modals/AddMangaModal';
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
+import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { normalizePubName } from './utils/volumeHelpers';
 import { buildScanPrefill } from './utils/scanHelpers';
-import { GERMAN_MONTHS, formatGermanDate, getStatusBadge } from './utils/collectionHelpers';
+import { GERMAN_MONTHS, getStatusBadge } from './utils/collectionHelpers';
+import { mpMatchesSelection } from './utils/radarHelpers';
+import {
+  parseInitialView, viewSearch, scanDashboardAction, SCAN_OFFLINE_MESSAGE, SCAN_FAILED_MESSAGE
+} from './components/dashboard/dashboardShell';
 import usePwaInstall from './hooks/usePwaInstall';
 import useOfflineStatus from './hooks/useOfflineStatus';
 import useMangaList from './hooks/useMangaList';
@@ -23,65 +24,81 @@ import useCollectionFilters from './hooks/useCollectionFilters';
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
 import useDashboardKeyboard from './hooks/useDashboardKeyboard';
+import { apiFetch, readJson, TIMEOUTS } from './utils/api';
+import { notify } from './utils/notify';
+
+// dialogs are loaded on first use and mounted only while open
+const UserManagementModal = lazy(() => import('./components/modals/UserManagementModal'));
+const ChangePasswordModal = lazy(() => import('./components/modals/ChangePasswordModal'));
+const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
+const StatsModal = lazy(() => import('./components/modals/StatsModal'));
+const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
+const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
+
+const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar' };
 
 export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
-  const canEdit = user && (user.role === 'admin' || user.role === 'editor');
+  const canEdit = Boolean(user) && (user.role === 'admin' || user.role === 'editor');
   // Offline (server unreachable) the user is demoted to read-only, but queued shopping purchases still work
   const canQuickBuy = Boolean(user) && !['visitor', 'guest'].includes(user.realRole || user.role);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const searchInputRef = useRef(null);
 
-  // Main view switcher: 'shelf' | 'shopping' | 'radar' (initialized from URL if present)
-  const [activeMainView, setActiveMainView] = useState(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const v = params.get('view');
-      if (v === 'shopping' || v === 'radar') return v;
-    } catch (_) {}
-    return 'shelf';
-  });
+  // 'shelf' | 'shopping' | 'radar' from ?view= (each change is a history entry, so Back returns to the previous view);
+  // ?view=stats (app shortcut) opens the statistics over the shelf
+  const [initialView] = useState(() => parseInitialView(location.search));
+  const activeMainView = parseInitialView(location.search).mainView;
+  useDocumentTitle(VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf);
+  const headingRef = usePageHeading();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [scanPrefill, setScanPrefill] = useState(null); // ISBN scan without a matching series: opens the add dialog prefilled
-  const [failedImages, setFailedImages] = useState({});
+  const [scanChoice, setScanChoice] = useState(null); // { candidates, book, isbn }: several series match a scan
+  const scanRequestRef = useRef(0);
+  const scanToastRef = useRef(null);
+  const [failedImages, setFailedImages] = useState({}); // shopping list and radar covers
 
   // Modal visibility states
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [showCsvModal, setShowCsvModal] = useState(false);
 
   const { isInstallable, isInstalledApp, handleInstallClick } = usePwaInstall();
 
   // Points at the functions below once they exist; called when the browser comes back online
   const onOnlineRef = useRef(() => {});
-  const { networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, handleRefreshOfflineCopy } =
-    useOfflineStatus({ user, onOnlineRef });
+  const {
+    networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy
+  } = useOfflineStatus({ user, onOnlineRef });
 
-  const { mangas, loading, fetchMangas, handleDeleteManga } = useMangaList({ user, canEdit });
+  const { mangas, loading, refreshing, dataAt, error: mangasError, fetchMangas, handleDeleteManga } = useMangaList({ user, canEdit });
 
   const {
-    search, setSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy, viewMode, setViewMode,
-    availablePublishers, filterCounts, filtered, totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries
-  } = useCollectionFilters(mangas);
+    search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
+    viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
+    totalCollectionValue, completedSeries
+  } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id });
 
   const {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
-    shoppingSearch, setShoppingSearch, buyingId, offlineLastUpdated,
+    shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
     fetchShoppingList, handleQuickBuy, syncPendingPurchases
-  } = useShoppingList({ setNetworkOffline, fetchMangas });
+  } = useShoppingList({ user, setNetworkOffline, fetchMangas });
 
   const {
-    radarData, loadingRadar, radarPublisherFilter, setRadarPublisherFilter, radarStatusFilter, setRadarStatusFilter,
-    radarSearch, setRadarSearch, markingDeliveredId, radarSubView, setRadarSubView,
-    mpYear, setMpYear, mpMonth, setMpMonth, mpData, loadingMp, mpSearch, setMpSearch,
-    mpPublisherFilter, setMpPublisherFilter, mpPrintOnly, setMpPrintOnly, mpMySeriesOnly, setMpMySeriesOnly, importingMpId,
+    radarData, loadingRadar, radarError, radarPublisherFilter, setRadarPublisherFilter, radarStatusFilter, setRadarStatusFilter,
+    radarSearch, setRadarSearch, markingDeliveredIds, radarSubView, setRadarSubView,
+    mpYear, setMpYear, mpMonth, setMpMonth, mpData, loadingMp, mpError, mpSearch, setMpSearch,
+    mpPublisherFilter, setMpPublisherFilter, mpPrintOnly, setMpPrintOnly, mpMySeriesOnly, setMpMySeriesOnly, importingMpIds,
     fetchReleaseRadar, handleMarkDelivered, fetchMangaPassionReleases,
     handlePrevMonth, handleNextMonth, handleCurrentMonth, handleImportMangaPassion
-  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList });
+  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline) });
 
   onOnlineRef.current = () => {
     syncPendingPurchases();
@@ -93,48 +110,141 @@ export default function Dashboard({ user, onLogout }) {
     fetchMangas();
     fetchShoppingList();
     if (!user?.offline) fetchReleaseRadar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount und beim Offline-Wechsel
   }, [user?.offline]);
 
+  // the start URL was read once; strip ?view=stats so a reload does not reopen the dialog
+  useEffect(() => {
+    if (!initialView.openStats) return;
+    if (!isOfflineMode) setShowStatsModal(true);
+    navigate({ search: viewSearch(location.search, 'shelf') }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount
+  }, []);
+
+  const loadViewData = (view) => {
+    if (view === 'shopping') fetchShoppingList();
+    if (view === 'radar') {
+      fetchReleaseRadar();
+      // an explicit entry retries a month whose last load failed; a loaded month is not fetched again
+      if (!mpMatchesSelection(mpData, mpYear, mpMonth)) fetchMangaPassionReleases();
+    }
+  };
+  const loadViewDataRef = useRef(loadViewData);
+  loadViewDataRef.current = loadViewData;
+
+  // entering a view (tab, header button, Back / Forward) refreshes its data
+  const shownViewRef = useRef(activeMainView);
+  useEffect(() => {
+    if (shownViewRef.current === activeMainView) return;
+    shownViewRef.current = activeMainView;
+    loadViewDataRef.current(activeMainView);
+  }, [activeMainView]);
+
+  /** The one way to change the main view: a ?view= history entry; choosing the open view again reloads its data. */
+  const setView = (next) => {
+    const nextSearch = viewSearch(location.search, next);
+    if (nextSearch !== location.search) navigate({ search: nextSearch });
+    else loadViewData(next);
+  };
+
+  const closeAddModal = useCallback(() => {
+    setShowAddModal(false);
+    setScanPrefill(null);
+  }, []);
+
   useDashboardKeyboard({
-    showAddModal, setShowAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
-    showRestoreModal, setShowRestoreModal, mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
+    showAddModal, setShowAddModal, closeAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
+    showRestoreModal, setShowRestoreModal, showPasswordModal, setShowPasswordModal,
+    mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
   });
 
+  /** One scan message at a time in the app's toast stack; a busy or action message stays until replaced or closed. */
+  const showScanToast = (kind, message, options) => {
+    if (scanToastRef.current !== null) notify.dismiss(scanToastRef.current);
+    scanToastRef.current = kind ? notify[kind](message, options) : null;
+  };
+  useEffect(() => () => {
+    if (scanToastRef.current !== null) notify.dismiss(scanToastRef.current);
+  }, []);
+
+  const openAddWithPrefill = (prefill) => {
+    if (!canEdit) return;
+    setScanPrefill(prefill);
+    setShowAddModal(true);
+  };
+
+  const openSeries = (manga) => {
+    setSearch(manga.title || '');
+    navigate(`/manga/${manga.id}`);
+  };
+
   const handleBarcodeDetected = async (scannedCode) => {
-    setSearch(scannedCode);
+    const requestId = ++scanRequestRef.current;
+    const isLatest = () => requestId === scanRequestRef.current;
+    if (isOfflineMode) {
+      showScanToast('error', SCAN_OFFLINE_MESSAGE);
+      return;
+    }
+    showScanToast('info', `ISBN ${scannedCode} wird gesucht...`, { duration: 0 });
+    let res;
+    let data = null;
     try {
-      const res = await fetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`);
-      const data = await res.json();
-      if (!res.ok && data?.error) {
-        // e.g. wrong check digit: a misread barcode, scan again
-        alert(data.error);
-        return;
-      }
-      if (data && data.found && data.matched_manga) {
-        setSearch(data.matched_manga.title);
-        navigate(`/manga/${data.matched_manga.id}`);
-      } else if (data && data.found && data.book) {
-        setSearch(data.book.title);
-        // no (clear) series in the collection: offer to create it from the catalogue data; only when nothing similar exists
-        if (canEdit && !(data.matched_candidates?.length > 0)) {
-          setScanPrefill(buildScanPrefill(data.book, data.isbn || scannedCode));
-          setSearch('');
-          setShowAddModal(true);
-        }
-      }
-    } catch (e) {
-      console.warn('Barcode lookup failed:', e);
+      res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`, { timeout: TIMEOUTS.lookup });
+      data = await readJson(res); // a proxy 502/504 answers with HTML
+    } catch (_) {
+      if (isLatest()) showScanToast('error', SCAN_FAILED_MESSAGE);
+      return;
+    }
+    if (!isLatest()) return;
+    const isbn = data?.isbn || scannedCode;
+    const action = scanDashboardAction({ ok: res.ok, data, canEdit });
+    switch (action.type) {
+      case 'navigate':
+        showScanToast(null);
+        openSeries(action.manga);
+        break;
+      case 'choose':
+        showScanToast(null);
+        setScanChoice({ candidates: action.candidates, book: action.book, isbn });
+        break;
+      case 'prefill':
+        showScanToast(null);
+        openAddWithPrefill(buildScanPrefill(action.book, isbn));
+        break;
+      case 'notFound':
+        showScanToast('info', action.message, action.canAdd ? {
+          duration: 0,
+          action: { label: 'Reihe manuell anlegen', onClick: () => openAddWithPrefill(buildScanPrefill({}, isbn)) }
+        } : { duration: 8000 });
+        break;
+      case 'notice':
+        showScanToast('info', action.message, { duration: 8000 });
+        break;
+      default:
+        showScanToast('error', action.message);
     }
   };
 
-  const handleOpenStats = () => {
+  const handleOpenStats = useCallback(() => {
+    if (isOfflineMode) return;
     setShowStatsModal(true);
-  };
+  }, [isOfflineMode]);
 
-  const handleOpenModal = () => {
+  const handleOpenModal = useCallback(() => {
     if (!canEdit) return;
+    setScanPrefill(null);
     setShowAddModal(true);
+  }, [canEdit]);
+
+  // stable for the memoised grid; the badges of the other views follow a delete
+  const afterDeleteRef = useRef(null);
+  afterDeleteRef.current = () => {
+    fetchShoppingList();
+    if (!user?.offline) fetchReleaseRadar();
   };
+  const onDeleteManga = useCallback(async (e, id, title) => {
+    if (await handleDeleteManga(e, id, title)) afterDeleteRef.current();
+  }, [handleDeleteManga]);
 
   const handleOpenPasswordModal = () => {
     setShowPasswordModal(true);
@@ -148,20 +258,24 @@ export default function Dashboard({ user, onLogout }) {
     setShowRestoreModal(true);
   };
 
+  const handleOpenCsvModal = () => {
+    setShowCsvModal(true);
+  };
+
   return (
     <div className="min-h-screen pb-16 overflow-x-hidden">
-      {/* Top Navbar */}
+      <SkipLink />
       <DashboardHeader
         activeMainView={activeMainView}
         canEdit={canEdit}
-        fetchReleaseRadar={fetchReleaseRadar}
-        fetchShoppingList={fetchShoppingList}
         handleBarcodeDetected={handleBarcodeDetected}
         handleInstallClick={handleInstallClick}
+        handleOpenCsvModal={handleOpenCsvModal}
         handleOpenModal={handleOpenModal}
         handleOpenRestoreModal={handleOpenRestoreModal}
         handleOpenStats={handleOpenStats}
         handleOpenUsersModal={handleOpenUsersModal}
+        headingRef={headingRef}
         handleOpenPasswordModal={handleOpenPasswordModal}
         isInstallable={isInstallable}
         isInstalledApp={isInstalledApp}
@@ -172,36 +286,34 @@ export default function Dashboard({ user, onLogout }) {
         radarData={radarData}
         search={search}
         searchInputRef={searchInputRef}
-        setActiveMainView={setActiveMainView}
         setMobileMenuOpen={setMobileMenuOpen}
         setSearch={setSearch}
+        setView={setView}
         shoppingData={shoppingData}
         user={user}
       />
 
-      {/* Main Container */}
-      <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
+      <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
         
         <MainViewSwitcher
           activeMainView={activeMainView}
-          setActiveMainView={setActiveMainView}
+          onSelectView={setView}
           mangaCount={mangas.length}
           shoppingData={shoppingData}
           radarData={radarData}
-          fetchShoppingList={fetchShoppingList}
-          fetchReleaseRadar={fetchReleaseRadar}
-          fetchMangaPassionReleases={fetchMangaPassionReleases}
         />
 
         {/* SHELF VIEW */}
         {activeMainView === 'shelf' && (
           <>
+            <h2 className="sr-only">Sammlung</h2>
             <CollectionStats
               totalSeries={totalSeries}
               totalOwnedVolumes={totalOwnedVolumes}
               totalCollectionValue={totalCollectionValue}
               completedSeries={completedSeries}
               handleOpenStats={handleOpenStats}
+              isOfflineMode={isOfflineMode}
             />
 
         {/* Filter & Sort Toolbar */}
@@ -218,23 +330,28 @@ export default function Dashboard({ user, onLogout }) {
           setViewMode={setViewMode}
           sortBy={sortBy}
           statusFilter={statusFilter}
+          statusTabs={statusTabs}
           viewMode={viewMode}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
           canEdit={canEdit}
-          failedImages={failedImages}
+          error={mangasError}
           filtered={filtered}
           getStatusBadge={getStatusBadge}
-          handleDeleteManga={handleDeleteManga}
+          handleDeleteManga={onDeleteManga}
           handleOpenModal={handleOpenModal}
+          isOffline={isOfflineMode}
           loading={loading}
+          refreshing={refreshing}
+          dataAt={dataAt}
+          onRetry={fetchMangas}
           publisherFilter={publisherFilter}
-          search={search}
-          setFailedImages={setFailedImages}
+          search={deferredSearch}
           setPublisherFilter={setPublisherFilter}
           setSearch={setSearch}
           setStatusFilter={setStatusFilter}
+          sortBy={sortBy}
           statusFilter={statusFilter}
           viewMode={viewMode}
         />
@@ -255,10 +372,16 @@ export default function Dashboard({ user, onLogout }) {
         shoppingPublisherFilter={shoppingPublisherFilter}
         setShoppingPublisherFilter={setShoppingPublisherFilter}
         normalizePubName={normalizePubName}
-        setActiveMainView={setActiveMainView}
+        setActiveMainView={setView}
         canEdit={canQuickBuy}
         handleQuickBuy={handleQuickBuy}
-        buyingId={buyingId}
+        buyingIds={buyingIds}
+        shoppingError={shoppingError}
+        user={user}
+        fetchMangas={fetchMangas}
+        pendingPurchases={pendingPurchases}
+        failedPurchases={failedPurchases}
+        cacheWriteFailed={cacheWriteFailed}
         failedImages={failedImages}
         setFailedImages={setFailedImages}
       />
@@ -267,6 +390,9 @@ export default function Dashboard({ user, onLogout }) {
     {/* RELEASE RADAR / ERSCHEINUNGSKALENDER VIEW */}
     {activeMainView === 'radar' && (
       <ReleaseRadarView
+        isOffline={Boolean(user?.offline)}
+        radarError={radarError}
+        mpError={mpError}
         radarSubView={radarSubView}
         setRadarSubView={setRadarSubView}
         radarData={radarData}
@@ -298,14 +424,12 @@ export default function Dashboard({ user, onLogout }) {
         setMpSearch={setMpSearch}
         canEdit={canEdit}
         handleImportMangaPassion={handleImportMangaPassion}
-        importingMpId={importingMpId}
+        importingMpIds={importingMpIds}
         handleMarkDelivered={handleMarkDelivered}
-        markingDeliveredId={markingDeliveredId}
+        markingDeliveredIds={markingDeliveredIds}
         failedImages={failedImages}
         setFailedImages={setFailedImages}
-        setActiveMainView={setActiveMainView}
         GERMAN_MONTHS={GERMAN_MONTHS}
-        formatGermanDate={formatGermanDate}
       />
     )}
     </main>
@@ -316,47 +440,79 @@ export default function Dashboard({ user, onLogout }) {
         networkOffline={networkOffline}
         offlineCopyAt={offlineCopyAt}
         refreshingCopy={refreshingCopy}
+        refreshError={refreshError}
         handleRefreshOfflineCopy={handleRefreshOfflineCopy}
+        pendingPurchases={pendingPurchases}
         isInstallable={isInstallable}
         isInstalledApp={isInstalledApp}
         handleInstallClick={handleInstallClick}
       />
 
       {/* MODALS */}
-      <AddMangaModal 
-        isOpen={showAddModal} 
-        onClose={() => { setShowAddModal(false); setScanPrefill(null); }} 
-        onSuccess={(created) => {
-          fetchMangas();
-          if (scanPrefill && created?.id) navigate(`/manga/${created.id}`);
-        }}
-        prefill={scanPrefill}
-      />
+      <Suspense fallback={null}>
+        {showAddModal && (
+          <AddMangaModal
+            isOpen
+            onClose={closeAddModal}
+            onSeriesCreated={() => fetchMangas()}
+            onSuccess={(created) => {
+              fetchMangas();
+              if (scanPrefill && created?.id) navigate(`/manga/${created.id}`);
+            }}
+            prefill={scanPrefill}
+          />
+        )}
 
-      <ChangePasswordModal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
+        {showPasswordModal && <ChangePasswordModal isOpen onClose={() => setShowPasswordModal(false)} />}
 
-      <UserManagementModal 
-        isOpen={showUsersModal} 
-        onClose={() => setShowUsersModal(false)} 
-        currentUser={user} 
-      />
+        {showUsersModal && <UserManagementModal isOpen onClose={() => setShowUsersModal(false)} currentUser={user} />}
 
-      <BackupRestoreModal 
-        isOpen={showRestoreModal} 
-        onClose={() => setShowRestoreModal(false)} 
-        user={user} 
-        onRestoreSuccess={() => {
-          fetchMangas();
-          fetchShoppingList();
-          fetchReleaseRadar();
-        }} 
-      />
+        {showRestoreModal && (
+          <BackupRestoreModal
+            isOpen
+            onClose={() => setShowRestoreModal(false)}
+            user={user}
+            onRestoreSuccess={() => {
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
 
-      <StatsModal 
-        isOpen={showStatsModal} 
-        onClose={() => setShowStatsModal(false)} 
-        user={user} 
-      />
+        {showStatsModal && <StatsModal isOpen onClose={() => setShowStatsModal(false)} user={user} />}
+
+        {showCsvModal && (
+          <CsvExchangeModal
+            isOpen
+            onClose={() => setShowCsvModal(false)}
+            canEdit={canEdit}
+            onImported={() => {
+              fetchMangas();
+              fetchShoppingList();
+              if (!user?.offline) fetchReleaseRadar();
+            }}
+          />
+        )}
+      </Suspense>
+
+      {scanChoice && (
+        <ScanCandidatesDialog
+          candidates={scanChoice.candidates}
+          bookTitle={scanChoice.book?.title}
+          canEdit={canEdit}
+          onChoose={(manga) => {
+            setScanChoice(null);
+            openSeries(manga);
+          }}
+          onCreateNew={() => {
+            const choice = scanChoice;
+            setScanChoice(null);
+            openAddWithPrefill(buildScanPrefill(choice?.book || {}, choice?.isbn));
+          }}
+          onClose={() => setScanChoice(null)}
+        />
+      )}
 
     </div>
   );

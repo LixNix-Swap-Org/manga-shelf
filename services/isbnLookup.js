@@ -1,51 +1,124 @@
 // ISBN lookup: book metadata from DNB / K10plus / Google Books and the match against the user's collection.
 const https = require('https');
 const { normalizePublisher } = require('../utils/publishers');
+const { normalizeIsbn } = require('../utils/isbn');
 const { titleKey } = require('./mangaPassion/classify');
 const log = require('../utils/logger').child('isbn-lookup');
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
-/** GET a text document over HTTPS (timeout, size limit, HTTP errors rejected). */
-function fetchTextHttps(url, timeoutMs = 7000) {
+/**
+ * GET a text document over HTTPS (overall deadline, size limit, HTTP errors and dropped connections rejected).
+ * `get` is injectable so tests can use a plain HTTP server.
+ */
+function fetchTextHttps(url, timeoutMs = 7000, { get = https.get } = {}) {
     return new Promise((resolve, reject) => {
-        const req = https.get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
-            if (res.statusCode >= 300) {
-                res.resume();
-                return reject(new Error(`HTTP ${res.statusCode}`));
-            }
-            let data = '';
-            res.setEncoding('utf8');
-            res.on('data', chunk => {
-                data += chunk;
-                if (data.length > MAX_BODY_BYTES) {
-                    req.destroy();
-                    reject(new Error('Antwort zu groß'));
+        let settled = false;
+        let req = null;
+        const finish = (fn, value) => {
+            if (settled) return false;
+            settled = true;
+            clearTimeout(deadline);
+            fn(value);
+            return true;
+        };
+        const fail = (err) => {
+            if (finish(reject, err) && req) req.destroy();
+        };
+        // req.setTimeout is an idle timer: a server dripping a byte every few seconds would never trip it
+        const deadline = setTimeout(() => fail(new Error('Timeout')), timeoutMs);
+        try {
+            req = get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
+                if (res.statusCode >= 300) {
+                    res.resume();
+                    return fail(new Error(`HTTP ${res.statusCode}`));
                 }
+                const chunks = [];
+                let size = 0;
+                res.on('data', chunk => {
+                    size += chunk.length;
+                    if (size > MAX_BODY_BYTES) return fail(new Error('Antwort zu groß'));
+                    chunks.push(chunk);
+                });
+                res.on('end', () => finish(resolve, Buffer.concat(chunks).toString('utf8')));
+                res.on('error', fail);
+                res.on('aborted', () => fail(new Error('Verbindung abgebrochen')));
+                res.on('close', () => { if (!res.complete) fail(new Error('Verbindung abgebrochen')); });
             });
-            res.on('end', () => resolve(data));
-        });
-        req.on('error', reject);
-        req.setTimeout(timeoutMs, () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
+        } catch (err) {
+            return fail(err);
+        }
+        req.on('error', fail);
+        req.setTimeout(timeoutMs, () => fail(new Error('Timeout')));
     });
 }
 
-// MARC 21 wraps a leading article that is ignored when sorting in two control characters ("Der Herr"): DNB does this
+// MARC 21 wraps a leading article that is ignored when sorting in two control characters ("Der Herr"): DNB does this
 // for "Der", "Die", "Das", "The", "A" ... They must never reach a title, a comparison or the screen.
 const stripMarcControls = (text) => text.replace(/[-]/g, '');
 
 const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-function decodeXmlEntities(text) {
-    return text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (m, e) => {
+const HTML_ENTITIES = {
+    ...XML_ENTITIES, nbsp: ' ', mdash: '—', ndash: '–', hellip: '…', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+    laquo: '«', raquo: '»', bdquo: '„', sbquo: '‚', middot: '·', bull: '•', times: '×', copy: '©', reg: '®', trade: '™'
+};
+
+// one pass only, so "&amp;lt;" becomes "&lt;" and not "<"; unknown named entities stay as they are
+function decodeEntities(text, named) {
+    return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
         if (e[0] === '#') {
             const code = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-            return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+            return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : m;
         }
-        return XML_ENTITIES[e.toLowerCase()];
+        const lower = e.toLowerCase();
+        return Object.prototype.hasOwnProperty.call(named, lower) ? named[lower] : m;
     });
+}
+const decodeXmlEntities = (text) => decodeEntities(text, XML_ENTITIES);
+const decodeHtmlEntities = (text) => decodeEntities(text, HTML_ENTITIES);
+
+/** "05" -> "5", "05.5" -> "5.5"; "0", "0.5" and anything not purely numeric stay as they are. */
+function normalizeVolumeNumber(value) {
+    if (value === undefined || value === null) return value;
+    const s = String(value).trim();
+    return /^\d+(\.\d+)?$/.test(s) ? s.replace(/^0+(?=\d)/, '') : s;
+}
+
+const numberIn = (text) => {
+    const m = text ? text.match(/\d+(\.\d+)?/) : null;
+    return m ? normalizeVolumeNumber(m[0]) : null;
+};
+
+function parsePages(raw) {
+    if (!raw) return null;
+    const counted = raw.match(/(\d+)\]?\s*(?:ungez(?:ählte|\.)?\s*)?(?:S\.|Seiten|p\.|pages)/i);
+    if (counted) return parseInt(counted[1], 10);
+    // "1 Online-Ressource", "1 Band (unpaginiert)": a count of units, not of pages
+    const first = raw.match(/(\d+)\s*([^\s\d(]*)/);
+    if (!first || /^(online|b[aä]nd|bd\b|bd\.)/i.test(first[2])) return null;
+    return parseInt(first[1], 10);
+}
+
+function parseYear(raw) {
+    if (!raw) return null;
+    const m = raw.replace(/[[\]?]/g, '').match(/(?:1[5-9]|20)\d{2}/);
+    return m ? parseInt(m[0], 10) : null;
+}
+
+/** "EUR 9,99", "kart. : DM 9.95, EUR 5.09", "7,00 EUR", "EUR 1.234,56" -> number. */
+function parseEuroPrice(raw) {
+    if (!raw) return null;
+    const m = raw.match(/EUR\s*(\d[\d.,]*)/i) || raw.match(/(\d[\d.,]*)\s*(?:EUR|€)/i);
+    if (!m) return null;
+    let n = m[1].replace(/[.,]+$/, '');
+    if (n.includes(',') && n.includes('.')) {
+        const decimal = n.lastIndexOf(',') > n.lastIndexOf('.') ? ',' : '.';
+        n = n.split(decimal === ',' ? '.' : ',').join('').replace(',', '.');
+    } else {
+        n = n.replace(',', '.');
+    }
+    const value = parseFloat(n);
+    return Number.isFinite(value) ? value : null;
 }
 
 /**
@@ -67,39 +140,33 @@ function parseMarc21Xml(xml, cleanIsbn, sourceName) {
         return null;
     };
 
-    // Series and volume number live in 800/490 ("One piece", 60) while 245$a is the volume's own title ("Mein kleiner Bruder!")
+    // Series and volume number live in 800/830/490 ("One piece", 60) while 245$a is the volume's own title ("Mein kleiner Bruder!")
     const fieldsOf = (tag) => record.match(new RegExp(`<datafield[^>]*tag="${tag}"[^>]*>[\\s\\S]*?<\\/datafield>`, 'g')) || [];
     const subOf = (fieldXml, code) => {
         const m = fieldXml.match(new RegExp(`<subfield[^>]*code="${code}"[^>]*>([^<]+)<\\/subfield>`));
         return m ? stripMarcControls(decodeXmlEntities(m[1])).trim() : null;
     };
-    let series = null;
-    let seriesNumber = null;
-    for (const f of fieldsOf('800')) {
-        const t = subOf(f, 't');
-        if (t) { series = t.replace(/\s*[/:;,.]\s*$/, ''); seriesNumber = subOf(f, 'v'); break; }
-    }
-    if (!series) {
-        for (const f of fieldsOf('490')) {
-            const a = subOf(f, 'a');
-            const v = subOf(f, 'v');
-            if (a && v) { series = a.replace(/\s*[/:;,.]\s*$/, ''); seriesNumber = v; break; }
-        }
-    }
-    const seriesNumberOnly = seriesNumber ? (seriesNumber.match(/\d+(\.\d+)?/) || [null])[0] : null;
+    const seriesFields = (tag, nameCode) => fieldsOf(tag)
+        .map(f => ({ name: subOf(f, nameCode), number: numberIn(subOf(f, 'v')) }))
+        .filter(c => c.name);
+    const series800 = seriesFields('800', 't');
+    // DNB lists story arcs ("Marine Ford") and genres ("Action") without a number next to the numbered main series:
+    // the series and its number always come from the same numbered field; an unnumbered 800 is only the last resort
+    const chosenSeries = [...series800, ...seriesFields('830', 'a'), ...seriesFields('490', 'a')].find(c => c.number)
+        || series800[0] || null;
+    const series = chosenSeries ? chosenSeries.name.replace(/\s*[/:;,.]\s*$/, '') : null;
+    const seriesNumberOnly = chosenSeries ? chosenSeries.number : null;
 
     let title = getField('245', 'a');
     if (title) title = title.replace(/\s*[/:]\s*$/, '').trim();
 
-    // the structured series number (800/490 $v) wins; 245$n is free text ("Band 12.", "2021,16" = year, volume)
+    // the structured series number (800/830/490 $v) wins; 245$n is free text ("Band 12.", "2021,16" = year, volume)
     let volumeNumber = seriesNumberOnly;
     if (!volumeNumber) {
         const raw = getField('245', 'n');
         if (raw) {
             const yearAndNumber = raw.match(/^\s*(?:19|20)\d{2}\s*[,;.]\s*(\d+(?:\.\d+)?)/);
-            const firstNumber = raw.match(/\d+(\.\d+)?/);
-            if (yearAndNumber) volumeNumber = yearAndNumber[1];
-            else if (firstNumber) volumeNumber = firstNumber[0];
+            volumeNumber = yearAndNumber ? normalizeVolumeNumber(yearAndNumber[1]) : numberIn(raw);
         }
     }
 
@@ -113,26 +180,12 @@ function parseMarc21Xml(xml, cleanIsbn, sourceName) {
     let publisher = getField('264', 'b') || getField('260', 'b');
     if (publisher) publisher = normalizePublisher(publisher.replace(/\s*;\s*$/, '').trim());
 
-    const releaseYearRaw = getField('264', 'c') || getField('260', 'c');
-    let releaseYear = null;
-    if (releaseYearRaw) {
-        const yMatch = releaseYearRaw.match(/\d{4}/);
-        if (yMatch) releaseYear = parseInt(yMatch[0], 10);
-    }
-
-    const pagesRaw = getField('300', 'a');
-    let pages = null;
-    if (pagesRaw) {
-        const pMatch = pagesRaw.match(/(\d+)/);
-        if (pMatch) pages = parseInt(pMatch[1], 10);
-    }
-
-    const priceRaw = getField('020', 'c');
-    let price = null;
-    if (priceRaw) {
-        const eurMatch = priceRaw.match(/EUR\s*([\d,.]+)/i);
-        if (eurMatch) price = parseFloat(eurMatch[1].replace(',', '.'));
-    }
+    const releaseYear = parseYear(getField('264', 'c') || getField('260', 'c'));
+    const pages = parsePages(getField('300', 'a'));
+    const price = priceForIsbn(fieldsOf('020').map(f => ({
+        isbn: subOf(f, 'a') || subOf(f, '9'),
+        text: [subOf(f, 'c'), subOf(f, 'q')].filter(Boolean).join(' ')
+    })), cleanIsbn);
 
     if (!title) return null;
     return {
@@ -152,10 +205,42 @@ function parseMarc21Xml(xml, cleanIsbn, sourceName) {
     };
 }
 
+/**
+ * The price of the scanned book: a record often lists a box set or the other binding in a second 020, so the field
+ * whose ISBN is the scanned one wins; a field without an ISBN is used only when no field names this ISBN.
+ */
+function priceForIsbn(fields, cleanIsbn) {
+    const wanted = normalizeIsbn(cleanIsbn);
+    const isbnOf = (text) => {
+        const m = text ? text.match(/\d[\d-]{8,15}[\dXx]/) : null;
+        return m ? normalizeIsbn(m[0].replace(/-/g, '')) : null;
+    };
+    const priced = fields.map(f => ({ ...f, key: isbnOf(f.isbn), price: parseEuroPrice(f.text) })).filter(f => f.price !== null);
+    const own = priced.find(f => f.key && f.key === wanted);
+    if (own) return own.price;
+    const generic = priced.find(f => !f.key && !/B[aä]nde|Behältnis|Schuber/i.test(f.text));
+    return generic ? generic.price : null;
+}
+
+const GOOGLE_BOOKS_SOURCE = 'Google Books';
+const EXPLICIT_VOLUME = /(?:^|[\s,.:(-])(?:Band|Bd\.?|Vol\.?|Volume)\s*(\d+(?:\.\d+)?)\b/i;
+
+/** Volume number of a Google Books entry: "Band 3" / "Vol. 3" in title or subtitle, the series number, a trailing number. */
+function googleVolumeNumber(vi) {
+    for (const text of [vi.title, vi.subtitle]) {
+        const m = (text || '').match(EXPLICIT_VOLUME);
+        if (m) return normalizeVolumeNumber(m[1]);
+    }
+    const display = String(vi.seriesInfo?.bookDisplayNumber ?? '').trim();
+    if (/^\d+(\.\d+)?$/.test(display)) return normalizeVolumeNumber(display);
+    const trailing = (vi.title || '').match(/\S\s+(\d+)$/);
+    return trailing ? normalizeVolumeNumber(trailing[1]) : null;
+}
+
 function bookFromGoogleBooks(gbData, cleanIsbn) {
     if (!gbData.items || gbData.items.length === 0) return null;
     const vi = gbData.items[0].volumeInfo || {};
-    const numMatch = (vi.title || '').match(/(\d+)$/);
+    const number = googleVolumeNumber(vi);
 
     let year = null;
     if (vi.publishedDate) {
@@ -165,8 +250,8 @@ function bookFromGoogleBooks(gbData, cleanIsbn) {
 
     return {
         title: vi.title || 'Unbekannter Titel',
-        volume_number: numMatch ? numMatch[1] : '1',
-        volume_number_known: Boolean(numMatch),
+        volume_number: number || '1',
+        volume_number_known: Boolean(number),
         series: null,
         subtitle: vi.subtitle || null,
         author: vi.authors && vi.authors.length > 0 ? vi.authors.join(', ') : null,
@@ -174,7 +259,7 @@ function bookFromGoogleBooks(gbData, cleanIsbn) {
         release_year: year,
         pages: vi.pageCount || null,
         price: null,
-        source: 'Google Books',
+        source: GOOGLE_BOOKS_SOURCE,
         cover_url: vi.imageLinks?.thumbnail ? vi.imageLinks.thumbnail.replace('http://', 'https://') : `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
     };
 }
@@ -241,41 +326,79 @@ function titleMatchScore(bookTitles, manga) {
     return best;
 }
 
+/**
+ * Which kind of exact hit a series is (higher = closer): the book title is the series title (4), the catalogue series is
+ * the series title (3), the book title (2) or the catalogue series (1) is its alternative title, no exact hit (0).
+ */
+function exactMatchRank(book, manga) {
+    const bookTitle = titleKey(book.title);
+    const bookSeries = titleKey(book.series);
+    const title = titleKey(manga.title);
+    const alt = titleKey(manga.alt_title);
+    if (title && title === bookTitle) return 4;
+    if (title && title === bookSeries) return 3;
+    if (alt && alt === bookTitle) return 2;
+    if (alt && alt === bookSeries) return 1;
+    return 0;
+}
+
 const MIN_LEAD = 15;
 const VOLUME_COLUMNS = 'id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year';
 
 /**
  * Finds the series / volume of the collection a book belongs to.
  *  1. the same ISBN on a stored volume (certain),
- *  2. otherwise the best title match, only if it clearly stands out; then the volume by number, but only when the
- *     catalogue really knew the number (a placeholder "1" must not report "you already own volume 1").
- * Returns { manga, volume, reason: 'isbn' | 'title' | null, candidates }.
+ *  2. otherwise the best title match, only if it clearly stands out; exact hits are ranked (own title before alternative
+ *     title, then the publisher) and a remaining tie gives candidates instead of a guess; then the volume by number,
+ *     but only when the catalogue really knew the number (a placeholder "1" must not report "you already own volume 1").
+ * Returns { manga, volume, reason: 'isbn' | 'title' | null, candidates, number_in_title }; number_in_title = the
+ * Google Books number is part of the series name ("Eyeshield 21"), so the volume number is in fact unknown.
  */
 function matchCollection(db, book, isbn13) {
     const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS} FROM volumes WHERE isbn = ? ORDER BY id LIMIT 1`).get(isbn13) : null;
     if (byIsbn) {
         const manga = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas WHERE id = ?').get(byIsbn.manga_id);
-        return { manga: manga || null, volume: byIsbn, reason: 'isbn', candidates: [] };
+        return { manga: manga || null, volume: byIsbn, reason: 'isbn', candidates: [], number_in_title: false };
     }
 
-    const scored = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas').all()
-        .map(m => ({ manga: m, score: titleMatchScore([book.series, book.title], m) }))
+    const bookPublisher = normalizePublisher(book.publisher);
+    const scored = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas ORDER BY id').all()
+        .map(m => ({
+            manga: m,
+            score: titleMatchScore([book.series, book.title], m),
+            rank: exactMatchRank(book, m),
+            samePublisher: bookPublisher && normalizePublisher(m.publisher) === bookPublisher ? 1 : 0
+        }))
         .filter(s => s.score > 0)
-        .sort((a, b) => b.score - a.score);
+        .sort((a, b) => b.score - a.score || b.rank - a.rank || b.samePublisher - a.samePublisher);
     const [top, second] = scored;
-    if (!top || (top.score < 100 && second && top.score - second.score < MIN_LEAD)) {
-        return { manga: null, volume: null, reason: null, candidates: scored.slice(0, 3).map(s => s.manga) };
+    const unclear = top && second && (top.score < 100
+        ? top.score - second.score < MIN_LEAD
+        : second.score === 100 && second.rank === top.rank && second.samePublisher === top.samePublisher);
+    if (!top || unclear) {
+        return { manga: null, volume: null, reason: null, candidates: scored.slice(0, 3).map(s => s.manga), number_in_title: false };
     }
+
+    const numberInTitle = book.source === GOOGLE_BOOKS_SOURCE && book.volume_number_known &&
+        [top.manga.title, top.manga.alt_title].some(t => {
+            const key = titleKey(t);
+            return key && key === titleKey(book.title) && normalizeVolumeNumber(key.split(' ').pop()) === normalizeVolumeNumber(book.volume_number);
+        });
 
     let volume = null;
-    if (book.volume_number_known) {
+    if (book.volume_number_known && !numberInTitle) {
+        // "05" and "5" are the same volume, also for numbers stored before the catalogue numbers were normalised
+        const wanted = String(normalizeVolumeNumber(book.volume_number)).toLowerCase();
         volume = db.prepare(`
             SELECT ${VOLUME_COLUMNS} FROM volumes
-            WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND COALESCE(type, 'volume') = 'volume'
-            ORDER BY id LIMIT 1
-        `).get(top.manga.id, String(book.volume_number).trim()) || null;
+            WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'
+            ORDER BY id
+        `).all(top.manga.id).find(v => String(normalizeVolumeNumber(v.volume_number ?? '')).toLowerCase() === wanted) || null;
     }
-    return { manga: top.manga, volume, reason: 'title', candidates: [] };
+    return { manga: top.manga, volume, reason: 'title', candidates: [], number_in_title: numberInTitle };
 }
 
-module.exports = { stripMarcControls, fetchTextHttps, parseMarc21Xml, lookupBookByIsbn, matchCollection, titleMatchScore, decodeXmlEntities };
+module.exports = {
+    stripMarcControls, fetchTextHttps, parseMarc21Xml, lookupBookByIsbn, matchCollection, titleMatchScore,
+    decodeXmlEntities, decodeHtmlEntities, normalizeVolumeNumber
+};

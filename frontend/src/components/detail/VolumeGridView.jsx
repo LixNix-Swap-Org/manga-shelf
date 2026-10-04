@@ -1,6 +1,9 @@
-import { AlertCircle, BookCheck, BookOpen, Building2, Calendar, Camera, Check, Coins, Edit3, FileText, Package, Plus, Sparkles, Truck, X } from 'lucide-react';
-import { getVolumeDisplayTitle, getEditionLabel, getSpecialEditionNumber } from '../../utils/volumeHelpers';
+import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleAlert, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
+import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
+import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges from './OwnerBadges';
+import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
+import { assetImgProps } from '../../utils/api';
 
 /** Card grid view of a series' volumes (incl. official gaps). Purely presentational; all state and handlers come in via props. */
 export default function VolumeGridView({
@@ -16,21 +19,25 @@ export default function VolumeGridView({
   readers,
   selectedReaderId,
   setFillingGapNumber,
-  user
+  user,
+  canToggleOthers,
+  gapsOfficial
 }) {
+  const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1800px]:grid-cols-7 gap-3 sm:gap-3.5 mb-8">
           {displayVolumeItems.map((item, itemIdx) => {
             if (item.isGap) {
-              const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+              const gapMeta = item.gapMeta || getRegularGapMeta(mpGapMap, item.gapNumber);
+              const gapPrice = gapMeta?.price != null ? formatEuro(gapMeta.price) : '';
               return (
                 <div 
                   key={`gap-card-${item.gapNumber}-${itemIdx}`}
-                  onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
-                  className={`group relative flex flex-col justify-between p-3 rounded-2xl border border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-900/60 hover:bg-slate-900/90 text-sm select-none shadow-sm shadow-amber-950/20 transition-all duration-200 overflow-hidden ${
-                    canEdit ? 'cursor-pointer hover:scale-[1.01]' : 'cursor-default'
+                  onClick={canEdit ? () => setFillingGapNumber(item.gapNumber) : undefined}
+                  className={`group relative flex flex-col justify-between p-3 rounded-2xl border border-dashed border-amber-500/40 bg-slate-900/60 text-sm select-none shadow-sm shadow-amber-950/20 transition-all duration-200 overflow-hidden ${
+                    canEdit ? 'cursor-pointer hover:border-amber-400 hover:bg-slate-900/90 hover:scale-[1.01]' : 'cursor-default'
                   }`}
-                  title={gapMeta?.price ? `Fehlender Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €) • Klicken zum schnellen Erfassen` : `Fehlender Band ${item.gapNumber} fehlt in der Sammlung • Klicken zum Erfassen`}
+                  title={`${gapPrice ? `Fehlender Band ${item.gapNumber} (${gapPrice})` : `Band ${item.gapNumber} fehlt in der Sammlung`}${canEdit ? ' • Klicken zum Erfassen' : ''}`}
                 >
                   {/* Top Row: Gap Indicator & Number & Action */}
                   <div className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5 pb-2 border-b border-amber-500/20 w-full shrink-0">
@@ -66,10 +73,12 @@ export default function VolumeGridView({
                     {gapMeta?.cover_image ? (
                       <div className="relative shrink-0 rounded-xl overflow-hidden shadow-md border border-amber-500/40 bg-slate-950 w-12 h-16 sm:w-13 sm:h-18 group-hover:scale-105 transition-transform duration-200">
                         <img 
-                          src={gapMeta.cover_image} 
-                          alt={`Band ${item.gapNumber}`}
+                          {...assetImgProps(gapMeta.cover_image)} 
+                          alt=""
                           className="w-full h-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
                           loading="lazy"
+                          decoding="async"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end justify-center p-1">
                           <span className="text-[8px] font-black text-amber-300 uppercase tracking-wider">Lücke</span>
@@ -84,28 +93,28 @@ export default function VolumeGridView({
 
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 text-[11px]">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 text-[10px]">
-                        <AlertCircle className="w-3 h-3 text-amber-400" />
-                        Lücke in Reihe
+                        <CircleAlert className="w-3 h-3 text-amber-400" />
+                        {gapLabel(gapsOfficial)}
                       </span>
 
-                      {gapMeta?.price !== undefined && gapMeta?.price !== null && (
+                      {gapPrice && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 text-[10px]">
                           <Coins className="w-3 h-3 text-emerald-400" />
-                          {gapMeta.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                          {gapPrice}
                         </span>
                       )}
 
                       {(gapMeta?.publisher || manga.publisher) && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={`Verlag: ${gapMeta?.publisher || manga.publisher}`}>
-                          <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                          <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                           <span className="truncate">{gapMeta?.publisher || manga.publisher}</span>
                         </span>
                       )}
 
                       {gapMeta?.release_date && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${gapMeta.release_date}`}>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${formatShortDate(gapMeta.release_date)}`}>
                           <Calendar className="w-3 h-3 text-sky-400" />
-                          {gapMeta.release_date}
+                          {formatShortDate(gapMeta.release_date)}
                         </span>
                       )}
                     </div>
@@ -114,7 +123,7 @@ export default function VolumeGridView({
                   {/* Bottom Row: Quick Add Prompt */}
                   <div className="w-full mt-auto pt-2 border-t border-amber-500/20 flex items-center justify-between gap-1.5 shrink-0 text-xs">
                     <span className="text-slate-400 text-[11px] flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                      <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                       {canEdit ? 'Klicken zum Erfassen' : 'Noch zu sammeln'}
                     </span>
                     {canEdit && (
@@ -135,7 +144,10 @@ export default function VolumeGridView({
             }
 
             const vol = item.volume;
-            const isOwned = vol.status === 'Vorhanden';
+            const statusKind = volumeStatusKind(vol.status);
+            const isOwned = statusKind === 'owned';
+            const badge = getVolumeBadge(vol);
+            const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
         const effectivePublisher = (vol.publisher && vol.publisher.trim()) || (manga.publisher && manga.publisher.trim());
         const hasCover = Boolean(vol.cover_image);
 
@@ -150,9 +162,11 @@ export default function VolumeGridView({
             } ${
               isOwned 
                 ? 'bg-slate-900/90 border-emerald-500/40 text-slate-100 shadow-emerald-950/20' + (canEdit ? ' hover:border-emerald-400 hover:bg-slate-850' : '') 
-                : vol.status === 'Vorbestellt'
+                : statusKind === 'preordered'
                   ? 'bg-sky-950/30 border-sky-500/40 text-slate-100 shadow-sky-950/20' + (canEdit ? ' hover:border-sky-400 hover:bg-sky-900/30' : '')
-                  : vol.status === 'Erscheint bald'
+                  : statusKind === 'ordered'
+                    ? 'bg-orange-950/30 border-orange-500/40 text-slate-100 shadow-orange-950/20' + (canEdit ? ' hover:border-orange-400 hover:bg-orange-900/30' : '')
+                  : statusKind === 'upcoming'
                     ? 'bg-purple-950/30 border-purple-500/40 text-slate-100 shadow-purple-950/20' + (canEdit ? ' hover:border-purple-400 hover:bg-purple-900/30' : '')
                     : 'bg-slate-950/70 border-slate-800 text-slate-400' + (canEdit ? ' hover:border-slate-700 hover:text-slate-200' : '')
             }`}
@@ -167,97 +181,96 @@ export default function VolumeGridView({
                     e.stopPropagation();
                     if (canEdit) handleToggleVolume(vol);
                   }}
-                  className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
                     !canEdit ? 'cursor-default' : 'cursor-pointer'
                   } ${
                     isOwned 
                       ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canEdit ? ' hover:bg-emerald-500/30' : '') 
-                      : vol.status === 'Vorbestellt'
+                      : statusKind === 'preordered'
                         ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canEdit ? ' hover:bg-sky-500/30' : '')
-                        : vol.status === 'Erscheint bald'
+                        : statusKind === 'ordered'
+                          ? 'bg-orange-500/20 border border-orange-500/60 text-orange-400' + (canEdit ? ' hover:bg-orange-500/30' : '')
+                        : statusKind === 'upcoming'
                           ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canEdit ? ' hover:bg-purple-500/30' : '')
-                          : 'bg-slate-800/80 border border-slate-700 text-slate-500' + (canEdit ? ' hover:border-slate-500 hover:text-slate-300' : '')
+                          : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canEdit ? ' hover:border-slate-500 hover:text-slate-300' : '')
                   }`}
                   title={!canEdit ? `Status: ${vol.status || 'Fehlt'}` : `Status: ${vol.status || 'Fehlt'} (Klicken zum Umschalten)`}
+                  aria-label={`Status: ${vol.status || 'Fehlt'} – ${getVolumeDisplayTitle(vol)}`}
                 >
                   {isOwned ? (
-                    <Check className="w-3 h-3 stroke-[2.5]" />
-                  ) : vol.status === 'Vorbestellt' ? (
-                    <Truck className="w-3 h-3" />
-                  ) : vol.status === 'Erscheint bald' ? (
+                    <Check className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                  ) : statusKind === 'preordered' ? (
+                    <Truck className="w-3 h-3" aria-hidden="true" />
+                  ) : statusKind === 'ordered' ? (
+                    <ShoppingCart className="w-3 h-3" aria-hidden="true" />
+                  ) : statusKind === 'upcoming' ? (
                     <Calendar className="w-3 h-3" />
                   ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
                   )}
                 </button>
                 <div 
                   className="font-bold text-white text-sm tracking-tight flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0"
                   title={getVolumeDisplayTitle(vol)}
                 >
-                  {vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber') ? (
+                  {badge.type === 'schuber' ? (
                     <>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shrink-0 shadow-sm">
                         <Package className="w-2.5 h-2.5 text-indigo-400" /> Schuber
                       </span>
-                      <span className="min-w-0 break-words leading-tight">{String(vol.volume_number).replace(/^schuber\s*/i, '')}</span>
+                      <span className="min-w-0 break-words leading-tight">{badge.text}</span>
                     </>
-                  ) : vol.type === 'special_edition' || (
-                    vol.type !== 'schuber' && (
-                      String(vol.volume_number).toLowerCase().includes('special edition') ||
-                      String(vol.volume_number).toLowerCase().includes('limited edition') ||
-                      String(vol.volume_number).toLowerCase().includes('spezial edition') ||
-                      (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition')))
-                    )
-                  ) ? (
+                  ) : badge.type === 'special_edition' ? (
                     <>
-                      <span className="shrink-0 font-bold">
-                        {getSpecialEditionNumber(vol) ? `Band ${getSpecialEditionNumber(vol)}` : 'Special'}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 max-w-full shadow-sm" title={getEditionLabel(vol).label}>
-                        <Sparkles className="w-2.5 h-2.5 text-fuchsia-400 shrink-0" /> <span className="truncate">{getEditionLabel(vol).label.replace(/ Edition$/, '')}</span>
+                      {badge.text && <span className="shrink-0 font-bold">{badge.text}</span>}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 max-w-full shadow-sm" title={badge.label}>
+                        <Sparkles className="w-2.5 h-2.5 text-fuchsia-400 shrink-0" /> <span className="truncate">{badge.label.replace(/ Edition$/, '')}</span>
                       </span>
                     </>
-                  ) : vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra') ? (
+                  ) : badge.type === 'special' ? (
                     <>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/25 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-sm">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Special
                       </span>
-                      <span className="truncate">{String(vol.volume_number).replace(/special\s*|extra\s*|sonderband\s*/i, '')}</span>
+                      <span className="truncate">{badge.text}</span>
                     </>
                   ) : (
-                    <span className="truncate">{getVolumeDisplayTitle(vol)}</span>
+                    <span className="truncate">{badge.text}</span>
                   )}
                   <OwnerBadges vol={vol} multiUser={readers.length > 1} />
                 </div>
               </div>
 
               {canEdit && (
-                <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
+                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
                   {!hasCover && (
                     <button
                       type="button"
                       onClick={(e) => handleOpenEditVolume(vol, e)}
-                      className="p-1 text-slate-500 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
+                      className={`p-1.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all`}
                       title="Foto für Band hochladen"
+                      aria-label="Foto für Band hochladen"
                     >
-                      <Camera className="w-3.5 h-3.5" />
+                      <Camera className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={(e) => handleOpenEditVolume(vol, e)}
-                    className="p-1 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
+                    className={`p-1.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all`}
                     title="Band-Details & Fotos bearbeiten"
+                    aria-label="Band-Details & Fotos bearbeiten"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <PenLine className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => handleDeleteVolume(e, vol.id)}
-                    className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-md transition-all"
+                    onClick={(e) => handleDeleteVolume(e, vol)}
+                    className={`ml-1.5 p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-md transition-all`}
                     title="Band löschen"
+                    aria-label="Band löschen"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -266,17 +279,19 @@ export default function VolumeGridView({
             {/* Middle: Harmonious Cover Thumbnail + Badges */}
             <div className="flex gap-2.5 items-start flex-1 py-2.5 min-w-0">
               {hasCover && (
-                <div 
+                <button
+                  type="button"
                   className="relative shrink-0 group/cover rounded-xl overflow-hidden shadow-md border border-slate-700/80 bg-slate-950 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     openVolumeGallery(vol);
                   }}
                   title="Klicken zum Öffnen der Fotogalerie"
+                  aria-label={`Fotogalerie öffnen: ${getVolumeDisplayTitle(vol)}`}
                 >
                   <img 
-                    src={vol.cover_image} 
-                    alt={getVolumeDisplayTitle(vol)} 
+                    {...assetImgProps(vol.cover_image)} 
+                    alt="" 
                     className="w-12 h-16 sm:w-13 sm:h-18 object-cover group-hover/cover:scale-105 transition-transform duration-200" 
                     loading="lazy"
                     onError={(e) => {
@@ -285,21 +300,26 @@ export default function VolumeGridView({
                     }}
                   />
                   {vol.images && vol.images.length > 1 && (
-                    <span className="absolute bottom-1 right-1 bg-black/85 text-brand-300 font-mono text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow flex items-center gap-1 border border-brand-500/30 backdrop-blur-xs">
+                    <span aria-hidden="true" className="absolute bottom-1 right-1 bg-black/85 text-brand-300 font-mono text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow flex items-center gap-1 border border-brand-500/30">
                       <Camera className="w-2.5 h-2.5 text-brand-400" />
                       {vol.images.length}
                     </span>
                   )}
-                </div>
+                </button>
               )}
 
               <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 text-[11px]">
-                {vol.status === 'Vorbestellt' ? (
+                {statusKind === 'preordered' ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-sky-300 bg-sky-950/70 border border-sky-500/40 text-[10px]">
                     <Truck className="w-3 h-3 text-sky-400" />
                     Vorbestellt
                   </span>
-                ) : vol.status === 'Erscheint bald' ? (
+                ) : statusKind === 'ordered' ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-orange-300 bg-orange-950/70 border border-orange-500/40 text-[10px]">
+                    <ShoppingCart className="w-3 h-3 text-orange-400" />
+                    Bestellt
+                  </span>
+                ) : statusKind === 'upcoming' ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-purple-300 bg-purple-950/70 border border-purple-500/40 text-[10px]">
                     <Calendar className="w-3 h-3 text-purple-400" />
                     Erscheint bald
@@ -307,22 +327,22 @@ export default function VolumeGridView({
                 ) : null}
 
                 {vol.release_date ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${vol.release_date}`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${formatShortDate(vol.release_date)}`}>
                     <Calendar className="w-3 h-3 text-sky-400" />
-                    {vol.release_date}
+                    {formatShortDate(vol.release_date)}
                   </span>
                 ) : null}
 
-                {vol.price !== null && vol.price !== undefined ? (
+                {formatEuro(vol.price) ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30">
                     <Coins className="w-3 h-3 text-emerald-400" />
-                    {vol.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {formatEuro(vol.price)}
                   </span>
                 ) : null}
 
                 {effectivePublisher ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={`Verlag: ${effectivePublisher}`}>
-                    <Building2 className="w-3 h-3 text-brand-400 shrink-0" />
+                    <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                     <span className="truncate">{effectivePublisher}</span>
                   </span>
                 ) : null}
@@ -335,7 +355,7 @@ export default function VolumeGridView({
 
                 {vol.release_year ? (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-slate-400 bg-slate-900 border border-slate-800 font-mono" title={`Erscheinungsjahr: ${vol.release_year}`}>
-                    <Calendar className="w-3 h-3 text-slate-500" />
+                    <Calendar className="w-3 h-3 text-slate-400" />
                     {vol.release_year}
                   </span>
                 ) : null}
@@ -353,7 +373,7 @@ export default function VolumeGridView({
                 ) : null}
 
                 {vol.notes ? (
-                  <span className="inline-flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-white" title={`Notiz: ${vol.notes}`}>
+                  <span role="img" aria-label={`Notiz: ${vol.notes}`} className="inline-flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-white" title={`Notiz: ${vol.notes}`}>
                     <FileText className="w-3 h-3 text-brand-400" />
                   </span>
                 ) : null}
@@ -376,11 +396,8 @@ export default function VolumeGridView({
             {isOwned && (
               <div className="w-full mt-auto pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5 shrink-0">
                 {(() => {
-                  const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
-                  const isRead = vol.read_users 
-                    ? vol.read_users.some(u => String(u.user_id || u.id) === String(effUserId)) 
-                    : (Boolean(vol.is_read) && String(effUserId) === String(user?.id));
-                  const canToggleStatus = canEdit;
+                  const isRead = hasUserRead(vol, effUserId, user?.id);
+                  const canToggleStatus = canEdit && (mayToggleOthers || String(effUserId) === String(user?.id));
 
                   return (
                     <button
@@ -396,47 +413,60 @@ export default function VolumeGridView({
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' + (canToggleStatus ? ' hover:bg-emerald-500/30' : '')
                           : 'bg-slate-800/60 text-slate-400 border border-slate-700/60' + (canToggleStatus ? ' hover:text-slate-200 hover:border-slate-600' : '')
                       }`}
-                      title={!canToggleStatus ? `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)` : 'Lesestatus umschalten (Gelesen / Ungelesen)'}
+                      title={canToggleStatus
+                        ? 'Lesestatus umschalten (Gelesen / Ungelesen)'
+                        : canEdit ? READ_OTHERS_ADMIN_ONLY : `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)`}
                     >
-                      <BookCheck className={`w-3.5 h-3.5 ${isRead ? 'text-emerald-400' : 'text-slate-500'}`} />
+                      <BookCheck className={`w-3.5 h-3.5 ${isRead ? 'text-emerald-400' : 'text-slate-400'}`} aria-hidden="true" />
                       <span>{isRead ? 'Gelesen' : 'Ungelesen'}</span>
                     </button>
                   );
                 })()}
 
-                {/* Reader Badges: Dynamic, non-overlapping, with clear tooltip */}
                 {readers.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <div role="group" aria-label="Lesestatus der Leser" className="flex items-center gap-1 flex-wrap justify-end">
                     {readers.map(r => {
-                      const isReaderDone = vol.read_users 
-                        ? vol.read_users.some(u => String(u.user_id || u.id) === String(r.user_id))
-                        : (Boolean(vol.is_read) && String(r.user_id) === String(user?.id));
-                      const initial = (r.display_name || r.username || '?').charAt(0).toUpperCase();
-                      const canToggleReader = canEdit;
+                      const isReaderDone = hasUserRead(vol, r.user_id, user?.id);
+                      const name = r.display_name || r.username || 'Unbekannt';
+                      const initial = name.charAt(0).toUpperCase();
+                      const canToggleReader = canEdit && (mayToggleOthers || String(r.user_id) === String(user?.id));
+                      const stateText = isReaderDone ? 'gelesen' : 'ungelesen';
+                      const look = `relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                        isReaderDone
+                          ? 'bg-emerald-500/25 border border-emerald-400/70 text-emerald-300 shadow-sm shadow-emerald-950/40'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400'
+                      }`;
+                      const content = (
+                        <>
+                          <span aria-hidden="true">{initial}</span>
+                          {isReaderDone ? (
+                            <span aria-hidden="true" className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border border-slate-900 flex items-center justify-center">
+                              <Check className="w-2 h-2 text-slate-950 stroke-[3]" />
+                            </span>
+                          ) : (
+                            <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-slate-500 bg-slate-900" />
+                          )}
+                        </>
+                      );
 
+                      if (!canToggleReader) {
+                        return (
+                          <span key={r.user_id} role="img" aria-label={`${name}: ${stateText}`} title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'}`} className={`${look} cursor-default`}>
+                            {content}
+                          </span>
+                        );
+                      }
                       return (
                         <button
                           key={r.user_id}
                           type="button"
-                          disabled={!canToggleReader}
-                          onClick={(e) => {
-                            if (canToggleReader) {
-                              handleToggleVolumeRead(vol, r.user_id, e);
-                            }
-                          }}
-                          className={`relative w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                            canToggleReader ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-                          } ${
-                            isReaderDone
-                              ? 'bg-emerald-500/25 border border-emerald-400/70 text-emerald-300 shadow-sm shadow-emerald-950/40'
-                              : 'bg-slate-900 border border-slate-800 text-slate-500'
-                          }`}
-                          title={`${r.display_name || r.username}: ${isReaderDone ? 'Gelesen ✓' : 'Noch ungelesen'}${canToggleReader ? ' (Klicken zum Umschalten)' : ''}`}
+                          aria-pressed={isReaderDone}
+                          aria-label={`Gelesen: ${name}`}
+                          onClick={(e) => handleToggleVolumeRead(vol, r.user_id, e)}
+                          className={`${look} cursor-pointer hover:scale-110`}
+                          title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'} (Klicken zum Umschalten)`}
                         >
-                          <span>{initial}</span>
-                          <span className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-slate-900 ${
-                            isReaderDone ? 'bg-emerald-400' : 'bg-slate-600'
-                          }`} />
+                          {content}
                         </button>
                       );
                     })}

@@ -10,8 +10,9 @@ function isbn13CheckDigit(first12) {
 }
 
 /**
- * Returns the canonical ISBN-13 for valid-looking input, otherwise the input stripped of hyphens/spaces
- * (never throws away what the user typed), or null for empty input.
+ * Returns 13-digit input as is, converts an ISBN-10 to ISBN-13 only when its check digit is correct, and otherwise
+ * returns the input stripped of hyphens/spaces (never throws away what the user typed), or null for empty input.
+ * An ISBN-10 with a typo is kept as typed: converting it would mint a valid ISBN-13 of a different book.
  */
 function normalizeIsbn(value) {
     if (value === undefined || value === null) return null;
@@ -19,7 +20,7 @@ function normalizeIsbn(value) {
     if (!raw) return null;
     const compact = raw.replace(/[\s-]/g, '').toUpperCase();
     if (/^\d{13}$/.test(compact)) return compact;
-    if (/^\d{9}[\dX]$/.test(compact)) {
+    if (/^\d{9}[\dX]$/.test(compact) && isValidIsbn(compact)) {
         const first12 = '978' + compact.slice(0, 9);
         return first12 + isbn13CheckDigit(first12);
     }

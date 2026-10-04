@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Users } from 'lucide-react';
+import { apiFetch, readJson } from '../../../utils/api';
 
 /**
  * Besitzer eines Bandes (Mehrbenutzer). Jeder schaltet seinen eigenen Besitz um, Admins auch den der anderen.
  * Änderungen gehen sofort an POST /api/volumes/:id/owners, unabhängig vom Speichern-Knopf des Formulars.
+ * onChanged bekommt die Antwort ({ status, owners }): der Server leitet daraus den Status des Bandes ab.
  */
 export default function OwnersField({ volumeId, owners: initialOwners, users, currentUser, onChanged }) {
   const [owners, setOwners] = useState(initialOwners || []);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  const labelId = useId();
 
   useEffect(() => { setOwners(initialOwners || []); }, [initialOwners, volumeId]);
 
@@ -20,15 +23,14 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
     setBusyId(u.user_id);
     setError('');
     try {
-      const res = await fetch(`/api/volumes/${volumeId}/owners`, {
+      const res = await apiFetch(`/api/volumes/${volumeId}/owners`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owned: !owned, ...(u.user_id !== currentUser?.id ? { user_id: u.user_id } : {}) })
+        body: { owned: !owned, ...(u.user_id !== currentUser?.id ? { user_id: u.user_id } : {}) }
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await readJson(res)) ?? {};
       if (!res.ok) throw new Error(data.error || 'Fehler beim Speichern');
       setOwners(data.owners || []);
-      if (onChanged) onChanged();
+      if (onChanged) onChanged(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -38,10 +40,10 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
 
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-        <Users className="w-3.5 h-3.5 text-brand-400" /> Besitzer
-      </label>
-      <div className="flex flex-wrap gap-1.5">
+      <span id={labelId} className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+        <Users className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> Besitzer
+      </span>
+      <div role="group" aria-labelledby={labelId} className="flex flex-wrap gap-1.5">
         {users.map(u => {
           const owned = owners.some(o => o.user_id === u.user_id);
           const canToggle = isAdmin || u.user_id === currentUser?.id;
@@ -63,7 +65,7 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
           );
         })}
       </div>
-      {error && <p className="text-xs text-red-400 mt-1.5">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-400 mt-1.5">{error}</p>}
     </div>
   );
 }

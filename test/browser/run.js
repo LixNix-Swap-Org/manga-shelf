@@ -37,6 +37,40 @@ function freePort() {
     });
 }
 
+/** Environment of the test server: its own port (SERVER_PORT wins over PORT in index.js) and never native HTTPS. */
+function buildServerEnv(baseEnv, { dataDir, port }) {
+    const noSsl = path.join(dataDir, 'no-ssl');
+    return {
+        ...baseEnv,
+        DATA_DIR: dataDir,
+        PORT: String(port),
+        SERVER_PORT: String(port),
+        SSL_KEY_PATH: path.join(noSsl, 'privkey.pem'),
+        SSL_CERT_PATH: path.join(noSsl, 'cert.pem'),
+        SETUP_TOKEN: baseEnv.SETUP_TOKEN || 'browser-test-setup-token',
+        LOG_LEVEL: 'warn'
+    };
+}
+
+/** Consistent copy of a (possibly live, WAL-mode) database; the source is only opened read-only. */
+function snapshotDatabase(src, dest) {
+    const { DatabaseSync } = require('node:sqlite');
+    try {
+        const db = new DatabaseSync(src, { readOnly: true });
+        try {
+            db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+        } finally {
+            db.close();
+        }
+    } catch (err) {
+        // a read-only open of a WAL database fails without its -shm file in a read-only folder: copy all three files
+        fs.rmSync(dest, { force: true });
+        for (const suffix of ['', '-wal', '-shm']) {
+            if (fs.existsSync(src + suffix)) fs.copyFileSync(src + suffix, dest + suffix);
+        }
+    }
+}
+
 async function waitForHealth(base, server) {
     for (let i = 0; i < 60; i++) {
         if (server.exitCode !== null) throw new Error('The test server exited early (exit code ' + server.exitCode + ')');
@@ -69,7 +103,7 @@ async function main() {
     try {
         if (db) {
             // work on a copy: the original database is never opened by the test server
-            fs.copyFileSync(path.resolve(db), path.join(dataDir, 'manga.db'));
+            snapshotDatabase(path.resolve(db), path.join(dataDir, 'manga.db'));
             const { DatabaseSync } = require('node:sqlite');
             const bcrypt = require('bcryptjs');
             const copy = new DatabaseSync(path.join(dataDir, 'manga.db'));
@@ -80,9 +114,10 @@ async function main() {
 
         const port = await freePort();
         const base = `http://127.0.0.1:${port}`;
+        const serverEnv = buildServerEnv(process.env, { dataDir, port });
         server = spawn(process.execPath, ['index.js'], {
             cwd: root,
-            env: { ...process.env, DATA_DIR: dataDir, PORT: String(port), LOG_LEVEL: 'warn' },
+            env: serverEnv,
             stdio: ['ignore', 'ignore', 'inherit']
         });
         await waitForHealth(base, server);
@@ -91,7 +126,7 @@ async function main() {
             const res = await fetch(base + '/api/setup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password, setup_token: serverEnv.SETUP_TOKEN })
             });
             if (!res.ok) throw new Error('Creating the test admin failed: ' + res.status);
         }
@@ -100,7 +135,7 @@ async function main() {
         exitCode = await new Promise((resolve) => {
             const child = spawn(process.execPath, [path.resolve(script)], {
                 cwd: root,
-                env: { ...process.env, BASE_URL: base, E2E_USER: username, E2E_PASSWORD: password },
+                env: { ...process.env, BASE_URL: base, E2E_USER: username, E2E_PASSWORD: password, E2E_DB_SOURCE: db ? 'copy' : 'empty' },
                 stdio: 'inherit'
             });
             child.on('exit', code => resolve(code === null ? 1 : code));
@@ -117,4 +152,6 @@ async function main() {
     process.exit(exitCode);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { buildServerEnv, snapshotDatabase, parseArgs };

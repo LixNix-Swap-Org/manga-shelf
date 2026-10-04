@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "MangaShelf - Manga Sammlung & Tracker",
   "short_name": "MangaShelf",
   "description": "Persönliche Manga-Sammlung, Bände-Tracker, Lesestatus und Einkaufsliste",
@@ -12,19 +13,25 @@
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -33,16 +40,62 @@
       "short_name": "Einkauf",
       "description": "Fehlende Bände direkt im Buchladen aufrufen",
       "url": "/?view=shopping",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Barcode scannen",
+      "short_name": "Scannen",
+      "description": "Band im Laden per Foto scannen und mit der Sammlung abgleichen",
+      "url": "/?view=shopping&scan=1",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Release-Radar",
+      "short_name": "Radar",
+      "description": "Vorbestellungen & Neuerscheinungen",
+      "url": "/?view=radar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Statistiken",
       "short_name": "Stats",
       "description": "Sammlungswert & Lesestatistiken",
       "url": "/?view=stats",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
-  "categories": ["books", "entertainment", "lifestyle"],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "categories": [
+    "books",
+    "entertainment",
+    "lifestyle"
+  ],
   "lang": "de"
 }

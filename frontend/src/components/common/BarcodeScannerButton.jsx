@@ -1,11 +1,94 @@
 import { useRef, useState } from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import { Camera, LoaderCircle } from 'lucide-react';
+import { pickIsbnBarcode, isIsbnBarcode, computeScaledSize } from '../../utils/scanHelpers';
+import { notify } from '../../utils/notify';
+import { haptic } from '../../utils/haptics';
+
+// Below iOS Safari's canvas area limit (about 16.7 MP); a 12-48 MP photo drawn at full size can come out blank.
+const MAX_DIM = 1600;
+const RETRY_DIM = 2400;
+const NATIVE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'];
+
+/** createImageBitmap, or an <img> for formats it rejects (e.g. HEIC outside Safari). */
+async function loadImage(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close?.() };
+  } catch (bitmapErr) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      return { source: img, width: img.naturalWidth, height: img.naturalHeight, release: () => URL.revokeObjectURL(url) };
+    } catch (_) {
+      URL.revokeObjectURL(url);
+      throw bitmapErr;
+    }
+  }
+}
+
+function drawScaled(image, maxDim) {
+  const { width, height } = computeScaledSize(image.width, image.height, maxDim);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d').drawImage(image.source, 0, 0, width, height);
+  return canvas;
+}
+
+const releaseCanvas = (canvas) => {
+  if (canvas) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+};
+
+async function detectNative(canvas) {
+  if (!('BarcodeDetector' in window)) return null;
+  try {
+    const detector = new window.BarcodeDetector({ formats: NATIVE_FORMATS });
+    return pickIsbnBarcode(await detector.detect(canvas));
+  } catch (err) {
+    console.warn('Native BarcodeDetector threw, falling back to ZXing:', err);
+    return null;
+  }
+}
+
+/** ZXing on downscaled canvases: a quick pass, then TRY_HARDER on a larger copy. decodeFromCanvas throws on a miss. */
+async function decodeWithZxing(image, firstCanvas) {
+  const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+    import('@zxing/browser'),
+    import('@zxing/library')
+  ]);
+  const formats = [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128];
+  const hints = (tryHarder) => {
+    const map = new Map([[DecodeHintType.POSSIBLE_FORMATS, formats]]);
+    if (tryHarder) map.set(DecodeHintType.TRY_HARDER, true);
+    return map;
+  };
+  const attempt = (canvas, tryHarder) => {
+    try {
+      return new BrowserMultiFormatReader(hints(tryHarder)).decodeFromCanvas(canvas)?.getText() || null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const quick = attempt(firstCanvas, false);
+  if (quick) return quick;
+  const larger = Math.max(image.width, image.height) > MAX_DIM ? drawScaled(image, RETRY_DIM) : null;
+  try {
+    return attempt(larger || firstCanvas, true);
+  } finally {
+    releaseCanvas(larger);
+  }
+}
 
 /**
  * BarcodeScannerButton
- * Resilient barcode scanner that works reliably over plain HTTP without WebRTC camera blocks.
- * Uses HTML5 capture="environment" file input, native BarcodeDetector API (Prio 1),
- * with dynamic fallback to ZXing browser reader (Prio 2).
+ * Barcode scan from a photo (file input with capture="environment", works over plain HTTP without camera access):
+ * native BarcodeDetector first, ZXing (lazy chunk) as the fallback, both on a downscaled canvas.
  */
 export default function BarcodeScannerButton({ onDetected, className = '', buttonText = 'Barcode scannen', compact = false }) {
   const fileInputRef = useRef(null);
@@ -16,71 +99,37 @@ export default function BarcodeScannerButton({ onDetected, className = '', butto
     if (!file) return;
     setScanning(true);
 
+    let image = null;
+    let canvas = null;
     try {
-      // 1. Create ImageBitmap or Image element for decoding
-      const imageBitmap = await createImageBitmap(file);
+      image = await loadImage(file);
+      canvas = drawScaled(image, MAX_DIM);
 
-      // Downscale if image is gigantic (> 1600px) to speed up decoding on mobile
-      let processSource = imageBitmap;
-      const maxDim = 1600;
-      if (imageBitmap.width > maxDim || imageBitmap.height > maxDim) {
-        const scale = Math.min(maxDim / imageBitmap.width, maxDim / imageBitmap.height);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(imageBitmap.width * scale);
-        canvas.height = Math.round(imageBitmap.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
-        processSource = canvas;
-      }
-
-      let detectedCode = null;
-
-      // 2. Try native BarcodeDetector API (Hardware accelerated, supported on Chrome/Edge Android)
-      if ('BarcodeDetector' in window) {
-        try {
-          const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
-          const barcodes = await detector.detect(processSource);
-          if (barcodes && barcodes.length > 0) {
-            detectedCode = barcodes[0].rawValue;
-          }
-        } catch (detectorErr) {
-          console.warn('Native BarcodeDetector threw, falling back to ZXing:', detectorErr);
-        }
-      }
-
-      // 3. Fallback: Use ZXing browser library dynamically
+      const native = await detectNative(canvas);
+      let detectedCode = isIsbnBarcode(native) ? native : null;
       if (!detectedCode) {
         try {
-          const { BrowserMultiFormatReader } = await import('@zxing/browser');
-          const reader = new BrowserMultiFormatReader();
-          let imgUrl = URL.createObjectURL(file);
-          try {
-            const result = await reader.decodeFromImageUrl(imgUrl);
-            if (result && result.getText()) {
-              detectedCode = result.getText();
-            }
-          } finally {
-            URL.revokeObjectURL(imgUrl);
-          }
+          detectedCode = await decodeWithZxing(image, canvas);
         } catch (zxingErr) {
           console.warn('ZXing decode attempt finished without hit:', zxingErr?.message || zxingErr);
         }
       }
+      detectedCode = detectedCode || native;
 
       if (detectedCode) {
         const cleanIsbn = detectedCode.replace(/[^0-9X]/gi, '');
-        // Haptic feedback if supported
-        if ('vibrate' in navigator) {
-          try { navigator.vibrate([25, 40, 25]); } catch (_) {}
-        }
+        haptic('success', { sound: true });
         onDetected(cleanIsbn || detectedCode);
       } else {
-        alert('Kein Barcode erkannt. Bitte fotografiere den Barcode scharf, nah und gut ausgeleuchtet auf der Buchrückseite.');
+        haptic('error');
+        notify.error('Kein Barcode erkannt. Bitte fotografiere den Barcode scharf, nah und gut ausgeleuchtet auf der Buchrückseite.');
       }
     } catch (err) {
       console.error('Fehler beim Barcode-Scannen:', err);
-      alert('Konnte Bild nicht analysieren: ' + (err.message || 'Unbekannter Fehler'));
+      notify.error(`Konnte Bild nicht analysieren: ${err?.message || 'Unbekannter Fehler'}`);
     } finally {
+      releaseCanvas(canvas);
+      image?.release();
       setScanning(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -94,23 +143,31 @@ export default function BarcodeScannerButton({ onDetected, className = '', butto
         accept="image/*"
         capture="environment"
         className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
         onChange={handleCapture}
       />
       <button
         type="button"
         disabled={scanning}
-        onClick={() => fileInputRef.current?.click()}
+        aria-busy={scanning || undefined}
+        aria-label={compact ? (scanning ? 'Scanne...' : buttonText) : undefined}
+        onClick={(e) => {
+          // the header search box focuses its input on any click inside it, which would pop up the keyboard
+          e.stopPropagation();
+          fileInputRef.current?.click();
+        }}
         title="ISBN / EAN-Barcode per Kamera scannen (funktioniert auch ohne HTTPS)"
         className={className || `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white transition shadow-sm active:scale-95 disabled:opacity-50`}
       >
         {scanning ? (
           <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <LoaderCircle className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
             {!compact && <span>Scanne...</span>}
           </>
         ) : (
           <>
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-3.5 h-3.5" aria-hidden="true" />
             {!compact && <span>{buttonText}</span>}
           </>
         )}

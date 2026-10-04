@@ -25,6 +25,12 @@ frontend/public/uploads/
 .env
 .env.*
 !.env.example
+ssl/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Logs
 logs/
@@ -52,3 +58,4 @@ desktop.ini
 .vscode/
 .idea/
 .claude/
+frontend/dist-app/

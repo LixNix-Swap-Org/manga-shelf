@@ -1,5 +1,5 @@
 // Entry type of a volume row: 'volume' | 'special_edition' | 'schuber' | 'special'.
-// Mirrors inferVolumeType() in frontend/src/utils/volumeHelpers.js (kept in sync by test/volumeType.test.js).
+// Mirrors inferVolumeType() in frontend/src/utils/volumeHelpers.js; test/specialeditions.test.js ('the backend and frontend type inference agree') keeps them in sync.
 
 /** Uses vol.type when set, otherwise derives it from keywords in volume_number / notes. */
 function inferVolumeType(vol) {

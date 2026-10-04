@@ -1,5 +1,9 @@
 import { useState, useMemo, useRef } from 'react';
 
+const prefersReducedMotion = () => typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** Spine-shelf layout: mode (fit/rows/scroll), scale presets, balanced rows and keyboard focus. */
 export default function useShelfLayout(spineShelfItems) {
   // 3D Shelf scaling and layout modes: 'fit' (Auto-Fit) | 'rows' (Mehrzeilig) | 'scroll' (Horizontal scrollen)
@@ -25,7 +29,7 @@ export default function useShelfLayout(spineShelfItems) {
 
   const scrollShelf = (offset) => {
     if (shelfScrollRef.current) {
-      shelfScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+      shelfScrollRef.current.scrollBy({ left: offset, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     }
   };
 

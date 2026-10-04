@@ -1,42 +1,37 @@
 import { Library, ShoppingCart, Calendar } from 'lucide-react';
 
-/** Tabs Sammlung / Einkaufsliste / Release-Radar plus the mode hint next to them. */
-export default function MainViewSwitcher({
-  activeMainView, setActiveMainView, mangaCount, shoppingData, radarData,
-  fetchShoppingList, fetchReleaseRadar, fetchMangaPassionReleases
-}) {
+const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
+  active
+    ? 'bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow-lg shadow-brand-500/25'
+    : 'text-slate-400 hover:text-white'
+}`;
+
+/**
+ * Tabs Sammlung / Einkaufsliste / Release-Radar plus the mode hint next to them. `onSelectView` is Dashboard's
+ * setView (state, ?view= and the view's data in one place).
+ */
+export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, shoppingData, radarData }) {
   return (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-        <div className="flex items-center max-w-full overflow-x-auto bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
+        <nav aria-label="Hauptansicht" className="flex items-center max-w-full overflow-x-auto bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
           <button
             id="btn-nav-shelf"
-            onClick={() => {
-              setActiveMainView('shelf');
-              try { window.history.replaceState(null, '', window.location.pathname); } catch (_) {}
-            }}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
-              activeMainView === 'shelf'
-                ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            type="button"
+            aria-current={activeMainView === 'shelf' ? 'page' : undefined}
+            onClick={() => onSelectView('shelf')}
+            className={tabClass(activeMainView === 'shelf')}
           >
-            <Library className="w-4 h-4 hidden sm:block" />
+            <Library className="w-4 h-4 hidden sm:block" aria-hidden="true" />
             <span>Sammlung ({mangaCount})</span>
           </button>
           <button
             id="btn-nav-shopping"
-            onClick={() => {
-              setActiveMainView('shopping');
-              try { window.history.replaceState(null, '', '?view=shopping'); } catch (_) {}
-              fetchShoppingList();
-            }}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
-              activeMainView === 'shopping'
-                ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            type="button"
+            aria-current={activeMainView === 'shopping' ? 'page' : undefined}
+            onClick={() => onSelectView('shopping')}
+            className={tabClass(activeMainView === 'shopping')}
           >
-            <ShoppingCart className="w-4 h-4 text-emerald-400 hidden sm:block" />
+            <ShoppingCart className="w-4 h-4 text-emerald-400 hidden sm:block" aria-hidden="true" />
             <span>Einkaufsliste</span>
             {shoppingData && shoppingData.total_missing > 0 && (
               <span className="bg-emerald-500/30 text-emerald-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
@@ -46,19 +41,12 @@ export default function MainViewSwitcher({
           </button>
           <button
             id="btn-nav-radar"
-            onClick={() => {
-              setActiveMainView('radar');
-              try { window.history.replaceState(null, '', '?view=radar'); } catch (_) {}
-              fetchReleaseRadar();
-              fetchMangaPassionReleases();
-            }}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
-              activeMainView === 'radar'
-                ? 'bg-gradient-to-r from-brand-600 to-sky-500 text-white shadow-lg shadow-brand-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            type="button"
+            aria-current={activeMainView === 'radar' ? 'page' : undefined}
+            onClick={() => onSelectView('radar')}
+            className={tabClass(activeMainView === 'radar')}
           >
-            <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" />
+            <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" aria-hidden="true" />
             <span>Release-Radar</span>
             {radarData && radarData.total_releases > 0 && (
               <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
@@ -66,18 +54,18 @@ export default function MainViewSwitcher({
               </span>
             )}
           </button>
-        </div>
+        </nav>
 
         {activeMainView === 'shopping' && (
           <div className="text-xs text-slate-400 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>Laden-Modus: Fehlende Bände abhaken & direkt einbuchen</span>
           </div>
         )}
 
         {activeMainView === 'radar' && (
           <div className="text-xs text-slate-400 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
             <span>Kalender-Modus: Vorbestellungen & Neuerscheinungen im Blick</span>
           </div>
         )}

@@ -2,7 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted (no request to Google Fonts); variable font covers weights 200-800 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('./fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('./fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.brand.400');
+    outline-offset: 2px;
+  }
+
   body {
     @apply antialiased text-slate-100 bg-[#0b0f19] font-sans selection:bg-brand-500 selection:text-white;
   }
@@ -32,9 +60,25 @@
     scrollbar-width: none;
   }
 
-  /* Prevent browser default white borders or outlines on select elements */
+  /* Firefox only: Chromium ignores the ::-webkit-scrollbar rules above once scrollbar-color/-width is set */
+  @supports not selector(::-webkit-scrollbar) {
+    html {
+      scrollbar-color: #334155 #0f172a;
+    }
+    .custom-scrollbar {
+      scrollbar-width: thin;
+    }
+  }
+
+  /* Prevent browser default white borders on select elements */
   select {
     border-color: transparent;
+  }
+
+  @media (display-mode: standalone) {
+    html {
+      overscroll-behavior-y: none;
+    }
   }
 }
 
@@ -42,16 +86,17 @@
   @apply bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 shadow-2xl;
 }
 
+/* no backdrop blur: repeated over a solid background it is invisible and only adds compositing layers */
 .glass-card {
-  @apply bg-slate-900/60 backdrop-blur-md border border-slate-800/60 hover:border-brand-500/50 transition-all duration-300;
+  @apply bg-slate-900/60 border border-slate-800/60 hover:border-brand-500/50 transition-all duration-300;
 }
 
 .input-field {
-  @apply w-full bg-slate-950/70 border border-slate-700/80 text-slate-100 rounded-xl px-4 py-2.5 placeholder-slate-500 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all duration-200 text-sm;
+  @apply w-full bg-slate-950/70 border border-slate-700/80 text-slate-100 rounded-xl px-4 py-2.5 placeholder-slate-400 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none transition-all duration-200 text-base sm:text-sm;
 }
 
 .btn-primary {
-  @apply bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 hover:to-sky-400 text-white px-4 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-brand-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
+  @apply bg-gradient-to-r from-brand-800 to-brand-700 hover:from-brand-900 hover:to-brand-800 text-white px-4 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-brand-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
 }
 
 .btn-secondary {
@@ -80,22 +125,19 @@
   border: none !important;
   border-width: 0 !important;
   border-style: none !important;
-  outline: none !important;
   box-shadow: none !important;
   color: #e2e8f0;
   cursor: pointer;
   padding-right: 0.25rem;
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: 1rem;
+  line-height: 1.25rem;
 }
 
-.filter-chip-select:focus,
-.filter-chip-select:active,
-.filter-chip-select:focus-visible {
-  outline: none !important;
-  border: none !important;
-  border-width: 0 !important;
-  box-shadow: none !important;
+@media (min-width: 640px) {
+  .filter-chip-select {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
 }
 
 .filter-chip-select option {
@@ -113,19 +155,8 @@
   border: none !important;
   border-width: 0 !important;
   border-style: none !important;
-  outline: none !important;
   box-shadow: none !important;
   cursor: pointer;
-}
-
-.seamless-select:focus,
-.seamless-select:active,
-.seamless-select:focus-visible {
-  outline: none !important;
-  border: none !important;
-  border-width: 0 !important;
-  border-style: none !important;
-  box-shadow: none !important;
 }
 
 .seamless-select option {
@@ -134,54 +165,79 @@
   padding: 8px 12px;
 }
 
-/* 3D Physical Manga Spine View */
-.manga-spine {
-  position: relative;
-  height: var(--spine-height, 220px);
-  min-height: 120px;
-  border-radius: 4px 4px 2px 2px;
-  box-shadow: 
-    inset 2px 0 4px rgba(255, 255, 255, 0.22),
-    inset -3px 0 6px rgba(0, 0, 0, 0.65),
-    2px 6px 12px rgba(0, 0, 0, 0.6);
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
-  user-select: none;
+/* Where :has works, keyboard focus rings the wrapping chip/label instead of the borderless select; elsewhere the global :focus-visible outline stays on the select */
+@supports selector(:has(*)) {
+  .filter-chip-select:focus-visible,
+  .seamless-select:focus-visible {
+    outline: none;
+  }
 }
 
-.manga-spine:hover {
-  transform: translateY(-8px) scale(1.04);
-  box-shadow: 
-    inset 2px 0 6px rgba(255, 255, 255, 0.35),
-    inset -3px 0 8px rgba(0, 0, 0, 0.75),
-    0 16px 24px -4px rgba(0, 0, 0, 0.8),
-    0 0 16px rgba(56, 189, 248, 0.35);
-  z-index: 20;
+:has(> .filter-chip-select:focus-visible),
+:has(> .seamless-select:focus-visible) {
+  border-color: theme('colors.brand.400');
+  box-shadow: 0 0 0 2px theme('colors.brand.400');
 }
 
-/* Special / Collectors / Limited editions: foil edge so they stand out on the shelf */
-.manga-spine-special {
-  box-shadow:
-    inset 2px 0 4px rgba(255, 255, 255, 0.22),
-    inset -3px 0 6px rgba(0, 0, 0, 0.65),
-    inset 0 0 0 1px rgba(250, 204, 21, 0.55),
-    0 0 12px rgba(217, 70, 239, 0.35),
-    2px 6px 12px rgba(0, 0, 0, 0.6);
+/* zero specificity: only bare wrappers without a rounded-* class get this radius */
+:where(:has(> .filter-chip-select:focus-visible), :has(> .seamless-select:focus-visible)) {
+  border-radius: 0.375rem;
 }
 
-/* foil shine as an overlay so the publisher colour gradient of the spine stays visible */
-.manga-spine-special::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 47%, transparent 62%);
-}
+/* components layer: the focus ring utilities on a spine must win over its depth shadow */
+@layer components {
+  .manga-spine {
+    position: relative;
+    height: var(--spine-height, 220px);
+    min-height: 120px;
+    border-radius: 4px 4px 2px 2px;
+    box-shadow:
+      inset 2px 0 4px rgba(255, 255, 255, 0.22),
+      inset -3px 0 6px rgba(0, 0, 0, 0.65),
+      2px 6px 12px rgba(0, 0, 0, 0.6);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
+    user-select: none;
+  }
 
-/* Slipcases / boxes: dashed stitched frame */
-.manga-spine-box {
-  outline: 1px dashed rgba(165, 180, 252, 0.45);
-  outline-offset: -4px;
+  .manga-spine:hover {
+    transform: translateY(-8px) scale(1.04);
+    box-shadow:
+      inset 2px 0 6px rgba(255, 255, 255, 0.35),
+      inset -3px 0 8px rgba(0, 0, 0, 0.75),
+      0 16px 24px -4px rgba(0, 0, 0, 0.8),
+      0 0 16px rgba(56, 189, 248, 0.35);
+    z-index: 20;
+  }
+
+  /* Special / Collectors / Limited editions: foil edge so they stand out on the shelf */
+  .manga-spine-special {
+    box-shadow:
+      inset 2px 0 4px rgba(255, 255, 255, 0.22),
+      inset -3px 0 6px rgba(0, 0, 0, 0.65),
+      inset 0 0 0 1px rgba(250, 204, 21, 0.55),
+      0 0 12px rgba(217, 70, 239, 0.35),
+      2px 6px 12px rgba(0, 0, 0, 0.6);
+  }
+
+  /* foil shine as an overlay so the publisher colour gradient of the spine stays visible */
+  .manga-spine-special::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 47%, transparent 62%);
+  }
+
+  /* Slipcases / boxes: dashed stitched frame, drawn as a border so the focus outline stays free */
+  .manga-spine-box::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px dashed rgba(165, 180, 252, 0.45);
+    border-radius: 2px;
+    pointer-events: none;
+  }
 }
 
 .manga-spine-ghost {
@@ -214,4 +270,24 @@
   transform: rotate(180deg);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 
+  /* spinners stay recognisable as busy, just slower */
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .manga-spine:hover,
+  .manga-spine-ghost:hover {
+    transform: none;
+  }
+}

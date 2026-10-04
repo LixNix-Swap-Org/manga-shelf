@@ -1,18 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const pkg = require('../package.json');
 const { db, hasAdmin, runTransaction } = require('../db');
-const { 
-    JWT_SECRET, 
-    setAuthCookie, 
-    clearAuthCookie, 
-    requireAuth, 
-    requireAdmin 
+const {
+    AUTH_ERRORS,
+    signSessionToken,
+    bumpSessionVersion,
+    endSession,
+    tokenFromRequest,
+    sameUsername,
+    setAuthCookie,
+    clearAuthCookie,
+    requireAuth,
+    requireAdmin
 } = require('../middleware/auth');
-const { loginLimiter, setupLimiter, loginFailures } = require('../middleware/rateLimit');
+const { loginLimiter, logoutLimiter, setupLimiter, passwordChangeLimiter, loginGuard, accountKey, clientIp } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('auth');
+const { config, normalizeSetupToken } = require('../utils/config');
+const { HttpError, badRequest, notFound, sendError } = require('../utils/httpError');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const MIN_PASSWORD_LENGTH = 8;
@@ -38,98 +45,176 @@ router.get('/setup/status', (req, res) => {
 });
 
 const MAX_USERNAME_LENGTH = 64;
+// ',' and '|' separate owner names in the CSV exchange
+// eslint-disable-next-line no-control-regex
+const USERNAME_FORBIDDEN = /[,|\u0000-\u001f\u007f-\u009f]/;
+const usernameError = (cleanUsername) => {
+    if (cleanUsername.length > MAX_USERNAME_LENGTH) return `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)`;
+    if (USERNAME_FORBIDDEN.test(cleanUsername)) return 'Benutzername darf weder Komma, senkrechten Strich (|) noch Steuerzeichen enthalten';
+    return null;
+};
+// First-run code: whoever reaches a fresh public instance first must not become its admin. SETUP_TOKEN (normalised and
+// length-checked in utils/config.js) overrides the generated code, which only lives in memory; index.js prints it.
+const SETUP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+let generatedSetupToken = null;
+
+function generateSetupToken() {
+    const chars = Array.from({ length: 16 }, () => SETUP_CODE_ALPHABET[crypto.randomInt(SETUP_CODE_ALPHABET.length)]);
+    return chars.join('').match(/.{4}/g).join('-');
+}
+
+function currentSetupToken() {
+    const configured = config.setupToken;
+    if (configured) return configured;
+    if (!generatedSetupToken) generatedSetupToken = generateSetupToken();
+    return generatedSetupToken;
+}
+
+function setupTokenMatches(candidate) {
+    if (typeof candidate !== 'string') return false;
+    const given = normalizeSetupToken(candidate);
+    if (!given) return false;
+    const digest = (v) => crypto.createHash('sha256').update(v).digest();
+    return crypto.timingSafeEqual(digest(given), digest(normalizeSetupToken(currentSetupToken())));
+}
+
+/** Startup banner line while no admin exists (null afterwards). */
+function setupNotice() {
+    if (hasAdmin()) return null;
+    if (config.setupToken) return 'Ersteinrichtung: Einrichtungscode ist der Wert von SETUP_TOKEN';
+    return `Ersteinrichtung: Einrichtungscode für das erste Admin-Konto: ${currentSetupToken()}`;
+}
+
+if (!hasAdmin()) currentSetupToken();
+
+// App clients (X-Client: app, or a request made with a bearer token) also get the session token in the body; the
+// cookie is set for every client.
+const wantsTokenInBody = (req) => String(req.get('X-Client') || '').trim().toLowerCase() === 'app'
+    || req.body?.client === 'app' || req.authScheme === 'bearer';
+
+/** Signs a session for `user`, sets the cookie and returns the body fields ({ token } for app clients). */
+function issueSession(req, res, user) {
+    const token = signSessionToken(user);
+    setAuthCookie(req, res, token);
+    return wantsTokenInBody(req) ? { token } : {};
+}
+
+const SETUP_TOKEN_INVALID = 'Einrichtungscode fehlt oder ist falsch. Er steht in der Server-Konsole beim Start (oder in SETUP_TOKEN).';
+const adminExists = (res) => sendError(res, 400, AUTH_ERRORS.ADMIN_EXISTS, 'ADMIN_EXISTS');
+const isUniqueViolation = (err) => err && (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.errcode === 2067 || /UNIQUE constraint failed/i.test(err.message || ''));
 
 router.post('/setup', setupLimiter, async (req, res) => {
-    try {
-        if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
-        const { username, password } = req.body || {};
-        if (typeof username !== 'string' || !username.trim() || typeof password !== 'string') {
-            return res.status(400).json({ error: 'Benutzername und Passwort sind erforderlich' });
-        }
-        const pwErr = passwordError(password);
-        if (pwErr) return res.status(400).json({ error: pwErr });
-
-        const cleanUsername = username.trim();
-        if (cleanUsername.length > MAX_USERNAME_LENGTH) {
-            return res.status(400).json({ error: `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)` });
-        }
-        const hash = await bcrypt.hash(password, 10);
-
-        // Re-check right before the (synchronous) insert so two concurrent setups cannot both create an admin
-        if (hasAdmin()) return res.status(400).json({ error: 'Admin already exists' });
-        const result = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, 'admin');
-        const newUserId = Number(result.lastInsertRowid);
-
-        // Auto-login on setup
-        const token = jwt.sign({ id: newUserId, username: cleanUsername, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-        setAuthCookie(req, res, token);
-        res.json({ success: true, user: { id: newUserId, username: cleanUsername, role: 'admin' } });
-    } catch (err) {
-        log.error('Setup error:', err);
-        res.status(500).json({ error: 'Fehler bei der Einrichtung' });
+    if (hasAdmin()) return adminExists(res);
+    const { username, password, setup_token: setupToken } = req.body || {};
+    if (!setupTokenMatches(setupToken)) {
+        throw new HttpError(403, SETUP_TOKEN_INVALID, 'SETUP_TOKEN_INVALID');
     }
+    if (typeof username !== 'string' || !username.trim() || typeof password !== 'string') {
+        throw badRequest('Benutzername und Passwort sind erforderlich');
+    }
+    const pwErr = passwordError(password);
+    if (pwErr) throw badRequest(pwErr);
+
+    const cleanUsername = username.trim();
+    const nameErr = usernameError(cleanUsername);
+    if (nameErr) throw badRequest(nameErr);
+    const hash = await bcrypt.hash(password, 10);
+
+    // Re-check right before the (synchronous) insert so two concurrent setups cannot both create an admin
+    if (hasAdmin()) return adminExists(res);
+    const result = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, 'admin');
+    const newUserId = Number(result.lastInsertRowid);
+    generatedSetupToken = null;
+
+    const session = issueSession(req, res, { id: newUserId, username: cleanUsername, role: 'admin', password_changed_at: null });
+    res.json({ success: true, user: { id: newUserId, username: cleanUsername, role: 'admin' }, ...session });
 });
 
 // Pre-computed hash so unknown usernames cost the same time as wrong passwords (no user enumeration by timing)
 const DUMMY_HASH = bcrypt.hashSync('manga-shelf-dummy-password', 10);
 
-router.post('/auth/login', loginLimiter, async (req, res) => {
-    try {
-        const { username, password } = req.body || {};
-        if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
-            return res.status(400).json({ error: 'Bitte Benutzername und Passwort eingeben' });
-        }
-        const failureKey = username.trim().toLowerCase();
-        if (loginFailures.isLocked(failureKey)) {
-            res.setHeader('Retry-After', loginFailures.retryAfterSeconds(failureKey));
-            return res.status(429).json({ error: 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.' });
-        }
-        // "Max" and "max" are the same account; an exact match wins if old data has both
-        const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE ORDER BY (username = ?) DESC LIMIT 1').get(username.trim(), username.trim());
-        const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
-        if (!user || !valid) {
-            loginFailures.fail(failureKey);
-            return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
-        }
-        loginFailures.reset(failureKey);
+const tooManyLoginFailures = (res, retryAfter) => {
+    res.setHeader('Retry-After', retryAfter);
+    return sendError(res, 429, 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.', 'TOO_MANY_ATTEMPTS');
+};
 
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-        setAuthCookie(req, res, token);
-        res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
-    } catch (err) {
-        log.error('Login error:', err);
-        res.status(500).json({ error: 'Anmeldung fehlgeschlagen' });
+router.post('/auth/login', async (req, res) => {
+    const { username, password } = req.body || {};
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+        throw badRequest('Bitte Benutzername und Passwort eingeben');
     }
+    const account = accountKey(username);
+    const ip = clientIp(req);
+    const lock = loginGuard.check(account, ip);
+    if (lock.locked) return tooManyLoginFailures(res, lock.retryAfter);
+    if (loginLimiter.consume(req, res, { exempt: loginGuard.knows(account, ip) })) return;
+    // Counted before the await so parallel guesses cannot all pass the check; a success clears it again
+    loginGuard.attempt(account, ip);
+
+    // "Max" and "max" are the same account; an exact match wins if old data has both
+    const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE ORDER BY (username = ?) DESC, id ASC LIMIT 1').get(username.trim(), username.trim());
+    const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+    if (!user || !valid) throw new HttpError(401, 'Ungültige Anmeldedaten', 'INVALID_CREDENTIALS');
+    loginGuard.succeeded(account, ip);
+    loginLimiter.refund(req);
+
+    // Signed with the session version read together with the hash: a reset during the compare ends this session
+    const session = issueSession(req, res, user);
+    res.json({ success: true, user: { id: user.id, username: user.username, role: user.role }, ...session });
 });
 
-// Own password: needs the current one; ends all other sessions and keeps this one logged in with a fresh token
-router.put('/auth/password', loginLimiter, requireAuth, async (req, res) => {
-    try {
-        const { current_password, new_password } = req.body || {};
-        if (typeof current_password !== 'string' || !current_password) {
-            return res.status(400).json({ error: 'Bitte das aktuelle Passwort eingeben' });
-        }
-        const pwErr = passwordError(new_password);
-        if (pwErr) return res.status(400).json({ error: pwErr });
+const PASSWORD_CHANGED_MEANWHILE = 'Das Passwort wurde in der Zwischenzeit geändert. Bitte neu laden und erneut versuchen.';
+const authGone = (res) => sendError(res, 401, AUTH_ERRORS.SESSION_INVALID, 'SESSION_INVALID');
+const WRONG_PASSWORD = 'Das aktuelle Passwort stimmt nicht';
 
-        const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(req.user.id);
-        if (!user || !(await bcrypt.compare(current_password, user.password_hash))) {
-            return res.status(403).json({ error: 'Das aktuelle Passwort stimmt nicht' });
-        }
-        const hash = await bcrypt.hash(new_password, 10);
-        db.prepare('UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?').run(hash, Date.now(), user.id);
-
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-        setAuthCookie(req, res, token);
-        res.json({ success: true });
-    } catch (err) {
-        log.error('Password change error:', err);
-        res.status(500).json({ error: 'Fehler beim Ändern des Passworts' });
+// Own password: needs the current one; ends all other sessions and keeps this one logged in with a fresh token.
+// Wrong current passwords count toward the same lock as failed logins (whoever guesses here already holds a session).
+router.put('/auth/password', requireAuth, passwordChangeLimiter, async (req, res) => {
+    const { current_password, new_password } = req.body || {};
+    if (typeof current_password !== 'string' || !current_password) {
+        throw badRequest('Bitte das aktuelle Passwort eingeben');
     }
+    const pwErr = passwordError(new_password);
+    if (pwErr) throw badRequest(pwErr);
+
+    const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(req.user.id);
+    if (!user) throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
+    const account = accountKey(user.username);
+    const ip = clientIp(req);
+    const lock = loginGuard.check(account, ip);
+    if (lock.locked) {
+        res.setHeader('Retry-After', lock.retryAfter);
+        return sendError(res, 429, 'Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.', 'TOO_MANY_ATTEMPTS');
+    }
+    loginGuard.attempt(account, ip);
+    if (!(await bcrypt.compare(current_password, user.password_hash))) {
+        throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
+    }
+    loginGuard.succeeded(account, ip);
+    const hash = await bcrypt.hash(new_password, 10);
+    // Only while the row is still this user with the hash just compared: a restore or another change may have
+    // happened during the bcrypt awaits
+    const outcome = runTransaction(() => {
+        const version = bumpSessionVersion(user.id, hash, { username: user.username, passwordHash: user.password_hash });
+        if (version !== null) return { version };
+        const now = db.prepare('SELECT username FROM users WHERE id = ?').get(user.id);
+        return { gone: !now || !sameUsername(now.username, user.username) };
+    });
+    if (outcome.gone) return authGone(res);
+    if (outcome.version === undefined) throw new HttpError(409, PASSWORD_CHANGED_MEANWHILE, 'CHANGED_MEANWHILE');
+
+    res.json({ success: true, ...issueSession(req, res, { ...user, password_changed_at: outcome.version }) });
 });
 
+// Ends this session for good (also copies of the token); works without a valid token and always clears the cookie
 router.post('/auth/logout', (req, res) => {
     clearAuthCookie(res);
+    if (logoutLimiter.consume(req, res)) return;
+    try {
+        endSession(tokenFromRequest(req));
+    } catch (err) {
+        log.warn('Logout: session could not be revoked:', err);
+    }
     res.json({ success: true });
 });
 
@@ -139,182 +224,190 @@ router.get('/auth/me', requireAuth, (req, res) => {
 
 // --- USER MANAGEMENT (Admin only) ---
 router.get('/users', requireAdmin, (req, res) => {
-    try {
-        const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
-        res.json(users);
-    } catch (err) {
-        log.error('Error fetching users:', err);
-        res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
-    }
+    const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
+    res.json(users);
 });
 
 router.post('/users', requireAdmin, async (req, res) => {
+    const { username, password, role = 'editor' } = req.body || {};
+    if (!ROLES.includes(role)) {
+        throw badRequest('Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')');
+    }
+    if (typeof username !== 'string' || !username.trim()) {
+        throw badRequest('Benutzername darf nicht leer sein');
+    }
+    const pwErr = passwordError(password);
+    if (pwErr) throw badRequest(pwErr);
+    const cleanUsername = username.trim();
+    const nameErr = usernameError(cleanUsername);
+    if (nameErr) throw badRequest(nameErr);
+    const cleanRole = role;
+
+    const usernameTaken = () => sendError(res, 400, 'Dieser Benutzername existiert bereits', 'USERNAME_TAKEN');
+    if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return usernameTaken();
+
+    const hash = await bcrypt.hash(password, 10);
+    // Check again after the await, synchronously with the insert: a parallel create of "Max"/"max" may have won.
+    // (COLLATE NOCASE folds ASCII only, like the login lookup.)
+    let result;
     try {
-        const { username, password, role = 'editor' } = req.body || {};
-        if (!ROLES.includes(role)) {
-            return res.status(400).json({ error: 'Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')' });
-        }
-        if (typeof username !== 'string' || !username.trim()) {
-            return res.status(400).json({ error: 'Benutzername darf nicht leer sein' });
-        }
-        const pwErr = passwordError(password);
-        if (pwErr) return res.status(400).json({ error: pwErr });
-        const cleanUsername = username.trim();
-        if (cleanUsername.length > MAX_USERNAME_LENGTH) {
-            return res.status(400).json({ error: `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)` });
-        }
-        const cleanRole = role;
-
-        const existing = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername);
-        if (existing) {
-            return res.status(400).json({ error: 'Dieser Benutzername existiert bereits' });
-        }
-
-        const hash = await bcrypt.hash(password, 10);
-        const stmt = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
-        const result = stmt.run(cleanUsername, hash, cleanRole);
-
-        res.json({
-            success: true,
-            user: {
-                id: Number(result.lastInsertRowid),
-                username: cleanUsername,
-                role: cleanRole
-            }
+        result = runTransaction(() => {
+            if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return null;
+            return db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, cleanRole);
         });
     } catch (err) {
-        log.error('Error creating user:', err);
-        res.status(500).json({ error: 'Fehler beim Anlegen des Benutzers' });
+        if (isUniqueViolation(err)) return usernameTaken();
+        throw err;
     }
+    if (!result) return usernameTaken();
+
+    res.json({
+        success: true,
+        user: {
+            id: Number(result.lastInsertRowid),
+            username: cleanUsername,
+            role: cleanRole
+        }
+    });
 });
 
+const LAST_ADMIN_DEMOTE = 'Der letzte verbleibende Administrator kann nicht herabgestuft werden';
+const USER_CHANGED_MEANWHILE = 'Der Benutzer wurde in der Zwischenzeit geändert. Bitte neu laden und erneut versuchen.';
+
 router.put('/users/:id', requireAdmin, async (req, res) => {
-    try {
-        const userId = parseInt(req.params.id, 10);
-        const { role, password } = req.body || {};
-        const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
-        if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    const userId = parseInt(req.params.id, 10);
+    const { role, password } = req.body || {};
+    const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(userId);
+    if (!user) throw notFound('Benutzer');
 
-        let newRole = user.role;
-        if (role) {
-            if (!ROLES.includes(role)) {
-                return res.status(400).json({ error: 'Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')' });
-            }
-            newRole = role;
-        }
-
-        // Prevent demoting the last remaining admin
-        if (user.role === 'admin' && newRole !== 'admin') {
-            const adminCountRow = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get();
-            if (adminCountRow && adminCountRow.count <= 1) {
-                return res.status(400).json({ error: 'Der letzte verbleibende Administrator kann nicht herabgestuft werden' });
-            }
-        }
-
-        if (password) {
-            const pwErr = passwordError(password);
-            if (pwErr) return res.status(400).json({ error: pwErr });
-            const hash = await bcrypt.hash(password, 10);
-            db.prepare('UPDATE users SET role = ?, password_hash = ?, password_changed_at = ? WHERE id = ?').run(newRole, hash, Date.now(), userId);
-        } else {
-            db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
-        }
-        res.json({ success: true, user: { id: userId, username: user.username, role: newRole } });
-    } catch (err) {
-        log.error('Error updating user:', err);
-        res.status(500).json({ error: 'Fehler beim Aktualisieren des Benutzers' });
+    if (role && !ROLES.includes(role)) {
+        throw badRequest('Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')');
     }
+    if (password) {
+        const pwErr = passwordError(password);
+        if (pwErr) throw badRequest(pwErr);
+    }
+    const hash = password ? await bcrypt.hash(password, 10) : null;
+
+    // Re-read and write in one synchronous step: two admins demoting each other in parallel must not both pass
+    // the last-admin check while the other request waits for bcrypt. The id must still name the same person with
+    // the same hash (a restore or another reset may have happened during the await).
+    const outcome = runTransaction(() => {
+        const caller = db.prepare('SELECT username, role FROM users WHERE id = ?').get(req.user.id);
+        if (!caller || caller.role !== 'admin' || !sameUsername(caller.username, req.user.username)) return { status: 403 };
+        const current = db.prepare('SELECT id, username, role, password_hash, password_changed_at FROM users WHERE id = ?').get(userId);
+        if (!current) return { status: 404 };
+        if (!sameUsername(current.username, user.username) || (hash && current.password_hash !== user.password_hash)) return { status: 409 };
+        const newRole = role || current.role;
+        if (current.role === 'admin' && newRole !== 'admin') {
+            const others = db.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin' AND id != ?").get(userId);
+            if (!others || others.count < 1) return { status: 400 };
+        }
+        const version = hash ? bumpSessionVersion(userId, hash, { username: user.username, passwordHash: user.password_hash }) : current.password_changed_at;
+        if (hash && version === null) return { status: 409 };
+        db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
+        return { status: 200, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
+    });
+    if (outcome.status === 403) return sendError(res, 403, AUTH_ERRORS.FORBIDDEN, 'FORBIDDEN');
+    if (outcome.status === 404) throw notFound('Benutzer');
+    if (outcome.status === 409) throw new HttpError(409, USER_CHANGED_MEANWHILE, 'CHANGED_MEANWHILE');
+    if (outcome.status === 400) throw badRequest(LAST_ADMIN_DEMOTE);
+
+    const updated = outcome.user;
+    let session = {};
+    if (hash) {
+        loginGuard.clear(accountKey(updated.username));
+        // Own password reset here ends the other sessions, not this one
+        if (userId === req.user.id) session = issueSession(req, res, updated);
+    }
+    res.json({ success: true, user: { id: userId, username: updated.username, role: updated.role }, ...session });
 });
 
 router.delete('/users/:id', requireAdmin, (req, res) => {
-    try {
-        const userId = parseInt(req.params.id, 10);
-        if (userId === req.user.id) {
-            return res.status(400).json({ error: 'Du kannst dein eigenes Administratorkonto nicht löschen' });
-        }
-        const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
-        if (!user) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-
-        // Prevent deleting the last admin
-        if (user.role === 'admin') {
-            const adminCountRow = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get();
-            if (adminCountRow && adminCountRow.count <= 1) {
-                return res.status(400).json({ error: 'Der letzte verbleibende Administrator kann nicht gelöscht werden' });
-            }
-        }
-
-        // volume_reads go with the user; mangas.updated_by is a plain foreign key and would block the delete otherwise
-        runTransaction(() => {
-            db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
-            // Bände, die nur dieser Benutzer besaß, gehen an den löschenden Admin, damit die Sammlung nicht schrumpft
-            db.prepare(`
-                INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
-                SELECT volume_id, ?, price, purchase_date, condition FROM volume_owners
-                WHERE user_id = ? AND volume_id NOT IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
-            `).run(req.user.id, userId, userId);
-            db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
-            db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
-            db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-        });
-        res.json({ success: true });
-    } catch (err) {
-        log.error('Error deleting user:', err);
-        res.status(500).json({ error: 'Fehler beim Löschen des Benutzers' });
+    const userId = parseInt(req.params.id, 10);
+    if (userId === req.user.id) {
+        throw badRequest('Du kannst dein eigenes Administratorkonto nicht löschen');
     }
+    const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
+    if (!user) {
+        throw notFound('Benutzer');
+    }
+
+    // Defensive: the caller is an admin and cannot delete itself, so another admin always remains today
+    if (user.role === 'admin') {
+        const adminCountRow = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get();
+        if (adminCountRow && adminCountRow.count <= 1) {
+            throw badRequest('Der letzte verbleibende Administrator kann nicht gelöscht werden');
+        }
+    }
+
+    // volume_reads go with the user; mangas.updated_by is a plain foreign key and would block the delete otherwise
+    runTransaction(() => {
+        db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
+        // Bände, die nur dieser Benutzer besaß, gehen an den löschenden Admin, damit die Sammlung nicht schrumpft
+        db.prepare(`
+            INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
+            SELECT volume_id, ?, price, purchase_date, condition FROM volume_owners
+            WHERE user_id = ? AND volume_id NOT IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
+        `).run(req.user.id, userId, userId);
+        db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
+        db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    });
+    res.json({ success: true });
 });
 
 router.get('/users/:id/stats', requireAuth, (req, res) => {
-    try {
-        const userId = parseInt(req.params.id, 10);
-        
-        const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
-        if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    const userId = parseInt(req.params.id, 10);
+    
+    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+    if (!user) throw notFound('Benutzer');
 
-        const readVolumes = db.prepare(`
-            SELECT vr.read_at, v.volume_number, v.pages, m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
-            FROM volume_reads vr
-            JOIN volumes v ON vr.volume_id = v.id
-            JOIN mangas m ON v.manga_id = m.id
-            WHERE vr.user_id = ?
-            ORDER BY vr.read_at DESC
-        `).all(userId);
+    const readVolumes = db.prepare(`
+        SELECT strftime('%Y-%m-%dT%H:%M:%SZ', vr.read_at) AS read_at, v.id, v.volume_number, v.type, v.notes, v.pages,
+               m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
+        FROM volume_reads vr
+        JOIN volumes v ON vr.volume_id = v.id
+        JOIN mangas m ON v.manga_id = m.id
+        WHERE vr.user_id = ? AND v.status = 'Vorhanden'
+        ORDER BY vr.read_at DESC, v.id DESC
+    `).all(userId);
 
-        const totalVolumes = readVolumes.length;
-        const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);
+    const totalVolumes = readVolumes.length;
+    const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);
 
-        const mangasReadMap = new Map();
-        readVolumes.forEach(v => {
-            if (!mangasReadMap.has(v.manga_id)) {
-                mangasReadMap.set(v.manga_id, {
-                    id: v.manga_id,
-                    title: v.manga_title,
-                    cover_image: v.manga_cover,
-                    volumes: []
-                });
-            }
-            mangasReadMap.get(v.manga_id).volumes.push({
-                volume_number: v.volume_number,
-                read_at: v.read_at
+    const mangasReadMap = new Map();
+    readVolumes.forEach(v => {
+        if (!mangasReadMap.has(v.manga_id)) {
+            mangasReadMap.set(v.manga_id, {
+                id: v.manga_id,
+                title: v.manga_title,
+                cover_image: v.manga_cover,
+                volumes: []
             });
+        }
+        mangasReadMap.get(v.manga_id).volumes.push({
+            id: v.id,
+            volume_number: v.volume_number,
+            type: v.type,
+            notes: v.notes,
+            read_at: v.read_at
         });
-        
-        const readMangas = Array.from(mangasReadMap.values());
+    });
+    
+    const readMangas = Array.from(mangasReadMap.values());
 
-        res.json({
-            user: { id: user.id, username: user.username },
-            stats: {
-                totalVolumes,
-                totalPages,
-                recentVolumes: readVolumes.slice(0, 10), // Last 10 read volumes for timeline
-                readMangas
-            }
-        });
-    } catch (err) {
-        log.error('Error fetching user stats:', err);
-        res.status(500).json({ error: 'Fehler beim Laden der Benutzer-Statistiken' });
-    }
+    res.json({
+        user: { id: user.id, username: user.username },
+        stats: {
+            totalVolumes,
+            totalPages,
+            recentVolumes: readVolumes.slice(0, 10), // Last 10 read volumes for timeline
+            readMangas
+        }
+    });
 });
 
 module.exports = router;
+module.exports.setupNotice = setupNotice;
+module.exports.setupTokenMatches = setupTokenMatches;

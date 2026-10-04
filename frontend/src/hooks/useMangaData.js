@@ -1,40 +1,169 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loadMangaDetail, updateCachedManga } from '../utils/offlineStore';
+import { loadMangaDetail, updateCachedManga, syncOfflineCopy } from '../utils/offlineStore';
+import { prefillTotalVolumes } from '../utils/scanHelpers';
+import { readApiError } from './useVolumeActions';
+import { apiFetch, errorFromResponse, readJson, TIMEOUTS } from '../utils/api';
+import { notify, notifyResponseError } from '../utils/notify';
+import {
+  readCache, writeCache, touchCache, dropCache, revalidateHeaders, cacheOwner, detailKey, LIST_KEY
+} from '../utils/dataCache';
+import useLatestRequest from './useLatestRequest';
 
-/** Loads one manga (server, else the offline copy) and owns its edit form, cover upload and Manga-Passion metadata lookup. */
-export default function useMangaData({ id, user, canEdit }) {
+export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
+
+/** A catalogue status the form can show; 'Unbekannt', empty or anything else keeps the previous value. */
+export function normalizeLookupStatus(status, previous) {
+  return MANGA_STATUSES.includes(status) ? status : previous;
+}
+
+export function buildFormData(data) {
+  return {
+    title: data.title || '',
+    alt_title: data.alt_title || '',
+    author: data.author || '',
+    publisher: data.publisher || '',
+    language: data.language || 'Deutsch',
+    status: data.status || 'Laufend',
+    tags: data.tags || '',
+    total_volumes: data.total_volumes || '',
+    description: data.description || '',
+    cover_image: data.cover_image || '',
+    manga_passion_id: data.manga_passion_id || null
+  };
+}
+
+/** Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released volumes). */
+export function mergeEditLookup(prev, item, coverUrl) {
+  return {
+    ...prev,
+    title: item.title || prev.title,
+    alt_title: item.alt_title || prev.alt_title,
+    author: item.author || prev.author,
+    publisher: (item.publisher && item.publisher !== 'Unbekannt') ? item.publisher : prev.publisher,
+    status: normalizeLookupStatus(item.status, prev.status),
+    total_volumes: prefillTotalVolumes(item, prev.total_volumes),
+    description: item.description || prev.description,
+    cover_image: coverUrl || prev.cover_image,
+    manga_passion_id: item.manga_passion_id || prev.manga_passion_id
+  };
+}
+
+export function isFormDirty(base, current) {
+  if (!base || !current) return false;
+  const keys = new Set([...Object.keys(base), ...Object.keys(current)]);
+  for (const key of keys) {
+    if (String(base[key] ?? '') !== String(current[key] ?? '')) return true;
+  }
+  return false;
+}
+
+/** The fields the user changed since the form was opened; a refresh meanwhile (edition sync) must not be sent back. */
+export function changedFormFields(base, current) {
+  const changed = {};
+  for (const [key, value] of Object.entries(current || {})) {
+    if (String(base?.[key] ?? '') !== String(value ?? '')) changed[key] = value;
+  }
+  return changed;
+}
+
+export const seriesDeleteConfirmText = (title) =>
+  `Möchtest du "${title}" wirklich löschen? Alle zugehörigen Bände werden ebenfalls entfernt.`;
+
+const REFRESH_FAILED = 'Aktualisierung fehlgeschlagen: Der Server ist gerade nicht erreichbar. Angezeigt wird der letzte Stand.';
+const SHOWING_OFFLINE_COPY = 'Server nicht erreichbar: Angezeigt wird die Offline-Kopie.';
+const SESSION_EXPIRED = 'Sitzung abgelaufen. Bitte melde dich neu an.';
+
+/**
+ * Loads one manga (server, else the offline copy) and owns its edit form, cover upload and Manga-Passion metadata lookup.
+ * loadError (nothing to show): 'server' | 'offline-missing' | 'unauthorized'. refreshError: a failed reload while data is shown.
+ */
+export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const navigate = useNavigate();
 
-  const [manga, setManga] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const loadedIdRef = useRef(null); // the series shown right now: reloads after an action keep the page (no spinner, scroll stays)
+  const owner = cacheOwner(user);
+  // the in-memory copy (a series seen before) renders at once and is revalidated by fetchManga
+  const [initial] = useState(() => readCache(owner, detailKey(id)));
+  const [manga, setManga] = useState(() => initial?.data ?? null);
+  const [loading, setLoading] = useState(() => !initial);
+  const loadedIdRef = useRef(initial ? id : null); // the series shown right now: reloads after an action keep the page (no spinner, scroll stays)
+  const mangaRef = useRef(initial?.data ?? null);
+  const ownerRef = useRef(owner);
+  ownerRef.current = owner;
+  const beginRequest = useLatestRequest();
   const [notFound, setNotFound] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [refreshError, setRefreshError] = useState(null);
+  const [editing, setEditingState] = useState(false);
+  const editingRef = useRef(false); // read by async refreshes, whose closures hold an old `editing`
   const [saving, setSaving] = useState(false);
 
-  // Edit form state
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState(() => (initial ? buildFormData(initial.data) : {}));
+  const formBaseRef = useRef(null); // the values the form was opened with
+  if (formBaseRef.current === null && initial) formBaseRef.current = buildFormData(initial.data);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [failedCover, setFailedCover] = useState(false);
 
-  // Edit Manga Auto-Fill state (Manga Passion First)
   const [editLookingUp, setEditLookingUp] = useState(false);
   const [editLookupResults, setEditLookupResults] = useState(null);
   const [editLookupError, setEditLookupError] = useState('');
+  const editSessionRef = useRef(0); // a lookup or upload that finishes after cancel must not write into the next form
+
+  const seedForm = (data) => {
+    const base = buildFormData(data || {});
+    formBaseRef.current = base;
+    setFormData(base);
+  };
+
+  const resetLookup = () => {
+    setEditLookupResults(null);
+    setEditLookupError('');
+    setEditLookingUp(false);
+  };
+
+  const startEditing = () => {
+    if (!canEdit) return;
+    editSessionRef.current++;
+    seedForm(mangaRef.current);
+    resetLookup();
+    editingRef.current = true;
+    setEditingState(true);
+  };
+
+  const cancelEditing = () => {
+    editSessionRef.current++;
+    editingRef.current = false;
+    setEditingState(false);
+    seedForm(mangaRef.current);
+    resetLookup();
+  };
+
+  const setEditing = (value) => (value ? startEditing() : cancelEditing());
+
+  const isEditDirty = editing && isFormDirty(formBaseRef.current, formData);
+
+  const handleUnauthorized = () => {
+    if (onUnauthorized) onUnauthorized();
+    else notify.error(SESSION_EXPIRED);
+  };
 
   const handleEditLookup = async () => {
-    if (!formData.title.trim()) {
+    const title = String(formData.title || '').trim();
+    if (!title) {
       setEditLookupError('Bitte gib zuerst einen Titel ein.');
       return;
     }
+    const session = editSessionRef.current;
     setEditLookingUp(true);
     setEditLookupError('');
     setEditLookupResults(null);
     try {
-      const res = await fetch(`/api/lookup/manga?q=${encodeURIComponent(formData.title.trim())}`);
+      const res = await apiFetch(`/api/lookup/manga?q=${encodeURIComponent(title)}`, { timeout: TIMEOUTS.lookup });
+      if (session !== editSessionRef.current) return;
       if (res.ok) {
-        const data = await res.json();
+        const data = await readJson(res);
+        if (data === null) throw new Error('Antwort ist kein JSON');
+        if (session !== editSessionRef.current) return;
         if (data && data.length > 0) {
           if (data.length === 1) {
             await applyEditLookupResult(data[0]);
@@ -44,175 +173,239 @@ export default function useMangaData({ id, user, canEdit }) {
         } else {
           setEditLookupError('Keine Treffer gefunden.');
         }
+      } else if (res.status === 401) {
+        handleUnauthorized();
       } else {
-        const err = await res.json();
-        setEditLookupError(err.error || 'Fehler bei der Suche');
+        setEditLookupError(await readApiError(res, 'Fehler bei der Suche'));
       }
     } catch (e) {
-      setEditLookupError('Netzwerkfehler');
+      if (session === editSessionRef.current) {
+        setEditLookupError(e?.code === 'TIMEOUT' ? 'Die Suche hat zu lange gedauert.' : 'Netzwerkfehler');
+      }
     } finally {
-      setEditLookingUp(false);
+      if (session === editSessionRef.current) setEditLookingUp(false);
     }
   };
 
   const applyEditLookupResult = async (item) => {
+    const session = editSessionRef.current;
     let localCoverUrl = item.cover_image;
     if (item.cover_image && item.cover_image.startsWith('http')) {
       try {
-        const upRes = await fetch('/api/upload-remote', {
+        const upRes = await apiFetch('/api/upload-remote', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: item.cover_image })
+          body: { url: item.cover_image },
+          timeout: TIMEOUTS.remote
         });
         if (upRes.ok) {
-          const upData = await upRes.json();
-          if (upData.url) localCoverUrl = upData.url;
+          const upData = await readJson(upRes);
+          if (upData?.url) localCoverUrl = upData.url;
         }
       } catch (e) {
         console.warn('Could not cache remote cover locally, using remote URL:', e);
       }
     }
+    if (session !== editSessionRef.current) return;
 
-    setFormData(prev => ({
-      ...prev,
-      title: item.title || prev.title,
-      alt_title: item.alt_title || prev.alt_title,
-      author: item.author || prev.author,
-      publisher: item.publisher || prev.publisher,
-      status: item.status || prev.status,
-      total_volumes: item.total_volumes ? String(item.total_volumes) : prev.total_volumes,
-      description: item.description || prev.description,
-      cover_image: localCoverUrl || prev.cover_image,
-      manga_passion_id: item.manga_passion_id || prev.manga_passion_id
-    }));
+    setFormData(prev => mergeEditLookup(prev, item, localCoverUrl));
     setEditLookupResults(null);
     setEditLookupError('');
   };
 
   const applyMangaData = (data) => {
+    const idChanged = loadedIdRef.current !== id;
+    if (mangaRef.current?.cover_image !== data.cover_image) setFailedCover(false);
     loadedIdRef.current = id;
+    mangaRef.current = data;
     setManga(data);
-    setFormData({
-      title: data.title || '',
-      alt_title: data.alt_title || '',
-      author: data.author || '',
-      publisher: data.publisher || '',
-      language: data.language || 'Deutsch',
-      status: data.status || 'Laufend',
-      tags: data.tags || '',
-      total_volumes: data.total_volumes || '',
-      description: data.description || '',
-      cover_image: data.cover_image || '',
-      manga_passion_id: data.manga_passion_id || null
-    });
+    setNotFound(false);
+    setLoadError(null);
+    if (idChanged && editingRef.current) {
+      editSessionRef.current++;
+      editingRef.current = false;
+      setEditingState(false);
+      resetLookup();
+    }
+    // a refresh while the form is open (volume toggle, cover upload) must not wipe what the user typed
+    if (!editingRef.current) seedForm(data);
   };
 
   const fetchManga = async () => {
+    const { signal, isCurrent: isLatest } = beginRequest();
+    const key = detailKey(id);
+    let showing = loadedIdRef.current === id && mangaRef.current !== null;
+    if (!showing) {
+      const copy = readCache(ownerRef.current, key);
+      if (copy) {
+        applyMangaData(copy.data);
+        setLoading(false);
+        showing = true;
+      } else {
+        setLoading(true);
+        setNotFound(false);
+        setLoadError(null);
+      }
+    }
     try {
-      if (loadedIdRef.current !== id) setLoading(true);
-      setNotFound(false);
       if (!user?.offline) {
+        const entry = readCache(ownerRef.current, key);
+        const conditional = Boolean(entry) && entry.data === mangaRef.current;
+        let res = null;
         try {
-          const res = await fetch(`/api/mangas/${id}`);
-          if (res.ok) {
-            const data = await res.json();
+          res = await apiFetch(`/api/mangas/${id}`, { signal, headers: conditional ? revalidateHeaders(entry) : undefined });
+        } catch (e) {
+          if (!isLatest()) return;
+          console.warn('Manga fetch failed:', e);
+        }
+        if (!isLatest()) return;
+        if (res && res.status === 304 && conditional) {
+          touchCache(ownerRef.current, key);
+          setRefreshError(null);
+          return;
+        }
+        if (res && res.ok) {
+          const data = await readJson(res);
+          if (!isLatest()) return;
+          if (data) {
+            writeCache(ownerRef.current, key, data, res.headers?.get?.('ETag'));
             applyMangaData(data);
+            setRefreshError(null);
             updateCachedManga(data);
             return;
           }
-          // 404 or any server error - show not found
+        } else if (res && res.status === 404) {
+          dropCache(ownerRef.current, key);
           setNotFound(true);
           return;
-        } catch (e) {
-          // server unreachable: show the read-only offline copy if we have one
-          console.warn('Manga fetch failed, trying offline copy:', e);
+        } else if (res && res.status === 401) {
+          if (onUnauthorized) onUnauthorized();
+          if (showing) setRefreshError(SESSION_EXPIRED);
+          else setLoadError('unauthorized');
+          return;
+        }
+        // 5xx (restore running, proxy while the server restarts), a non-JSON answer or no connection
+        if (showing) {
+          setRefreshError(REFRESH_FAILED);
+          return;
         }
       }
       const cached = await loadMangaDetail(id);
-      if (cached) applyMangaData(cached);
-      else setNotFound(true);
+      if (!isLatest()) return;
+      if (cached) {
+        applyMangaData(cached);
+        if (!user?.offline) setRefreshError(SHOWING_OFFLINE_COPY);
+      } else {
+        setLoadError(user?.offline ? 'offline-missing' : 'server');
+      }
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!canEdit) return;
+    const body = changedFormFields(formBaseRef.current, formData);
+    const closeForm = () => {
+      editSessionRef.current++;
+      editingRef.current = false;
+      setEditingState(false);
+      resetLookup();
+    };
+    if (Object.keys(body).length === 0) {
+      closeForm();
+      seedForm(mangaRef.current);
+      return;
+    }
     setSaving(true);
     try {
-      const res = await fetch(`/api/mangas/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
       if (res.ok) {
-        setEditing(false);
+        closeForm();
         await fetchManga();
+      } else if (res.status === 401) {
+        handleUnauthorized();
       } else {
-        const err = await res.json();
-        alert(err.error || 'Fehler beim Speichern');
+        await notifyResponseError(res, 'Fehler beim Speichern');
       }
     } catch (err) {
-      alert('Netzwerkfehler');
+      notify.error(err);
     } finally {
       setSaving(false);
     }
   };
 
+  // the shelf's in-memory list would otherwise show the deleted series until its refresh answers
+  const forgetSeries = () => {
+    dropCache(ownerRef.current, detailKey(id));
+    const list = readCache(ownerRef.current, LIST_KEY);
+    if (list) writeCache(ownerRef.current, LIST_KEY, list.data.filter((m) => String(m.id) !== String(id)));
+  };
+
   const handleDeleteManga = async () => {
-    if (!canEdit) return;
-    if (!confirm(`Möchtest du "${manga.title}" wirklich dauerhaft löschen?`)) return;
+    if (!canEdit || !manga) return;
+    if (!confirm(seriesDeleteConfirmText(manga.title))) return;
     try {
-      const res = await fetch(`/api/mangas/${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      const res = await apiFetch(`/api/mangas/${id}`, { method: 'DELETE' });
+      if (res.ok || res.status === 404) {
+        if (res.status === 404) notify.info((await errorFromResponse(res, 'Die Reihe wurde bereits gelöscht')).message);
+        forgetSeries();
+        // the offline copy would otherwise list the deleted series until the next throttled sync
+        syncOfflineCopy({ force: true });
         navigate('/');
+      } else if (res.status === 401) {
+        handleUnauthorized();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Fehler beim Löschen');
+        await notifyResponseError(res, 'Fehler beim Löschen');
       }
     } catch (err) {
-      alert('Netzwerkfehler');
+      notify.error(err);
     }
   };
 
+  /** While the form is open the new cover only goes into the form ('Speichern' stores it, 'Abbrechen' drops it). */
   const handleCoverUpload = async (e) => {
     if (!canEdit) return;
     const file = e.target.files[0];
     if (!file) return;
+    const deferred = editingRef.current;
+    const session = editSessionRef.current;
 
     setUploadingCover(true);
     try {
       const fd = new FormData();
       fd.append('image', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (res.ok) {
-        const data = await res.json();
-        const saveRes = await fetch(`/api/mangas/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cover_image: data.url })
-        });
-        if (!saveRes.ok) {
-          const saveErr = await saveRes.json().catch(() => ({}));
-          alert(saveErr.error || 'Das Cover konnte nicht gespeichert werden');
-          return;
-        }
-        setFormData(prev => ({ ...prev, cover_image: data.url }));
-        await fetchManga();
-      } else {
-        const upErr = await res.json().catch(() => ({}));
-        alert(upErr.error || 'Fehler beim Hochladen des Covers');
+      const res = await apiFetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        if (res.status === 401) handleUnauthorized();
+        else await notifyResponseError(res, 'Fehler beim Hochladen des Covers');
+        return;
       }
+      const data = await readJson(res);
+      if (!data?.url) throw new Error('Antwort ohne Bild-URL');
+      if (deferred) {
+        if (session === editSessionRef.current && editingRef.current) {
+          setFormData(prev => ({ ...prev, cover_image: data.url }));
+        }
+        return;
+      }
+      const saveRes = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body: { cover_image: data.url } });
+      if (!saveRes.ok) {
+        if (saveRes.status === 401) handleUnauthorized();
+        else await notifyResponseError(saveRes, 'Das Cover konnte nicht gespeichert werden');
+        return;
+      }
+      await fetchManga();
     } catch (err) {
-      alert('Fehler beim Hochladen des Covers');
+      notify.error(err, { fallback: 'Fehler beim Hochladen des Covers' });
     } finally {
       setUploadingCover(false);
     }
   };
 
   return {
-    manga, loading, notFound, editing, setEditing, saving, formData, setFormData,
+    manga, loading, notFound, loadError, refreshError, clearRefreshError: () => setRefreshError(null),
+    editing, setEditing, startEditing, cancelEditing, isEditDirty, saving, formData, setFormData,
     uploadingCover, failedCover, setFailedCover,
     editLookingUp, editLookupResults, setEditLookupResults, editLookupError,
     applyEditLookupResult, handleEditLookup,

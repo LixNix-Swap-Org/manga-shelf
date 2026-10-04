@@ -1,12 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw } from 'lucide-react';
-import VolumeEditModal from './components/detail/VolumeEditModal';
-import BatchAddModal from './components/detail/BatchAddModal';
-import BatchReadModal from './components/detail/BatchReadModal';
-import GapFillModal from './components/detail/GapFillModal';
-import LightboxGallery from './components/detail/LightboxGallery';
-import MpEditionModal from './components/detail/MpEditionModal';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { useParams, Link, useLocation, useNavigationType } from 'react-router-dom';
+import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleAlert } from 'lucide-react';
 import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
@@ -17,6 +11,7 @@ import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import ShelfSpine from './components/detail/ShelfSpine';
+import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
 import useMangaData from './hooks/useMangaData';
 import useVolumeFilters from './hooks/useVolumeFilters';
 import useMpGaps from './hooks/useMpGaps';
@@ -24,23 +19,108 @@ import useVolumeActions from './hooks/useVolumeActions';
 import useVolumeGallery from './hooks/useVolumeGallery';
 import useShelfLayout from './hooks/useShelfLayout';
 import useDetailKeyboard from './hooks/useDetailKeyboard';
-import { inferVolumeType, volumeNumberOf, getSeriesProgress, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
+import { PURCHASE_RECORDED_EVENT } from './appShell';
+import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
+import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
 
-export default function MangaDetail({ user }) {
+// dialogs are loaded on first use and mounted only while open
+const VolumeEditModal = lazy(() => import('./components/detail/VolumeEditModal'));
+const BatchAddModal = lazy(() => import('./components/detail/BatchAddModal'));
+const BatchReadModal = lazy(() => import('./components/detail/BatchReadModal'));
+const GapFillModal = lazy(() => import('./components/detail/GapFillModal'));
+const LightboxGallery = lazy(() => import('./components/detail/LightboxGallery'));
+const MpEditionModal = lazy(() => import('./components/detail/MpEditionModal'));
+
+export const DETAIL_SCROLL_KEY = 'mangashelf_detail_scroll';
+const MAX_SCROLL_ENTRIES = 30;
+
+function readScrollPositions() {
+  try {
+    const map = JSON.parse(window.sessionStorage.getItem(DETAIL_SCROLL_KEY));
+    return map && typeof map === 'object' ? map : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+/**
+ * A series opened by a link starts at the top (the shelf may have been scrolled far down); Back / Forward to a
+ * history entry returns to where that entry was left. Positions are kept per entry for this tab.
+ */
+function useDetailScroll(ready) {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const handled = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!ready || handled.current === location.key) return;
+    handled.current = location.key;
+    const target = navigationType === 'POP' ? Number(readScrollPositions()[location.key]) || 0 : 0;
+    if (window.scrollY !== target) window.scrollTo(0, target);
+  }, [ready, location.key, navigationType]);
+
+  useLayoutEffect(() => {
+    const entryKey = location.key;
+    let y = window.scrollY;
+    const onScroll = () => { y = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      const map = readScrollPositions();
+      delete map[entryKey];
+      map[entryKey] = Math.round(y);
+      const keys = Object.keys(map);
+      for (const old of keys.slice(0, Math.max(0, keys.length - MAX_SCROLL_ENTRIES))) delete map[old];
+      try { window.sessionStorage.setItem(DETAIL_SCROLL_KEY, JSON.stringify(map)); } catch (_) { /* storage unavailable */ }
+    };
+  }, [location.key]);
+}
+
+/** Same type and number more than once; "Band 5" and "5" are the same regular volume (the server rejects that pair too). */
+export function findDuplicateEntries(volumes) {
+  const groups = new Map();
+  for (const v of volumes || []) {
+    const type = inferVolumeType(v);
+    const regular = type === 'volume' ? regularVolumeNumber(v) : null;
+    const key = `${type}:${regular !== null ? regular : String(v.volume_number ?? '').trim().toLowerCase()}`;
+    groups.set(key, [...(groups.get(key) || []), v]);
+  }
+  return [...groups.values()].filter(g => g.length > 1).map(g => ({ label: getVolumeDisplayTitle(g[0]), count: g.length }));
+}
+
+/** Where "Zurück zur Übersicht" leads: the in-app page that linked here (e.g. the shopping list), else the shelf. */
+export function backLinkTarget(state) {
+  const from = state?.from;
+  if (typeof from !== 'string' || !from.startsWith('/') || from.startsWith('//') || from.includes('\\')) return '/';
+  return from;
+}
+
+const LOAD_ERRORS = {
+  server: { title: 'Server nicht erreichbar', text: 'Die Reihe konnte gerade nicht geladen werden.' },
+  'offline-missing': { title: 'Nicht in der Offline-Kopie', text: 'Diese Reihe war beim letzten Abgleich noch nicht gespeichert. Mit Verbindung erneut öffnen.' },
+  unauthorized: { title: 'Sitzung abgelaufen', text: 'Bitte melde dich neu an.' }
+};
+
+export default function MangaDetail({ user, onUnauthorized }) {
   const { id } = useParams();
+  const location = useLocation();
+  const backTo = backLinkTarget(location.state);
 
   // Role permissions (visitor / guest are read-only)
   const canEdit = user && (user.role === 'admin' || user.role === 'editor');
 
+  const isOffline = Boolean(user?.offline);
+
   const {
-    manga, loading, notFound, editing, setEditing, saving, formData, setFormData,
-    uploadingCover, failedCover, setFailedCover,
+    manga, loading, notFound, loadError, refreshError, clearRefreshError,
+    editing, setEditing, startEditing, cancelEditing, isEditDirty, saving, formData, setFormData,
+    uploadingCover,
     editLookingUp, editLookupResults, setEditLookupResults, editLookupError,
     applyEditLookupResult, handleEditLookup,
     fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload
-  } = useMangaData({ id, user, canEdit });
+  } = useMangaData({ id, user, canEdit, onUnauthorized });
 
-  const volumes = manga?.volumes || [];
+  const volumes = useMemo(() => manga?.volumes || [], [manga?.volumes]);
 
   // Reader whose read status is shown
   const [selectedReaderId, setSelectedReaderId] = useState(user?.id || 'ALL');
@@ -49,6 +129,7 @@ export default function MangaDetail({ user }) {
     if (user?.id && (selectedReaderId === 'ALL' || !selectedReaderId)) {
       setSelectedReaderId(user.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Benutzerwechsel, 'Alle' bleibt wählbar
   }, [user?.id]);
 
   // Dialog visibility
@@ -65,13 +146,14 @@ export default function MangaDetail({ user }) {
     availablePublishers, conditionsList, baseVolumesForType,
     schuberCount, specialEditionCount, specialCount, regularVolumeCount,
     volumeOwnerFilter, setVolumeOwnerFilter, volumeOwnerMissing, setVolumeOwnerMissing,
-    filteredVolumes, hasActiveFilters, handleResetFilters
+    filteredVolumes, hasActiveFilters, gapsAllowedByFilters, handleResetFilters
   } = useVolumeFilters({ volumes, manga, user, selectedReaderId });
 
   const {
     showGaps, handleToggleShowGaps, fillingGapLoading,
-    mpGapData, mpGapLoading, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
+    mpGapData, mpGapLoading, mpGapError, mpGapNotice, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
     handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition,
+    gapEditionUnconfirmed, canSyncVolumeCount,
     mpGapMap, detectedGapEntries, detectedGaps
   } = useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal });
 
@@ -79,38 +161,37 @@ export default function MangaDetail({ user }) {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover, uploadingNewCover,
-    activeVolume, setActiveVolume,
+    activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume
-  } = useVolumeActions({ id, user, canEdit, selectedReaderId, fetchManga });
+  } = useVolumeActions({ id, user, canEdit, selectedReaderId, fetchManga, volumes, onUnauthorized });
 
-  const { lightboxData, setLightboxData, openVolumeGallery, setPreviewImage } = useVolumeGallery({ manga, canEdit, fetchManga });
+  const { lightboxData, setLightboxData, openVolumeGallery } = useVolumeGallery({ manga });
 
   useEffect(() => {
     fetchManga();
     if (!user?.offline) fetchMpGaps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei Reihen- oder Offline-Wechsel
   }, [id, user?.offline]);
+
+  // A quick buy from the shopping list can land after this page loaded (sent when the list view closed)
+  const purchaseRefetchRef = useRef(null);
+  purchaseRefetchRef.current = (volumeId) => {
+    if (!manga || volumes.some((v) => String(v.id) === String(volumeId))) fetchManga();
+  };
+  useEffect(() => {
+    const onPurchase = (event) => purchaseRefetchRef.current(event.detail?.volumeId);
+    window.addEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
+    return () => window.removeEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
+  }, []);
 
   const ownedCount = volumes.filter(v => v.status === 'Vorhanden').length;
   const missingCount = volumes.filter(v => v.status === 'Fehlt').length;
   const preorderedCount = volumes.filter(v => v.status === 'Vorbestellt').length;
   const upcomingCount = volumes.filter(v => v.status === 'Erscheint bald').length;
-  // progress counts regular volumes only; schuber/extras show as "+N", a stale total follows the highest owned number
-  const ownedRegular = volumes.filter(v => v.status === 'Vorhanden' && inferVolumeType(v) === 'volume' && volumeNumberOf(v) !== null);
-  const seriesProgress = getSeriesProgress({
-    regular_owned: new Set(ownedRegular.map(v => volumeNumberOf(v))).size, // distinct: a duplicate entry does not raise progress
-    max_regular_number: Math.max(0, ...ownedRegular.map(v => volumeNumberOf(v))),
-    total_volumes: manga?.total_volumes,
-    owned_volumes: ownedCount
-  });
-  const duplicateEntries = useMemo(() => {
-    const groups = new Map();
-    for (const v of volumes) {
-      const key = `${inferVolumeType(v)}:${String(v.volume_number).trim().toLowerCase()}`;
-      groups.set(key, [...(groups.get(key) || []), v]);
-    }
-    return [...groups.values()].filter(g => g.length > 1).map(g => ({ label: getVolumeDisplayTitle(g[0]), count: g.length }));
-  }, [volumes]);
+  // progress counts distinct regular volumes only; schuber/extras show as "+N", a stale total follows the highest owned number
+  const seriesProgress = getSeriesProgress({ ...getVolumeProgressCounts(volumes), total_volumes: manga?.total_volumes });
+  const duplicateEntries = useMemo(() => findDuplicateEntries(volumes), [volumes]);
   const totalTarget = seriesProgress.total;
   const completionPct = seriesProgress.pct;
 
@@ -122,24 +203,40 @@ export default function MangaDetail({ user }) {
   // Readers stats
   const readers = manga?.reader_stats || [];
   const currentReaderStats = readers.find(r => String(r.user_id) === String(selectedReaderId)) || readers.find(r => String(r.user_id) === String(user?.id)) || null;
-  const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read).length;
+  const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read && v.status === 'Vorhanden').length;
   const currentReaderUnreadCount = currentReaderStats ? currentReaderStats.unread_count : Math.max(0, ownedCount - currentReaderReadCount);
 
   // Items to render across Spine Shelf, Grid View, and Table View (interleaving gaps if showGaps is active)
+  const gapsOfficial = Boolean(mpGapData?.matched && mpGapData.link_confirmed !== false);
+
   const displayVolumeItems = useMemo(() => buildDisplayVolumeItems({
-    filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort
-  }), [showGaps, detectedGaps, detectedGapEntries, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap]);
-  const spineShelfItems = displayVolumeItems;
+    filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort,
+    volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing
+  }), [showGaps, detectedGaps, detectedGapEntries, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap,
+    volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing]);
 
   const {
     shelfMode, shelfScale, focusedVolumeId, setFocusedVolumeId, shelfScrollRef,
     handleSetShelfMode, handleSetShelfScale, scrollShelf, shelfRows, isFitMultiRow
-  } = useShelfLayout(spineShelfItems);
+  } = useShelfLayout(displayVolumeItems);
+
+  // while loading: the title the shelf already knows, else null (the previous title stays, no generic title in between)
+  const listTitle = useMemo(
+    () => readCache(cacheOwner(user), LIST_KEY)?.data?.find((m) => String(m.id) === String(id))?.title || null,
+    [user, id]
+  );
+  let documentTitle = listTitle;
+  if (notFound) documentTitle = 'Manga nicht gefunden';
+  else if (!loading && manga?.title) documentTitle = manga.title;
+  else if (!loading && loadError) documentTitle = (LOAD_ERRORS[loadError] || LOAD_ERRORS.server).title;
+  useDocumentTitle(documentTitle);
+  const headingRef = usePageHeading(!loading);
+  useDetailScroll(!loading && Boolean(manga));
 
   useDetailKeyboard({
     lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
     showBatchReadModal, setShowBatchReadModal, fillingGapNumber, setFillingGapNumber,
-    showMpEditionModal, setShowMpEditionModal, editing, setEditing,
+    showMpEditionModal, setShowMpEditionModal, editing, setEditing, cancelEditing, isEditDirty, volumeViewMode,
     filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume
   });
 
@@ -149,7 +246,7 @@ export default function MangaDetail({ user }) {
       item={item}
       currentMode={currentMode}
       isFitMultiRow={isFitMultiRow}
-      totalCount={spineShelfItems.length}
+      totalCount={displayVolumeItems.length}
       shelfScale={shelfScale}
       mpGapMap={mpGapMap}
       canEdit={canEdit}
@@ -160,36 +257,72 @@ export default function MangaDetail({ user }) {
       focusedVolumeId={focusedVolumeId}
       setFocusedVolumeId={setFocusedVolumeId}
       handleOpenEditVolume={handleOpenEditVolume}
+      gapsOfficial={gapsOfficial}
     />
   );
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-3">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm">Lade Manga-Details...</p>
-      </div>
+      <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex items-center justify-center text-slate-400">
+        <div role="status" className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+          <p className="text-sm">Lade Manga-Details...</p>
+        </div>
+      </main>
     );
   }
 
   if (notFound) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
-        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl">
+      <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl" aria-hidden="true">
           📚
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h2>
+          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h1>
           <p className="text-slate-400 text-sm">Dieser Manga existiert nicht oder wurde gelöscht.</p>
         </div>
         <Link
-          to="/"
+          to={backTo}
           className="btn-primary flex items-center gap-2 px-5 py-2.5"
         >
           <ArrowLeft className="w-4 h-4" />
           Zurück zur Übersicht
         </Link>
-      </div>
+      </main>
+    );
+  }
+
+  if (!manga && loadError) {
+    const info = LOAD_ERRORS[loadError] || LOAD_ERRORS.server;
+    return (
+      <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl" aria-hidden="true">
+          📚
+        </div>
+        <div className="text-center" role="alert">
+          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{info.title}</h1>
+          <p className="text-slate-400 text-sm">{info.text}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {loadError === 'server' && (
+            <button type="button" onClick={() => fetchManga()} className="btn-secondary flex items-center gap-2 px-5 py-2.5">
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
+              Erneut versuchen
+            </button>
+          )}
+          {loadError === 'unauthorized' ? (
+            <Link to="/login" className="btn-primary flex items-center gap-2 px-5 py-2.5">
+              Zur Anmeldung
+            </Link>
+          ) : (
+            <Link to={backTo} className="btn-primary flex items-center gap-2 px-5 py-2.5">
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+              Zurück zur Übersicht
+            </Link>
+          )}
+        </div>
+      </main>
     );
   }
 
@@ -197,22 +330,37 @@ export default function MangaDetail({ user }) {
 
   return (
     <div className="min-h-screen pb-20 overflow-x-hidden">
-      {/* Top Bar */}
-      <div className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
+      <SkipLink />
+      <nav aria-label="Seitennavigation" className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4">
         <Link 
-          to="/" 
+          to={backTo} 
           className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium bg-slate-900/60 hover:bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-800 shadow-sm"
         >
           <ArrowLeft className="w-4 h-4 text-brand-400" /> Zurück zur Übersicht
         </Link>
-      </div>
+      </nav>
 
-      {/* Main Container */}
-      <div className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
+      <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
         
+        {refreshError && (
+          <div role="status" className="mb-4 p-3 bg-amber-500/10 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+            <span className="flex items-center gap-2">
+              <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+              {refreshError}
+            </span>
+            <button
+              type="button"
+              onClick={clearRefreshError}
+              className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium cursor-pointer"
+            >
+              Schließen
+            </button>
+          </div>
+        )}
+
         {/* Hero Card */}
         <MangaHeroCard
-          isOffline={Boolean(user?.offline)}
+          isOffline={isOffline}
           applyEditLookupResult={applyEditLookupResult}
           canEdit={canEdit}
           completionPct={completionPct}
@@ -220,8 +368,8 @@ export default function MangaDetail({ user }) {
           editLookupError={editLookupError}
           editLookupResults={editLookupResults}
           editing={editing}
-          failedCover={failedCover}
           formData={formData}
+          headingRef={headingRef}
           handleCoverUpload={handleCoverUpload}
           handleDeleteManga={handleDeleteManga}
           handleEditLookup={handleEditLookup}
@@ -232,7 +380,8 @@ export default function MangaDetail({ user }) {
           saving={saving}
           setEditLookupResults={setEditLookupResults}
           setEditing={setEditing}
-          setFailedCover={setFailedCover}
+          startEditing={startEditing}
+          cancelEditing={cancelEditing}
           setFormData={setFormData}
           totalOwnedValue={totalOwnedValue}
           totalTarget={totalTarget}
@@ -240,17 +389,17 @@ export default function MangaDetail({ user }) {
         />
 
         {/* VOLUMES CHECKLIST SECTION */}
-        <section className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
+        <section aria-labelledby="volumes-heading" className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
           
           {/* Header & Controls */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2.5">
+              <h2 id="volumes-heading" className="text-xl font-bold text-white flex items-center gap-2.5">
                 <Layers className="w-5 h-5 text-brand-400" />
                 Bände-Checkliste
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Klicke auf das Häkchen für Schnell-Status, oder auf die Karte für <b>Preise & Detailangaben</b>
+                Klicke auf das Häkchen für Schnell-Status oder auf die Karte für <b>Preise & Detailangaben</b>
               </p>
             </div>
 
@@ -268,7 +417,7 @@ export default function MangaDetail({ user }) {
                   onClick={() => setShowBatchModal(true)} 
                   className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
                 >
-                  <Plus className="w-3.5 h-3.5 text-brand-400" /> Mehrere Bände (Batch)
+                  <Plus className="w-3.5 h-3.5 text-brand-400" /> Mehrere Bände anlegen
                 </button>
               </div>
             )}
@@ -303,12 +452,15 @@ export default function MangaDetail({ user }) {
             currentReaderReadCount={currentReaderReadCount}
             currentReaderUnreadCount={currentReaderUnreadCount}
             detectedGaps={detectedGaps}
+            gapsAllowedByFilters={gapsAllowedByFilters}
+            isOffline={isOffline}
             handleResetFilters={handleResetFilters}
             handleSetVolumeViewMode={handleSetVolumeViewMode}
             handleToggleShowGaps={handleToggleShowGaps}
             hasActiveFilters={hasActiveFilters}
             missingCount={missingCount}
             mpGapData={mpGapData}
+            mpGapError={mpGapError}
             mpGapLoading={mpGapLoading}
             ownedCount={ownedCount}
             preorderedCount={preorderedCount}
@@ -335,10 +487,34 @@ export default function MangaDetail({ user }) {
             volumes={volumes}
           />
 
+          {/* Edition confirmation, duplicates, Manga-Passion discrepancy and gaps: also above an empty (filtered) list */}
+          <GapNotices
+            duplicateEntries={duplicateEntries}
+            canEdit={canEdit}
+            isOffline={isOffline}
+            showGaps={showGaps}
+            detectedGaps={detectedGaps}
+            detectedGapEntries={detectedGapEntries}
+            volumeFilter={volumeFilter}
+            volumeSearch={volumeSearch}
+            gapsAllowedByFilters={gapsAllowedByFilters}
+            volumeViewMode={volumeViewMode}
+            mpGapData={mpGapData}
+            mpGapLoading={mpGapLoading}
+            mpGapNotice={mpGapNotice}
+            canSyncVolumeCount={canSyncVolumeCount}
+            gapEditionUnconfirmed={gapEditionUnconfirmed}
+            fillingGapLoading={fillingGapLoading}
+            handleSyncTotalVolumes={handleSyncTotalVolumes}
+            handleBatchFillGaps={handleBatchFillGaps}
+            handleSelectMpEdition={handleSelectMpEdition}
+            setShowMpEditionModal={setShowMpEditionModal}
+          />
+
           {/* Volumes Grid */}
           {displayVolumeItems.length === 0 ? (
             <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 my-4">
-              <BookOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <BookOpen className="w-8 h-8 text-slate-500 mx-auto mb-2" />
               <p className="text-sm text-slate-400">
                 {volumes.length === 0 
                   ? 'Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.' 
@@ -356,24 +532,6 @@ export default function MangaDetail({ user }) {
             </div>
           ) : (
             <>
-              {/* Duplicate entries, Manga-Passion discrepancy and detected gaps */}
-              <GapNotices
-                duplicateEntries={duplicateEntries}
-                canEdit={canEdit}
-                showGaps={showGaps}
-                detectedGaps={detectedGaps}
-                detectedGapEntries={detectedGapEntries}
-                volumeFilter={volumeFilter}
-                volumeSearch={volumeSearch}
-                mpGapData={mpGapData}
-                mpGapLoading={mpGapLoading}
-                fillingGapLoading={fillingGapLoading}
-                handleSyncTotalVolumes={handleSyncTotalVolumes}
-                handleBatchFillGaps={handleBatchFillGaps}
-                handleSelectMpEdition={handleSelectMpEdition}
-                setShowMpEditionModal={setShowMpEditionModal}
-              />
-
 
               {/* SPINE VIEW */}
               {volumeViewMode === 'spine' && (
@@ -387,7 +545,8 @@ export default function MangaDetail({ user }) {
                   shelfRows={shelfRows}
                   shelfScale={shelfScale}
                   shelfScrollRef={shelfScrollRef}
-                  spineShelfItems={spineShelfItems}
+                  spineShelfItems={displayVolumeItems}
+                  canEdit={Boolean(canEdit)}
                 />
               )}
 
@@ -399,6 +558,8 @@ export default function MangaDetail({ user }) {
                   manga={manga}
                   user={user}
                   canEdit={canEdit}
+                  canToggleOthers={canToggleOthers}
+                  gapsOfficial={gapsOfficial}
                   selectedReaderId={selectedReaderId}
                   setFillingGapNumber={setFillingGapNumber}
                   openVolumeGallery={openVolumeGallery}
@@ -413,6 +574,8 @@ export default function MangaDetail({ user }) {
               {volumeViewMode === 'grid' && (
                 <VolumeGridView
                   canEdit={canEdit}
+                  canToggleOthers={canToggleOthers}
+                  gapsOfficial={gapsOfficial}
                   displayVolumeItems={displayVolumeItems}
                   handleDeleteVolume={handleDeleteVolume}
                   handleOpenEditVolume={handleOpenEditVolume}
@@ -451,75 +614,90 @@ export default function MangaDetail({ user }) {
           />
 
         </section>
-      </div>
+      </main>
 
       {/* MODALS & OVERLAYS */}
-      <VolumeEditModal
-        isOpen={Boolean(activeVolume)}
-        activeVolume={activeVolume}
-        onClose={() => setActiveVolume(null)}
-        manga={manga}
-        mangaId={id}
-        canEdit={canEdit}
-        user={user}
-        onSuccess={fetchManga}
-        onPreviewImage={setPreviewImage}
-      />
+      <Suspense fallback={null}>
+        {activeVolume && (
+          <VolumeEditModal
+            isOpen
+            activeVolume={activeVolume}
+            onClose={() => setActiveVolume(null)}
+            manga={manga}
+            mangaId={id}
+            canEdit={canEdit}
+            user={user}
+            onSuccess={fetchManga}
+          />
+        )}
 
-      <BatchAddModal
-        isOpen={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
-        manga={manga}
-        mangaId={id}
-        onSuccess={fetchManga}
-      />
+        {showBatchModal && (
+          <BatchAddModal
+            isOpen
+            onClose={() => setShowBatchModal(false)}
+            manga={manga}
+            mangaId={id}
+            onSuccess={fetchManga}
+          />
+        )}
 
-      <BatchReadModal
-        isOpen={showBatchReadModal}
-        onClose={() => setShowBatchReadModal(false)}
-        mangaId={id}
-        readers={readers}
-        selectedReaderId={selectedReaderId}
-        setSelectedReaderId={setSelectedReaderId}
-        user={user}
-        onSuccess={fetchManga}
-      />
+        {showBatchReadModal && (
+          <BatchReadModal
+            isOpen
+            onClose={() => setShowBatchReadModal(false)}
+            mangaId={id}
+            readers={readers}
+            selectedReaderId={selectedReaderId}
+            user={user}
+            onSuccess={fetchManga}
+          />
+        )}
 
-      <GapFillModal
-        isOpen={fillingGapNumber !== null}
-        gapNumber={fillingGapNumber}
-        onClose={() => setFillingGapNumber(null)}
-        manga={manga}
-        mangaId={id}
-        mpGapMap={mpGapMap}
-        canEdit={canEdit}
-        onSuccess={async () => {
-          await fetchManga();
-          await fetchMpGaps();
-        }}
-      />
+        {fillingGapNumber !== null && (
+          <GapFillModal
+            isOpen
+            gapNumber={fillingGapNumber}
+            onClose={() => setFillingGapNumber(null)}
+            manga={manga}
+            mangaId={id}
+            mpGapMap={mpGapMap}
+            canEdit={canEdit}
+            gapEditionUnconfirmed={gapEditionUnconfirmed}
+            onSuccess={async () => {
+              await fetchManga();
+              await fetchMpGaps();
+            }}
+          />
+        )}
 
-      <LightboxGallery
-        lightboxData={lightboxData}
-        setLightboxData={setLightboxData}
-        onClose={() => setLightboxData(null)}
-        canEdit={canEdit}
-        onSuccess={fetchManga}
-      />
+        {lightboxData && (
+          <LightboxGallery
+            lightboxData={lightboxData}
+            setLightboxData={setLightboxData}
+            onClose={() => setLightboxData(null)}
+            canEdit={canEdit}
+            onSuccess={fetchManga}
+          />
+        )}
 
-      <MpEditionModal
-        isOpen={showMpEditionModal}
-        onClose={() => setShowMpEditionModal(false)}
-        manga={manga}
-        mangaId={id}
-        mpGapData={mpGapData}
-        mpGapLoading={mpGapLoading}
-        fetchMpGaps={fetchMpGaps}
-        handleSyncTotalVolumes={handleSyncTotalVolumes}
-        handleBatchAutofillManga={handleBatchAutofillManga}
-        batchAutofilling={batchAutofilling}
-        handleSelectMpEdition={handleSelectMpEdition}
-      />
+        {showMpEditionModal && (
+          <MpEditionModal
+            isOpen
+            onClose={() => setShowMpEditionModal(false)}
+            manga={manga}
+            mpGapData={mpGapData}
+            mpGapLoading={mpGapLoading}
+            mpGapNotice={mpGapNotice}
+            canEdit={canEdit}
+            isOffline={isOffline}
+            fetchMpGaps={fetchMpGaps}
+            handleSyncTotalVolumes={handleSyncTotalVolumes}
+            handleBatchAutofillManga={handleBatchAutofillManga}
+            batchAutofilling={batchAutofilling}
+            handleSelectMpEdition={handleSelectMpEdition}
+          />
+        )}
+      </Suspense>
 
     </div>
   );

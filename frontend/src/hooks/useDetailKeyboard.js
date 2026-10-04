@@ -1,99 +1,156 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-/** Escape closes the topmost dialog, arrows page the lightbox, J / K / Space / E drive the volume list. */
+// Space on these is the control's own key; a focused spine (role=button) is the shortcut's target instead
+const CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]:not(.manga-spine)';
+const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'image']);
+
+const asElement = (target) => (target && typeof target.closest === 'function' ? target : null);
+
+function isTextEntry(target) {
+  const el = asElement(target);
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+  return el.tagName === 'INPUT' && !NON_TEXT_INPUTS.has(String(el.type || 'text').toLowerCase());
+}
+
+/**
+ * Which shelf shortcut a keydown means: 'next' | 'prev' | 'toggleRead' | 'edit' | null.
+ * Only in the shelf view (the only view that shows the focused volume), never with modifiers, auto-repeat or IME input.
+ */
+export function resolveVolumeShortcut(e, { shelfActive, modalOpen }) {
+  if (!shelfActive || modalOpen) return null;
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.isComposing) return null;
+  const el = asElement(e.target);
+  if (el && (el.isContentEditable || el.closest('input, textarea, select'))) return null;
+  switch (e.key) {
+    case 'j': case 'J': return 'next';
+    case 'k': case 'K': return 'prev';
+    case 'e': case 'E': return 'edit';
+    case ' ': return el && el.closest(CONTROL_SELECTOR) ? null : 'toggleRead';
+    default: return null;
+  }
+}
+
+/**
+ * Escape closes the topmost dialog (a dialog that handles Escape itself calls preventDefault). J / K / Space / E
+ * drive the shelf view; arrow keys in the lightbox belong to LightboxGallery.
+ */
 export default function useDetailKeyboard({
   lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
   showBatchReadModal, setShowBatchReadModal, fillingGapNumber, setFillingGapNumber,
-  showMpEditionModal, setShowMpEditionModal, editing, setEditing,
+  showMpEditionModal, setShowMpEditionModal, editing, setEditing, cancelEditing, isEditDirty, volumeViewMode,
   filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume
 }) {
-  // Keyboard navigation & Escape handling for modals, edit mode and photo gallery lightbox
+  const latest = useRef({});
+  latest.current = { isEditDirty, cancelEditing, setEditing };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (lightboxData) {
-          setLightboxData(null);
-          return;
-        }
-        if (activeVolume) {
-          setActiveVolume(null);
-          return;
-        }
-        if (showBatchModal) {
-          setShowBatchModal(false);
-          return;
-        }
-        if (showBatchReadModal) {
-          setShowBatchReadModal(false);
-          return;
-        }
-        if (fillingGapNumber !== null) {
-          setFillingGapNumber(null);
-          return;
-        }
-        if (showMpEditionModal) {
-          setShowMpEditionModal(false);
-          return;
-        }
-        if (editing) {
-          setEditing(false);
-          return;
-        }
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+      if (lightboxData) {
+        setLightboxData(null);
+        return;
       }
-      // Lightbox arrow keys are handled in LightboxGallery itself (a second handler here skipped every other image)
+      if (activeVolume) {
+        // Escape in a text field (dismissing autocomplete, IME) must not throw away the editor's unsaved input
+        if (isTextEntry(e.target)) return;
+        setActiveVolume(null);
+        return;
+      }
+      if (showBatchModal) {
+        setShowBatchModal(false);
+        return;
+      }
+      if (showBatchReadModal) {
+        setShowBatchReadModal(false);
+        return;
+      }
+      if (fillingGapNumber !== null) {
+        setFillingGapNumber(null);
+        return;
+      }
+      if (showMpEditionModal) {
+        setShowMpEditionModal(false);
+        return;
+      }
+      if (editing) {
+        if (isTextEntry(e.target)) return;
+        const { isEditDirty: dirty, cancelEditing: cancel, setEditing: set } = latest.current;
+        // cancelEditing resets the form: without a dirty flag from the caller, ask rather than lose input
+        const mayLoseInput = cancel ? dirty !== false : Boolean(dirty);
+        if (mayLoseInput && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
+        if (cancel) cancel();
+        else set(false);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing]);
+  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing,
+    setLightboxData, setActiveVolume, setShowBatchModal, setShowBatchReadModal, setFillingGapNumber, setShowMpEditionModal]);
 
-  // Desktop keyboard shortcuts (J / K / Space / E) for shelf & volume navigation
+  const viewModeRef = useRef(volumeViewMode);
+  useEffect(() => {
+    if (viewModeRef.current === volumeViewMode) return;
+    viewModeRef.current = volumeViewMode;
+    setFocusedVolumeId(null);
+  }, [volumeViewMode, setFocusedVolumeId]);
+
+  useEffect(() => {
+    if (focusedVolumeId == null) return;
+    if (!(filteredVolumes || []).some(v => String(v.id) === String(focusedVolumeId))) setFocusedVolumeId(null);
+  }, [filteredVolumes, focusedVolumeId, setFocusedVolumeId]);
+
+  // after J / K: real DOM focus on the spine (ring, scrolling and screen readers follow it)
+  const movedByKeyRef = useRef(false);
+  useEffect(() => {
+    if (!movedByKeyRef.current) return;
+    movedByKeyRef.current = false;
+    if (focusedVolumeId == null) return;
+    const el = document.querySelector(`[data-volume-id="${String(focusedVolumeId).replace(/["\\]/g, '\\$&')}"]`);
+    if (!el) return;
+    if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [focusedVolumeId]);
+
   useEffect(() => {
     const handleVolumeKeyboardNav = (e) => {
-      const isInputActive = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
-      if (isInputActive) return;
-
-      const hasModalOpen = lightboxData || activeVolume || showBatchModal || showBatchReadModal || fillingGapNumber !== null || showMpEditionModal || editing;
-      if (hasModalOpen) return;
+      const modalOpen = Boolean(lightboxData || activeVolume || showBatchModal || showBatchReadModal || fillingGapNumber !== null || showMpEditionModal || editing);
+      // without a view mode from the caller, fall back to whether shelf spines are on the page
+      const shelfActive = volumeViewMode === undefined ? Boolean(document.querySelector('.manga-spine')) : volumeViewMode === 'spine';
+      const action = resolveVolumeShortcut(e, { shelfActive, modalOpen });
+      if (!action) return;
 
       const volList = filteredVolumes || [];
       if (volList.length === 0) return;
 
-      if (e.key === 'j' || e.key === 'J') {
+      if (action === 'next' || action === 'prev') {
         e.preventDefault();
-        setFocusedVolumeId(prev => {
-          if (!prev) return volList[0].id;
-          const currIdx = volList.findIndex(v => v.id === prev);
-          const nextIdx = (currIdx + 1) % volList.length;
-          return volList[nextIdx].id;
-        });
-      } else if (e.key === 'k' || e.key === 'K') {
-        e.preventDefault();
-        setFocusedVolumeId(prev => {
-          if (!prev) return volList[volList.length - 1].id;
-          const currIdx = volList.findIndex(v => v.id === prev);
-          const nextIdx = (currIdx - 1 + volList.length) % volList.length;
-          return volList[nextIdx].id;
-        });
-      } else if (e.key === ' ' || e.code === 'Space') {
-        // Space on a focused button/link/checkbox is that control's own key; only act on the shelf itself
-        if (focusedVolumeId && !e.target.closest?.('button, a, input, select, textarea, [role="button"]')) {
-          e.preventDefault();
-          const targetVol = volList.find(v => v.id === focusedVolumeId);
-          if (targetVol && canEdit) {
-            handleToggleVolumeRead(targetVol);
-          }
-        }
-      } else if (e.key === 'e' || e.key === 'E') {
-        if (focusedVolumeId && canEdit) {
-          e.preventDefault();
-          const targetVol = volList.find(v => v.id === focusedVolumeId);
-          if (targetVol) {
-            handleOpenEditVolume(targetVol);
-          }
-        }
+        const step = action === 'next' ? 1 : -1;
+        const currIdx = volList.findIndex(v => String(v.id) === String(focusedVolumeId));
+        const nextIdx = currIdx === -1
+          ? (step === 1 ? 0 : volList.length - 1)
+          : (currIdx + step + volList.length) % volList.length;
+        movedByKeyRef.current = true;
+        setFocusedVolumeId(volList[nextIdx].id);
+        return;
+      }
+
+      const spineId = asElement(e.target)?.closest('[data-volume-id]')?.getAttribute('data-volume-id');
+      const targetId = spineId ?? focusedVolumeId;
+      if (targetId == null) return;
+      const targetVol = volList.find(v => String(v.id) === String(targetId));
+      if (!targetVol) return;
+
+      e.preventDefault();
+      if (!canEdit) return;
+      if (action === 'toggleRead') {
+        // the read toggle exists only for owned volumes
+        if (targetVol.status === 'Vorhanden') handleToggleVolumeRead(targetVol);
+      } else if (action === 'edit') {
+        handleOpenEditVolume(targetVol);
       }
     };
     window.addEventListener('keydown', handleVolumeKeyboardNav);
     return () => window.removeEventListener('keydown', handleVolumeKeyboardNav);
-  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing, filteredVolumes, focusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume, setFocusedVolumeId]);
+  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing, volumeViewMode, filteredVolumes, focusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume, setFocusedVolumeId]);
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Lock, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
+import { apiFetch, readJson, rememberToken } from '../../utils/api';
 
 /** Own password change (PUT /api/auth/password): current password, new password twice. Other devices are logged out. */
 export default function ChangePasswordModal({ isOpen, onClose }) {
@@ -33,13 +34,15 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/auth/password', {
+      const res = await apiFetch('/api/auth/password', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_password: current, new_password: next })
+        body: { current_password: current, new_password: next }
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setDone(true);
+      const data = (await readJson(res)) ?? {};
+      if (res.ok) {
+        rememberToken(data);
+        setDone(true);
+      }
       else setError(data.error || 'Das Passwort konnte nicht geändert werden.');
     } catch (err) {
       setError('Netzwerkfehler');
@@ -89,7 +92,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-red-500/15 border border-red-500/40 text-red-300 p-3 rounded-xl text-sm">{error}</div>
+              <div role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3 rounded-xl text-sm">{error}</div>
             )}
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-current">Aktuelles Passwort</label>

@@ -1,4 +1,25 @@
-import { AlertCircle, BookOpen, Building2, CheckCircle2, Coins, Edit3, RefreshCw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
+import { useId, useState } from 'react';
+import { BookOpen, BuildingComplex, CircleAlert, CircleCheck, Coins, PenLine, RefreshCw, Save, Sparkles, Trash, Upload } from 'lucide-react';
+import { MANGA_STATUSES } from '../../hooks/useMangaData';
+import { assetImgProps } from '../../utils/api';
+import { formatCount, formatEuro } from '../../utils/format';
+import FilePickerButton from '../common/FilePickerButton';
+import { langFor } from '../common/lang';
+
+const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
+
+/**
+ * The cover the hero shows: while the form is open an uploaded cover (/uploads/…) is previewed before 'Speichern';
+ * typed URLs are not, so every keystroke does not fire an image request.
+ */
+export function heroCoverUrl({ manga, formData, editing }) {
+  const draft = String(formData?.cover_image || '').trim();
+  if (editing && draft.startsWith('/uploads/')) return draft;
+  return manga?.cover_image || '';
+}
+
+/** A broken URL is remembered per URL: a new cover (upload, other URL) gets a fresh attempt without a reload. */
+export const shouldShowCover = (url, failedUrl) => Boolean(url) && url !== failedUrl;
 
 /** Cover, metadata, edit form and progress of the series. Purely presentational; all state and handlers come in via props. */
 export default function MangaHeroCard({
@@ -9,25 +30,40 @@ export default function MangaHeroCard({
   editLookupError,
   editLookupResults,
   editing,
-  failedCover,
   isOffline,
   formData,
   handleCoverUpload,
   handleDeleteManga,
   handleEditLookup,
   handleUpdate,
+  headingRef,
   manga,
   ownedCount,
   extrasCount = 0,
   saving,
   setEditLookupResults,
   setEditing,
-  setFailedCover,
+  startEditing,
+  cancelEditing,
   setFormData,
   totalOwnedValue,
   totalTarget,
   uploadingCover
 }) {
+  const [failedCoverUrl, setFailedCoverUrl] = useState(null);
+  const ids = useId();
+  const coverUrl = heroCoverUrl({ manga, formData, editing });
+  const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
+  const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
+  // the hook reads the file synchronously; clearing the input lets the same file be picked again
+  const handleCoverInput = (e) => {
+    handleCoverUpload(e);
+    e.target.value = '';
+  };
+  const statusOptions = formData.status && !MANGA_STATUSES.includes(formData.status)
+    ? [...MANGA_STATUSES, formData.status]
+    : MANGA_STATUSES;
+
   return (
     <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl flex flex-col md:flex-row gap-8 mb-8 relative overflow-hidden">
 
@@ -37,45 +73,44 @@ export default function MangaHeroCard({
       {/* Cover Column */}
       <div className="w-full md:w-64 lg:w-72 shrink-0 flex flex-col items-center">
         <div className="relative group w-48 sm:w-56 md:w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-slate-700/80 bg-slate-950 flex items-center justify-center">
-          {manga.cover_image && !failedCover ? (
+          {shouldShowCover(coverUrl, failedCoverUrl) ? (
             <img 
-              src={manga.cover_image} 
+              key={coverUrl}
+              {...assetImgProps(coverUrl)} 
               alt={manga.title} 
-              onError={() => setFailedCover(true)}
+              onError={() => setFailedCoverUrl(coverUrl)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
             />
           ) : (
-            <div className="flex flex-col items-center justify-center text-slate-600 gap-2 p-4 text-center">
-              <BookOpen className="w-12 h-12 stroke-[1.5]" />
-              <span className="text-xs font-medium">Kein Cover vorhanden</span>
+            <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+              <BookOpen className="w-12 h-12 stroke-[1.5] text-slate-500" />
+              <span className="text-xs font-medium text-slate-400">Kein Cover vorhanden</span>
             </div>
           )}
 
           {/* Cover Upload Overlay */}
           {canEdit && (
-            <label 
-              htmlFor="cover-upload" 
-              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 cursor-pointer transition-opacity backdrop-blur-sm text-white text-xs font-semibold"
+            <FilePickerButton
+              id="cover-upload"
+              accept="image/*"
+              onChange={handleCoverInput}
+              disabled={uploadingCover}
+              className={'absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 flex flex-col items-center justify-center gap-2 cursor-pointer transition-opacity text-white text-xs font-semibold ' +
+                '[@media(hover:none)]:opacity-100 [@media(hover:none)]:inset-auto [@media(hover:none)]:inset-x-0 [@media(hover:none)]:bottom-0 [@media(hover:none)]:flex-row [@media(hover:none)]:py-2.5 [@media(hover:none)]:bg-black/75'}
             >
-              <Upload className="w-6 h-6 text-brand-400" />
+              <Upload className="w-6 h-6 text-brand-400 [@media(hover:none)]:w-4 [@media(hover:none)]:h-4" />
               <span>Cover ändern</span>
-              <input 
-                id="cover-upload" 
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleCoverUpload}
-                disabled={uploadingCover}
-              />
-            </label>
+            </FilePickerButton>
           )}
 
           {uploadingCover && (
             <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+              <span aria-hidden="true" className="block w-6 h-6 rounded-full animate-spin border-2 border-brand-500 border-t-transparent" />
             </div>
           )}
         </div>
+        {/* one live region that is always mounted: a region mounted together with its text is often not announced */}
+        <p role="status" className="sr-only">{uploadingCover ? COVER_UPLOAD_TEXT : ''}</p>
 
         {/* Quick stats under cover */}
         <div className="w-full mt-4 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex justify-around text-center">
@@ -83,11 +118,11 @@ export default function MangaHeroCard({
             <span className="text-[10px] uppercase font-semibold text-slate-400 block">Bände</span>
             <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title="Schuber, Specials und Extras zusätzlich zu den Bänden">+{extrasCount}</span>}</span>
           </div>
-          <div className="w-[1px] bg-slate-800"></div>
+          <div aria-hidden="true" className="w-[1px] bg-slate-800"></div>
           <div>
             <span className="text-[10px] uppercase font-semibold text-emerald-400 block">Sammlungswert</span>
             <span className="text-sm font-bold text-emerald-400 font-mono">
-              {totalOwnedValue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              {formatEuro(totalOwnedValue)}
             </span>
           </div>
         </div>
@@ -100,12 +135,12 @@ export default function MangaHeroCard({
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-brand-400" /> Manga bearbeiten
+                <PenLine className="w-4 h-4 text-brand-400" /> Manga bearbeiten
               </h2>
               <div className="flex gap-2">
                 <button 
                   type="button" 
-                  onClick={() => setEditing(false)} 
+                  onClick={endEdit} 
                   className="btn-secondary text-xs py-1.5 px-3"
                 >
                   Abbrechen
@@ -122,9 +157,10 @@ export default function MangaHeroCard({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Titel der Reihe</label>
+                <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-400 mb-1">Titel der Reihe</label>
                 <div className="flex gap-2 items-center">
                   <input 
+                    id={`${ids}-title`}
                     type="text" 
                     className="input-field flex-1" 
                     required
@@ -153,8 +189,9 @@ export default function MangaHeroCard({
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Alternativer Titel</label>
+                <label htmlFor={`${ids}-alt`} className="block text-xs font-semibold text-slate-400 mb-1">Alternativer Titel</label>
                 <input 
+                  id={`${ids}-alt`}
                   type="text" 
                   className="input-field" 
                   value={formData.alt_title} 
@@ -165,8 +202,8 @@ export default function MangaHeroCard({
 
             {/* Edit Lookup Error */}
             {editLookupError && (
-              <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <div role="alert" className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
+                <CircleAlert className="w-4 h-4 shrink-0 text-amber-400" />
                 <span>{editLookupError}</span>
               </div>
             )}
@@ -200,23 +237,23 @@ export default function MangaHeroCard({
                     >
                       {item.cover_image ? (
                         <img 
-                          src={item.cover_image} 
-                          alt={item.title} 
+                          {...assetImgProps(item.cover_image)} 
+                          alt="" 
                           className="w-10 h-14 object-cover rounded shadow shrink-0" 
                         />
                       ) : (
-                        <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-500">
+                        <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-400">
                           <BookOpen className="w-5 h-5" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {item.source === 'manga_passion' ? (
-                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-0.2 rounded text-[9px] font-bold shrink-0">
+                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
                               🇩🇪 Manga Passion
                             </span>
                           ) : (
-                            <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-0.2 rounded text-[9px] font-medium shrink-0">
+                            <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
                               🌐 AniList
                             </span>
                           )}
@@ -235,7 +272,7 @@ export default function MangaHeroCard({
                           )}
                           {item.total_volumes && (
                             <span className="bg-slate-800 text-slate-200 border border-slate-700/80 px-1.5 py-0.5 rounded font-bold">
-                              {item.total_volumes} Bände
+                              {formatCount(item.total_volumes, 'Band', 'Bände')}
                             </span>
                           )}
                           <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
@@ -251,8 +288,9 @@ export default function MangaHeroCard({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Autor / Mangaka</label>
+                <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-400 mb-1">Autor / Mangaka</label>
                 <input 
+                  id={`${ids}-author`}
                   type="text" 
                   className="input-field" 
                   value={formData.author} 
@@ -260,8 +298,9 @@ export default function MangaHeroCard({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Standard-Verlag</label>
+                <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-400 mb-1">Standard-Verlag</label>
                 <input 
+                  id={`${ids}-publisher`}
                   type="text" 
                   className="input-field" 
                   value={formData.publisher} 
@@ -269,65 +308,69 @@ export default function MangaHeroCard({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Status</label>
+                <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-400 mb-1">Status</label>
                 <select 
+                  id={`${ids}-status`}
                   className="input-field bg-slate-950"
                   value={formData.status} 
                   onChange={e => setFormData({ ...formData, status: e.target.value })}
                 >
-                  <option value="Laufend">Laufend</option>
-                  <option value="Abgeschlossen">Abgeschlossen</option>
-                  <option value="Pausiert">Pausiert</option>
-                  <option value="Geplant">Geplant</option>
+                  {statusOptions.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Geplante Gesamtbände</label>
+                <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-400 mb-1">Geplante Gesamtbände</label>
                 <input 
+                  id={`${ids}-total`}
                   type="number" 
                   min="1"
+                  max="5000"
+                  step="1"
                   className="input-field" 
                   value={formData.total_volumes} 
                   onChange={e => setFormData({ ...formData, total_volumes: e.target.value })} 
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Cover-Bild</label>
+                <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-400 mb-1">Cover-Bild</label>
                 <div className="flex gap-2 items-center">
                   <input 
+                    id={`${ids}-cover`}
                     type="text" 
                     className="input-field flex-1" 
                     placeholder="URL oder Datei hochladen"
                     value={formData.cover_image} 
                     onChange={e => setFormData({ ...formData, cover_image: e.target.value })} 
                   />
-                  <label className="btn-secondary text-xs flex items-center gap-1.5 cursor-pointer shrink-0 py-2.5 px-3">
+                  <FilePickerButton
+                    accept="image/*"
+                    onChange={handleCoverInput}
+                    disabled={uploadingCover}
+                    label="Cover-Bild hochladen"
+                    className="btn-secondary text-xs flex items-center gap-1.5 cursor-pointer shrink-0 py-2.5 px-3"
+                  >
                     <Upload className="w-3.5 h-3.5" />
                     Bild
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={handleCoverUpload}
-                      disabled={uploadingCover}
-                    />
-                  </label>
+                  </FilePickerButton>
                 </div>
                 {uploadingCover && (
-                  <p className="text-xs text-brand-400 mt-1 flex items-center gap-1.5">
+                  <p aria-hidden="true" className="text-xs text-brand-400 mt-1 flex items-center gap-1.5">
                     <span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block"></span>
-                    Cover wird hochgeladen...
+                    {COVER_UPLOAD_TEXT}
                   </p>
                 )}
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">Beschreibung</label>
+              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">Beschreibung</label>
               <textarea 
+                id={`${ids}-description`}
                 rows="3" 
                 className="input-field resize-none" 
                 value={formData.description} 
@@ -342,11 +385,11 @@ export default function MangaHeroCard({
               {/* Title & Action Buttons */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-3">
                 <div>
-                  <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                  <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                     {manga.title}
                   </h1>
                   {manga.alt_title && (
-                    <p className="text-sm text-slate-400 mt-0.5">{manga.alt_title}</p>
+                    <p className="text-sm text-slate-400 mt-0.5" lang={langFor(manga.alt_title)}>{manga.alt_title}</p>
                   )}
                 </div>
 
@@ -354,17 +397,18 @@ export default function MangaHeroCard({
                   {canEdit ? (
                     <>
                       <button 
-                        onClick={() => setEditing(true)} 
+                        onClick={beginEdit} 
                         className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
                       >
-                        <Edit3 className="w-3.5 h-3.5" /> Bearbeiten
+                        <PenLine className="w-3.5 h-3.5" /> Bearbeiten
                       </button>
                       <button 
                         onClick={handleDeleteManga} 
                         className="btn-danger text-xs flex items-center gap-1.5 py-2 px-3"
                         title="Reihe löschen"
+                        aria-label="Reihe löschen"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </button>
                     </>
                   ) : (
@@ -381,26 +425,28 @@ export default function MangaHeroCard({
                   Autor: <strong className="text-white">{manga.author || 'Unbekannt'}</strong>
                 </span>
                 <span className="bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-brand-400" />
+                  <BuildingComplex className="w-3.5 h-3.5 text-brand-400" />
                   Verlag: <strong className="text-white">{manga.publisher || 'Unbekannt'}</strong>
                 </span>
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">
                   {manga.status || 'Laufend'}
                 </span>
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
-                  Gesamt: {totalTarget > 0 ? `${totalTarget} Bände` : 'Unbekannt'}
+                  Gesamt: {totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : 'Unbekannt'}
                 </span>
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                  Sammlungswert: <strong className="text-white font-mono">{totalOwnedValue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong>
+                  Sammlungswert: <strong className="text-white font-mono">{formatEuro(totalOwnedValue)}</strong>
                 </span>
               </div>
 
               {/* Description */}
               <div className="mb-6">
-                <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Beschreibung</h3>
+                <h2 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Beschreibung</h2>
                 <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line max-w-2xl bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60">
-                  {manga.description || 'Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.'}
+                  {manga.description || (canEdit
+                    ? 'Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.'
+                    : 'Keine Beschreibung vorhanden.')}
                 </p>
               </div>
             </div>
@@ -409,7 +455,7 @@ export default function MangaHeroCard({
             <div className="pt-4 border-t border-slate-800/80">
               <div className="flex justify-between items-center text-xs mb-2">
                 <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CircleCheck className="w-4 h-4 text-emerald-400" />
                   Sammlungs-Fortschritt
                 </span>
                 <span className="text-slate-400 font-mono">
@@ -417,7 +463,15 @@ export default function MangaHeroCard({
                   {completionPct !== null && ` (${completionPct}%)`}
                 </span>
               </div>
-              <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div
+                role="progressbar"
+                aria-label="Sammlungs-Fortschritt"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={completionPct ?? 0}
+                aria-valuetext={totalTarget > 0 ? `${ownedCount} von ${formatCount(totalTarget, 'Band', 'Bänden')}` : `${formatCount(ownedCount, 'Band', 'Bände')} im Besitz`}
+                className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800"
+              >
                 <div 
                   className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500"
                   style={{ width: `${completionPct !== null ? completionPct : 0}%` }}

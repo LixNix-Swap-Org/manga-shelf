@@ -10,14 +10,17 @@ const TOTAL_TIMEOUT_MS = 30000;
 const USER_AGENT = 'MangaShelf (+https://github.com/MoltresHD/manga-shelf)';
 
 function isPrivateIPv4(address) {
-    const [a, b] = address.split('.').map(Number);
+    const [a, b, c] = address.split('.').map(Number);
     return a === 0 || a === 10 || a === 127 ||
         (a === 100 && b >= 64 && b <= 127) ||
         (a === 169 && b === 254) ||
         (a === 172 && b >= 16 && b <= 31) ||
         (a === 192 && b === 168) ||
-        (a === 192 && b === 0) ||
+        (a === 192 && b === 0 && (c === 0 || c === 2)) ||   // the rest of 192.0/16 is public (e.g. i0.wp.com)
+        (a === 192 && b === 88 && c === 99) ||
         (a === 198 && (b === 18 || b === 19)) ||
+        (a === 198 && b === 51 && c === 100) ||
+        (a === 203 && b === 0 && c === 113) ||
         a >= 224;
 }
 
@@ -87,13 +90,27 @@ function makeSafeLookup(isBlocked) {
     };
 }
 
+const AVIF_BRANDS = new Set(['avif', 'avis']);
+
+/** AVIF writers may use a generic major brand ('mif1', 'miaf') and list avif only among the compatible brands. */
+function isAvifFtyp(buf) {
+    if (buf.slice(4, 8).toString('ascii') !== 'ftyp') return false;
+    const boxEnd = Math.min(buf.readUInt32BE(0), buf.length);
+    if (AVIF_BRANDS.has(buf.slice(8, 12).toString('ascii'))) return true;
+    for (let i = 16; i + 4 <= boxEnd; i += 4) {
+        if (AVIF_BRANDS.has(buf.slice(i, i + 4).toString('ascii'))) return true;
+    }
+    return false;
+}
+
+/** Image extension from the first bytes (at least 12; pass 64 or more so AVIF compatible brands are seen). */
 function detectImageExt(buf) {
-    if (buf.length < 12) return null;
+    if (!buf || buf.length < 12) return null;
     if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
     if (buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return '.png';
     if (buf.slice(0, 4).toString('ascii') === 'GIF8') return '.gif';
     if (buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP') return '.webp';
-    if (buf.slice(4, 8).toString('ascii') === 'ftyp' && /avif|avis/.test(buf.slice(8, 12).toString('ascii'))) return '.avif';
+    if (isAvifFtyp(buf)) return '.avif';
     return null;
 }
 

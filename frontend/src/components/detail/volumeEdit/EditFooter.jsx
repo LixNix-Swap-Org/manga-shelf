@@ -1,4 +1,4 @@
-import { Trash2, Save } from 'lucide-react';
+import { Trash, Save } from 'lucide-react';
 
 /** Delete / cancel / save buttons. */
 export default function EditFooter({
@@ -14,7 +14,7 @@ export default function EditFooter({
         onClick={(e) => handleDeleteVolume(e, activeVolume.id)} 
         className="btn-danger text-xs py-2 px-3 flex items-center justify-center gap-1.5 w-full sm:w-auto"
       >
-        <Trash2 className="w-3.5 h-3.5" /> Band löschen
+        <Trash className="w-3.5 h-3.5" /> Band löschen
       </button>
 
       <div className="flex items-center gap-2 w-full sm:w-auto">

@@ -1,6 +1,9 @@
 import { Package, RefreshCw, Coins } from 'lucide-react';
+import { formatCount, formatEuro } from '../../../utils/format';
 
-/** Pre-order count and budget of the personal radar. */
+const euro = (value) => formatEuro(value || 0);
+
+/** Pre-order count and budget of the personal radar ('–' while nothing is loaded, never a made-up 0,00 €). */
 export default function PersonalSummary({
   radarData,
   loadingRadar,
@@ -17,7 +20,7 @@ export default function PersonalSummary({
             <span>Meine Vorbestellungen & Lieferungen</span>
             {radarData && (
               <span className="bg-sky-500/20 text-sky-300 text-xs px-2.5 py-0.5 rounded-full border border-sky-500/30 font-mono font-bold">
-                {radarData.total_releases} {radarData.total_releases === 1 ? 'Band' : 'Bände'}
+                {formatCount(radarData.total_releases, 'Band', 'Bände')}
               </span>
             )}
           </h2>
@@ -30,10 +33,10 @@ export default function PersonalSummary({
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full md:w-auto">
         <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
           <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
-            <Package className="w-3 h-3 text-sky-400" /> Vorbestellt ({radarData ? radarData.preordered_count : 0})
+            <Package className="w-3 h-3 text-sky-400" /> Vorbestellt ({radarData ? radarData.preordered_count : '–'})
           </p>
           <p className="text-base sm:text-lg font-extrabold text-sky-400 font-mono">
-            {radarData ? radarData.preordered_budget.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
+            {radarData ? euro(radarData.preordered_budget) : '–'}
           </p>
         </div>
 
@@ -42,15 +45,17 @@ export default function PersonalSummary({
             <Coins className="w-3 h-3 text-emerald-400" /> Gesamt geplant
           </p>
           <p className="text-base sm:text-lg font-extrabold text-emerald-400 font-mono">
-            {radarData ? radarData.total_budget.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'} €
+            {radarData ? euro(radarData.total_budget) : '–'}
           </p>
         </div>
 
         <button
+          type="button"
           onClick={fetchReleaseRadar}
           disabled={loadingRadar}
           className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 shrink-0"
           title="Release-Radar aktualisieren"
+          aria-label="Release-Radar aktualisieren"
         >
           <RefreshCw className={`w-4 h-4 ${loadingRadar ? 'animate-spin' : ''}`} />
         </button>

@@ -1,124 +1,213 @@
+#!/usr/bin/env node
+/**
+ * Release: node release.js <patch|minor|major|X.Y.Z|vX.Y.Z>
+ * Every check runs before anything is written: version, branch main in sync with origin, clean tree, tag and
+ * GitHub release not existing yet, gh signed in, lint and tests. Then the version is bumped (package.json and
+ * package-lock.json in root and frontend/), the ZIP is built, exactly those four files are committed, commit and
+ * tag are pushed atomically and the GitHub release is created with the ZIP.
+ */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
-function run(cmd, options = {}) {
-  console.log(`\n> ${cmd}`);
-  return execSync(cmd, { stdio: 'inherit', ...options });
+const ROOT = __dirname;
+const RELEASE_BRANCH = 'main';
+const VERSION_FILES = ['package.json', 'package-lock.json', 'frontend/package.json', 'frontend/package-lock.json'];
+const ZIP_NAME = 'pterodactyl-manga-shelf.zip';
+const USAGE = 'Aufruf: node release.js <patch|minor|major|X.Y.Z|vX.Y.Z>';
+
+function parseVersion(value) {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(value));
+  return m ? m.slice(1).map(Number) : null;
 }
 
-function runOutput(cmd) {
-  return execSync(cmd, { encoding: 'utf8' }).trim();
+function compareVersions(a, b) {
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
 }
 
-async function main() {
-  console.log('🚀 Starte Release-Prozess für Manga Shelf...');
-
-  // 1. Version bestimmen
-  const rootPkgPath = path.join(__dirname, 'package.json');
-  const frontendPkgPath = path.join(__dirname, 'frontend', 'package.json');
-
-  const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
-  const frontendPkg = JSON.parse(fs.readFileSync(frontendPkgPath, 'utf8'));
-
-  let targetVersion = process.argv[2];
-
-  if (!targetVersion) {
-    targetVersion = rootPkg.version;
-  } else if (targetVersion.startsWith('v')) {
-    targetVersion = targetVersion.slice(1);
-  } else if (targetVersion === 'patch' || targetVersion === 'minor' || targetVersion === 'major') {
-    const parts = rootPkg.version.split('.').map(Number);
-    if (targetVersion === 'patch') parts[2]++;
-    if (targetVersion === 'minor') { parts[1]++; parts[2] = 0; }
-    if (targetVersion === 'major') { parts[0]++; parts[1] = 0; parts[2] = 0; }
-    targetVersion = parts.join('.');
+/** Target version for a release argument; throws with a German message for anything that is not a real step up. */
+function resolveTargetVersion(arg, current) {
+  if (!arg || !String(arg).trim()) throw new Error(`Keine Version angegeben. ${USAGE}`);
+  const cur = parseVersion(current);
+  if (!cur) throw new Error(`Aktuelle Version in package.json ist ungültig: "${current}"`);
+  const raw = String(arg).trim();
+  let target;
+  if (raw === 'patch') target = `${cur[0]}.${cur[1]}.${cur[2] + 1}`;
+  else if (raw === 'minor') target = `${cur[0]}.${cur[1] + 1}.0`;
+  else if (raw === 'major') target = `${cur[0] + 1}.0.0`;
+  else {
+    target = raw.replace(/^v/, '');
+    if (!parseVersion(target)) throw new Error(`Ungültige Version "${raw}". ${USAGE}`);
   }
-
-  const tag = `v${targetVersion}`;
-  console.log(`📌 Ziel-Version: ${tag} (Package Version: ${targetVersion})`);
-
-  // 2. Versionen in package.json und frontend/package.json synchronisieren
-  rootPkg.version = targetVersion;
-  frontendPkg.version = targetVersion;
-
-  fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + '\n');
-  fs.writeFileSync(frontendPkgPath, JSON.stringify(frontendPkg, null, 2) + '\n');
-  console.log('✅ package.json & frontend/package.json aktualisiert.');
-
-  // 3. Frontend bauen & ZIP-Paket erzeugen
-  console.log('📦 Erzeuge pterodactyl-manga-shelf.zip...');
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  run(`${npmCmd} run package`);
-
-  const zipPath = path.join(__dirname, 'pterodactyl-manga-shelf.zip');
-  if (!fs.existsSync(zipPath)) {
-    throw new Error(`ZIP-Datei wurde nicht gefunden: ${zipPath}`);
+  if (compareVersions(target, current) <= 0) {
+    throw new Error(`Version ${target} ist nicht größer als die aktuelle Version ${current}.`);
   }
-  const zipStats = fs.statSync(zipPath);
-  console.log(`✅ ZIP erfolgreich erstellt (${(zipStats.size / 1024).toFixed(1)} KB)`);
+  return target;
+}
 
-  // 4. Git Status prüfen & Änderungen committen
-  const status = runOutput('git status --porcelain');
-  if (status) {
-    console.log('📝 Committe Änderungen vor dem Release...');
-    run('git add .');
-    try {
-      run(`git commit -m "chore(release): bump version to ${tag}"`);
-    } catch (e) {
-      console.log('Keine neuen Commits nötig oder bereits committed.');
-    }
-  }
+/** Paths from `git status --porcelain` output that are not in `allowed`. */
+function getReleaseBlockers(porcelain, allowed = []) {
+  return String(porcelain || '')
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => {
+      const p = line.slice(3);
+      const arrow = p.indexOf(' -> ');
+      return (arrow === -1 ? p : p.slice(arrow + 4)).replace(/^"|"$/g, '');
+    })
+    .filter(p => !allowed.includes(p));
+}
 
-  // 5. Änderungen zu GitHub pushen
-  console.log('⬆️ Pushe main zu GitHub...');
-  run('git push origin main');
+function run(cmd, args, options = {}) {
+  console.log(`\n> ${cmd} ${args.join(' ')}`);
+  return execFileSync(cmd, args, {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: cmd === 'npm' && process.platform === 'win32',
+    ...options
+  });
+}
 
-  // 6. Prüfen ob Tag lokal oder remote existiert
-  const existingTags = runOutput('git tag -l').split('\n').map(t => t.trim());
-  if (existingTags.includes(tag)) {
-    console.log(`⚠️ Tag ${tag} existiert bereits. Erneuere Tag...`);
-    run(`git tag -d ${tag}`);
-    try { run(`git push origin :refs/tags/${tag}`); } catch (_) { }
-  }
+function output(cmd, args) {
+  return execFileSync(cmd, args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+}
 
-  console.log(`🏷️ Erstelle Git Tag ${tag}...`);
-  run(`git tag -a ${tag} -m "Release ${tag}"`);
-  run(`git push origin ${tag}`);
+// untrimmed: the first porcelain line starts with a status column that may be a space
+function gitStatus() {
+  return execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' });
+}
 
-  // 7. GitHub Release erstellen & ZIP hochladen via gh CLI
-  console.log(`🌐 Erstelle GitHub Release für ${tag} und lade ZIP hoch...`);
+function succeeds(cmd, args) {
   try {
-    // Falls Release bereits existiert, überschreiben / anpassen
-    const releaseTitle = `Manga Shelf ${tag}`;
-    // Notes come from the merged PRs / commits since the previous tag; only the deploy hint is static.
-    const deployHint = 'Laden Sie einfach die beigefügte `pterodactyl-manga-shelf.zip` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.';
-    const notesFile = path.join(__dirname, 'RELEASE_NOTES.tmp');
-    fs.writeFileSync(notesFile, `### Deployment-Hinweis
-${deployHint}
-`, 'utf8');
-
-    try {
-      run(`gh release create ${tag} "${zipPath}" --title "${releaseTitle}" --notes-file "${notesFile}" --generate-notes`);
-    } catch (createErr) {
-      console.log('Release existiert evtl. bereits, versuche Upload via `gh release upload`...');
-      run(`gh release upload ${tag} "${zipPath}" --clobber`);
-    }
-
-    if (fs.existsSync(notesFile)) {
-      fs.unlinkSync(notesFile);
-    }
-
-    console.log(`\n🎉 Release ${tag} erfolgreich auf GitHub veröffentlicht!`);
-    const releaseUrl = runOutput(`gh release view ${tag} --json url -q .url`);
-    console.log(`🔗 Release URL: ${releaseUrl}`);
-  } catch (err) {
-    console.error('❌ Fehler beim Erstellen des GitHub Releases via gh CLI:', err.message);
-    console.log('Hinweis: Der Git Tag wurde bereits gepusht. Falls GitHub Actions eingerichtet ist, wird der Release dort gebaut.');
+    execFileSync(cmd, args, { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch (e) {
+    return false;
   }
 }
 
-main().catch(err => {
-  console.error('\n❌ Fehler im Release-Skript:', err);
-  process.exit(1);
-});
+function preflight(tag) {
+  const branch = output('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (branch !== RELEASE_BRANCH) {
+    throw new Error(`Releases nur auf "${RELEASE_BRANCH}" (aktueller Branch: "${branch}").`);
+  }
+  const dirty = getReleaseBlockers(gitStatus());
+  if (dirty.length) {
+    throw new Error(`Arbeitsverzeichnis nicht sauber, bitte zuerst committen oder entfernen:\n  ${dirty.join('\n  ')}`);
+  }
+  run('git', ['fetch', 'origin', RELEASE_BRANCH]);
+  if (!succeeds('git', ['merge-base', '--is-ancestor', `origin/${RELEASE_BRANCH}`, 'HEAD'])) {
+    throw new Error(`Lokaler ${RELEASE_BRANCH} ist hinter origin/${RELEASE_BRANCH} oder weicht ab. Bitte zuerst pullen.`);
+  }
+  if (succeeds('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}`])) {
+    throw new Error(`Tag ${tag} existiert lokal bereits.`);
+  }
+  if (output('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`])) {
+    throw new Error(`Tag ${tag} existiert auf origin bereits. Veröffentlichte Tags werden nie verschoben.`);
+  }
+  if (!succeeds('gh', ['auth', 'status'])) {
+    throw new Error('GitHub CLI nicht angemeldet oder nicht installiert (`gh auth login`).');
+  }
+  if (succeeds('gh', ['release', 'view', tag])) {
+    throw new Error(`GitHub-Release ${tag} existiert bereits.`);
+  }
+}
+
+function snapshotFiles() {
+  const saved = new Map();
+  for (const rel of VERSION_FILES) {
+    const abs = path.join(ROOT, rel);
+    if (fs.existsSync(abs)) saved.set(rel, fs.readFileSync(abs));
+  }
+  return saved;
+}
+
+function restoreFiles(saved) {
+  for (const [rel, content] of saved) fs.writeFileSync(path.join(ROOT, rel), content);
+}
+
+function bumpAndBuild(version, saved) {
+  try {
+    run('npm', ['version', version, '--no-git-tag-version', '--allow-same-version']);
+    run('npm', ['version', version, '--no-git-tag-version', '--allow-same-version'], { cwd: path.join(ROOT, 'frontend') });
+    console.log('📦 Baue Frontend und erzeuge die ZIP...');
+    run('npm', ['run', 'package']);
+    const zipPath = path.join(ROOT, ZIP_NAME);
+    if (!fs.existsSync(zipPath) || fs.statSync(zipPath).size === 0) throw new Error(`ZIP-Datei fehlt oder ist leer: ${zipPath}`);
+    const extra = getReleaseBlockers(gitStatus(), VERSION_FILES);
+    if (extra.length) throw new Error(`Der Build hat unerwartete Dateien verändert:\n  ${extra.join('\n  ')}`);
+    return zipPath;
+  } catch (err) {
+    restoreFiles(saved);
+    console.error('Versionsdateien wurden zurückgesetzt.');
+    throw err;
+  }
+}
+
+function commitAndTag(tag, saved) {
+  const files = VERSION_FILES.filter(rel => fs.existsSync(path.join(ROOT, rel)));
+  try {
+    run('git', ['add', '--', ...files]);
+    run('git', ['commit', '-m', `chore(release): ${tag}`, '--', ...files]);
+  } catch (err) {
+    restoreFiles(saved);
+    succeeds('git', ['reset', '-q', '--', ...files]);
+    throw new Error(`Commit fehlgeschlagen (Versionsdateien zurückgesetzt): ${err.message}`);
+  }
+  run('git', ['tag', '-a', tag, '-m', `Release ${tag}`]);
+  try {
+    run('git', ['push', '--atomic', 'origin', `HEAD:refs/heads/${RELEASE_BRANCH}`, `refs/tags/${tag}`]);
+  } catch (err) {
+    throw new Error(`Push fehlgeschlagen. Commit und Tag ${tag} liegen nur lokal; erneut mit: git push --atomic origin HEAD:${RELEASE_BRANCH} ${tag}`);
+  }
+}
+
+function createGithubRelease(tag, zipPath) {
+  const notesFile = path.join(ROOT, 'RELEASE_NOTES.tmp');
+  const deployHint = `Laden Sie einfach die beigefügte \`${ZIP_NAME}\` auf Ihren Server bzw. Ihr Pterodactyl-Panel hoch und starten Sie den Server neu.`;
+  fs.writeFileSync(notesFile, `### Deployment-Hinweis\n${deployHint}\n`, 'utf8');
+  try {
+    run('gh', ['release', 'create', tag, zipPath, '--title', `Manga Shelf ${tag}`, '--notes-file', notesFile, '--generate-notes']);
+  } catch (err) {
+    throw new Error(`GitHub-Release konnte nicht erstellt werden (Tag ${tag} ist bereits gepusht). Manuell: gh release create ${tag} ${ZIP_NAME} --generate-notes`);
+  } finally {
+    fs.rmSync(notesFile, { force: true });
+  }
+  const url = output('gh', ['release', 'view', tag, '--json', 'url', '-q', '.url']);
+  console.log(`🔗 Release URL: ${url}`);
+}
+
+function main(argv) {
+  console.log('🚀 Starte Release-Prozess für Manga Shelf...');
+  const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const version = resolveTargetVersion(argv[0], rootPkg.version);
+  const tag = `v${version}`;
+  console.log(`📌 Ziel-Version: ${tag} (bisher ${rootPkg.version})`);
+
+  preflight(tag);
+  console.log('🔍 Lint und Tests...');
+  run('npm', ['run', 'lint']);
+  run('npm', ['test']);
+
+  const saved = snapshotFiles();
+  const zipPath = bumpAndBuild(version, saved);
+  commitAndTag(tag, saved);
+  createGithubRelease(tag, zipPath);
+  console.log(`\n🎉 Release ${tag} erfolgreich auf GitHub veröffentlicht!`);
+}
+
+if (require.main === module) {
+  try {
+    main(process.argv.slice(2));
+  } catch (err) {
+    console.error(`\n❌ Release abgebrochen: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
+module.exports = { resolveTargetVersion, getReleaseBlockers, compareVersions, VERSION_FILES };

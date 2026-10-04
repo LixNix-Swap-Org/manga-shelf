@@ -1,12 +1,52 @@
 const { db, withTransaction } = require('../../db.js');
 const { normalizePublisher } = require('../../utils/publishers');
 const { normalizeIsbn } = require('../../utils/isbn');
+const { inferVolumeType } = require('../../utils/volumeType');
 const log = require('../../utils/logger').child('manga-passion');
 const {
   API_BASE, HEADERS, fetchWithTimeout, downloadRemoteImageToUploads,
   searchMangaPassionEditions, getEditionDetailsAndVolumes, linkRecommendedEdition
 } = require('./client');
-const { cleanOfficialDate, matchSchuberVolume, findRegularVolume } = require('./classify');
+const {
+  cleanOfficialDate, matchSchuberVolume, findOfficialVolume, classifyOfficialVolume, knownPublisher,
+  MP_UNREACHABLE_MESSAGE, MP_EDITION_NOT_FOUND_MESSAGE
+} = require('./classify');
+
+const VOLUME_TYPES = ['volume', 'special_edition', 'schuber', 'special'];
+
+/** Type of the volume a single lookup is for: the form's type, keywords in the number, "schuber" in the notes. */
+function lookupVolumeType(volumeNumber, options) {
+  const vn = String(volumeNumber || '').toLowerCase();
+  const type = VOLUME_TYPES.includes(options.type) ? options.type : null;
+  if (type === 'schuber' || vn.includes('schuber') || String(options.notes || '').toLowerCase().includes('schuber')) return 'schuber';
+  if (type && type !== 'volume') return type;
+  if (/(?:special|spezial|limited|collector['’]?s?)\s*edition/.test(vn)) return 'special_edition';
+  if (type === 'volume') return 'volume';
+  return inferVolumeType({ volume_number: volumeNumber });
+}
+
+function officialYear(date, year) {
+  if (date) return parseInt(date.slice(0, 4), 10);
+  return Number.isInteger(year) && year >= 1900 && year < 2100 ? year : null;
+}
+
+/** The official entry for a user volume, never one of another type. Schubers: matchSchuberVolume. */
+function matchOfficialVolume(officialVolumes, volumeNumber, type, hint = {}) {
+  if (type === 'schuber') return matchSchuberVolume(officialVolumes, volumeNumber, hint.price, hint.notes);
+  return findOfficialVolume(officialVolumes, volumeNumber, type, hint);
+}
+
+/** A stored link (set by the gap import) wins over number matching while it still fits the volume's type and number. */
+function linkedOfficialVolume(officialVolumes, uv, type) {
+  if (!uv.manga_passion_volume_id) return null;
+  const linked = officialVolumes.find(ov => ov.id === uv.manga_passion_volume_id);
+  if (!linked || classifyOfficialVolume(linked) !== type) return null;
+  if (type === 'volume' || type === 'special_edition') {
+    const m = String(uv.volume_number || '').match(/(\d+(?:\.\d+)?)/);
+    if (m && linked.num !== parseFloat(m[1])) return null;
+  }
+  return linked;
+}
 
 /**
  * Looks up detailed metadata for a single volume or schuber (release_date, release_year, pages, isbn, price, cover, title)
@@ -31,9 +71,9 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
       if (fullRes.ok) {
         const fullVol = await fullRes.json();
         const localCover = await downloadRemoteImageToUploads(fullVol.cover);
-        const relDate = cleanOfficialDate(fullVol.date);
-        const relYear = fullVol.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
-        const publisher = normalizePublisher(fullVol.edition?.publishers?.[0]?.name) || manga?.publisher || null;
+        const relDate = cleanOfficialDate(fullVol);
+        const relYear = officialYear(relDate, fullVol.year);
+        const publisher = normalizePublisher(fullVol.edition?.publishers?.[0]?.name) || knownPublisher(manga?.publisher);
 
         return {
           success: true,
@@ -80,17 +120,8 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
       if (details && details.volumes && details.volumes.length > 0) {
         editionInfo = details.edition;
 
-        const isSchuber = options.type === 'schuber' ||
-          String(volumeNumber || '').toLowerCase().includes('schuber') ||
-          String(options.notes || '').toLowerCase().includes('schuber');
-
-        if (isSchuber) {
-          matchedVolume = matchSchuberVolume(details.volumes, volumeNumber, options.price, options.notes);
-        } else if (options.type === 'special_edition' || String(volumeNumber || '').toLowerCase().includes('special edition') || String(volumeNumber || '').toLowerCase().includes('limited edition')) {
-          matchedVolume = details.volumes.find(v => v.specialType === 2 || /special\s*edition|limited\s*edition/i.test(v.title || ''));
-        } else {
-          matchedVolume = findRegularVolume(details.volumes, volumeNumber);
-        }
+        const type = lookupVolumeType(volumeNumber, options);
+        matchedVolume = matchOfficialVolume(details.volumes, volumeNumber, type, { notes: options.notes, price: options.price });
       }
     } catch (e) {
       log.warn('Error fetching edition volumes:', e.message);
@@ -112,15 +143,15 @@ async function lookupVolumeMetadata(mangaId, volumeNumber, options = {}) {
       }
     }
 
-    const relDate = fullVol?.date ? cleanOfficialDate(fullVol.date) : matchedVolume.release_date;
-    const relYear = fullVol?.year || (relDate ? parseInt(relDate.slice(0, 4), 10) : null);
+    const relDate = fullVol?.date ? cleanOfficialDate(fullVol) : matchedVolume.release_date;
+    const relYear = officialYear(relDate, fullVol?.year);
     const pages = fullVol?.pages || matchedVolume.pages || null;
     const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
     const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
     const localCover = await downloadRemoteImageToUploads(rawCover);
     const title = fullVol?.title || matchedVolume.title || null;
-    const publisher = editionInfo?.publisher || manga?.publisher || null;
+    const publisher = knownPublisher(editionInfo?.publisher) || knownPublisher(manga?.publisher);
 
     let finalVolNumber = matchedVolume.volume_number || String(volumeNumber);
     const isSchuber = options.type === 'schuber' || String(volumeNumber || '').toLowerCase().includes('schuber');
@@ -196,13 +227,16 @@ async function autofillMangaVolumes(mangaId, options = {}) {
   let editionId = options.edition_id || manga.manga_passion_id;
   if (!editionId) {
     const searchRes = await searchMangaPassionEditions(manga.title, manga.publisher, manga.total_volumes);
+    if (searchRes.unavailable) {
+      return { success: false, unavailable: true, message: MP_UNREACHABLE_MESSAGE, updated_count: 0 };
+    }
     const linked = linkRecommendedEdition(manga, searchRes);
     if (linked.editionId && !linked.confident) {
       // writing data into every volume from a guessed edition could corrupt them: ask first
       return {
         success: false,
         needs_confirmation: true,
-        message: 'Die passende Manga-Passion-Edition ist nicht eindeutig (Vorschlag: "' + searchRes.recommended.title + '"). Bitte zuerst im Lücken-Abgleich die Edition bestätigen oder auswählen.',
+        message: 'Die passende Manga-Passion-Edition ist nicht eindeutig (Vorschlag: "' + searchRes.recommended.title + '"). Bitte zuerst mit „Edition bestätigen“ (Lücken-Hinweis oder Manga-Passion-Dialog) bestätigen oder eine andere Edition wählen.',
         updated_count: 0
       };
     }
@@ -218,7 +252,13 @@ async function autofillMangaVolumes(mangaId, options = {}) {
   }
 
   const details = await getEditionDetailsAndVolumes(editionId, false);
-  if (!details || !details.volumes || details.volumes.length === 0) {
+  if (!details || details.notFound) {
+    return { success: false, message: MP_EDITION_NOT_FOUND_MESSAGE, updated_count: 0 };
+  }
+  if (details.incomplete && !details.volumes?.length) {
+    return { success: false, unavailable: true, message: MP_UNREACHABLE_MESSAGE, updated_count: 0 };
+  }
+  if (!details.volumes || details.volumes.length === 0) {
     return {
       success: false,
       message: 'Keine Bände für diese Edition gefunden.',
@@ -231,85 +271,56 @@ async function autofillMangaVolumes(mangaId, options = {}) {
 
   let updatedCount = 0;
   const overwrite = Boolean(options.overwrite);
+  const editionPublisher = knownPublisher(details.edition?.publisher);
+  const mangaPublisher = knownPublisher(manga.publisher);
 
-  // Phase 1 (async): pre-download needed Schuber covers and collect updates without holding a DB lock
-  const schuberCovers = new Map();
+  const matches = [];
   for (const uv of userVolumes) {
-    const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
-    if (isSchuber) {
-      const matched = matchSchuberVolume(officialVolumes, uv.volume_number, uv.price, uv.notes);
-      if (matched?.cover_image && (overwrite || !uv.cover_image || options.update_covers)) {
-        try {
-          const localCover = await downloadRemoteImageToUploads(matched.cover_image);
-          if (localCover) schuberCovers.set(uv.id, localCover);
-        } catch (e) { log.warn('Schuber cover download failed:', e.message); }
-      }
+    const type = inferVolumeType(uv);
+    const matched = linkedOfficialVolume(officialVolumes, uv, type)
+      || matchOfficialVolume(officialVolumes, uv.volume_number, type, { notes: uv.notes, price: uv.price });
+    if (matched) matches.push({ uv, type, matched });
+  }
+
+  // Phase 1 (async): pre-download needed Schuber covers without holding a DB lock
+  const schuberCovers = new Map();
+  for (const { uv, type, matched } of matches) {
+    if (type === 'schuber' && matched.cover_image && (overwrite || !uv.cover_image || options.update_covers)) {
+      try {
+        const localCover = await downloadRemoteImageToUploads(matched.cover_image);
+        if (localCover) schuberCovers.set(uv.id, localCover);
+      } catch (e) { log.warn('Schuber cover download failed:', e.message); }
     }
   }
 
   const pendingUpdates = [];
-    for (const uv of userVolumes) {
-      const isSchuber = uv.type === 'schuber' || String(uv.volume_number || '').toLowerCase().includes('schuber');
-      let matched = null;
+  for (const { uv, type, matched } of matches) {
+    const next = {
+      release_date: uv.release_date, release_year: uv.release_year, pages: uv.pages, price: uv.price,
+      publisher: uv.publisher, cover_image: uv.cover_image, notes: uv.notes
+    };
+    let changed = false;
+    const set = (field, value, when) => {
+      if (when && value && value !== next[field]) { next[field] = value; changed = true; }
+    };
 
-      if (isSchuber) {
-        matched = matchSchuberVolume(officialVolumes, uv.volume_number, uv.price, uv.notes);
-      } else {
-        matched = findRegularVolume(officialVolumes, uv.volume_number);
-      }
+    set('release_date', matched.release_date, overwrite || !next.release_date);
+    const inferredYear = matched.release_date ? parseInt(matched.release_date.slice(0, 4), 10) : null;
+    set('release_year', inferredYear, overwrite || !next.release_year);
+    set('pages', matched.pages, overwrite || !next.pages);
+    set('price', matched.price, overwrite || !next.price);
+    // the edition's publisher may replace a volume's own one; the series publisher only fills a missing one
+    const volumePublisher = knownPublisher(next.publisher);
+    if (editionPublisher) set('publisher', editionPublisher, overwrite || !volumePublisher);
+    else set('publisher', mangaPublisher, !volumePublisher);
 
-      if (!matched) continue;
-
-      let changed = false;
-      let newDate = uv.release_date;
-      let newYear = uv.release_year;
-      let newPages = uv.pages;
-      let newPrice = uv.price;
-      let newPub = uv.publisher;
-      let newCover = uv.cover_image;
-      let newNotes = uv.notes;
-
-      if ((overwrite || !newDate) && matched.release_date) {
-        newDate = matched.release_date;
-        changed = true;
-      }
-      const inferredYear = matched.release_date ? parseInt(matched.release_date.slice(0, 4), 10) : null;
-      if ((overwrite || !newYear) && inferredYear) {
-        newYear = inferredYear;
-        changed = true;
-      }
-      if ((overwrite || !newPages) && matched.pages) {
-        newPages = matched.pages;
-        changed = true;
-      }
-      if ((overwrite || !newPrice || newPrice === 0) && matched.price) {
-        newPrice = matched.price;
-        changed = true;
-      }
-      if ((overwrite || !newPub) && (details.edition?.publisher || manga.publisher)) {
-        newPub = details.edition?.publisher || manga.publisher;
-        changed = true;
-      }
-
-      // For Schuber: apply pre-downloaded cover and title
-      if (isSchuber) {
-        if (schuberCovers.has(uv.id)) {
-          newCover = schuberCovers.get(uv.id);
-          changed = true;
-        }
-        if ((overwrite || !newNotes || newNotes === 'Das Abenteuer beginnt') && matched.title) {
-          newNotes = matched.title;
-          changed = true;
-        }
-      }
-
-      if (changed) {
-        pendingUpdates.push({
-          uv,
-          next: { release_date: newDate, release_year: newYear, pages: newPages, price: newPrice, publisher: newPub, cover_image: newCover, notes: newNotes }
-        });
-      }
+    if (type === 'schuber') {
+      if (schuberCovers.has(uv.id)) set('cover_image', schuberCovers.get(uv.id), true);
+      set('notes', matched.title, overwrite || !next.notes || next.notes === 'Das Abenteuer beginnt');
     }
+
+    if (changed) pendingUpdates.push({ uv, next });
+  }
 
   // Phase 2 (sync): apply all updates atomically
   updatedCount = applyAutofillUpdates(pendingUpdates);

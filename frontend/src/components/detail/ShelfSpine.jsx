@@ -1,10 +1,12 @@
 import { Package } from 'lucide-react';
-import { getVolumeDisplayTitle, getEditionLabel, getSpecialEditionNumber, getSpinePublisherTheme, hasUserRead } from '../../utils/volumeHelpers';
+import { getVolumeDisplayTitle, getSpinePublisherTheme, hasUserRead, getRegularGapMeta } from '../../utils/volumeHelpers';
+import { formatEuro, formatShortDate, gapLabel, getSpineAriaLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
+import { assetImgProps } from '../../utils/api';
 
 /** One book spine (or a ghost spine for a gap) on the shelf. Layout depends on the shelf mode and scale. */
 export default function ShelfSpine({
   item, currentMode, isFitMultiRow, totalCount, shelfScale, mpGapMap, canEdit, setFillingGapNumber,
-  selectedReaderId, user, manga, focusedVolumeId, setFocusedVolumeId, handleOpenEditVolume
+  selectedReaderId, user, manga, focusedVolumeId, setFocusedVolumeId, handleOpenEditVolume, gapsOfficial
 }) {
   const isFitSingleRow = currentMode === 'fit' && !isFitMultiRow;
   const isScrollFixed = currentMode === 'scroll';
@@ -24,7 +26,11 @@ export default function ShelfSpine({
   }
 
   if (item.isGap) {
-    const gapMeta = item.gapMeta || mpGapMap.get(String(item.gapNumber).toLowerCase());
+    const gapMeta = item.gapMeta || getRegularGapMeta(mpGapMap, item.gapNumber);
+    const gapPrice = gapMeta?.price ? formatEuro(gapMeta.price) : '';
+    const gapDate = formatShortDate(gapMeta?.release_date);
+    const gapDetails = [gapPrice, gapDate].filter(Boolean).join(' • ');
+    const gapTitle = `${gapLabel(gapsOfficial)}: Band ${item.gapNumber}${gapDetails ? ` (${gapDetails})` : ''}`;
     // Width class depends on layout mode:
     // KEY MATH: max-width must satisfy (targetPerRow × max-width > ~950px container)
     //   so flex-1 is forced to shrink items in full rows → row fills entire width.
@@ -42,19 +48,28 @@ export default function ShelfSpine({
         : 'flex-1 min-w-[20px] max-w-[70px]';
     }
 
+    const GapTag = canEdit ? 'button' : 'div';
+    const gapA11y = canEdit
+      ? { type: 'button', onClick: () => setFillingGapNumber(item.gapNumber), 'aria-label': `Lücke: Band ${item.gapNumber} erfassen${gapPrice ? ` (${gapPrice})` : ''}`, title: `${gapTitle}. Klicken zum Erfassen` }
+      : { role: 'img', 'aria-label': `Lücke: Band ${item.gapNumber} fehlt`, title: gapTitle };
+
     return (
-      <div
-        onClick={() => canEdit && setFillingGapNumber(item.gapNumber)}
+      <GapTag
+        {...gapA11y}
         style={{ height: spineHeightPx, '--spine-height': spineHeightPx }}
-        className={`manga-spine-ghost relative group ${ghostWidthClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 text-center ${isFlexFill ? '' : 'shrink-0'} rounded-lg overflow-hidden border border-dashed transition-all ${
-          canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03]' : 'cursor-default'
-        } border-amber-500/40 bg-slate-900/60 backdrop-blur-sm`}
-        title={gapMeta?.price ? `Lücke: Band ${item.gapNumber} (${gapMeta.price.toFixed(2).replace('.', ',')} €${gapMeta.release_date ? ' • ' + gapMeta.release_date : ''}). Klicken zum Erfassen!` : `Lücke: Band ${item.gapNumber} fehlt.`}
+        className={`manga-spine-ghost relative group ${ghostWidthClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 text-center appearance-none ${isFlexFill ? '' : 'shrink-0'} rounded-lg overflow-hidden border border-dashed transition-all ${
+          canEdit ? 'cursor-pointer hover:border-amber-400 hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950' : 'cursor-default'
+        } border-amber-500/40 bg-slate-900/60`}
       >
         {gapMeta?.cover_image && (
-          <div 
-            className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity pointer-events-none"
-            style={{ backgroundImage: `url(${gapMeta.cover_image})` }}
+          <img
+            {...assetImgProps(gapMeta.cover_image)}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-25 group-hover:opacity-40 transition-opacity pointer-events-none"
           />
         )}
         <div className={`relative z-10 font-bold text-amber-400/90 flex items-center justify-center rounded-full bg-amber-500/20 border border-amber-500/40 ${
@@ -69,9 +84,9 @@ export default function ShelfSpine({
           <span className={`${isUltraCompact ? 'text-xs sm:text-sm' : isVeryCompact ? 'text-sm' : 'text-base'} font-black text-amber-400 leading-tight drop-shadow`}>
             {item.gapNumber}
           </span>
-          {gapMeta?.price && !isUltraCompact && (
+          {gapPrice && !isUltraCompact && (
             <span className="text-[8px] sm:text-[9px] font-mono font-bold text-amber-300/90 mt-0.5 truncate max-w-full">
-              {gapMeta.price.toFixed(2).replace('.', ',')} €
+              {gapPrice}
             </span>
           )}
         </div>
@@ -80,26 +95,21 @@ export default function ShelfSpine({
         }`}>
           Lücke
         </div>
-      </div>
+      </GapTag>
     );
   }
 
   const vol = item.volume;
-  const isOwned = vol.status === 'Vorhanden';
+  const statusKind = volumeStatusKind(vol.status);
+  const isOwned = statusKind === 'owned';
   const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
   const isRead = hasUserRead(vol, effUserId, user?.id);
 
   const theme = getSpinePublisherTheme(vol.publisher || manga.publisher);
-  const isSchuber = vol.type === 'schuber' || String(vol.volume_number).toLowerCase().includes('schuber');
-  const isSpecialEd = vol.type === 'special_edition' || (
-    vol.type !== 'schuber' && (
-      String(vol.volume_number).toLowerCase().includes('special edition') ||
-      String(vol.volume_number).toLowerCase().includes('limited edition') ||
-      String(vol.volume_number).toLowerCase().includes('spezial edition') ||
-      (vol.notes && (vol.notes.toLowerCase().includes('special edition') || vol.notes.toLowerCase().includes('limited edition')))
-    )
-  );
-  const isSpecial = vol.type === 'special' || String(vol.volume_number).toLowerCase().includes('special') || String(vol.volume_number).toLowerCase().includes('extra');
+  const badge = getVolumeBadge(vol);
+  const isSchuber = badge.type === 'schuber';
+  const isSpecialEd = badge.type === 'special_edition';
+  const isSpecial = badge.type === 'special';
 
   // Page-count realistic spine thickness factor (Standard manga ~192p = 1.0, Double-vol ~380p = 1.5)
   const pageFactor = (vol.pages && Number(vol.pages) > 40)
@@ -137,16 +147,21 @@ export default function ShelfSpine({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={getVolumeDisplayTitle(vol)}
-      onFocus={() => setFocusedVolumeId(vol.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (canEdit) handleOpenEditVolume(vol);
+      data-volume-id={vol.id}
+      {...(canEdit
+        ? {
+          role: 'button',
+          tabIndex: 0,
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleOpenEditVolume(vol);
+            }
+          }
         }
-      }}
+        : { role: 'img', tabIndex: -1 })}
+      aria-label={getSpineAriaLabel(vol, isOwned && isRead)}
+      onFocus={() => setFocusedVolumeId(vol.id)}
       onClick={() => {
         setFocusedVolumeId(vol.id);
         if (canEdit) handleOpenEditVolume(vol);
@@ -160,7 +175,7 @@ export default function ShelfSpine({
       className={`manga-spine ${isSpecialEd ? 'manga-spine-special' : ''} ${isSchuber ? 'manga-spine-box' : ''} ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
         isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
       } ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
-      title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${vol.price ? ` • ${vol.price}€` : ''}${isRead ? ' • Gelesen ✓' : ''}`}
+      title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatEuro(vol.price) ? ` • ${formatEuro(vol.price)}` : ''}${isOwned && isRead ? ' • Gelesen ✓' : ''}`}
     >
       {/* Spine Top: Publisher Logo / Accent */}
       <div className="w-full flex justify-center shrink-0">
@@ -185,21 +200,21 @@ export default function ShelfSpine({
         {isSchuber ? (
           <div className="text-[9px] sm:text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
             <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-            <span className="truncate">{String(vol.volume_number).replace(/^schuber\s*/i, '')}</span>
+            <span className="truncate">{badge.text}</span>
           </div>
         ) : isSpecialEd ? (
           <div className="flex flex-col items-center">
             <span className="text-xs sm:text-sm font-black text-fuchsia-300 drop-shadow">
-              {getSpecialEditionNumber(vol) || getEditionLabel(vol).short}
+              {badge.text.match(/^Band (.+)$/)?.[1] || badge.short}
             </span>
-            <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40" title={getEditionLabel(vol).label}>
-              {getEditionLabel(vol).short}
+            <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40" title={badge.label}>
+              {badge.short}
             </span>
           </div>
         ) : isSpecial ? (
           <div className="flex flex-col items-center">
             <span className="text-xs sm:text-sm font-black text-amber-300 drop-shadow">
-              {String(vol.volume_number).replace(/special\s*|extra\s*/gi, '').trim() || 'SP'}
+              {badge.text || 'SP'}
             </span>
             <span className="text-[7px] sm:text-[8px] font-bold text-amber-300 bg-amber-950/70 px-0.5 sm:px-1 rounded border border-amber-500/40">
               EXTRA
@@ -222,11 +237,15 @@ export default function ShelfSpine({
             </span>
           )}
           {/* Status Badge */}
-          {vol.status === 'Vorbestellt' ? (
+          {statusKind === 'preordered' ? (
             <span className="text-[7px] sm:text-[8px] font-extrabold bg-sky-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Vorbestellt">
+              VORB.
+            </span>
+          ) : statusKind === 'ordered' ? (
+            <span className="text-[7px] sm:text-[8px] font-extrabold bg-orange-400 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Bestellt">
               BESTELLT
             </span>
-          ) : vol.status === 'Erscheint bald' ? (
+          ) : statusKind === 'upcoming' ? (
             <span className="text-[7px] sm:text-[8px] font-extrabold bg-purple-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Erscheint bald">
               BALD
             </span>

@@ -7,405 +7,343 @@ const {
     reconcileMangaGaps,
     syncMangaWithEdition,
     batchImportGaps,
-    autofillMangaVolumes
+    autofillMangaVolumes,
+    toEditionId
 } = require('../mangaPassion');
-const log = require('../utils/logger').child('mangas');
+const { GAP_IMPORT_STATUSES } = require('../services/mangaPassion/gaps');
+const { qstr } = require('../utils/query');
+const snapshot = require('../services/snapshot');
+const { conditional } = require('../utils/dataVersion');
+const { badRequest, notFound, conflict } = require('../utils/httpError');
 
-// --- MANGA API ---
-// Series list with aggregates for the dashboard (also reused by the offline snapshot)
-function listMangas(userId) {
-    return db.prepare(`
-            SELECT m.*, 
-                   COALESCE(SUM(CASE WHEN v.status = 'Vorhanden' THEN v.price ELSE 0 END), 0) as total_value,
-                   COALESCE(SUM(v.price), 0) as full_value,
-                   COUNT(DISTINCT v.id) as volume_count,
-                   COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume' AND (TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) GLOB '[0-9]*' AND TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) NOT GLOB '*[^0-9]*') THEN CAST(TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) AS INTEGER) END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
-                   MAX(CASE WHEN v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume' AND (TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) GLOB '[0-9]*' AND TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) NOT GLOB '*[^0-9]*') THEN CAST(TRIM(REPLACE(REPLACE(v.volume_number, 'Band ', ''), 'band ', '')) AS INTEGER) END) as max_regular_number,
-                   COUNT(DISTINCT vr.volume_id) as read_volume_count
-            FROM mangas m
-            LEFT JOIN volumes v ON m.id = v.manga_id
-            LEFT JOIN volume_reads vr ON v.id = vr.volume_id AND vr.user_id = ?
-            GROUP BY m.id
-            ORDER BY m.title ASC
-        `).all(userId);
+// The UI offers Laufend/Abgeschlossen/Pausiert/Geplant; the AniList lookup also sends Abgebrochen.
+const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
+// Manga Passion reports an unknown run state as 'Unbekannt'
+const MANGA_STATUS_ALIASES = { Unbekannt: 'Laufend' };
+
+// strict: reject an over-long value (a cut URL is broken); otherwise cut it like the POST handler always did
+const TEXT_FIELDS = {
+    alt_title: { max: 300, label: 'Alternativtitel' },
+    author: { max: 300, label: 'Autor' },
+    publisher: { max: 300, label: 'Verlag' },
+    language: { max: 50, label: 'Sprache' },
+    tags: { max: 500, label: 'Tags' },
+    description: { max: 10000, label: 'Beschreibung' },
+    cover_image: { max: 2048, label: 'Cover', strict: true },
+    banner_image: { max: 2048, label: 'Banner', strict: true }
+};
+
+const TOTAL_VOLUMES_ERROR = 'Gesamtbände muss eine ganze Zahl zwischen 1 und 5000 sein';
+
+function cleanText(field, value) {
+    const spec = TEXT_FIELDS[field];
+    if (value === undefined || value === null) return { value: null };
+    if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
+        return { error: `${spec.label} muss ein Text sein` };
+    }
+    const text = String(value).trim();
+    if (!text) return { value: null };
+    if (text.length > spec.max) {
+        if (spec.strict) return { error: `${spec.label} ist zu lang (maximal ${spec.max} Zeichen)` };
+        return { value: text.slice(0, spec.max) };
+    }
+    return { value: text };
 }
 
-router.get('/mangas', requireAuth, (req, res) => {
-    try {
-        res.json(listMangas(req.user.id));
-    } catch (err) {
-        log.error('Error fetching mangas:', err);
-        res.status(500).json({ error: 'Fehler beim Laden der Mangas' });
+function parseSeriesStatus(value) {
+    if (value === undefined || value === null || value === '') return { value: 'Laufend' };
+    const status = typeof value === 'string' ? (MANGA_STATUS_ALIASES[value.trim()] || value.trim()) : null;
+    if (!MANGA_STATUSES.includes(status)) {
+        return { error: 'Ungültiger Status (erlaubt: ' + MANGA_STATUSES.join(', ') + ')' };
     }
+    return { value: status };
+}
+
+/** null, '' and 0 clear the total; anything else must be a whole number from 1 to 5000. */
+function parseTotalVolumes(value) {
+    if (value === undefined || value === null) return { value: null };
+    const text = typeof value === 'number' ? String(value) : (typeof value === 'string' ? value.trim() : null);
+    if (text === '') return { value: null };
+    if (text === null || !/^\d+$/.test(text)) return { error: TOTAL_VOLUMES_ERROR };
+    const n = Number(text);
+    if (n === 0) return { value: null };
+    if (n > 5000) return { error: TOTAL_VOLUMES_ERROR };
+    return { value: n };
+}
+
+/** Positive integer id (number or digit string); parseInt would accept '12abc' or 1.5. */
+function parsePositiveInt(value) {
+    const text = typeof value === 'number' ? String(value) : (typeof value === 'string' ? value.trim() : '');
+    if (!/^\d+$/.test(text)) return null;
+    const n = Number(text);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+function parseOptionalId(value) {
+    if (value === undefined || value === null || value === '' || value === 0) return { value: null };
+    const id = parsePositiveInt(value);
+    return id ? { value: id } : { error: true };
+}
+
+function parseFlag(value, fallback) {
+    if (value === undefined || value === null) return fallback;
+    return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+/**
+ * Validated manga columns from a request body; only fields present in the body are returned. With `stored` (PUT), a
+ * text field sent back unchanged is left out, so a legacy value (e.g. a long data: cover) does not block other edits.
+ */
+function readMangaFields(body, stored = null) {
+    const fields = {};
+    for (const field of Object.keys(TEXT_FIELDS)) {
+        if (body[field] === undefined) continue;
+        if (stored && typeof body[field] === 'string' && typeof stored[field] === 'string'
+            && body[field].trim() === stored[field].trim()) continue;
+        const r = cleanText(field, body[field]);
+        if (r.error) return { error: r.error };
+        fields[field] = r.value;
+    }
+    if (fields.publisher !== undefined) fields.publisher = normalizePublisher(fields.publisher);
+    if (body.total_volumes !== undefined) {
+        const r = parseTotalVolumes(body.total_volumes);
+        if (r.error) return { error: r.error };
+        fields.total_volumes = r.value;
+    }
+    if (body.manga_passion_id !== undefined) {
+        const r = parseOptionalId(body.manga_passion_id);
+        if (r.error) return { error: 'Ungültige Manga-Passion-ID' };
+        fields.manga_passion_id = r.value;
+    }
+    return { fields };
+}
+
+// --- MANGA API ---
+// The read endpoints answer 304 from the data version before any query runs (utils/dataVersion.js)
+router.get('/mangas', requireAuth, conditional(), (req, res) => {
+    res.json(snapshot.listMangas(req.user.id));
 });
 
 router.post('/mangas', requireEditor, (req, res) => {
-    try {
-        const {
-            title,
-            alt_title = null,
-            author = null,
-            publisher = null,
-            language = 'Deutsch',
-            status = 'Laufend',
-            tags = null,
-            total_volumes = null,
-            description = null,
-            cover_image = null,
-            banner_image = null,
-            manga_passion_id = null
-        } = req.body;
-
-        if (!title || typeof title !== 'string' || !title.trim()) {
-            return res.status(400).json({ error: 'Titel darf nicht leer sein' });
-        }
-
-        const cleanTitle = title.trim();
-        if (cleanTitle.length > 300) {
-            return res.status(400).json({ error: 'Titel ist zu lang (maximal 300 Zeichen)' });
-        }
-
-        let cleanTotal = null;
-        if (total_volumes !== null && total_volumes !== undefined && total_volumes !== '') {
-            const parsed = parseInt(total_volumes, 10);
-            if (!isNaN(parsed) && parsed >= 0 && parsed <= 5000) {
-                cleanTotal = parsed;
-            }
-        }
-
-        const cleanMpId = manga_passion_id ? (parseInt(manga_passion_id, 10) || null) : null;
-
-        const stmt = db.prepare(`
-            INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        const result = stmt.run(
-            cleanTitle,
-            alt_title ? String(alt_title).trim().slice(0, 300) : null,
-            author ? String(author).trim().slice(0, 300) : null,
-            publisher ? normalizePublisher(publisher) : null,
-            language ? String(language).trim().slice(0, 50) : 'Deutsch',
-            status || 'Laufend',
-            tags ? String(tags).trim().slice(0, 500) : null,
-            cleanTotal,
-            description ? String(description).trim() : null,
-            cover_image ? String(cover_image).trim() : null,
-            banner_image ? String(banner_image).trim() : null,
-            cleanMpId,
-            req.user.id
-        );
-        res.json({ success: true, id: Number(result.lastInsertRowid) });
-    } catch (err) {
-        log.error('Error creating manga:', err);
-        res.status(500).json({ error: 'Fehler beim Erstellen des Mangas' });
+    const { title } = req.body;
+    if (!title || typeof title !== 'string' || !title.trim()) {
+        throw badRequest('Titel darf nicht leer sein');
     }
+    const cleanTitle = title.trim();
+    if (cleanTitle.length > 300) {
+        throw badRequest('Titel ist zu lang (maximal 300 Zeichen)');
+    }
+    const { fields, error } = readMangaFields(req.body);
+    if (error) throw badRequest(error);
+    const status = parseSeriesStatus(req.body.status);
+    if (status.error) throw badRequest(status.error);
+
+    const stmt = db.prepare(`
+        INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+        cleanTitle,
+        fields.alt_title ?? null,
+        fields.author ?? null,
+        fields.publisher ?? null,
+        fields.language || 'Deutsch',
+        status.value,
+        fields.tags ?? null,
+        fields.total_volumes ?? null,
+        fields.description ?? null,
+        fields.cover_image ?? null,
+        fields.banner_image ?? null,
+        fields.manga_passion_id ?? null,
+        req.user.id
+    );
+    res.json({ success: true, id: Number(result.lastInsertRowid) });
 });
 
-// Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id
-function loadMangaDetail(mangaId, userId) {
-    const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
-    if (!manga) return null;
-    const volumes = db.prepare(`
-        SELECT * FROM volumes 
-        WHERE manga_id = ? 
-        ORDER BY 
-            CASE 
-                WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
-                WHEN COALESCE(type, 'volume') = 'special_edition' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1 
-                WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1.5
-                WHEN COALESCE(type, 'volume') = 'schuber' THEN 2 
-                WHEN COALESCE(type, 'volume') = 'special' THEN 3 
-                ELSE 2 
-            END ASC, 
-            CASE 
-                WHEN CAST(volume_number AS REAL) > 0 THEN CAST(volume_number AS REAL) 
-                WHEN volume_number = '0' THEN 0 
-                ELSE 999999 
-            END ASC, 
-            CASE 
-                WHEN COALESCE(type, 'volume') = 'volume' THEN 0 
-                WHEN COALESCE(type, 'volume') = 'special_edition' THEN 1 
-                ELSE 2 
-            END ASC,
-            volume_number ASC
-    `).all(mangaId);
-    manga.volumes = volumes || [];
-
-    // Fetch volume reading records
-    const reads = db.prepare(`
-        SELECT vr.volume_id, vr.user_id, u.username
-        FROM volume_reads vr
-        JOIN users u ON vr.user_id = u.id
-        JOIN volumes v ON vr.volume_id = v.id
-        WHERE v.manga_id = ?
-    `).all(mangaId);
-
-    const readMap = {};
-    for (const r of reads) {
-        if (!readMap[r.volume_id]) readMap[r.volume_id] = [];
-        // both keys: POST /volumes/:id/read answers with user_id, older clients read id
-        readMap[r.volume_id].push({ id: r.user_id, user_id: r.user_id, username: r.username });
+router.get('/mangas/:id', requireAuth, conditional(), (req, res) => {
+    const manga = snapshot.loadMangaDetail(req.params.id, req.user.id);
+    if (!manga) {
+        throw notFound('Manga');
     }
-
-    // Besitzer pro Band (mehrere Personen können denselben Band besitzen)
-    const ownerRows = db.prepare(`
-        SELECT vo.volume_id, vo.user_id, u.username, vo.price, vo.purchase_date
-        FROM volume_owners vo
-        JOIN users u ON vo.user_id = u.id
-        JOIN volumes v ON vo.volume_id = v.id
-        WHERE v.manga_id = ?
-        ORDER BY vo.created_at, vo.user_id
-    `).all(mangaId);
-    const ownerMap = {};
-    for (const o of ownerRows) {
-        if (!ownerMap[o.volume_id]) ownerMap[o.volume_id] = [];
-        ownerMap[o.volume_id].push({ user_id: o.user_id, username: o.username, price: o.price, purchase_date: o.purchase_date });
-    }
-
-    let total_value = 0;
-    let full_value = 0;
-    for (const v of manga.volumes) {
-        const p = typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0);
-        if (v.status === 'Vorhanden') total_value += p;
-        full_value += p;
-
-        // Ownership info
-        v.owners = ownerMap[v.id] || [];
-        v.owned_by_me = v.owners.some(o => o.user_id === userId);
-
-        // Reading info
-        const usersWhoRead = readMap[v.id] || [];
-        v.read_by = usersWhoRead.map(u => u.id);
-        v.read_users = usersWhoRead;
-        v.is_read = v.read_by.includes(userId);
-
-        // Parse images
-        try {
-            if (v.images) {
-                v.images = Array.isArray(v.images) ? v.images : JSON.parse(v.images);
-            } else if (v.cover_image) {
-                v.images = [v.cover_image];
-            } else {
-                v.images = [];
-            }
-        } catch (e) {
-            v.images = v.cover_image ? [v.cover_image] : [];
-        }
-        if (!v.cover_image && v.images.length > 0) {
-            v.cover_image = v.images[0];
-        }
-    }
-    manga.total_value = Math.round(total_value * 100) / 100;
-    manga.full_value = Math.round(full_value * 100) / 100;
-
-    // Statistics for each reader
-    const allUsers = db.prepare('SELECT id, username FROM users ORDER BY id ASC').all();
-    manga.reader_stats = allUsers.map(u => {
-        const count = manga.volumes.filter(v => v.read_by.includes(u.id)).length;
-        const total = manga.volumes.filter(v => v.status === 'Vorhanden').length;
-        return {
-            user_id: u.id,
-            username: u.username,
-            read_count: count,
-            total_owned: total,
-            unread_count: Math.max(0, total - count),
-            percentage: total > 0 ? Math.round((count / total) * 100) : 0
-        };
-    });
-    return manga;
-}
-
-router.get('/mangas/:id', requireAuth, (req, res) => {
-    try {
-        const manga = loadMangaDetail(req.params.id, req.user.id);
-        if (!manga) {
-            return res.status(404).json({ error: 'Manga nicht gefunden' });
-        }
-        res.json(manga);
-    } catch (err) {
-        log.error('Error fetching manga:', err);
-        res.status(500).json({ error: 'Fehler beim Laden des Mangas' });
-    }
+    res.json(manga);
 });
 
-// Whole collection in one response so the client can keep a read-only offline copy.
-router.get('/offline-snapshot', requireAuth, (req, res) => {
-    try {
-        const mangas = listMangas(req.user.id);
-        const details = {};
-        for (const m of mangas) details[m.id] = loadMangaDetail(m.id, req.user.id);
-        res.json({
-            generated_at: new Date().toISOString(),
-            user: { id: req.user.id, username: req.user.username, role: req.user.role },
-            mangas,
-            details
-        });
-    } catch (err) {
-        log.error('Error building offline snapshot:', err);
-        res.status(500).json({ error: 'Fehler beim Erstellen der Offline-Kopie' });
-    }
+// Whole collection in one response so the client can keep a read-only offline copy. A restore during the build
+// rejects with status 503, which the error handler passes on with its message.
+router.get('/offline-snapshot', requireAuth, conditional({ cacheControl: 'private, no-store' }), async (req, res) => {
+    res.json(await snapshot.buildOfflineSnapshot(req.user));
 });
 
+// owned_volumes is derived from the volumes and never taken from the body
 router.put('/mangas/:id', requireEditor, (req, res) => {
-    try {
-        const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(req.params.id);
-        if (!manga) return res.status(404).json({ error: 'Manga nicht gefunden' });
+    const manga = db.prepare('SELECT * FROM mangas WHERE id = ?').get(req.params.id);
+    if (!manga) throw notFound('Manga');
 
-        const body = req.body;
-        if (body.title !== undefined) {
-            if (typeof body.title !== 'string' || !body.title.trim()) {
-                return res.status(400).json({ error: 'Titel darf nicht leer sein' });
-            }
-            if (body.title.trim().length > 300) {
-                return res.status(400).json({ error: 'Titel ist zu lang (maximal 300 Zeichen)' });
-            }
+    const body = req.body;
+    if (body.title !== undefined) {
+        if (typeof body.title !== 'string' || !body.title.trim()) {
+            throw badRequest('Titel darf nicht leer sein');
         }
-        const title = body.title !== undefined ? body.title : manga.title;
-        const alt_title = body.alt_title !== undefined ? body.alt_title : manga.alt_title;
-        const author = body.author !== undefined ? body.author : manga.author;
-        const publisher = body.publisher !== undefined ? normalizePublisher(body.publisher) : normalizePublisher(manga.publisher);
-        const language = body.language !== undefined ? body.language : manga.language;
-        const status = body.status !== undefined ? body.status : manga.status;
-        const tags = body.tags !== undefined ? body.tags : manga.tags;
-        let total_volumes = manga.total_volumes;
-        if (body.total_volumes !== undefined) {
-            const parsed = parseInt(body.total_volumes, 10);
-            total_volumes = parsed > 0 && parsed <= 5000 ? parsed : null;
+        if (body.title.trim().length > 300) {
+            throw badRequest('Titel ist zu lang (maximal 300 Zeichen)');
         }
-        const owned_volumes = body.owned_volumes !== undefined ? (parseInt(body.owned_volumes, 10) || 0) : manga.owned_volumes;
-        const description = body.description !== undefined ? body.description : manga.description;
-        const cover_image = body.cover_image !== undefined ? body.cover_image : manga.cover_image;
-        const banner_image = body.banner_image !== undefined ? body.banner_image : manga.banner_image;
-        const manga_passion_id = body.manga_passion_id !== undefined ? (parseInt(body.manga_passion_id, 10) || null) : manga.manga_passion_id;
-
-        const stmt = db.prepare(`
-            UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?, 
-            language = ?, status = ?, tags = ?, total_volumes = ?, 
-            owned_volumes = ?, description = ?, cover_image = ?, 
-            banner_image = ?, manga_passion_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `);
-        stmt.run(
-            title ? title.trim() : manga.title,
-            alt_title || null,
-            author || null,
-            publisher || null,
-            language || 'Deutsch',
-            status || 'Laufend',
-            tags || null,
-            total_volumes,
-            owned_volumes,
-            description || null,
-            cover_image || null,
-            banner_image || null,
-            manga_passion_id,
-            req.user.id,
-            req.params.id
-        );
-        res.json({ success: true });
-    } catch (err) {
-        log.error('Error updating manga:', err);
-        res.status(500).json({ error: 'Fehler beim Speichern' });
     }
+    const { fields, error } = readMangaFields(body, manga);
+    if (error) throw badRequest(error);
+    // a stored status from before the whitelist may be sent back unchanged
+    let status = manga.status || 'Laufend';
+    if (body.status !== undefined && body.status !== manga.status) {
+        const r = parseSeriesStatus(body.status);
+        if (r.error) throw badRequest(r.error);
+        status = r.value;
+    }
+    const pick = (field) => (fields[field] !== undefined ? fields[field] : manga[field]);
+
+    db.prepare(`
+        UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?, 
+        language = ?, status = ?, tags = ?, total_volumes = ?, 
+        description = ?, cover_image = ?, 
+        banner_image = ?, manga_passion_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    `).run(
+        body.title !== undefined ? body.title.trim() : manga.title,
+        pick('alt_title') || null,
+        pick('author') || null,
+        fields.publisher !== undefined ? fields.publisher : (normalizePublisher(manga.publisher) || null),
+        pick('language') || 'Deutsch',
+        status,
+        pick('tags') || null,
+        pick('total_volumes') ?? null,
+        pick('description') || null,
+        pick('cover_image') || null,
+        pick('banner_image') || null,
+        pick('manga_passion_id') ?? null,
+        req.user.id,
+        req.params.id
+    );
+    res.json({ success: true });
 });
 
 router.delete('/mangas/:id', requireEditor, (req, res) => {
-    try {
-        let deleted = false;
-        runTransaction(() => {
-            db.prepare('DELETE FROM volume_reads WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)').run(req.params.id);
-            db.prepare('DELETE FROM volumes WHERE manga_id = ?').run(req.params.id);
-            const result = db.prepare('DELETE FROM mangas WHERE id = ?').run(req.params.id);
-            deleted = result.changes > 0;
-        });
+    let deleted = false;
+    runTransaction(() => {
+        db.prepare('DELETE FROM volume_reads WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)').run(req.params.id);
+        db.prepare('DELETE FROM volumes WHERE manga_id = ?').run(req.params.id);
+        const result = db.prepare('DELETE FROM mangas WHERE id = ?').run(req.params.id);
+        deleted = result.changes > 0;
+    });
 
-        if (!deleted) return res.status(404).json({ error: 'Manga nicht gefunden' });
-        res.json({ success: true });
-    } catch (err) {
-        log.error('Error deleting manga:', err);
-        res.status(500).json({ error: 'Fehler beim Löschen des Mangas' });
-    }
+    if (!deleted) throw notFound('Manga');
+    res.json({ success: true });
 });
 
 // 404 instead of a logged 500 when the series of a Manga Passion action does not exist
 const mangaExists = (req, res, next) => {
     if (!db.prepare('SELECT id FROM mangas WHERE id = ?').get(parseInt(req.params.id, 10))) {
-        return res.status(404).json({ error: 'Manga nicht gefunden' });
+        throw notFound('Manga');
     }
     next();
 };
 
 // --- MANGA GAPS CHECK (Manga Passion Live-Abgleich) ---
+// Every role may run the check; only editors and admins store an automatically found edition link.
 router.get('/mangas/:id/gaps', requireAuth, mangaExists, async (req, res) => {
-    try {
-        const mangaId = parseInt(req.params.id, 10);
-        const editionId = req.query.edition_id ? parseInt(req.query.edition_id, 10) : null;
-        const forceRefresh = req.query.force_refresh === 'true';
-
-        const result = await reconcileMangaGaps(mangaId, { edition_id: editionId, force_refresh: forceRefresh });
-        res.json(result);
-    } catch (err) {
-        log.error('Manga gaps check error:', err);
-        res.status(500).json({ error: 'Fehler beim Abgleich der Lücken' });
+    const mangaId = parseInt(req.params.id, 10);
+    const rawEdition = qstr(req.query.edition_id);
+    let editionId = null;
+    if (rawEdition !== undefined && rawEdition !== '') {
+        editionId = toEditionId(rawEdition);
+        if (!editionId) throw badRequest('Ungültige edition_id');
     }
+    const forceRefresh = qstr(req.query.force_refresh) === 'true';
+    const ac = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) ac.abort(); });
+
+    const result = await reconcileMangaGaps(mangaId, {
+        edition_id: editionId,
+        force_refresh: forceRefresh,
+        persist: ['admin', 'editor'].includes(req.user.role),
+        signal: ac.signal
+    });
+    res.json(result);
 });
 
 // --- SYNC MANGA WITH MANGA PASSION EDITION ---
 router.post('/mangas/:id/sync-edition', requireEditor, mangaExists, async (req, res) => {
-    try {
-        const mangaId = parseInt(req.params.id, 10);
-        const { edition_id, update_total_volumes, update_status, update_publisher } = req.body;
-        if (!edition_id) {
-            return res.status(400).json({ error: 'edition_id ist erforderlich' });
-        }
-
-        const updatedManga = await syncMangaWithEdition(mangaId, edition_id, {
-            update_total_volumes: update_total_volumes !== false,
-            update_status: Boolean(update_status),
-            update_publisher: Boolean(update_publisher)
-        });
-
-        res.json({ success: true, manga: updatedManga });
-    } catch (err) {
-        log.error('Sync edition error:', err);
-        res.status(500).json({ error: 'Fehler beim Synchronisieren der Edition' });
+    const mangaId = parseInt(req.params.id, 10);
+    const { edition_id, update_total_volumes, update_status, update_publisher } = req.body;
+    if (edition_id === undefined || edition_id === null || edition_id === '') {
+        throw badRequest('edition_id ist erforderlich');
     }
+    const editionId = toEditionId(edition_id);
+    if (!editionId) throw badRequest('Ungültige edition_id');
+
+    const updatedManga = await syncMangaWithEdition(mangaId, editionId, {
+        update_total_volumes: parseFlag(update_total_volumes, true),
+        update_status: parseFlag(update_status, false),
+        update_publisher: parseFlag(update_publisher, false)
+    });
+
+    res.json({ success: true, manga: updatedManga });
 });
 
 // --- BATCH IMPORT GAPS FROM MANGA PASSION ---
+const MAX_GAP_ENTRIES = 500;
+// raw UI labels such as "26 (Titel)"; the stored number is limited separately in batchImportGaps
+const MAX_GAP_LABEL_LENGTH = 200;
 router.post('/mangas/:id/batch-import-gaps', requireEditor, mangaExists, async (req, res) => {
-    try {
-        const mangaId = parseInt(req.params.id, 10);
-        const { volume_numbers, target_status, edition_id } = req.body;
+    const mangaId = parseInt(req.params.id, 10);
+    const { volume_numbers, target_status, edition_id, confirm_edition } = req.body;
 
-        if (!Array.isArray(volume_numbers) || volume_numbers.length === 0) {
-            return res.status(400).json({ error: 'volume_numbers Array ist erforderlich' });
-        }
-
-        const result = await batchImportGaps(mangaId, volume_numbers, target_status || 'Fehlt', edition_id);
-        res.json(result);
-    } catch (err) {
-        log.error('Batch import gaps error:', err);
-        res.status(500).json({ error: 'Fehler beim Erfassen der Lücken' });
+    if (!Array.isArray(volume_numbers) || volume_numbers.length === 0) {
+        throw badRequest('volume_numbers Array ist erforderlich');
     }
+    if (volume_numbers.length > MAX_GAP_ENTRIES) {
+        throw badRequest(`Zu viele Einträge (maximal ${MAX_GAP_ENTRIES})`);
+    }
+    const entries = [];
+    for (const entry of volume_numbers) {
+        const valid = typeof entry === 'string' || (typeof entry === 'number' && Number.isFinite(entry));
+        const label = valid ? String(entry).trim() : '';
+        if (!label || label.length > MAX_GAP_LABEL_LENGTH) {
+            throw badRequest(`Ungültiger Eintrag in volume_numbers (Text oder Zahl, 1 bis ${MAX_GAP_LABEL_LENGTH} Zeichen)`);
+        }
+        entries.push(label);
+    }
+    let status = 'Fehlt';
+    if (target_status !== undefined && target_status !== null && target_status !== '') {
+        if (typeof target_status !== 'string' || !GAP_IMPORT_STATUSES.includes(target_status)) {
+            throw badRequest('Ungültiger Zielstatus (erlaubt: ' + GAP_IMPORT_STATUSES.join(', ') + ')');
+        }
+        status = target_status;
+    }
+    const edition = parseOptionalId(edition_id);
+    if (edition.error) throw badRequest('Ungültige edition_id');
+    // prices, dates and covers of a guessed edition are only written once the user confirmed that edition
+    if (edition.value && !parseFlag(confirm_edition, false)) {
+        const linked = toEditionId(db.prepare('SELECT manga_passion_id FROM mangas WHERE id = ?').get(mangaId)?.manga_passion_id);
+        if (linked !== edition.value) {
+            throw conflict('Edition nicht bestätigt: bitte die Manga-Passion-Edition zuerst übernehmen', 'EDITION_NOT_CONFIRMED', { needs_confirmation: true });
+        }
+    }
+
+    const result = await batchImportGaps(mangaId, entries, status, edition.value);
+    res.json(result);
 });
 
 // --- BATCH AUTOFILL MANGA VOLUMES (Release Dates, Year, Pages, Prices) ---
 router.post('/mangas/:id/autofill-volumes', requireEditor, mangaExists, async (req, res) => {
-    try {
-        const mangaId = parseInt(req.params.id, 10);
-        const { overwrite, edition_id } = req.body;
+    const mangaId = parseInt(req.params.id, 10);
+    const { overwrite, edition_id } = req.body;
+    const edition = parseOptionalId(edition_id);
+    if (edition.error) throw badRequest('Ungültige edition_id');
 
-        const result = await autofillMangaVolumes(mangaId, {
-            overwrite: Boolean(overwrite),
-            edition_id: edition_id ? parseInt(edition_id, 10) : null
-        });
+    const result = await autofillMangaVolumes(mangaId, {
+        overwrite: Boolean(overwrite),
+        edition_id: edition.value
+    });
 
-        res.json(result);
-    } catch (err) {
-        log.error('Batch autofill volumes error:', err);
-        res.status(500).json({ error: 'Fehler beim automatischen Ausfüllen der Bände' });
-    }
+    res.json(result);
 });
 
 module.exports = router;

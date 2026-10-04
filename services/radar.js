@@ -1,6 +1,7 @@
 // Shopping list and release radar: turns the rows of the two queries into the API responses.
 // Pure functions (no database, no clock of their own) so they can be unit-tested.
 const { normalizePublisher } = require('../utils/publishers');
+const { config } = require('../utils/config');
 
 const MONTH_NAMES = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -11,25 +12,88 @@ const DAY_MS = 1000 * 60 * 60 * 24;
 const round2 = (n) => Math.round(n * 100) / 100;
 const isPreordered = (status) => ['Vorbestellt', 'Bestellt'].includes(status);
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
 /**
- * Days until a release date ("YYYY-MM-DD", or "YYYY-MM" = first of the month) and the label shown on the card.
- * `today` is a parameter so the result is testable. Unparseable dates give nulls.
+ * Today's calendar date in the app's time zone (APP_TIMEZONE, default Europe/Berlin; an unknown zone means the
+ * server's) as a local-midnight Date, so getFullYear/getMonth/getDate give the user's day even when the server runs in UTC.
+ */
+function zonedToday(now = new Date(), timeZone = config.appTimeZone) {
+    let parts;
+    if (!timeZone) return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    try {
+        parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+    } catch {
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    const get = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+    return new Date(get('year'), get('month') - 1, get('day'));
+}
+
+/** "YYYY-MM" of a Date's local calendar month. */
+const monthKeyOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+
+/** Strict release date check: "YYYY-MM" or "YYYY-MM-DD" with a month 1-12 and a day that exists in that month. */
+function isValidReleaseDate(value) {
+    if (typeof value !== 'string') return false;
+    const m = value.trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+    if (!m) return false;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    if (y < 1900 || y > 2999 || mo < 1 || mo > 12) return false;
+    if (m[3] === undefined) return true;
+    const d = Number(m[3]);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+// whole calendar days via UTC midnights: local midnights are 23 / 25 hours apart across a daylight-saving change
+const toUtcDay = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+const daysBetween = (from, to) => Math.round((toUtcDay(to) - toUtcDay(from)) / DAY_MS);
+
+/**
+ * Countdown for a month-only date: month labels instead of a day count. days_until stays null while the month is
+ * current or ahead (the day is unknown), and becomes negative (days since the month ended) once it is over.
+ */
+function monthCountdown(y, m, today) {
+    const monthsAhead = (y - today.getFullYear()) * 12 + (m - 1 - today.getMonth());
+    if (monthsAhead < 0) {
+        const ago = -monthsAhead;
+        return {
+            days_until: daysBetween(today, new Date(y, m, 0)),
+            countdown_label: `Vor ${ago} Monat${ago === 1 ? '' : 'en'}`,
+            date_precision: 'month'
+        };
+    }
+    const label = monthsAhead === 0 ? 'Diesen Monat' : (monthsAhead === 1 ? 'Nächsten Monat' : `In ${monthsAhead} Monaten`);
+    return { days_until: null, countdown_label: label, date_precision: 'month' };
+}
+
+/**
+ * Days until a release date ("YYYY-MM-DD") and the label shown on the card; a month-only date ("YYYY-MM" or "YYYY-M")
+ * gets month labels (see monthCountdown). `today` is a parameter so the result is testable. Unparseable or impossible
+ * dates give nulls.
  */
 function countdownFor(releaseDate, today = new Date()) {
-    if (!releaseDate) return { days_until: null, countdown_label: null };
+    const empty = { days_until: null, countdown_label: null };
+    if (!releaseDate) return empty;
+    const raw = String(releaseDate).trim();
 
-    const parts = String(releaseDate).split('-');
-    let targetDate = null;
-    if (parts.length >= 3) {
-        targetDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    } else if (parts.length === 2) {
-        targetDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    const monthOnly = raw.match(/^(\d{4})-(\d{1,2})$/);
+    if (monthOnly) {
+        const y = Number(monthOnly[1]);
+        const m = Number(monthOnly[2]);
+        return m >= 1 && m <= 12 ? monthCountdown(y, m, today) : empty;
     }
-    if (!targetDate || isNaN(targetDate.getTime())) return { days_until: null, countdown_label: null };
 
-    // whole calendar days via UTC midnights: local midnights are 23 / 25 hours apart across a daylight-saving change
-    const toUtcDay = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-    const daysUntil = Math.round((toUtcDay(targetDate) - toUtcDay(today)) / DAY_MS);
+    const full = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (!full) return empty;
+    const [y, m, d] = [Number(full[1]), Number(full[2]), Number(full[3])];
+    const targetDate = new Date(y, m - 1, d);
+    // "2026-13-45" would roll over into another date
+    if (isNaN(targetDate.getTime()) || targetDate.getFullYear() !== y || targetDate.getMonth() !== m - 1 || targetDate.getDate() !== d) return empty;
+
+    const daysUntil = daysBetween(today, targetDate);
 
     let label;
     if (daysUntil < 0) {
@@ -139,4 +203,4 @@ function buildReleaseRadar(radarVols, today = new Date()) {
     };
 }
 
-module.exports = { countdownFor, buildShoppingList, buildReleaseRadar, monthGroupOf };
+module.exports = { countdownFor, buildShoppingList, buildReleaseRadar, monthGroupOf, zonedToday, monthKeyOf, isValidReleaseDate };

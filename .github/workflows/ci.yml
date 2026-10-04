@@ -5,37 +5,121 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # engines floor, current 22 and the next LTS
+        node-version: ['22.13.0', 22, 24]
+    name: test (Node ${{ matrix.node-version }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+      - name: Audit build toolchain (report only)
+        run: npm audit --audit-level=high
+        working-directory: frontend
+        continue-on-error: true
       - run: npm run build
         working-directory: frontend
+      - name: Bundle size budget (gzip, +15 % allowed)
+        run: node scripts/check-bundle-size.js
+      - name: Service worker carries the app version
+        run: |
+          test -f frontend/dist/sw.js
+          if grep -q '__APP_VERSION__' frontend/dist/sw.js; then
+            echo "dist/sw.js still contains __APP_VERSION__ (stamp-sw-version plugin did not run)"
+            exit 1
+          fi
+      - run: npm test
+        working-directory: frontend
+
+  package:
+    # The Pterodactyl ZIP as users get it: unpack, install production deps from the shipped lockfile, start
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm run package
+      - name: Unpack, install like the egg and start
+        run: |
+          pkg="$RUNNER_TEMP/pkg"
+          mkdir -p "$pkg"
+          unzip -q pterodactyl-manga-shelf.zip -d "$pkg"
+          test -f "$pkg/package-lock.json"
+          test -f "$pkg/frontend/dist/index.html"
+          test ! -e "$pkg/node_modules"
+          test ! -e "$pkg/data"
+          test ! -e "$pkg/package.js"
+          test -f "$pkg/scripts/admin.js"
+          test "$(ls -A "$pkg/scripts")" = admin.js
+          cp "$pkg/package-lock.json" "$RUNNER_TEMP/lock.before"
+          (cd "$pkg" && npm install --omit=dev --ignore-scripts --no-audit --no-fund)
+          cmp "$RUNNER_TEMP/lock.before" "$pkg/package-lock.json"
+          (cd "$pkg" && npm ls --omit=dev --all > /dev/null)
+          (cd "$pkg" && DATA_DIR="$RUNNER_TEMP/admin-data" node scripts/admin.js status)
+          (cd "$pkg" && DATA_DIR="$RUNNER_TEMP/pkg-data" SERVER_PORT=3999 node index.js > "$RUNNER_TEMP/pkg.log" 2>&1 &)
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:3999/api/health; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != 1 ]; then cat "$RUNNER_TEMP/pkg.log"; exit 1; fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3999/)" = 200
+          node -e '
+            const fs = require("fs");
+            const done = JSON.parse(JSON.parse(fs.readFileSync("egg-manga-shelf.json", "utf8")).config.startup).done;
+            const log = fs.readFileSync(process.argv[1], "utf8");
+            const missing = done.filter(line => !log.includes(line));
+            if (missing.length) { console.error("egg done strings missing:", missing, log); process.exit(1); }
+          ' "$RUNNER_TEMP/pkg.log"
 
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build image
         run: docker build -t manga-shelf:ci .
       - name: Smoke test (container starts and answers)
@@ -47,16 +131,50 @@ jobs:
           done
           docker logs ms
           exit 1
+      - name: Bind mount created by the daemon (root-owned) and SERVER_PORT, HEALTHCHECK must turn healthy
+        run: |
+          data="$RUNNER_TEMP/msdata-new"
+          docker run -d --name ms2 -e SERVER_PORT=4000 -p 4000:4000 -v "$data:/app/data" \
+            --health-interval=2s --health-start-period=30s manga-shelf:ci
+          status=none
+          for i in $(seq 1 45); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' ms2)
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          if [ "$status" != healthy ]; then
+            echo "health status: $status"
+            docker inspect -f '{{json .State.Health}}' ms2
+            docker logs ms2
+            exit 1
+          fi
+          curl -fs http://127.0.0.1:4000/api/health
+          test "$(stat -c %u "$data/manga.db")" = 1000
+      - name: Bind mount owned by the runner user (uid 1001)
+        run: |
+          data="$RUNNER_TEMP/msdata-runner"
+          mkdir -p "$data/uploads"
+          docker run -d --name ms3 -p 3002:3000 -v "$data:/app/data" manga-shelf:ci
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:3002/api/health && exit 0
+            sleep 1
+          done
+          docker logs ms3
+          exit 1
 
   browser:
     # Real browser (Chrome from the runner image) against an isolated server, see test/browser/run.js
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
       - run: npm ci
       - run: npm ci && npm run build
         working-directory: frontend
@@ -68,7 +186,7 @@ jobs:
           CHROME_BIN: /usr/bin/google-chrome
       - name: Keep screenshots of a failed run
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: browser-test-screenshots
           path: test/browser/screenshots

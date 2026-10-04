@@ -69,8 +69,9 @@ test('owners: Berechtigungen (Besucher 403, Editor nur für sich, Admin für and
 
     const users = (await admin('GET', '/users')).body;
     const adminId = users.find(u => u.username === 'admin').id;
-    // user_id wird für Editoren ignoriert: der Besitz landet beim Editor selbst
-    const res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: true, user_id: adminId });
+    // Editoren ändern nur den eigenen Besitz: eine fremde user_id ist 403
+    assert.equal((await editor('POST', `/volumes/${vol.id}/owners`, { owned: true, user_id: adminId })).status, 403);
+    const res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: true });
     assert.deepEqual(res.body.owners.map(o => o.username), ['ed']);
     // Admin darf für andere eintragen
     const visId = users.find(u => u.username === 'vis').id;
@@ -143,7 +144,8 @@ test('owners: CSV-Export enthält Besitzer, Import ordnet sie zu', async () => {
     const list = (await editor('GET', '/mangas')).body;
     const mid = list.find(m => m.title === 'Import Owners').id;
     const vols = (await detail(editor, mid)).volumes;
-    assert.deepEqual(vols[0].owners.map(o => o.username).sort(), ['admin', 'ed']);
+    // Editoren dürfen per CSV nur sich selbst als Besitzer eintragen; fremde Namen werden ignoriert
+    assert.deepEqual(vols[0].owners.map(o => o.username).sort(), ['ed']);
     assert.deepEqual(vols[1].owners.map(o => o.username), ['ed']);
     assert.equal(vols[2].owners.length, 0);
 });
@@ -159,4 +161,266 @@ test('owners: Statistik liefert Bände und Wert pro Besitzer', async () => {
     assert.ok(mine.volume_count >= 1 && ed.volume_count >= 1);
     assert.ok(mine.shared_count >= 1);
     assert.ok(stats.owner_stats.every(o => typeof o.total_value === 'number'));
+});
+
+const seedVolume = (mangaId, number, status) => {
+    const { db } = require('../db');
+    return Number(db.prepare('INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, ?, ?)').run(mangaId, number, status).lastInsertRowid);
+};
+
+test('owners: Altstatus Gelesen wird beim Speichern zu Vorhanden mit Besitzer und Lese-Eintrag', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Alt' })).body.id;
+    const volId = seedVolume(id, '1', 'Gelesen');
+    assert.equal((await editor('PUT', `/volumes/${volId}`, { notes: 'egal' })).status, 200);
+    const m = await detail(editor, id);
+    assert.equal(m.volumes[0].status, 'Vorhanden');
+    assert.deepEqual(m.volumes[0].owners.map(o => o.username), ['ed']);
+    assert.equal(m.volumes[0].is_read, true);
+    assert.equal(m.owned_volumes, 1);
+});
+
+test('owners: Status Gelesen per PUT löscht keine Besitzer', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen PUT' })).body.id;
+    await editor('POST', '/volumes', { manga_id: id, volume_number: '1', price: 7 });
+    const vol = (await detail(editor, id)).volumes[0];
+    await admin('POST', `/volumes/${vol.id}/owners`, { owned: true });
+    const res = await editor('PUT', `/volumes/${vol.id}`, { status: 'Gelesen' });
+    assert.ok(res.status === 200 || res.status === 400, `unexpected status ${res.status}`);
+    const m = await detail(editor, id);
+    assert.equal(m.volumes[0].status, 'Vorhanden');
+    assert.deepEqual(m.volumes[0].owners.map(o => o.username).sort(), ['admin', 'ed']);
+    assert.equal(m.owned_volumes, 1);
+});
+
+test('owners: migrateLegacyReadStatus stellt Altdaten um und zählt neu', async () => {
+    const { db } = require('../db');
+    const { migrateLegacyReadStatus, syncStatusWithOwners, normalizeVolumeStatus } = require('../utils/owners');
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Migration' })).body.id;
+    const orphan = seedVolume(id, '1', 'Gelesen');
+    const owned = seedVolume(id, '2', 'Gelesen');
+    const missing = seedVolume(id, '3', 'Fehlt');
+    const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
+    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(owned, edId);
+
+    assert.equal(migrateLegacyReadStatus(db), 2);
+    const m = await detail(admin, id);
+    const byId = Object.fromEntries(m.volumes.map(v => [v.id, v]));
+    assert.equal(byId[orphan].status, 'Vorhanden');
+    assert.deepEqual(byId[orphan].owners.map(o => o.username), ['admin']);
+    assert.equal(byId[orphan].is_read, true);
+    assert.deepEqual(byId[owned].owners.map(o => o.username), ['ed']);
+    assert.deepEqual(byId[owned].read_by, [edId]);
+    assert.equal(byId[missing].status, 'Fehlt');
+    assert.equal(m.owned_volumes, 2);
+    assert.equal(migrateLegacyReadStatus(db), 0);
+
+    const ownerless = seedVolume(id, '4', 'Gelesen');
+    const adminId = (await admin('GET', '/users')).body.find(u => u.username === 'admin').id;
+    assert.equal(syncStatusWithOwners(db, ownerless), 'Vorhanden');
+    assert.deepEqual(db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ?').all(ownerless).map(r => r.user_id), [adminId]);
+    assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(ownerless).map(r => r.user_id), [adminId]);
+    assert.equal(normalizeVolumeStatus(' gelesen '), 'Vorhanden');
+    assert.equal(normalizeVolumeStatus('Bestellt'), 'Bestellt');
+});
+
+test('owners: Besitz-Umschalten auf einem Altstatus-Gelesen-Band stellt erst um, dann gilt die Änderung', async () => {
+    const { db } = require('../db');
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Toggle' })).body.id;
+    const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
+    const claimed = seedVolume(id, '1', 'Gelesen');
+    const released = seedVolume(id, '2', 'Gelesen');
+    const shared = seedVolume(id, '3', 'Gelesen');
+    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(shared, edId);
+    const reads = (volId) => db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(volId).map(r => r.user_id);
+
+    let res = await editor('POST', `/volumes/${claimed}/owners`, { owned: true });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'Vorhanden');
+    assert.deepEqual(res.body.owners.map(o => o.username), ['ed']);
+    assert.deepEqual(reads(claimed), [edId]);
+
+    // ownerless: the remover is the fallback owner of the conversion, keeps the read entry, and nobody owns it then
+    res = await editor('POST', `/volumes/${released}/owners`, { owned: false });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'Fehlt');
+    assert.deepEqual(res.body.owners, []);
+    assert.deepEqual(reads(released), [edId]);
+
+    res = await admin('POST', `/volumes/${shared}/owners`, { owned: true });
+    assert.equal(res.body.status, 'Vorhanden');
+    assert.deepEqual(res.body.owners.map(o => o.username).sort(), ['admin', 'ed']);
+    assert.deepEqual(reads(shared), [edId]);
+
+    const m = await detail(admin, id);
+    assert.deepEqual(m.volumes.map(v => v.status), ['Vorhanden', 'Fehlt', 'Vorhanden']);
+    assert.equal(m.owned_volumes, 2);
+});
+
+test('owners: der einzige Besitzer eines Altstatus-Gelesen-Bands gibt ihn ab, behält den Lese-Eintrag', async () => {
+    const { db } = require('../db');
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Remove' })).body.id;
+    const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
+    const vol = seedVolume(id, '1', 'Gelesen');
+    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(vol, edId);
+
+    const res = await editor('POST', `/volumes/${vol}/owners`, { owned: false });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'Fehlt');
+    assert.deepEqual(res.body.owners, []);
+    assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vol).map(r => r.user_id), [edId]);
+});
+
+test('owners: Kauf mit Datum auf einem herrenlosen Altstatus-Gelesen-Band speichert das Datum des Käufers', async () => {
+    const { db } = require('../db');
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Buy' })).body.id;
+    const vol = seedVolume(id, '1', 'Gelesen');
+    const res = await editor('POST', `/volumes/${vol}/owners`, { owned: true, purchase_date: '2026-10-01', price: 7.5 });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.owners.map(o => [o.username, o.purchase_date, o.price]), [['ed', '2026-10-01', 7.5]]);
+    assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(vol).status, 'Vorhanden');
+});
+
+test('owners: zwei Käufe desselben Bands (Schnellkauf und nachgereichter Offline-Kauf) behalten beide Daten', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Race' })).body.id;
+    await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' });
+    const vol = (await detail(admin, id)).volumes[0];
+
+    let res = await admin('POST', `/volumes/${vol.id}/owners`, { owned: true, purchase_date: '2026-10-01' });
+    assert.equal(res.status, 200);
+    res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: true, purchase_date: '2026-10-02' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.status, 'Vorhanden');
+    const dates = Object.fromEntries(res.body.owners.map(o => [o.username, o.purchase_date]));
+    assert.deepEqual(dates, { admin: '2026-10-01', ed: '2026-10-02' });
+
+    // replayed again (the first answer was lost): nothing changes
+    res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: true, purchase_date: '2026-10-03' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(Object.fromEntries(res.body.owners.map(o => [o.username, o.purchase_date])), dates);
+    const after = (await detail(admin, id)).volumes[0];
+    assert.equal(after.purchase_date, '2026-10-01', 'the first purchase fills the volume date, later ones keep it');
+});
+
+test('owners: ein Kauf über die Besitz-Route füllt volumes.purchase_date für Statistik, CSV und Formular', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Kaufdatum' })).body.id;
+    const add = async (number, extra = {}) =>
+        (await admin('POST', '/volumes', { manga_id: id, volume_number: number, status: 'Fehlt', price: 7.5, ...extra })).body.id;
+    const bought = await add('1');
+    const dated = await add('2', { purchase_date: '1998-01-01' });
+    const yearCount = async () => (await admin('GET', '/stats')).body.spending.by_year.find(y => y.year === 1999)?.volumes || 0;
+    const before = await yearCount();
+
+    assert.equal((await admin('POST', `/volumes/${bought}/owners`, { owned: true, purchase_date: '1999-05-06' })).status, 200);
+    assert.equal((await admin('POST', `/volumes/${dated}/owners`, { owned: true, purchase_date: '1999-07-08' })).status, 200);
+    assert.equal((await editor('POST', `/volumes/${bought}/owners`, { owned: true, purchase_date: '1999-09-09' })).status, 200);
+
+    const byId = Object.fromEntries((await detail(admin, id)).volumes.map(v => [v.id, v]));
+    assert.equal(byId[bought].purchase_date, '1999-05-06');
+    assert.equal(byId[dated].purchase_date, '1998-01-01', 'an existing volume date is never overwritten');
+    assert.deepEqual(byId[dated].owners.map(o => o.purchase_date), ['1999-07-08']);
+    assert.equal(await yearCount(), before + 1);
+
+    const csv = await (await fetch(`${ctx.base}/export/csv`, { headers: { Cookie: admin.cookie } })).text();
+    const row = csv.split(/\r?\n/).find(line => line.startsWith('Owners Kaufdatum;') && line.includes(';1;Vorhanden;'));
+    assert.ok(row && row.includes('1999-05-06'), row);
+});
+
+test('owners: Abgeben des letzten Besitzes löscht das Kaufdatum, ein neuer Kauf zählt im neuen Monat', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Rueckgabe' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt', price: 10 })).body.id;
+    const monthKey = (back) => {
+        const d = new Date();
+        d.setDate(15);
+        d.setMonth(d.getMonth() - back);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
+    const oldMonth = monthKey(3);
+    const newMonth = monthKey(0);
+    const monthCount = async (month) => (await admin('GET', '/stats')).body.spending.by_month.find(m => m.month === month)?.volumes || 0;
+    const volume = async () => (await detail(admin, id)).volumes.find(v => v.id === vid);
+    const before = { old: await monthCount(oldMonth), new: await monthCount(newMonth) };
+
+    assert.equal((await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: `${oldMonth}-05` })).status, 200);
+    assert.equal((await volume()).purchase_date, `${oldMonth}-05`);
+    let res = await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(res.body.status, 'Fehlt');
+    assert.equal((await volume()).purchase_date, null);
+
+    // detail toggle without a date: no stale date is copied into the new owner row
+    res = await admin('POST', `/volumes/${vid}/owners`, { owned: true });
+    assert.deepEqual(res.body.owners.map(o => o.purchase_date), [null]);
+    await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+
+    res = await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: `${newMonth}-01` });
+    assert.equal(res.body.status, 'Vorhanden');
+    assert.deepEqual(res.body.owners.map(o => o.purchase_date), [`${newMonth}-01`]);
+    assert.equal((await volume()).purchase_date, `${newMonth}-01`);
+    assert.equal(await monthCount(oldMonth), before.old);
+    assert.equal(await monthCount(newMonth), before.new + 1);
+});
+
+test('owners: ein weiterer Besitzer, der abgibt, lässt das Kaufdatum des Bands stehen', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Teilabgabe' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-04-04' });
+    await editor('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-06-06' });
+    const res = await editor('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(res.body.status, 'Vorhanden');
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '2024-04-04');
+});
+
+test('owners: gibt der Erstkäufer ab, gilt das früheste Datum der verbleibenden Besitzer', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Erstkaeufer' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-04-04' });
+    await editor('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-06-06' });
+    const res = await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(res.body.status, 'Vorhanden');
+    assert.equal(res.body.previous_purchase_date, '2024-04-04');
+    assert.equal(res.body.removed_owner.purchase_date, '2024-04-04');
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '2024-06-06');
+
+    // undo: re-own with the removed row and the earlier volume date
+    const undo = await admin('POST', `/volumes/${vid}/owners`, {
+        owned: true, purchase_date: res.body.removed_owner.purchase_date, previous_purchase_date: res.body.previous_purchase_date
+    });
+    assert.equal(undo.status, 200);
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '2024-04-04');
+});
+
+test('owners: Abgeben und Rückgängig behält Kaufdatum und Preis des Besitzers', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Undo' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt', price: 8 })).body.id;
+    await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2025-01-05', price: 6.5 });
+    const off = await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(off.body.status, 'Fehlt');
+    assert.deepEqual(
+        [off.body.removed_owner.purchase_date, off.body.removed_owner.price, off.body.previous_purchase_date],
+        ['2025-01-05', 6.5, '2025-01-05']
+    );
+    const { purchase_date, price } = off.body.removed_owner;
+    const on = await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date, price, previous_purchase_date: off.body.previous_purchase_date });
+    assert.equal(on.body.status, 'Vorhanden');
+    assert.equal(on.body.removed_owner, null);
+    assert.deepEqual(on.body.owners.map(o => [o.purchase_date, o.price]), [['2025-01-05', 6.5]]);
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '2025-01-05');
+});
+
+test('owners: Rückgängig eines Kaufs stellt das vorherige Datum des Bands wieder her', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Kauf Undo' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt', purchase_date: '1998-01-01' })).body.id;
+    const buy = await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2026-01-01' });
+    assert.equal(buy.body.previous_purchase_date, '1998-01-01');
+
+    assert.equal((await admin('POST', `/volumes/${vid}/owners`, { owned: false, previous_purchase_date: 'gestern' })).status, 400);
+    assert.equal((await detail(admin, id)).volumes[0].status, 'Vorhanden', 'a rejected undo changes nothing');
+
+    const undo = await admin('POST', `/volumes/${vid}/owners`, { owned: false, previous_purchase_date: buy.body.previous_purchase_date });
+    assert.equal(undo.body.status, 'Fehlt');
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '1998-01-01');
+
+    // without the field the last owner leaving clears the date, as before
+    await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2026-01-01' });
+    await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, null);
 });

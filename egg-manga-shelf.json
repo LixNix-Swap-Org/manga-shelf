@@ -4,7 +4,7 @@
     "version": "PTDL_v2",
     "update_url": null
   },
-  "exported_at": "2024-03-24T12:00:00+00:00",
+  "exported_at": "2026-10-03T12:00:00+00:00",
   "name": "Manga Shelf App",
   "author": "antigravity@mangashelf",
   "description": "A lightweight Node.js Manga tracking application. Requires Node.js 22.13 or newer (built-in node:sqlite).",
@@ -13,18 +13,18 @@
     "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
   },
   "file_denylist": [],
-  "startup": "if [ -f package.json ]; then npm install --omit=dev; fi; node index.js",
+  "startup": "if [ -f package.json ]; then npm install --omit=dev --ignore-scripts --no-audit --no-fund; fi; node index.js",
   "config": {
     "files": "{}",
-    "startup": "{\r\n    \"done\": [\r\n        \"Manga Shelf running on http://0.0.0.0:\",\r\n        \"Server listening on port\",\r\n        \"change this text 1\"\r\n    ]\r\n}",
+    "startup": "{\n    \"done\": [\n        \"Manga Shelf running on http://0.0.0.0:\",\n        \"Server listening on port\"\n    ]\n}",
     "logs": "{}",
     "stop": "^^C"
   },
   "scripts": {
     "installation": {
-      "script": "#!/bin/bash\n# Empty install script, as user uploads pre-built ZIP",
-      "container": "alpine:3.18",
-      "entrypoint": "bash"
+      "script": "#!/bin/ash\n# The server files come from the release ZIP (pterodactyl-manga-shelf.zip); nothing to download here.\nmkdir -p /mnt/server\necho \"Manga Shelf: upload and extract pterodactyl-manga-shelf.zip in the server files, then start the server.\"\n",
+      "container": "ghcr.io/parkervcp/installers:alpine",
+      "entrypoint": "ash"
     }
   },
   "variables": [
@@ -36,6 +36,16 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|numeric",
+      "field_type": "text"
+    },
+    {
+      "name": "Trust Proxy",
+      "description": "Welche Reverse-Proxys die Client-Adresse per X-Forwarded-For setzen dürfen. Standard: loopback (nur ein Proxy auf demselben Host). Hinter einem anderen Proxy dessen Adresse oder Subnetz eintragen (z. B. loopback, 172.18.0.0/16), sonst teilen sich alle Clients ein Login-Limit. Die Allocation darf dann nur über den Proxy erreichbar sein (z. B. an 127.0.0.1 gebunden), sonst kann jeder direkt eine fremde Adresse vortäuschen und deren Login sperren; das gilt erst recht für eine Hop-Zahl (1), die jedem Verbindungspartner vertraut. IPv6-Clients über docker-proxy erscheinen als Gateway-Adresse (z. B. 172.17.0.1); private Netze deshalb nicht pauschal freigeben. false = kein Proxy. Ungültige Werte verhindern den Start.",
+      "env_variable": "TRUST_PROXY",
+      "default_value": "loopback",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:200",
       "field_type": "text"
     }
   ]

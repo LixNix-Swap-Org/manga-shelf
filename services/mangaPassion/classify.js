@@ -41,6 +41,11 @@ function titleRelation(editionTitle, targetTitle) {
   return 'fuzzy';
 }
 
+// in titleKey form ("Spin-off" -> "spin off"); matched as whole words so "Romance" is no "Roman"
+const COMPANION_WORDS = ['guide', 'guidebook', 'artbook', 'artworks', 'spin off', 'spinoff', 'roman', 'romane', 'novel', 'novels',
+  'präludium', 'fanbuch', 'kochbuch', 'wimmelbuch'];
+const hasWord = (key, word) => ` ${key} `.includes(` ${word} `);
+
 function scoreEdition(e, targetTitle, targetPub, targetTotal) {
   let score = 0;
   const tNorm = titleKey(targetTitle);
@@ -81,18 +86,9 @@ function scoreEdition(e, targetTitle, targetPub, targetTotal) {
     else if (Math.abs(e.numVolumes - targetTotal) <= 2) score += 15;
   }
 
-  // Demote single volume spin-offs, artbooks, novels, etc. if target title isn't explicitly looking for them
-  const isSpinOff = e.title.toLowerCase().includes('guide') || 
-                    e.title.toLowerCase().includes('artbook') || 
-                    e.title.toLowerCase().includes('artworks') ||
-                    e.title.toLowerCase().includes('spin-off') || 
-                    e.title.toLowerCase().includes('roman') || 
-                    e.title.toLowerCase().includes('novel') || 
-                    e.title.toLowerCase().includes('präludium') ||
-                    e.title.toLowerCase().includes('fanbuch') ||
-                    e.title.toLowerCase().includes('kochbuch') ||
-                    e.title.toLowerCase().includes('wimmelbuch');
-  if (isSpinOff && !tNorm.includes('guide') && !tNorm.includes('spin-off') && !tNorm.includes('novel') && !tNorm.includes('roman') && !tNorm.includes('artbook') && !tNorm.includes('fanbuch')) {
+  // Demote companion books (guides, artbooks, novels, spin-offs ...) unless the target asks for that same kind
+  const isSpinOff = COMPANION_WORDS.some(w => hasWord(eNorm, w) && !hasWord(tNorm, w));
+  if (isSpinOff) {
     score -= 40;
   }
 
@@ -109,27 +105,100 @@ function scoreEdition(e, targetTitle, targetPub, targetTotal) {
   return score;
 }
 
+const MIN_YEAR = 1900;
+const PLACEHOLDER_YEAR = 2100;
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function validYearMonth(year, month) {
+  return Number.isInteger(year) && year >= MIN_YEAR && year < PLACEHOLDER_YEAR && Number.isInteger(month) && month >= 1 && month <= 12;
+}
+
 /**
- * Manga Passion marks "release date not announced yet" with a placeholder far in the future (2999-12-31).
- * That is no date: returns null for it (and for empty input), otherwise the YYYY-MM-DD part.
+ * Release date of an official entry: "YYYY-MM-DD", or "YYYY-MM" when Manga Passion only knows the month (it then sends
+ * day: null and the last day of the month as date). Accepts the raw date string or the whole API volume.
+ * Manga Passion marks "not announced yet" with 2999-12-31: that, invalid and malformed input give null.
  */
 function cleanOfficialDate(raw) {
+  if (raw && typeof raw === 'object') {
+    const full = cleanOfficialDate(raw.date);
+    if (raw.day === null && raw.month != null) {
+      const year = Number(raw.year ?? (full ? full.slice(0, 4) : NaN));
+      const month = Number(raw.month);
+      return validYearMonth(year, month) ? `${year}-${pad2(month)}` : null;
+    }
+    return full;
+  }
   if (!raw) return null;
-  const day = String(raw).slice(0, 10);
-  const year = parseInt(day.slice(0, 4), 10);
-  return Number.isNaN(year) || year >= 2100 ? null : day;
+  const m = String(raw).trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?(?=$|[T\s])/);
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  if (!validYearMonth(year, month)) return null;
+  if (!m[3]) return `${m[1]}-${m[2]}`;
+  const day = parseInt(m[3], 10);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day >= 1 && day <= daysInMonth ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+
+/**
+ * Whether an official release date has passed. A month-only date ("YYYY-MM") counts as released once that month is
+ * over, the same moment as the last-of-month date Manga Passion sends for it.
+ */
+function isOfficialReleased(date, now = new Date()) {
+  const m = String(date || '').match(/^(\d{4})-(\d{2})$/);
+  if (m) return now.getTime() >= Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10), 1);
+  return date ? new Date(date) <= now : false;
+}
+
+/** A publisher name that is not the 'Unbekannt' placeholder the edition mapping uses for "none". */
+function knownPublisher(name) {
+  const p = typeof name === 'string' ? name.trim() : '';
+  return p && p !== 'Unbekannt' ? p : null;
+}
+
+const MP_UNREACHABLE_MESSAGE = 'Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.';
+const MP_EDITION_NOT_FOUND_MESSAGE = 'Manga-Passion Edition nicht gefunden oder nicht verfügbar.';
+
+// Title heuristics, used only where the structured API fields (type / specialType) do not decide. "schuber" stays a
+// substring for German compounds (Leerschuber, Sammelschuber); "box" is a whole word so "Der Boxer" is a volume.
+const SCHUBER_TITLE = /schuber|slipcase|sammelbox|\bbox(?:\s?set)?\b/i;
+const SPECIAL_EDITION_TITLE = /\b(?:collector['’]?s?|limited|variant|deluxe)\b|\bedition\b/i;
+const SPECIAL_TITLE = /\b(?:special|extras?|guide|guidebook|sonderband|fanbook|fanbuch)\b/i;
+
+const hasStructure = (v) => typeof v.type === 'number';
+const hasDigit = (v) => /\d/.test(String(v.volume_number || ''));
+
+/**
+ * A Schuber / box set entry of the official edition. Manga Passion marks them with specialType 1 (type 3); a type 3
+ * entry with another specialType is a Collectors/Limited Edition, a numbered type 0 entry a regular volume.
+ */
+function isSchuberEntry(v) {
+  if (v.specialType === 1) return true;
+  if (/schuber/i.test(String(v.volume_number || ''))) return true;
+  if (hasStructure(v)) {
+    if (v.type === 3 && v.specialType != null) return false;
+    if (v.type !== 3 && hasDigit(v)) return false;
+  }
+  return SCHUBER_TITLE.test(v.title || '');
 }
 
 /**
  * Entry type of an official Manga Passion volume: 'volume' | 'special_edition' | 'schuber' | 'special'.
  * A Collectors/Limited Edition has the same number as the regular volume, so the type is part of its identity.
+ * Live data: type 3 + specialType 1 = Schuber, type 3 otherwise = Collectors/Limited/Variant edition,
+ * type 0 = regular volume whatever its title says. Titles are only read when those fields do not decide.
  */
 function classifyOfficialVolume(ov) {
+  if (isSchuberEntry(ov)) return 'schuber';
   const key = String(ov.volume_number || '').trim().toLowerCase();
-  const titleKey = String(ov.title || '').trim().toLowerCase();
-  if (ov.specialType === 1 || titleKey.includes('schuber') || titleKey.includes('box')) return 'schuber';
-  if (ov.specialType === 2 || /edition|limited|collectors|variant/i.test(titleKey)) return 'special_edition';
-  if (key === 'special' || /special|extra|guide/i.test(titleKey)) return 'special';
+  const title = String(ov.title || '').trim().toLowerCase();
+  if (ov.type === 3 || ov.specialType === 2) return 'special_edition';
+  if (hasStructure(ov)) {
+    if (key === 'special' || /\b(?:special|extra|sonderband)\b/.test(key)) return 'special';
+    if (hasDigit(ov)) return 'volume';
+  }
+  if (SPECIAL_EDITION_TITLE.test(title)) return 'special_edition';
+  if (key === 'special' || SPECIAL_TITLE.test(title)) return 'special';
   return 'volume';
 }
 
@@ -224,47 +293,80 @@ function buildSearchQueries(title) {
   };
 }
 
-/** A Schuber / box set entry of the official edition (never a regular volume). */
-function isSchuberEntry(v) {
-  return v.specialType === 1 || /schuber|box|slipcase/i.test(v.title || '');
+const numberIn = (text) => {
+  const m = String(text ?? '').match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+};
+const officialNum = (v) => (Number.isFinite(v.num) && v.num < 99999 ? v.num : numberIn(v.volume_number));
+const lower = (t) => String(t ?? '').trim().toLowerCase();
+
+const EDITION_KINDS = [['collectors', /collector/], ['limited', /limited/], ['variant', /variant/], ['deluxe', /deluxe/], ['special', /special|spezial/]];
+function editionKind(text) {
+  const t = lower(text);
+  const hit = EDITION_KINDS.find(([, re]) => re.test(t));
+  return hit ? hit[0] : null;
+}
+
+/** Several special editions with one number (Limited and Collectors of volume 7): the user's label, then the price decide. */
+function pickSpecialEdition(candidates, volumeNumber, hint) {
+  if (candidates.length <= 1) return candidates[0] || null;
+  const notes = lower(hint.notes);
+  const byTitle = notes && candidates.find(c => lower(c.title) === notes);
+  if (byTitle) return byTitle;
+  const kind = editionKind(`${volumeNumber ?? ''} ${hint.notes ?? ''}`);
+  const byKind = kind && candidates.find(c => editionKind(c.title) === kind);
+  if (byKind) return byKind;
+  const price = Number(hint.price);
+  if (price > 0) {
+    const priced = candidates.filter(c => c.price);
+    if (priced.length) return priced.reduce((a, b) => (Math.abs(b.price - price) < Math.abs(a.price - price) ? b : a));
+  }
+  return candidates[0];
 }
 
 /**
- * Finds the regular (non-Schuber) official volume for a number as the user wrote it ("5", "05", "Band 5").
- * Exact label first, then the first number in it. Schubers are excluded so Band 1 never matches a Schuber.
+ * The official entry for a user volume of a given type ('volume' | 'special_edition' | 'special'; Schubers go through
+ * matchSchuberVolume). Never crosses types: a regular volume never gets Collectors Edition data and the other way round,
+ * and a number without an entry of that type gives null instead of another entry. `hint` = { notes, price } of the
+ * user volume, used to tell several special editions with the same number apart.
+ */
+function findOfficialVolume(officialVolumes, volumeNumber, type = 'volume', hint = {}) {
+  const vols = officialVolumes || [];
+  const key = lower(volumeNumber);
+
+  if (type === 'special_edition') {
+    const editions = vols.filter(v => classifyOfficialVolume(v) === 'special_edition');
+    const wanted = numberIn(volumeNumber);
+    if (wanted === null) return pickSpecialEdition(editions, volumeNumber, hint);
+    return pickSpecialEdition(editions.filter(v => officialNum(v) === wanted), volumeNumber, hint);
+  }
+
+  if (type === 'special') {
+    const names = [key, lower(hint.notes)].filter(Boolean);
+    return vols.find(v => classifyOfficialVolume(v) === 'special'
+      && [lower(v.volume_number), lower(officialVolumeNumber(v)), lower(v.title)].some(n => n && names.includes(n))) || null;
+  }
+
+  // a regular volume; an entry classified 'special' only by its title is still accepted, a Schuber or special edition never
+  const regular = vols.filter(v => !['schuber', 'special_edition'].includes(classifyOfficialVolume(v)));
+  let matches = regular.filter(v => lower(v.volume_number) === key);
+  if (!matches.length) {
+    const wanted = numberIn(key);
+    if (wanted === null) return null;
+    matches = regular.filter(v => v.num === wanted && v.num < 99999);
+  }
+  return matches.find(v => classifyOfficialVolume(v) === 'volume') || matches[0] || null;
+}
+
+/**
+ * Finds the regular official volume for a number as the user wrote it ("5", "05", "Band 5").
+ * Exact label first, then the first number in it. Schubers and special editions are never returned.
  */
 function findRegularVolume(officialVolumes, volumeNumber) {
-  const regular = officialVolumes.filter(v => !isSchuberEntry(v));
-  const key = String(volumeNumber || '').trim().toLowerCase();
-  const exact = regular.find(v => String(v.volume_number || '').trim().toLowerCase() === key);
-  if (exact) return exact;
-  const m = key.match(/(\d+(\.\d+)?)/);
-  if (!m) return null;
-  const wanted = parseFloat(m[1]);
-  return regular.find(v => v.num === wanted && v.num < 99999) || null;
+  return findOfficialVolume(officialVolumes, volumeNumber, 'volume');
 }
 
-/**
- * Intelligently matches a Schuber (Sammelschuber or Leerschuber) by customArrangement, title, or index.
- */
-function matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes) {
-  if (!volumes || volumes.length === 0) return null;
-  const numMatch = String(volumeNumber || '').match(/(\d+(\.\d+)?)/);
-  const targetNum = numMatch ? parseInt(numMatch[1], 10) : 1;
-
-  const schuberVols = volumes.filter(v => 
-    v.specialType === 1 || v.type === 3 || 
-    /schuber|box|slipcase/i.test(v.title || '') || 
-    /schuber/i.test(v.volume_number || '')
-  );
-  if (schuberVols.length === 0) return null;
-
-  const emptyBoxes = schuberVols.filter(v => /leer/i.test(v.title || '') || (v.price && v.price <= 25));
-  const fullBoxes = schuberVols.filter(v => /sammel|komplett/i.test(v.title || '') || (v.price && v.price > 25));
-
-  const preferEmpty = (userPrice && userPrice <= 25) || /leer/i.test(userNotes || '') || (!userPrice && emptyBoxes.length > 0);
-  const pool = (preferEmpty && emptyBoxes.length > 0) ? emptyBoxes : (fullBoxes.length > 0 ? fullBoxes : schuberVols);
-
+function matchSchuberIn(pool, targetNum) {
   // 1. By customArrangement
   let matched = pool.find(v => v.customArrangement === targetNum);
 
@@ -281,8 +383,34 @@ function matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes) {
     const sorted = [...pool].sort((a, b) => (a.release_date || '').localeCompare(b.release_date || '') || a.id - b.id);
     matched = sorted[targetNum - 1];
   }
+  return matched || null;
+}
 
-  return matched || pool[0];
+/**
+ * Matches a Schuber (Sammelschuber or Leerschuber) by customArrangement, title number or chronological index. The kind
+ * suggested by price / notes is tried first, then the other kind. A number without a Schuber gives null.
+ */
+function matchSchuberVolume(volumes, volumeNumber, userPrice, userNotes) {
+  if (!volumes || volumes.length === 0) return null;
+  const numMatch = String(volumeNumber || '').match(/(\d+(\.\d+)?)/);
+  const targetNum = numMatch ? parseInt(numMatch[1], 10) : 1;
+  if (targetNum <= 0) return null;
+
+  const schuberVols = volumes.filter(isSchuberEntry);
+  if (schuberVols.length === 0) return null;
+
+  const emptyBoxes = schuberVols.filter(v => /leer/i.test(v.title || '') || (v.price && v.price <= 25));
+  const fullBoxes = schuberVols.filter(v => /sammel|komplett/i.test(v.title || '') || (v.price && v.price > 25));
+
+  const preferEmpty = (userPrice && userPrice <= 25) || /leer/i.test(userNotes || '') || (!userPrice && emptyBoxes.length > 0);
+  const pools = preferEmpty ? [emptyBoxes, fullBoxes, schuberVols] : [fullBoxes, emptyBoxes, schuberVols];
+
+  for (const pool of pools) {
+    if (!pool.length) continue;
+    const matched = matchSchuberIn(pool, targetNum);
+    if (matched) return matched;
+  }
+  return null;
 }
 
 module.exports = {
@@ -292,10 +420,15 @@ module.exports = {
   buildSearchQueries,
   isConfidentMatch,
   cleanOfficialDate,
+  isOfficialReleased,
+  knownPublisher,
+  MP_UNREACHABLE_MESSAGE,
+  MP_EDITION_NOT_FOUND_MESSAGE,
   classifyOfficialVolume,
   officialVolumeNumber,
   resolveOfficialGap,
   matchSchuberVolume,
   isSchuberEntry,
-  findRegularVolume
+  findRegularVolume,
+  findOfficialVolume
 };

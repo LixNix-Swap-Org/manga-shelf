@@ -1,18 +1,23 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, Star, ExternalLink, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
+import { apiFetch, assetUrl, assetImgProps } from '../../utils/api';
 
 export default function LightboxGallery({
   lightboxData,
   setLightboxData,
   onClose,
   canEdit,
-  onSuccess
+  onSuccess,
+  onSetCover
 }) {
   useEffect(() => {
     if (!lightboxData) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
+        // topmost layer: the page's own Escape handling must not also close the dialog underneath
+        e.stopPropagation();
         onClose();
       } else if (e.key === 'ArrowLeft') {
         setLightboxData(prev => {
@@ -32,25 +37,32 @@ export default function LightboxGallery({
         });
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [lightboxData, onClose, setLightboxData]);
 
   const dialogRef = useDialogA11y(Boolean(lightboxData));
   if (!lightboxData) return null;
 
+  const canSetCover = canEdit && Boolean(onSetCover || lightboxData.volumeId);
+  const isCover = lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex];
+  const coverLabel = isCover ? 'Aktuelles Cover' : 'Als Cover festlegen';
+
   const handleSetCoverFromLightbox = async () => {
-    if (!canEdit || !lightboxData || !lightboxData.volumeId) return;
+    if (!canSetCover || isCover) return;
     const currentImg = lightboxData.images[lightboxData.currentIndex];
     if (!currentImg) return;
+    if (onSetCover) {
+      onSetCover(currentImg);
+      return;
+    }
     try {
-      const res = await fetch(`/api/volumes/${lightboxData.volumeId}`, {
+      const res = await apiFetch(`/api/volumes/${lightboxData.volumeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           ...lightboxData.volume,
           cover_image: currentImg
-        })
+        }
       });
       if (res.ok) {
         if (onSuccess) await onSuccess();
@@ -64,14 +76,14 @@ export default function LightboxGallery({
     }
   };
 
-  return (
+  return createPortal(
     <div 
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Bildergalerie"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-60 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
+      className="outline-none fixed inset-0 z-60 bg-black/95 flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
       onClick={onClose}
     >
       {/* Lightbox Top Header */}
@@ -81,57 +93,61 @@ export default function LightboxGallery({
             <Camera className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
               <span>{lightboxData.title}</span>
               {lightboxData.images.length > 1 && (
-                <span className="bg-slate-800 text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded-full border border-slate-700">
-                  {lightboxData.currentIndex + 1} / {lightboxData.images.length}
+                <span className="bg-slate-800 text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded-full border border-slate-700" aria-live="polite">
+                  <span aria-hidden="true">{lightboxData.currentIndex + 1} / {lightboxData.images.length}</span>
+                  <span className="sr-only">Bild {lightboxData.currentIndex + 1} von {lightboxData.images.length}</span>
                 </span>
               )}
-              {lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] && (
+              {isCover && (
                 <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Star className="w-2.5 h-2.5 fill-current text-brand-400" /> Cover
                 </span>
               )}
-            </h3>
+            </h2>
             <p className="text-xs text-slate-400">{lightboxData.subtitle}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {canEdit && lightboxData.volumeId && (
+          {canSetCover && (
             <button
               type="button"
               onClick={handleSetCoverFromLightbox}
+              aria-disabled={isCover || undefined}
               className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all ${
-                lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex]
+                isCover
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/50 cursor-default'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700'
               }`}
-              title="Dieses Bild als Coverbild für diesen Eintrag festlegen"
+              title={isCover ? 'Dieses Bild ist das aktuelle Cover' : 'Dieses Bild als Coverbild für diesen Eintrag festlegen'}
+              aria-label={coverLabel}
             >
-              <Star className={`w-3.5 h-3.5 ${lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] ? 'fill-current text-brand-400' : 'text-slate-400'}`} />
-              <span className="hidden sm:inline">
-                {lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex] ? 'Aktuelles Cover' : 'Als Cover festlegen'}
-              </span>
+              <Star className={`w-3.5 h-3.5 ${isCover ? 'fill-current text-brand-400' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline">{coverLabel}</span>
             </button>
           )}
 
           <a 
-            href={lightboxData.images[lightboxData.currentIndex]} 
+            href={assetUrl(lightboxData.images[lightboxData.currentIndex])} 
             target="_blank" 
             rel="noreferrer" 
             className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 sm:px-3 sm:py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
             title="In Originalgröße in neuem Tab öffnen"
+            aria-label="Original in neuem Tab öffnen"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Original</span>
           </a>
 
           <button 
+            type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-colors"
             title="Galerie schließen (Esc)"
+            aria-label="Galerie schließen"
           >
             <X className="w-5 h-5" />
           </button>
@@ -143,12 +159,14 @@ export default function LightboxGallery({
         {/* Prev Button */}
         {lightboxData.images.length > 1 ? (
           <button
+            type="button"
             onClick={() => setLightboxData(prev => ({
               ...prev,
               currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
             }))}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
             title="Vorheriges Bild (Pfeiltaste links)"
+            aria-label="Vorheriges Bild"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
@@ -158,7 +176,7 @@ export default function LightboxGallery({
         <div className="flex-1 flex flex-col items-center justify-center h-full max-h-[75vh] relative overflow-hidden">
           <img 
             key={lightboxData.images[lightboxData.currentIndex]}
-            src={lightboxData.images[lightboxData.currentIndex]} 
+            {...assetImgProps(lightboxData.images[lightboxData.currentIndex])} 
             alt={`Foto ${lightboxData.currentIndex + 1}`} 
             className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain border border-slate-800/80 transition-all duration-200 animate-fade-in"
           />
@@ -167,12 +185,14 @@ export default function LightboxGallery({
         {/* Next Button */}
         {lightboxData.images.length > 1 ? (
           <button
+            type="button"
             onClick={() => setLightboxData(prev => ({
               ...prev,
               currentIndex: (prev.currentIndex + 1) % prev.images.length
             }))}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
             title="Nächstes Bild (Pfeiltaste rechts)"
+            aria-label="Nächstes Bild"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
@@ -184,10 +204,13 @@ export default function LightboxGallery({
         <div className="flex items-center justify-center gap-2 overflow-x-auto py-2 px-4 max-w-2xl mx-auto z-10" onClick={e => e.stopPropagation()}>
           {lightboxData.images.map((thumbUrl, idx) => {
             const isActive = idx === lightboxData.currentIndex;
-            const isCover = lightboxData.volume?.cover_image === thumbUrl;
+            const thumbIsCover = lightboxData.volume?.cover_image === thumbUrl;
             return (
               <button
+                type="button"
                 key={idx}
+                aria-label={`Bild ${idx + 1} anzeigen${thumbIsCover ? ' (Cover)' : ''}`}
+                aria-current={isActive ? 'true' : undefined}
                 onClick={() => setLightboxData(prev => ({ ...prev, currentIndex: idx }))}
                 className={`relative rounded-xl overflow-hidden shrink-0 transition-all ${
                   isActive 
@@ -196,12 +219,12 @@ export default function LightboxGallery({
                 }`}
               >
                 <img 
-                  src={thumbUrl} 
-                  alt={`Thumb ${idx + 1}`} 
+                  {...assetImgProps(thumbUrl)} 
+                  alt="" 
                   className="w-10 h-14 sm:w-12 sm:h-16 object-cover" 
                 />
-                {isCover && (
-                  <div className="absolute bottom-0 inset-x-0 bg-brand-600/90 text-[8px] text-white font-bold py-0.2 text-center">
+                {thumbIsCover && (
+                  <div aria-hidden="true" className="absolute bottom-0 inset-x-0 bg-brand-700/90 text-[8px] text-white font-bold py-px text-center">
                     Cover
                   </div>
                 )}
@@ -210,6 +233,7 @@ export default function LightboxGallery({
           })}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

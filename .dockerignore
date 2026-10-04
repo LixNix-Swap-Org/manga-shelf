@@ -14,3 +14,12 @@ scratch/
 .env
 .env.*
 !.env.example
+data-dev/
+frontend/dist/
+coverage/
+ssl/
+**/*.pem
+**/*.key
+**/*.crt
+**/*.p12
+**/*.pfx

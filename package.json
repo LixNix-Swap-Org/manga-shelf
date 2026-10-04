@@ -6,13 +6,29 @@
   "engines": {
     "node": ">=22.13.0"
   },
+  "files": [
+    "index.js",
+    "db.js",
+    "mangaPassion.js",
+    "healthcheck.js",
+    "middleware/",
+    "routes/",
+    "scripts/admin.js",
+    "services/",
+    "utils/"
+  ],
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js",
-    "build:frontend": "cd frontend && npm install && npm run build",
+    "dev": "node scripts/dev.js",
+    "dev:api": "node index.js",
+    "build:frontend": "cd frontend && npm ci && npm run build",
     "package": "npm run build:frontend && node package.js",
     "release": "node release.js",
+    "seed": "node scripts/seed.js",
+    "bench": "node scripts/bench/run.js",
+    "check:bundle": "node scripts/check-bundle-size.js",
     "test": "node --test test/*.test.js",
+    "test:frontend": "cd frontend && npm test",
     "test:e2e": "node test/browser/run.js test/browser/e2e-suite.js",
     "test:radar": "node test/browser/run.js test/browser/release-radar.js",
     "test:perf": "node test/browser/run.js test/browser/performance-suite.js",
@@ -35,6 +51,7 @@
     "@eslint/js": "^9.39.5",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
     "puppeteer-core": "^25.12.0"
   }

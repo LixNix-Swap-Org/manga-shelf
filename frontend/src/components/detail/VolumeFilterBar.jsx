@@ -1,4 +1,8 @@
-import { ArrowUpDown, BookOpen, Building2, ChevronDown, Eye, EyeOff, Filter, Globe, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, X } from 'lucide-react';
+import { ArrowUpDown, BookOpen, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, X } from 'lucide-react';
+import { CONDITION_NONE } from '../../utils/volumeHelpers';
+import { mpPillText } from './volumeViewHelpers';
+import { formatCount } from '../../utils/format';
+
 
 /** View-mode switcher, gap/Manga-Passion pills, status/type filters, search and sort. Purely presentational; all state and handlers come in via props. */
 export default function VolumeFilterBar({
@@ -8,12 +12,15 @@ export default function VolumeFilterBar({
   currentReaderReadCount,
   currentReaderUnreadCount,
   detectedGaps,
+  gapsAllowedByFilters = true,
   handleResetFilters,
   handleSetVolumeViewMode,
   handleToggleShowGaps,
   hasActiveFilters,
+  isOffline = false,
   missingCount,
   mpGapData,
+  mpGapError,
   mpGapLoading,
   ownedCount,
   preorderedCount,
@@ -39,6 +46,9 @@ export default function VolumeFilterBar({
   volumeViewMode,
   volumes
 }) {
+  const showTypeChip = (type, count) => count > 0 || volumeTypeFilter === type;
+  const showTypeRow = specialEditionCount > 0 || schuberCount > 0 || specialCount > 0 || volumeTypeFilter !== 'ALL';
+  const visibleGapCount = showGaps && gapsAllowedByFilters ? detectedGaps.length : 0;
   return (
     <div className="flex flex-col gap-3 mb-6 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80 shadow-lg">
       {/* Top Bar: View Mode Switcher + Gap Indicator */}
@@ -48,13 +58,14 @@ export default function VolumeFilterBar({
             <Library className="w-3.5 h-3.5 text-brand-400" />
             Ansicht:
           </span>
-          <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
+          <div role="group" aria-label="Ansicht" className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
+              aria-pressed={volumeViewMode === 'grid'}
               onClick={() => handleSetVolumeViewMode('grid')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'grid'
-                  ? 'bg-brand-600 text-white shadow-sm'
+                  ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
               title="Kachelansicht mit Coverbildern"
@@ -64,10 +75,11 @@ export default function VolumeFilterBar({
             </button>
             <button
               type="button"
+              aria-pressed={volumeViewMode === 'spine'}
               onClick={() => handleSetVolumeViewMode('spine')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'spine'
-                  ? 'bg-brand-600 text-white shadow-sm'
+                  ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
               title="3D-Buchrückenansicht / Echtes Manga-Regal"
@@ -77,10 +89,11 @@ export default function VolumeFilterBar({
             </button>
             <button
               type="button"
+              aria-pressed={volumeViewMode === 'list'}
               onClick={() => handleSetVolumeViewMode('list')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'list'
-                  ? 'bg-brand-600 text-white shadow-sm'
+                  ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
               title="Kompakte Listenansicht"
@@ -96,91 +109,104 @@ export default function VolumeFilterBar({
           {detectedGaps.length > 0 && (
             <button
               type="button"
+              aria-pressed={showGaps}
               onClick={handleToggleShowGaps}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
                 showGaps
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-950/40'
-                  : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300'
               }`}
               title={showGaps ? 'Lücken-Erkennung in Regal & Karten aktiv (Klicken zum Ausblenden)' : 'Lücken-Erkennung ausgeblendet (Klicken zum Aktivieren)'}
             >
-              {showGaps ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-slate-500" />}
+              {showGaps ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
               <span>Lücken: <strong>{detectedGaps.length} fehlend</strong></span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${showGaps ? 'bg-amber-400/20 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${showGaps ? 'bg-amber-400/20 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
                 {showGaps ? 'AN' : 'AUS'}
               </span>
             </button>
           )}
 
-          {/* Manga Passion Pill / Discrepancy indicator */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowMpEditionModal(true);
-            }}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
-              mpGapData?.discrepancy 
-                ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 hover:bg-amber-500/25 shadow-sm' 
-                : mpGapData?.matched
-                  ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-                  : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
-            }`}
-            title="Klicken für Manga-Passion Editionsabgleich"
-          >
-            <Globe className="w-3.5 h-3.5 text-brand-400" />
-            <span className="hidden sm:inline">Manga-Passion:</span>
-            <span className="font-semibold text-white truncate max-w-[130px]">
-              {mpGapData?.edition ? mpGapData.edition.publisher : (mpGapLoading ? 'Prüfe...' : 'Abgleich')}
-            </span>
-            {mpGapData?.discrepancy && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-500/30 text-amber-200">
-                {mpGapData.discrepancy.official_total} statt {mpGapData.discrepancy.db_total}
+          {/* Manga Passion Pill / Discrepancy indicator (no check offline) */}
+          {!isOffline && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowMpEditionModal(true);
+              }}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                mpGapData?.discrepancy 
+                  ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 hover:bg-amber-500/25 shadow-sm' 
+                  : mpGapData?.matched
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300'
+              }`}
+              title={mpGapError || mpGapData?.unavailable
+                ? `Manga Passion: ${mpGapError || mpGapData.message || 'nicht erreichbar'}`
+                : 'Klicken für Manga-Passion-Editionsabgleich'}
+            >
+              <Globe className="w-3.5 h-3.5 text-brand-400" />
+              <span className="hidden sm:inline">Manga Passion:</span>
+              <span className="font-semibold text-white truncate max-w-[130px]">
+                {mpPillText({ mpGapData, mpGapLoading, mpGapError })}
               </span>
-            )}
-          </button>
+              {mpGapData?.discrepancy && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-500/30 text-amber-200">
+                  {mpGapData.discrepancy.official_total} statt {mpGapData.discrepancy.db_total}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
 
         {/* Status Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
+        <div role="group" aria-label="Status-Filter" className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
           <button
+            type="button"
+            aria-pressed={volumeFilter === 'ALL'}
             onClick={() => setVolumeFilter('ALL')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'ALL' 
-                ? 'bg-brand-600 text-white shadow-sm' 
+                ? 'bg-brand-700 text-white shadow-sm' 
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             Alle ({volumes.length})
           </button>
           <button
+            type="button"
+            aria-pressed={volumeFilter === 'Vorhanden'}
             onClick={() => setVolumeFilter('Vorhanden')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Vorhanden' 
-                ? 'bg-emerald-600 text-white shadow-sm' 
+                ? 'bg-emerald-700 text-white shadow-sm' 
                 : 'text-emerald-400 hover:text-emerald-300'
             }`}
           >
             ✓ Im Besitz ({ownedCount})
           </button>
           <button
+            type="button"
+            aria-pressed={volumeFilter === 'Fehlt'}
             onClick={() => setVolumeFilter('Fehlt')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Fehlt' 
-                ? 'bg-amber-600 text-white shadow-sm' 
+                ? 'bg-amber-700 text-white shadow-sm' 
                 : 'text-amber-400 hover:text-amber-300'
             }`}
           >
-            ✕ Fehlt noch ({missingCount}{showGaps && detectedGaps.length > 0 ? ` + ${detectedGaps.length} Lücken` : ''})
+            ✕ Fehlt noch ({missingCount}{visibleGapCount > 0 ? ` + ${formatCount(visibleGapCount, 'Lücke', 'Lücken')}` : ''})
           </button>
           {preorderedCount > 0 && (
             <button
+              type="button"
+              aria-pressed={volumeFilter === 'Vorbestellt'}
               onClick={() => setVolumeFilter('Vorbestellt')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 volumeFilter === 'Vorbestellt' 
-                  ? 'bg-sky-600 text-white shadow-sm' 
+                  ? 'bg-sky-700 text-white shadow-sm' 
                   : 'text-sky-400 hover:text-sky-300'
               }`}
             >
@@ -189,10 +215,12 @@ export default function VolumeFilterBar({
           )}
           {upcomingCount > 0 && (
             <button
+              type="button"
+              aria-pressed={volumeFilter === 'Erscheint bald'}
               onClick={() => setVolumeFilter('Erscheint bald')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 volumeFilter === 'Erscheint bald' 
-                  ? 'bg-purple-600 text-white shadow-sm' 
+                  ? 'bg-purple-700 text-white shadow-sm' 
                   : 'text-purple-400 hover:text-purple-300'
               }`}
             >
@@ -200,20 +228,24 @@ export default function VolumeFilterBar({
             </button>
           )}
           <button
+            type="button"
+            aria-pressed={volumeFilter === 'Gelesen'}
             onClick={() => setVolumeFilter('Gelesen')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Gelesen' 
-                ? 'bg-teal-600 text-white shadow-sm' 
+                ? 'bg-teal-700 text-white shadow-sm' 
                 : 'text-teal-400 hover:text-teal-300'
             }`}
           >
             📖 Gelesen ({currentReaderReadCount})
           </button>
           <button
+            type="button"
+            aria-pressed={volumeFilter === 'Ungelesen'}
             onClick={() => setVolumeFilter('Ungelesen')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Ungelesen' 
-                ? 'bg-rose-600 text-white shadow-sm' 
+                ? 'bg-rose-700 text-white shadow-sm' 
                 : 'text-rose-400 hover:text-rose-300'
             }`}
             title="Im Besitz, aber noch nicht gelesen (Stapel ungelesener Bücher)"
@@ -226,8 +258,9 @@ export default function VolumeFilterBar({
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* Verlag Filter Dropdown */}
           <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
-            <Building2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+            <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
             <select
+              aria-label="Verlag filtern"
               value={volumePublisherFilter}
               onChange={e => setVolumePublisherFilter(e.target.value)}
               className="filter-chip-select font-medium text-slate-200 group-hover:text-white"
@@ -244,6 +277,7 @@ export default function VolumeFilterBar({
           <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
             <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <select
+              aria-label="Zustand filtern"
               value={volumeConditionFilter}
               onChange={e => setVolumeConditionFilter(e.target.value)}
               className="filter-chip-select font-medium text-slate-200 group-hover:text-white"
@@ -252,6 +286,7 @@ export default function VolumeFilterBar({
               {conditionsList.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
+              <option value={CONDITION_NONE}>Ohne Zustand</option>
             </select>
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
           </label>
@@ -260,6 +295,7 @@ export default function VolumeFilterBar({
           <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
             <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
             <select
+              aria-label="Sortierung"
               value={volumeSort}
               onChange={e => setVolumeSort(e.target.value)}
               className="filter-chip-select font-medium text-slate-200 group-hover:text-white"
@@ -278,18 +314,25 @@ export default function VolumeFilterBar({
           </label>
 
           {/* Fast search input */}
-          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 focus-within:border-brand-500">
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-400">
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <input 
               type="text" 
               placeholder="Suchen..." 
+              aria-label="Bände durchsuchen"
               value={volumeSearch}
               onChange={e => setVolumeSearch(e.target.value)}
-              className="bg-transparent border-0 text-xs text-white placeholder-slate-500 focus:outline-none w-24 sm:w-32 py-1"
+              className="bg-transparent border-0 text-base sm:text-xs text-white placeholder-slate-400 focus:outline-none w-24 sm:w-32 py-1"
             />
             {volumeSearch && (
-              <button onClick={() => setVolumeSearch('')} className="text-slate-400 hover:text-white">
-                <X className="w-3 h-3" />
+              <button
+                type="button"
+                onClick={() => setVolumeSearch('')}
+                className="p-1.5 -m-1 rounded-md text-slate-400 hover:text-white"
+                aria-label="Suche löschen"
+                title="Suche löschen"
+              >
+                <X className="w-3 h-3" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -301,6 +344,7 @@ export default function VolumeFilterBar({
               onClick={handleResetFilters}
               className="inline-flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all shadow-sm cursor-pointer"
               title="Alle Filter zurücksetzen"
+              aria-label="Alle Filter zurücksetzen"
             >
               <RotateCcw className="w-3.5 h-3.5 text-brand-400" />
               <span className="hidden sm:inline">Filter zurücksetzen</span>
@@ -311,13 +355,14 @@ export default function VolumeFilterBar({
       </div>
 
       {/* Optional Type Filter Chips (if manga contains Special Editions, Schuber or Specials) */}
-      {(specialEditionCount > 0 || schuberCount > 0 || specialCount > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/60 text-xs">
+      {showTypeRow && (
+        <div role="group" aria-label="Typ-Filter" className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/60 text-xs">
           <span className="text-[11px] text-slate-400 font-semibold mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3 text-brand-400" /> Typ:
+            <Funnel className="w-3 h-3 text-brand-400" /> Typ:
           </span>
           <button
             type="button"
+            aria-pressed={volumeTypeFilter === 'ALL'}
             onClick={() => setVolumeTypeFilter('ALL')}
             className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
               volumeTypeFilter === 'ALL'
@@ -329,31 +374,34 @@ export default function VolumeFilterBar({
           </button>
           <button
             type="button"
+            aria-pressed={volumeTypeFilter === 'volume'}
             onClick={() => setVolumeTypeFilter('volume')}
             className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
               volumeTypeFilter === 'volume'
-                ? 'bg-brand-600 text-white shadow-sm'
+                ? 'bg-brand-700 text-white shadow-sm'
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
             <BookOpen className="w-3 h-3 text-brand-400" /> Nur Bände ({regularVolumeCount})
           </button>
-          {specialEditionCount > 0 && (
+          {showTypeChip('special_edition', specialEditionCount) && (
             <button
               type="button"
+              aria-pressed={volumeTypeFilter === 'special_edition'}
               onClick={() => setVolumeTypeFilter('special_edition')}
               className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
                 volumeTypeFilter === 'special_edition'
-                  ? 'bg-fuchsia-600 text-white shadow-sm ring-1 ring-fuchsia-400'
+                  ? 'bg-fuchsia-700 text-white shadow-sm ring-1 ring-fuchsia-400'
                   : 'bg-fuchsia-950/40 text-fuchsia-300 hover:bg-fuchsia-900/50 border border-fuchsia-800/50'
               }`}
             >
               <Sparkles className="w-3 h-3 text-fuchsia-400" /> ✨ Special Editions ({specialEditionCount})
             </button>
           )}
-          {schuberCount > 0 && (
+          {showTypeChip('schuber', schuberCount) && (
             <button
               type="button"
+              aria-pressed={volumeTypeFilter === 'schuber'}
               onClick={() => setVolumeTypeFilter('schuber')}
               className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
                 volumeTypeFilter === 'schuber'
@@ -364,13 +412,14 @@ export default function VolumeFilterBar({
               <Package className="w-3 h-3 text-indigo-400" /> 📦 Nur Schuber ({schuberCount})
             </button>
           )}
-          {specialCount > 0 && (
+          {showTypeChip('special', specialCount) && (
             <button
               type="button"
+              aria-pressed={volumeTypeFilter === 'special'}
               onClick={() => setVolumeTypeFilter('special')}
               className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
                 volumeTypeFilter === 'special'
-                  ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-400'
+                  ? 'bg-amber-700 text-white shadow-sm ring-1 ring-amber-400'
                   : 'bg-amber-950/40 text-amber-300 hover:bg-amber-900/50 border border-amber-800/50'
               }`}
             >
