@@ -128,7 +128,7 @@ test('oversized JSON body: 413 with a German message and the security headers', 
     });
     assert.equal(res.status, 413);
     assertSecurityHeaders(res, 'too large');
-    assert.equal((await res.json()).error, 'Anfrage ist zu groß (max. 100 KB)');
+    assert.deepEqual(await res.json(), { error: 'Anfrage ist zu groß (max. 100 KB)', code: 'PAYLOAD_TOO_LARGE', msg: 'Anfrage ist zu groß (max. {max})', params: { max: '100 KB' } });
 });
 
 test('CSV import: the 10 MB body is only parsed for editors', async () => {
@@ -149,7 +149,7 @@ test('CSV import: the 10 MB body is only parsed for editors', async () => {
 
     const tooBig = await editor('POST', '/import/csv', { csv: 'a'.repeat(11 * 1024 * 1024) });
     assert.equal(tooBig.status, 413);
-    assert.equal(tooBig.body.error, 'CSV-Datei ist zu groß (max. 10 MB)');
+    assert.deepEqual(tooBig.body, { error: 'CSV-Datei ist zu groß (max. 10 MB)', code: 'PAYLOAD_TOO_LARGE', msg: 'CSV-Datei ist zu groß (max. {max})', params: { max: '10 MB' } });
 });
 
 test('upload errors from multer are German', async () => {
@@ -362,12 +362,11 @@ test('every response has a request id; a server error names it as reference', as
     assert.equal(ids.size, 3);
 
     const snapshot = require('../core/snapshot');
-    t.mock.method(snapshot, 'listMangas', () => { throw new Error('kaputt: /secret/path'); });
+    // a plain Error may carry msg/params as well; a hidden 500 drops them with its text
+    t.mock.method(snapshot, 'listMangas', () => { throw Object.assign(new Error('kaputt: /secret/path'), { extra: { msg: 'kaputt: {path}', params: { path: '/secret/path' } } }); });
     const res = await fetch(ctx.base + '/mangas', { headers: { Cookie: editor.cookie } });
     assert.equal(res.status, 500);
     const body = await res.json();
-    assert.equal(body.error, 'Interner Serverfehler');
-    assert.equal(body.code, 'INTERNAL_ERROR');
-    assert.equal(body.ref, res.headers.get('x-request-id'));
-    assert.doesNotMatch(JSON.stringify(body), /secret/);
+    assert.deepEqual(body, { error: 'Interner Serverfehler', code: 'INTERNAL_ERROR', ref: res.headers.get('x-request-id') });
+    assert.doesNotMatch(JSON.stringify(body), /secret|kaputt/);
 });

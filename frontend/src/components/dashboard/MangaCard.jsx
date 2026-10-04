@@ -4,26 +4,36 @@ import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
 import { getSeriesProgress } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
-import { formatCount, formatEuro } from '../../utils/format';
+import { formatCount, formatMoney } from '../../utils/format';
 import { splitAuthors } from '../../utils/seriesMeta';
 import { langFor } from '../common/lang';
+import { t, tn } from '../../i18n/index.js';
+import { mangaStatusLabel } from '../../utils/enumLabels.js';
+import LanguagePill, { useDefaultLanguage } from '../common/LanguagePill';
+import { editionCurrency, editionLanguage, editionName, editionRegion } from '../../utils/editions';
 
 /** What the card shows as badges and progress bar, as one sentence for screen readers. */
-export function seriesSummary(manga, { owned, total, extras }, readState) {
-  const parts = [manga.status];
-  parts.push(total > 0 ? `${owned} von ${formatCount(total, 'Band', 'Bänden')}` : formatCount(owned, 'Band', 'Bände'));
-  if (extras > 0) parts.push(`${extras} Extras`);
-  if (readState.read > 0) parts.push(readState.complete ? 'alle gelesen' : `${readState.read} von ${readState.owned} gelesen`);
-  else parts.push('ungelesen');
+export function seriesSummary(manga, { owned, total, extras }, readState, defaultLanguage = null) {
+  const parts = [mangaStatusLabel(manga.status)];
+  const language = editionLanguage(manga);
+  if (defaultLanguage && language !== defaultLanguage) parts.push(t('Ausgabe: {language}', { language: editionName(language, editionRegion(manga)) }));
+  parts.push(total > 0 ? t('{owned} von {volumes}', { owned, volumes: formatCount(total, 'Band', 'Bänden') }) : formatCount(owned, 'Band', 'Bände'));
+  if (extras > 0) parts.push(tn('{n} Extras', '{n} Extras', extras));
+  if (readState.read > 0) parts.push(readState.complete ? t('alle gelesen') : t('{read} von {owned} gelesen', { read: readState.read, owned: readState.owned }));
+  else parts.push(t('ungelesen'));
   return parts.filter(Boolean).join(', ');
 }
 
-const COVER_FALLBACK = (
-  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
-    <BookOpen className="w-10 h-10 mb-2 opacity-50 text-slate-500" />
-    <span className="text-xs text-slate-400">Kein Cover</span>
-  </div>
-);
+// a component, so the text is translated at render time (never t() at module scope)
+function CoverFallback() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
+      <BookOpen className="w-10 h-10 mb-2 opacity-50 text-slate-500" />
+      <span className="text-xs text-slate-400">{t('Kein Cover')}</span>
+    </div>
+  );
+}
+const COVER_FALLBACK = <CoverFallback />;
 
 // the wrapper is the positioned card; the link's ::after makes the whole card clickable
 export const CARD_LINK_CLASS =
@@ -42,7 +52,7 @@ export function AuthorButtons({ names, onAuthorClick, buttonClassName = '' }) {
         type="button"
         onClick={() => onAuthorClick(name)}
         className={`hover:text-brand-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded ${buttonClassName}`}
-        title={`Alle Reihen von ${name}`}
+        title={t('Alle Reihen von {name}', { name })}
       >
         {name}
         {/* inside the button, so a wrapped name keeps its comma; not part of the name */}
@@ -65,6 +75,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
   const summaryId = `manga-card-${manga.id}-summary`;
   const authorId = `manga-card-${manga.id}-author`;
   const authors = onAuthorClick ? splitAuthors(manga.author) : [];
+  const defaultLanguage = useDefaultLanguage();
 
   return (
     <>
@@ -81,16 +92,17 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             fallback={COVER_FALLBACK}
           />
 
-          <span id={summaryId} className="sr-only">{seriesSummary(manga, progress, readState)}</span>
+          <span id={summaryId} className="sr-only">{seriesSummary(manga, progress, readState, defaultLanguage)}</span>
           <div aria-hidden="true" className="absolute top-2 left-2 right-2 flex justify-between items-start gap-1 pointer-events-none min-w-0">
-            <span className="rounded-full bg-slate-950/85 shrink min-w-0 flex">
+            <span className="rounded-full bg-slate-950/85 shrink min-w-0 flex items-center gap-1">
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide lg:tracking-wider border truncate ${getStatusBadge(manga.status)}`}>
-                {manga.status}
+                {mangaStatusLabel(manga.status)}
               </span>
+              <LanguagePill language={editionLanguage(manga)} />
             </span>
 
             <span className="bg-slate-950/85 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
-              {owned} {total > 0 ? `/ ${total}` : 'Bde.'}{extras > 0 ? ` +${extras}` : ''}
+              {owned} {total > 0 ? `/ ${total}` : t('Bde.')}{extras > 0 ? ` +${extras}` : ''}
             </span>
           </div>
 
@@ -120,7 +132,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
           </h3>
           {!authors.length && (
             <p id={authorId} className="text-xs text-slate-400 truncate mt-0.5" title={manga.author || ''}>
-              {manga.author || 'Kein Autor'}
+              {manga.author || t('Kein Autor')}
             </p>
           )}
         </div>
@@ -134,7 +146,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             </p>
           )}
           {manga.publisher && (
-            <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate" title={`Verlag: ${manga.publisher}`}>
+            <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate" title={t('Verlag: {publisher}', { publisher: manga.publisher })}>
               <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" aria-hidden="true" />
               <span className="truncate">{manga.publisher}</span>
             </p>
@@ -145,14 +157,14 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
           {manga.total_value > 0 ? (
             <span className="font-mono font-bold text-emerald-400 flex items-center gap-1 whitespace-nowrap">
               <Coins className="w-3 h-3 text-emerald-400" aria-hidden="true" />
-              {formatEuro(manga.total_value)}
+              {formatMoney(manga.total_value, editionCurrency(manga))}
             </span>
           ) : (
             <span className="text-slate-400">
-              {pct !== null ? `${pct}% komplett` : formatCount(owned, 'Band', 'Bände')}
+              {pct !== null ? t('{pct}% komplett', { pct }) : formatCount(owned, 'Band', 'Bände')}
             </span>
           )}
-          <span aria-hidden="true" className="text-brand-400 font-semibold group-hover:translate-x-0.5 transition-transform whitespace-nowrap">Details &rarr;</span>
+          <span aria-hidden="true" className="text-brand-400 font-semibold group-hover:translate-x-0.5 transition-transform whitespace-nowrap">{t('Details →')}</span>
         </div>
       </div>
     </>

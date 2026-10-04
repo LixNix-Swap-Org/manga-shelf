@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { fmtEuro, countLabel, monthLabel, monthShort } from './statsFormat';
+import { t, tn } from '../../i18n/index.js';
 
 const hasPurchases = (m) => Boolean(m && (m.total > 0 || m.volumes > 0));
 const monthSummary = (m, sep = ' · ') => `${monthLabel(m.month)}: ${fmtEuro(m.total)}${sep}${countLabel(m.volumes, 'Band', 'Bände')}`;
@@ -19,18 +20,18 @@ export default function SpendingCard({ spending }) {
 
   return (
     <div id="stats-spending" className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
-      <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4">Ausgaben nach Kaufdatum</h3>
+      <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4">{t('Ausgaben nach Kaufdatum')}</h3>
       {!hasData ? (
-        <p className="text-xs text-slate-400">Noch keine Käufe mit Kaufdatum erfasst.</p>
+        <p className="text-xs text-slate-400">{t('Noch keine Käufe mit Kaufdatum erfasst.')}</p>
       ) : (
         <div className="space-y-5">
           <div>
-            <p className="text-[11px] text-slate-400 mb-2">Letzte 12 Monate{range && ` (${range})`}</p>
+            <p className="text-[11px] text-slate-400 mb-2">{range ? t('Letzte 12 Monate ({range})', { range }) : t('Letzte 12 Monate')}</p>
             {recentEmpty ? (
-              <p className="text-xs text-slate-400">Keine Käufe in den letzten 12 Monaten.</p>
+              <p className="text-xs text-slate-400">{t('Keine Käufe in den letzten 12 Monaten.')}</p>
             ) : (
               <>
-                <div className="flex items-end gap-1.5 h-28" role="group" aria-label={`Ausgaben je Monat, ${range}`}>
+                <div className="flex items-end gap-1.5 h-28" role="group" aria-label={t('Ausgaben je Monat, {range}', { range })}>
                   {months.map(m => {
                     const isActive = m.month === active?.month;
                     return (
@@ -74,12 +75,22 @@ export default function SpendingCard({ spending }) {
       )}
       {yearOnly?.volumes > 0 && (
         <p className="text-[11px] text-slate-400 mt-3">
-          {countLabel(yearOnly.volumes, 'Band', 'Bände')} ({fmtEuro(yearOnly.total)}) {yearOnly.volumes === 1 ? 'hat nur ein Kaufjahr und fehlt' : 'haben nur ein Kaufjahr und fehlen'} im Monatsdiagramm.
+          {tn(
+            '{volumes} ({total}) hat nur ein Kaufjahr und fehlt im Monatsdiagramm.',
+            '{volumes} ({total}) haben nur ein Kaufjahr und fehlen im Monatsdiagramm.',
+            yearOnly.volumes,
+            { volumes: countLabel(yearOnly.volumes, 'Band', 'Bände'), total: fmtEuro(yearOnly.total) }
+          )}
         </p>
       )}
       {none?.volumes > 0 && (
         <p className="text-[11px] text-slate-400 mt-3">
-          {countLabel(none.volumes, 'Band', 'Bände')} ({fmtEuro(none.total)}) {none.volumes === 1 ? 'hat kein verwertbares Kaufdatum und fehlt' : 'haben kein verwertbares Kaufdatum und fehlen'} hier.
+          {tn(
+            '{volumes} ({total}) hat kein verwertbares Kaufdatum und fehlt hier.',
+            '{volumes} ({total}) haben kein verwertbares Kaufdatum und fehlen hier.',
+            none.volumes,
+            { volumes: countLabel(none.volumes, 'Band', 'Bände'), total: fmtEuro(none.total) }
+          )}
         </p>
       )}
     </div>

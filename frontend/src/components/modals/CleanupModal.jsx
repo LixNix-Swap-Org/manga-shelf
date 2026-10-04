@@ -6,7 +6,9 @@ import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDate } from '../../utils/format';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { t } from '../../i18n/index.js';
 
+// i18n
 export const CHECKS = {
   duplicate_titles: { label: 'Gleicher Titel mehrfach', hint: 'Oft eine zweite Ausgabe – sonst ein Doppel, das zusammengehört.', kind: 'groups' },
   series_without_cover: { label: 'Reihen ohne Cover', kind: 'series' },
@@ -23,6 +25,7 @@ export const CHECKS = {
   publishers_unknown: { label: 'Verlage außerhalb der Verlagsliste', hint: 'Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?', kind: 'publishers' }
 };
 
+// i18n
 const FIX_LABELS = { legacy_read: 'Jetzt umstellen', normalize_publishers: 'Schreibweisen vereinheitlichen' };
 
 function Items({ check, onNavigate }) {
@@ -53,11 +56,11 @@ function Items({ check, onNavigate }) {
           <li key={item.id}>
             {seriesLink(item.manga_id, item.title)} · {getVolumeDisplayTitle(item)}
             {item.isbn && check.id === 'invalid_isbns' ? <span className="font-mono text-slate-400"> · {item.isbn}</span> : null}
-            {item.release_date && check.id === 'overdue_preorders' ? <span className="text-slate-400"> · erschienen {formatDate(item.release_date)}</span> : null}
+            {item.release_date && check.id === 'overdue_preorders' ? <span className="text-slate-400"> · {t('erschienen {date}', { date: formatDate(item.release_date) })}</span> : null}
           </li>
         );
       })}
-      {check.count > check.items.length && <li className="text-slate-400">… und {formatCount(check.count - check.items.length, 'weiterer', 'weitere')}</li>}
+      {check.count > check.items.length && <li className="text-slate-400">{t('… und {count}', { count: formatCount(check.count - check.items.length, 'weiterer', 'weitere') })}</li>}
     </ul>
   );
 }
@@ -78,7 +81,7 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
     try {
       setData(await api.get('/api/maintenance/quality'));
     } catch (e) {
-      setError(e?.message || 'Prüfung konnte nicht geladen werden.');
+      setError(e?.message || t('Prüfung konnte nicht geladen werden.'));
     }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -90,7 +93,7 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
       onChanged?.();
       await load();
     } catch (e) {
-      notify.error(e, { fallback: 'Korrektur fehlgeschlagen' });
+      notify.error(e, { fallback: t('Korrektur fehlgeschlagen') });
     } finally {
       setBusy(null);
       setConfirm(null);
@@ -99,11 +102,11 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
 
   const fix = (check) => run(check.id, async () => {
     const res = await api.post('/api/maintenance/fix', { check: check.fix });
-    notify.success(`${formatCount(res.changed, 'Eintrag', 'Einträge')} korrigiert`);
+    notify.success(t('{count} korrigiert', { count: formatCount(res.changed, 'Eintrag', 'Einträge') }));
   });
   const markOwned = (check) => run(check.id, async () => {
     const res = await api.post('/api/volumes/bulk', { ids: check.items.map(v => v.id), set: { status: 'Vorhanden' } });
-    notify.success(`${formatCount(res.updated, 'Band', 'Bände')} als vorhanden markiert`);
+    notify.success(t('{count} als vorhanden markiert', { count: formatCount(res.updated, 'Band', 'Bände') }));
   });
 
   const checks = data?.checks || [];
@@ -113,8 +116,8 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
   return (
     <ToolDialog
       id="cleanup-modal"
-      title="Sammlung aufräumen"
-      subtitle="Unvollständige oder uneinheitliche Daten auf einen Blick."
+      title={t('Sammlung aufräumen')}
+      subtitle={t('Unvollständige oder uneinheitliche Daten auf einen Blick.')}
       Icon={BrushCleaning}
       onClose={onClose}
       busy={busy !== null}
@@ -122,37 +125,37 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
       {error ? (
         <div role="alert" className="py-10 text-center space-y-3">
           <p className="text-sm text-rose-300">{error}</p>
-          <button type="button" onClick={load} className="btn-secondary text-xs px-4 py-2">Erneut versuchen</button>
+          <button type="button" onClick={load} className="btn-secondary text-xs px-4 py-2">{t('Erneut versuchen')}</button>
         </div>
       ) : !data ? (
-        <p role="status" className="py-10 text-center text-sm text-slate-400">Sammlung wird geprüft…</p>
+        <p role="status" className="py-10 text-center text-sm text-slate-400">{t('Sammlung wird geprüft…')}</p>
       ) : (
         <div className="space-y-2">
-          {open.length === 0 && <p className="py-6 text-center text-sm text-emerald-300">Alles aufgeräumt – keine Auffälligkeiten.</p>}
+          {open.length === 0 && <p className="py-6 text-center text-sm text-emerald-300">{t('Alles aufgeräumt – keine Auffälligkeiten.')}</p>}
           {open.map((check) => {
             const meta = CHECKS[check.id] || { label: check.id };
             return (
               <details key={check.id} id={`quality-${check.id}`} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
                 <summary className="flex flex-wrap items-center gap-2 cursor-pointer text-sm">
-                  <span className="font-semibold text-white">{meta.label}</span>
+                  <span className="font-semibold text-white">{t(meta.label)}</span>
                   <span className="text-[11px] rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 font-mono">{check.count}</span>
                 </summary>
-                {meta.hint && <p className="text-[11px] text-slate-400 mt-1">{meta.hint}</p>}
+                {meta.hint && <p className="text-[11px] text-slate-400 mt-1">{t(meta.hint)}</p>}
                 <div className="flex flex-wrap gap-2 mt-2">
                   {canEdit && check.fix && FIX_LABELS[check.fix] && (
-                    <button type="button" onClick={() => fix(check)} disabled={busy !== null} className="btn-primary text-xs px-3 py-1.5">{FIX_LABELS[check.fix]}</button>
+                    <button type="button" onClick={() => fix(check)} disabled={busy !== null} className="btn-primary text-xs px-3 py-1.5">{t(FIX_LABELS[check.fix])}</button>
                   )}
                   {canEdit && check.id === 'overdue_preorders' && (
                     confirm === check.id ? (
                       <button type="button" onClick={() => markOwned(check)} disabled={busy !== null} className="btn-primary text-xs px-3 py-1.5">
-                        {formatCount(check.items.length, 'Band', 'Bände')} wirklich als vorhanden markieren?
+                        {t('{count} wirklich als vorhanden markieren?', { count: formatCount(check.items.length, 'Band', 'Bände') })}
                       </button>
                     ) : (
-                      <button type="button" onClick={() => setConfirm(check.id)} className="btn-secondary text-xs px-3 py-1.5">Als vorhanden markieren…</button>
+                      <button type="button" onClick={() => setConfirm(check.id)} className="btn-secondary text-xs px-3 py-1.5">{t('Als vorhanden markieren…')}</button>
                     )
                   )}
                   {user?.role === 'admin' && onOpenPublishers && check.id.startsWith('publishers_') && (
-                    <button type="button" onClick={onOpenPublishers} className="btn-secondary text-xs px-3 py-1.5">Verlage zusammenführen…</button>
+                    <button type="button" onClick={onOpenPublishers} className="btn-secondary text-xs px-3 py-1.5">{t('Verlage zusammenführen…')}</button>
                   )}
                 </div>
                 <Items check={check} onNavigate={onNavigate} />
@@ -162,7 +165,7 @@ export default function CleanupModal({ onClose, user, onChanged, onOpenPublisher
           {done.length > 0 && (
             <p className="text-[11px] text-slate-400 flex flex-wrap items-center gap-1.5 pt-2">
               <CircleCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-              In Ordnung: {done.map(c => CHECKS[c.id]?.label || c.id).join(' · ')}
+              {t('In Ordnung: {checks}', { checks: done.map(c => t(CHECKS[c.id]?.label || c.id)).join(' · ') })}
             </p>
           )}
         </div>

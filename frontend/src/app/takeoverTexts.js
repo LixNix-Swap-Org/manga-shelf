@@ -1,4 +1,5 @@
 // Titles and explanations of the three takeover dialogs, without the dialog code.
+// i18n
 export const TAKEOVER = {
   push: {
     title: 'Auf Server übertragen',

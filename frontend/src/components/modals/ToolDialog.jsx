@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
+import { t } from '../../i18n/index.js';
 
 /**
  * Shell of the collection tools: overlay above other dialogs, scrolling body (the whole dialog on short landscape
@@ -41,14 +42,14 @@ export default function ToolDialog({ id, title, subtitle, Icon, onClose, busy = 
               {subtitle && <p className="text-xs text-slate-400 mt-0.5 short:hidden">{subtitle}</p>}
             </div>
           </div>
-          <button type="button" onClick={close} disabled={busy} className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800" aria-label="Schließen" title="Schließen">
+          <button type="button" onClick={close} disabled={busy} className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800" aria-label={t('Schließen')} title={t('Schließen')}>
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <div className="overflow-y-auto short:overflow-visible custom-scrollbar flex-1 pr-1 pt-4 short:pt-3">{children}</div>
         <div className="pt-4 mt-4 short:pt-3 short:mt-3 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2 shrink-0">
           {footer}
-          <button type="button" onClick={close} disabled={busy} className="btn-secondary text-xs px-4 py-2">Schließen</button>
+          <button type="button" onClick={close} disabled={busy} className="btn-secondary text-xs px-4 py-2">{t('Schließen')}</button>
         </div>
       </div>
     </div>

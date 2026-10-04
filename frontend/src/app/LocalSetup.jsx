@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpen, Smartphone } from 'lucide-react';
 import { useDocumentTitle } from '../components/common/PageChrome';
 import SourcesPanel from './SourcesPanel';
+import LanguageSelect from '../components/common/LanguageSelect';
+import { t } from '../i18n/index.js';
 
 export const PROFILE_NAME_MAX = 40;
 
 function Steps({ current }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-300">Schritt {current} von 3</p>;
+  return <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-300">{t('Schritt {current} von 3', { current })}</p>;
 }
 
 /**
@@ -15,7 +17,7 @@ function Steps({ current }) {
  * the local profile, step 3 connects the sources (optional). `onStart({ name })` creates the local database.
  */
 export default function LocalSetup({ user, onStart }) {
-  useDocumentTitle('Ohne Server nutzen');
+  useDocumentTitle(t('Ohne Server nutzen'));
   const ids = useId();
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -34,7 +36,7 @@ export default function LocalSetup({ user, onStart }) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError('Bitte einen Namen für dein Profil eingeben.');
+      setError(t('Bitte einen Namen für dein Profil eingeben.'));
       return;
     }
     setError('');
@@ -42,7 +44,7 @@ export default function LocalSetup({ user, onStart }) {
     try {
       const outcome = await onStart({ name: trimmed });
       if (outcome?.status === 'local') setCreated(true);
-      else setError(outcome?.error || 'Die lokale Sammlung konnte nicht angelegt werden.');
+      else setError(outcome?.error || t('Die lokale Sammlung konnte nicht angelegt werden.'));
     } finally {
       setBusy(false);
     }
@@ -53,7 +55,7 @@ export default function LocalSetup({ user, onStart }) {
       <div className="max-w-xl mx-auto space-y-6">
         <header className="flex items-center gap-3">
           {!local && (
-            <Link to="/server" className="btn-secondary p-2 text-slate-300" aria-label="Zurück" title="Zurück">
+            <Link to="/server" className="btn-secondary p-2 text-slate-300" aria-label={t('Zurück')} title={t('Zurück')}>
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             </Link>
           )}
@@ -61,38 +63,40 @@ export default function LocalSetup({ user, onStart }) {
             <BookOpen className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold text-white tracking-tight">Ohne Server nutzen</h1>
-            <p className="text-xs text-slate-400">Die Sammlung liegt nur auf diesem Gerät; später lässt sie sich auf einen Server übertragen.</p>
+            <h1 className="text-xl font-extrabold text-white tracking-tight">{t('Ohne Server nutzen')}</h1>
+            <p className="text-xs text-slate-400">{t('Die Sammlung liegt nur auf diesem Gerät; später lässt sie sich auf einen Server übertragen.')}</p>
           </div>
         </header>
+
+        <LanguageSelect />
 
         {!local ? (
           <form onSubmit={start} className="glass-panel rounded-2xl p-4 sm:p-5 border border-slate-700/70 space-y-4" aria-labelledby={`${ids}-title`}>
             <Steps current={2} />
             <h2 id={`${ids}-title`} className="text-lg font-bold text-white flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-brand-400" aria-hidden="true" /> Dein Profil
+              <Smartphone className="w-5 h-5 text-brand-400" aria-hidden="true" /> {t('Dein Profil')}
             </h2>
-            <p className="text-sm text-slate-300">Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.</p>
+            <p className="text-sm text-slate-300">{t('Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.')}</p>
             {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
             <div>
-              <label htmlFor={`${ids}-name`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Name</label>
-              <input id={`${ids}-name`} className="input-field" placeholder="z. B. Felix" maxLength={PROFILE_NAME_MAX} autoFocus
+              <label htmlFor={`${ids}-name`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">{t('Name')}</label>
+              <input id={`${ids}-name`} className="input-field" placeholder={t('z. B. Felix')} maxLength={PROFILE_NAME_MAX} autoFocus
                 value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="flex justify-end">
               <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-1.5" aria-busy={busy || undefined}>
-                {busy ? 'Lege an…' : 'Sammlung anlegen'} <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                {busy ? t('Lege an…') : t('Sammlung anlegen')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </form>
         ) : (
           <section className="glass-panel rounded-2xl p-4 sm:p-5 border border-slate-700/70 space-y-4" aria-labelledby={`${ids}-sources`}>
             <Steps current={3} />
-            <h2 id={`${ids}-sources`} ref={sourcesHeading} tabIndex={-1} className="text-lg font-bold text-white focus:outline-none">Quellen verbinden (optional)</h2>
+            <h2 id={`${ids}-sources`} ref={sourcesHeading} tabIndex={-1} className="text-lg font-bold text-white focus:outline-none">{t('Quellen verbinden (optional)')}</h2>
             <SourcesPanel />
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
-              <button type="button" className="btn-secondary text-sm" onClick={() => navigate('/', { replace: true })}>Überspringen</button>
-              <button type="button" className="btn-primary text-sm" onClick={() => navigate('/', { replace: true })}>Fertig</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => navigate('/', { replace: true })}>{t('Überspringen')}</button>
+              <button type="button" className="btn-primary text-sm" onClick={() => navigate('/', { replace: true })}>{t('Fertig')}</button>
             </div>
           </section>
         )}

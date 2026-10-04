@@ -6,6 +6,8 @@ import {
   readCache, writeCache, touchCache, clearDataCache, revalidateHeaders, takePrefetch, cacheOwner, PREFETCH_MANGAS, LIST_KEY
 } from '../utils/dataCache';
 import useLatestRequest from './useLatestRequest';
+import { t } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
 export { SESSION_EXPIRED_EVENT } from '../utils/api';
 
@@ -104,7 +106,7 @@ export default function useMangaList({ user, canEdit, onRestored }) {
         answered = true;
         clearMangaListCache();
         if (fromOfflineCopyRef.current) show([]);
-        setError('Sitzung abgelaufen – bitte neu anmelden.');
+        setError(t('Sitzung abgelaufen – bitte neu anmelden.'));
         return;
       }
       if (!res.ok) {
@@ -114,13 +116,13 @@ export default function useMangaList({ user, canEdit, onRestored }) {
           && (fromOfflineCopyRef.current || (mangasRef.current.length === 0 && await showOfflineCopy()));
         if (!isLatest()) return;
         setError(usedCopy
-          ? 'Server nicht erreichbar – angezeigt wird die gespeicherte Offline-Kopie.'
-          : (body.error || `Sammlung konnte nicht geladen werden (Fehler ${res.status}).`));
+          ? t('Server nicht erreichbar – angezeigt wird die gespeicherte Offline-Kopie.')
+          : (serverText(body) || t('Sammlung konnte nicht geladen werden (Fehler {status}).', { status: res.status })));
         return;
       }
       const data = await readJson(res);
       if (!isLatest()) return;
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       answered = true;
       const list = Array.isArray(data) ? data : [];
       const stored = writeCache(key, LIST_KEY, list, res.headers?.get?.('ETag'));
@@ -132,8 +134,8 @@ export default function useMangaList({ user, canEdit, onRestored }) {
       const usedCopy = mangasRef.current.length === 0 && await showOfflineCopy();
       if (!isLatest()) return;
       setError(usedCopy || mangasRef.current.length > 0
-        ? 'Server nicht erreichbar – angezeigt wird der zuletzt geladene Stand.'
-        : 'Server nicht erreichbar – Sammlung konnte nicht geladen werden.');
+        ? t('Server nicht erreichbar – angezeigt wird der zuletzt geladene Stand.')
+        : t('Server nicht erreichbar – Sammlung konnte nicht geladen werden.'));
     } finally {
       if (isLatest()) {
         setLoading(false);
@@ -146,7 +148,7 @@ export default function useMangaList({ user, canEdit, onRestored }) {
     try {
       const res = await apiFetch(`/api/trash/${trashId}/restore`, { method: 'POST' });
       if (!res.ok) {
-        await notifyResponseError(res, 'Wiederherstellen fehlgeschlagen');
+        await notifyResponseError(res, t('Wiederherstellen fehlgeschlagen'));
         return;
       }
     } catch (err) {
@@ -166,7 +168,7 @@ export default function useMangaList({ user, canEdit, onRestored }) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     if (!canEditRef.current) return false;
-    if (!confirm(`Möchtest du "${title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).`)) {
+    if (!confirm(t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title }))) {
       return false;
     }
 
@@ -187,19 +189,19 @@ export default function useMangaList({ user, canEdit, onRestored }) {
       syncOfflineCopy({ force: true });
       const trashId = (await readJson(res))?.trash_id;
       if (trashId) {
-        notify.success(`„${title}“ in den Papierkorb gelegt`, {
+        notify.success(t('„{title}“ in den Papierkorb gelegt', { title }), {
           duration: TRASH_UNDO_MS,
-          action: { label: 'Rückgängig', onClick: () => restoreSeries(trashId) }
+          action: { label: t('Rückgängig'), onClick: () => restoreSeries(trashId) }
         });
       }
       return true;
     }
     if (res.status === 401) {
       // a session end is already on its way to the login; any other 401 (proxy) needs a message
-      if (!sessionEndAnnounced(res)) await notifyResponseError(res, 'Sitzung abgelaufen – bitte neu anmelden.');
+      if (!sessionEndAnnounced(res)) await notifyResponseError(res, t('Sitzung abgelaufen – bitte neu anmelden.'));
       return false;
     }
-    await notifyResponseError(res, 'Fehler beim Löschen');
+    await notifyResponseError(res, t('Fehler beim Löschen'));
     return false;
   }, [fetchMangas, restoreSeries, show]);
 

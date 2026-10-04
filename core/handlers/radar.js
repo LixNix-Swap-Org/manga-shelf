@@ -7,6 +7,7 @@ const { sha256Hex, buildCalendar } = require('../ical');
 const { inferVolumeType } = require('../lib/volumeType');
 const { qstr } = require('../lib/query');
 const { HttpError } = require('../errors');
+const { MP_LANGUAGE, DEFAULT_LANGUAGE } = require('../lib/language');
 
 const { buildMatcher, monthsToCheck, detectDateChanges } = releases;
 const log = (ctx) => ctx.log.child('radar');
@@ -30,6 +31,7 @@ function releaseRadar(ctx) {
             m.title as manga_title, 
             m.cover_image as manga_cover,
             m.publisher as manga_publisher,
+            COALESCE(v.language, m.language) as language, m.currency as currency,
             COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher
         FROM volumes v
         JOIN mangas m ON v.manga_id = m.id
@@ -63,12 +65,17 @@ function dashboardSummary(ctx) {
     return { body: { total_missing: missing, total_releases: radar.total, preordered_count: radar.preordered || 0 } };
 }
 
+// The Manga Passion calendar lists German editions only: series and volumes in other languages never match it
 const loadUserMangas = (ctx) => ctx.db.prepare(`
     SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.manga_passion_id, m.wish_priority, m.collecting,
            (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS owned_count
-    FROM mangas m ORDER BY m.id
-`).all();
-const loadUserVolumes = (ctx) => ctx.db.prepare('SELECT id, manga_id, volume_number, type, notes, status, price, release_date, manga_passion_volume_id FROM volumes ORDER BY id').all();
+    FROM mangas m WHERE COALESCE(m.language, ?) = ? ORDER BY m.id
+`).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
+const loadUserVolumes = (ctx) => ctx.db.prepare(`
+    SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.price, v.release_date, v.manga_passion_volume_id
+    FROM volumes v JOIN mangas m ON m.id = v.manga_id
+    WHERE COALESCE(v.language, m.language, ?) = ? ORDER BY v.id
+`).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
 
 // Preorders whose date in the Manga Passion calendar has changed since (postponements)
 async function dateChanges(ctx) {
@@ -77,7 +84,8 @@ async function dateChanges(ctx) {
         FROM volumes v JOIN mangas m ON m.id = v.manga_id
         WHERE v.status IN ('Vorbestellt', 'Erscheint bald', 'Bestellt')
           AND v.release_date IS NOT NULL AND TRIM(v.release_date) != ''
-    `).all();
+          AND COALESCE(v.language, m.language, ?) = ?
+    `).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
     const months = monthsToCheck(pending, zonedToday(ctx.now(), ctx.config.appTimeZone));
     const results = await releases.fetchMonthsForCheck(ctx, months);
     const matcher = buildMatcher(loadUserMangas(ctx), loadUserVolumes(ctx));
@@ -147,7 +155,8 @@ function feedVolumeLabel(row) {
     }
 }
 
-const feedPrice = (value) => (typeof value === 'number' && value > 0 ? `${value.toFixed(2).replace('.', ',')} €` : null);
+const feedPrice = (value, currency = 'EUR') => (typeof value === 'number' && value > 0
+    ? `${value.toFixed(2).replace('.', ',')} ${currency === 'EUR' ? '€' : currency}` : null);
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function calendarFeed(ctx, { query }) {
@@ -161,7 +170,7 @@ function calendarFeed(ctx, { query }) {
     const from = isoDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - FEED_PAST_DAYS));
     const rows = ctx.db.prepare(`
         SELECT v.id, v.volume_number, v.type, v.notes, v.status, v.price, v.isbn, TRIM(v.release_date) AS release_date,
-               m.title AS manga_title,
+               m.title AS manga_title, m.currency,
                COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') AS effective_publisher
         FROM volumes v JOIN mangas m ON v.manga_id = m.id
         WHERE ${RADAR_WHERE} AND TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND TRIM(v.release_date) >= ?
@@ -176,7 +185,7 @@ function calendarFeed(ctx, { query }) {
         description: [
             `Status: ${row.status || 'unbekannt'}`,
             `Verlag: ${row.effective_publisher}`,
-            feedPrice(row.price) && `Preis: ${feedPrice(row.price)}`,
+            feedPrice(row.price, row.currency) && `Preis: ${feedPrice(row.price, row.currency)}`,
             row.isbn && `ISBN: ${row.isbn}`
         ].filter(Boolean).join('\n'),
         categories: 'Manga'

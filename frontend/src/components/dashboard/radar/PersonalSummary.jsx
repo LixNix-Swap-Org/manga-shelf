@@ -3,6 +3,9 @@ import { Package, RefreshCw, Coins, CalendarPlus, Copy, ExternalLink } from 'luc
 import api, { apiUrl } from '../../../utils/api';
 import { notify } from '../../../utils/notify';
 import { formatCount, formatEuro, formatRelative } from '../../../utils/format';
+import { t } from '../../../i18n/index.js';
+import { rich } from '../../../i18n/react.jsx';
+import OtherCurrencies from '../../common/OtherCurrencies';
 
 const euro = (value) => formatEuro(value || 0);
 
@@ -31,9 +34,9 @@ export function CalendarFeedPanel() {
 
   useEffect(() => {
     let alive = true;
-    api.get(FEED_API, { fallback: 'Kalender-Abo konnte nicht geladen werden' })
+    api.get(FEED_API, { fallback: t('Kalender-Abo konnte nicht geladen werden') })
       .then((data) => { if (alive) setState(data); })
-      .catch((err) => { if (alive) setError(err?.message || 'Kalender-Abo konnte nicht geladen werden'); });
+      .catch((err) => { if (alive) setError(err?.message || t('Kalender-Abo konnte nicht geladen werden')); });
     return () => { alive = false; };
   }, []);
 
@@ -45,45 +48,44 @@ export function CalendarFeedPanel() {
       setError('');
       if (success) notify.success(success);
     } catch (err) {
-      notify.error(err, { fallback: 'Kalender-Abo konnte nicht geändert werden' });
+      notify.error(err, { fallback: t('Kalender-Abo konnte nicht geändert werden') });
     } finally {
       setBusy(false);
     }
   };
-  const create = (renew) => act(() => api.post(FEED_API, {}), renew ? 'Neue Adresse erzeugt – die alte funktioniert nicht mehr' : 'Kalender-Adresse erzeugt');
+  const create = (renew) => act(() => api.post(FEED_API, {}), renew ? t('Neue Adresse erzeugt – die alte funktioniert nicht mehr') : t('Kalender-Adresse erzeugt'));
   const revoke = () => act(async () => {
     await api.del(FEED_API);
     return { active: false };
-  }, 'Kalender-Abo beendet');
+  }, t('Kalender-Abo beendet'));
 
   const address = feedAddress(state);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(address);
-      notify.success('Kalender-Adresse kopiert');
+      notify.success(t('Kalender-Adresse kopiert'));
     } catch (_) {
-      notify.info('Kopieren nicht möglich – bitte die Adresse im Feld markieren und kopieren.');
+      notify.info(t('Kopieren nicht möglich – bitte die Adresse im Feld markieren und kopieren.'));
     }
   };
 
   return (
     <div id="radar-calendar-feed" className="w-full rounded-2xl border border-sky-500/25 bg-slate-950/60 p-4 space-y-3 text-xs">
       <p className="text-slate-300">
-        Vorbestellte und angekündigte Bände mit genauem Erscheinungstag als Kalender-Abo (iCal) – für iPhone, Android oder Thunderbird.
-        Die Adresse ist persönlich und funktioniert ohne Anmeldung: nicht weitergeben.
+        {t('Vorbestellte und angekündigte Bände mit genauem Erscheinungstag als Kalender-Abo (iCal) – für iPhone, Android oder Thunderbird. Die Adresse ist persönlich und funktioniert ohne Anmeldung: nicht weitergeben.')}
       </p>
       {error && <p role="alert" className="text-rose-300">{error}</p>}
-      {!state && !error && <p role="status" className="text-slate-400">Wird geladen…</p>}
+      {!state && !error && <p role="status" className="text-slate-400">{t('Wird geladen…')}</p>}
       {state && !state.active && (
         <button type="button" id="btn-calendar-feed-create" className="btn-primary text-xs inline-flex items-center gap-1.5" disabled={busy} onClick={() => create(false)}>
-          <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> Abo-Adresse erzeugen
+          <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Abo-Adresse erzeugen')}
         </button>
       )}
       {state?.active && (
         <div className="space-y-2">
           {address ? (
             <>
-              <label htmlFor={`${ids}-url`} className="block text-slate-400">Kalender-Adresse</label>
+              <label htmlFor={`${ids}-url`} className="block text-slate-400">{t('Kalender-Adresse')}</label>
               <div className="flex flex-wrap gap-2">
                 <input
                   id={`${ids}-url`}
@@ -93,41 +95,41 @@ export function CalendarFeedPanel() {
                   className="input-field text-base sm:text-xs flex-1 min-w-0 font-mono"
                 />
                 <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={copy}>
-                  <Copy className="w-3.5 h-3.5" aria-hidden="true" /> Kopieren
+                  <Copy className="w-3.5 h-3.5" aria-hidden="true" /> {t('Kopieren')}
                 </button>
                 <a href={address.replace(/^https?:/, 'webcal:')} className="btn-secondary text-xs inline-flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" /> In Kalender-App öffnen
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" /> {t('In Kalender-App öffnen')}
                 </a>
               </div>
             </>
           ) : (
-            <p className="text-amber-300">Die Adresse lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen und im Kalender ersetzen.</p>
+            <p className="text-amber-300">{t('Die Adresse lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen und im Kalender ersetzen.')}</p>
           )}
           <p className="text-slate-400">
-            {state.last_used_at ? `Zuletzt abgerufen ${formatRelative(state.last_used_at)}.` : 'Noch nicht abgerufen.'}
+            {state.last_used_at ? t('Zuletzt abgerufen {time}.', { time: formatRelative(state.last_used_at) }) : t('Noch nicht abgerufen.')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {confirmRenew ? (
-              <span className="inline-flex flex-wrap items-center gap-2" role="group" aria-label="Neue Adresse erzeugen?">
-                <span className="text-amber-200">Die alte Adresse hört sofort auf zu funktionieren.</span>
-                <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => create(true)}>Neu erzeugen</button>
-                <button type="button" className="btn-secondary text-xs" onClick={() => setConfirmRenew(false)}>Abbrechen</button>
+              <span className="inline-flex flex-wrap items-center gap-2" role="group" aria-label={t('Neue Adresse erzeugen?')}>
+                <span className="text-amber-200">{t('Die alte Adresse hört sofort auf zu funktionieren.')}</span>
+                <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => create(true)}>{t('Neu erzeugen')}</button>
+                <button type="button" className="btn-secondary text-xs" onClick={() => setConfirmRenew(false)}>{t('Abbrechen')}</button>
               </span>
             ) : (
-              <button type="button" id="btn-calendar-feed-renew" className="btn-secondary text-xs" disabled={busy} onClick={() => setConfirmRenew(true)}>Neue Adresse erzeugen</button>
+              <button type="button" id="btn-calendar-feed-renew" className="btn-secondary text-xs" disabled={busy} onClick={() => setConfirmRenew(true)}>{t('Neue Adresse erzeugen')}</button>
             )}
-            <button type="button" id="btn-calendar-feed-revoke" className="btn-secondary text-xs text-rose-300" disabled={busy} onClick={revoke}>Abo beenden</button>
+            <button type="button" id="btn-calendar-feed-revoke" className="btn-secondary text-xs text-rose-300" disabled={busy} onClick={revoke}>{t('Abo beenden')}</button>
           </div>
         </div>
       )}
       <details className="text-slate-300">
-        <summary className="cursor-pointer text-brand-300 hover:text-brand-200">So abonnierst du den Kalender</summary>
+        <summary className="cursor-pointer text-brand-300 hover:text-brand-200">{t('So abonnierst du den Kalender')}</summary>
         <ul className="mt-2 space-y-1.5 list-disc pl-5">
-          <li><strong>iPhone/iPad:</strong> „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.</li>
-          <li><strong>Android:</strong> im Browser calendar.google.com öffnen → bei „Weitere Kalender“ auf + → „Per URL“ → Adresse einfügen. Danach in der Google-Kalender-App unter Einstellungen die Synchronisierung des Kalenders einschalten. Ohne Google-Konto geht es mit der App ICSx⁵.</li>
-          <li><strong>Thunderbird:</strong> Kalender → Neuer Kalender → Im Netzwerk → Adresse einfügen → Abonnieren.</li>
+          <li>{rich('{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.', { device: <strong>iPhone/iPad:</strong> })}</li>
+          <li>{rich('{device} im Browser calendar.google.com öffnen → bei „Weitere Kalender“ auf + → „Per URL“ → Adresse einfügen. Danach in der Google-Kalender-App unter Einstellungen die Synchronisierung des Kalenders einschalten. Ohne Google-Konto geht es mit der App ICSx⁵.', { device: <strong>Android:</strong> })}</li>
+          <li>{rich('{device} Kalender → Neuer Kalender → Im Netzwerk → Adresse einfügen → Abonnieren.', { device: <strong>Thunderbird:</strong> })}</li>
         </ul>
-        <p className="mt-2 text-slate-400">Google ruft den Kalender von seinen eigenen Servern ab: das klappt nur, wenn Manga Shelf aus dem Internet erreichbar ist. iPhone und Thunderbird holen ihn direkt vom Gerät. Kalender-Apps aktualisieren Abos nur alle paar Stunden.</p>
+        <p className="mt-2 text-slate-400">{t('Google ruft den Kalender von seinen eigenen Servern ab: das klappt nur, wenn Manga Shelf aus dem Internet erreichbar ist. iPhone und Thunderbird holen ihn direkt vom Gerät. Kalender-Apps aktualisieren Abos nur alle paar Stunden.')}</p>
       </details>
     </div>
   );
@@ -149,7 +151,7 @@ export default function PersonalSummary({
           </div>
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>Meine Vorbestellungen & Lieferungen</span>
+              <span>{t('Meine Vorbestellungen & Lieferungen')}</span>
               {radarData && (
                 <span className="bg-sky-500/20 text-sky-300 text-xs px-2.5 py-0.5 rounded-full border border-sky-500/30 font-mono font-bold">
                   {formatCount(radarData.total_releases, 'Band', 'Bände')}
@@ -157,7 +159,7 @@ export default function PersonalSummary({
               )}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Verfolge deine offenen Vorbestellungen und behalte dein geplantes Manga-Budget im Blick
+              {t('Verfolge deine offenen Vorbestellungen und behalte dein geplantes Manga-Budget im Blick')}
             </p>
           </div>
         </div>
@@ -165,7 +167,7 @@ export default function PersonalSummary({
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full md:w-auto">
           <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
-              <Package className="w-3 h-3 text-sky-400" /> Vorbestellt ({radarData ? radarData.preordered_count : '–'})
+              <Package className="w-3 h-3 text-sky-400" /> {t('Vorbestellt ({count})', { count: radarData ? radarData.preordered_count : '–' })}
             </p>
             <p className="text-base sm:text-lg font-extrabold text-sky-400 font-mono">
               {radarData ? euro(radarData.preordered_budget) : '–'}
@@ -174,11 +176,12 @@ export default function PersonalSummary({
 
           <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
-              <Coins className="w-3 h-3 text-emerald-400" /> Gesamt geplant
+              <Coins className="w-3 h-3 text-emerald-400" /> {t('Gesamt geplant')}
             </p>
             <p className="text-base sm:text-lg font-extrabold text-emerald-400 font-mono">
               {radarData ? euro(radarData.total_budget) : '–'}
             </p>
+            <OtherCurrencies list={radarData?.other_currencies} />
           </div>
 
           <button
@@ -188,11 +191,11 @@ export default function PersonalSummary({
             aria-expanded={feedOpen}
             aria-controls="radar-calendar-feed"
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 shrink-0"
-            title="Erscheinungstermine als Kalender abonnieren"
-            aria-label="Kalender abonnieren"
+            title={t('Erscheinungstermine als Kalender abonnieren')}
+            aria-label={t('Kalender abonnieren')}
           >
             <CalendarPlus className="w-4 h-4 text-sky-400" aria-hidden="true" />
-            <span className="hidden sm:inline" aria-hidden="true">Kalender abonnieren</span>
+            <span className="hidden sm:inline" aria-hidden="true">{t('Kalender abonnieren')}</span>
           </button>
 
           <button
@@ -200,8 +203,8 @@ export default function PersonalSummary({
             onClick={fetchReleaseRadar}
             disabled={loadingRadar}
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 shrink-0"
-            title="Release-Radar aktualisieren"
-            aria-label="Release-Radar aktualisieren"
+            title={t('Release-Radar aktualisieren')}
+            aria-label={t('Release-Radar aktualisieren')}
           >
             <RefreshCw className={`w-4 h-4 ${loadingRadar ? 'animate-spin' : ''}`} />
           </button>

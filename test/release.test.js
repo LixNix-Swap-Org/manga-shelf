@@ -169,13 +169,20 @@ describe('signing detection and release text', () => {
   });
 
   test('the release text names the signing state and the downloads', () => {
-    assert.match(notes(detectSigning({})), /Windows .*: unsigniert/);
-    assert.match(notes(detectSigning({ WIN_CSC_LINK: 'x', WIN_CSC_KEY_PASSWORD: 'y' })), /Windows .*: signiert/);
+    assert.match(notes(detectSigning({})), /Windows .*: unsigned/);
+    assert.match(notes(detectSigning({ WIN_CSC_LINK: 'x', WIN_CSC_KEY_PASSWORD: 'y' })), /Windows .*: signed/);
+    // AGENTS.md §7 and CHANGELOG.md quote these iPhone lines
+    const ios = { IOS_CERT_P12_BASE64: 'a', IOS_CERT_PASSWORD: 'b', IOS_PROVISIONING_PROFILE_BASE64: 'c', APPLE_TEAM_ID: 'd' };
+    const withShare = { ...ios, IOS_SHARE_PROVISIONING_PROFILE_BASE64: 'p' };
+    assert.match(notes(detectSigning(withShare), withShare), /iPhone \(IPA\): signed, with share extension \(iOS\)$/m);
+    const withoutShare = { ...ios, IOS_SHARE_PROVISIONING_PROFILE_BASE64: '' };
+    assert.match(notes(detectSigning(withoutShare), withoutShare), /iPhone \(IPA\): signed, without share extension \(iOS\)$/m);
     const text = releaseNotes('v2.20.0', {}, 'LixNix-Swap-Org/manga-shelf');
     assert.match(text, /pterodactyl-manga-shelf\.zip/);
     assert.match(text, /ghcr\.io\/lixnix-swap-org\/manga-shelf:2\.20\.0/);
     assert.match(text, /SHA256SUMS\.txt/);
-    assert.match(text, /### Signierung/);
+    assert.match(text, /### Signing/);
+    assert.match(text, /^Checksums: `SHA256SUMS\.txt`/m);
   });
 
   test('tags have the vX.Y.Z form the update check reads (routes/system.js)', () => {

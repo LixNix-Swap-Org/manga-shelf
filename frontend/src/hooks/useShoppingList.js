@@ -11,16 +11,20 @@ import { PURCHASE_RECORDED_EVENT } from '../appShell';
 import { apiFetch, readJson, sessionEndAnnounced } from '../utils/api';
 import { notify } from '../utils/notify';
 import { haptic } from '../utils/haptics';
+import { t } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
 async function errorText(res) {
-  const body = await readJson(res);
-  return typeof body?.error === 'string' ? body.error : '';
+  return serverText(await readJson(res));
 }
 
 const browserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
+// i18n
 const SESSION_EXPIRED = 'Sitzung abgelaufen – der Kauf ist vorgemerkt und wird nach der Anmeldung übertragen.';
+// i18n
 const BUY_FAILED = 'Fehler beim Aktualisieren des Bands';
+// i18n
 const QUEUE_FAILED = 'Der Kauf konnte nicht vorgemerkt werden (Speicher voll oder nicht verfügbar). Bitte erneut versuchen, sobald eine Verbindung besteht.';
 
 /** Why the list could not be loaded: 'offline' (no answer), 'auth' (401), 'server' (5xx/429) or 'error' (other 4xx). */
@@ -147,7 +151,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
         return;
       }
       const data = await readJson(res);
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       if (generation !== getClearGeneration()) return; // logged out meanwhile: keep nothing of it
       await getOutbox().load();
       if (generation !== getClearGeneration()) return;
@@ -208,23 +212,23 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     setBuyingIds((prev) => addId(prev, volumeId));
     try {
       const id = userId !== null ? userId : await resolveUserId();
-      if (id === null) return done('failed', QUEUE_FAILED);
+      if (id === null) return done('failed', t(QUEUE_FAILED));
       const offline = Boolean(user?.offline) || browserOffline();
       const change = { kind: 'purchase', volumeId, value: true, purchase_date: localToday() };
       let result;
       try {
         result = await submitChange(change, { userId: id, offline });
       } catch (_) {
-        return done('failed', QUEUE_FAILED);
+        return done('failed', t(QUEUE_FAILED));
       }
       const { status, res } = result;
-      if (result.reason === 'storage') return done('failed', QUEUE_FAILED);
+      if (result.reason === 'storage') return done('failed', t(QUEUE_FAILED));
       if (status === 'queued' || status === 'auth') {
         syncDueRef.current = true;
         if (!offline && status === 'queued') setNetworkOffline(true);
         const recorded = recordPurchaseLocally(volumeId, change, id, true);
         markBought(volumeId);
-        if (status === 'auth' && !sessionEndAnnounced(res) && !batch) notify.info(SESSION_EXPIRED);
+        if (status === 'auth' && !sessionEndAnnounced(res) && !batch) notify.info(t(SESSION_EXPIRED));
         await recorded;
         return done('queued');
       }
@@ -240,7 +244,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
       }
       // 404: the volume no longer exists; other 4xx: the server refused the purchase
       if (res?.status === 404) dropItem(volumeId);
-      return done('failed', (res && await errorText(res)) || BUY_FAILED, res?.status ?? null);
+      return done('failed', (res && await errorText(res)) || t(BUY_FAILED), res?.status ?? null);
     } finally {
       setBuyingIds((prev) => removeId(prev, volumeId));
     }

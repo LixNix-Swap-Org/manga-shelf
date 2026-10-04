@@ -2,6 +2,7 @@ import { BookOpen, Plus, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { assetImgProps } from '../../utils/api';
 import { langFor } from '../common/lang';
+import { t } from '../../i18n/index.js';
 
 /** Barcode scan matched several similar series: the user picks one (or, as an editor, creates a new one). */
 export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, onChoose, onCreateNew, onClose }) {
@@ -27,13 +28,13 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
       <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="scan-candidates-title" className="text-lg font-bold text-white">Mehrere Reihen passen – bitte auswählen</h2>
-            {bookTitle && <p className="text-xs text-slate-400 mt-1 truncate">Gescannt: {bookTitle}</p>}
+            <h2 id="scan-candidates-title" className="text-lg font-bold text-white">{t('Mehrere Reihen passen – bitte auswählen')}</h2>
+            {bookTitle && <p className="text-xs text-slate-400 mt-1 truncate">{t('Gescannt: {bookTitle}', { bookTitle })}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Schließen"
+            aria-label={t('Schließen')}
             className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -67,10 +68,10 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
         <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-800">
           {canEdit && onCreateNew && (
             <button type="button" onClick={onCreateNew} className="btn-secondary text-xs inline-flex items-center gap-1.5">
-              <Plus className="w-4 h-4" aria-hidden="true" /> Neue Reihe anlegen
+              <Plus className="w-4 h-4" aria-hidden="true" /> {t('Neue Reihe anlegen')}
             </button>
           )}
-          <button type="button" onClick={onClose} className="btn-secondary text-xs">Abbrechen</button>
+          <button type="button" onClick={onClose} className="btn-secondary text-xs">{t('Abbrechen')}</button>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { apiFetch, assetUrl, isLocalMode, TIMEOUTS } from './api.js';
 import { formatRelative } from './format.js';
 import { clearDataCache } from './dataCache.js';
 import { ANIME_CACHE_KEY, ANIME_META_KEY } from './storageKeys.js';
+import { t } from '../i18n/index.js';
 
 // The scan helpers stay out of the start chunk: the index is built during the background sync and read by the scanners
 const isbnTools = () => import('./scanHelpers.js');
@@ -35,7 +36,7 @@ function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB nicht verfügbar'));
+      reject(new Error(t('IndexedDB nicht verfügbar')));
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -47,7 +48,7 @@ function openDb() {
       }
     };
     req.onblocked = () => {
-      blockedTimer = setTimeout(() => reject(new Error('Offline-Datenbank wird von einem anderen Tab blockiert')), BLOCKED_TIMEOUT_MS);
+      blockedTimer = setTimeout(() => reject(new Error(t('Offline-Datenbank wird von einem anderen Tab blockiert'))), BLOCKED_TIMEOUT_MS);
     };
     req.onsuccess = () => {
       clearTimeout(blockedTimer);

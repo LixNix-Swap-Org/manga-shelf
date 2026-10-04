@@ -73,7 +73,7 @@ function dropDialogEntry(token) {
 
 /** The dialog's own close path: its Escape handling (which may refuse while busy or ask about unsaved input). */
 function pressEscape(node) {
-  node?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  node?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); // i18n-ignore: key name
 }
 
 /**

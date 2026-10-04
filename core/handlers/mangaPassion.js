@@ -5,7 +5,7 @@ const { qstr } = require('../lib/query');
 const { normalizeIsbn } = require('../lib/isbn');
 const { inferVolumeType } = require('../lib/volumeType');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
-const { HttpError, badRequest, notFound, conflict } = require('../errors');
+const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../errors');
 const { parseOptionalId, parseTrueFlag: parseFlag } = require('../lib/validate');
 const { zonedToday, isValidReleaseDate } = require('../radar');
 const client = require('../mangaPassion/client');
@@ -14,14 +14,22 @@ const autofill = require('../mangaPassion/autofill');
 const releases = require('../mangaPassion/releases');
 const { fillTagsFromEdition } = require('../mangaPassion/tags');
 const { loadUserMangas, loadUserVolumes } = require('./radar');
+const { isMpLanguage, MP_LANGUAGE, DEFAULT_LANGUAGE } = require('../lib/language');
+const { findDuplicate } = require('./volumes');
 
 const { toEditionId } = client;
 const { GAP_IMPORT_STATUSES: IMPORT_STATUSES } = gapsLib;
 
-// 404 instead of a logged 500 when the series of a Manga Passion action does not exist
+const MP_LANGUAGE_ERROR = 'Manga Passion kennt nur deutsche Ausgaben';
+// Manga Passion lists German editions only: a series in another language would be matched to the German edition
+const mpLanguageError = () => conflict(MP_LANGUAGE_ERROR, 'MP_LANGUAGE');
+
+// 404 instead of a logged 500 when the series of a Manga Passion action does not exist; 409 for a non-German edition
 function mangaExists(ctx, params) {
     const mangaId = parseInt(params.id, 10);
-    if (!ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(mangaId)) throw notFound('Manga');
+    const row = ctx.db.prepare('SELECT id, language FROM mangas WHERE id = ?').get(mangaId);
+    if (!row) throw notFound('Manga');
+    if (!isMpLanguage(row.language)) throw mpLanguageError();
     return mangaId;
 }
 
@@ -83,21 +91,21 @@ async function batchImportGaps(ctx, { params, body }) {
         throw badRequest('volume_numbers Array ist erforderlich');
     }
     if (volume_numbers.length > MAX_GAP_ENTRIES) {
-        throw badRequest(`Zu viele Einträge (maximal ${MAX_GAP_ENTRIES})`);
+        throw badRequest(msg('Zu viele Einträge (maximal {max_entries})', { max_entries: MAX_GAP_ENTRIES }));
     }
     const entries = [];
     for (const entry of volume_numbers) {
         const valid = typeof entry === 'string' || (typeof entry === 'number' && Number.isFinite(entry));
         const label = valid ? String(entry).trim() : '';
         if (!label || label.length > MAX_GAP_LABEL_LENGTH) {
-            throw badRequest(`Ungültiger Eintrag in volume_numbers (Text oder Zahl, 1 bis ${MAX_GAP_LABEL_LENGTH} Zeichen)`);
+            throw badRequest(msg('Ungültiger Eintrag in volume_numbers (Text oder Zahl, 1 bis {max_length} Zeichen)', { max_length: MAX_GAP_LABEL_LENGTH }));
         }
         entries.push(label);
     }
     let status = 'Fehlt';
     if (target_status !== undefined && target_status !== null && target_status !== '') {
         if (typeof target_status !== 'string' || !IMPORT_STATUSES.includes(target_status)) {
-            throw badRequest('Ungültiger Zielstatus (erlaubt: ' + IMPORT_STATUSES.join(', ') + ')');
+            throw badRequest(msg('Ungültiger Zielstatus (erlaubt: {allowed})', { allowed: msgList(IMPORT_STATUSES) }));
         }
         status = target_status;
     }
@@ -145,6 +153,12 @@ async function volumeLookup(ctx, { query }) {
 
     if (!volumeNumber && !isbn && !url && !mpVolumeId) {
         throw badRequest('Band-Nummer, ISBN oder URL erforderlich');
+    }
+    const series = mangaId ? ctx.db.prepare('SELECT language FROM mangas WHERE id = ?').get(mangaId) : null;
+    if (series) {
+        // a stored volume with its own language (an English volume in a German series) is no German edition either
+        const stored = volumeNumber ? findDuplicate(ctx, mangaId, volumeNumber, type || inferVolumeType({ volume_number: volumeNumber, notes })) : null;
+        if (!isMpLanguage((stored && stored.language) || series.language)) throw mpLanguageError();
     }
 
     const result = await autofill.lookupVolumeMetadata(ctx, mangaId, volumeNumber, {
@@ -237,12 +251,12 @@ function optionalId(v) {
 /** Checks and normalises the import body; returns { error } or the cleaned fields. */
 function parseImportBody(body) {
     for (const field of ['title', 'publisher', 'cover_image', 'release_date', 'target_status', 'type', 'volume_title']) {
-        if (!isBlank(body[field]) && typeof body[field] !== 'string') return { error: `Ungültiger Wert für ${field}` };
+        if (!isBlank(body[field]) && typeof body[field] !== 'string') return { error: msg('Ungültiger Wert für {field}', { field }) };
     }
 
     const effStatus = body.target_status || 'Vorbestellt';
     if (!IMPORT_STATUSES.includes(effStatus)) {
-        return { error: 'Ungültiger Zielstatus (erlaubt: ' + IMPORT_STATUSES.join(', ') + ')' };
+        return { error: msg('Ungültiger Zielstatus (erlaubt: {allowed})', { allowed: msgList(IMPORT_STATUSES) }) };
     }
 
     let price = null;
@@ -274,7 +288,7 @@ function parseImportBody(body) {
         type = EDITION_TYPES.has(fromTitle) && inferred === 'volume' ? fromTitle
             : (inferred === 'volume' && !/\d/.test(volNumStr) ? 'special' : inferred);
     }
-    if (!IMPORT_TYPES.includes(type)) return { error: 'Ungültiger Typ (erlaubt: ' + IMPORT_TYPES.join(', ') + ')' };
+    if (!IMPORT_TYPES.includes(type)) return { error: msg('Ungültiger Typ (erlaubt: {allowed})', { allowed: IMPORT_TYPES.join(', ') }) };
     // "Band 4" is regular volume 4, like POST /volumes stores it
     volNumStr = canonicalVolumeNumber(volNumStr, type);
 
@@ -311,8 +325,9 @@ async function importRelease(ctx, { body }) {
     let { mangaId } = parsed;
 
     if (mangaId) {
-        const series = ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE id = ?').get(mangaId);
+        const series = ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id, language FROM mangas WHERE id = ?').get(mangaId);
         if (!series) throw notFound('Manga');
+        if (!isMpLanguage(series.language)) throw mpLanguageError();
         // Older clients send the main series' id for a spin-off ("X – Episode Nagi"): that is another work
         if (cleanTitle && cleanTitle.length <= 300) {
             const [probe] = releases.buildMatcher([series]).enrich([{ title: cleanTitle, edition_id: editionId, volume_number: volNumStr }]);
@@ -335,15 +350,15 @@ async function importRelease(ctx, { body }) {
         let seriesCreated = false;
         if (!mangaId) {
             const existing = releases.findSeriesForImport(
-                ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas ORDER BY id').all(), cleanTitle, editionId
+                ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE COALESCE(language, ?) = ? ORDER BY id').all(DEFAULT_LANGUAGE, MP_LANGUAGE), cleanTitle, editionId
             );
             if (existing) {
                 mangaId = existing.id;
             } else {
                 const insManga = ctx.db.prepare(`
-                    INSERT INTO mangas (title, author, tags, publisher, cover_image, manga_passion_id, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'Laufend', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                `).run(cleanTitle, editionMeta.author ?? null, editionMeta.tags ?? null, publisher, coverImage, editionId);
+                    INSERT INTO mangas (title, author, tags, publisher, cover_image, manga_passion_id, language, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Laufend', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                `).run(cleanTitle, editionMeta.author ?? null, editionMeta.tags ?? null, publisher, coverImage, editionId, MP_LANGUAGE);
                 mangaId = Number(insManga.lastInsertRowid);
                 seriesCreated = true;
             }

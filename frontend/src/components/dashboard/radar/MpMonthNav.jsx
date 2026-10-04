@@ -1,5 +1,6 @@
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Star, RefreshCw, CalendarCheck } from 'lucide-react';
 import { buildYearOptions, isCurrentMonth, shiftMonth } from '../../../utils/radarHelpers';
+import { t } from '../../../i18n/index.js';
 
 /** Month / year navigation of the Manga-Passion calendar. `mpCurrent`: mpData is the selected month. */
 export default function MpMonthNav({
@@ -32,11 +33,11 @@ export default function MpMonthNav({
             onClick={handlePrevMonth}
             disabled={loadingMp || !shiftMonth(mpYear, mpMonth, -1)}
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
-            title="Vorheriger Monat"
-            aria-label="Vorheriger Monat"
+            title={t('Vorheriger Monat')}
+            aria-label={t('Vorheriger Monat')}
           >
             <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Vorheriger Monat</span>
+            <span className="hidden sm:inline">{t('Vorheriger Monat')}</span>
           </button>
 
           <div className="flex flex-1 sm:flex-initial min-w-0 justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl shadow-inner">
@@ -46,7 +47,7 @@ export default function MpMonthNav({
               <select
                 value={mpMonth}
                 disabled={loadingMp}
-                aria-label="Monat"
+                aria-label={t('Monat')}
                 onChange={(e) => {
                   const m = Number(e.target.value);
                   setMpMonth(m);
@@ -67,7 +68,7 @@ export default function MpMonthNav({
               <select
                 value={mpYear}
                 disabled={loadingMp}
-                aria-label="Jahr"
+                aria-label={t('Jahr')}
                 onChange={(e) => {
                   const y = Number(e.target.value);
                   setMpYear(y);
@@ -90,10 +91,10 @@ export default function MpMonthNav({
             onClick={handleNextMonth}
             disabled={loadingMp || !shiftMonth(mpYear, mpMonth, 1)}
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
-            title="Nächster Monat"
-            aria-label="Nächster Monat"
+            title={t('Nächster Monat')}
+            aria-label={t('Nächster Monat')}
           >
-            <span className="hidden sm:inline">Nächster Monat</span>
+            <span className="hidden sm:inline">{t('Nächster Monat')}</span>
             <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
@@ -104,32 +105,32 @@ export default function MpMonthNav({
             onClick={handleCurrentMonth}
             disabled={loadingMp}
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
-            title="Zum aktuellen Monat"
+            title={t('Zum aktuellen Monat')}
           >
             <CalendarCheck className="w-4 h-4" />
-            <span>Aktueller Monat</span>
+            <span>{t('Aktueller Monat')}</span>
           </button>
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Neuerscheinungen</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{t('Neuerscheinungen')}</p>
           <p className="text-base sm:text-lg font-extrabold text-sky-400 font-mono">
             {countOrPlaceholder(mpPrintOnly ? shown?.print_count : shown?.total_items)}
             <span className="text-xs text-slate-400 font-normal ml-1">
-              {mpPrintOnly ? 'Print' : 'Gesamt'}
+              {mpPrintOnly ? t('Print') : t('Gesamt')}
             </span>
           </p>
         </div>
 
         <div className="bg-slate-950/70 border border-slate-800 px-3.5 py-2 rounded-xl text-right flex-1 sm:flex-initial">
           <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
-            <Star className="w-3 h-3 text-amber-400" /> Aus deinen Reihen
+            <Star className="w-3 h-3 text-amber-400" /> {t('Aus deinen Reihen')}
           </p>
           <p className="text-base sm:text-lg font-extrabold text-amber-400 font-mono">
             {countOrPlaceholder(mpPrintOnly ? shown?.user_series_print_count : shown?.user_series_count)}
-            <span className="text-xs text-slate-400 font-normal ml-1">Bände</span>
+            <span className="text-xs text-slate-400 font-normal ml-1">{t('Bände')}</span>
           </p>
         </div>
 
@@ -138,8 +139,8 @@ export default function MpMonthNav({
           onClick={() => fetchMangaPassionReleases(mpYear, mpMonth, true)}
           disabled={loadingMp}
           className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 shrink-0"
-          title="Manga-Passion-Daten neu laden (Cache umgehen)"
-          aria-label="Manga-Passion-Daten neu laden"
+          title={t('Manga-Passion-Daten neu laden (Cache umgehen)')}
+          aria-label={t('Manga-Passion-Daten neu laden')}
         >
           <RefreshCw className={`w-4 h-4 ${loadingMp ? 'animate-spin' : ''}`} />
         </button>

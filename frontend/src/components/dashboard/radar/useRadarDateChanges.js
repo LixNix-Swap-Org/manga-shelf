@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { withId, withoutId } from '../../../utils/radarHelpers';
 import { apiFetch, readJson, TIMEOUTS } from '../../../utils/api';
 import { notify, notifyResponseError } from '../../../utils/notify';
+import { t as tr } from '../../../i18n/index.js';
 
 /**
  * Pre-orders whose Manga-Passion date changed; loaded once per radar visit (the server walks several months).
@@ -56,7 +57,7 @@ export default function useRadarDateChanges({ enabled, onApplied }) {
         dropVolume(change.volume_id);
         onApplied?.();
       } else {
-        await notifyResponseError(res, 'Termin konnte nicht übernommen werden');
+        await notifyResponseError(res, tr('Termin konnte nicht übernommen werden'));
       }
     } catch (err) {
       notify.error(err);

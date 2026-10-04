@@ -3,6 +3,7 @@ import { BookCheck, BookOpen, CircleCheck } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { fmtNumber, fmtPct, countLabel, cssPct, fmtDateTime, sortReadVolumes } from '../statsFormat';
+import { t } from '../../../i18n/index.js';
 
 const READER_COVER_FALLBACK = (
   <div aria-hidden="true" className="w-full h-full flex items-center justify-center text-slate-500">
@@ -15,7 +16,7 @@ export function ReadingSummaryCard({ readers, ownedVols }) {
   return (
     <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
       <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4 flex items-center gap-2">
-        <BookCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" /> Lese-Fortschritt der Community
+        <BookCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" /> {t('Lese-Fortschritt der Community')}
       </h3>
       <div className="space-y-3.5">
         {readers.map(r => {
@@ -32,8 +33,8 @@ export function ReadingSummaryCard({ readers, ownedVols }) {
                 <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style={{ width: `${cssPct(pct)}%` }} />
               </div>
               <div className="flex justify-between text-[10px] text-slate-400">
-                <span>Gelesen: {countLabel(r.read_count, 'Band', 'Bände')}</span>
-                <span>Noch ungelesen (SuB): {countLabel(r.unread_count, 'Band', 'Bände')}</span>
+                <span>{t('Gelesen: {count}', { count: countLabel(r.read_count, 'Band', 'Bände') })}</span>
+                <span>{t('Noch ungelesen (SuB): {count}', { count: countLabel(r.unread_count, 'Band', 'Bände') })}</span>
               </div>
             </div>
           );
@@ -50,12 +51,12 @@ function ReaderDetails({ details, visibleSeries, onShowMore, onBack, onNavigate 
     <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
       <div className="flex items-center gap-3 mb-6">
         <button type="button" onClick={onBack} className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors text-xs">
-          Zurück
+          {t('Zurück')}
         </button>
         <div>
-          <h3 className="text-sm font-bold text-white">Gelesene Mangas von {details.user.username}</h3>
+          <h3 className="text-sm font-bold text-white">{t('Gelesene Mangas von {username}', { username: details.user.username })}</h3>
           <p className="text-xs text-slate-400">
-            {countLabel(details.stats.totalVolumes, 'Band', 'Bände')} ({countLabel(details.stats.totalPages, 'Seite', 'Seiten')}) insgesamt gelesen
+            {t('{volumes} ({pages}) insgesamt gelesen', { volumes: countLabel(details.stats.totalVolumes, 'Band', 'Bände'), pages: countLabel(details.stats.totalPages, 'Seite', 'Seiten') })}
           </p>
         </div>
       </div>
@@ -75,7 +76,7 @@ function ReaderDetails({ details, visibleSeries, onShowMore, onBack, onNavigate 
                   <span
                     key={v.id ?? `${v.type}-${v.volume_number}`}
                     className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[10px] font-mono flex items-center gap-1"
-                    title={`Gelesen am: ${fmtDateTime(v.read_at)}`}
+                    title={t('Gelesen am: {date}', { date: fmtDateTime(v.read_at) })}
                   >
                     <CircleCheck className="w-3 h-3" aria-hidden="true" />
                     {getVolumeDisplayTitle(v)}
@@ -91,13 +92,13 @@ function ReaderDetails({ details, visibleSeries, onShowMore, onBack, onNavigate 
             onClick={onShowMore}
             className="w-full py-2 rounded-xl bg-slate-800/50 hover:bg-slate-700/80 border border-slate-700 text-slate-300 text-xs font-semibold"
           >
-            Weitere Reihen anzeigen ({fmtNumber(hiddenSeries)} übrig)
+            {t('Weitere Reihen anzeigen ({number} übrig)', { number: fmtNumber(hiddenSeries) })}
           </button>
         )}
         {readMangas.length === 0 && (
           <div className="text-center py-8 bg-slate-900/50 rounded-xl border border-slate-800/50">
             <BookOpen className="w-8 h-8 mx-auto text-slate-500 mb-2" aria-hidden="true" />
-            <p className="text-xs text-slate-400">Noch keine Bände als gelesen markiert.</p>
+            <p className="text-xs text-slate-400">{t('Noch keine Bände als gelesen markiert.')}</p>
           </div>
         )}
       </div>
@@ -117,9 +118,9 @@ export default function ReadingTab({
         <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
           <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
             <BookCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
-            Lese-Tracking & SuB (Stapel ungelesener Bücher)
+            {t('Lese-Tracking & SuB (Stapel ungelesener Bücher)')}
           </h3>
-          <p className="text-xs text-slate-400 mb-6">Übersicht aller Leser und deren Lesestatus über die gesamte Manga-Sammlung.</p>
+          <p className="text-xs text-slate-400 mb-6">{t('Übersicht aller Leser und deren Lesestatus über die gesamte Manga-Sammlung.')}</p>
           {readerError && <p role="alert" className="mb-4 text-xs text-rose-300">{readerError}</p>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -137,7 +138,7 @@ export default function ReadingTab({
                       </div>
                       <div className="text-right">
                         <span className="text-xl font-extrabold font-mono text-emerald-400">{fmtPct(pct)}</span>
-                        <span className="text-[10px] text-slate-400 block">gelesen</span>
+                        <span className="text-[10px] text-slate-400 block">{t('gelesen')}</span>
                       </div>
                     </div>
 
@@ -147,15 +148,15 @@ export default function ReadingTab({
 
                     <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-xl bg-slate-950/60 border border-slate-800/60 text-xs">
                       <div>
-                        <span className="text-slate-400 text-[10px] block">Gelesen</span>
+                        <span className="text-slate-400 text-[10px] block">{t('Gelesen')}</span>
                         <strong className="font-mono text-emerald-400 text-sm">{fmtNumber(r.read_count)}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">SuB (Offen)</span>
+                        <span className="text-slate-400 text-[10px] block">{t('SuB (Offen)')}</span>
                         <strong className="font-mono text-amber-400 text-sm">{fmtNumber(r.unread_count)}</strong>
                       </div>
                       <div>
-                        <span className="text-slate-400 text-[10px] block">Im Besitz</span>
+                        <span className="text-slate-400 text-[10px] block">{t('Im Besitz')}</span>
                         <strong className="font-mono text-white text-sm">{fmtNumber(r.total_owned ?? ownedVols)}</strong>
                       </div>
                     </div>
@@ -168,7 +169,7 @@ export default function ReadingTab({
                       disabled={loadingDetails}
                       className="w-full py-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 text-slate-300 text-xs font-semibold transition-colors flex items-center justify-center gap-2"
                     >
-                      {loadingDetails ? 'Lädt...' : 'Alle gelesenen Bände anzeigen'}
+                      {loadingDetails ? t('Lädt...') : t('Alle gelesenen Bände anzeigen')}
                     </button>
                   </div>
                 </div>

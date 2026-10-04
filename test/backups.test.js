@@ -885,6 +885,65 @@ test('inspect of a server snapshot, of a backup without the current user, cancel
     assert.deepEqual(stagedFiles(), []);
 });
 
+test('invalid backup causes reach the client as nested messages; the German text stays', async () => {
+    const nested = (template, params = {}) => ({ msg: template, params });
+    const reasonOf = (body) => {
+        assert.equal(body.msg, 'Backup kann nicht geprüft werden: {reason}');
+        return body.params.reason;
+    };
+
+    const notZip = await uploadZip(Buffer.from('not a zip at all, definitely not'), '/backup/inspect');
+    assert.equal(notZip.status, 400);
+    assert.equal(notZip.body.error, 'Backup kann nicht geprüft werden: Ungültiges ZIP-Archiv: kein Inhaltsverzeichnis gefunden');
+    assert.deepEqual(reasonOf(notZip.body), nested('Ungültiges ZIP-Archiv: {detail}', { detail: nested('kein Inhaltsverzeichnis gefunden') }));
+
+    const noAdmin = await snapshotDbBuffer((d) => d.exec("UPDATE users SET role = 'editor'"));
+    const adminless = await uploadZip(zipOf({ 'manga.db': noAdmin }).toBuffer(), '/backup/inspect');
+    assert.equal(adminless.status, 400);
+    assert.equal(adminless.body.error, 'Backup kann nicht geprüft werden: Ungültige Backup-Datenbank: Die Datenbank enthält keinen Administrator');
+    assert.deepEqual(reasonOf(adminless.body), nested('Ungültige Backup-Datenbank: {reason}', { reason: nested('Die Datenbank enthält keinen Administrator') }));
+
+    const tmp = path.join(ctx.dataDir, 'temp', `only-users-${Date.now()}.db`);
+    const d = new DatabaseSync(tmp);
+    d.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT)');
+    d.close();
+    const onlyUsers = fs.readFileSync(tmp);
+    fs.unlinkSync(tmp);
+    const missing = await uploadZip(zipOf({ 'manga.db': onlyUsers }).toBuffer(), '/backup/restore');
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.error, 'Fehler beim Wiederherstellen des Backups: Ungültige Backup-Datenbank: Tabelle "mangas" fehlt in der Datenbank');
+    assert.deepEqual(missing.body.params.reason, nested('Ungültige Backup-Datenbank: {reason}', { reason: nested('Tabelle "{table}" fehlt in der Datenbank', { table: 'mangas' }) }));
+
+    // SQLite's own text is no catalog key: a plain string the client shows as it is
+    const garbage = await uploadZip(zipOf({ 'manga.db': Buffer.alloc(4096, 7) }).toBuffer(), '/backup/inspect');
+    assert.equal(garbage.status, 400);
+    const reason = reasonOf(garbage.body);
+    assert.equal(reason.msg, 'Ungültige Backup-Datenbank: {reason}');
+    assert.equal(typeof reason.params.reason, 'string');
+    assert.equal(garbage.body.error, `Backup kann nicht geprüft werden: Ungültige Backup-Datenbank: ${reason.params.reason}`);
+    assert.deepEqual(stagedFiles(), []);
+});
+
+test('migrateDbFile: a failed migration names its cause inside a nested message', () => {
+    const file = path.join(ctx.dataDir, 'temp', `broken-migration-${Date.now()}.db`);
+    const d = new DatabaseSync(file);
+    d.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY); CREATE TABLE mangas (id INTEGER); CREATE VIEW users AS SELECT 1 AS id');
+    d.close();
+    try {
+        assert.throws(() => dbm.migrateDbFile(file), (err) => {
+            assert.equal(err.status, 400);
+            assert.match(err.message, /^Ungültige Backup-Datenbank: Migration fehlgeschlagen: /);
+            assert.equal(err.extra.msg, 'Ungültige Backup-Datenbank: {reason}');
+            const reason = JSON.parse(JSON.stringify(err.extra.params.reason));
+            assert.equal(reason.msg, 'Migration fehlgeschlagen: {cause}');
+            assert.equal(err.message, `Ungültige Backup-Datenbank: Migration fehlgeschlagen: ${reason.params.cause}`);
+            return true;
+        });
+    } finally {
+        fs.rmSync(file, { force: true });
+    }
+});
+
 test('at most three backups stay staged; the oldest is dropped first', async () => {
     const snapshot = await createSnapshot();
     const ids = [];

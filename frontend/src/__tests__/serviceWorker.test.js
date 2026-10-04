@@ -51,7 +51,7 @@ function fakeCaches(fetchImpl) {
 }
 
 /** Runs public/sw.js against fake globals; returns its event handlers and helpers to dispatch them. */
-function loadWorker({ version, fetchImpl, caches }) {
+function loadWorker({ version, fetchImpl, caches, catalogs = null }) {
   const listeners = {};
   const self = {
     addEventListener: (type, fn) => { listeners[type] = fn; },
@@ -59,7 +59,8 @@ function loadWorker({ version, fetchImpl, caches }) {
     clients: { claim: vi.fn(async () => {}) },
     location: { origin: ORIGIN }
   };
-  const source = swSource.replaceAll('__APP_VERSION__', version);
+  let source = swSource.replaceAll('__APP_VERSION__', version);
+  if (catalogs) source = source.replace('/*__CATALOGS__*/', Object.entries(catalogs).map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(', '));
   new Function('self', 'caches', 'fetch', 'Response', 'URL', 'console', source)(self, caches, fetchImpl, Response, URL, { warn: () => {} });
 
   const lifecycle = async (type) => {
@@ -76,7 +77,12 @@ function loadWorker({ version, fetchImpl, caches }) {
     await Promise.all(extra);
     return res;
   };
-  return { install: () => lifecycle('install'), activate: () => lifecycle('activate'), request, self };
+  const message = async (data) => {
+    let pending;
+    listeners.message({ data, waitUntil: (p) => { pending = p; } });
+    return pending;
+  };
+  return { install: () => lifecycle('install'), activate: () => lifecycle('activate'), request, message, self };
 }
 
 const indexHtml = (hash) => `<!doctype html><html><head><script type="module" crossorigin src="/assets/index-${hash}.js"></script>
@@ -194,7 +200,8 @@ describe('service worker', () => {
     await sw.request('/?share_text=geheim', { mode: 'navigate' });
     const keys = [...(await caches.open('mangashelf-app-1')).entries.keys()];
     expect(keys.filter((k) => !k.includes('/assets/'))).toEqual(
-      ['/', '/manifest.json', '/favicon.svg', '/icon-192.png', '/icon-512.png'].map(abs)
+      // the manifest is no longer precached: WARM_LANGUAGE caches the active language's one
+      ['/', '/favicon.svg', '/icon-192.png', '/icon-512.png'].map(abs)
     );
 
     net.mockImplementation(async () => { throw new TypeError('offline'); });
@@ -223,6 +230,40 @@ describe('service worker', () => {
     const page = await v1.request('/manga/5', { mode: 'navigate' });
     expect(await page.text()).toContain('index-B.js');
     expect(await (await v1.request('/assets/Login-B.js')).text()).toBe('export default 2');
+  });
+
+  it('WARM_LANGUAGE caches the catalog and manifest of that language only; German needs only /manifest.json', async () => {
+    const files = {
+      '/manifest.json': ['{}', 'application/json'],
+      '/manifest.en.json': ['{}', 'application/json'],
+      '/assets/en-H1.js': ['export default {}', 'text/javascript'],
+      '/assets/fr-H2.js': ['export default {}', 'text/javascript']
+    };
+    const net = vi.fn(async (req) => {
+      const hit = files[new URL(abs(req)).pathname];
+      return hit ? response(hit[0], { type: hit[1] }) : response('Nicht gefunden', { status: 404, type: 'text/plain' });
+    });
+    const caches = fakeCaches(net);
+    const sw = loadWorker({ version: '4', fetchImpl: net, caches, catalogs: { en: '/assets/en-H1.js', fr: '/assets/fr-H2.js' } });
+    await sw.message({ type: 'WARM_LANGUAGE', language: 'en' });
+    const keys = () => (caches.store.get('mangashelf-app-4') ? [...caches.store.get('mangashelf-app-4').entries.keys()].sort() : []);
+    expect(keys()).toEqual(['/assets/en-H1.js', '/manifest.en.json'].map(abs));
+    await sw.message({ type: 'WARM_LANGUAGE', language: 'de' });
+    expect(keys()).toEqual(['/assets/en-H1.js', '/manifest.en.json', '/manifest.json'].map(abs));
+    // already cached files are not fetched again; junk is ignored
+    net.mockClear();
+    await sw.message({ type: 'WARM_LANGUAGE', language: 'en' });
+    await sw.message({ type: 'WARM_LANGUAGE', language: '../x' });
+    expect(net).not.toHaveBeenCalled();
+  });
+
+  it('a catalog loaded at runtime is cached on first use (cache first, like every hashed chunk)', async () => {
+    const net = vi.fn(async () => response('export default {}', { type: 'text/javascript' }));
+    const caches = fakeCaches(net);
+    const sw = loadWorker({ version: '5', fetchImpl: net, caches });
+    await sw.request('/assets/ja-H3.js');
+    net.mockImplementation(async () => { throw new TypeError('offline'); });
+    expect((await sw.request('/assets/ja-H3.js')).ok).toBe(true);
   });
 
   it('leaves API calls and non-GET requests to the network', async () => {

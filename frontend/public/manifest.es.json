@@ -1,0 +1,101 @@
+{
+  "id": "/",
+  "name": "MangaShelf - Colección y seguimiento de manga",
+  "short_name": "MangaShelf",
+  "description": "Colección personal de manga, seguimiento de tomos, estado de lectura y lista de la compra",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lista de la compra",
+      "short_name": "Compras",
+      "description": "Abre los tomos que faltan directamente en la tienda",
+      "url": "/?view=shopping",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Escanear código de barras",
+      "short_name": "Escanear",
+      "description": "Escanea un tomo en la tienda con una foto y compáralo con la colección",
+      "url": "/?view=shopping&scan=1",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Release Radar",
+      "short_name": "Radar",
+      "description": "Reservas y novedades",
+      "url": "/?view=radar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Estadísticas",
+      "short_name": "Estadísticas",
+      "description": "Valor de la colección y estadísticas de lectura",
+      "url": "/?view=stats",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "categories": [
+    "books",
+    "entertainment",
+    "lifestyle"
+  ],
+  "lang": "es"
+}

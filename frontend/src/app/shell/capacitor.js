@@ -10,6 +10,7 @@ import { receiveDeepLink, buildShareLink } from '../deepLink.js';
 import { setLocalAdapters } from '../../local/localTransport.js';
 import { createCapacitorAdapters, bytesToBase64 } from '../../local/capacitor.js';
 import { notify } from '../../utils/notify.js';
+import { t } from '../../i18n/index.js';
 
 export const TOKEN_PREFIX = 'server-token:';
 // whole values that carry tokens; the server list keeps its tokens apart (TOKEN_PREFIX + server id)
@@ -54,7 +55,7 @@ export function createServerStorage(bridge) {
 
   async function setServers(value) {
     const list = JSON.parse(value);
-    if (!Array.isArray(list)) throw new TypeError('Serverliste ist keine Liste');
+    if (!Array.isArray(list)) throw new TypeError(t('Serverliste ist keine Liste'));
     const keep = new Set();
     const stripped = [];
     for (const entry of list) {
@@ -130,7 +131,7 @@ export function installExternalLinks(bridge, { doc = globalThis.document } = {})
     returnFocus = viaApp ? null : keyFieldNear(lastTarget) || keyFieldNear(doc.activeElement);
     Promise.resolve(viaApp ? systemOpener(url) : inAppBrowser(url)).catch((err) => {
       returnFocus = null;
-      notify.error(`Link ließ sich nicht öffnen: ${err?.message || url}`);
+      notify.error(t('Link ließ sich nicht öffnen: {reason}', { reason: err?.message || url }));
     });
   });
   const onPointer = (e) => { lastTarget = e.target; };
@@ -186,7 +187,7 @@ export function installObjectUrls(urlApi = globalThis.URL) {
 
 function dataUrlBlob(url) {
   const comma = url.indexOf(',');
-  if (comma < 0) throw new TypeError('Ungültige data:-Adresse');
+  if (comma < 0) throw new TypeError(t('Ungültige data:-Adresse'));
   const meta = url.slice(5, comma);
   const body = decodeURIComponent(url.slice(comma + 1));
   const base64 = /;base64$/i.test(meta);
@@ -234,7 +235,7 @@ export function installLinkClicks(bridge, { doc = globalThis.document, win = glo
     if (link.hasAttribute('download') && /^(blob|data):/i.test(href)) {
       e.preventDefault();
       saveFile(bridge, href, link.getAttribute('download') || 'download')
-        .catch((err) => notify.error(`Datei konnte nicht gespeichert werden: ${err?.message || err}`));
+        .catch((err) => notify.error(t('Datei konnte nicht gespeichert werden: {reason}', { reason: err?.message || err })));
       return;
     }
     if (link.target === '_blank' && /^https?:/i.test(link.href) && link.origin !== win?.location?.origin) {

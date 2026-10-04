@@ -8,8 +8,12 @@ import { isTypingTarget, useKeyboardOpen } from '../../hooks/useKeyboardOpen';
 import { apiFetch, readJson, TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { scanSeriesTitle, toIsbn13 } from '../../utils/scanHelpers';
+import { t } from '../../i18n/index.js';
+import { payloadText, serverText } from '../../i18n/serverText.js';
 
+// i18n
 export const DETAIL_SCAN_OFFLINE = 'Die ISBN-Suche braucht eine Verbindung zum Server.';
+// i18n
 export const DETAIL_SCAN_FAILED = 'ISBN-Suche fehlgeschlagen (Server nicht erreichbar).';
 
 const sameId = (a, b) => a !== null && a !== undefined && String(a) === String(b);
@@ -27,7 +31,7 @@ export function findScannedVolume(volumes, code) {
  */
 export function detailScanAction({ ok, data, mangaId, canEdit }) {
   if (!ok || !data) {
-    return { type: 'error', message: (data && typeof data.error === 'string' && data.error) || DETAIL_SCAN_FAILED };
+    return { type: 'error', message: serverText(data) || t(DETAIL_SCAN_FAILED) };
   }
   const matched = data.found ? data.matched_manga : null;
   if (matched && !sameId(matched.id, mangaId)) return { type: 'other', manga: matched };
@@ -36,10 +40,10 @@ export function detailScanAction({ ok, data, mangaId, canEdit }) {
   if (!matched && candidates.length && !candidates.some((c) => sameId(c.id, mangaId))) {
     return candidates.length === 1
       ? { type: 'other', manga: candidates[0] }
-      : { type: 'notice', message: 'Diese ISBN passt zu einer anderen Reihe der Sammlung.' };
+      : { type: 'notice', message: t('Diese ISBN passt zu einer anderen Reihe der Sammlung.') };
   }
   if (data.found && data.book) {
-    if (!canEdit) return { type: 'notice', message: 'Dieser Band ist in der Reihe noch nicht erfasst.' };
+    if (!canEdit) return { type: 'notice', message: t('Dieser Band ist in der Reihe noch nicht erfasst.') };
     const book = data.book;
     return {
       type: 'prefill',
@@ -49,7 +53,7 @@ export function detailScanAction({ ok, data, mangaId, canEdit }) {
       isbn: (typeof data.isbn === 'string' && data.isbn) || (typeof book.isbn === 'string' && book.isbn) || ''
     };
   }
-  return { type: 'notFound', message: (typeof data.message === 'string' && data.message) || 'Keine Daten zu dieser ISBN gefunden.' };
+  return { type: 'notFound', message: payloadText(data, 'message') || t('Keine Daten zu dieser ISBN gefunden.') };
 }
 
 export { isTypingTarget, useKeyboardOpen };
@@ -113,17 +117,17 @@ export default function DetailBottomBar({
       return;
     }
     if (isOffline) {
-      toast('error', DETAIL_SCAN_OFFLINE);
+      toast('error', t(DETAIL_SCAN_OFFLINE));
       return;
     }
-    toast('info', `ISBN ${code} wird gesucht...`, { duration: 0 });
+    toast('info', t('ISBN {isbn} wird gesucht...', { isbn: code }), { duration: 0 });
     let res;
     let data = null;
     try {
       res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(code)}`, { timeout: TIMEOUTS.lookup });
       data = await readJson(res);
     } catch (_) {
-      if (request === requestRef.current) toast('error', DETAIL_SCAN_FAILED);
+      if (request === requestRef.current) toast('error', t(DETAIL_SCAN_FAILED));
       return;
     }
     if (request !== requestRef.current) return;
@@ -136,17 +140,20 @@ export default function DetailBottomBar({
         break;
       }
       case 'other':
-        toast('info', `Diese ISBN gehört zu „${action.manga.title || 'einer anderen Reihe'}“.`, {
+        toast('info', t('Diese ISBN gehört zu „{title}“.', { title: action.manga.title || t('einer anderen Reihe') }), {
           duration: 8000,
-          action: { label: 'Reihe öffnen', onClick: () => onOtherSeries?.(action.manga) }
+          action: { label: t('Reihe öffnen'), onClick: () => onOtherSeries?.(action.manga) }
         });
         break;
-      case 'prefill':
-        toast('info', action.number
-          ? `Band ${action.number}${action.title ? ` (${action.title})` : ''} übernommen – bitte prüfen und hinzufügen.`
-          : 'Bandnummer unbekannt – bitte eintragen und hinzufügen.', { duration: 8000 });
+      case 'prefill': {
+        let text;
+        if (!action.number) text = t('Bandnummer unbekannt – bitte eintragen und hinzufügen.');
+        else if (action.title) text = t('Band {number} ({title}) übernommen – bitte prüfen und hinzufügen.', { number: action.number, title: action.title });
+        else text = t('Band {number} übernommen – bitte prüfen und hinzufügen.', { number: action.number });
+        toast('info', text, { duration: 8000 });
         onPrefill?.({ ...action, isbn: action.isbn || toIsbn13(code) || '' });
         break;
+      }
       case 'notice':
       case 'notFound':
         toast('info', action.message, { duration: 8000 });
@@ -161,31 +168,31 @@ export default function DetailBottomBar({
     <nav
       ref={barRef}
       id="detail-bottom-bar"
-      aria-label="Reihe"
+      aria-label={t('Reihe')}
       data-keyboard={keyboardOpen ? 'open' : undefined}
       className={`${keyboardOpen ? 'hidden' : ''} fixed inset-x-0 bottom-0 z-40 sm:hidden border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.35)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]`}
     >
       <div className="flex items-stretch justify-around max-w-lg mx-auto">
         <Link id="btn-detail-back" to={backTo} className={itemClass}>
           <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-          Zurück
+          {t('Zurück')}
         </Link>
         <div className="flex-1 min-w-0 flex items-start justify-center">
           <BarcodeScannerButton
             id="btn-detail-scan"
-            buttonText="Band scannen"
-            scannerTitle="Band scannen"
+            buttonText={t('Band scannen')}
+            scannerTitle={t('Band scannen')}
             onDetected={handleScan}
             className="-mt-5 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60 border-4 border-slate-950 flex items-center justify-center active:scale-95 transition disabled:opacity-60"
           >
             <ScanBarcode className="w-6 h-6" aria-hidden="true" />
-            <span className="sr-only">Band scannen</span>
+            <span className="sr-only">{t('Band scannen')}</span>
           </BarcodeScannerButton>
         </div>
         {canEdit ? (
           <button type="button" id="btn-detail-add-volume" onClick={onAddVolume} className={itemClass}>
             <Plus className="w-5 h-5" aria-hidden="true" />
-            Band hinzufügen
+            {t('Band hinzufügen')}
           </button>
         ) : (
           <span className="flex-1" aria-hidden="true" />

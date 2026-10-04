@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { fmtEuro, countLabel, cssPct } from './statsFormat';
+import { t } from '../../i18n/index.js';
 
 function OwnerPublishers({ rows }) {
   return (
@@ -38,7 +39,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
 
   return (
     <div id="stats-owners" className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
-      <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4">Besitz pro Nutzer</h3>
+      <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4">{t('Besitz pro Nutzer')}</h3>
       <div className="space-y-3">
         {ownerStats.map(o => {
           const pubs = byUser.get(o.user_id) || [];
@@ -50,7 +51,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
                 <span className="font-semibold text-slate-200">{o.username}</span>
                 <span className="text-slate-400 text-right">
                   {countLabel(o.volume_count, 'Band', 'Bände')} · {countLabel(o.series_count, 'Reihe', 'Reihen')} · {fmtEuro(o.total_value)}
-                  {o.shared_count > 0 && <span className="text-amber-300"> · {o.shared_count} geteilt</span>}
+                  {o.shared_count > 0 && <span className="text-amber-300"> · {t('{count} geteilt', { count: o.shared_count })}</span>}
                 </span>
               </div>
               <div aria-hidden="true" className="h-2 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
@@ -66,7 +67,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
                     className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300"
                   >
                     <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-                    Verlage von {o.username}
+                    {t('Verlage von {username}', { username: o.username })}
                   </button>
                   {expanded && <div id={listId}><OwnerPublishers rows={pubs} /></div>}
                 </>
@@ -76,7 +77,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
         })}
       </div>
       {anyShared && (
-        <p className="text-[10px] text-slate-400 mt-3">Geteilte Bände zählen bei jedem Besitzer voll; Wert = Listenpreis des Bands.</p>
+        <p className="text-[10px] text-slate-400 mt-3">{t('Geteilte Bände zählen bei jedem Besitzer voll; Wert = Listenpreis des Bands.')}</p>
       )}
     </div>
   );

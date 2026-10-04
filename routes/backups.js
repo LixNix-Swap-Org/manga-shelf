@@ -18,6 +18,7 @@ const disk = require('../utils/disk');
 const { config } = require('../utils/config');
 const { trackJob } = require('../services/lifecycle');
 const { sendError } = require('../utils/httpError');
+const { msg, msgData, payloadMsg } = require('../core/errors');
 const log = require('../utils/logger').child('backup');
 
 /** Read per restore so operators (and tests) can change them without a restart. */
@@ -35,7 +36,7 @@ async function openArchive(source, maxEntries) {
     return openZip(source, maxEntries).catch((err) => {
         if (err.status) throw err;
         log.warn('[Backup Restore] Could not read the archive:', err.message);
-        throw notAZip('Datei kann nicht gelesen werden');
+        throw notAZip(msg('Datei kann nicht gelesen werden'));
     });
 }
 
@@ -166,7 +167,9 @@ let restoreRunning = false;
  */
 function assertNoRollbackCopy() {
     if (!fs.existsSync(bakPath)) return;
-    const blocked = new Error(`Eine frühere Wiederherstellung wurde nicht sauber abgeschlossen. Die vorherige Datenbank liegt als ${bakPath}. Von Hand: Server stoppen, manga.db.bak nach manga.db kopieren (oder löschen, wenn die aktuelle Datenbank stimmt) und neu starten. Oder auf dem Server "node scripts/admin.js rollback-aufraeumen" ausführen (Docker: "docker exec -it -u node manga-shelf node scripts/admin.js rollback-aufraeumen", in der Server-Konsole "rollback-aufraeumen"): es prüft die aktuelle Datenbank und löscht die Kopie erst nach Bestätigung.`);
+    const text = msg('Eine frühere Wiederherstellung wurde nicht sauber abgeschlossen. Die vorherige Datenbank liegt als {path}. Von Hand: Server stoppen, manga.db.bak nach manga.db kopieren (oder löschen, wenn die aktuelle Datenbank stimmt) und neu starten. Oder auf dem Server "node scripts/admin.js rollback-aufraeumen" ausführen (Docker: "docker exec -it -u node manga-shelf node scripts/admin.js rollback-aufraeumen", in der Server-Konsole "rollback-aufraeumen"): es prüft die aktuelle Datenbank und löscht die Kopie erst nach Bestätigung.', { path: bakPath });
+    const blocked = new Error(text.text);
+    blocked.extra = { msg: text.template, params: text.params };
     blocked.status = 503;
     blocked.code = 'ROLLBACK_COPY_PENDING';
     throw blocked;
@@ -175,7 +178,7 @@ function assertNoRollbackCopy() {
 function assertSchemaSupported(version, allowNewer) {
     const current = latestSchemaVersion();
     if (version <= current || allowNewer) return;
-    const err = invalidBackup(`Backup stammt aus einer neueren Version (Schema v${version} > v${current}) – erst Manga Shelf aktualisieren.`);
+    const err = invalidBackup(msg('Backup stammt aus einer neueren Version (Schema v{version} > v{current}) – erst Manga Shelf aktualisieren.', { version, current }));
     err.code = 'SCHEMA_NEWER';
     throw err;
 }
@@ -240,12 +243,12 @@ async function runRestore(source, { allowNewerSchema = false, preRestoreSnapshot
         try {
             const dbEntry = findDbEntry(zip.entries);
             if (!dbEntry) {
-                throw invalidBackup('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
+                throw invalidBackup(msg('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.'));
             }
             const prefix = dbEntry.name.slice(0, -'manga.db'.length);
             const uploads = restorableUploads(zip.entries, prefix);
             disk.ensureFreeSpace(dataDir, Math.min(dbEntry.uncompressedSize, limits.maxDbBytes)
-                + Math.min(uploads.bytes, limits.maxUploadsBytes) + disk.fileSize(dbFilePath) + SPACE_MARGIN_BYTES, 'die Wiederherstellung');
+                + Math.min(uploads.bytes, limits.maxUploadsBytes) + disk.fileSize(dbFilePath) + SPACE_MARGIN_BYTES, 'restore');
 
             removeStagedDb();
             await extractEntry(zip, dbEntry, stagedDbPath, limits.maxDbBytes);
@@ -280,11 +283,15 @@ async function runRestore(source, { allowNewerSchema = false, preRestoreSnapshot
     }
 }
 
-const ROLE_NAMES = { admin: 'Administrator', editor: 'Bearbeiter', visitor: 'Besucher', guest: 'Gast' };
+// *_TEXTS: the extractor collects the role names as catalog keys (they reach the client as nested messages)
+const ROLE_TEXTS = { admin: 'Administrator', editor: 'Bearbeiter', visitor: 'Besucher', guest: 'Gast' };
 
 const userWarning = (user, username) => {
-    if (!user || !user.exists) return `Dein Benutzer „${username}“ ist im Backup nicht vorhanden: Du wirst danach abgemeldet.`;
-    if (user.role !== 'admin') return `Dein Benutzer „${username}“ ist im Backup kein Administrator (Rolle: ${ROLE_NAMES[user.role] || user.role}): Die Backup-Verwaltung ist danach nicht mehr erreichbar.`;
+    if (!user || !user.exists) return msg('Dein Benutzer „{username}“ ist im Backup nicht vorhanden: Du wirst danach abgemeldet.', { username });
+    if (user.role !== 'admin') {
+        const role = ROLE_TEXTS[user.role] ? msg(ROLE_TEXTS[user.role]) : user.role;
+        return msg('Dein Benutzer „{username}“ ist im Backup kein Administrator (Rolle: {role}): Die Backup-Verwaltung ist danach nicht mehr erreichbar.', { username, role });
+    }
     return null;
 };
 
@@ -308,9 +315,13 @@ function accountsWithoutPassword(file) {
 
 function noPasswordWarning(names) {
     const shown = names.slice(0, MAX_NAMED_ACCOUNTS).join(', ');
-    const more = names.length > MAX_NAMED_ACCOUNTS ? ` und ${names.length - MAX_NAMED_ACCOUNTS} weitere` : '';
-    const subject = names.length === 1 ? '1 Konto braucht' : `${names.length} Konten brauchen`;
-    return `${subject} nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${shown}${more}.`;
+    if (names.length === 1) return msg('1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.', { names: shown });
+    if (names.length <= MAX_NAMED_ACCOUNTS) {
+        return msg('{count} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.', { count: names.length, names: shown });
+    }
+    return msg('{count} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names} und {more} weitere.', {
+        count: names.length, names: shown, more: names.length - MAX_NAMED_ACCOUNTS
+    });
 }
 
 /**
@@ -323,13 +334,13 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
     const copy = path.join(tempDir, `inspect-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.db`);
     try {
         const dbEntry = findDbEntry(zip.entries);
-        if (!dbEntry) throw invalidBackup('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
+        if (!dbEntry) throw invalidBackup(msg('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.'));
         const prefix = dbEntry.name.slice(0, -'manga.db'.length);
         const uploads = restorableUploads(zip.entries, prefix);
         if (uploads.bytes > limits.maxUploadsBytes) {
-            throw invalidBackup(`Die Bilder im Backup sind zusammen zu groß (${disk.formatMb(uploads.bytes)}, erlaubt sind ${disk.formatMb(limits.maxUploadsBytes)}).`);
+            throw invalidBackup(msg('Die Bilder im Backup sind zusammen zu groß ({size}, erlaubt sind {max}).', { size: disk.formatMb(uploads.bytes), max: disk.formatMb(limits.maxUploadsBytes) }));
         }
-        disk.ensureFreeSpace(tempDir, Math.min(dbEntry.uncompressedSize, limits.maxDbBytes) + SPACE_MARGIN_BYTES, 'die Prüfung des Backups');
+        disk.ensureFreeSpace(tempDir, Math.min(dbEntry.uncompressedSize, limits.maxDbBytes) + SPACE_MARGIN_BYTES, 'inspect');
         const manifest = await readArchiveManifest(zip, dbEntry);
 
         await extractEntry(zip, dbEntry, copy, limits.maxDbBytes);
@@ -348,12 +359,12 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
         const who = userWarning(facts.user, username);
         if (who) warnings.push(who);
         if (facts.schema_version > current) {
-            warnings.push(`Backup stammt aus einer neueren Version (Schema v${facts.schema_version} > v${current}) – erst Manga Shelf aktualisieren.`);
+            warnings.push(msg('Backup stammt aus einer neueren Version (Schema v{version} > v{current}) – erst Manga Shelf aktualisieren.', { version: facts.schema_version, current }));
         } else if (facts.schema_version < current) {
-            warnings.push(`Backup stammt aus einer älteren Version (Schema v${facts.schema_version}); es wird beim Einspielen auf v${current} aktualisiert.`);
+            warnings.push(msg('Backup stammt aus einer älteren Version (Schema v{version}); es wird beim Einspielen auf v{current} aktualisiert.', { version: facts.schema_version, current }));
         }
         if (withoutPassword.length) warnings.push(noPasswordWarning(withoutPassword));
-        warnings.push('Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.');
+        warnings.push(msg('Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.'));
 
         return {
             created_at: createdAt,
@@ -370,7 +381,9 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
             current_user: { username, exists: Boolean(facts.user && facts.user.exists), role: facts.user ? facts.user.role : null },
             relogin: !(facts.user && facts.user.exists && facts.user.role === 'admin'),
             accounts_without_password: withoutPassword,
-            warnings
+            warnings: warnings.map(String),
+            // parallel to warnings (plain strings for older clients), for the client's catalog
+            warnings_msg: warnings.map(msgData)
         };
     } finally {
         await zip.fh.close().catch(() => {});
@@ -420,15 +433,32 @@ function sessionAfterRestore(req, res, previousUsername) {
     return { relogin: true };
 }
 
-/** Client-facing restore error: own German texts for 4xx/503/507, never raw library or OS messages for a 500. */
-function restoreErrorText(prefix, err, status) {
-    return status >= 500 && status !== 503 && status !== 507 ? `${prefix} (Details im Server-Log)` : `${prefix}: ${err.message}`;
+// per restore step: the hidden 500 text and the sentence around the reason ({reason} is the cause's own message)
+const RESTORE_HIDDEN_TEXTS = {
+    snapshot: 'Fehler beim Wiederherstellen (Details im Server-Log)',
+    backup: 'Fehler beim Wiederherstellen des Backups (Details im Server-Log)',
+    inspect: 'Backup kann nicht geprüft werden (Details im Server-Log)'
+};
+const RESTORE_REASON_TEXTS = {
+    snapshot: 'Fehler beim Wiederherstellen: {reason}',
+    backup: 'Fehler beim Wiederherstellen des Backups: {reason}',
+    inspect: 'Backup kann nicht geprüft werden: {reason}'
+};
+
+/**
+ * Client-facing restore error: own German texts for 4xx/503/507, never raw library or OS messages for a 500. The
+ * reason is nested as a message of its own: a static text (the client looks it up) or the cause's msg/params.
+ */
+function restoreErrorText(step, err, status) {
+    if (status >= 500 && status !== 503 && status !== 507) return RESTORE_HIDDEN_TEXTS[step];
+    const reason = typeof err.extra?.msg === 'string' ? msg(err.extra.msg, err.extra.params) : msg(err.message);
+    return msg(RESTORE_REASON_TEXTS[step], { reason });
 }
 
 const EXPOSED_RESTORE_CODES = new Set(['SCHEMA_NEWER', 'ROLLBACK_COPY_PENDING', 'INSUFFICIENT_SPACE']);
 
-function sendRestoreError(res, prefix, err, status) {
-    return sendError(res, status, restoreErrorText(prefix, err, status), EXPOSED_RESTORE_CODES.has(err.code) ? err.code : undefined);
+function sendRestoreError(res, step, err, status) {
+    return sendError(res, status, restoreErrorText(step, err, status), EXPOSED_RESTORE_CODES.has(err.code) ? err.code : undefined);
 }
 
 /** Resolves a snapshot name from the URL to an existing .zip directly in backupsDir, or null. */
@@ -453,11 +483,11 @@ function requireSpaceForUpload(req, res, next) {
     const length = Number(req.headers['content-length']);
     if (!Number.isFinite(length) || length <= 0) return next();
     try {
-        disk.ensureFreeSpace(tempDir, 2 * length + disk.fileSize(dbFilePath), 'das Backup');
+        disk.ensureFreeSpace(tempDir, 2 * length + disk.fileSize(dbFilePath), 'backup');
         next();
     } catch (err) {
         log.warn('[Backup Restore] Upload rejected for lack of space:', err.message);
-        sendError(res, 507, err.message, err.code);
+        sendError(res, 507, err.message, err.code, err.extra);
     }
 }
 
@@ -513,11 +543,14 @@ router.post('/backups/create', requireAdmin, async (req, res) => {
     try {
         const snapshot = await trackJob('Snapshot', createBackupSnapshot('manual'));
         const body = { success: true, snapshot };
-        if (!snapshot.verified) body.warning = `Der Snapshot wurde erstellt, hat aber die Prüfung nicht bestanden: ${snapshot.verify_error}`;
+        if (!snapshot.verified) {
+            // the reason is the stored technical check result, shown verbatim
+            Object.assign(body, payloadMsg('warning', msg('Der Snapshot wurde erstellt, hat aber die Prüfung nicht bestanden: {reason}', { reason: String(snapshot.verify_error) })));
+        }
         res.json(body);
     } catch (err) {
         log.error('Error creating snapshot:', err);
-        if (err.status === 507) return sendError(res, 507, err.message, err.code);
+        if (err.status === 507) return sendError(res, 507, err.message, err.code, err.extra);
         if (isDiskFull(err)) {
             return sendError(res, 507, 'Nicht genug Speicherplatz auf dem Server, um den Snapshot zu erstellen. Bitte Platz freigeben (z. B. alte Snapshots löschen) und erneut versuchen.', 'INSUFFICIENT_SPACE');
         }
@@ -544,7 +577,9 @@ router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
         log.info(`[Backup Restore] Restored snapshot ${filename} (${result.mangaCount} Mangas)`);
         res.json({
             success: true,
-            message: `Snapshot "${filename}" erfolgreich wiederhergestellt! (${result.mangaCount} Mangas, ${result.restoredImagesCount} Uploads)`,
+            ...payloadMsg('message', msg('Snapshot "{filename}" erfolgreich wiederhergestellt! ({mangas} Mangas, {uploads} Uploads)', {
+                filename, mangas: result.mangaCount, uploads: result.restoredImagesCount
+            })),
             ...result
         });
     } catch (err) {
@@ -552,7 +587,7 @@ router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
         const status = err.status || 500;
         if (status >= 500) log.error('Error restoring snapshot:', err);
         else log.warn('Rejected snapshot restore:', err.message);
-        sendRestoreError(res, 'Fehler beim Wiederherstellen', err, status);
+        sendRestoreError(res, 'snapshot', err, status);
     }
 });
 
@@ -568,8 +603,12 @@ router.delete('/backups/:filename', requireAdmin, (req, res) => {
     const snapshot = findSnapshot(req.params.filename);
     if (!snapshot) return snapshotNotFound(res);
     scheduler.deleteSnapshot(snapshot.filename);
-    res.json({ success: true, message: 'Snapshot gelöscht' });
+    res.json({ success: true, ...payloadMsg('message', msg('Snapshot gelöscht')) });
 });
+
+const restoredMessage = (result) => payloadMsg('message', msg('Backup erfolgreich eingespielt! ({mangas} Manga-Reihen und {images} Bilddateien wiederhergestellt)', {
+    mangas: result.mangaCount, images: result.restoredImagesCount
+}));
 
 // 7. Manual ZIP upload restore. multer stages the upload in data/temp (bounds only the compressed size);
 // restoreFromZip streams the extraction and enforces its own uncompressed limits.
@@ -584,14 +623,14 @@ const handleUploadedBackupRestore = async (req, res) => {
         Object.assign(result, sessionAfterRestore(req, res, req.user.username));
         res.json({
             success: true,
-            message: `Backup erfolgreich eingespielt! (${result.mangaCount} Manga-Reihen und ${result.restoredImagesCount} Bilddateien wiederhergestellt)`,
+            ...restoredMessage(result),
             ...result
         });
     } catch (err) {
         const status = err.status || 500;
         if (status >= 500) log.error('[Backup Restore] Error:', err);
         else log.warn('[Backup Restore] Rejected uploaded backup:', err.message);
-        sendRestoreError(res, 'Fehler beim Wiederherstellen des Backups', err, status);
+        sendRestoreError(res, 'backup', err, status);
     } finally {
         unlinkQuietly(uploadedPath);
     }
@@ -643,7 +682,7 @@ router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup
         const status = err.status || 500;
         if (status >= 500) log.error('[Backup Inspect] Error:', err);
         else log.warn('[Backup Inspect] Rejected backup:', err.message);
-        sendRestoreError(res, 'Backup kann nicht geprüft werden', err, status);
+        sendRestoreError(res, 'inspect', err, status);
     } finally {
         if (!kept) {
             if (uploadedPath) unlinkQuietly(uploadedPath);
@@ -677,7 +716,7 @@ router.post('/backup/restore/:stagingId', requireAdmin, async (req, res) => {
         log.info(`[Backup Restore] Restored staged ${entry.type} ${entry.filename || ''} (${result.mangaCount} Mangas)`);
         res.json({
             success: true,
-            message: `Backup erfolgreich eingespielt! (${result.mangaCount} Manga-Reihen und ${result.restoredImagesCount} Bilddateien wiederhergestellt)`,
+            ...restoredMessage(result),
             ...result
         });
     } catch (err) {
@@ -686,7 +725,7 @@ router.post('/backup/restore/:stagingId', requireAdmin, async (req, res) => {
         if (status === 400 && err.code !== 'SCHEMA_NEWER') dropStaging(entry.id);
         if (status >= 500) log.error('[Backup Restore] Error:', err);
         else log.warn('[Backup Restore] Rejected staged backup:', err.message);
-        sendRestoreError(res, 'Fehler beim Wiederherstellen des Backups', err, status);
+        sendRestoreError(res, 'backup', err, status);
     }
 });
 

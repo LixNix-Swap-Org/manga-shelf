@@ -218,7 +218,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: Desktop-Projekt vorhanden?
+      - name: Desktop project present?
         id: project
         run: |
           if [ -f desktop/package.json ] && node -e 'const s = require("./desktop/package.json").scripts || {}; process.exit(s["build:dir"] && s.test ? 0 : 1)'; then
@@ -241,7 +241,7 @@ jobs:
           npm run smoke
 
   build:
-    name: Artefakte
+    name: Artifacts
     permissions:
       contents: read
     uses: ./.github/workflows/build.yml
@@ -250,7 +250,7 @@ jobs:
       installers: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
 
   mobile:
-    name: Handy-Apps (Smoke)
+    name: Mobile apps (smoke)
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     permissions:
       contents: read

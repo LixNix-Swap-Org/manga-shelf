@@ -1,7 +1,10 @@
 import { buildVolumeForm } from '../../../utils/volumeFormHelpers';
 import { apiFetch, readJson } from '../../../utils/api';
 import { formatDate } from '../../../utils/format';
+import { t } from '../../../i18n/index.js';
+import { serverText } from '../../../i18n/serverText.js';
 
+// i18n
 export const EDITOR_STATUSES = ['Vorhanden', 'Bestellt', 'Vorbestellt', 'Erscheint bald', 'Fehlt'];
 
 // Same limits as middleware/upload.js and POST /api/upload/multiple
@@ -53,19 +56,20 @@ export const partialDateLabel = (val) => {
 const unchanged = (form, initial, key) => initial && String(form[key] ?? '').trim() === String(initial[key] ?? '').trim();
 
 /**
- * Field errors that the server would answer with 400 (keys are form fields, values German messages). Like PUT, a value
+ * Field errors that the server would answer with 400 (keys are form fields, values messages in the UI language). Like PUT, a value
  * that still equals the one the editor opened with is not checked, so legacy rows stay saveable.
  */
 export const validateVolumeForm = (form, initial = null) => {
   const errors = {};
   const num = String(form.volume_number ?? '').trim();
-  if (!num) errors.volume_number = 'Bitte eine Bandnummer eingeben.';
-  else if (num.length > 80 && !unchanged(form, initial, 'volume_number')) errors.volume_number = 'Höchstens 80 Zeichen.';
-  if (!isValidPriceInput(form.price) && !unchanged(form, initial, 'price')) errors.price = 'Ungültiger Preis, z. B. 7,50';
-  if (!isValidPriceInput(form.target_price) && !unchanged(form, initial, 'target_price')) errors.target_price = 'Ungültiger Zielpreis, z. B. 5,00';
+  if (!num) errors.volume_number = t('Bitte eine Bandnummer eingeben.');
+  else if (num.length > 80 && !unchanged(form, initial, 'volume_number')) errors.volume_number = t('Höchstens 80 Zeichen.');
+  if (!isValidPriceInput(form.price) && !unchanged(form, initial, 'price')) errors.price = t('Ungültiger Preis, z. B. 7,50');
+  if (!isValidPriceInput(form.target_price) && !unchanged(form, initial, 'target_price')) errors.target_price = t('Ungültiger Zielpreis, z. B. 5,00');
   return errors;
 };
 
+// i18n
 export const FIELD_NAMES = { volume_number: 'Bandnummer', price: 'Kaufpreis', target_price: 'Zielpreis' };
 
 const sameField = (a, b) => (Array.isArray(a) || Array.isArray(b)
@@ -112,8 +116,8 @@ export const filterUploadFiles = (files) => {
   const rejected = [];
   for (const file of Array.from(files || [])) {
     const ext = String(file.name || '').split('.').pop().toLowerCase();
-    if (!UPLOAD_MIMES.has(file.type) || !UPLOAD_EXTS.has(ext)) rejected.push({ name: file.name, reason: 'kein JPG, PNG, WebP, GIF oder AVIF' });
-    else if (file.size > MAX_UPLOAD_BYTES) rejected.push({ name: file.name, reason: 'größer als 15 MB' });
+    if (!UPLOAD_MIMES.has(file.type) || !UPLOAD_EXTS.has(ext)) rejected.push({ name: file.name, reason: t('kein JPG, PNG, WebP, GIF oder AVIF') });
+    else if (file.size > MAX_UPLOAD_BYTES) rejected.push({ name: file.name, reason: t('größer als 15 MB') });
     else accepted.push(file);
   }
   return { accepted, rejected };
@@ -159,9 +163,9 @@ export const deleteVolumeRequest = async (volId, { signal } = {}) => {
     if (res.ok) return { ok: true, gone: false, trash_id: (await readJsonSafe(res)).trash_id ?? null };
     if (res.status === 404) return { ok: true, gone: true };
     const data = await readJsonSafe(res);
-    return { ok: false, error: data.error || `Fehler beim Löschen des Bands (HTTP ${res.status})` };
+    return { ok: false, error: serverText(data) || t('Fehler beim Löschen des Bands (HTTP {status})', { status: res.status }) };
   } catch (err) {
     if (isAbortError(err)) return { ok: false, aborted: true };
-    return { ok: false, error: 'Netzwerkfehler beim Löschen des Bands' };
+    return { ok: false, error: t('Netzwerkfehler beim Löschen des Bands') };
   }
 };

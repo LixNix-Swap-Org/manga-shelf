@@ -2,6 +2,7 @@
 // manga.db + uploads/<name> + manifest.json. A server restores it through inspect/restore, the app restores a
 // server backup the same way. fflate keeps it pure JS; the whole archive is held in memory.
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { t } from '../i18n/index.js';
 
 export const MANIFEST_NAME = 'manifest.json';
 const ALLOWED_IMAGE = /\.(jpe?g|png|webp|gif|avif)$/i;
@@ -61,14 +62,14 @@ export function readBackupZip(bytes) {
   try {
     files = unzipSync(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
   } catch (_) {
-    throw new Error('Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden');
+    throw new Error(t('Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden'));
   }
   const dbName = Object.keys(files)
     .filter((n) => (n === 'manga.db' || n.endsWith('/manga.db')) && !isJunkPath(n))
     .sort((a, b) => a.length - b.length)[0];
-  if (!dbName) throw new Error('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.');
+  if (!dbName) throw new Error(t('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.'));
   const dbBytes = files[dbName];
-  if (dbBytes.length > MAX_DB_BYTES) throw new Error('Die Datenbank im Backup ist zu groß.');
+  if (dbBytes.length > MAX_DB_BYTES) throw new Error(t('Die Datenbank im Backup ist zu groß.'));
   const prefix = dbName.slice(0, -'manga.db'.length);
   const uploads = new Map();
   for (const [name, data] of Object.entries(files)) {

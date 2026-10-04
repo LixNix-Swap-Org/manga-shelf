@@ -2,7 +2,9 @@
 // resolve-link call and the clipboard read of "Link einfügen". The dialog flow lives in hooks/useShareIntake.js.
 import links from '../../../core/watch/links.js';
 import api, { TIMEOUTS } from './api';
+import { t, tn } from '../i18n/index.js';
 
+// i18n
 export const SHARE_TEXTS = {
   visitor: 'Nur Bearbeiter können ihren Fortschritt speichern.',
   offline: 'Geteilte Links brauchen eine Verbindung zum Server.',
@@ -21,6 +23,7 @@ export function findStreamingLink(...parts) {
   return text ? links.detectLink(text) : null;
 }
 
+// i18n-ignore: brand name
 export const serviceLabel = (id) => links.SERVICES.find((s) => s.id === id)?.label || 'Crunchyroll';
 
 /** POST /api/anime/resolve-link; the text goes along for an episode number ("Folge 7") the URL does not carry. */
@@ -28,13 +31,16 @@ export function resolveSharedLink({ url, text }, { signal } = {}) {
   const body = { url };
   const rest = typeof text === 'string' ? text.trim().slice(0, SENT_TEXT_LIMIT) : '';
   if (rest) body.text = rest;
-  return api.post('/api/anime/resolve-link', body, { signal, timeout: TIMEOUTS.lookup, fallback: SHARE_TEXTS.failed });
+  return api.post('/api/anime/resolve-link', body, { signal, timeout: TIMEOUTS.lookup, fallback: t(SHARE_TEXTS.failed) });
 }
 
 /** The error text for the dialog: an unsupported link gets its own sentence, anything else the server's message. */
+/** The server's answer for a link it cannot read at all: no retry makes sense. */
+export const isUnsupportedLink = (err) => err?.status === 400 && err?.code === 'UNSUPPORTED_LINK';
+
 export function resolveErrorText(err) {
-  if (err?.status === 400 && err?.code === 'UNSUPPORTED_LINK') return SHARE_TEXTS.notALink;
-  return err?.message || SHARE_TEXTS.failed;
+  if (isUnsupportedLink(err)) return t(SHARE_TEXTS.notALink);
+  return err?.message || t(SHARE_TEXTS.failed);
 }
 
 /** What the server said about an entry of the answer: the matched `entry`, else the candidate with that id. */
@@ -70,7 +76,7 @@ export function displaySeriesTitle(answer, link) {
   return fromSlug && fromSlug === title ? capitalizeWords(title) : title;
 }
 
-export const aboveTotalText = (episode, total) => `Folge ${episode} liegt über den ${total} Folgen dieses Eintrags.`;
+export const aboveTotalText = (episode, total) => tn('Folge {episode} liegt über den {n} Folgen dieses Eintrags.', 'Folge {episode} liegt über den {n} Folgen dieses Eintrags.', total, { episode, n: total });
 
 /** True when the shared episode raises the counter (else the dialog offers "Link merken"). */
 export const raisesCounter = (before, episode) => Number(episode) > (before?.episodes_watched || 0);

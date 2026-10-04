@@ -5,13 +5,14 @@ import guides from '../../../core/sources/guides.js';
 import gateway from '../../../core/anime/gateway.js';
 import sourceRequest from '../../../core/anime/request.js';
 import listSync from '../../../core/anime/listSync.js';
+import locales from '../../../core/lib/locales.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
-import { corsText } from './http.js';
 
-const { HttpError, badRequest, notFound } = errors;
+const { HttpError, badRequest, notFound, msg } = errors;
 const MIN_SECRET = 10;
 const MAX_SECRET = 4096;
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+// i18n
 export const NOT_LOCAL_TEXT = 'Im Modus ohne Server nicht verfügbar';
 const PROVIDER_HOSTS = { anilist: 'graphql.anilist.co', mal: 'api.myanimelist.net', google_books: 'www.googleapis.com' };
 
@@ -20,14 +21,16 @@ const notLocal = () => new HttpError(404, NOT_LOCAL_TEXT, 'NOT_AVAILABLE_LOCALLY
 
 function providerParam(raw, allowed) {
   const provider = String(raw || '').toLowerCase();
-  if (!allowed.includes(provider)) throw badRequest(`Unbekannter Anbieter (erlaubt: ${allowed.join(', ')})`, 'UNKNOWN_PROVIDER');
+  if (!allowed.includes(provider)) throw badRequest(msg('Unbekannter Anbieter (erlaubt: {allowed})', { allowed: allowed.join(', ') }), 'UNKNOWN_PROVIDER'); // i18n-ignore: answer text
   return provider;
 }
 
 function cleanSecret(provider, raw) {
-  if (typeof raw !== 'string') throw badRequest('Bitte den Schlüssel eingeben');
+  if (typeof raw !== 'string') throw badRequest('Bitte den Schlüssel eingeben'); // i18n-ignore: answer text
   const secret = raw.trim();
-  if (secret.length < MIN_SECRET || secret.length > MAX_SECRET) throw badRequest(`Der Schlüssel muss ${MIN_SECRET} bis ${MAX_SECRET} Zeichen lang sein`);
+  if (secret.length < MIN_SECRET || secret.length > MAX_SECRET) {
+    throw badRequest(msg('Der Schlüssel muss {min} bis {max} Zeichen lang sein', { min: MIN_SECRET, max: MAX_SECRET })); // i18n-ignore: answer text
+  }
   const wrong = guides.formatError(provider, secret);
   if (wrong) throw badRequest(wrong, 'KEY_FORMAT');
   return secret;
@@ -54,6 +57,9 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
     insecure_storage: !credentials.secure
   });
 
+  // a profile row that is not stored yet (second window) has the defaults
+  const profileLanguage = () => locales.readProfile(getCtx().db, getProfile().id);
+
   async function checkLive(provider, secret) {
     const name = guides.guideFor(provider)?.name || provider;
     const blockedBefore = new Set(http.blockedHosts?.() || []);
@@ -62,16 +68,20 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
     } catch (err) {
       const host = PROVIDER_HOSTS[provider];
       if (host && (http.blockedHosts?.() || []).includes(host) && !blockedBefore.has(host)) {
-        throw new HttpError(400, corsText(name), 'CORS_BLOCKED');
+        throw new HttpError(400, msg('{host} lässt Anfragen aus dem Browser nicht zu (CORS). In der App oder mit einem Server funktioniert diese Quelle.', { host: name }), 'CORS_BLOCKED'); // i18n-ignore: answer text
       }
       if (err instanceof sourceRequest.SourceError) {
         if (err.kind === 'auth' || err.kind === 'bad' || err.kind === 'notfound') {
-          const what = provider === 'anilist' ? 'den Token' : provider === 'mal' ? 'die Client-ID' : 'den Schlüssel';
-          throw new HttpError(400, `${name} lehnt ${what} ab (${err.status || 401})`, 'KEY_REJECTED');
+          const params = { provider: name, status: err.status || 401 };
+          let text;
+          if (provider === 'anilist') text = msg('{provider} lehnt den Token ab ({status})', params); // i18n-ignore: answer text
+          else if (provider === 'mal') text = msg('{provider} lehnt die Client-ID ab ({status})', params); // i18n-ignore: answer text
+          else text = msg('{provider} lehnt den Schlüssel ab ({status})', params); // i18n-ignore: answer text
+          throw new HttpError(400, text, 'KEY_REJECTED');
         }
-        throw new HttpError(502, `${name} ist gerade nicht erreichbar, der Schlüssel wurde nicht gespeichert. Bitte später erneut versuchen.`, 'PROVIDER_UNREACHABLE');
+        throw new HttpError(502, msg('{provider} ist gerade nicht erreichbar, der Schlüssel wurde nicht gespeichert. Bitte später erneut versuchen.', { provider: name }), 'PROVIDER_UNREACHABLE'); // i18n-ignore: answer text
       }
-      if (err?.code === 'CORS_BLOCKED') throw new HttpError(400, err.message, 'CORS_BLOCKED');
+      if (err?.code === 'CORS_BLOCKED') throw new HttpError(400, err.extra?.msg ? msg(err.extra.msg, err.extra.params) : err.message, 'CORS_BLOCKED');
       throw err;
     }
   }
@@ -91,13 +101,15 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
   async function upload(form, field, max) {
     const ctx = getCtx();
     const files = (await fileEntries(form, field)).slice(0, max);
-    if (!files.length) throw badRequest(max > 1 ? 'Keine Dateien hochgeladen' : 'Keine Datei hochgeladen');
+    // answer texts stay German: the client translates them (i18n/serverText.js)
+    if (!files.length && max > 1) throw badRequest('Keine Dateien hochgeladen'); // i18n-ignore
+    if (!files.length) throw badRequest('Keine Datei hochgeladen'); // i18n-ignore
     const prepared = [];
     for (const file of files) {
-      if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Die Datei ist zu groß (höchstens 15 MB)', 'PAYLOAD_TOO_LARGE');
+      if (file.size > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Die Datei ist zu groß (höchstens 15 MB)', 'PAYLOAD_TOO_LARGE'); // i18n-ignore
       const bytes = new Uint8Array(await file.arrayBuffer());
       const ext = imageCheck.detectImageExt(bytes);
-      if (!ext) throw badRequest('Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt', 'INVALID_FILE_TYPE');
+      if (!ext) throw badRequest('Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt', 'INVALID_FILE_TYPE'); // i18n-ignore
       prepared.push({ name: `${ctx.randomId()}${ext}`, bytes, ext });
     }
     for (const p of prepared) await ctx.files.write(p.name, p.bytes, { image: p.ext });
@@ -105,9 +117,14 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
   }
 
   const routes = [
-    ['GET', /^\/auth\/me$/, () => json({ user: { ...getProfile(), local: true } })],
+    ['GET', /^\/auth\/me$/, () => json({ user: { ...getProfile(), local: true, ...profileLanguage() } })],
+    ['PUT', /^\/auth\/profile$/, (m, body) => {
+      const fields = locales.parseProfileBody(body);
+      return json({ user: { ...getProfile(), local: true, ...locales.saveProfile(getCtx().db, getProfile().id, fields) } });
+    }],
     ['GET', /^\/setup\/status$/, () => json({ needsSetup: false })],
     ['POST', /^\/auth\/logout$/, () => json({ success: true })],
+    // i18n-ignore: the app name of the health answer
     ['GET', /^\/health$/, () => json({ status: 'ok', name: 'Manga Shelf', local: true })],
     ['GET', /^\/users$/, () => json(listProfiles())],
     ['POST', /^\/upload$/, async (m, body) => json({ url: (await upload(body, 'image', 1))[0] })],
@@ -118,7 +135,7 @@ export function createLocalServer({ getCtx, getProfile, listProfiles, credential
       const userId = getProfile().id;
       if (body?.secret === undefined && body?.allow_background !== undefined) {
         const entry = await credentials.setAllowBackground(userId, provider, allowBackgroundOf(body));
-        if (!entry) throw notFound('Schlüssel');
+        if (!entry) throw notFound('Schlüssel'); // i18n-ignore: answer text
         return json(masked(provider, entry));
       }
       return json(await saveKey(userId, provider, body));

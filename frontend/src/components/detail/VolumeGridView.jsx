@@ -3,7 +3,12 @@ import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../uti
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges, { ownerColor, readerInitials } from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
+import { formatMoney } from '../../utils/format';
+import { editionCurrency } from '../../utils/editions';
+import { VolumeLanguagePill } from '../common/LanguagePill';
 import { assetImgProps } from '../../utils/api';
+import { t, tn } from '../../i18n/index.js';
+import { conditionLabel, statusLabel } from '../../utils/enumLabels';
 
 export { readerInitials };
 
@@ -43,7 +48,7 @@ export default function VolumeGridView({
                   className={`group relative flex flex-col justify-between p-3 rounded-2xl border border-dashed border-amber-500/40 bg-slate-900/60 text-sm select-none shadow-sm shadow-amber-950/20 transition-all duration-200 overflow-hidden ${
                     canEdit ? 'cursor-pointer hover:border-amber-400 hover:bg-slate-900/90 hover:scale-[1.01]' : 'cursor-default'
                   }`}
-                  title={`${gapPrice ? `Fehlender Band ${item.gapNumber} (${gapPrice})` : `Band ${item.gapNumber} fehlt in der Sammlung`}${canEdit ? ' • Klicken zum Erfassen' : ''}`}
+                  title={`${gapPrice ? t('Fehlender Band {number} ({price})', { number: item.gapNumber, price: gapPrice }) : t('Band {number} fehlt in der Sammlung', { number: item.gapNumber })}${canEdit ? ` • ${t('Klicken zum Erfassen')}` : ''}`}
                 >
                   {/* Top Row: Gap Indicator & Number & Action */}
                   <div className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5 pb-2 border-b border-amber-500/20 w-full shrink-0">
@@ -51,12 +56,12 @@ export default function VolumeGridView({
                       <div className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 border border-amber-500/50 text-amber-400 font-bold text-xs">
                         +
                       </div>
-                      <span className="font-bold text-amber-300 text-sm tracking-tight min-w-0 break-words leading-tight">Band {item.gapNumber}</span>
+                      <span className="font-bold text-amber-300 text-sm tracking-tight min-w-0 break-words leading-tight">{t('Band {gapNumber}', { gapNumber: item.gapNumber })}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
-                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Fehlend
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> {t('Fehlend')}
                       </span>
                       {canEdit && (
                         <button
@@ -66,10 +71,10 @@ export default function VolumeGridView({
                             setFillingGapNumber(item.gapNumber);
                           }}
                           className="hit-44 px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
-                          title="Band in Sammlung erfassen"
-                          aria-label={`Band ${item.gapNumber} erfassen`}
+                          title={t('Band in Sammlung erfassen')}
+                          aria-label={t('Band {gapNumber} erfassen', { gapNumber: item.gapNumber })}
                         >
-                          <Plus className="w-3 h-3" /> Erfassen
+                          <Plus className="w-3 h-3" /> {t('Erfassen')}
                         </button>
                       )}
                     </div>
@@ -88,13 +93,13 @@ export default function VolumeGridView({
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end justify-center p-1">
-                          <span className="text-[8px] font-black text-amber-300 uppercase tracking-wider">Lücke</span>
+                          <span className="text-[8px] font-black text-amber-300 uppercase tracking-wider">{t('Lücke')}</span>
                         </div>
                       </div>
                     ) : (
                       <div className="w-12 h-16 sm:w-13 sm:h-18 rounded-xl border border-dashed border-amber-500/30 bg-amber-950/20 shrink-0 flex flex-col items-center justify-center p-1">
                         <BookOpen className="w-4 h-4 mb-1 text-amber-500/60" aria-hidden="true" />
-                        <span data-testid="gap-ghost-label" className="text-[10px] font-bold text-center leading-tight text-amber-300">Band {item.gapNumber}</span>
+                        <span data-testid="gap-ghost-label" className="text-[10px] font-bold text-center leading-tight text-amber-300">{t('Band {gapNumber}', { gapNumber: item.gapNumber })}</span>
                       </div>
                     )}
 
@@ -112,14 +117,14 @@ export default function VolumeGridView({
                       )}
 
                       {(gapMeta?.publisher || manga.publisher) && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={`Verlag: ${gapMeta?.publisher || manga.publisher}`}>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={t('Verlag: {publisher}', { publisher: gapMeta?.publisher || manga.publisher })}>
                           <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                           <span className="truncate">{gapMeta?.publisher || manga.publisher}</span>
                         </span>
                       )}
 
                       {gapMeta?.release_date && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${formatShortDate(gapMeta.release_date)}`}>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={t('Erscheinungsdatum: {date}', { date: formatShortDate(gapMeta.release_date) })}>
                           <Calendar className="w-3 h-3 text-sky-400" />
                           {formatShortDate(gapMeta.release_date)}
                         </span>
@@ -131,7 +136,7 @@ export default function VolumeGridView({
                   <div className="w-full mt-auto pt-2 border-t border-amber-500/20 flex items-center justify-between gap-1.5 shrink-0 text-xs">
                     <span className="text-slate-400 text-[11px] flex items-center gap-1.5">
                       <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                      {canEdit ? 'Klicken zum Erfassen' : 'Noch zu sammeln'}
+                      {canEdit ? t('Klicken zum Erfassen') : t('Noch zu sammeln')}
                     </span>
                     {canEdit && (
                       <button
@@ -141,9 +146,9 @@ export default function VolumeGridView({
                           setFillingGapNumber(item.gapNumber);
                         }}
                         className="hit-44 text-amber-400 hover:text-amber-300 font-semibold text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                        aria-label={`Band ${item.gapNumber} zu Sammlung hinzufügen`}
+                        aria-label={t('Band {gapNumber} zu Sammlung hinzufügen', { gapNumber: item.gapNumber })}
                       >
-                        <span>+ Zu Sammlung</span>
+                        <span>{t('+ Zu Sammlung')}</span>
                       </button>
                     )}
                   </div>
@@ -194,7 +199,7 @@ export default function VolumeGridView({
                       checked={selected}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
-                      aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                      aria-label={t('{volume} auswählen', { volume: getVolumeDisplayTitle(vol) })}
                       className="w-6 h-6 m-0 accent-brand-500 cursor-pointer"
                     />
                   </label>
@@ -219,8 +224,8 @@ export default function VolumeGridView({
                           ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canToggle ? ' hover:bg-purple-500/30' : '')
                           : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canToggle ? ' hover:border-slate-500 hover:text-slate-300' : '')
                   }`}
-                  title={!canToggle ? `Status: ${vol.status || 'Fehlt'}` : `Status: ${vol.status || 'Fehlt'} (Klicken zum Umschalten)`}
-                  aria-label={`Status: ${vol.status || 'Fehlt'} – ${getVolumeDisplayTitle(vol)}`}
+                  title={!canToggle ? t('Status: {status}', { status: statusLabel(vol.status || 'Fehlt') }) : t('Status: {status} (Klicken zum Umschalten)', { status: statusLabel(vol.status || 'Fehlt') })}
+                  aria-label={t('Status: {status} – {volume}', { status: statusLabel(vol.status || 'Fehlt'), volume: getVolumeDisplayTitle(vol) })}
                 >
                   {isOwned ? (
                     <Check className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
@@ -241,13 +246,13 @@ export default function VolumeGridView({
                   {badge.type === 'schuber' ? (
                     <>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shrink-0 shadow-sm">
-                        <Package className="w-2.5 h-2.5 text-indigo-400" /> Schuber
+                        <Package className="w-2.5 h-2.5 text-indigo-400" /> {t('Schuber')}
                       </span>
-                      <span className="min-w-0 break-words leading-tight">{badge.text}</span>
+                      <span className="min-w-0 break-words leading-tight">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>
                     </>
                   ) : badge.type === 'special_edition' ? (
                     <>
-                      {badge.text && <span className="shrink-0 font-bold">{badge.text}</span>}
+                      {badge.text && <span className="shrink-0 font-bold">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>}
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 flex items-center gap-1 max-w-full shadow-sm" title={badge.label}>
                         <Sparkles className="w-2.5 h-2.5 text-fuchsia-400 shrink-0" /> <span className="truncate">{badge.label.replace(/ Edition$/, '')}</span>
                       </span>
@@ -255,13 +260,14 @@ export default function VolumeGridView({
                   ) : badge.type === 'special' ? (
                     <>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/25 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-sm">
-                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Special
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> {t('Special')}
                       </span>
-                      <span className="truncate">{badge.text}</span>
+                      <span className="truncate">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>
                     </>
                   ) : (
-                    <span className="truncate">{badge.text}</span>
+                    <span className="truncate">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>
                   )}
+                  <VolumeLanguagePill volume={vol} manga={manga} />
                   <OwnerBadges vol={vol} multiUser={readers.length > 1} />
                 </div>
               </div>
@@ -273,8 +279,8 @@ export default function VolumeGridView({
                       type="button"
                       onClick={(e) => handleOpenEditVolume(vol, e)}
                       className="hit-44 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
-                      title="Foto für Band hochladen"
-                      aria-label={`Foto für ${getVolumeDisplayTitle(vol)} hochladen`}
+                      title={t('Foto für Band hochladen')}
+                      aria-label={t('Foto für {volume} hochladen', { volume: getVolumeDisplayTitle(vol) })}
                     >
                       <Camera className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
@@ -283,8 +289,8 @@ export default function VolumeGridView({
                     type="button"
                     onClick={(e) => handleOpenEditVolume(vol, e)}
                     className="hit-44 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
-                    title="Band-Details & Fotos bearbeiten"
-                    aria-label={`${getVolumeDisplayTitle(vol)} bearbeiten`}
+                    title={t('Band-Details & Fotos bearbeiten')}
+                    aria-label={t('{volume} bearbeiten', { volume: getVolumeDisplayTitle(vol) })}
                   >
                     <PenLine className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -292,8 +298,8 @@ export default function VolumeGridView({
                     type="button"
                     onClick={(e) => handleDeleteVolume(e, vol)}
                     className="hit-44 ml-1.5 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-md transition-all"
-                    title="Band löschen"
-                    aria-label={`${getVolumeDisplayTitle(vol)} löschen`}
+                    title={t('Band löschen')}
+                    aria-label={t('{volume} löschen', { volume: getVolumeDisplayTitle(vol) })}
                   >
                     <X className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -311,8 +317,8 @@ export default function VolumeGridView({
                     e.stopPropagation();
                     openVolumeGallery(vol);
                   }}
-                  title="Klicken zum Öffnen der Fotogalerie"
-                  aria-label={`Fotogalerie öffnen: ${getVolumeDisplayTitle(vol)}`}
+                  title={t('Klicken zum Öffnen der Fotogalerie')}
+                  aria-label={t('Fotogalerie öffnen: {volume}', { volume: getVolumeDisplayTitle(vol) })}
                 >
                   <img 
                     {...assetImgProps(vol.cover_image)} 
@@ -337,57 +343,57 @@ export default function VolumeGridView({
                 {statusKind === 'preordered' ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-sky-300 bg-sky-950/70 border border-sky-500/40 text-[10px]">
                     <Truck className="w-3 h-3 text-sky-400" />
-                    Vorbestellt
+                    {t('Vorbestellt')}
                   </span>
                 ) : statusKind === 'ordered' ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-orange-300 bg-orange-950/70 border border-orange-500/40 text-[10px]">
                     <ShoppingCart className="w-3 h-3 text-orange-400" />
-                    Bestellt
+                    {t('Bestellt')}
                   </span>
                 ) : statusKind === 'upcoming' ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-purple-300 bg-purple-950/70 border border-purple-500/40 text-[10px]">
                     <Calendar className="w-3 h-3 text-purple-400" />
-                    Erscheint bald
+                    {t('Erscheint bald')}
                   </span>
                 ) : null}
 
                 {vol.release_date ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={`Erscheinungsdatum: ${formatShortDate(vol.release_date)}`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono text-sky-300 bg-sky-950/60 border border-sky-500/30 text-[10px]" title={t('Erscheinungsdatum: {date}', { date: formatShortDate(vol.release_date) })}>
                     <Calendar className="w-3 h-3 text-sky-400" />
                     {formatShortDate(vol.release_date)}
                   </span>
                 ) : null}
 
-                {formatEuro(vol.price) ? (
+                {formatMoney(vol.price, editionCurrency(manga)) ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-mono font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30">
                     <Coins className="w-3 h-3 text-emerald-400" />
-                    {formatEuro(vol.price)}
+                    {formatMoney(vol.price, editionCurrency(manga))}
                   </span>
                 ) : null}
 
                 {effectivePublisher ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={`Verlag: ${effectivePublisher}`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={t('Verlag: {effectivePublisher}', { effectivePublisher })}>
                     <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                     <span className="truncate">{effectivePublisher}</span>
                   </span>
                 ) : null}
 
                 {vol.condition ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-amber-300 bg-amber-950/50 border border-amber-500/30 truncate" title={`Zustand: ${vol.condition}`}>
-                    {vol.condition}
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-amber-300 bg-amber-950/50 border border-amber-500/30 truncate" title={t('Zustand: {condition}', { condition: conditionLabel(vol.condition) })}>
+                    {conditionLabel(vol.condition)}
                   </span>
                 ) : null}
 
                 {vol.release_year ? (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-slate-400 bg-slate-900 border border-slate-800 font-mono" title={`Erscheinungsjahr: ${vol.release_year}`}>
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-slate-400 bg-slate-900 border border-slate-800 font-mono" title={t('Erscheinungsjahr: {release_year}', { release_year: vol.release_year })}>
                     <Calendar className="w-3 h-3 text-slate-400" />
                     {vol.release_year}
                   </span>
                 ) : null}
 
                 {vol.pages ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-slate-400 bg-slate-900 border border-slate-800 text-[10px]" title={`${vol.pages} Seiten`}>
-                    {vol.pages} S.
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-slate-400 bg-slate-900 border border-slate-800 text-[10px]" title={tn('{n} Seiten', '{n} Seiten', vol.pages)}>
+                    {t('{pages} S.', { pages: vol.pages })}
                   </span>
                 ) : null}
 
@@ -398,7 +404,7 @@ export default function VolumeGridView({
                 ) : null}
 
                 {vol.notes ? (
-                  <span role="img" aria-label={`Notiz: ${vol.notes}`} className="inline-flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-white" title={`Notiz: ${vol.notes}`}>
+                  <span role="img" aria-label={t('Notiz: {notes}', { notes: vol.notes })} className="inline-flex items-center px-1 py-0.5 rounded text-slate-400 hover:text-white" title={t('Notiz: {notes}', { notes: vol.notes })}>
                     <FileText className="w-3 h-3 text-brand-400" />
                   </span>
                 ) : null}
@@ -408,11 +414,11 @@ export default function VolumeGridView({
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openVolumeGallery(vol); }}
                     className="hit-44 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-brand-300 bg-brand-950/60 border border-brand-500/30 text-[10px] hover:bg-brand-900/80 transition-colors font-medium cursor-pointer"
-                    title="Fotogalerie öffnen"
-                    aria-label={`${vol.images.length} Fotos von ${getVolumeDisplayTitle(vol)} öffnen`}
+                    title={t('Fotogalerie öffnen')}
+                    aria-label={tn('{n} Fotos von {volume} öffnen', '{n} Fotos von {volume} öffnen', vol.images.length, { volume: getVolumeDisplayTitle(vol) })}
                   >
                     <Camera className="w-3 h-3 text-brand-400" />
-                    <span>{vol.images.length} Fotos</span>
+                    <span>{tn('{n} Fotos', '{n} Fotos', vol.images.length)}</span>
                   </button>
                 )}
               </div>
@@ -440,25 +446,25 @@ export default function VolumeGridView({
                           : 'bg-slate-800/60 text-slate-400 border border-slate-700/60' + (canToggleStatus ? ' hover:text-slate-200 hover:border-slate-600' : '')
                       }`}
                       title={canToggleStatus
-                        ? 'Lesestatus umschalten (Gelesen / Ungelesen)'
-                        : canToggle ? READ_OTHERS_ADMIN_ONLY : `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)`}
-                      aria-label={`${isRead ? 'Gelesen' : 'Ungelesen'} – ${getVolumeDisplayTitle(vol)}`}
+                        ? t('Lesestatus umschalten (Gelesen / Ungelesen)')
+                        : canToggle ? t(READ_OTHERS_ADMIN_ONLY) : t('Lesestatus: {state} (Nur Leseansicht)', { state: isRead ? t('Gelesen') : t('Ungelesen') })}
+                      aria-label={t('{state} – {volume}', { state: isRead ? t('Gelesen') : t('Ungelesen'), volume: getVolumeDisplayTitle(vol) })}
                     >
                       <BookCheck className={`w-3.5 h-3.5 ${isRead ? 'text-emerald-400' : 'text-slate-400'}`} aria-hidden="true" />
-                      <span>{isRead ? 'Gelesen' : 'Ungelesen'}</span>
+                      <span>{isRead ? t('Gelesen') : t('Ungelesen')}</span>
                     </button>
                   );
                 })()}
 
                 {readers.length > 0 && (
-                  <div role="group" aria-label={`Lesestatus der Leser – ${getVolumeDisplayTitle(vol)}`} className="flex items-center gap-1 flex-wrap justify-end">
+                  <div role="group" aria-label={t('Lesestatus der Leser – {volume}', { volume: getVolumeDisplayTitle(vol) })} className="flex items-center gap-1 flex-wrap justify-end">
                     {readers.map(r => {
                       const isReaderDone = hasUserRead(vol, r.user_id, user?.id);
-                      const name = r.display_name || r.username || 'Unbekannt';
+                      const name = r.display_name || r.username || t('Unbekannt');
                       const initials = readerInitials(name);
                       const color = ownerColor(r.user_id);
                       const canToggleReader = canToggle && (mayToggleOthers || String(r.user_id) === String(user?.id));
-                      const stateText = isReaderDone ? 'gelesen' : 'ungelesen';
+                      const stateText = isReaderDone ? t('gelesen') : t('ungelesen');
                       // the reader's own colour (same as the owner badges): filled when read, outlined when not
                       const look = `relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold tracking-tight transition-all border ${
                         isReaderDone ? 'text-slate-950 shadow-sm shadow-slate-950/40' : 'bg-slate-900 border-dashed'
@@ -481,7 +487,7 @@ export default function VolumeGridView({
 
                       if (!canToggleReader) {
                         return (
-                          <span key={r.user_id} role="img" aria-label={`${name}: ${stateText}`} title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'}`} className={`${look} cursor-default`} style={lookStyle}>
+                          <span key={r.user_id} role="img" aria-label={t('{name}: {state}', { name, state: stateText })} title={t('{name}: {state}', { name, state: isReaderDone ? t('Gelesen') : t('Noch ungelesen') })} className={`${look} cursor-default`} style={lookStyle}>
                             {content}
                           </span>
                         );
@@ -491,11 +497,11 @@ export default function VolumeGridView({
                           key={r.user_id}
                           type="button"
                           aria-pressed={isReaderDone}
-                          aria-label={`Gelesen: ${name} – ${getVolumeDisplayTitle(vol)}`}
+                          aria-label={t('Gelesen: {name} – {volume}', { name, volume: getVolumeDisplayTitle(vol) })}
                           onClick={(e) => handleToggleVolumeRead(vol, r.user_id, e)}
                           className={`${look} cursor-pointer hover:scale-110`}
                           style={lookStyle}
-                          title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'} (Klicken zum Umschalten)`}
+                          title={t('{name}: {state} (Klicken zum Umschalten)', { name, state: isReaderDone ? t('Gelesen') : t('Noch ungelesen') })}
                         >
                           {content}
                         </button>

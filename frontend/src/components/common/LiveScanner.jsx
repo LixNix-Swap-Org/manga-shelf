@@ -3,6 +3,7 @@ import { Camera, Flashlight, FlashlightOff, LoaderCircle, ScanBarcode, X } from 
 import { isIsbnBarcode, pickIsbnBarcode } from '../../utils/scanHelpers';
 import { haptic } from '../../utils/haptics';
 import useDialogA11y from '../../hooks/useDialogA11y';
+import { t as tr } from '../../i18n/index.js';
 
 export const SCAN_INTERVAL_MS = 125;
 export const SAME_ISBN_PAUSE_MS = 2000;
@@ -14,14 +15,14 @@ export function cameraErrorText(err) {
   switch (err?.name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return 'Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen oder fotografiere den Barcode.';
+      return tr('Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen oder fotografiere den Barcode.');
     case 'NotFoundError':
     case 'OverconstrainedError':
-      return 'Keine passende Kamera gefunden.';
+      return tr('Keine passende Kamera gefunden.');
     case 'NotReadableError':
-      return 'Die Kamera wird gerade von einer anderen App benutzt.';
+      return tr('Die Kamera wird gerade von einer anderen App benutzt.');
     default:
-      return 'Die Kamera ließ sich nicht starten.';
+      return tr('Die Kamera ließ sich nicht starten.');
   }
 }
 
@@ -56,7 +57,7 @@ async function startZxing(stream, video, onCode) {
 
 /** Rear camera in the page: BarcodeDetector at about 8 frames per second, else ZXing with EAN hints on the same stream. */
 function CameraScanner({
-  onDetected, onClose, onPhotoFallback, continuous = false, title = 'Barcode scannen', children = null,
+  onDetected, onClose, onPhotoFallback, continuous = false, title = tr('Barcode scannen'), children = null,
   mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices,
   Detector = typeof window === 'undefined' ? undefined : window.BarcodeDetector
 }) {
@@ -173,7 +174,7 @@ function CameraScanner({
       dialogRef={dialogRef}
       title={title}
       onClose={close}
-      status={lastIsbn ? `Erkannt: ${lastIsbn}` : (phase === 'scanning' ? 'Barcode der Buchrückseite in den Rahmen halten' : '')}
+      status={lastIsbn ? tr('Erkannt: {isbn}', { isbn: lastIsbn }) : (phase === 'scanning' ? tr('Barcode der Buchrückseite in den Rahmen halten') : '')}
       actions={(
         <>
           {torch.supported && (
@@ -184,12 +185,12 @@ function CameraScanner({
               className="min-h-[44px] px-4 rounded-full bg-white/10 hover:bg-white/20 flex items-center gap-2 text-sm"
             >
               {torch.on ? <FlashlightOff className="w-4 h-4" aria-hidden="true" /> : <Flashlight className="w-4 h-4" aria-hidden="true" />}
-              Licht
+              {tr('Licht')}
             </button>
           )}
           {onPhotoFallback && phase !== 'error' && (
             <button type="button" onClick={switchToPhoto} className={ROUND_BUTTON}>
-              <Camera className="w-4 h-4" aria-hidden="true" /> Foto statt Live-Bild
+              <Camera className="w-4 h-4" aria-hidden="true" /> {tr('Foto statt Live-Bild')}
             </button>
           )}
         </>
@@ -204,7 +205,7 @@ function CameraScanner({
           )}
           {phase === 'starting' && (
             <p role="status" className="absolute inset-x-0 bottom-6 flex items-center justify-center gap-2 text-sm text-slate-200">
-              <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> Kamera wird gestartet…
+              <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden="true" /> {tr('Kamera wird gestartet…')}
             </p>
           )}
           {phase === 'error' && <ScanError text={error} onPhoto={onPhotoFallback && switchToPhoto} />}
@@ -224,7 +225,7 @@ function ScanError({ text, onPhoto }) {
       <p className="text-sm text-slate-200 max-w-sm">{text}</p>
       {onPhoto && (
         <button type="button" onClick={onPhoto} className="btn-primary flex items-center gap-2 px-5 py-3">
-          <Camera className="w-4 h-4" aria-hidden="true" /> Foto aufnehmen
+          <Camera className="w-4 h-4" aria-hidden="true" /> {tr('Foto aufnehmen')}
         </button>
       )}
     </div>
@@ -261,7 +262,7 @@ function ScannerFrame({ dialogRef, title, onClose, status, view, actions, childr
           type="button"
           onClick={onClose}
           className="w-11 h-11 -m-1 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20"
-          aria-label="Scanner schließen"
+          aria-label={tr('Scanner schließen')}
         >
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
@@ -275,7 +276,7 @@ function ScannerFrame({ dialogRef, title, onClose, status, view, actions, childr
         <div className="flex flex-wrap items-center justify-center gap-3">
           {actions}
           <button type="button" onClick={onClose} className="min-h-[44px] px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-sm font-semibold">
-            Fertig
+            {tr('Fertig')}
           </button>
         </div>
       </div>
@@ -288,6 +289,7 @@ export const nativeScannerBridge = (win = typeof window === 'undefined' ? null :
   win?.mangashelfNative?.plugins?.BarcodeScanner ? win.mangashelfNative : null
 );
 
+// i18n
 export const NATIVE_TEXTS = {
   denied: 'Kein Zugriff auf die Kamera. Erlaube sie in den Einstellungen des Geräts (Manga Shelf → Kamera) oder fotografiere den Barcode.',
   installing: 'Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.',
@@ -305,11 +307,11 @@ export async function scanNative(bridge) {
     const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
     if (!available) {
       await BarcodeScanner.installGoogleBarcodeScannerModule();
-      throw Object.assign(new Error(NATIVE_TEXTS.installing), { code: 'SCANNER_INSTALLING' });
+      throw Object.assign(new Error(tr(NATIVE_TEXTS.installing)), { code: 'SCANNER_INSTALLING' });
     }
   } else {
     const { camera } = await BarcodeScanner.requestPermissions();
-    if (camera !== 'granted' && camera !== 'limited') throw Object.assign(new Error(NATIVE_TEXTS.denied), { code: 'CAMERA_DENIED' });
+    if (camera !== 'granted' && camera !== 'limited') throw Object.assign(new Error(tr(NATIVE_TEXTS.denied)), { code: 'CAMERA_DENIED' });
   }
   try {
     const { barcodes = [] } = await BarcodeScanner.scan({ formats: [BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA] });
@@ -324,7 +326,7 @@ export async function scanNative(bridge) {
  * The app's scanner: ML Kit's native full-screen view. The dialog behind it shows the result and `children` (scan list)
  * and starts the next scan; without `continuous` it closes after the first ISBN or when the user cancels.
  */
-function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuous = false, title = 'Barcode scannen', children = null }) {
+function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuous = false, title = tr('Barcode scannen'), children = null }) {
   const [phase, setPhase] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -351,7 +353,7 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
       const isbn = String(pickIsbnBarcode(barcodes) || '').replace(/[^0-9X]/gi, '');
       if (!isIsbnBarcode(isbn)) {
         haptic('error');
-        setMessage(NATIVE_TEXTS.noIsbn);
+        setMessage(tr(NATIVE_TEXTS.noIsbn));
         setPhase('idle');
         return;
       }
@@ -363,7 +365,7 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
       if (!keepOpen) done?.();
     } catch (err) {
       if (!aliveRef.current) return;
-      setError(err?.code === 'SCANNER_INSTALLING' || err?.code === 'CAMERA_DENIED' ? err.message : NATIVE_TEXTS.failed);
+      setError(err?.code === 'SCANNER_INSTALLING' || err?.code === 'CAMERA_DENIED' ? err.message : tr(NATIVE_TEXTS.failed));
       setPhase('error');
     }
   }, [bridge]);
@@ -384,15 +386,15 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
       dialogRef={dialogRef}
       title={title}
       onClose={close}
-      status={message || (lastIsbn ? `Erkannt: ${lastIsbn}` : (phase === 'scanning' ? 'Scanner ist geöffnet…' : ''))}
+      status={message || (lastIsbn ? tr('Erkannt: {isbn}', { isbn: lastIsbn }) : (phase === 'scanning' ? tr('Scanner ist geöffnet…') : ''))}
       actions={(
         <>
           <button type="button" onClick={scan} disabled={phase === 'scanning'} className={`${ROUND_BUTTON} disabled:opacity-50`}>
-            <ScanBarcode className="w-4 h-4" aria-hidden="true" /> {lastIsbn ? 'Nächsten Barcode scannen' : 'Barcode scannen'}
+            <ScanBarcode className="w-4 h-4" aria-hidden="true" /> {lastIsbn ? tr('Nächsten Barcode scannen') : tr('Barcode scannen')}
           </button>
           {onPhotoFallback && phase !== 'error' && (
             <button type="button" onClick={switchToPhoto} className={ROUND_BUTTON}>
-              <Camera className="w-4 h-4" aria-hidden="true" /> Foto aufnehmen
+              <Camera className="w-4 h-4" aria-hidden="true" /> {tr('Foto aufnehmen')}
             </button>
           )}
         </>

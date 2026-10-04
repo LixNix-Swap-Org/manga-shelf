@@ -1,4 +1,6 @@
 import { scanSeriesTitle } from '../../utils/scanHelpers';
+import { t } from '../../i18n/index.js';
+import { payloadText, serverText } from '../../i18n/serverText.js';
 
 // Vite always defines it; the guard keeps tests that render without Vite's define working.
 export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
@@ -51,10 +53,10 @@ const isVisitorRole = (role) => role === 'visitor' || role === 'guest';
 /** Visible role name; offline mode demotes everybody to read-only and says so. */
 export const roleLabel = (user) => {
   if (!user) return '';
-  if (user.offline) return 'Offline';
-  if (user.role === 'admin') return 'Admin';
-  if (user.role === 'editor') return 'Editor';
-  if (isVisitorRole(user.role)) return 'Gast';
+  if (user.offline) return t('Offline');
+  if (user.role === 'admin') return t('Admin');
+  if (user.role === 'editor') return t('Editor');
+  if (isVisitorRole(user.role)) return t('Gast');
   return user.role ? String(user.role) : '';
 };
 
@@ -64,7 +66,9 @@ export const roleBadgeClass = (user) => {
   return 'bg-sky-500/20 text-sky-300 border-sky-500/40';
 };
 
+// i18n
 export const SCAN_OFFLINE_MESSAGE = 'Die ISBN-Suche braucht eine Verbindung zum Server.';
+// i18n
 export const SCAN_FAILED_MESSAGE = 'ISBN-Suche fehlgeschlagen (Server nicht erreichbar).';
 
 /**
@@ -73,7 +77,7 @@ export const SCAN_FAILED_MESSAGE = 'ISBN-Suche fehlgeschlagen (Server nicht erre
  */
 export const scanDashboardAction = ({ ok, data, canEdit }) => {
   if (!ok || !data) {
-    return { type: 'error', message: (data && typeof data.error === 'string' && data.error) || SCAN_FAILED_MESSAGE };
+    return { type: 'error', message: serverText(data) || t(SCAN_FAILED_MESSAGE) };
   }
   if (data.found && data.matched_manga) return { type: 'navigate', manga: data.matched_manga };
   const candidates = Array.isArray(data.matched_candidates) ? data.matched_candidates.filter((c) => c && c.id != null) : [];
@@ -82,11 +86,11 @@ export const scanDashboardAction = ({ ok, data, canEdit }) => {
   if (data.found && data.book) {
     if (canEdit) return { type: 'prefill', book: data.book };
     const name = scanSeriesTitle(data.book);
-    return { type: 'notice', message: name ? `Nicht in der Sammlung: ${name}` : 'Diese Reihe ist nicht in der Sammlung.' };
+    return { type: 'notice', message: name ? t('Nicht in der Sammlung: {name}', { name }) : t('Diese Reihe ist nicht in der Sammlung.') };
   }
   return {
     type: 'notFound',
-    message: (typeof data.message === 'string' && data.message) || 'Keine Daten zu dieser ISBN gefunden.',
+    message: payloadText(data, 'message') || t('Keine Daten zu dieser ISBN gefunden.'),
     canAdd: Boolean(canEdit)
   };
 };

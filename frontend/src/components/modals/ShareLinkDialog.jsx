@@ -5,8 +5,9 @@ import { langFor } from '../common/lang';
 import { compareNatural } from '../../utils/search';
 import { displayTitle, progressText } from '../../utils/animeHelpers';
 import {
-  SHARE_TEXTS, aboveTotalText, displaySeriesTitle, knownEntry, progressBefore, raisesCounter, serviceLabel
+  aboveTotalText, displaySeriesTitle, knownEntry, progressBefore, raisesCounter, serviceLabel
 } from '../../utils/shareIntake';
+import { t } from '../../i18n/index.js';
 
 const MAX_CANDIDATES = 5;
 
@@ -19,7 +20,7 @@ function PasteStep({ error, onSubmit, onCancel, ids }) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(value); }} className="space-y-3" noValidate>
       <div>
-        <label htmlFor={`${ids}-paste`} className="block text-xs font-semibold text-slate-300 mb-1.5">Link aus der Crunchyroll-App oder -Website</label>
+        <label htmlFor={`${ids}-paste`} className="block text-xs font-semibold text-slate-300 mb-1.5">{t('Link aus der Crunchyroll-App oder -Website')}</label>
         <input
           ref={fieldRef}
           id={`${ids}-paste`}
@@ -35,12 +36,12 @@ function PasteStep({ error, onSubmit, onCancel, ids }) {
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${ids}-paste-hint ${ids}-paste-error` : `${ids}-paste-hint`}
         />
-        <p id={`${ids}-paste-hint`} className="text-[11px] text-slate-400 mt-1">Tippe lange ins Feld und wähle „Einfügen“.</p>
+        <p id={`${ids}-paste-hint`} className="text-[11px] text-slate-400 mt-1">{t('Tippe lange ins Feld und wähle „Einfügen“.')}</p>
         {error && <p id={`${ids}-paste-error`} role="alert" className="text-xs text-rose-300 mt-1">{error}</p>}
       </div>
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" className="btn-secondary text-sm" onClick={onCancel}>Abbrechen</button>
-        <button type="submit" className="btn-primary text-sm">Link prüfen</button>
+        <button type="button" className="btn-secondary text-sm" onClick={onCancel}>{t('Abbrechen')}</button>
+        <button type="submit" className="btn-primary text-sm">{t('Link prüfen')}</button>
       </div>
     </form>
   );
@@ -76,16 +77,16 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
   const showEpisodeField = !answer.episode || above || episode !== String(answer.episode);
 
   const heading = title
-    ? (answer.episode ? `${title}, Folge ${answer.episode} gesehen?` : `${title}: welche Folge?`)
-    : (answer.episode ? `Folge ${answer.episode} gesehen?` : 'Welche Folge hast du gesehen?');
+    ? (answer.episode ? t('{title}, Folge {episode} gesehen?', { title, episode: answer.episode }) : t('{title}: welche Folge?', { title }))
+    : (answer.episode ? t('Folge {episode} gesehen?', { episode: answer.episode }) : t('Welche Folge hast du gesehen?'));
 
   const check = () => {
     if (!chosenId) {
-      setError('Bitte einen Eintrag wählen.');
+      setError(t('Bitte einen Eintrag wählen.'));
       return false;
     }
     if (!valid) {
-      setError('Bitte die Folge eingeben.');
+      setError(t('Bitte die Folge eingeben.'));
       episodeRef.current?.focus();
       return false;
     }
@@ -111,7 +112,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
 
       {picking ? (
         <fieldset className="space-y-2">
-          <legend className="text-xs font-semibold text-slate-300 mb-1.5">Welcher Eintrag?</legend>
+          <legend className="text-xs font-semibold text-slate-300 mb-1.5">{t('Welcher Eintrag?')}</legend>
           {candidates.map((c) => (
             <label key={c.id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-100 cursor-pointer has-[:checked]:border-brand-500/70">
               <input type="radio" name={`${ids}-entry`} value={c.id} checked={chosenId === c.id} onChange={() => { onChoose(c.id); setError(''); }} />
@@ -121,7 +122,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
           ))}
           {others.length > 0 && (
             <div>
-              <label htmlFor={`${ids}-other`} className="block text-[11px] text-slate-400 mb-1">{candidates.length ? 'Anderer Eintrag' : 'Eintrag aus der Liste'}</label>
+              <label htmlFor={`${ids}-other`} className="block text-[11px] text-slate-400 mb-1">{candidates.length ? t('Anderer Eintrag') : t('Eintrag aus der Liste')}</label>
               <select
                 id={`${ids}-other`}
                 className="input-field text-base sm:text-sm"
@@ -134,21 +135,21 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
             </div>
           )}
           {!candidates.length && !others.length && (
-            <p className="text-xs text-slate-400">{listLoaded ? 'Dieser Anime steht noch nicht in der Liste.' : 'Die Liste wird noch geladen…'}</p>
+            <p className="text-xs text-slate-400">{listLoaded ? t('Dieser Anime steht noch nicht in der Liste.') : t('Die Liste wird noch geladen…')}</p>
           )}
           {canAdd && (
             <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={onAddToList} disabled={saving}>
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Zur Liste hinzufügen
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Zur Liste hinzufügen')}
             </button>
           )}
         </fieldset>
       ) : !above && (
-        <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>Anderer Eintrag…</button>
+        <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>{t('Anderer Eintrag…')}</button>
       )}
 
       {showEpisodeField && (
         <div>
-          <label htmlFor={`${ids}-episode`} className="block text-xs font-semibold text-slate-300 mb-1.5">Folge</label>
+          <label htmlFor={`${ids}-episode`} className="block text-xs font-semibold text-slate-300 mb-1.5">{t('Folge')}</label>
           <input
             ref={episodeRef}
             id={`${ids}-episode`}
@@ -169,10 +170,10 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
       {above && (
         <div className="space-y-2" aria-live="polite">
           <p id={`${ids}-above`} className="text-sm text-amber-300">
-            {total ? aboveTotalText(number, total) : `Folge ${number} gibt es bei diesem Eintrag nicht.`}
+            {total ? aboveTotalText(number, total) : t('Folge {number} gibt es bei diesem Eintrag nicht.', { number })}
           </p>
           {!picking && (
-            <button type="button" className="hit-44 text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>Anderen Eintrag wählen</button>
+            <button type="button" className="hit-44 text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>{t('Anderen Eintrag wählen')}</button>
           )}
         </div>
       )}
@@ -180,21 +181,21 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
       {ahead && (
         <p className="text-sm text-slate-300">
           {older
-            ? `Du bist schon bei Folge ${before.episodes_watched}, Folge ${number} ändert nichts.`
-            : `Du bist schon bei Folge ${before.episodes_watched} – nur den Link für „Weiter“ merken?`}
+            ? t('Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.', { episodes_watched: before.episodes_watched, number })
+            : t('Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?', { episodes_watched: before.episodes_watched })}
         </p>
       )}
       {error && <p id={`${ids}-confirm-error`} role="alert" className="text-xs text-rose-300">{error}</p>}
 
       <div className="flex flex-wrap justify-end gap-2 pt-1">
-        <button type="button" className="btn-secondary text-sm" onClick={onCancel} disabled={saving} data-autofocus={older ? true : undefined}>Abbrechen</button>
+        <button type="button" className="btn-secondary text-sm" onClick={onCancel} disabled={saving} data-autofocus={older ? true : undefined}>{t('Abbrechen')}</button>
         {above ? (
           <button key="complete" type="button" className="btn-primary text-sm" onClick={complete} disabled={saving}>
-            {saving ? 'Wird gespeichert…' : 'Trotzdem als komplett markieren'}
+            {saving ? t('Wird gespeichert…') : t('Trotzdem als komplett markieren')}
           </button>
         ) : !older && (
           <button key="confirm" type="submit" className="btn-primary text-sm" disabled={saving} data-autofocus>
-            {saving ? 'Wird gespeichert…' : ahead ? 'Link merken' : 'Ja, gesehen'}
+            {saving ? t('Wird gespeichert…') : ahead ? t('Link merken') : t('Ja, gesehen')}
           </button>
         )}
       </div>
@@ -239,14 +240,14 @@ export default function ShareLinkDialog({ state, list = [], listLoaded = true, c
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
       <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative" id="share-link-dialog">
-        <button type="button" onClick={close} disabled={state.phase === 'saving'} aria-label="Schließen" className="hit-44 absolute top-3 right-3 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+        <button type="button" onClick={close} disabled={state.phase === 'saving'} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
 
         {state.phase === 'paste' && (
           <>
             <h2 id={titleId} className="text-lg font-bold text-white flex items-center gap-2 mb-4 pr-10">
-              <ClipboardPaste className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> Link einfügen
+              <ClipboardPaste className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {t('Link einfügen')}
             </h2>
             <PasteStep error={state.error} onSubmit={onSubmitPaste} onCancel={close} ids={ids} />
           </>
@@ -255,16 +256,16 @@ export default function ShareLinkDialog({ state, list = [], listLoaded = true, c
         {(state.phase === 'reading' || state.phase === 'error') && (
           <>
             <h2 id={titleId} className="text-lg font-bold text-white flex items-center gap-2 mb-4 pr-10">
-              <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> Geteilter Link
+              <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {t('Geteilter Link')}
             </h2>
             {state.phase === 'reading'
-              ? <p role="status" className="text-sm text-slate-300">Link wird gelesen…</p>
+              ? <p role="status" className="text-sm text-slate-300">{t('Link wird gelesen…')}</p>
               : <p role="alert" className="text-sm text-rose-300">{state.error}</p>}
             <div className="flex flex-wrap justify-end gap-2 mt-5">
-              <button type="button" className="btn-secondary text-sm" onClick={close} data-autofocus={state.phase === 'reading' ? true : undefined}>Abbrechen</button>
-              {state.phase === 'error' && state.error !== SHARE_TEXTS.notALink && (
+              <button type="button" className="btn-secondary text-sm" onClick={close} data-autofocus={state.phase === 'reading' ? true : undefined}>{t('Abbrechen')}</button>
+              {state.phase === 'error' && state.retryable !== false && (
                 <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5" onClick={onRetry} data-autofocus>
-                  <RefreshCw className="w-4 h-4" aria-hidden="true" /> Erneut versuchen
+                  <RefreshCw className="w-4 h-4" aria-hidden="true" /> {t('Erneut versuchen')}
                 </button>
               )}
             </div>

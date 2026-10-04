@@ -1,6 +1,7 @@
 // Saved servers of the app build: { id, name, urls[], token?, tokenOrigins?, instanceId?, lastOkUrl?, lastOkAt? } plus
 // the active id and the logouts that have not reached their server yet ({ serverId, token, urls, instanceId? }).
 // Reads are synchronous from memory; writes go to a storage adapter (localStorage here, secure storage in the shells).
+import { t } from '../i18n/index.js';
 
 export const SERVERS_KEY = 'mangashelf_servers';
 export const ACTIVE_KEY = 'mangashelf_active_server';
@@ -51,6 +52,7 @@ export function isSecureEnough(url) {
   return parsed.protocol === 'http:' && localHost(parsed.hostname);
 }
 
+// i18n
 export const INSECURE_URL_TEXT = 'Unverschlüsselte Adressen (http://) sind nur im Heimnetz erlaubt (z. B. 192.168.x.x, 10.x.x.x, name.local oder fritz.box) – bitte https:// verwenden';
 
 /** Adapter over localStorage; getSync lets the store hydrate without waiting. */
@@ -226,7 +228,7 @@ export function saveServer(input, { replace = false } = {}) {
   const { servers, activeId, pendingLogouts } = current();
   const existing = input?.id ? servers.find((s) => s.id === input.id) : null;
   const merged = normalizeServer(replace ? input : { ...existing, ...input });
-  if (!merged) throw new TypeError('Mindestens eine gültige Adresse (http:// oder https://) angeben.');
+  if (!merged) throw new TypeError(t('Mindestens eine gültige Adresse (http:// oder https://) angeben.'));
   const next = existing ? servers.map((s) => (s.id === existing.id ? merged : s)) : [...servers, merged];
   commit({ servers: next, activeId, pendingLogouts });
   return merged;

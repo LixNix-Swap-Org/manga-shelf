@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { buildId, precacheList, stampServiceWorker } from '../../vite.config.js';
+import { buildId, catalogFiles, precacheList, stampServiceWorker } from '../../vite.config.js';
 
 const swSource = fs.readFileSync(path.resolve(import.meta.dirname, '../../public/sw.js'), 'utf8');
 
@@ -20,6 +20,24 @@ describe('service worker build stamping', () => {
     }
     expect(precacheList(dir)).toEqual(['/assets/font.woff2', '/assets/index-A.js', '/assets/nested/x.css']);
     expect(precacheList(path.join(dir, 'missing'))).toEqual([]);
+  });
+
+  it('leaves the translation catalogs out of the precache and maps them per language (Vite manifest)', () => {
+    fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.vite'), { recursive: true });
+    for (const name of ['index-A.js', 'en-B.js', 'zh-Hans-C.js', 'Dashboard-D.js']) fs.writeFileSync(path.join(dir, 'assets', name), 'x');
+    fs.writeFileSync(path.join(dir, '.vite', 'manifest.json'), JSON.stringify({
+      'index.html': { file: 'assets/index-A.js', isEntry: true },
+      'src/i18n/locales/en.json': { file: 'assets/en-B.js' },
+      'src/i18n/locales/zh-Hans.json': { file: 'assets/zh-Hans-C.js' },
+      'src/Dashboard.jsx': { file: 'assets/Dashboard-D.js' }
+    }));
+    expect(catalogFiles(dir)).toEqual({ en: '/assets/en-B.js', 'zh-Hans': '/assets/zh-Hans-C.js' });
+    expect(precacheList(dir)).toEqual(['/assets/Dashboard-D.js', '/assets/index-A.js']);
+    const source = stampServiceWorker(swSource, { version: '1', files: precacheList(dir), catalogs: catalogFiles(dir) });
+    expect(source).toContain('const CATALOGS = {"en": "/assets/en-B.js", "zh-Hans": "/assets/zh-Hans-C.js"};');
+    expect(source).not.toContain('/manifest.json\',\n');
+    expect(() => new Function('self', source)({ addEventListener: () => {} })).not.toThrow();
   });
 
   const cacheNameOf = (source) => {

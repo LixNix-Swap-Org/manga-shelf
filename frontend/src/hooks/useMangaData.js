@@ -11,7 +11,10 @@ import {
 import useLatestRequest from './useLatestRequest';
 import { prepareImageForUpload } from '../utils/imageResize';
 import { DEFAULT_WISH_PRIORITY, normalizeWishPriority } from '../utils/priority';
+import { t } from '../i18n/index.js';
+import { editionCurrency, editionLanguage, editionRegion, isMpEdition } from '../utils/editions';
 
+// i18n
 export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
 
 /** A catalogue status the form can show; 'Unbekannt', empty or anything else keeps the previous value. */
@@ -25,8 +28,12 @@ export function buildFormData(data) {
     alt_title: data.alt_title || '',
     author: data.author || '',
     publisher: data.publisher || '',
-    language: data.language || 'Deutsch',
-    status: data.status || 'Laufend',
+    // edition language/region/currency as ISO codes (an old name such as 'Deutsch' reads as 'de')
+    language: editionLanguage(data),
+    region: editionRegion(data) || '',
+    currency: editionCurrency(data),
+    // stored value (mangas.status), shown through its label
+    status: data.status || 'Laufend', // i18n-ignore
     tags: data.tags || '',
     total_volumes: data.total_volumes || '',
     description: data.description || '',
@@ -37,12 +44,17 @@ export function buildFormData(data) {
   };
 }
 
+/** Metadata search; the server searches Manga Passion only for German editions ('de' is its default, so it is not sent). */
+export const lookupMangaUrl = (title, language) =>
+  `/api/lookup/manga?q=${encodeURIComponent(title)}${language && language !== 'de' ? `&language=${encodeURIComponent(language)}` : ''}`;
+
 /** PUT body of the edit form: the wishlist toggle and its priority become wish_priority (null = not wished). */
 export function updateBody(changed, form) {
   const { wish, wish_priority: _priority, ...body } = changed;
   if (wish !== undefined || _priority !== undefined) {
     body.wish_priority = form.wish ? Number(form.wish_priority) : null;
   }
+  if (body.region !== undefined) body.region = body.region || null;
   return body;
 }
 
@@ -81,13 +93,16 @@ export function changedFormFields(base, current) {
 }
 
 export const seriesDeleteConfirmText = (title) =>
-  `Möchtest du "${title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).`;
+  t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title });
 
-/** "Genres nachladen": only for a series linked to Manga Passion that has no tags yet. */
-export const canFillTags = (manga) => Boolean(manga?.manga_passion_id) && !String(manga?.tags ?? '').trim();
+/** "Genres nachladen": only for a German series linked to Manga Passion that has no tags yet (MP knows only German editions). */
+export const canFillTags = (manga) => isMpEdition(manga) && Boolean(manga?.manga_passion_id) && !String(manga?.tags ?? '').trim();
 
+// i18n
 const REFRESH_FAILED = 'Aktualisierung fehlgeschlagen: Der Server ist gerade nicht erreichbar. Angezeigt wird der letzte Stand.';
+// i18n
 const SHOWING_OFFLINE_COPY = 'Server nicht erreichbar: Angezeigt wird die Offline-Kopie.';
+// i18n
 const SESSION_EXPIRED = 'Sitzung abgelaufen. Bitte melde dich neu an.';
 
 /**
@@ -162,13 +177,13 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
 
   const handleUnauthorized = () => {
     if (onUnauthorized) onUnauthorized();
-    else notify.error(SESSION_EXPIRED);
+    else notify.error(t(SESSION_EXPIRED));
   };
 
   const handleEditLookup = async () => {
     const title = String(formData.title || '').trim();
     if (!title) {
-      setEditLookupError('Bitte gib zuerst einen Titel ein.');
+      setEditLookupError(t('Bitte gib zuerst einen Titel ein.'));
       return;
     }
     const session = editSessionRef.current;
@@ -176,11 +191,11 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     setEditLookupError('');
     setEditLookupResults(null);
     try {
-      const res = await apiFetch(`/api/lookup/manga?q=${encodeURIComponent(title)}`, { timeout: TIMEOUTS.lookup });
+      const res = await apiFetch(lookupMangaUrl(title, formData.language), { timeout: TIMEOUTS.lookup });
       if (session !== editSessionRef.current) return;
       if (res.ok) {
         const data = await readJson(res);
-        if (data === null) throw new Error('Antwort ist kein JSON');
+        if (data === null) throw new Error(t('Antwort ist kein JSON'));
         if (session !== editSessionRef.current) return;
         if (data && data.length > 0) {
           if (data.length === 1) {
@@ -189,16 +204,16 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
             setEditLookupResults(data);
           }
         } else {
-          setEditLookupError('Keine Treffer gefunden.');
+          setEditLookupError(t('Keine Treffer gefunden.'));
         }
       } else if (res.status === 401) {
         handleUnauthorized();
       } else {
-        setEditLookupError(await readApiError(res, 'Fehler bei der Suche'));
+        setEditLookupError(await readApiError(res, t('Fehler bei der Suche')));
       }
     } catch (e) {
       if (session === editSessionRef.current) {
-        setEditLookupError(e?.code === 'TIMEOUT' ? 'Die Suche hat zu lange gedauert.' : 'Netzwerkfehler');
+        setEditLookupError(e?.code === 'TIMEOUT' ? t('Die Suche hat zu lange gedauert.') : t('Netzwerkfehler'));
       }
     } finally {
       if (session === editSessionRef.current) setEditLookingUp(false);
@@ -297,13 +312,13 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
           return;
         } else if (res && res.status === 401) {
           if (onUnauthorized) onUnauthorized();
-          if (showing) setRefreshError(SESSION_EXPIRED);
+          if (showing) setRefreshError(t(SESSION_EXPIRED));
           else setLoadError('unauthorized');
           return;
         }
         // 5xx (restore running, proxy while the server restarts), a non-JSON answer or no connection
         if (showing) {
-          setRefreshError(REFRESH_FAILED);
+          setRefreshError(t(REFRESH_FAILED));
           return;
         }
       }
@@ -311,7 +326,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       if (!isLatest()) return;
       if (cached) {
         applyMangaData(cached);
-        if (!user?.offline) setRefreshError(SHOWING_OFFLINE_COPY);
+        if (!user?.offline) setRefreshError(t(SHOWING_OFFLINE_COPY));
       } else {
         setLoadError(user?.offline ? 'offline-missing' : 'server');
       }
@@ -344,7 +359,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       } else if (res.status === 401) {
         handleUnauthorized();
       } else {
-        await notifyResponseError(res, 'Fehler beim Speichern');
+        await notifyResponseError(res, t('Fehler beim Speichern'));
       }
     } catch (err) {
       notify.error(err);
@@ -368,7 +383,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     try {
       const res = await apiFetch(`/api/mangas/${id}`, { method: 'DELETE' });
       if (res.ok || res.status === 404) {
-        if (res.status === 404) notify.info((await errorFromResponse(res, 'Die Reihe wurde bereits gelöscht')).message);
+        if (res.status === 404) notify.info((await errorFromResponse(res, t('Die Reihe wurde bereits gelöscht'))).message);
         const trashId = res.ok ? (await readJson(res))?.trash_id : null;
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
@@ -383,7 +398,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       } else if (res.status === 401) {
         handleUnauthorized();
       } else {
-        await notifyResponseError(res, 'Fehler beim Löschen');
+        await notifyResponseError(res, t('Fehler beim Löschen'));
       }
     } catch (err) {
       notify.error(err);
@@ -420,13 +435,13 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       const res = await apiFetch('/api/upload', { method: 'POST', body: fd, signal: controller.signal });
       if (!res.ok) {
         if (res.status === 401) handleUnauthorized();
-        else await notifyResponseError(res, 'Fehler beim Hochladen des Covers');
+        else await notifyResponseError(res, t('Fehler beim Hochladen des Covers'));
         return;
       }
       const data = await readJson(res);
       if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
       if (coverAbortRef.current === controller) setCoverCancellable(false);
-      if (!data?.url) throw new Error('Antwort ohne Bild-URL');
+      if (!data?.url) throw new Error(t('Antwort ohne Bild-URL'));
       if (deferred) {
         if (session === editSessionRef.current && editingRef.current) {
           setFormData(prev => ({ ...prev, cover_image: data.url }));
@@ -436,13 +451,13 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       const saveRes = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body: { cover_image: data.url }, signal: controller.signal });
       if (!saveRes.ok) {
         if (saveRes.status === 401) handleUnauthorized();
-        else await notifyResponseError(saveRes, 'Das Cover konnte nicht gespeichert werden');
+        else await notifyResponseError(saveRes, t('Das Cover konnte nicht gespeichert werden'));
         return;
       }
       await fetchManga();
     } catch (err) {
-      if (!isAbortError(err) && !controller.signal.aborted) notify.error(err, { fallback: 'Fehler beim Hochladen des Covers' });
-      else if (coverAbortRef.current === controller) notify.info(UPLOAD_CANCELLED);
+      if (!isAbortError(err) && !controller.signal.aborted) notify.error(err, { fallback: t('Fehler beim Hochladen des Covers') });
+      else if (coverAbortRef.current === controller) notify.info(t(UPLOAD_CANCELLED));
     } finally {
       if (coverAbortRef.current === controller) {
         coverAbortRef.current = null;
@@ -463,16 +478,16 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       const res = await apiFetch(`/api/mangas/${id}/sync-edition`, { method: 'POST', body: { tags_only: true }, timeout: TIMEOUTS.lookup });
       if (res.ok) {
         const data = (await readJson(res)) ?? {};
-        if (data.updated) notify.success(`Genres übernommen: ${data.tags}`);
-        else if (!data.tags) notify.info('Manga Passion nennt für diese Ausgabe keine Genres.');
+        if (data.updated) notify.success(t('Genres übernommen: {tags}', { tags: data.tags }));
+        else if (!data.tags) notify.info(t('Manga Passion nennt für diese Ausgabe keine Genres.'));
         await fetchManga();
       } else if (res.status === 401) {
         handleUnauthorized();
       } else {
-        await notifyResponseError(res, 'Genres konnten nicht geladen werden');
+        await notifyResponseError(res, t('Genres konnten nicht geladen werden'));
       }
     } catch (err) {
-      notify.error(err, { fallback: 'Genres konnten nicht geladen werden' });
+      notify.error(err, { fallback: t('Genres konnten nicht geladen werden') });
     } finally {
       fillingTagsRef.current = false;
       setFillingTags(false);

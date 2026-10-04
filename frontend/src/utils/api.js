@@ -1,6 +1,8 @@
 import { getActiveBase, setActiveBase, getToken, setToken } from '../app/connection.js';
 import { storedModeIsLocal } from '../local/profile.js';
 import { localTransport, localUploadUrl } from '../local/localTransport.js';
+import { serverText } from '../i18n/serverText.js';
+import { t } from '../i18n/index.js';
 
 /** Dispatched on window when the server says the session is gone; App clears the offline copy and logs out. */
 export const SESSION_EXPIRED_EVENT = 'mangashelf:session-expired';
@@ -44,6 +46,7 @@ const SESSION_END_CODES = new Set(['AUTH_REQUIRED', 'SESSION_INVALID']);
 const GATEWAY = new Set([502, 503, 504]);
 const ABSOLUTE_URL = /^[a-z][a-z\d+.-]*:|^\/\//i;
 
+// i18n
 export const MESSAGES = {
   network: 'Netzwerkfehler – Server nicht erreichbar.',
   timeout: 'Zeitüberschreitung – der Server antwortet nicht.',
@@ -133,8 +136,8 @@ export async function readJson(res) {
 }
 
 function statusMessage(status) {
-  if (GATEWAY.has(status)) return MESSAGES.gateway;
-  return MESSAGES[status] || `Anfrage fehlgeschlagen (HTTP ${status})`;
+  if (GATEWAY.has(status)) return t(MESSAGES.gateway);
+  return MESSAGES[status] ? t(MESSAGES[status]) : t('Anfrage fehlgeschlagen (HTTP {status})', { status });
 }
 
 /**
@@ -148,8 +151,8 @@ export async function errorFromResponse(res, fallback) {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === 'object') data = parsed;
   } catch (_) { /* not JSON */ }
-  const serverText = typeof data?.error === 'string' && data.error.trim() ? data.error : '';
-  const message = serverText || (fallback ? (res.status ? `${fallback} (HTTP ${res.status})` : fallback) : statusMessage(res.status));
+  const text = serverText(data);
+  const message = text || (fallback ? (res.status ? `${fallback} (HTTP ${res.status})` : fallback) : statusMessage(res.status));
   return new ApiError(message, {
     status: res.status,
     code: typeof data?.code === 'string' ? data.code : null,
@@ -234,9 +237,9 @@ function tokenFor(url) {
 }
 
 function failure(error, link, signal) {
-  if (link.timedOut()) return new ApiError(MESSAGES.timeout, { code: 'TIMEOUT', cause: error });
+  if (link.timedOut()) return new ApiError(t(MESSAGES.timeout), { code: 'TIMEOUT', cause: error });
   if (signal?.aborted || isAbortError(error)) return error;
-  return new ApiError(MESSAGES.network, { code: 'NETWORK', cause: error });
+  return new ApiError(t(MESSAGES.network), { code: 'NETWORK', cause: error });
 }
 
 const NO_LINK = { timedOut: () => false, stopTimer() {}, clear() {} };
@@ -248,7 +251,7 @@ async function send(path, { body, headers, timeout, signal, ...init } = {}) {
       return { res: await localTransport(method, path, body, { signal }), link: NO_LINK };
     } catch (e) {
       if (signal?.aborted || isAbortError(e)) throw e;
-      throw new ApiError(e?.message || MESSAGES.network, { code: 'LOCAL', cause: e });
+      throw new ApiError(e?.message || t(MESSAGES.network), { code: 'LOCAL', cause: e });
     }
   }
   const jsonBody = body !== undefined && body !== null && !isRawBody(body);
@@ -303,12 +306,12 @@ export async function request(method, path, body, { fallback, ...options } = {})
         return await res.json();
       } catch (e) {
         if (link.timedOut() || options.signal?.aborted) throw failure(e, link, options.signal);
-        throw new ApiError(MESSAGES.notJson, { status: res.status, code: 'NOT_JSON' });
+        throw new ApiError(t(MESSAGES.notJson), { status: res.status, code: 'NOT_JSON' });
       }
     }
     const text = await res.text().catch(() => '');
     if (!text.trim()) return null;
-    throw new ApiError(MESSAGES.notJson, { status: res.status, code: 'NOT_JSON' });
+    throw new ApiError(t(MESSAGES.notJson), { status: res.status, code: 'NOT_JSON' });
   } catch (e) {
     if (e instanceof ApiError || isAbortError(e)) throw e;
     throw failure(e, link, options.signal);
@@ -354,7 +357,7 @@ export async function downloadFile(path, { filename, onProgress, signal, doc = g
     return null;
   }
   const res = await apiFetch(path, { signal, timeout: TIMEOUTS.long });
-  if (!res.ok) throw await errorFromResponse(res, 'Download fehlgeschlagen');
+  if (!res.ok) throw await errorFromResponse(res, t('Download fehlgeschlagen'));
   const total = Number(res.headers?.get?.('content-length')) || 0;
   const type = res.headers?.get?.('content-type') || 'application/octet-stream';
   let blob;
@@ -377,7 +380,7 @@ export async function downloadFile(path, { filename, onProgress, signal, doc = g
     }
   } catch (e) {
     if (signal?.aborted || isAbortError(e)) throw e;
-    throw new ApiError(MESSAGES.network, { code: 'NETWORK', cause: e });
+    throw new ApiError(t(MESSAGES.network), { code: 'NETWORK', cause: e });
   }
   const name = downloadName(res, filename || 'download');
   saveBlob(blob, name, doc);

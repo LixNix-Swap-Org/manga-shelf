@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { loadMeta, syncOfflineCopy, OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
+import { t } from '../i18n/index.js';
 
 /**
  * Network state and the offline copy. `onOnlineRef.current()` runs when the browser comes back online (a ref, so it
@@ -50,7 +51,7 @@ export default function useOfflineStatus({ user, onOnlineRef }) {
     setRefreshError(null);
     try {
       const ok = await syncOfflineCopy({ force: true });
-      if (!ok) setRefreshError('Aktualisierung fehlgeschlagen');
+      if (!ok) setRefreshError(t('Aktualisierung fehlgeschlagen'));
     } finally {
       setRefreshingCopy(false);
     }

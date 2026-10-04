@@ -5,7 +5,9 @@ import { readApiError, readAtForDate, localDateString } from '../../hooks/useVol
 import { apiFetch, errorFromResponse, readJson, TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDate } from '../../utils/format';
+import { t } from '../../i18n/index.js';
 
+// i18n
 const READ_FAILED = 'Fehler beim Aktualisieren des Lesestatus';
 
 /**
@@ -29,12 +31,12 @@ export async function revertBatchRead(ids, { userId, read, readAt = null }) {
       const body = { user_id: userId, read, is_read: read };
       if (read && readAt?.[id]) body.read_at = readAt[id];
       const res = await apiFetch(`/api/volumes/${id}/read`, { method: 'POST', body });
-      if (!res.ok && res.status !== 404 && !failure) failure = await errorFromResponse(res, READ_FAILED);
+      if (!res.ok && res.status !== 404 && !failure) failure = await errorFromResponse(res, t(READ_FAILED));
     } catch (err) {
       failure = failure || err;
     }
   }
-  if (failure) notify.error(failure, { fallback: READ_FAILED });
+  if (failure) notify.error(failure, { fallback: t(READ_FAILED) });
   return !failure;
 }
 
@@ -84,7 +86,7 @@ export default function BatchReadModal({
     e.preventDefault();
     if (loading) return;
     if (!batchReadUpTo || isNaN(parseFloat(batchReadUpTo))) {
-      setMessage('Bitte eine gültige Band-Nummer eingeben.');
+      setMessage(t('Bitte eine gültige Band-Nummer eingeben.'));
       return;
     }
     setMessage('');
@@ -108,17 +110,21 @@ export default function BatchReadModal({
       if (res.ok) {
         const data = (await readJson(res)) ?? {};
         if (Number(data.count) === 0) {
-          setMessage('Keine passenden Bände gefunden: Nur Bände im Besitz (ohne Schuber) bis zu dieser Nummer zählen.');
+          setMessage(t('Keine passenden Bände gefunden: Nur Bände im Besitz (ohne Schuber) bis zu dieser Nummer zählen.'));
           return;
         }
         setBatchReadUpTo('');
         onClose();
         if (onSuccess) await onSuccess();
         const undo = batchReadUndo(data, read);
-        const on = readAt ? ` (gelesen am ${formatDate(readDate)})` : '';
-        notify.success(`${formatCount(data.count, 'Band', 'Bände')} als ${read ? 'gelesen' : 'ungelesen'} markiert${on}`, undo ? {
+        const count = formatCount(data.count, 'Band', 'Bände');
+        let text;
+        if (!read) text = t('{count} als ungelesen markiert', { count });
+        else if (readAt) text = t('{count} als gelesen markiert (gelesen am {date})', { count, date: formatDate(readDate) });
+        else text = t('{count} als gelesen markiert', { count });
+        notify.success(text, undo ? {
           action: {
-            label: 'Rückgängig',
+            label: t('Rückgängig'),
             onClick: async () => {
               await revertBatchRead(undo.ids, { userId: targetUserId, read: !read, readAt: undo.readAt });
               if (onSuccess) await onSuccess();
@@ -126,10 +132,10 @@ export default function BatchReadModal({
           }
         } : undefined);
       } else {
-        setMessage(await readApiError(res, READ_FAILED));
+        setMessage(await readApiError(res, t(READ_FAILED)));
       }
     } catch (err) {
-      setMessage('Netzwerkfehler');
+      setMessage(t('Netzwerkfehler'));
     } finally {
       setLoading(false);
     }
@@ -142,7 +148,7 @@ export default function BatchReadModal({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Lesestatus setzen"
+      aria-label={t('Lesestatus setzen')}
       tabIndex={-1}
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
@@ -150,21 +156,21 @@ export default function BatchReadModal({
       <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative" onClick={e => e.stopPropagation()}>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 mb-4 pb-3 short:mb-3 short:pb-2 border-b border-slate-800">
           <h2 className="min-w-0 pt-1.5 text-base font-bold text-white flex items-start gap-2 break-words">
-            <BookCheck className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" /> <span className="min-w-0">Lesestatus für mehrere Bände festlegen</span>
+            <BookCheck className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" /> <span className="min-w-0">{t('Lesestatus für mehrere Bände festlegen')}</span>
           </h2>
-          <button type="button" onClick={onClose} disabled={loading} aria-label="Schließen" title="Schließen" className="hit-44 shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={loading} aria-label={t('Schließen')} title={t('Schließen')} className="hit-44 shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <p className="text-xs text-slate-400 mb-4">
-          Markiere mehrere Bände bis zu einer bestimmten Band-Nummer mit einem Klick als gelesen oder ungelesen.
+          {t('Markiere mehrere Bände bis zu einer bestimmten Band-Nummer mit einem Klick als gelesen oder ungelesen.')}
         </p>
 
         <form onSubmit={handleBatchRead} className="space-y-4">
           {isAdmin && readers.length > 0 ? (
             <div>
-              <label htmlFor={`${ids}-reader`} className="block text-xs font-semibold text-slate-300 mb-1">Leser</label>
+              <label htmlFor={`${ids}-reader`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Leser')}</label>
               <select
                 id={`${ids}-reader`}
                 className="input-field bg-slate-950 text-base sm:text-xs"
@@ -173,19 +179,21 @@ export default function BatchReadModal({
               >
                 {readers.map(r => (
                   <option key={r.user_id} value={String(r.user_id)}>
-                    {r.display_name || r.username} ({r.read_count} gelesen)
+                    {t('{name} ({count} gelesen)', { name: r.display_name || r.username, count: r.read_count })}
                   </option>
                 ))}
               </select>
             </div>
           ) : (
             <p className="text-[11px] text-slate-400">
-              Gilt für deinen eigenen Lesestatus{ownName ? ` (${ownName})` : ''}.
+              {ownName
+                ? t('Gilt für deinen eigenen Lesestatus ({name}).', { name: ownName })
+                : t('Gilt für deinen eigenen Lesestatus.')}
             </p>
           )}
 
           <div>
-            <span id={`${ids}-action`} className="block text-xs font-semibold text-slate-300 mb-1">Aktion</span>
+            <span id={`${ids}-action`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Aktion')}</span>
             <div role="group" aria-labelledby={`${ids}-action`} className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -197,7 +205,7 @@ export default function BatchReadModal({
                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
-                <BookCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" /> Als gelesen markieren
+                <BookCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" /> {t('Als gelesen markieren')}
               </button>
               <button
                 type="button"
@@ -209,13 +217,13 @@ export default function BatchReadModal({
                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
-                <X className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" /> Als ungelesen markieren
+                <X className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" /> {t('Als ungelesen markieren')}
               </button>
             </div>
           </div>
 
           <div>
-            <label htmlFor={`${ids}-upto`} className="block text-xs font-semibold text-slate-300 mb-1">Bis einschließlich Band-Nummer</label>
+            <label htmlFor={`${ids}-upto`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Bis einschließlich Band-Nummer')}</label>
             <input
               id={`${ids}-upto`}
               type="number"
@@ -223,20 +231,20 @@ export default function BatchReadModal({
               step="any"
               min="1"
               required
-              placeholder="z. B. 12"
+              placeholder={t('z. B. 12')}
               aria-describedby={`${ids}-upto-hint`}
               className="input-field"
               value={batchReadUpTo}
               onChange={e => setBatchReadUpTo(e.target.value)}
             />
             <span id={`${ids}-upto-hint`} className="text-[11px] text-slate-400 mt-1 block">
-              Alle Bände im Besitz von Band 1 bis zu dieser Nummer erhalten den gewählten Status.
+              {t('Alle Bände im Besitz von Band 1 bis zu dieser Nummer erhalten den gewählten Status.')}
             </span>
           </div>
 
           {batchReadAction && (
             <div>
-              <label htmlFor={`${ids}-read-date`} className="block text-xs font-semibold text-slate-300 mb-1">Gelesen am</label>
+              <label htmlFor={`${ids}-read-date`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Gelesen am')}</label>
               <input
                 id={`${ids}-read-date`}
                 type="date"
@@ -247,7 +255,7 @@ export default function BatchReadModal({
                 onChange={e => setReadDate(e.target.value)}
               />
               <span id={`${ids}-read-date-hint`} className="text-[11px] text-slate-400 mt-1 block">
-                Für nachgetragene Bände ein früheres Datum wählen; bereits gelesene Bände behalten ihr Datum.
+                {t('Für nachgetragene Bände ein früheres Datum wählen; bereits gelesene Bände behalten ihr Datum.')}
               </span>
             </div>
           )}
@@ -263,10 +271,10 @@ export default function BatchReadModal({
               className="btn-secondary text-xs"
               disabled={loading}
             >
-              Abbrechen
+              {t('Abbrechen')}
             </button>
             <button type="submit" disabled={loading} className="btn-primary text-xs flex items-center gap-1.5">
-              <CheckCheck className="w-3.5 h-3.5" aria-hidden="true" /> {loading ? 'Wird angewendet...' : 'Anwenden'}
+              <CheckCheck className="w-3.5 h-3.5" aria-hidden="true" /> {loading ? t('Wird angewendet...') : t('Anwenden')}
             </button>
           </div>
         </form>

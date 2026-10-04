@@ -4,6 +4,8 @@ import LightboxGallery from './LightboxGallery';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import { assetImgProps } from '../../utils/api';
 import FilePickerButton from '../common/FilePickerButton';
+import { t } from '../../i18n/index.js';
+import { rich } from '../../i18n/react.jsx';
 
 /**
  * The photos in the editor's order, without duplicates; a cover that is not one of them goes first. Picking another
@@ -41,7 +43,7 @@ export default function VolumePhotoManager({
 
   const buildLightbox = (index) => (index === null || galleryImages.length === 0 ? null : {
     title: getVolumeDisplayTitle(editVolForm),
-    subtitle: 'Vorschau (nicht gespeicherte Änderungen)',
+    subtitle: t('Vorschau (nicht gespeicherte Änderungen)'),
     volume: { cover_image: editVolForm.cover_image },
     images: galleryImages,
     currentIndex: Math.min(index, galleryImages.length - 1)
@@ -68,10 +70,10 @@ export default function VolumePhotoManager({
         <div>
           <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
             <Camera className="w-4 h-4 text-brand-400" />
-            Fotos & Cover für diesen Band
+            {t('Fotos & Cover für diesen Band')}
           </h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Cover, Buchrücken oder Fotos vom Zustand hinzufügen
+            {t('Cover, Buchrücken oder Fotos vom Zustand hinzufügen')}
           </p>
         </div>
 
@@ -83,7 +85,7 @@ export default function VolumePhotoManager({
             className="flex-1 sm:flex-initial justify-center text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 border border-slate-800 px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
           >
             <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
-            <span>{showUrlInput ? 'Abbrechen' : 'URL eingeben'}</span>
+            <span>{showUrlInput ? t('Abbrechen') : t('URL eingeben')}</span>
           </button>
 
           <FilePickerButton
@@ -94,16 +96,16 @@ export default function VolumePhotoManager({
             className="flex-1 sm:flex-initial justify-center btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shadow-md"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>{uploadingVolImage ? 'Lädt...' : 'Fotos hochladen'}</span>
+            <span>{uploadingVolImage ? t('Lädt...') : t('Fotos hochladen')}</span>
           </FilePickerButton>
           {uploadingVolImage && onCancelUpload && (
             <button
               type="button"
               onClick={onCancelUpload}
               className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0 text-red-300 hover:text-red-200"
-              title="Foto-Upload abbrechen"
+              title={t('Foto-Upload abbrechen')}
             >
-              <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+              <X className="w-3.5 h-3.5" aria-hidden="true" /> {t('Upload abbrechen')}
             </button>
           )}
         </div>
@@ -115,8 +117,8 @@ export default function VolumePhotoManager({
           <div className="flex items-center gap-2">
             <input 
               type="text"
-              aria-label="Bild-URL oder Manga-Passion-Link"
-              placeholder="Bild-URL oder Manga-Passion-Link (z. B. https://www.manga-passion.de/volumes/9736/...)"
+              aria-label={t('Bild-URL oder Manga-Passion-Link')}
+              placeholder={t('Bild-URL oder Manga-Passion-Link (z. B. https://www.manga-passion.de/volumes/9736/...)')}
               className="input-field text-base sm:text-xs py-1.5 flex-1"
               value={manualImageUrl}
               onChange={e => setManualImageUrl(e.target.value)}
@@ -128,13 +130,13 @@ export default function VolumePhotoManager({
               className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1.5"
             >
               {manualImageUrl.includes('manga-passion.de')
-                ? <><Sparkles className="w-3.5 h-3.5" aria-hidden="true" />Importieren</>
-                : 'Hinzufügen'}
+                ? <><Sparkles className="w-3.5 h-3.5" aria-hidden="true" />{t('Importieren')}</>
+                : t('Hinzufügen')}
             </button>
           </div>
           <p className="text-[10px] text-slate-400 flex items-start gap-1">
             <Lightbulb className="w-3 h-3 shrink-0 mt-px text-amber-300" aria-hidden="true" />
-            <span>Unterstützt direkte Bild-Links sowie offizielle <span className="text-sky-400 font-medium">Manga Passion Bände- & Schuber-URLs</span> (lädt Cover, Titel & Datum automatisch herunter).</span>
+            <span>{rich('Unterstützt direkte Bild-Links sowie offizielle {links} (lädt Cover, Titel & Datum automatisch herunter).', { links: <span className="text-sky-400 font-medium">{t('Manga Passion Bände- & Schuber-URLs')}</span> })}</span>
           </p>
         </div>
       )}
@@ -156,12 +158,12 @@ export default function VolumePhotoManager({
                 <button
                   type="button"
                   onClick={() => openPreview(imgUrl)}
-                  aria-label={`Foto ${idx + 1} vergrößern`}
+                  aria-label={t('Foto {number} vergrößern', { number: idx + 1 })}
                   className="w-full h-full overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400"
                 >
                   <img 
                     {...assetImgProps(imgUrl)} 
-                    alt={`Foto ${idx + 1}`} 
+                    alt={t('Foto {number}', { number: idx + 1 })} 
                     className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
                   />
                 </button>
@@ -173,8 +175,8 @@ export default function VolumePhotoManager({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx - 1); }}
                       className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
-                      title="Nach links verschieben"
-                      aria-label={`Foto ${idx + 1} nach links verschieben`}
+                      title={t('Nach links verschieben')}
+                      aria-label={t('Foto {number} nach links verschieben', { number: idx + 1 })}
                     >
                       <ChevronLeft className="w-3 h-3" aria-hidden="true" />
                     </button>
@@ -184,8 +186,8 @@ export default function VolumePhotoManager({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx + 1); }}
                       className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
-                      title="Nach rechts verschieben"
-                      aria-label={`Foto ${idx + 1} nach rechts verschieben`}
+                      title={t('Nach rechts verschieben')}
+                      aria-label={t('Foto {number} nach rechts verschieben', { number: idx + 1 })}
                     >
                       <ChevronRight className="w-3 h-3" aria-hidden="true" />
                     </button>
@@ -194,8 +196,8 @@ export default function VolumePhotoManager({
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleRemoveVolumeImage(imgUrl); }}
                     className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow flex items-center justify-center transition-colors"
-                    title="Bild löschen"
-                    aria-label={`Foto ${idx + 1} löschen`}
+                    title={t('Bild löschen')}
+                    aria-label={t('Foto {number} löschen', { number: idx + 1 })}
                   >
                     <Trash className="w-3 h-3" />
                   </button>
@@ -205,17 +207,17 @@ export default function VolumePhotoManager({
                 <div className="absolute bottom-1.5 inset-x-1.5 z-10">
                   {isCover ? (
                     <span className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-brand-700 text-white shadow-md flex items-center justify-center gap-1">
-                      <Star className="w-3 h-3 fill-current" /> Cover
+                      <Star className="w-3 h-3 fill-current" /> {t('Cover')}
                     </span>
                   ) : (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleSetVolumeCover(imgUrl); }}
                       className="w-full py-1 px-1.5 text-[10px] bg-black/80 hover:bg-brand-700 text-slate-200 hover:text-white rounded-lg shadow-md font-semibold transition-colors flex items-center justify-center gap-1 border border-white/10"
-                      title="Als Hauptcover festlegen"
-                      aria-label={`Foto ${idx + 1} als Cover festlegen`}
+                      title={t('Als Hauptcover festlegen')}
+                      aria-label={t('Foto {number} als Cover festlegen', { number: idx + 1 })}
                     >
-                      <Star className="w-3 h-3" /> Als Cover
+                      <Star className="w-3 h-3" /> {t('Als Cover')}
                     </button>
                   )}
                 </div>
@@ -229,11 +231,11 @@ export default function VolumePhotoManager({
             accept="image/*"
             disabled={uploadingVolImage}
             onChange={onFilesPicked}
-            label="Weitere Fotos hinzufügen"
+            label={t('Weitere Fotos hinzufügen')}
             className="rounded-xl border-2 border-dashed border-slate-800 hover:border-brand-500/60 aspect-[3/4] bg-slate-900/40 hover:bg-slate-900/80 flex flex-col items-center justify-center text-slate-400 hover:text-brand-300 cursor-pointer transition-all group"
           >
             <Plus className="w-5 h-5 mb-1 text-slate-400 group-hover:text-brand-400 transition-colors" />
-            <span className="text-[11px] font-semibold">+ Foto</span>
+            <span className="text-[11px] font-semibold">{t('+ Foto')}</span>
           </FilePickerButton>
         </div>
       ) : (
@@ -248,10 +250,10 @@ export default function VolumePhotoManager({
             <Upload className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold text-slate-200 group-hover:text-brand-300 transition-colors">
-            {uploadingVolImage ? 'Fotos werden hochgeladen...' : 'Hier klicken oder Fotos auswählen'}
+            {uploadingVolImage ? t('Fotos werden hochgeladen...') : t('Hier klicken oder Fotos auswählen')}
           </span>
           <span className="text-[11px] text-slate-400 mt-1">
-            Unterstützt JPG, PNG, WebP (Cover, Buchrücken, Detailfotos)
+            {t('Unterstützt JPG, PNG, WebP (Cover, Buchrücken, Detailfotos)')}
           </span>
         </FilePickerButton>
       )}

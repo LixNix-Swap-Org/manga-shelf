@@ -9,7 +9,7 @@ const { db, dataDir, dbPath, uploadsDir, runTransaction, getInstanceId } = requi
 const { requireAuth, requireAdmin, signSessionToken, setAuthCookie, bumpSessionVersion } = require('../middleware/auth');
 const { createRateLimiter } = require('../middleware/rateLimit');
 const { freeBytes, fileSize } = require('../utils/disk');
-const { HttpError } = require('../utils/httpError');
+const { HttpError, msg } = require('../utils/httpError');
 const { sealForServer, openForServer } = require('../utils/secretBox');
 const scheduler = require('../services/scheduler');
 const lifecycle = require('../services/lifecycle');
@@ -203,11 +203,21 @@ router.get('/system', requireAdmin, (req, res) => {
     });
 });
 
+// one text per job that blocks the cleanup (names of lifecycle.trackJob(); the job name is German, so no parameter)
+const JOB_RUNNING_TEXTS = {
+    Snapshot: 'Gerade läuft „Snapshot“ – bitte gleich noch einmal versuchen',
+    'Täglicher Snapshot': 'Gerade läuft „Täglicher Snapshot“ – bitte gleich noch einmal versuchen',
+    Wiederherstellung: 'Gerade läuft „Wiederherstellung“ – bitte gleich noch einmal versuchen'
+};
+
 router.post('/system/orphans/clean', requireAdmin, (req, res) => {
     if (backupsRoutes.isRestoreRunning()) throw new HttpError(409, 'Während einer Wiederherstellung nicht möglich', 'RESTORE_RUNNING');
     // snapshots and restores read or replace the upload folder while they run
     const blocking = lifecycle.runningJobs().find(name => /Snapshot|Wiederherstellung/.test(name));
-    if (blocking) throw new HttpError(409, `Gerade läuft „${blocking}“ – bitte gleich noch einmal versuchen`, 'JOB_RUNNING');
+    if (blocking) {
+        const text = JOB_RUNNING_TEXTS[blocking] || msg('Gerade läuft „{job}“ – bitte gleich noch einmal versuchen', { job: msg(blocking) });
+        throw new HttpError(409, text, 'JOB_RUNNING');
+    }
     const candidates = orphanCandidates();
     const result = { removed: 0, bytes: 0, skipped: candidates.skipped };
     if (!candidates.skipped) {

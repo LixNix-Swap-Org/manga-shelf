@@ -2,12 +2,13 @@
 // collection (GET /lookup/isbn), and a cover taken from a URL into the uploads (POST /upload-remote).
 const { qstr } = require('../lib/query');
 const { normalizeIsbn, isValidIsbn } = require('../lib/isbn');
-const { HttpError, badRequest } = require('../errors');
+const { HttpError, badRequest, msg, payloadMsg } = require('../errors');
 const client = require('../mangaPassion/client');
 const { ANILIST_TIMEOUT_MS } = require('../anilist');
 const gateway = require('../anime/gateway');
 const { lookupBookByIsbn, matchCollection } = require('../isbnLookup');
 const { fetchImage } = require('../lib/imageCheck');
+const { normalizeLanguage, isMpLanguage, workKeyOfHit } = require('../lib/language');
 
 const log = (ctx) => ctx.log.child('lookup');
 
@@ -31,8 +32,9 @@ function withDeadline(ctx, promise, ms, fallback, label) {
 const FAILED = Symbol('failed');
 const SOURCES_UNAVAILABLE = 'Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.';
 
-// Manga Passion (official German editions) and the anime gateway (AniList, MyAnimeList: budget, cache) in parallel,
-// Manga Passion results first. 503 SOURCES_UNAVAILABLE when no source could be asked, so "no hits" stays truthful.
+// Manga Passion (official German editions, only for ?language=de, the default) and the anime gateway (AniList,
+// MyAnimeList: budget, cache) in parallel, Manga Passion results first. 503 SOURCES_UNAVAILABLE when no source could be
+// asked, so "no hits" stays truthful. Gateway hits carry the work_key their editions share.
 async function lookupManga(ctx, { query }) {
     const queryTerm = qstr(query.q);
     if (!queryTerm || !queryTerm.trim()) {
@@ -48,15 +50,19 @@ async function lookupManga(ctx, { query }) {
         if (!err?.unavailable) log(ctx).warn(`${label} lookup error:`, err);
         return FAILED;
     };
+    const askMangaPassion = isMpLanguage(normalizeLanguage(qstr(query.language)));
     const [mpResults, gatewayResults] = await Promise.all([
-        withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed).catch(failed('Manga Passion')), deadline, FAILED, 'Manga Passion'),
+        askMangaPassion
+            ? withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed).catch(failed('Manga Passion')), deadline, FAILED, 'Manga Passion')
+            : Promise.resolve(FAILED),
         withDeadline(ctx, gateway.searchManga(ctx, trimmed, { timeoutMs: lookupTimings.aniListTimeoutMs }).catch(failed('AniList/MyAnimeList')),
             deadline, FAILED, 'AniList/MyAnimeList')
     ]);
     if (mpResults === FAILED && gatewayResults === FAILED) throw new HttpError(503, SOURCES_UNAVAILABLE, 'SOURCES_UNAVAILABLE');
 
     // Manga Passion takes precedence (German publishers, correct German volume counts & covers)
-    return { body: [...(mpResults === FAILED ? [] : mpResults), ...(gatewayResults === FAILED ? [] : gatewayResults)] };
+    const international = gatewayResults === FAILED ? [] : gatewayResults.map(hit => ({ ...hit, work_key: workKeyOfHit(hit) }));
+    return { body: [...(mpResults === FAILED ? [] : mpResults), ...international] };
 }
 
 const UNREACHABLE_IMAGE = 'Bild-URL nicht erreichbar oder nicht erlaubt';
@@ -141,7 +147,7 @@ async function lookupIsbn(ctx, { query }) {
             body: {
                 isbn: cleanIsbn,
                 found: false,
-                message: 'Keine Metadaten für diese ISBN in DNB, K10plus oder Google Books gefunden.'
+                ...payloadMsg('message', msg('Keine Metadaten für diese ISBN in DNB, K10plus oder Google Books gefunden.'))
             }
         };
     }

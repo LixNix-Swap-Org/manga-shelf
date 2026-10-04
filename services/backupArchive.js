@@ -10,15 +10,19 @@ const archiver = require('archiver');
 const { db, uploadsDir, tempDir } = require('../db');
 const pkg = require('../package.json');
 const log = require('../utils/logger').child('backup');
+const { msg, isMsg } = require('../core/errors');
 
 /** A backup file that cannot be restored because its content is invalid (client error, HTTP 400). */
 function invalidBackup(message) {
-    const err = new Error(message);
+    const err = new Error(String(message));
     err.status = 400;
+    // a msg(): the restore answer nests it as { msg, params } (routes/backups.js restoreErrorText)
+    if (isMsg(message)) err.extra = { msg: message.template, params: message.params };
     return err;
 }
 
-const notAZip = (detail) => invalidBackup('Ungültiges ZIP-Archiv: ' + detail);
+/** `detail` is a msg() so the client can translate the nested text. */
+const notAZip = (detail) => invalidBackup(msg('Ungültiges ZIP-Archiv: {detail}', { detail }));
 const formatMb = (bytes) => `${Math.round(bytes / 1024 / 1024)} MB`;
 
 const MANIFEST_NAME = 'manifest.json';
@@ -137,7 +141,7 @@ const MAX_CENTRAL_DIRECTORY_BYTES = 64 * 1024 * 1024;
 async function readAt(fh, length, position) {
     const buf = Buffer.alloc(length);
     const { bytesRead } = await fh.read(buf, 0, length, position);
-    if (bytesRead !== length) throw notAZip('Datei ist unvollständig');
+    if (bytesRead !== length) throw notAZip(msg('Datei ist unvollständig'));
     return buf;
 }
 
@@ -145,14 +149,14 @@ async function openZip(file, maxEntries = Infinity) {
     const fh = await fs.promises.open(file, 'r');
     try {
         const { size } = await fh.stat();
-        if (size < 22) throw notAZip('Datei ist zu klein');
+        if (size < 22) throw notAZip(msg('Datei ist zu klein'));
         const tailLength = Math.min(size, 22 + 0xffff);
         const tail = await readAt(fh, tailLength, size - tailLength);
         let eocd = -1;
         for (let i = tailLength - 22; i >= 0; i--) {
             if (tail.readUInt32LE(i) === SIG_EOCD) { eocd = i; break; }
         }
-        if (eocd < 0) throw notAZip('kein Inhaltsverzeichnis gefunden');
+        if (eocd < 0) throw notAZip(msg('kein Inhaltsverzeichnis gefunden'));
 
         let count = tail.readUInt16LE(eocd + 10);
         let cdSize = tail.readUInt32LE(eocd + 12);
@@ -164,25 +168,25 @@ async function openZip(file, maxEntries = Infinity) {
             : null;
         if (locator && locator.readUInt32LE(0) === SIG_ZIP64_LOCATOR) {
             const zip64 = await readAt(fh, 56, Number(locator.readBigUInt64LE(8)));
-            if (zip64.readUInt32LE(0) !== SIG_ZIP64_EOCD) throw notAZip('ZIP64-Verzeichnis ist beschädigt');
+            if (zip64.readUInt32LE(0) !== SIG_ZIP64_EOCD) throw notAZip(msg('ZIP64-Verzeichnis ist beschädigt'));
             count = Number(zip64.readBigUInt64LE(32));
             cdSize = Number(zip64.readBigUInt64LE(40));
             cdOffset = Number(zip64.readBigUInt64LE(48));
         }
-        if (count > maxEntries) throw invalidBackup(`Das Backup enthält zu viele Dateien (${count}, erlaubt sind ${maxEntries}).`);
-        if (cdSize > MAX_CENTRAL_DIRECTORY_BYTES) throw notAZip('Inhaltsverzeichnis ist zu groß');
-        if (cdOffset + cdSize > size) throw notAZip('Inhaltsverzeichnis liegt außerhalb der Datei');
+        if (count > maxEntries) throw invalidBackup(msg('Das Backup enthält zu viele Dateien ({count}, erlaubt sind {max}).', { count, max: maxEntries }));
+        if (cdSize > MAX_CENTRAL_DIRECTORY_BYTES) throw notAZip(msg('Inhaltsverzeichnis ist zu groß'));
+        if (cdOffset + cdSize > size) throw notAZip(msg('Inhaltsverzeichnis liegt außerhalb der Datei'));
 
         const cd = await readAt(fh, cdSize, cdOffset);
         const entries = [];
         let p = 0;
         for (let i = 0; i < count; i++) {
-            if (p + 46 > cd.length || cd.readUInt32LE(p) !== SIG_CENTRAL) throw notAZip('Inhaltsverzeichnis ist beschädigt');
+            if (p + 46 > cd.length || cd.readUInt32LE(p) !== SIG_CENTRAL) throw notAZip(msg('Inhaltsverzeichnis ist beschädigt'));
             const flags = cd.readUInt16LE(p + 8);
             const nameLength = cd.readUInt16LE(p + 28);
             const extraLength = cd.readUInt16LE(p + 30);
             const commentLength = cd.readUInt16LE(p + 32);
-            if (p + 46 + nameLength + extraLength > cd.length) throw notAZip('Inhaltsverzeichnis ist beschädigt');
+            if (p + 46 + nameLength + extraLength > cd.length) throw notAZip(msg('Inhaltsverzeichnis ist beschädigt'));
             const entry = {
                 name: cd.toString(flags & 0x800 ? 'utf8' : 'latin1', p + 46, p + 46 + nameLength),
                 flags,
@@ -236,7 +240,7 @@ function readRange(fh, start, length) {
             }
             const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, remaining));
             fh.read(chunk, 0, chunk.length, position).then(({ bytesRead }) => {
-                if (bytesRead === 0) return this.destroy(notAZip('Datei ist unvollständig'));
+                if (bytesRead === 0) return this.destroy(notAZip(msg('Datei ist unvollständig')));
                 position += bytesRead;
                 remaining -= bytesRead;
                 this.push(bytesRead === chunk.length ? chunk : chunk.subarray(0, bytesRead));
@@ -247,15 +251,15 @@ function readRange(fh, start, length) {
 
 /** Inflates one entry into `sink`, counting the bytes actually produced (the sizes in the archive can lie). */
 async function inflateEntry(zip, entry, makeSink, maxBytes, hash) {
-    const tooLarge = () => invalidBackup(`"${entry.name}" im Backup ist zu groß (erlaubt sind ${formatMb(maxBytes)}).`);
-    if (entry.flags & 0x1) throw invalidBackup(`"${entry.name}" im Backup ist verschlüsselt.`);
-    if (entry.method !== 0 && entry.method !== 8) throw invalidBackup(`"${entry.name}" im Backup nutzt ein nicht unterstütztes Kompressionsverfahren.`);
+    const tooLarge = () => invalidBackup(msg('"{name}" im Backup ist zu groß (erlaubt sind {max}).', { name: entry.name, max: formatMb(maxBytes) }));
+    if (entry.flags & 0x1) throw invalidBackup(msg('"{name}" im Backup ist verschlüsselt.', { name: entry.name }));
+    if (entry.method !== 0 && entry.method !== 8) throw invalidBackup(msg('"{name}" im Backup nutzt ein nicht unterstütztes Kompressionsverfahren.', { name: entry.name }));
     if (entry.uncompressedSize > maxBytes) throw tooLarge();
 
     const local = await readAt(zip.fh, 30, entry.localOffset);
-    if (local.readUInt32LE(0) !== SIG_LOCAL) throw notAZip(`Eintrag "${entry.name}" ist beschädigt`);
+    if (local.readUInt32LE(0) !== SIG_LOCAL) throw notAZip(msg('Eintrag "{name}" ist beschädigt', { name: entry.name }));
     const start = entry.localOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
-    if (start + entry.compressedSize > zip.size) throw notAZip(`Eintrag "${entry.name}" ist unvollständig`);
+    if (start + entry.compressedSize > zip.size) throw notAZip(msg('Eintrag "{name}" ist unvollständig', { name: entry.name }));
 
     let written = 0;
     let crc = 0;
@@ -263,7 +267,7 @@ async function inflateEntry(zip, entry, makeSink, maxBytes, hash) {
         transform(chunk, encoding, callback) {
             written += chunk.length;
             if (written > maxBytes) return callback(tooLarge());
-            if (written > entry.uncompressedSize) return callback(notAZip(`"${entry.name}" ist größer als im Archiv angegeben`));
+            if (written > entry.uncompressedSize) return callback(notAZip(msg('"{name}" ist größer als im Archiv angegeben', { name: entry.name })));
             crc = zlib.crc32(chunk, crc);
             if (hash) hash.update(chunk);
             callback(null, chunk);
@@ -275,11 +279,11 @@ async function inflateEntry(zip, entry, makeSink, maxBytes, hash) {
 
     try {
         await pipeline(stages);
-        if (written !== entry.uncompressedSize) throw notAZip(`"${entry.name}" ist kleiner als im Archiv angegeben`);
-        if (crc !== entry.crc32) throw notAZip(`Prüfsumme von "${entry.name}" stimmt nicht`);
+        if (written !== entry.uncompressedSize) throw notAZip(msg('"{name}" ist kleiner als im Archiv angegeben', { name: entry.name }));
+        if (crc !== entry.crc32) throw notAZip(msg('Prüfsumme von "{name}" stimmt nicht', { name: entry.name }));
     } catch (err) {
         if (err.status) throw err;
-        if (typeof err.code === 'string' && err.code.startsWith('Z_')) throw notAZip(`"${entry.name}" ist beschädigt`);
+        if (typeof err.code === 'string' && err.code.startsWith('Z_')) throw notAZip(msg('"{name}" ist beschädigt', { name: entry.name }));
         throw err;
     }
     return written;

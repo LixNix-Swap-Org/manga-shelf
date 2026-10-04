@@ -3,9 +3,12 @@ import { RefreshCw, Upload } from 'lucide-react';
 import { apiFetch, TIMEOUTS } from '../../../utils/api';
 import { formatCount, formatNumber } from '../../../utils/format';
 import { httpErrorMessage, readJson } from './backupHelpers';
+import { t } from '../../../i18n/index.js';
+import { payloadText } from '../../../i18n/serverText.js';
 
 // express.json limit of POST /api/import/csv (index.js); the limit applies to the JSON body, not to the file
 const CSV_MAX_BODY_BYTES = 10 * 1024 * 1024;
+// i18n
 export const CSV_TOO_LARGE = 'CSV-Datei ist zu groß (max. 10 MB).';
 const LIST_LIMIT = 20;
 
@@ -25,12 +28,14 @@ const readFile = async (file) => (typeof file.arrayBuffer === 'function'
   ? decodeCsvBytes(await file.arrayBuffer())
   : { text: await file.text(), encoding: 'utf-8' });
 
-function LineList({ label, items, className, more }) {
+/** Row errors or warnings of the preview: `field` is 'errors' or 'warnings' of the import answer. */
+function LineList({ label, body, field, className, more }) {
+  const items = body[field];
   if (items.length === 0) return null;
   return (
     <ul aria-label={label} className={`text-[11px] max-h-28 overflow-y-auto custom-scrollbar space-y-0.5 ${className}`}>
-      {items.slice(0, LIST_LIMIT).map((e, i) => <li key={i}>Zeile {e.line}: {e.message}</li>)}
-      {items.length > LIST_LIMIT && <li>… und {formatNumber(items.length - LIST_LIMIT)} {more}</li>}
+      {items.slice(0, LIST_LIMIT).map((e, i) => <li key={i}>{t('Zeile {line}: {message}', { line: e.line, message: payloadText(body, field, i) })}</li>)}
+      {items.length > LIST_LIMIT && <li>{t('… und {number} {more}', { number: formatNumber(items.length - LIST_LIMIT), more })}</li>}
     </ul>
   );
 }
@@ -65,7 +70,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
     setError('');
     const body = JSON.stringify({ csv: text, dry_run: dryRun });
     if (new Blob([body]).size > CSV_MAX_BODY_BYTES) {
-      setError(CSV_TOO_LARGE);
+      setError(t(CSV_TOO_LARGE));
       return;
     }
     setBusy(true);
@@ -82,7 +87,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
       if (res.ok && !dryRun) onImported?.();
       if (!isLatest()) return;
       if (!res.ok) {
-        setError(httpErrorMessage(res.status, data, 'Import fehlgeschlagen', { tooLarge: CSV_TOO_LARGE }));
+        setError(httpErrorMessage(res.status, data, t('Import fehlgeschlagen'), { tooLarge: CSV_TOO_LARGE }));
         return;
       }
       if (dryRun) {
@@ -96,13 +101,17 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
       } else {
         setPreview(null);
         setFileName('');
-        setSuccess(`Import fertig: ${formatCount(data.created_volumes || 0, 'Band', 'Bände')}, ${formatCount(data.created_series || 0, 'neue Reihe', 'neue Reihen')}, ${formatNumber(data.skipped_existing || 0)} schon vorhanden.`);
+        setSuccess(t('Import fertig: {volumes}, {series}, {existing} schon vorhanden.', {
+          volumes: formatCount(data.created_volumes || 0, 'Band', 'Bände'),
+          series: formatCount(data.created_series || 0, 'neue Reihe', 'neue Reihen'),
+          existing: formatNumber(data.skipped_existing || 0)
+        }));
       }
     } catch (e) {
       if (isLatest()) {
         setError(e?.isTimeout
-          ? 'Der Server hat nicht rechtzeitig geantwortet. Der Import kann trotzdem durchgelaufen sein: Sammlung prüfen, bevor du die Datei erneut importierst.'
-          : 'Netzwerkfehler: Der Server ist nicht erreichbar.');
+          ? t('Der Server hat nicht rechtzeitig geantwortet. Der Import kann trotzdem durchgelaufen sein: Sammlung prüfen, bevor du die Datei erneut importierst.')
+          : t('Netzwerkfehler: Der Server ist nicht erreichbar.'));
       }
     } finally {
       if (isLatest()) {
@@ -121,7 +130,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
     setFileName(file ? file.name : '');
     if (!file) return;
     if (file.size > CSV_MAX_BODY_BYTES) {
-      setError(CSV_TOO_LARGE);
+      setError(t(CSV_TOO_LARGE));
       return;
     }
     setBusy(true);
@@ -130,7 +139,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
       decoded = await readFile(file);
     } catch (_) {
       if (id === requestRef.current) {
-        setError('Datei konnte nicht gelesen werden.');
+        setError(t('Datei konnte nicht gelesen werden.'));
         setBusy(false);
       }
       return;
@@ -144,34 +153,32 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
   const errors = preview?.errors || [];
   const warnings = preview?.warnings || [];
   const importLabel = volumes > 0
-    ? `${formatCount(volumes, 'Band', 'Bände')} importieren`
+    ? t('{volumes} importieren', { volumes: formatCount(volumes, 'Band', 'Bände') })
     : series > 0
-      ? `${formatCount(series, 'Reihe', 'Reihen')} anlegen`
-      : 'Nichts zu importieren';
+      ? t('{series} anlegen', { series: formatCount(series, 'Reihe', 'Reihen') })
+      : t('Nichts zu importieren');
+  const previewCounts = {
+    volumes: formatCount(volumes, 'neuer Band', 'neue Bände'),
+    series: formatCount(series, 'neue Reihe', 'neue Reihen'),
+    existing: formatNumber(preview?.skipped_existing || 0),
+    errors: formatCount(errors.length, 'fehlerhafte Zeile', 'fehlerhafte Zeilen')
+  };
+  const previewText = warnings.length > 0
+    ? t('Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.', { ...previewCounts, notes: formatCount(warnings.length, 'Hinweis', 'Hinweise') })
+    : t('Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.', previewCounts);
   const locked = disabled || importing;
 
   return (
     <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-3">
-      <div className="text-sm font-semibold text-slate-200">Aus CSV importieren</div>
+      <div className="text-sm font-semibold text-slate-200">{t('Aus CSV importieren')}</div>
       <p className="text-xs text-slate-400">
-        Spalten: Reihe und Bandnummer (Pflicht) sowie Reihenverlag, Verlag (nur wenn der Band abweicht), Autor, Typ („Reihe“ =
-        Zeile nur für die Reihe), Status (Vorhanden, Fehlt, Vorbestellt, Erscheint bald, Bestellt; „Gelesen“ = Vorhanden + gelesen),
-        ISBN, Preis, Zielpreis, Priorität (0–3), Erscheinungsdatum, Erscheinungsjahr, Kaufdatum, Zustand, Seiten, Notizen,
-        Reihen-Wunsch (0–3), Reihenstatus, Sammelstatus (aktiv, pausiert, abgebrochen; leer = aktiv), Gesamtbände, Alternativtitel, Sprache, Tags, Manga-Passion-ID, Reihen-Cover,
-        Reihen-Banner, Beschreibung, Band-Cover, Bilder (durch | getrennt), MP-Band-ID, Gelesen von und Besitzer
-        (Benutzernamen, durch Komma oder | getrennt; Besitzer nur bei Status Vorhanden; unbekannte Namen werden ignoriert, ohne
-        Treffer wirst du Besitzer). Nur Admins können andere Personen als Besitzer oder Leser eintragen; alle anderen nur sich selbst.
-        Eine Zeile ohne Bandnummer oder mit Typ „Reihe“ legt nur die Reihe an bzw. setzt deren Wunsch.
-        Bereits vorhandene Bände (Reihe + Typ + Nummer) werden nie verändert. Am einfachsten: erst exportieren und die Datei als Vorlage nutzen.
-        In Excel die Spalten ISBN und Bandnummer als Text formatieren. Höchstens 20.000 Zeilen und 10 MB pro Datei.
-        Bilddateien und Preise je Besitzer sind nicht in der CSV – dafür das ZIP-Backup nutzen.
-        Zu lange Cover- oder Reihenwerte (z. B. alte data:-Cover) werden mit Hinweis übersprungen, der Band wird trotzdem angelegt.
+        {t('Spalten: Reihe und Bandnummer (Pflicht) sowie Reihenverlag, Verlag (nur wenn der Band abweicht), Autor, Typ („Reihe“ = Zeile nur für die Reihe), Status (Vorhanden, Fehlt, Vorbestellt, Erscheint bald, Bestellt; „Gelesen“ = Vorhanden + gelesen), ISBN, Preis, Zielpreis, Priorität (0–3), Erscheinungsdatum, Erscheinungsjahr, Kaufdatum, Zustand, Seiten, Notizen, Reihen-Wunsch (0–3), Reihenstatus, Sammelstatus (aktiv, pausiert, abgebrochen; leer = aktiv), Gesamtbände, Alternativtitel, Sprache (Sprachcode wie de, en, ja oder der Name), Region (zwei Buchstaben, z. B. US), Währung (drei Buchstaben, z. B. EUR), Werk (gleicher Wert = Ausgaben derselben Reihe), Tags, Manga-Passion-ID, Reihen-Cover, Reihen-Banner, Beschreibung, Band-Cover, Bilder (durch | getrennt), MP-Band-ID, Bandsprache (leer = Sprache der Reihe), Gelesen von und Besitzer (Benutzernamen, durch Komma oder | getrennt; Besitzer nur bei Status Vorhanden; unbekannte Namen werden ignoriert, ohne Treffer wirst du Besitzer). Nur Admins können andere Personen als Besitzer oder Leser eintragen; alle anderen nur sich selbst. Eine Zeile ohne Bandnummer oder mit Typ „Reihe“ legt nur die Reihe an bzw. setzt deren Wunsch. Bereits vorhandene Bände (Reihe + Typ + Nummer) werden nie verändert. Am einfachsten: erst exportieren und die Datei als Vorlage nutzen. In Excel die Spalten ISBN und Bandnummer als Text formatieren. Höchstens 20.000 Zeilen und 10 MB pro Datei. Bilddateien und Preise je Besitzer sind nicht in der CSV – dafür das ZIP-Backup nutzen. Zu lange Cover- oder Reihenwerte (z. B. alte data:-Cover) werden mit Hinweis übersprungen, der Band wird trotzdem angelegt.')}
       </p>
       <input
         ref={fileInputRef}
         type="file"
         accept=".csv,text/csv"
-        aria-label="CSV-Datei auswählen"
+        aria-label={t('CSV-Datei auswählen')}
         className="hidden"
         tabIndex={-1}
         disabled={locked}
@@ -188,7 +195,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
           disabled={locked}
           className="btn-secondary text-xs inline-flex items-center gap-2 disabled:opacity-50"
         >
-          <Upload className="w-4 h-4" aria-hidden="true" /> CSV-Datei auswählen
+          <Upload className="w-4 h-4" aria-hidden="true" /> {t('CSV-Datei auswählen')}
         </button>
         {fileName && <span className="text-xs text-slate-400 truncate max-w-[14rem]" title={fileName}>{fileName}</span>}
       </div>
@@ -196,7 +203,7 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
       <div role="status" className="space-y-2 empty:hidden">
         {busy && (
           <div className="text-xs text-slate-400 flex items-center gap-2">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> {importing ? 'Wird importiert...' : 'Wird geprüft...'}
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> {importing ? t('Wird importiert...') : t('Wird geprüft...')}
           </div>
         )}
         {success && <div className="text-xs text-emerald-300">{success}</div>}
@@ -205,14 +212,14 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
         <div className="space-y-2">
           {preview.encoding === 'windows-1252' && (
             <div className="text-[11px] text-sky-300">
-              Die Datei ist nicht UTF-8-kodiert und wurde als Windows-1252 (Excel) gelesen. Bitte Umlaute nach dem Import prüfen.
+              {t('Die Datei ist nicht UTF-8-kodiert und wurde als Windows-1252 (Excel) gelesen. Bitte Umlaute nach dem Import prüfen.')}
             </div>
           )}
           <div className="text-xs text-slate-200">
-            Vorschau: {formatCount(volumes, 'neuer Band', 'neue Bände')} ({formatCount(series, 'neue Reihe', 'neue Reihen')}), {formatNumber(preview.skipped_existing || 0)} schon vorhanden, {formatCount(errors.length, 'fehlerhafte Zeile', 'fehlerhafte Zeilen')}{warnings.length > 0 && `, ${formatCount(warnings.length, 'Hinweis', 'Hinweise')}`}.
+            {previewText}
           </div>
-          <LineList label="Fehlerhafte Zeilen" items={errors} className="text-amber-300" more="weitere" />
-          <LineList label="Hinweise" items={warnings} className="text-amber-200/80" more="weitere Hinweise" />
+          <LineList label={t('Fehlerhafte Zeilen')} body={preview} field="errors" className="text-amber-300" more={t('weitere')} />
+          <LineList label={t('Hinweise')} body={preview} field="warnings" className="text-amber-200/80" more={t('weitere Hinweise')} />
           <button
             id="btn-csv-import"
             type="button"

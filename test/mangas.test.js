@@ -125,7 +125,7 @@ test('POST /mangas: non-text fields are rejected, not stored as [object Object]'
     const id = await createManga({ title: 'T5', author: 'a'.repeat(1000), language: '', tags: '  ' });
     const m = await detail(id);
     assert.equal(m.author.length, 300);
-    assert.equal(m.language, 'Deutsch');
+    assert.equal(m.language, 'de');
     assert.equal(m.tags, null);
 });
 

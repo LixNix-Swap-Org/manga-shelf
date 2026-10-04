@@ -1,6 +1,7 @@
 // The `local` transport of utils/api.js: a request below /api goes to the standalone core on the device and comes back
 // as a Response, so every caller (request, apiFetch, downloadFile) works unchanged. The core loads on first use.
 import { getLocalProfile, setLocalProfile, storedModeIsLocal } from './profile.js';
+import { t } from '../i18n/index.js';
 
 let runtimePromise = null;
 let runtime = null;
@@ -42,7 +43,7 @@ export function onSourceBlocked(listener) {
 // only the app build has the standalone mode: the web build drops the import (and sql.js, the wasm file, the core)
 const loadBoot = () => (import.meta.env?.VITE_APP_MODE === 'app'
   ? import('./boot.js')
-  : Promise.reject(new Error('Der Modus ohne Server gibt es nur in der App')));
+  : Promise.reject(new Error(t('Der Modus ohne Server gibt es nur in der App'))));
 
 export function getLocalRuntime() {
   if (!runtimePromise) {
@@ -89,7 +90,7 @@ export function useLocalRuntime(rt) {
 const NO_BODY = new Set([204, 205, 304]);
 
 function abortError() {
-  try { return new DOMException('Aborted', 'AbortError'); } catch (_) { return Object.assign(new Error('Aborted'), { name: 'AbortError' }); }
+  try { return new DOMException('Aborted', 'AbortError'); } catch (_) { return Object.assign(new Error('Aborted'), { name: 'AbortError' }); } // i18n-ignore: never shown
 }
 
 /** Upload paths keep their FormData; JSON bodies go through JSON like on the wire (undefined dropped, dates as text). */

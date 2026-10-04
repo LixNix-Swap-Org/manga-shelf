@@ -32,6 +32,8 @@ const routes = [
     { method: 'GET', path: '/offline-snapshot', role: 'auth', conditional: { cacheControl: 'private, no-store' }, handler: snapshot.offlineSnapshot },
     { method: 'PUT', path: '/mangas/:id', role: 'editor', handler: mangas.update },
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
+    { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
+    { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
     { method: 'GET', path: '/mangas/:id/gaps', role: 'auth', handler: mangaPassion.gaps },
     { method: 'POST', path: '/mangas/:id/sync-edition', role: 'editor', handler: mangaPassion.syncEdition },
     { method: 'POST', path: '/mangas/:id/batch-import-gaps', role: 'editor', handler: mangaPassion.batchImportGaps },

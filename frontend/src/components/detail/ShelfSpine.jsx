@@ -1,7 +1,10 @@
 import { Package } from 'lucide-react';
 import { getVolumeDisplayTitle, getSpinePublisherTheme, hasUserRead, getRegularGapMeta } from '../../utils/volumeHelpers';
 import { formatEuro, formatShortDate, gapLabel, getSpineAriaLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
+import { formatMoney } from '../../utils/format';
+import { editionCurrency } from '../../utils/editions';
 import { assetImgProps } from '../../utils/api';
+import { t } from '../../i18n/index.js';
 
 /** One book spine (or a ghost spine for a gap) on the shelf. Layout depends on the shelf mode and scale. */
 export default function ShelfSpine({
@@ -31,7 +34,9 @@ export default function ShelfSpine({
     const gapPrice = gapMeta?.price ? formatEuro(gapMeta.price) : '';
     const gapDate = formatShortDate(gapMeta?.release_date);
     const gapDetails = [gapPrice, gapDate].filter(Boolean).join(' • ');
-    const gapTitle = `${gapLabel(gapsOfficial)}: Band ${item.gapNumber}${gapDetails ? ` (${gapDetails})` : ''}`;
+    const gapTitle = gapDetails
+      ? t('{gap}: Band {number} ({details})', { gap: gapLabel(gapsOfficial), number: item.gapNumber, details: gapDetails })
+      : t('{gap}: Band {number}', { gap: gapLabel(gapsOfficial), number: item.gapNumber });
     // max-width x books per row must exceed the ~950px container so full rows fill it; partial rows stay capped
     let ghostWidthClass;
     if (isFitSingleRow) {
@@ -47,8 +52,8 @@ export default function ShelfSpine({
 
     const GapTag = canEdit ? 'button' : 'div';
     const gapA11y = canEdit
-      ? { type: 'button', onClick: () => setFillingGapNumber(item.gapNumber), 'aria-label': `Lücke: Band ${item.gapNumber} erfassen${gapPrice ? ` (${gapPrice})` : ''}`, title: `${gapTitle}. Klicken zum Erfassen` }
-      : { role: 'img', 'aria-label': `Lücke: Band ${item.gapNumber} fehlt`, title: gapTitle };
+      ? { type: 'button', onClick: () => setFillingGapNumber(item.gapNumber), 'aria-label': gapPrice ? t('Lücke: Band {number} erfassen ({price})', { number: item.gapNumber, price: gapPrice }) : t('Lücke: Band {number} erfassen', { number: item.gapNumber }), title: t('{gapTitle}. Klicken zum Erfassen', { gapTitle }) }
+      : { role: 'img', 'aria-label': t('Lücke: Band {number} fehlt', { number: item.gapNumber }), title: gapTitle };
 
     return (
       <GapTag
@@ -76,7 +81,7 @@ export default function ShelfSpine({
         </div>
         <div className="relative z-10 flex flex-col items-center">
           {!isUltraCompact && (
-            <span className="text-[10px] font-black text-amber-300/80 tracking-tight leading-none mb-0.5">Band</span>
+            <span className="text-[10px] font-black text-amber-300/80 tracking-tight leading-none mb-0.5">{t('Band')}</span>
           )}
           <span className={`${isUltraCompact ? 'text-xs sm:text-sm' : isVeryCompact ? 'text-sm' : 'text-base'} font-black text-amber-400 leading-tight drop-shadow`}>
             {item.gapNumber}
@@ -90,7 +95,7 @@ export default function ShelfSpine({
         <div className={`relative z-10 uppercase tracking-wider text-amber-400/90 bg-amber-500/20 px-0.5 sm:px-1 py-0.5 rounded border border-amber-500/30 truncate max-w-full ${
           isUltraCompact ? 'text-[7px] leading-none' : 'text-[8px] font-bold'
         }`}>
-          Lücke
+          {t('Lücke')}
         </div>
       </GapTag>
     );
@@ -186,7 +191,7 @@ export default function ShelfSpine({
         isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
       } ${selected ? 'outline outline-2 outline-offset-2 outline-emerald-400 -translate-y-2' : ''} ${canEdit || selectionMode ? 'cursor-pointer' : 'cursor-default'} group/spine`}
       data-missing={!isOwned || undefined}
-      title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatEuro(vol.price) ? ` • ${formatEuro(vol.price)}` : ''}${isOwned && isRead ? ' • Gelesen ✓' : ''}`}
+      title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatMoney(vol.price, editionCurrency(manga)) ? ` • ${formatMoney(vol.price, editionCurrency(manga))}` : ''}${isOwned && isRead ? ` • ${t('Gelesen ✓')}` : ''}`}
     >
       {/* a missing volume dims its background only; badges and numbers keep their contrast */}
       {!isOwned && !selected && (
@@ -215,14 +220,14 @@ export default function ShelfSpine({
         {isSchuber ? (
           <div className="text-[9px] sm:text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
             <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-            <span className="truncate">{badge.text}</span>
+            <span className="truncate">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>
           </div>
         ) : isSpecialEd ? (
           <div className="flex flex-col items-center">
             <span className="text-xs sm:text-sm font-black text-fuchsia-300 drop-shadow">
-              {badge.text.match(/^Band (.+)$/)?.[1] || badge.short}
+              {badge.number || badge.short}
             </span>
-            <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40" title={badge.label}>
+            <span className="text-[7px] sm:text-[8px] font-bold text-fuchsia-300 bg-fuchsia-950/70 px-0.5 sm:px-1 rounded border border-fuchsia-500/40" title={badge.label}>{/* i18n-ignore: edition abbreviation (utils/volumeHelpers) */}
               {badge.short}
             </span>
           </div>
@@ -247,26 +252,26 @@ export default function ShelfSpine({
         <div className="flex items-center gap-1 mt-0.5">
           {/* Read Checkmark */}
           {isOwned && isRead && (
-            <span className={`${isUltraCompact ? 'w-3 h-3 text-[7px]' : 'w-3.5 h-3.5 text-[8px]'} rounded-full bg-emerald-500/25 border border-emerald-400 text-emerald-300 flex items-center justify-center font-bold`} title="Gelesen">
+            <span className={`${isUltraCompact ? 'w-3 h-3 text-[7px]' : 'w-3.5 h-3.5 text-[8px]'} rounded-full bg-emerald-500/25 border border-emerald-400 text-emerald-300 flex items-center justify-center font-bold`} title={t('Gelesen')}>
               ✓
             </span>
           )}
           {/* Status Badge */}
           {statusKind === 'preordered' ? (
-            <span className="text-[7px] sm:text-[8px] font-extrabold bg-sky-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Vorbestellt">
-              VORB.
+            <span className="text-[7px] sm:text-[8px] font-extrabold bg-sky-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title={t('Vorbestellt')}>
+              {t('VORB.')}
             </span>
           ) : statusKind === 'ordered' ? (
-            <span className="text-[7px] sm:text-[8px] font-extrabold bg-orange-400 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Bestellt">
-              BESTELLT
+            <span className="text-[7px] sm:text-[8px] font-extrabold bg-orange-400 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title={t('Bestellt')}>
+              {t('BESTELLT')}
             </span>
           ) : statusKind === 'upcoming' ? (
-            <span className="text-[7px] sm:text-[8px] font-extrabold bg-purple-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title="Erscheint bald">
-              BALD
+            <span className="text-[7px] sm:text-[8px] font-extrabold bg-purple-500 text-slate-950 px-0.5 sm:px-1 rounded-sm shadow-sm" title={t('Erscheint bald')}>
+              {t('BALD')}
             </span>
           ) : !isOwned ? (
-            <span className="text-[7px] sm:text-[8px] font-extrabold bg-amber-500 text-slate-950 px-0.5 sm:px-1 rounded-sm" title="Fehlt in der Sammlung">
-              FEHLT
+            <span className="text-[7px] sm:text-[8px] font-extrabold bg-amber-500 text-slate-950 px-0.5 sm:px-1 rounded-sm" title={t('Fehlt in der Sammlung')}>
+              {t('FEHLT')}
             </span>
           ) : null}
         </div>

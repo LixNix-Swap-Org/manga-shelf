@@ -46,7 +46,7 @@ env:
 
 jobs:
   frontend:
-    name: Web-Portal (frontend/dist)
+    name: Web portal (frontend/dist)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -72,7 +72,7 @@ jobs:
           if-no-files-found: error
 
   zip:
-    name: Pterodactyl-ZIP
+    name: Pterodactyl ZIP
     needs: frontend
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,7 +92,7 @@ jobs:
           name: frontend-dist
           path: frontend/dist
       - run: node package.js
-      - name: SBOM der Laufzeit-Abhängigkeiten (CycloneDX)
+      - name: SBOM of the runtime dependencies (CycloneDX)
         run: npm sbom --omit=dev --sbom-format cyclonedx > dist_pack/manga-shelf-sbom.cdx.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -104,7 +104,7 @@ jobs:
           if-no-files-found: error
 
   server-binaries:
-    name: Server-Binärdatei (${{ matrix.artifact }})
+    name: Server binary (${{ matrix.artifact }})
     needs: frontend
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -146,7 +146,7 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-      - name: Signierung erkennen
+      - name: Detect signing
         id: signing
         shell: bash
         env:
@@ -161,7 +161,7 @@ jobs:
       - name: Build (esbuild bundle + Node SEA)
         shell: bash
         run: node scripts/server-bin/build-sea.js --target ${{ matrix.targets }}
-      - name: Developer-ID-Signatur (macOS, nur mit Zertifikat)
+      - name: Developer ID signature (macOS, only with a certificate)
         if: runner.os == 'macOS' && steps.signing.outputs.macos == 'true'
         env:
           MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
@@ -190,7 +190,7 @@ jobs:
               --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
           fi
           security delete-keychain "$keychain"
-      - name: Authenticode-Signatur (Windows, nur mit Zertifikat)
+      - name: Authenticode signature (Windows, only with a certificate)
         if: runner.os == 'Windows' && steps.signing.outputs.windows == 'true'
         shell: pwsh
         env:
@@ -206,11 +206,11 @@ jobs:
           $code = $LASTEXITCODE
           Remove-Item $pfx
           exit $code
-      - name: Smoke-Test (Start, /api/health, Portal, status)
+      - name: Smoke test (start, /api/health, portal, status)
         shell: bash
         run: node scripts/server-bin/smoke.js "dist/server/${{ matrix.smoke }}"
       # install-service for real on the throwaway runner (Windows: LOCAL SERVICE + data folder ACL; Linux: 0750, UMask)
-      - name: Dienst-Probe (install-service, Rechte, uninstall-service)
+      - name: Service probe (install-service, permissions, uninstall-service)
         if: runner.os != 'macOS'
         continue-on-error: true
         shell: bash
@@ -227,12 +227,12 @@ jobs:
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
-      - name: Smoke-Test linux-arm64 unter QEMU
+      - name: Smoke test linux-arm64 under QEMU
         if: runner.os == 'Linux'
         run: |
           docker run --rm --platform linux/arm64 -e SMOKE_TIMEOUT_S=240 -v "$PWD:/repo:ro" \
             node:22.23.3-bookworm-slim node /repo/scripts/server-bin/smoke.js /repo/dist/server/manga-shelf-server-linux-arm64
-      - name: x64-Teil der Universal-Binärdatei (Rosetta)
+      - name: x64 part of the universal binary (Rosetta)
         if: runner.os == 'macOS'
         continue-on-error: true
         run: arch -x86_64 "dist/server/${{ matrix.smoke }}" --version
@@ -244,7 +244,7 @@ jobs:
           if-no-files-found: error
 
   server-packages:
-    name: Server-Pakete (.deb/.rpm)
+    name: Server packages (.deb/.rpm)
     needs: server-binaries
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -274,7 +274,7 @@ jobs:
           done
           rm dist/server/manga-shelf-server-linux
           ls -l dist/packages
-      - name: .deb installieren, Dienst prüfen, wieder entfernen
+      - name: Install the .deb, check the service, remove it again
         run: |
           sudo apt-get install -y ./dist/packages/*_amd64.deb
           systemctl is-enabled manga-shelf
@@ -298,7 +298,7 @@ jobs:
           if-no-files-found: error
 
   docker:
-    name: Docker-Image (amd64 + arm64, nicht gepusht)
+    name: Docker image (amd64 + arm64, not pushed)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -325,7 +325,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=manga-shelf-image
 
   desktop:
-    name: Desktop-Installer (${{ matrix.os }})
+    name: Desktop installers (${{ matrix.os }})
     if: inputs.installers
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -342,7 +342,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: Desktop-Projekt vorhanden?
+      - name: Desktop project present?
         id: project
         shell: bash
         run: |
@@ -352,7 +352,7 @@ jobs:
             echo "::notice::desktop/package.json hat kein Skript build:desktop, Desktop-Installer übersprungen"
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Signierung erkennen
+      - name: Detect signing
         id: signing
         shell: bash
         env:
@@ -364,7 +364,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/release/signing.js
-      - name: Abhängigkeiten
+      - name: Dependencies
         if: steps.project.outputs.present == 'true'
         shell: bash
         run: |
@@ -372,7 +372,7 @@ jobs:
           (cd frontend && npm ci)
           (cd desktop && npm ci)
       # electron-builder signs only when CSC_LINK is set; without certificates the variables stay unset
-      - name: Installer bauen
+      - name: Build installers
         if: steps.project.outputs.present == 'true'
         shell: bash
         working-directory: desktop
@@ -403,7 +403,7 @@ jobs:
           fi
           unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD MAC_CSC_LINK MAC_CSC_KEY_PASSWORD NOTARIZE_APPLE_ID NOTARIZE_PASSWORD NOTARIZE_TEAM_ID
           npm run build:desktop
-      - name: Flatpak (Versuch)
+      - name: Flatpak (attempt)
         if: steps.project.outputs.present == 'true' && runner.os == 'Linux'
         continue-on-error: true
         shell: bash

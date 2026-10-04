@@ -4,7 +4,7 @@ const express = require('express');
 const { db, runTransaction, createCtx } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { createRateLimiter, clientIp } = require('../middleware/rateLimit');
-const { HttpError, badRequest, notFound } = require('../utils/httpError');
+const { HttpError, msg, badRequest, notFound } = require('../utils/httpError');
 const { sealForServer, openForServer, UNREADABLE } = require('../utils/secretBox');
 const log = require('../utils/logger').child('api-keys');
 const { config } = require('../utils/config');
@@ -127,11 +127,18 @@ function registerServerSources() {
 function cleanSecret(provider, raw) {
     if (typeof raw !== 'string') throw badRequest('Bitte den Schlüssel eingeben');
     const secret = raw.trim();
-    if (secret.length < MIN_SECRET || secret.length > MAX_SECRET) throw badRequest(`Der Schlüssel muss ${MIN_SECRET} bis ${MAX_SECRET} Zeichen lang sein`);
+    if (secret.length < MIN_SECRET || secret.length > MAX_SECRET) throw badRequest(msg('Der Schlüssel muss {min} bis {max} Zeichen lang sein', { min: MIN_SECRET, max: MAX_SECRET }));
     const wrong = formatError(provider, secret);
     if (wrong) throw badRequest(wrong, 'KEY_FORMAT');
     return secret;
 }
+
+// what the provider refused, by provider ({provider} is its name from the guide; same texts as frontend/src/local/localServer.js)
+const REJECTED_TEXTS = {
+    anilist: '{provider} lehnt den Token ab ({status})',
+    mal: '{provider} lehnt die Client-ID ab ({status})',
+    other: '{provider} lehnt den Schlüssel ab ({status})'
+};
 
 /** Live check at the provider: { label } or an HttpError 400 (refused) / 502 (not reachable). */
 async function checkLive(provider, secret) {
@@ -141,10 +148,10 @@ async function checkLive(provider, secret) {
     } catch (err) {
         if (err instanceof SourceError) {
             if (err.kind === 'auth' || err.kind === 'bad' || err.kind === 'notfound') {
-                const what = provider === 'anilist' ? 'den Token' : provider === 'mal' ? 'die Client-ID' : 'den Schlüssel';
-                throw new HttpError(400, `${name} lehnt ${what} ab (${err.status || 401})`, 'KEY_REJECTED');
+                const text = REJECTED_TEXTS[provider] || REJECTED_TEXTS.other;
+                throw new HttpError(400, msg(text, { provider: name, status: err.status || 401 }), 'KEY_REJECTED');
             }
-            throw new HttpError(502, `${name} ist gerade nicht erreichbar, der Schlüssel wurde nicht gespeichert. Bitte später erneut versuchen.`, 'PROVIDER_UNREACHABLE');
+            throw new HttpError(502, msg('{provider} ist gerade nicht erreichbar, der Schlüssel wurde nicht gespeichert. Bitte später erneut versuchen.', { provider: name }), 'PROVIDER_UNREACHABLE');
         }
         throw err;
     }
@@ -189,7 +196,7 @@ const listInstance = () => instanceProviders().map((p) => masked(p, rowFor(null,
 
 function providerParam(req, allowed) {
     const provider = String(req.params.provider || '').toLowerCase();
-    if (!allowed.includes(provider)) throw badRequest(`Unbekannter Anbieter (erlaubt: ${allowed.join(', ')})`, 'UNKNOWN_PROVIDER');
+    if (!allowed.includes(provider)) throw badRequest(msg('Unbekannter Anbieter (erlaubt: {allowed})', { allowed: allowed.join(', ') }), 'UNKNOWN_PROVIDER');
     return provider;
 }
 

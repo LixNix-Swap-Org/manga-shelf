@@ -1,6 +1,9 @@
-import { ArrowUpDown, BuildingComplex, ChevronDown, Layers, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
-import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, getStatusTabs } from '../../utils/collectionHelpers';
+import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
+import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, collectFilterLabel, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
+import { t as tr } from '../../i18n/index.js';
+import { genreLabel } from '../../utils/enumLabels.js';
+import { languageName } from '../../utils/editions';
 
 // columns below xl: two chips per row (phones fill the row), four from lg; content-sized in one row from xl. The select
 // truncates inside its chip.
@@ -10,7 +13,8 @@ const VIEW_TOGGLE = 'hit-44 p-1.5 rounded-lg transition-all [@media(pointer:coar
 
 /**
  * Status tabs, filter/sort/grouping selects, author and genre chips, view-mode toggle; presentational, state via props.
- * The genre filter (AND over tags) shows when `setTagFilter` is given; `availableTags` is [{ tag, count }].
+ * The genre filter (AND over tags) shows when `setTagFilter` is given; `availableTags` is [{ tag, count }]. The edition
+ * language chip shows when the collection holds more than one language (`availableLanguages` [{ code, count }]).
  */
 export default function CollectionToolbar({
   availablePublishers,
@@ -36,18 +40,22 @@ export default function CollectionToolbar({
   setGroupBy,
   availableTags = [],
   tagFilter = [],
-  setTagFilter
+  setTagFilter,
+  availableLanguages = [],
+  languageFilter = 'ALL',
+  setLanguageFilter
 }) {
   const tabs = statusTabs || getStatusTabs(filterCounts || {}, statusFilter);
   const chosenTags = Array.isArray(tagFilter) ? tagFilter : [];
   const chosenKeys = new Set(chosenTags.map(t => t.toLowerCase()));
   const tagOptions = availableTags.filter(t => !chosenKeys.has(t.tag.toLowerCase()));
   const filtersActive = statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter) || Boolean(search)
-    || chosenTags.length > 0;
+    || chosenTags.length > 0 || languageFilter !== 'ALL';
+  const showLanguages = Boolean(setLanguageFilter) && (availableLanguages.length > 1 || languageFilter !== 'ALL');
   return (
     <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
       {/* Status Tabs with Count Badges */}
-      <div role="group" aria-label="Status-Filter" className="w-full xl:w-auto flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
+      <div role="group" aria-label={tr('Status-Filter')} className="w-full xl:w-auto flex items-center gap-1.5 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs overflow-x-auto no-scrollbar">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -60,7 +68,7 @@ export default function CollectionToolbar({
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
             }`}
           >
-            <span>{tab.label}</span>
+            <span>{tr(tab.label)}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none ${
               statusFilter === tab.id ? 'bg-brand-900/90 text-white' : 'bg-slate-800 text-slate-400'
             }`}>
@@ -77,12 +85,12 @@ export default function CollectionToolbar({
           <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
           <select
             id="filter-publisher-select"
-            aria-label="Verlag filtern"
+            aria-label={tr('Verlag filtern')}
             value={publisherFilter}
             onChange={e => setPublisherFilter(e.target.value)}
             className={`filter-chip-select ${CHIP_SELECT}`}
           >
-            <option value="ALL">Alle Verlage</option>
+            <option value="ALL">{tr('Alle Verlage')}</option>
             {availablePublishers.map(pub => (
               <option key={pub} value={pub}>{pub}</option>
             ))}
@@ -95,14 +103,14 @@ export default function CollectionToolbar({
             <ListFilter className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-collect-select"
-              aria-label="Sammelstand filtern"
+              aria-label={tr('Sammelstand filtern')}
               value={collectFilter}
               onChange={e => setCollectFilter(e.target.value)}
               className={`filter-chip-select ${CHIP_SELECT}`}
             >
               {COLLECT_FILTERS.map(f => (
                 <option key={f.id} value={f.id}>
-                  {f.label}{collectCounts && f.id !== 'ALL' ? ` (${collectCounts[f.id] || 0})` : ''}
+                  {collectFilterLabel(f)}{collectCounts && f.id !== 'ALL' ? ` (${collectCounts[f.id] || 0})` : ''}
                 </option>
               ))}
             </select>
@@ -115,13 +123,33 @@ export default function CollectionToolbar({
             <Tag className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-tag-select"
-              aria-label="Genre filtern"
+              aria-label={tr('Genre filtern')}
               value=""
               onChange={e => { if (e.target.value) setTagFilter([...chosenTags, e.target.value]); }}
               className={`filter-chip-select ${CHIP_SELECT}`}
             >
-              <option value="">{chosenTags.length ? 'Weiteres Genre…' : 'Alle Genres'}</option>
-              {tagOptions.map(t => <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>)}
+              <option value="">{chosenTags.length ? tr('Weiteres Genre…') : tr('Alle Genres')}</option>
+              {tagOptions.map(t => <option key={t.tag} value={t.tag}>{genreLabel(t.tag)} ({t.count})</option>)}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
+          </label>
+        )}
+
+        {showLanguages && (
+          <label className={CHIP_LABEL}>
+            <Languages className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" />
+            <select
+              id="filter-language-select"
+              aria-label={tr('Sprache filtern')}
+              value={languageFilter}
+              onChange={e => setLanguageFilter(e.target.value)}
+              className={`filter-chip-select ${CHIP_SELECT}`}
+            >
+              <option value="ALL">{tr('Alle Sprachen')}</option>
+              {availableLanguages.map(l => <option key={l.code} value={l.code}>{languageName(l.code)} ({l.count})</option>)}
+              {languageFilter !== 'ALL' && !availableLanguages.some(l => l.code === languageFilter) && (
+                <option value={languageFilter}>{languageName(languageFilter)}</option>
+              )}
             </select>
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
           </label>
@@ -133,11 +161,11 @@ export default function CollectionToolbar({
             type="button"
             onClick={() => setTagFilter(chosenTags.filter(t => t !== tag))}
             className="tag-filter-chip flex items-center gap-1.5 min-w-0 max-w-full rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/15 px-2.5 py-1.5 text-fuchsia-200 hover:bg-fuchsia-500/25 shrink-0"
-            title="Genre-Filter entfernen"
-            aria-label={`Genre-Filter „${tag}“ entfernen`}
+            title={tr('Genre-Filter entfernen')}
+            aria-label={tr('Genre-Filter „{tag}“ entfernen', { tag: genreLabel(tag) })}
           >
             <Tag className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate max-w-[140px]">{tag}</span>
+            <span className="truncate max-w-[140px]">{genreLabel(tag)}</span>
             <X className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           </button>
         ))}
@@ -146,12 +174,12 @@ export default function CollectionToolbar({
         <label className={CHIP_LABEL}>
           <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
           <select
-            aria-label="Sortierung"
+            aria-label={tr('Sortierung')}
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
             className={`filter-chip-select ${CHIP_SELECT}`}
           >
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{tr(o.label)}</option>)}
           </select>
           <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
         </label>
@@ -161,13 +189,13 @@ export default function CollectionToolbar({
             <Layers className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
             <select
               id="group-by-select"
-              aria-label="Gruppieren"
+              aria-label={tr('Gruppieren')}
               value={groupBy}
               onChange={e => setGroupBy(e.target.value)}
               className={`filter-chip-select ${CHIP_SELECT}`}
             >
               {GROUP_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.value === 'none' ? o.label : `Gruppieren: ${o.label}`}</option>
+                <option key={o.value} value={o.value}>{o.value === 'none' ? tr(o.label) : tr('Gruppieren: {label}', { label: tr(o.label) })}</option>
               ))}
             </select>
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
@@ -180,8 +208,8 @@ export default function CollectionToolbar({
             id="author-filter-chip"
             onClick={() => setAuthorFilter('')}
             className="flex items-center gap-1.5 min-w-0 max-w-full rounded-xl border border-brand-500/40 bg-brand-500/15 px-2.5 py-1.5 text-brand-200 hover:bg-brand-500/25 shrink-0"
-            title="Autor-Filter entfernen"
-            aria-label={`Autor-Filter „${authorFilter}“ entfernen`}
+            title={tr('Autor-Filter entfernen')}
+            aria-label={tr('Autor-Filter „{authorFilter}“ entfernen', { authorFilter })}
           >
             <UserPen className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate max-w-[160px]">{authorFilter}</span>
@@ -199,31 +227,32 @@ export default function CollectionToolbar({
               setCollectFilter?.('ALL');
               setAuthorFilter?.('');
               setTagFilter?.([]);
+              setLanguageFilter?.('ALL');
               setSearch('');
             }}
             className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"
-            title="Alle Filter und Suche zurücksetzen"
-            aria-label="Filter und Suche zurücksetzen"
+            title={tr('Alle Filter und Suche zurücksetzen')}
+            aria-label={tr('Filter und Suche zurücksetzen')}
           >
             <X className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Zurücksetzen</span>
+            <span className="hidden sm:inline">{tr('Zurücksetzen')}</span>
           </button>
         )}
 
         <div className="basis-full xl:basis-auto flex items-center justify-between gap-2">
-          <div role="group" aria-label="Ansicht" className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
+          <div role="group" aria-label={tr('Ansicht')} className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
             <button
               id="btn-view-grid"
               type="button"
               aria-pressed={viewMode === 'grid'}
-              aria-label="Rasteransicht"
+              aria-label={tr('Rasteransicht')}
               onClick={() => setViewMode('grid')}
               className={`${VIEW_TOGGLE} ${
                 viewMode === 'grid'
                   ? 'bg-brand-700 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Plakative Rasteransicht"
+              title={tr('Plakative Rasteransicht')}
             >
               <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
@@ -231,14 +260,14 @@ export default function CollectionToolbar({
               id="btn-view-list"
               type="button"
               aria-pressed={viewMode === 'list'}
-              aria-label="Listenansicht"
+              aria-label={tr('Listenansicht')}
               onClick={() => setViewMode('list')}
               className={`${VIEW_TOGGLE} ${
                 viewMode === 'list'
                   ? 'bg-brand-700 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Kompakte Listenansicht"
+              title={tr('Kompakte Listenansicht')}
             >
               <List className="w-3.5 h-3.5" aria-hidden="true" />
             </button>

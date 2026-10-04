@@ -2,6 +2,10 @@ import { useId } from 'react';
 import { Barcode, Camera, Check, Plus, X } from 'lucide-react';
 import { assetImgProps } from '../../utils/api';
 import FilePickerButton from '../common/FilePickerButton';
+import { t } from '../../i18n/index.js';
+import { rich } from '../../i18n/react.jsx';
+import { currencySymbol } from '../../utils/format';
+import { currencyName } from '../../utils/editions';
 
 const LABEL = 'block text-xs font-semibold text-slate-400 mb-1 truncate';
 
@@ -28,7 +32,8 @@ export default function AddVolumeBar({
   uploadingNewCover,
   onCancelUpload,
   newVolumeIsbn = '',
-  setNewVolumeIsbn
+  setNewVolumeIsbn,
+  currency = 'EUR'
 }) {
   const ids = useId();
   const cancelUpload = onCancelUpload ?? handleUploadNewSingleCover?.cancel;
@@ -55,39 +60,39 @@ export default function AddVolumeBar({
           <div>
             <h3 id={`${ids}-title`} className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5 text-brand-400" />
-              Band, Special Edition oder Schuber hinzufügen
+              {t('Band, Special Edition oder Schuber hinzufügen')}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben
+              {t('Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben')}
             </p>
           </div>
 
           <div id="add-volume-fields" className="grid grid-cols-2 grid-flow-row-dense items-end gap-2.5 w-full sm:flex sm:flex-wrap xl:w-auto">
             <div className="min-w-0 sm:w-40 sm:shrink-0">
-              <label htmlFor={`${ids}-type`} className={LABEL}>Typ</label>
+              <label htmlFor={`${ids}-type`} className={LABEL}>{t('Typ')}</label>
               <select 
                 id={`${ids}-type`}
                 className="input-field bg-slate-950 text-base sm:text-sm py-2 px-2 w-full cursor-pointer font-medium"
                 value={newVolumeType}
                 onChange={e => setNewVolumeType(e.target.value)}
               >
-                <option value="volume">Einzelband</option>
-                <option value="special_edition">Special Edition</option>
-                <option value="schuber">Schuber</option>
-                <option value="special">Special / Extra</option>
+                <option value="volume">{t('Einzelband')}</option>
+                <option value="special_edition">{t('Special Edition')}</option>
+                <option value="schuber">{t('Schuber')}</option>
+                <option value="special">{t('Special / Extra')}</option>
               </select>
             </div>
 
             <div className="min-w-0 sm:w-32 sm:shrink-0">
-              <label htmlFor={ADD_VOLUME_NUMBER_ID} className={LABEL}>{newVolumeType === 'special' ? 'Bezeichnung' : 'Nummer'}</label>
+              <label htmlFor={ADD_VOLUME_NUMBER_ID} className={LABEL}>{newVolumeType === 'special' ? t('Bezeichnung') : t('Nummer')}</label>
               <input 
                 id={ADD_VOLUME_NUMBER_ID}
                 type="text" 
                 inputMode={newVolumeType === 'special' ? 'text' : 'decimal'}
                 placeholder={
-                  newVolumeType === 'schuber' ? 'Schuber-Nr.' :
-                  newVolumeType === 'special' ? 'z. B. 1' :
-                  'Band-Nr.'
+                  newVolumeType === 'schuber' ? t('Schuber-Nr.') :
+                  newVolumeType === 'special' ? t('z. B. 1') :
+                  t('Band-Nr.')
                 }
                 className="input-field text-base sm:text-sm py-2 px-3 w-full font-medium" 
                 value={newVolumeNum} 
@@ -96,12 +101,12 @@ export default function AddVolumeBar({
             </div>
 
             <div className="min-w-0 col-span-2 sm:w-44 sm:shrink-0">
-              <label htmlFor={`${ids}-price`} className={LABEL}>Preis<span className="sr-only"> in Euro</span></label>
+              <label htmlFor={`${ids}-price`} className={LABEL}>{rich('Preis{hint}', { hint: <span className="sr-only"> {t('in {currency}', { currency: currencyName(currency) })}</span> })}</label>
               <input 
                 id={`${ids}-price`}
                 type="text" 
                 inputMode="decimal"
-                placeholder="Preis (€, z. B. 7,99)" 
+                placeholder={t('Preis ({symbol}, z. B. 7,99)', { symbol: currencySymbol(currency) })} 
                 className="input-field text-base sm:text-sm py-2 px-3 w-full text-emerald-400" 
                 value={newVolumePrice} 
                 onChange={e => setNewVolumePrice(e.target.value)} 
@@ -109,22 +114,22 @@ export default function AddVolumeBar({
             </div>
 
             <div className="min-w-0 sm:w-40 sm:shrink-0">
-              <label htmlFor={`${ids}-status`} className={LABEL}>Status</label>
+              <label htmlFor={`${ids}-status`} className={LABEL}>{t('Status')}</label>
               <select 
                 id={`${ids}-status`}
                 className="input-field bg-slate-950 text-base sm:text-sm py-2 px-2 w-full cursor-pointer font-medium"
                 value={newVolumeStatus}
                 onChange={e => setNewVolumeStatus(e.target.value)}
               >
-                <option value="Vorhanden">Im Besitz</option>
-                <option value="Vorbestellt">Vorbestellt</option>
-                <option value="Erscheint bald">Erscheint bald</option>
-                <option value="Fehlt">Fehlt noch</option>
+                <option value="Vorhanden">{t('Im Besitz')}</option>
+                <option value="Vorbestellt">{t('Vorbestellt')}</option>
+                <option value="Erscheint bald">{t('Erscheint bald')}</option>
+                <option value="Fehlt">{t('Fehlt noch')}</option>
               </select>
             </div>
 
-            <div className="min-w-0 col-span-2 sm:w-40 sm:shrink-0" title="Erscheinungsdatum (für Release-Radar)">
-              <label htmlFor={`${ids}-date`} className={LABEL}>Erscheinungsdatum<span className="sr-only"> (für Release-Radar)</span></label>
+            <div className="min-w-0 col-span-2 sm:w-40 sm:shrink-0" title={t('Erscheinungsdatum (für Release-Radar)')}>
+              <label htmlFor={`${ids}-date`} className={LABEL}>{rich('Erscheinungsdatum{hint}', { hint: <span className="sr-only"> {t('(für Release-Radar)')}</span> })}</label>
               <input 
                 id={`${ids}-date`}
                 type="date" 
@@ -139,14 +144,14 @@ export default function AddVolumeBar({
               accept="image/*"
               disabled={uploadingNewCover}
               onChange={handlePickCover}
-              title="Foto/Cover für diesen Band auswählen"
-              label={uploadingNewCover ? 'Foto wird hochgeladen' : (newVolumeCover ? 'Anderes Foto auswählen' : 'Foto auswählen')}
+              title={t('Foto/Cover für diesen Band auswählen')}
+              label={uploadingNewCover ? t('Foto wird hochgeladen') : (newVolumeCover ? t('Anderes Foto auswählen') : t('Foto auswählen'))}
               className={`btn-secondary text-xs py-2 px-3 min-h-[2.625rem] flex items-center justify-center gap-1.5 shrink-0 ${uploadingNewCover ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
             >
               {newVolumeCover && !uploadingNewCover
                 ? <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                 : <Camera className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" />}
-              <span>{uploadingNewCover ? 'Lädt...' : 'Foto'}</span>
+              <span>{uploadingNewCover ? t('Lädt...') : t('Foto')}</span>
             </FilePickerButton>
 
             {uploadingNewCover && cancelUpload && (
@@ -154,21 +159,21 @@ export default function AddVolumeBar({
                 type="button"
                 onClick={cancelUpload}
                 className="btn-secondary text-xs py-2 px-3 min-h-[2.625rem] flex items-center justify-center gap-1.5 shrink-0 text-red-300 hover:text-red-200"
-                title="Foto-Upload abbrechen"
+                title={t('Foto-Upload abbrechen')}
               >
-                <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+                <X className="w-3.5 h-3.5" aria-hidden="true" /> {t('Upload abbrechen')}
               </button>
             )}
 
             {newVolumeCover && (
               <div className="relative group shrink-0 justify-self-start self-center">
-                <img {...assetImgProps(newVolumeCover)} alt="Gewähltes Foto" className="w-8 h-8 rounded-lg object-cover border border-brand-500" />
+                <img {...assetImgProps(newVolumeCover)} alt={t('Gewähltes Foto')} className="w-8 h-8 rounded-lg object-cover border border-brand-500" />
                 <button 
                   type="button" 
                   onClick={() => setNewVolumeCover('')} 
                   disabled={uploadingNewCover}
-                  aria-label="Foto entfernen"
-                  title="Foto entfernen"
+                  aria-label={t('Foto entfernen')}
+                  title={t('Foto entfernen')}
                   className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full min-w-6 min-h-6 flex items-center justify-center disabled:opacity-50"
                 >
                   <X className="w-3 h-3" aria-hidden="true" />
@@ -177,15 +182,15 @@ export default function AddVolumeBar({
             )}
 
             {newVolumeIsbn && (
-              <span className="col-span-2 justify-self-start inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-brand-500/40 bg-brand-500/10 pl-2.5 pr-1 py-1 text-xs font-mono text-brand-200" title="Gescannte ISBN wird mit dem Band gespeichert">
+              <span className="col-span-2 justify-self-start inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-brand-500/40 bg-brand-500/10 pl-2.5 pr-1 py-1 text-xs font-mono text-brand-200" title={t('Gescannte ISBN wird mit dem Band gespeichert')}>
                 <Barcode className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>ISBN {newVolumeIsbn}</span>
                 {setNewVolumeIsbn && (
                   <button
                     type="button"
                     onClick={() => setNewVolumeIsbn('')}
-                    aria-label="Gescannte ISBN entfernen"
-                    title="Gescannte ISBN entfernen"
+                    aria-label={t('Gescannte ISBN entfernen')}
+                    title={t('Gescannte ISBN entfernen')}
                     className="min-w-6 min-h-6 flex items-center justify-center rounded-md text-slate-300 hover:text-white"
                   >
                     <X className="w-3 h-3" aria-hidden="true" />
@@ -197,10 +202,10 @@ export default function AddVolumeBar({
             <button 
               type="submit" 
               disabled={uploadingNewCover}
-              title={uploadingNewCover ? 'Foto wird noch hochgeladen' : undefined}
+              title={uploadingNewCover ? t('Foto wird noch hochgeladen') : undefined}
               className="col-span-2 btn-primary text-sm py-2 px-4 min-h-[2.625rem] flex items-center justify-center gap-1.5 shadow-lg shrink-0 disabled:opacity-60 disabled:cursor-wait"
             >
-              <Plus className="w-4 h-4" /> Hinzufügen
+              <Plus className="w-4 h-4" /> {t('Hinzufügen')}
             </button>
           </div>
         </form>

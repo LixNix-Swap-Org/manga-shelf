@@ -6,14 +6,18 @@ import {
 import { apiFetch, readJson, TIMEOUTS } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import useLatestRequest from './useLatestRequest';
+import { t } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
+// i18n
 const RADAR_LOAD_ERROR = 'Release-Radar konnte nicht geladen werden';
+// i18n
 const MP_LOAD_ERROR = 'Neuerscheinungen konnten nicht geladen werden';
 
 // a proxy 502/503 may answer with HTML
 const errorText = async (res, fallback) => {
   const body = (await readJson(res)) ?? {};
-  return (body && body.error) || fallback;
+  return serverText(body) || fallback;
 };
 
 /** Release radar: personal pre-orders / upcoming volumes and the Manga-Passion monthly calendar. */
@@ -55,20 +59,20 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
       const res = await apiFetch('/api/release-radar', { signal });
       if (!isCurrent()) return;
       if (!res.ok) {
-        const message = await errorText(res, RADAR_LOAD_ERROR);
+        const message = await errorText(res, t(RADAR_LOAD_ERROR));
         if (isCurrent()) setRadarError(message);
         return;
       }
       const data = await readJson(res);
       if (!isCurrent()) return;
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       setRadarError(null);
       setRadarData(data);
       setRadarPublisherFilter(f => reconcilePublisherFilter(f, data.publishers, 'publisher'));
     } catch (err) {
       if (!isCurrent()) return;
       console.error('Error fetching release radar:', err);
-      setRadarError(`${RADAR_LOAD_ERROR} (keine Verbindung zum Server)`);
+      setRadarError(t('{failure} (keine Verbindung zum Server)', { failure: t(RADAR_LOAD_ERROR) }));
     } finally {
       if (isCurrent()) setLoadingRadar(false);
     }
@@ -91,7 +95,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
         await Promise.all([fetchReleaseRadar(), fetchMangas(), fetchShoppingList()]);
         return true;
       }
-      await notifyResponseError(res, 'Fehler beim Markieren als erhalten');
+      await notifyResponseError(res, t('Fehler beim Markieren als erhalten'));
     } catch (e) {
       console.error(e);
       notify.error(e);
@@ -135,13 +139,13 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
       const res = await apiFetch(url, { signal, timeout: TIMEOUTS.remote });
       if (!isCurrent()) return;
       if (!res.ok) {
-        const message = await errorText(res, MP_LOAD_ERROR);
+        const message = await errorText(res, t(MP_LOAD_ERROR));
         if (isCurrent()) fail(message);
         return;
       }
       const data = await readJson(res);
       if (!isCurrent()) return;
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       mpFailedKeyRef.current = null;
       setMpError(null);
       setMpData(data);
@@ -149,7 +153,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
     } catch (err) {
       if (!isCurrent()) return;
       console.error('Error fetching Manga Passion releases:', err);
-      fail(`${MP_LOAD_ERROR} (keine Verbindung zum Server)`);
+      fail(t('{failure} (keine Verbindung zum Server)', { failure: t(MP_LOAD_ERROR) }));
     } finally {
       if (isCurrent()) setMpLoading(false);
     }
@@ -197,11 +201,11 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
         timeout: TIMEOUTS.remote
       });
       if (!res.ok) {
-        await notifyResponseError(res, 'Fehler beim Übernehmen des Bands');
+        await notifyResponseError(res, t('Fehler beim Übernehmen des Bands'));
         return null;
       }
       const result = await readJson(res);
-      if (result === null) throw new Error('Antwort ist kein JSON');
+      if (result === null) throw new Error(t('Antwort ist kein JSON'));
       setMpData(prev => (prev ? { ...prev, items: applyImportToMpItems(prev.items || [], item, result, targetStatus) } : prev));
       // the server re-matches the whole month (siblings of a new series, eBook entries)
       fetchMangaPassionReleases(undefined, undefined, false, { silent: true });

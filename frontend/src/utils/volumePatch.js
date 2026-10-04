@@ -2,6 +2,7 @@
 // list the way the server would apply it, with the aggregates (values, progress, reader_stats) recomputed.
 import { getVolumeProgressCounts } from './volumeHelpers.js';
 
+// i18n-ignore: stored status value
 const OWNED = 'Vorhanden';
 const same = (a, b) => String(a) === String(b);
 const priceOf = (v) => (typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0));

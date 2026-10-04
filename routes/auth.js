@@ -21,20 +21,22 @@ const {
 const { loginLimiter, logoutLimiter, setupLimiter, passwordChangeLimiter, loginGuard, accountKey, clientIp } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('auth');
 const { config, normalizeSetupToken } = require('../utils/config');
-const { HttpError, badRequest, notFound, sendError } = require('../utils/httpError');
+const { HttpError, msg, badRequest, notFound, sendError } = require('../utils/httpError');
 const { purchaseDateFromRemainingOwners } = require('../utils/owners');
 const { revokeFeedTokens } = require('../core/handlers/radar');
 const listSync = require('../core/anime/listSync');
+const { parseProfileBody, saveProfile, readProfile } = require('../core/lib/locales');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
+const ROLE_ERROR = msg('Ungültige Rolle (erlaubt: {allowed})', { allowed: ROLES.join(', ') });
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores everything beyond 72 bytes
 const passwordError = (pw) => {
     if (typeof pw !== 'string' || pw.length < MIN_PASSWORD_LENGTH) {
-        return `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`;
+        return msg('Passwort muss mindestens {min} Zeichen lang sein', { min: MIN_PASSWORD_LENGTH });
     }
     if (Buffer.byteLength(pw) > MAX_PASSWORD_LENGTH) {
-        return `Passwort darf höchstens ${MAX_PASSWORD_LENGTH} Bytes lang sein`;
+        return msg('Passwort darf höchstens {max} Bytes lang sein', { max: MAX_PASSWORD_LENGTH });
     }
     return null;
 };
@@ -54,7 +56,7 @@ const MAX_USERNAME_LENGTH = 64;
 // eslint-disable-next-line no-control-regex
 const USERNAME_FORBIDDEN = /[,|\u0000-\u001f\u007f-\u009f]/;
 const usernameError = (cleanUsername) => {
-    if (cleanUsername.length > MAX_USERNAME_LENGTH) return `Benutzername ist zu lang (maximal ${MAX_USERNAME_LENGTH} Zeichen)`;
+    if (cleanUsername.length > MAX_USERNAME_LENGTH) return msg('Benutzername ist zu lang (maximal {max} Zeichen)', { max: MAX_USERNAME_LENGTH });
     if (USERNAME_FORBIDDEN.test(cleanUsername)) return 'Benutzername darf weder Komma, senkrechten Strich (|) noch Steuerzeichen enthalten';
     return null;
 };
@@ -227,7 +229,13 @@ router.post('/auth/logout', (req, res) => {
 });
 
 router.get('/auth/me', requireAuth, (req, res) => {
-    res.json({ user: req.user });
+    res.json({ user: { ...req.user, ...readProfile(db, req.user.id) } });
+});
+
+// Own language settings; guests too (only their own row). locale null = follow the device.
+router.put('/auth/profile', requireAuth, (req, res) => {
+    const fields = parseProfileBody(req.body);
+    res.json({ user: { ...req.user, ...saveProfile(db, req.user.id, fields) } });
 });
 
 // QR code "Mit App verbinden": the address this browser used plus the instance id the app checks on /api/health
@@ -248,7 +256,7 @@ router.get('/users', requireAdmin, (req, res) => {
 router.post('/users', requireAdmin, async (req, res) => {
     const { username, password, role = 'editor' } = req.body || {};
     if (!ROLES.includes(role)) {
-        throw badRequest('Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')');
+        throw badRequest(ROLE_ERROR);
     }
     if (typeof username !== 'string' || !username.trim()) {
         throw badRequest('Benutzername darf nicht leer sein');
@@ -298,7 +306,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
     if (!user) throw notFound('Benutzer');
 
     if (role && !ROLES.includes(role)) {
-        throw badRequest('Ungültige Rolle (erlaubt: ' + ROLES.join(', ') + ')');
+        throw badRequest(ROLE_ERROR);
     }
     if (password) {
         const pwErr = passwordError(password);

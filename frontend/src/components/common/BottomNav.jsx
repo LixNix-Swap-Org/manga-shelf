@@ -4,6 +4,7 @@ import { Calendar, Ellipsis, Library, ScanBarcode, ShoppingCart, X } from 'lucid
 import BarcodeScannerButton from './BarcodeScannerButton';
 import { formatBadgeCount } from '../dashboard/dashboardShell';
 import { useKeyboardOpen } from '../../hooks/useKeyboardOpen';
+import { t, tn } from '../../i18n/index.js';
 
 // below Tailwind's `sm` (640 px): phones get the bottom navigation instead of the top quick toggles
 export const NARROW_QUERY = '(max-width: 639.98px)';
@@ -72,7 +73,7 @@ export default function BottomNav({
     <nav
       ref={navRef}
       id="bottom-nav"
-      aria-label="Hauptnavigation"
+      aria-label={t('Hauptnavigation')}
       data-keyboard={keyboardOpen ? 'open' : undefined}
       hidden={!narrow || undefined}
       className={`${keyboardOpen ? 'hidden' : ''} fixed inset-x-0 bottom-0 z-40 sm:hidden border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.35)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]`}
@@ -86,32 +87,32 @@ export default function BottomNav({
           className={itemClass(activeMainView === 'shelf')}
         >
           <Library className={`w-5 h-5 ${activeMainView === 'shelf' ? 'text-brand-300' : ''}`} aria-hidden="true" />
-          Sammlung
+          {t('Sammlung')}
         </button>
         <div className="relative flex-1 min-w-0 flex">
           <button
             type="button"
             id={id('btn-mobile-shopping')}
             aria-current={activeMainView === 'shopping' ? 'page' : undefined}
-            aria-label={missingCount > 0 ? `Einkauf – Einkaufsliste, ${missingCount} fehlend` : 'Einkauf – Einkaufsliste'}
+            aria-label={missingCount > 0 ? t('Einkauf – Einkaufsliste, {missingCount} fehlend', { missingCount }) : t('Einkauf – Einkaufsliste')}
             onClick={() => go('shopping')}
             className={itemClass(activeMainView === 'shopping')}
           >
             <ShoppingCart className={`w-5 h-5 ${activeMainView === 'shopping' ? 'text-emerald-300' : ''}`} aria-hidden="true" />
-            <span aria-hidden="true">Einkauf</span>
+            <span aria-hidden="true">{t('Einkauf')}</span>
           </button>
           <Badge count={missingCount} className="bg-emerald-500" />
         </div>
         <div className="flex-1 min-w-0 flex items-start justify-center">
           <BarcodeScannerButton
             id={id('btn-bottom-scan')}
-            buttonText="Scannen"
-            scannerTitle="Barcode scannen"
+            buttonText={t('Scannen')}
+            scannerTitle={t('Barcode scannen')}
             onDetected={onScan}
             className="-mt-5 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60 border-4 border-slate-950 flex items-center justify-center active:scale-95 transition disabled:opacity-60"
           >
             <ScanBarcode className="w-6 h-6" aria-hidden="true" />
-            <span className="sr-only">Scannen</span>
+            <span className="sr-only">{t('Scannen')}</span>
           </BarcodeScannerButton>
         </div>
         <div className="relative flex-1 min-w-0 flex">
@@ -119,12 +120,12 @@ export default function BottomNav({
             type="button"
             id={id('btn-mobile-radar')}
             aria-current={activeMainView === 'radar' ? 'page' : undefined}
-            aria-label={releaseCount > 0 ? `Radar – Release-Radar, ${releaseCount} Termine` : 'Radar – Release-Radar'}
+            aria-label={releaseCount > 0 ? tn('Radar – Release-Radar, {n} Termine', 'Radar – Release-Radar, {n} Termine', releaseCount) : t('Radar – Release-Radar')}
             onClick={() => go('radar')}
             className={itemClass(activeMainView === 'radar')}
           >
             <Calendar className={`w-5 h-5 ${activeMainView === 'radar' ? 'text-sky-300' : ''}`} aria-hidden="true" />
-            <span aria-hidden="true">Radar</span>
+            <span aria-hidden="true">{t('Radar')}</span>
           </button>
           <Badge count={releaseCount} className="bg-sky-500" />
         </div>
@@ -134,12 +135,12 @@ export default function BottomNav({
           ref={narrow ? menuToggleRef : undefined}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-menu-drawer"
-          aria-label={mobileMenuOpen ? 'Mehr – Menü schließen' : 'Mehr – Menü öffnen'}
+          aria-label={mobileMenuOpen ? t('Mehr – Menü schließen') : t('Mehr – Menü öffnen')}
           onClick={() => setMobileMenuOpen?.(!mobileMenuOpen)}
           className={itemClass(mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Ellipsis className="w-5 h-5" aria-hidden="true" />}
-          <span aria-hidden="true">Mehr</span>
+          <span aria-hidden="true">{t('Mehr')}</span>
         </button>
       </div>
     </nav>,

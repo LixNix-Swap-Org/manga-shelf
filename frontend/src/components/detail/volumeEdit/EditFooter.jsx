@@ -1,4 +1,5 @@
 import { Trash, Save } from 'lucide-react';
+import { t } from '../../../i18n/index.js';
 
 /** Delete / cancel / save buttons. */
 export default function EditFooter({
@@ -14,7 +15,7 @@ export default function EditFooter({
         onClick={(e) => handleDeleteVolume(e, activeVolume.id)} 
         className="btn-danger text-xs py-2 px-3 flex items-center justify-center gap-1.5 w-full sm:w-auto"
       >
-        <Trash className="w-3.5 h-3.5" /> Band löschen
+        <Trash className="w-3.5 h-3.5" /> {t('Band löschen')}
       </button>
 
       <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -23,14 +24,14 @@ export default function EditFooter({
           onClick={() => onClose()} 
           className="btn-secondary text-xs py-2 px-4 flex-1 sm:flex-initial text-center"
         >
-          Abbrechen
+          {t('Abbrechen')}
         </button>
         <button 
           type="submit" 
           disabled={savingVol}
           className="btn-primary text-xs py-2 px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 shadow-lg font-semibold"
         >
-          <Save className="w-3.5 h-3.5" /> {savingVol ? 'Speichert...' : 'Speichern'}
+          <Save className="w-3.5 h-3.5" /> {savingVol ? t('Speichert...') : t('Speichern')}
         </button>
       </div>
     </div>

@@ -37,7 +37,7 @@ const { initScheduler, lastVerifiedSnapshot } = require('./services/scheduler');
 const lifecycle = require('./services/lifecycle');
 const { setStaticHeaders, createUploadHeaders } = require('./utils/staticHeaders');
 const { freeBytes } = require('./utils/disk');
-const { defaultCode, errorBody, isAppCode } = require('./utils/httpError');
+const { defaultCode, errorBody, isAppCode, msg } = require('./utils/httpError');
 const { requireEditor } = require('./middleware/auth');
 const { createOriginCheck, normalizeOrigin } = require('./middleware/originCheck');
 const { ALLOWED_IMAGE_EXTS } = require('./middleware/upload');
@@ -104,8 +104,10 @@ function clientErrorMessage(err, req, status) {
     if (err.name === 'MulterError') return uploadErrorMessage(err);
     if (err.type === 'entity.parse.failed') return 'Ungültige Anfrage (fehlerhaftes JSON)';
     if (err.type === 'entity.too.large') {
-        const max = Number.isFinite(err.limit) ? ` (max. ${formatLimit(err.limit)})` : '';
-        return (/^\/api\/import\/csv\/?$/i.test(req.path) ? 'CSV-Datei ist zu groß' : 'Anfrage ist zu groß') + max;
+        const csv = /^\/api\/import\/csv\/?$/i.test(req.path);
+        if (!Number.isFinite(err.limit)) return csv ? 'CSV-Datei ist zu groß' : 'Anfrage ist zu groß';
+        const params = { max: formatLimit(err.limit) };
+        return csv ? msg('CSV-Datei ist zu groß (max. {max})', params) : msg('Anfrage ist zu groß (max. {max})', params);
     }
     if (isLibraryError(err)) return CLIENT_ERROR_TEXTS[status] || 'Anfrage konnte nicht verarbeitet werden';
     return err.message;
@@ -380,17 +382,19 @@ function createApp() {
         if (res.headersSent) return next(err);
         const isUpload = err.name === 'MulterError';
         const status = isUpload ? 400 : (err.status >= 400 && err.status < 600 ? err.status : 500);
+        const exposed = status < 500 || exposesServerMessage(err, status);
         let message;
         if (status < 500) message = clientErrorMessage(err, req, status);
-        else message = exposesServerMessage(err, status) ? err.message : 'Interner Serverfehler';
+        else message = exposed ? err.message : 'Interner Serverfehler';
         const context = { reqId: req.id, method: req.method, path: req.originalUrl.split('?')[0], user: req.user?.id };
         if (status >= 500 && err.name === 'HttpError') log.warn(`${status} ${message}`, context);
         else if (status >= 500) log.error('Unhandled error', context, err);
         else if (!isLibraryError(err) && !isUpload) log.debug(`${status} ${message}`, context);
         res.removeHeader('ETag');
-        if (!req.originalUrl.startsWith('/api')) return res.status(status).type('text/plain').send(message);
+        if (!req.originalUrl.startsWith('/api')) return res.status(status).type('text/plain').send(String(message));
         res.setHeader('Cache-Control', 'no-store');
-        res.status(status).json(errorBody(req, status, message, errorCode(err, status), err.extra));
+        // a hidden 500 must not carry the template of its text either
+        res.status(status).json(errorBody(req, status, message, errorCode(err, status), exposed ? err.extra : undefined));
     });
 
     return app;

@@ -1,9 +1,10 @@
 // Trash: GET /trash, POST /trash/:id/restore, DELETE /trash/:id, DELETE /trash; purgeTrash for the scheduler.
-const { badRequest, notFound, conflict } = require('../errors');
+const { msg, badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
+const { parseLanguage, DEFAULT_LANGUAGE } = require('../lib/language');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -129,7 +130,12 @@ function restoreManga(ctx, entry, payload) {
     const free = volumes.filter(v => v.id <= volumeSequence && !taken.get(v.id));
     const updatedBy = manga.updated_by && ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(manga.updated_by) ? manga.updated_by : null;
     // owned_volumes is counted up again by the volume triggers
-    insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy });
+    // an entry trashed before migration 27 still carries a language name ('Deutsch')
+    const language = parseLanguage(manga.language);
+    const edition = { language: (language && language.language) || DEFAULT_LANGUAGE, region: manga.region || (language && language.region) || null };
+    // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries
+    edition.work_key = manga.work_key && ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key) ? manga.work_key : null;
+    insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || []);
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
     const relink = ctx.db.prepare('UPDATE animes SET manga_id = ? WHERE id = ? AND manga_id IS NULL');
@@ -142,8 +148,8 @@ function restoreVolume(ctx, entry, payload) {
     if (!ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE id = ?').get(volume.manga_id)) {
         const seriesTrashed = ctx.db.prepare("SELECT 1 AS ok FROM trash WHERE kind = 'manga' AND ref_id = ?").get(volume.manga_id);
         throw conflict(seriesTrashed
-            ? `Die Reihe „${entry.title}“ liegt im Papierkorb – bitte zuerst die Reihe wiederherstellen.`
-            : `Die Reihe „${entry.title}“ gibt es nicht mehr; der Band lässt sich nicht wiederherstellen.`,
+            ? msg('Die Reihe „{title}“ liegt im Papierkorb – bitte zuerst die Reihe wiederherstellen.', { title: entry.title })
+            : msg('Die Reihe „{title}“ gibt es nicht mehr; der Band lässt sich nicht wiederherstellen.', { title: entry.title }),
         'TRASH_SERIES_MISSING', { series_in_trash: Boolean(seriesTrashed) });
     }
     if (ctx.db.prepare('SELECT 1 AS ok FROM volumes WHERE id = ?').get(volume.id)) throw conflict('Der Band existiert bereits', 'TRASH_ID_TAKEN');

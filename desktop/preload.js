@@ -45,8 +45,13 @@ ipcRenderer.on('desktop:open-api-keys', () => {
     if (unhandled) ipcRenderer.send('desktop:open-api-keys-unhandled');
 });
 
+// system UI language (app.getLocale()) for the page's language detection; read once per page load
+let locale = null;
+try { locale = ipcRenderer.sendSync('desktop:locale') || null; } catch (_) { locale = null; }
+
 contextBridge.exposeInMainWorld('mangashelfDesktop', {
     platform: process.platform,
+    locale,
     appBuild: isAppBuild,
     storage,
     openExternal: (url) => ipcRenderer.send('desktop:open-external', String(url)),

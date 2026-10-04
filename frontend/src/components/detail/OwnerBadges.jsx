@@ -1,4 +1,5 @@
 import { Users } from 'lucide-react';
+import { t } from '../../i18n/index.js';
 
 const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
 
@@ -23,7 +24,7 @@ export default function OwnerBadges({ vol, multiUser }) {
   if (!multiUser || owners.length === 0) return null;
   const names = owners.map(o => o.username).join(', ');
   return (
-    <span role="img" aria-label={`Besitzer: ${names}`} className="inline-flex items-center gap-1 shrink-0" title={`Besitzer: ${names}`}>
+    <span role="img" aria-label={t('Besitzer: {names}', { names })} className="inline-flex items-center gap-1 shrink-0" title={t('Besitzer: {names}', { names })}>
       {owners.length > 1 && (
         <span aria-hidden="true" className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
           <Users className="w-2.5 h-2.5" /> {owners.length}×

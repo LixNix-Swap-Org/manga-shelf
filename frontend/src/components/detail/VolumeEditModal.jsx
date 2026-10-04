@@ -3,6 +3,7 @@ import { TriangleAlert, X } from 'lucide-react';
 import VolumePhotoManager from './VolumePhotoManager';
 import EditHeader from './volumeEdit/EditHeader';
 import AutofillPanel from './volumeEdit/AutofillPanel';
+import { editionCurrency, isMpVolume } from '../../utils/editions';
 import TypeNumberFields from './volumeEdit/TypeNumberFields';
 import StatusPriceFields from './volumeEdit/StatusPriceFields';
 import DetailFields from './volumeEdit/DetailFields';
@@ -10,6 +11,7 @@ import EditFooter from './volumeEdit/EditFooter';
 import OwnersField from './volumeEdit/OwnersField';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
 import useDialogA11y from '../../hooks/useDialogA11y';
+import { t } from '../../i18n/index.js';
 
 export default function VolumeEditModal({ isOpen, activeVolume, ...props }) {
   if (!isOpen || !activeVolume) return null;
@@ -56,6 +58,7 @@ function VolumeEditDialog({
     handleSaveVolume,
     handleDeleteVolume
   } = useVolumeEditForm({ activeVolume, mangaId, canEdit, onClose, onSuccess });
+  const mpLookup = isMpVolume(activeVolume, manga) && isMpVolume(editVolForm, manga);
 
   const dialogRef = useDialogA11y(true);
 
@@ -64,7 +67,7 @@ function VolumeEditDialog({
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Band bearbeiten"
+          aria-label={t('Band bearbeiten')}
           tabIndex={-1}
           className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-md animate-fade-in"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -82,13 +85,16 @@ function VolumeEditDialog({
             <form onSubmit={handleSaveVolume} noValidate className="flex flex-col flex-1 min-h-0 overflow-hidden short:overflow-visible">
               {/* Scrollable Form Body */}
               <div className="flex-1 overflow-y-auto short:overflow-visible p-4 sm:p-6 space-y-4 custom-scrollbar">
-                <AutofillPanel
-                  editVolForm={editVolForm}
-                  autofillingVolume={autofillingVolume}
-                  autofillMessage={autofillMessage}
-                  setAutofillMessage={setAutofillMessage}
-                  handleAutofillVolumeData={handleAutofillVolumeData}
-                />
+                {/* Manga Passion only knows German editions: the stored and the edited volume language must both be German */}
+                {mpLookup && (
+                  <AutofillPanel
+                    editVolForm={editVolForm}
+                    autofillingVolume={autofillingVolume}
+                    autofillMessage={autofillMessage}
+                    setAutofillMessage={setAutofillMessage}
+                    handleAutofillVolumeData={handleAutofillVolumeData}
+                  />
+                )}
                 <TypeNumberFields
                   editVolForm={editVolForm}
                   setEditVolForm={setEditVolForm}
@@ -98,6 +104,7 @@ function VolumeEditDialog({
                   editVolForm={editVolForm}
                   setEditVolForm={setEditVolForm}
                   errors={fieldErrors}
+                  currency={editionCurrency(manga)}
                 />
                 {canEdit && (
                   <OwnersField
@@ -130,14 +137,14 @@ function VolumeEditDialog({
                     <div className="flex items-start gap-2 min-w-0">
                       <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
                       <div className="min-w-0">
-                        <p className="break-words">{photoError.text}</p>
+                        <p className="break-words">{photoError.text}{/* i18n-ignore: translated where produced (useVolumeEditForm) */}</p>
                         {photoError.externalUrl && (
                           <button
                             type="button"
                             onClick={() => addExternalImageUrl(photoError.externalUrl)}
                             className="mt-1 underline text-amber-200 hover:text-white"
                           >
-                            Trotzdem als externen Link hinzufügen
+                            {t('Trotzdem als externen Link hinzufügen')}
                           </button>
                         )}
                       </div>
@@ -145,7 +152,7 @@ function VolumeEditDialog({
                     <button
                       type="button"
                       onClick={() => setPhotoError(null)}
-                      aria-label="Meldung schließen"
+                      aria-label={t('Meldung schließen')}
                       className="p-1 -m-1 rounded text-slate-400 hover:text-white shrink-0"
                     >
                       <X className="w-3.5 h-3.5" aria-hidden="true" />
@@ -159,6 +166,7 @@ function VolumeEditDialog({
                   autofillingVolume={autofillingVolume}
                   handleAutofillVolumeData={handleAutofillVolumeData}
                   manga={manga}
+                  mpLookup={mpLookup}
                 />
               </div>
 

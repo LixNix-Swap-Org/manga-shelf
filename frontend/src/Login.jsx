@@ -7,6 +7,9 @@ import { useDocumentTitle } from './components/common/PageChrome';
 import useConnection from './app/useConnection';
 import { hostLabel, isSecureEnough, INSECURE_URL_TEXT } from './app/serverStore';
 import { PROBE_ERRORS, needsLoginAtAddress, getActiveBase } from './app/connection';
+import LanguageSelect from './components/common/LanguageSelect';
+import { t } from './i18n/index.js';
+import { serverText } from './i18n/serverText.js';
 
 /** App build: the address in use is plain http outside the home network, where a token is never sent. */
 export const insecureAddress = (base = getActiveBase()) => Boolean(base) && !isSecureEnough(base);
@@ -29,11 +32,11 @@ function ServerInfo({ onRetry }) {
           <span className="block font-semibold text-slate-200 truncate">{server.name}</span>
           <span className={`block truncate ${state === 'offline' ? 'text-amber-300' : 'text-slate-400'}`}>
             {state === 'offline'
-              ? (lastError && lastError !== PROBE_ERRORS.unreachable ? `Nicht erreichbar – ${lastError}` : 'Nicht erreichbar')
+              ? (lastError && lastError !== PROBE_ERRORS.unreachable ? t('Nicht erreichbar – {lastError}', { lastError: t(lastError) }) : t('Nicht erreichbar')) // i18n-dynamic: lastError is a PROBE_ERRORS/connection text
               : hostLabel(baseUrl)}
           </span>
           {!insecure && state !== 'offline' && needsLoginAtAddress(server, baseUrl) && (
-            <span className="block text-amber-300">Neue Adresse – bitte erneut anmelden</span>
+            <span className="block text-amber-300">{t('Neue Adresse – bitte erneut anmelden')}</span>
           )}
         </span>
       </div>
@@ -41,18 +44,18 @@ function ServerInfo({ onRetry }) {
         <div role="alert" className="basis-full flex items-start gap-2 text-red-300">
           <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
           <span>
-            {INSECURE_URL_TEXT}.{' '}
-            <Link to="/server" state={{ edit: server.id }} className="font-semibold underline underline-offset-2">Server bearbeiten</Link>
+            {t(INSECURE_URL_TEXT)}.{' '}
+            <Link to="/server" state={{ edit: server.id }} className="font-semibold underline underline-offset-2">{t('Server bearbeiten')}</Link>
           </span>
         </div>
       )}
       <div className="flex items-center gap-2 shrink-0">
         {state === 'offline' && onRetry && (
           <button type="button" onClick={retry} disabled={retrying} className="btn-secondary text-xs py-1.5 px-2.5 inline-flex items-center gap-1">
-            <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} aria-hidden="true" /> Erneut verbinden
+            <RefreshCw className={`w-3.5 h-3.5 ${retrying ? 'animate-spin' : ''}`} aria-hidden="true" /> {t('Erneut verbinden')}
           </button>
         )}
-        <Link to="/server" className="text-brand-300 hover:text-brand-200 font-medium underline-offset-2 hover:underline">Server wechseln</Link>
+        <Link to="/server" className="text-brand-300 hover:text-brand-200 font-medium underline-offset-2 hover:underline">{t('Server wechseln')}</Link>
       </div>
     </div>
   );
@@ -62,7 +65,7 @@ function ServerInfo({ onRetry }) {
 const FIELD_ICON_CLASS = 'absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none';
 
 export default function Login({ onLogin, notice, onRetry }) {
-  useDocumentTitle('Anmelden');
+  useDocumentTitle(t('Anmelden'));
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -85,7 +88,7 @@ export default function Login({ onLogin, notice, onRetry }) {
     setFieldsInvalid(false);
     // the token of this login would never be sent to this address: do not ask the server for one
     if (isAppMode() && insecureAddress()) {
-      fail(INSECURE_URL_TEXT);
+      fail(t(INSECURE_URL_TEXT));
       return;
     }
     setLoading(true);
@@ -101,13 +104,13 @@ export default function Login({ onLogin, notice, onRetry }) {
         // Wait for the session check, so a cookie the browser refused does not leave the form silently as it was
         const outcome = await onLogin();
         if (outcome && outcome.status !== 'online' && outcome.status !== 'offline') {
-          fail(outcome.status === 'unauthorized' ? MESSAGES.cookieRejected : MESSAGES.loginUnconfirmed);
+          fail(t(outcome.status === 'unauthorized' ? MESSAGES.cookieRejected : MESSAGES.loginUnconfirmed)); // i18n-dynamic
         }
       } else {
-        fail(data?.error || (res.status === 401 ? 'Ungültige Anmeldedaten' : 'Anmeldung fehlgeschlagen'), res.status === 400 || res.status === 401);
+        fail(serverText(data) || (res.status === 401 ? t('Ungültige Anmeldedaten') : t('Anmeldung fehlgeschlagen')), res.status === 400 || res.status === 401);
       }
     } catch (err) {
-      fail('Verbindungsfehler zum Server');
+      fail(t('Verbindungsfehler zum Server'));
     } finally {
       setLoading(false);
     }
@@ -120,8 +123,8 @@ export default function Login({ onLogin, notice, onRetry }) {
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-sky-400 flex items-center justify-center mb-4 shadow-xl shadow-brand-500/25">
             <BookOpen className="w-8 h-8 text-white" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Manga Shelf</h1>
-          <p className="text-sm text-slate-400 mt-1">Melde dich bei deiner Sammlung an</p>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">{t('Manga Shelf')}</h1>
+          <p className="text-sm text-slate-400 mt-1">{t('Melde dich bei deiner Sammlung an')}</p>
         </div>
 
         {isAppMode() && <ServerInfo onRetry={onRetry} />}
@@ -129,7 +132,7 @@ export default function Login({ onLogin, notice, onRetry }) {
         {notice && !error && (
           <div role="status" className="flex items-start gap-2 bg-sky-500/10 border border-sky-500/40 text-sky-200 p-3.5 rounded-xl mb-6 text-sm text-left">
             <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-            <span>{notice}</span>
+            <span>{notice}</span>{/* App passes the notice translated */}
           </div>
         )}
 
@@ -142,7 +145,7 @@ export default function Login({ onLogin, notice, onRetry }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor={usernameId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Benutzername
+              {t('Benutzername')}
             </label>
             <div className="relative bg-slate-950/70 border border-slate-700/80 rounded-xl focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <User className={FIELD_ICON_CLASS} aria-hidden="true" />
@@ -158,7 +161,7 @@ export default function Login({ onLogin, notice, onRetry }) {
                 aria-describedby={fieldsInvalid && error ? errorId : undefined}
                 required
                 autoFocus
-                placeholder="Dein Benutzername"
+                placeholder={t('Dein Benutzername')}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
               />
@@ -167,7 +170,7 @@ export default function Login({ onLogin, notice, onRetry }) {
 
           <div>
             <label htmlFor={passwordId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Passwort
+              {t('Passwort')}
             </label>
             <div className="relative bg-slate-950/70 border border-slate-700/80 rounded-xl focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <Lock className={FIELD_ICON_CLASS} aria-hidden="true" />
@@ -180,7 +183,7 @@ export default function Login({ onLogin, notice, onRetry }) {
                 aria-invalid={fieldsInvalid || undefined}
                 aria-describedby={fieldsInvalid && error ? errorId : undefined}
                 required
-                placeholder="Dein Passwort"
+                placeholder={t('Dein Passwort')}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
@@ -196,15 +199,17 @@ export default function Login({ onLogin, notice, onRetry }) {
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-                <span className="sr-only">Anmeldung läuft…</span>
+                <span className="sr-only">{t('Anmeldung läuft…')}</span>
               </>
             ) : (
               <>
-                Anmelden <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                {t('Anmelden')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </>
             )}
           </button>
         </form>
+
+        <LanguageSelect className="justify-center mt-6" />
       </div>
     </main>
   );

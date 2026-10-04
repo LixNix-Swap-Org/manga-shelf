@@ -15,6 +15,7 @@ function shoppingList(ctx, { query }) {
             v.notes, v.status, v.type, v.priority, v.target_price,
             m.title as manga_title, 
             m.cover_image as manga_cover,
+            COALESCE(v.language, m.language) as language, m.currency as currency,
             COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher
         FROM volumes v
         JOIN mangas m ON v.manga_id = m.id
@@ -34,6 +35,7 @@ function shoppingList(ctx, { query }) {
                 v.notes, v.status, v.type,
                 m.title as manga_title,
                 m.cover_image as manga_cover,
+                COALESCE(v.language, m.language) as language, m.currency as currency,
                 COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher,
                 (SELECT GROUP_CONCAT(username, ', ') FROM (SELECT u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id ORDER BY vo.created_at, vo.rowid)) as owned_by_others
             FROM volumes v

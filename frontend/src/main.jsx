@@ -6,6 +6,7 @@ import { apiFetch, isAppMode } from './utils/api'
 import { startPrefetch, PREFETCH_MANGAS } from './utils/dataCache'
 import { watchServiceWorkerUpdates } from './hooks/usePwaInstall'
 import { installDeepLinkBridge } from './app/deepLink'
+import { initI18n, t } from './i18n/index.js'
 import './index.css'
 
 const appBuild = isAppMode()
@@ -27,7 +28,14 @@ const shellReady = import.meta.env.VITE_APP_MODE === 'app'
     ]).catch((err) => console.warn('[App] Hülle nicht geladen:', err?.message || err))
   : Promise.resolve()
 
-shellReady.then(() => {
+// language detection runs here only (stored choice, device languages, German): tests and node never trigger it.
+// After the shells, so the desktop bridge's locale is there; the catalog loads before the first render.
+const i18nReady = shellReady.then(() => initI18n()).then(() => {
+  const loading = document.querySelector('#root [role="status"] span');
+  if (loading) loading.textContent = t('Manga Shelf wird geladen...');
+}, (err) => console.warn('[i18n] Sprache nicht geladen:', err?.message || err))
+
+i18nReady.then(() => {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <App />

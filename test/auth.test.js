@@ -343,7 +343,7 @@ test('app login: X-Client: app or client: app add the token, other clients get t
 test('bearer: an Authorization header authenticates reads and writes like the cookie', async () => {
     const token = await appLogin('ed');
     const app = withBearer(token);
-    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor' });
+    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de' });
     const created = await app('POST', '/mangas', { title: 'Bearer Reihe' });
     assert.equal(created.status, 200);
     assert.equal((await withBearer(await appLogin('vis'))('POST', '/mangas', { title: 'X' })).body.code, 'READ_ONLY');

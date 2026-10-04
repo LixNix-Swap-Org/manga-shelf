@@ -1,10 +1,10 @@
 // Locale-aware formatting with cached Intl formatters (creating one per call costs about 40x the formatting itself).
 // No React imports: the node:test suites load this module directly.
+import { getLocaleTag, t, tn } from '../i18n/index.js';
 
-const DEFAULT_LOCALE = 'de-DE';
-
+/** Formatting locale of the UI language ('de-DE' until a language is chosen); the formatter cache is keyed by it. */
 export function getLocale() {
-  return DEFAULT_LOCALE;
+  return getLocaleTag();
 }
 
 const cache = new Map();
@@ -20,7 +20,6 @@ function cached(kind, options, create) {
 
 const numberFormat = (options) => cached('number', options, (locale, o) => new Intl.NumberFormat(locale, o));
 const dateFormat = (options) => cached('date', options, (locale, o) => new Intl.DateTimeFormat(locale, o));
-const pluralRules = () => cached('plural', {}, (locale) => new Intl.PluralRules(locale));
 const relativeFormat = () => cached('relative', { style: 'short', numeric: 'always' }, (locale, o) => new Intl.RelativeTimeFormat(locale, o));
 
 /** Number or numeric string; null for null, '' and anything non-numeric. */
@@ -40,15 +39,37 @@ export function formatNumber(value, digits = 0, { fixed = false } = {}) {
 
 /** 7.5 / '7.5' -> '7,50 €' (no-break space); `empty` (default '') for null, '' or non-numeric input. */
 export function formatEuro(value, { empty = '' } = {}) {
-  const n = toFiniteNumber(value);
-  if (n === null) return empty;
-  return numberFormat({ style: 'currency', currency: 'EUR' }).format(n);
+  return formatMoney(value, 'EUR', { empty });
 }
 
-/** '1 Band' / '1.234 Bände' / '0 Bände', chosen by Intl.PluralRules. */
+/** Amount in the currency of an edition ('USD' -> '7,50 $' in German); an invalid code formats as euro. */
+export function formatMoney(value, currency = 'EUR', { empty = '' } = {}) {
+  const n = toFiniteNumber(value);
+  if (n === null) return empty;
+  const code = /^[A-Z]{3}$/.test(String(currency || '')) ? currency : 'EUR';
+  try {
+    return numberFormat({ style: 'currency', currency: code }).format(n);
+  } catch (_) {
+    return numberFormat({ style: 'currency', currency: 'EUR' }).format(n);
+  }
+}
+
+/** Symbol of a currency in the UI locale ('EUR' -> '€', 'USD' -> '$' in German, 'US$' in en-GB); an invalid code is the euro's. */
+export function currencySymbol(currency = 'EUR', locale = getLocale()) {
+  const code = /^[A-Z]{3}$/.test(String(currency || '')) ? currency : 'EUR';
+  try {
+    const parts = cached('number', { style: 'currency', currency: code, locale }, () => new Intl.NumberFormat(locale, { style: 'currency', currency: code })).formatToParts(0);
+    return parts.find((p) => p.type === 'currency')?.value || code;
+  } catch (_) {
+    return code === 'EUR' ? '€' : code;
+  }
+}
+
+/** '1 Band' / '1.234 Bände' / '0 Bände', chosen by Intl.PluralRules; other languages through the tn() pair. */
 export function formatCount(value, singular, plural) {
   const n = toFiniteNumber(value) ?? 0;
-  return `${formatNumber(n, 2)} ${pluralRules().select(n) === 'one' ? singular : plural}`;
+  // i18n-dynamic: the extractor collects the pairs at the formatCount/countLabel call sites
+  return `${formatNumber(n, 2)} ${tn(singular, plural, n)}`;
 }
 
 /** 12.5 -> '12,5%' (no space, as in the stats). */
@@ -146,7 +167,7 @@ export function formatRelative(timestamp, now = Date.now()) {
   const ms = typeof timestamp === 'number' ? timestamp : Date.parse(timestamp);
   if (!ms || Number.isNaN(ms)) return null;
   const mins = Math.max(0, Math.floor((now - ms) / 60000));
-  if (mins < 1) return 'gerade eben';
+  if (mins < 1) return t('gerade eben');
   if (mins < 60) return relativeFormat().format(-mins, 'minute');
   const days = Math.floor(mins / 1440);
   if (days < 1) return relativeFormat().format(-Math.floor(mins / 60), 'hour');

@@ -4,11 +4,16 @@ import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, rememberToken } from '../../utils/api';
 import { formatDay } from '../../utils/format';
 import { parseUtcTimestamp } from './statsFormat';
+import { t, tn } from '../../i18n/index.js';
+import { serverText } from '../../i18n/serverText.js';
 
 const MIN_PASSWORD_LENGTH = 8;
 const EMPTY_USER = { username: '', password: '', role: 'editor' };
+// i18n
 const SESSION_EXPIRED = 'Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.';
+// i18n
 const ROLE_LABELS = { admin: 'Admin', editor: 'Editor', visitor: 'Gast', guest: 'Gast' };
+// i18n
 const ROLE_OPTIONS = [
   ['editor', 'Editor'],
   ['visitor', 'Gast'],
@@ -16,10 +21,10 @@ const ROLE_OPTIONS = [
 ];
 
 const isReadOnlyRole = (role) => role === 'visitor' || role === 'guest';
-const roleLabel = (role) => ROLE_LABELS[role] || role;
+const roleLabel = (role) => (ROLE_LABELS[role] ? t(ROLE_LABELS[role]) : role);
 const formatCreated = (value) => {
   const date = parseUtcTimestamp(value);
-  return (date && formatDay(date)) || 'unbekannt';
+  return (date && formatDay(date)) || t('unbekannt');
 };
 
 async function readJson(res) {
@@ -31,9 +36,10 @@ async function readJson(res) {
 }
 
 function errorMessage(res, data, fallback) {
-  if (res.status === 401) return SESSION_EXPIRED;
-  if (data && typeof data.error === 'string' && data.error.trim()) return data.error;
-  return `${fallback} (HTTP ${res.status})`;
+  if (res.status === 401) return t(SESSION_EXPIRED);
+  const server = serverText(data);
+  if (server) return server;
+  return t('{message} (HTTP {status})', { message: fallback, status: res.status });
 }
 
 export default function UserManagementModal({ isOpen, onClose, currentUser }) {
@@ -74,10 +80,10 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
         setUsersList(data);
         setUsersLoaded(true);
       } else {
-        setListError(res.ok ? 'Benutzerliste konnte nicht geladen werden.' : errorMessage(res, data, 'Benutzerliste konnte nicht geladen werden'));
+        setListError(res.ok ? t('Benutzerliste konnte nicht geladen werden.') : errorMessage(res, data, t('Benutzerliste konnte nicht geladen werden')));
       }
     } catch (_) {
-      if (id === usersRequestRef.current) setListError('Netzwerkfehler beim Laden der Benutzerliste.');
+      if (id === usersRequestRef.current) setListError(t('Netzwerkfehler beim Laden der Benutzerliste.'));
     } finally {
       if (id === usersRequestRef.current) setLoadingUsers(false);
     }
@@ -101,11 +107,11 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!newUser.username.trim() || !newUser.password) {
-      showResult('Bitte Benutzername und Passwort eingeben.');
+      showResult(t('Bitte Benutzername und Passwort eingeben.'));
       return;
     }
     if (newUser.password.length < MIN_PASSWORD_LENGTH) {
-      showResult(`Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.`);
+      showResult(tn('Passwort muss mindestens {n} Zeichen lang sein.', 'Passwort muss mindestens {n} Zeichen lang sein.', MIN_PASSWORD_LENGTH));
       return;
     }
 
@@ -119,14 +125,14 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       });
       const data = await readJson(res);
       if (res.ok) {
-        showResult('', `Benutzer "${newUser.username.trim()}" erfolgreich angelegt!`);
+        showResult('', t('Benutzer "{username}" erfolgreich angelegt!', { username: newUser.username.trim() }));
         setNewUser(EMPTY_USER);
         await fetchUsers();
       } else {
-        showResult(errorMessage(res, data, 'Fehler beim Erstellen des Benutzers'));
+        showResult(errorMessage(res, data, t('Fehler beim Erstellen des Benutzers')));
       }
     } catch (_) {
-      showResult('Netzwerkfehler beim Erstellen des Benutzers.');
+      showResult(t('Netzwerkfehler beim Erstellen des Benutzers.'));
     } finally {
       setCreatingUser(false);
     }
@@ -145,13 +151,13 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       if (res.ok) {
         const newRole = data?.user?.role || role;
         setUsersList(prev => prev.map(u => (u.id === target.id ? { ...u, role: newRole } : u)));
-        showResult('', `Rolle von "${target.username}" ist jetzt ${roleLabel(newRole)}.`);
+        showResult('', t('Rolle von "{username}" ist jetzt {role}.', { username: target.username, role: roleLabel(newRole) }));
       } else {
-        showResult(errorMessage(res, data, 'Rolle konnte nicht geändert werden'));
+        showResult(errorMessage(res, data, t('Rolle konnte nicht geändert werden')));
         if (res.status === 404 || res.status === 409) fetchUsers();
       }
     } catch (_) {
-      showResult('Netzwerkfehler beim Ändern der Rolle.');
+      showResult(t('Netzwerkfehler beim Ändern der Rolle.'));
     } finally {
       setPending(target.id, null);
     }
@@ -165,7 +171,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
   const handleResetPassword = async (e, target) => {
     e.preventDefault();
     if (resetPassword.length < MIN_PASSWORD_LENGTH) {
-      showResult(`Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.`);
+      showResult(tn('Passwort muss mindestens {n} Zeichen lang sein.', 'Passwort muss mindestens {n} Zeichen lang sein.', MIN_PASSWORD_LENGTH));
       return;
     }
     showResult('');
@@ -181,20 +187,20 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
         rememberToken(data, { rotate: true });
         setResetTargetId(null);
         setResetPassword('');
-        showResult('', `Neues Passwort für "${target.username}" gesetzt. ${target.username} wurde auf allen Geräten abgemeldet.`);
+        showResult('', t('Neues Passwort für "{username}" gesetzt. {username} wurde auf allen Geräten abgemeldet.', { username: target.username }));
       } else {
-        showResult(errorMessage(res, data, 'Passwort konnte nicht zurückgesetzt werden'));
+        showResult(errorMessage(res, data, t('Passwort konnte nicht zurückgesetzt werden')));
         if (res.status === 404 || res.status === 409) fetchUsers();
       }
     } catch (_) {
-      showResult('Netzwerkfehler beim Zurücksetzen des Passworts.');
+      showResult(t('Netzwerkfehler beim Zurücksetzen des Passworts.'));
     } finally {
       setPending(target.id, null);
     }
   };
 
   const handleDeleteUser = async (target) => {
-    if (!confirm(`Möchtest du den Benutzer "${target.username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über.`)) return;
+    if (!confirm(t('Möchtest du den Benutzer "{username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über.', { username: target.username }))) return;
     showResult('');
     setPending(target.id, 'delete');
     try {
@@ -203,13 +209,13 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       if (res.ok) {
         setUsersList(prev => prev.filter(u => u.id !== target.id));
         if (resetTargetId === target.id) setResetTargetId(null);
-        showResult('', `Benutzer "${target.username}" wurde gelöscht.`);
+        showResult('', t('Benutzer "{username}" wurde gelöscht.', { username: target.username }));
       } else {
-        showResult(errorMessage(res, data, 'Fehler beim Löschen des Benutzers'));
+        showResult(errorMessage(res, data, t('Fehler beim Löschen des Benutzers')));
         if (res.status === 404) fetchUsers();
       }
     } catch (_) {
-      showResult('Netzwerkfehler beim Löschen des Benutzers.');
+      showResult(t('Netzwerkfehler beim Löschen des Benutzers.'));
     } finally {
       setPending(target.id, null);
     }
@@ -226,7 +232,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Benutzerverwaltung"
+      aria-label={t('Benutzerverwaltung')}
       tabIndex={-1}
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
@@ -238,15 +244,15 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Benutzerverwaltung</h2>
-              <p className="text-xs text-slate-400">Verwalte Zugänge und lege neue Benutzer an</p>
+              <h2 className="text-xl font-bold text-white">{t('Benutzerverwaltung')}</h2>
+              <p className="text-xs text-slate-400">{t('Verwalte Zugänge und lege neue Benutzer an')}</p>
             </div>
           </div>
           <button
             id="btn-close-users-modal-x"
             type="button"
             onClick={onClose}
-            aria-label="Schließen"
+            aria-label={t('Schließen')}
             className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -267,20 +273,20 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
 
         <div className="bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-slate-800 mb-6">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-brand-400" /> Neuen Benutzer anlegen
+            <UserPlus className="w-4 h-4 text-brand-400" /> {t('Neuen Benutzer anlegen')}
           </h3>
 
           <form onSubmit={handleCreateUser} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label htmlFor={`${fieldId}-name`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Benutzername
+                  {t('Benutzername')}
                 </label>
                 <input
                   id={`${fieldId}-name`}
                   name="new-user-name"
                   type="text"
-                  placeholder="z.B. alex"
+                  placeholder={t('z.B. alex')}
                   autoComplete="off"
                   className="input-field text-base sm:text-xs py-2"
                   required
@@ -291,13 +297,13 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
 
               <div>
                 <label htmlFor={`${fieldId}-password`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Passwort
+                  {t('Passwort')}
                 </label>
                 <input
                   id={`${fieldId}-password`}
                   name="new-user-password"
                   type="password"
-                  placeholder="Mind. 8 Zeichen"
+                  placeholder={t('Mind. 8 Zeichen')}
                   autoComplete="new-password"
                   minLength={MIN_PASSWORD_LENGTH}
                   className="input-field text-base sm:text-xs py-2"
@@ -309,7 +315,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
 
               <div>
                 <label htmlFor={`${fieldId}-role`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Rolle
+                  {t('Rolle')}
                 </label>
                 <select
                   id={`${fieldId}-role`}
@@ -317,9 +323,9 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                   value={newUser.role}
                   onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                 >
-                  <option value="editor">Editor (Mangas verwalten)</option>
-                  <option value="visitor">Gast (Nur Lesezugriff)</option>
-                  <option value="admin">Administrator (Vollzugriff)</option>
+                  <option value="editor">{t('Editor (Mangas verwalten)')}</option>
+                  <option value="visitor">{t('Gast (Nur Lesezugriff)')}</option>
+                  <option value="admin">{t('Administrator (Vollzugriff)')}</option>
                 </select>
               </div>
             </div>
@@ -335,7 +341,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                 ) : (
                   <UserPlus className="w-3.5 h-3.5" />
                 )}
-                Benutzer erstellen
+                {t('Benutzer erstellen')}
               </button>
             </div>
           </form>
@@ -343,18 +349,18 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
 
         <div>
           <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-400" /> Registrierte Benutzer{countLabel}
+            <Users className="w-4 h-4 text-slate-400" /> {t('Registrierte Benutzer')}{countLabel}
           </h3>
 
           {listError ? (
             <div role="alert" className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs space-y-3 text-center">
-              <p>Die Benutzerliste konnte nicht geladen werden: {listError}</p>
+              <p>{t('Die Benutzerliste konnte nicht geladen werden: {listError}', { listError })}</p>
               <button type="button" onClick={fetchUsers} disabled={loadingUsers} className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5">
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} aria-hidden="true" /> Erneut laden
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} aria-hidden="true" /> {t('Erneut laden')}
               </button>
             </div>
           ) : loadingUsers && !usersLoaded ? (
-            <div aria-busy="true" className="p-6 text-center text-slate-400 text-xs">Lade Benutzerliste...</div>
+            <div aria-busy="true" className="p-6 text-center text-slate-400 text-xs">{t('Lade Benutzerliste...')}</div>
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto overflow-x-hidden custom-scrollbar pr-1">
               {usersList.map(u => {
@@ -386,12 +392,12 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             <span className="font-bold text-white truncate" title={u.username}>{u.username}</span>
                             {isSelf && (
                               <span className="shrink-0 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">
-                                Du
+                                {t('Du')}
                               </span>
                             )}
                           </div>
                           <span className="text-[10px] text-slate-400">
-                            Erstellt am {formatCreated(u.created_at)}
+                            {t('Erstellt am {date}', { date: formatCreated(u.created_at) })}
                           </span>
                         </div>
                       </div>
@@ -406,21 +412,21 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                                 : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
                             }`}
-                            title="Die eigene Rolle kann hier nicht geändert werden"
+                            title={t('Die eigene Rolle kann hier nicht geändert werden')}
                           >
                             {roleLabel(u.role)}
                           </span>
                         ) : (
                           <select
-                            aria-label={`Rolle von ${u.username}`}
+                            aria-label={t('Rolle von {username}', { username: u.username })}
                             value={u.role}
                             disabled={Boolean(pending)}
                             onChange={e => handleRoleChange(u, e.target.value)}
                             className="input-field bg-slate-950 text-base sm:text-[11px] py-1 px-2 w-auto"
                           >
-                            {ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            {ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
                             {!ROLE_LABELS[u.role] || u.role === 'guest'
-                              ? <option value={u.role}>{u.role === 'guest' ? 'Gast (alte Rolle)' : u.role}</option>
+                              ? <option value={u.role}>{u.role === 'guest' ? t('Gast (alte Rolle)') : u.role}</option>
                               : null}
                           </select>
                         )}
@@ -431,8 +437,8 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             onClick={() => openReset(u)}
                             disabled={Boolean(pending)}
                             aria-expanded={resetOpen}
-                            aria-label={`Passwort von ${u.username} zurücksetzen`}
-                            title="Passwort zurücksetzen"
+                            aria-label={t('Passwort von {username} zurücksetzen', { username: u.username })}
+                            title={t('Passwort zurücksetzen')}
                             className="hit-44 p-1.5 hover:bg-slate-700/60 text-slate-400 hover:text-white rounded-lg transition-colors"
                           >
                             <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
@@ -445,8 +451,8 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             onClick={() => handleDeleteUser(u)}
                             disabled={Boolean(pending)}
                             className="hit-44 p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
-                            title={`Benutzer "${u.username}" löschen`}
-                            aria-label={`Benutzer ${u.username} löschen`}
+                            title={t('Benutzer "{username}" löschen', { username: u.username })}
+                            aria-label={t('Benutzer {username} löschen', { username: u.username })}
                           >
                             <Trash className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
@@ -457,28 +463,28 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                     {resetOpen && (
                       <form onSubmit={e => handleResetPassword(e, u)} className="mt-3 pt-3 border-t border-slate-800 space-y-2">
                         <label htmlFor={`${fieldId}-reset-${u.id}`} className="block text-[11px] font-semibold text-slate-400">
-                          Neues Passwort für {u.username}
+                          {t('Neues Passwort für {username}', { username: u.username })}
                         </label>
                         <div className="flex flex-wrap items-center gap-2">
                           <input
                             id={`${fieldId}-reset-${u.id}`}
                             type="password"
                             autoComplete="new-password"
-                            placeholder="Neues Passwort"
+                            placeholder={t('Neues Passwort')}
                             className="input-field text-base sm:text-xs py-1.5 flex-1 min-w-0"
                             value={resetPassword}
                             onChange={e => setResetPassword(e.target.value)}
                             autoFocus
                           />
                           <button type="submit" disabled={Boolean(pending)} className="btn-primary text-xs py-1.5 px-3">
-                            Zurücksetzen
+                            {t('Zurücksetzen')}
                           </button>
                           <button type="button" onClick={() => setResetTargetId(null)} className="btn-secondary text-xs py-1.5 px-3">
-                            Abbrechen
+                            {t('Abbrechen')}
                           </button>
                         </div>
                         <p className="text-[10px] text-slate-400">
-                          Mindestens {MIN_PASSWORD_LENGTH} Zeichen. {u.username} wird danach auf allen Geräten abgemeldet.
+                          {t('Mindestens {minPasswordLength} Zeichen. {username} wird danach auf allen Geräten abgemeldet.', { minPasswordLength: MIN_PASSWORD_LENGTH, username: u.username })}
                         </p>
                       </form>
                     )}
@@ -487,7 +493,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
               })}
             </div>
           )}
-          <p className="text-[10px] text-slate-400 mt-2">Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).</p>
+          <p className="text-[10px] text-slate-400 mt-2">{t('Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).')}</p>
         </div>
 
         <div className="flex justify-end pt-5 mt-5 border-t border-slate-800">
@@ -497,7 +503,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
             onClick={onClose}
             className="btn-secondary text-xs"
           >
-            Schließen
+            {t('Schließen')}
           </button>
         </div>
 

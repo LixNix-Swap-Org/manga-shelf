@@ -4,6 +4,9 @@ import { createSearch, prepareQuery, naturalCollator } from './search.js';
 import { isWishedSeries } from './priority.js';
 import { COLLECTING_OPTIONS, collectingOf, splitAuthors, authorShelfPath } from './seriesMeta.js';
 import { collectTags, hasAllTags, splitTags } from './tags.js';
+import { mangaStatusLabel, collectingLabel } from './enumLabels.js';
+import { t } from '../i18n/index.js';
+import { editionCurrency, editionLanguage } from './editions.js';
 
 export const GERMAN_MONTHS = monthNames('long');
 
@@ -68,6 +71,7 @@ export const sanitizePublisherFilter = (value, availablePublishers) => {
   return availablePublishers.find(p => p.toLowerCase() === key) || 'ALL';
 };
 
+// i18n
 const SERIES_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Geplant', 'Abgebrochen'];
 
 /** Series counts per status filter chip (WISHLIST = wished series, see isWishedSeries). */
@@ -84,6 +88,7 @@ export const getFilterCounts = (mangas) => {
   return counts;
 };
 
+// i18n
 export const STATUS_TABS = [
   { id: 'ALL', label: 'Alle' },
   { id: 'Laufend', label: 'Laufend' },
@@ -105,6 +110,7 @@ export const getStatusTabs = (filterCounts, statusFilter) =>
     .filter(tab => tab.id === 'ALL' || tab.count > 0 || tab.id === statusFilter);
 
 /** Sort choices of the collection toolbar ('progress' = reading progress, 'completion' = collection progress of the card). */
+// i18n
 export const SORT_OPTIONS = [
   { value: 'newest_first', label: 'Zuletzt hinzugefügt' },
   { value: 'title_asc', label: 'Titel (A → Z)' },
@@ -182,6 +188,7 @@ export const withVolumeSearch = (mangas, index) => {
 export { COLLECTING_OPTIONS, collectingOf, splitAuthors, authorShelfPath };
 
 /** Collection filter of the toolbar ("Sammelstand"); counts come from getCollectCounts. */
+// i18n
 export const COLLECT_FILTERS = [
   { id: 'ALL', label: 'Alle Reihen' },
   { id: 'gaps', label: 'Mit Lücken' },
@@ -191,6 +198,8 @@ export const COLLECT_FILTERS = [
   { id: 'abgebrochen', label: 'Nicht mehr gesammelt' }
 ];
 export const isCollectFilter = (value) => COLLECT_FILTERS.some(f => f.id === value);
+/** Shown label of a collect filter; the collecting states use collectingLabel ('Pausiert' in its collecting sense). */
+export const collectFilterLabel = (f) => (f.id === 'pausiert' || f.id === 'abgebrochen' ? collectingLabel(f.id) : t(f.label));
 
 /**
  * Still something to buy: a missing volume, or a known total that is not reached yet. A dropped series has no gaps;
@@ -239,7 +248,7 @@ export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
 
 // Search, filters and sort of the series list (tags: AND). A search ranks title-prefix, title, other-field and typo
 // hits in that order; the chosen sort orders each group.
-export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [] }) => {
+export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [], languageFilter = 'ALL' }) => {
   const query = prepareQuery(search);
   const tags = parseTagFilter(tagFilter);
   const publisherKey = publisherFilter && publisherFilter !== 'ALL' ? normalizePubName(publisherFilter).toLowerCase() : null;
@@ -267,6 +276,7 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
       if (!matchesCollectFilter(m, collectFilter)) return false;
       if (authorFilter && !matchesAuthor(m, authorFilter)) return false;
       if (tags.length && !hasAllTags(m, tags)) return false;
+      if (languageFilter && languageFilter !== 'ALL' && editionLanguage(m) !== languageFilter) return false;
       return true;
     })
     .sort(query ? (a, b) => ranks.get(a) - ranks.get(b) || compare(a, b) : compare);
@@ -281,6 +291,7 @@ export function isSeriesComplete(m) {
   return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) >= total;
 }
 
+// i18n
 export const GROUP_OPTIONS = [
   { value: 'none', label: 'Keine Gruppierung' },
   { value: 'publisher', label: 'Verlag' },
@@ -289,7 +300,13 @@ export const GROUP_OPTIONS = [
 ];
 export const isGroupOption = (value) => GROUP_OPTIONS.some(o => o.value === value);
 
+// i18n
 const GROUP_FALLBACK = { publisher: 'Ohne Verlag', author: 'Ohne Autor', status: 'Ohne Status' };
+
+const displayGroupLabel = (label, groupBy, empty) => {
+  if (empty) return t(label);
+  return groupBy === 'status' ? mangaStatusLabel(label) : label;
+};
 
 const groupLabelOf = (m, groupBy) => {
   if (groupBy === 'publisher') return m.publisher ? normalizePubName(m.publisher) : '';
@@ -299,7 +316,8 @@ const groupLabelOf = (m, groupBy) => {
 };
 
 // Sections [{ key, label, items }] of a sorted list, keeping its order inside; sections are alphabetical (status:
-// chip order), the one without a value last; 'none' gives a single unlabeled section.
+// chip order), the one without a value last; 'none' gives a single unlabeled section. Sorting uses the stored values,
+// the label is the shown text (status through mangaStatusLabel, the fallback through t()).
 export const groupMangas = (list, groupBy) => {
   if (!isGroupOption(groupBy) || groupBy === 'none') return [{ key: 'all', label: '', items: list }];
   const sections = new Map();
@@ -312,17 +330,21 @@ export const groupMangas = (list, groupBy) => {
   const rank = (s) => (groupBy === 'status' && SERIES_STATUSES.includes(s.label) ? SERIES_STATUSES.indexOf(s.label) : SERIES_STATUSES.length);
   return Array.from(sections.values())
     .sort((a, b) => (a.empty - b.empty) || (rank(a) - rank(b)) || naturalCollator.compare(a.label, b.label))
-    .map(({ empty: _empty, ...section }) => section);
+    .map(({ empty, ...section }) => ({ ...section, label: displayGroupLabel(section.label, groupBy, empty) }));
 };
 
+/** Edition language filter: 'ALL' or an ISO 639-1 code (URL ?lang=en). */
+export const isLanguageFilter = (value) => value === 'ALL' || /^[a-z]{2}$/.test(String(value || ''));
+
 /** Filter state kept in the URL next to localStorage, so Back and shared links keep it ('q' stays in sessionStorage). */
-export const FILTER_DEFAULTS = { status: 'ALL', publisher: 'ALL', collect: 'ALL', author: '', tags: '', sort: 'title_asc', group: 'none' };
+export const FILTER_DEFAULTS = { status: 'ALL', publisher: 'ALL', collect: 'ALL', author: '', tags: '', lang: 'ALL', sort: 'title_asc', group: 'none' };
 const FILTER_VALID = {
   status: isStatusFilter,
   publisher: (v) => v.length <= 300,
   collect: isCollectFilter,
   author: (v) => v.length <= 300,
   tags: (v) => v.length <= 500,
+  lang: (v) => isLanguageFilter(v),
   sort: isSortOption,
   group: isGroupOption
 };
@@ -358,7 +380,7 @@ export const writeFilterParams = (search, filters) => {
   const query = params.toString();
   return query ? `?${query}` : '';
 };
-/** Totals for the quick-stats bar. */
+/** Totals for the quick-stats bar; the value counts euro editions only (no conversion, see getOtherCurrencyTotals). */
 export const getCollectionTotals = (mangas) => {
   let owned = 0;
   let val = 0;
@@ -366,7 +388,7 @@ export const getCollectionTotals = (mangas) => {
   for (let i = 0; i < mangas.length; i++) {
     const m = mangas[i];
     owned += (m.owned_volumes || 0);
-    val += (m.total_value || 0);
+    if (editionCurrency(m) === 'EUR') val += (m.total_value || 0);
     if (isSeriesComplete(m)) completed++;
   }
   return {
@@ -374,4 +396,19 @@ export const getCollectionTotals = (mangas) => {
     totalCollectionValue: val,
     completedSeries: completed
   };
+};
+
+/**
+ * Owned value of the editions in other currencies than the euro: [{ currency, value }], largest first. `valueOf` reads
+ * another amount (a shopping item's price); rows carry the currency of their series.
+ */
+export const getOtherCurrencyTotals = (mangas, valueOf = (m) => m.total_value) => {
+  const sums = new Map();
+  for (const m of mangas || []) {
+    const currency = editionCurrency(m);
+    const value = Number(valueOf(m));
+    if (currency === 'EUR' || !(value > 0)) continue;
+    sums.set(currency, (sums.get(currency) || 0) + value);
+  }
+  return [...sums].map(([currency, value]) => ({ currency, value })).sort((a, b) => b.value - a.value);
 };

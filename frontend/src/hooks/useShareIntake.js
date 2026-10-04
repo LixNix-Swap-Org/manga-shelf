@@ -4,9 +4,10 @@ import { SHARE_LINK_EVENT, hasPendingShare } from '../app/deepLink';
 import { notify } from '../utils/notify';
 import { displayTitle } from '../utils/animeHelpers';
 import {
-  SHARE_TEXTS, findStreamingLink, resolveSharedLink, resolveErrorText, knownEntry, displaySeriesTitle, savedRaised, progressBefore,
+  SHARE_TEXTS, findStreamingLink, resolveSharedLink, resolveErrorText, isUnsupportedLink, knownEntry, displaySeriesTitle, savedRaised, progressBefore,
   raisesCounter, readClipboardText
 } from '../utils/shareIntake';
+import { t } from '../i18n/index.js';
 
 /**
  * A streaming link shared to the app (share target, Android share sheet, "Link einfügen"): asks the server what it
@@ -41,7 +42,7 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
       setState({ phase: 'confirm', input, link, answer, chosenId: answer?.anime_id ?? null });
     } catch (err) {
       if (isAbortError(err) || controller.signal.aborted) return;
-      setState({ phase: 'error', input, link, error: resolveErrorText(err) });
+      setState({ phase: 'error', input, link, error: resolveErrorText(err), retryable: !isUnsupportedLink(err) });
     }
   }, []);
 
@@ -50,11 +51,11 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
     const link = findStreamingLink(input.text, input.url);
     if (!link) return false;
     if (user?.offline) {
-      notify.info(SHARE_TEXTS.offline);
+      notify.info(t(SHARE_TEXTS.offline));
       return true;
     }
     if (!canEdit) {
-      notify.info(SHARE_TEXTS.visitor);
+      notify.info(t(SHARE_TEXTS.visitor));
       return true;
     }
     if (stateRef.current || handingOn.current) {
@@ -95,7 +96,7 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
   const submitPaste = useCallback((text) => {
     const link = findStreamingLink(text);
     if (!link) {
-      setState((s) => (s ? { ...s, phase: 'paste', error: SHARE_TEXTS.notALink } : s));
+      setState((s) => (s ? { ...s, phase: 'paste', error: t(SHARE_TEXTS.notALink) } : s));
       return;
     }
     resolve({ text }, link);
@@ -122,7 +123,7 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
     const actions = animeRef.current;
     const entry = actions.list.find((a) => a.id === animeId);
     const known = knownEntry(answer, animeId);
-    const title = entry ? displayTitle(entry) : (known?.title || displaySeriesTitle(answer, s.link) || 'Anime');
+    const title = entry ? displayTitle(entry) : (known?.title || displaySeriesTitle(answer, s.link) || t('Anime'));
     setState({ ...s, phase: 'saving', aboveTotal: null });
     const remember = answer.series_id ? { service: answer.service, external_id: answer.series_id } : undefined;
     // a series page is no episode to continue from: the server only takes episode links as resume_url
@@ -142,13 +143,13 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
     close();
     const hasPrevious = 'previous' in saved;
     if (!(hasPrevious ? savedRaised(saved) : raisesCounter(progressBefore(entry, known), episode))) {
-      notify.success(`${title}: Link für „Weiter“ gemerkt`);
+      notify.success(t('{title}: Link für „Weiter“ gemerkt', { title }));
       return;
     }
     const text = saved.progress?.status === 'Gesehen' && complete ? `${title}: komplett gesehen` : `${title}: Folge ${episode} gesehen`;
     // an older server without `previous` gets no undo: guessing from the list could delete real progress
     const undo = hasPrevious
-      ? { label: 'Rückgängig', onClick: () => animeRef.current.undoWatched(animeId, saved.previous) }
+      ? { label: t('Rückgängig'), onClick: () => animeRef.current.undoWatched(animeId, saved.previous) }
       : undefined;
     notify.success(text, undo ? { action: undo } : undefined);
   }, [close]);

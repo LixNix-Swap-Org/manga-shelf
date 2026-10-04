@@ -1,6 +1,9 @@
 // Pure helpers shared by Dashboard and MangaDetail (no React / no component state).
+import { t } from '../i18n/index.js';
+import { payloadText } from '../i18n/serverText.js';
 
 // Built-in names of core/lib/publishers.js: the fallback while the server's names (setPublisherNames) are not loaded
+// i18n-ignore: publisher names are data, never translated
 export const CANONICAL_PUBLISHERS = {
   'altraverse': 'Altraverse',
   'carlsen manga': 'Carlsen Manga',
@@ -228,6 +231,7 @@ export const compareVolumesByNumber = (a, b, descending = false) => {
     ? infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true })
     : infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
 };
+// i18n
 const EDITION_PATTERNS = [
   [/collector'?s?\s*edition/i, 'Collectors Edition', 'COLL'],
   [/limited\s*edition|limitierte?\s*edition/i, 'Limited Edition', 'LTD'],
@@ -244,9 +248,9 @@ const EDITION_PATTERNS = [
 export const getEditionLabel = (vol) => {
   const text = `${vol.volume_number || ''} ${vol.notes || ''}`;
   for (const [pattern, label, short] of EDITION_PATTERNS) {
-    if (pattern.test(text)) return { label, short };
+    if (pattern.test(text)) return { label: t(label), short };
   }
-  return { label: 'Special Edition', short: 'SE' };
+  return { label: t('Special Edition'), short: 'SE' };
 };
 
 /** The number of a special edition ("Band 5 Limited Edition" -> "5"), or '' when its name has no number. */
@@ -265,12 +269,12 @@ export const getVolumeDisplayTitle = (vol) => {
     // or "Sammelschuber 15" when the notes name the kind of slipcase
     if (numStr.toLowerCase().includes('schuber')) return numStr;
     const kind = String(vol.notes || '').match(/\b(\w*schuber)\b/i);
-    return `${kind ? kind[1].charAt(0).toUpperCase() + kind[1].slice(1) : 'Schuber'} ${numStr}`.trim();
+    return (kind ? `${kind[1].charAt(0).toUpperCase() + kind[1].slice(1)} ${numStr}` : t('Schuber {num}', { num: numStr })).trim();
   }
   if (type === 'special_edition') {
     const { label } = getEditionLabel(vol);
     const num = getSpecialEditionNumber(vol);
-    if (num) return `Band ${num} (${label})`;
+    if (num) return t('Band {num} ({edition})', { num, edition: label });
     const rest = numStr.replace(EDITION_WORDS, '').trim();
     if (!rest) return label;
     // a name that already says what it is ("Variant Cover") stays as typed
@@ -278,13 +282,14 @@ export const getVolumeDisplayTitle = (vol) => {
   }
   if (type === 'special') {
     const lower = numStr.toLowerCase();
-    if (!numStr) return 'Special';
-    return (lower.startsWith('special') || lower.startsWith('extra') || lower.startsWith('sonderband')) ? numStr : `Special ${numStr}`;
+    if (!numStr) return t('Special');
+    return (lower.startsWith('special') || lower.startsWith('extra') || lower.startsWith('sonderband')) ? numStr : t('Special {num}', { num: numStr });
   }
-  if (!numStr) return 'Band ?';
-  return /^\d+(\.\d+)?$/.test(numStr) ? `Band ${numStr}` : numStr;
+  if (!numStr) return t('Band ?');
+  return /^\d+(\.\d+)?$/.test(numStr) ? t('Band {num}', { num: numStr }) : numStr;
 };
 
+// i18n-ignore: stored condition values; shown through conditionLabel (utils/enumLabels.js)
 export const VOLUME_CONDITIONS = ['Neuwertig', 'Sehr gut', 'Gut', 'Akzeptabel', 'Mängelexemplar'];
 /** Filter value for "no condition recorded"; not a word, so it cannot collide with an imported condition. */
 export const CONDITION_NONE = '__NONE__';
@@ -303,7 +308,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-blue-400/40',
       text: 'text-blue-100',
       accentBadge: 'bg-red-600 text-white font-bold',
-      accentName: 'Carlsen'
+      accentName: 'Carlsen' // i18n-ignore: brand name
     };
   }
   if (pub.includes('manga cult')) {
@@ -312,7 +317,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-neutral-500/50',
       text: 'text-neutral-100',
       accentBadge: 'bg-white text-black font-extrabold',
-      accentName: 'Manga Cult'
+      accentName: 'Manga Cult' // i18n-ignore: brand name
     };
   }
   if (pub.includes('altraverse')) {
@@ -321,7 +326,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-orange-400/40',
       text: 'text-orange-100',
       accentBadge: 'bg-orange-700 text-white font-bold',
-      accentName: 'Altraverse'
+      accentName: 'Altraverse' // i18n-ignore: brand name
     };
   }
   if (pub.includes('crunchyroll')) {
@@ -330,7 +335,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-amber-400/40',
       text: 'text-amber-100',
       accentBadge: 'bg-amber-500 text-slate-950 font-bold',
-      accentName: 'Crunchyroll'
+      accentName: 'Crunchyroll' // i18n-ignore: brand name
     };
   }
   if (pub.includes('kazé') || pub.includes('kaze')) {
@@ -339,7 +344,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-yellow-400/40',
       text: 'text-yellow-100',
       accentBadge: 'bg-yellow-400 text-slate-950 font-bold',
-      accentName: 'Kazé'
+      accentName: 'Kazé' // i18n-ignore: brand name
     };
   }
   if (pub.includes('tokyopop')) {
@@ -348,7 +353,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-red-400/40',
       text: 'text-rose-100',
       accentBadge: 'bg-red-600 text-white font-bold',
-      accentName: 'TOKYOPOP'
+      accentName: 'TOKYOPOP' // i18n-ignore: brand name
     };
   }
   if (pub.includes('egmont') || pub.includes('ema')) {
@@ -357,7 +362,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-red-500/40',
       text: 'text-red-100',
       accentBadge: 'bg-red-700 text-white font-bold',
-      accentName: 'Egmont'
+      accentName: 'Egmont' // i18n-ignore: brand name
     };
   }
   if (pub.includes('papertoons')) {
@@ -366,7 +371,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-purple-400/40',
       text: 'text-purple-100',
       accentBadge: 'bg-purple-700 text-white font-bold',
-      accentName: 'Papertoons'
+      accentName: 'Papertoons' // i18n-ignore: brand name
     };
   }
   if (pub.includes('hayabusa')) {
@@ -375,7 +380,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-pink-400/40',
       text: 'text-pink-100',
       accentBadge: 'bg-pink-700 text-white font-bold',
-      accentName: 'Hayabusa'
+      accentName: 'Hayabusa' // i18n-ignore: brand name
     };
   }
   if (pub.includes('panini')) {
@@ -384,7 +389,7 @@ export const getSpinePublisherTheme = (publisherName) => {
       border: 'border-emerald-400/40',
       text: 'text-emerald-100',
       accentBadge: 'bg-emerald-700 text-white font-bold',
-      accentName: 'Panini'
+      accentName: 'Panini' // i18n-ignore: brand name
     };
   }
   return {
@@ -392,7 +397,7 @@ export const getSpinePublisherTheme = (publisherName) => {
     border: 'border-slate-600/40',
     text: 'text-slate-100',
     accentBadge: 'bg-brand-700 text-white font-bold',
-    accentName: publisherName || 'Manga'
+    accentName: publisherName || t('Manga')
   };
 };
 
@@ -434,9 +439,9 @@ export const canFixVolumeCount = (mpGapData) =>
 export const gapStatusText = (mpGapData, error) => {
   if (error) return error;
   if (!mpGapData) return null;
-  if (mpGapData.success === false || mpGapData.matched === false) return mpGapData.message || null;
-  if (mpGapData.stale) return 'Daten evtl. veraltet – Manga Passion nicht erreichbar';
-  if (mpGapData.incomplete) return 'Manga-Passion-Daten evtl. unvollständig';
+  if (mpGapData.success === false || mpGapData.matched === false) return payloadText(mpGapData, 'message') || null;
+  if (mpGapData.stale) return t('Daten evtl. veraltet – Manga Passion nicht erreichbar');
+  if (mpGapData.incomplete) return t('Manga-Passion-Daten evtl. unvollständig');
   return null;
 };
 
@@ -474,6 +479,15 @@ export const detectGapEntries = (mpGapData, volumes, totalVolumes) => {
   }
   return gaps;
 };
+
+// read-state pseudo-values of the status filter: neutral ids, never shown (VolumeFilterBar labels its chips); the
+// other values are stored statuses. The old German ids are still accepted.
+export const READ_FILTER = 'read';
+export const UNREAD_FILTER = 'unread';
+// i18n-ignore: the old German filter ids, mapped to the neutral ones
+const LEGACY_VOLUME_FILTERS = { Gelesen: READ_FILTER, Ungelesen: UNREAD_FILTER };
+/** A status-filter value with the old German read-state ids mapped to their neutral ids. */
+export const normalizeVolumeFilter = (filter) => (Object.prototype.hasOwnProperty.call(LEGACY_VOLUME_FILTERS, filter) ? LEGACY_VOLUME_FILTERS[filter] : filter);
 
 /**
  * Whether the active filters leave room for ghost entries: type "Bände", status "Fehlt" and "Bände, die ihr fehlen"

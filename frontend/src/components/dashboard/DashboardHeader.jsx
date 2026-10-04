@@ -5,27 +5,37 @@ import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import BottomNav, { useIsNarrow } from '../common/BottomNav';
 import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
+import { LOCAL_SERVER_NAME } from '../../app/connection';
 import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
+import { t } from '../../i18n/index.js';
 
 const SystemModal = lazy(() => import('../modals/SystemModal'));
 const BackupExportModal = lazy(() => import('../modals/BackupExportModal'));
 
+// i18n
 const SEARCH_PLACEHOLDER = 'Titel, Autor, Tag, ISBN oder Notiz suchen...';
 // BarcodeScannerButton's look plus the touch hit area
 const HEADER_SCAN_CLASS = 'hit-44 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white transition shadow-sm active:scale-95 disabled:opacity-50';
 
+// i18n
 const PILL_STATE = {
   online: { dot: 'bg-emerald-400', text: 'verbunden' },
   connecting: { dot: 'bg-sky-400 animate-pulse', text: 'verbinde…' },
   offline: { dot: 'bg-amber-400 animate-pulse', text: 'offline' }
 };
 
+/** Name of the device entry in the UI language ('Auf diesem Gerät' or 'Auf diesem Gerät · Felix'). */
+const localServerName = (name) => (typeof name === 'string' && name.startsWith(LOCAL_SERVER_NAME)
+  ? `${t(LOCAL_SERVER_NAME)}${name.slice(LOCAL_SERVER_NAME.length)}`
+  : name);
+
 /** App build: server name and connection state; opens the server screen. */
 function ConnectionPill() {
   const { state, server } = useConnection();
   const look = PILL_STATE[state] || PILL_STATE.offline;
-  const name = server?.name || 'Kein Server';
+  // the device entry carries the German LOCAL_SERVER_NAME ('Auf diesem Gerät · <profile>'): only that part is translated
+  const name = server?.local ? localServerName(server.name) : (server?.name || t('Kein Server'));
   // without a server the collection lives on the device: no connection state to report
   const local = Boolean(server?.local) || isLocalMode();
   return (
@@ -33,12 +43,12 @@ function ConnectionPill() {
       to="/server"
       id="btn-connection-pill"
       className="inline-flex items-center gap-1.5 min-w-0 max-w-full rounded-full border border-slate-700/70 bg-slate-900/70 px-2 py-0.5 hover:border-brand-500/60 hover:text-slate-200"
-      aria-label={local ? `${name}. Server wechseln` : `Server ${name}, ${look.text}. Server wechseln`}
-      title="Server wechseln oder Verbindung prüfen"
+      aria-label={local ? t('{name}. Server wechseln', { name }) : t('Server {name}, {text}. Server wechseln', { name, text: t(look.text) })}
+      title={t('Server wechseln oder Verbindung prüfen')}
     >
       <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${local ? 'bg-slate-400' : look.dot}`}></span>
       <span className="min-w-0 truncate">{name}</span>
-      {!local && <span className="text-slate-400 shrink-0" aria-hidden="true">· {look.text}</span>}
+      {!local && <span className="text-slate-400 shrink-0" aria-hidden="true">· {t(look.text)}</span>}
     </Link>
   );
 }
@@ -149,8 +159,8 @@ export default function DashboardHeader({
   const showSystemEntry = isAdmin && !local && !user?.offline;
   const [backupOpen, setBackupOpen] = useState(false);
   const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
-  const logoutLabel = local ? 'Sammlung schließen' : 'Abmelden';
-  const accountLabel = local ? 'Konto: API-Schlüssel' : 'Konto: Passwort und API-Schlüssel';
+  const logoutLabel = local ? t('Sammlung schließen') : t('Abmelden');
+  const accountLabel = local ? t('Konto: API-Schlüssel') : t('Konto: Passwort und API-Schlüssel');
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -186,7 +196,7 @@ export default function DashboardHeader({
                 <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-lg sm:text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight truncate">
                   MangaShelf
                 </h1>
-                <span id="app-version-badge" className="min-w-0 truncate text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">
+                <span id="app-version-badge" className="min-w-0 truncate text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">{/* i18n-ignore: version number */}
                   v{APP_VERSION}
                 </span>
               </div>
@@ -197,7 +207,7 @@ export default function DashboardHeader({
               ) : (
                 <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
                   <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block shrink-0`}></span>
-                  <span className="truncate">{isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}</span>
+                  <span className="truncate">{isOfflineMode ? t('Offline-Modus') : t('Sammlung & Tracker')}</span>
                 </p>
               )}
             </div>
@@ -212,10 +222,10 @@ export default function DashboardHeader({
                 id="btn-header-add-manga"
                 onClick={handleOpenModal}
                 className="hit-44 hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm shrink-0"
-                title="Neuen Manga anlegen"
+                title={t('Neuen Manga anlegen')}
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
-                <span>Neuer Manga</span>
+                <span>{t('Neuer Manga')}</span>
               </button>
             )}
 
@@ -225,8 +235,8 @@ export default function DashboardHeader({
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="hit-44 btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
-              title={mobileMenuOpen ? 'Menü schließen' : 'Menü öffnen'}
-              aria-label={mobileMenuOpen ? 'Menü schließen' : 'Menü öffnen'}
+              title={mobileMenuOpen ? t('Menü schließen') : t('Menü öffnen')}
+              aria-label={mobileMenuOpen ? t('Menü schließen') : t('Menü öffnen')}
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-menu-drawer"
             >
@@ -250,8 +260,8 @@ export default function DashboardHeader({
             ref={searchInputRef}
             id="main-search-input"
             type="text" 
-            aria-label="Sammlung durchsuchen"
-            placeholder={activeMainView === 'shelf' ? SEARCH_PLACEHOLDER : 'In der Sammlung suchen...'}
+            aria-label={t('Sammlung durchsuchen')}
+            placeholder={activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...')}
             className="w-full min-w-0 bg-transparent border-0 px-0 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
             value={search} 
             onFocus={() => { searchTypedRef.current = false; }}
@@ -274,8 +284,8 @@ export default function DashboardHeader({
                   searchInputRef.current?.focus();
                 }}
                 className="hit-44 text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 shrink-0 transition-colors"
-                title="Suche zurücksetzen"
-                aria-label="Suche zurücksetzen"
+                title={t('Suche zurücksetzen')}
+                aria-label={t('Suche zurücksetzen')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -291,10 +301,10 @@ export default function DashboardHeader({
             onClick={handleOpenStats} 
             disabled={isOfflineMode}
             className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
-            title={isOfflineMode ? 'Offline nicht verfügbar' : 'Statistik- & Finanz-Dashboard öffnen'}
+            title={isOfflineMode ? t('Offline nicht verfügbar') : t('Statistik- & Finanz-Dashboard öffnen')}
           >
             <ChartColumn className="w-4 h-4 text-emerald-400 shrink-0" /> 
-            <span>Statistiken<span className="hidden 2xl:inline"> & Finanzen</span></span>
+            <span>{t('Statistiken')}<span className="hidden 2xl:inline"> {t('& Finanzen')}</span></span>
           </button>
 
           {canEdit && (
@@ -304,7 +314,7 @@ export default function DashboardHeader({
               className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-2.5 2xl:px-3 whitespace-nowrap"
             >
               <Plus className="w-4 h-4 shrink-0" /> 
-              <span>Neuer Manga</span>
+              <span>{t('Neuer Manga')}</span>
             </button>
           )}
 
@@ -313,11 +323,11 @@ export default function DashboardHeader({
               id="btn-install-pwa"
               onClick={handleInstallClick}
               className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-2.5 2xl:px-3 shadow-sm transition-all whitespace-nowrap"
-              title="Manga Shelf als native App auf deinem Gerät installieren"
-              aria-label="App installieren"
+              title={t('Manga Shelf als native App auf deinem Gerät installieren')}
+              aria-label={t('App installieren')}
             >
               <Download className="w-4 h-4 text-brand-400 shrink-0" />
-              <span className="hidden 2xl:inline">App installieren</span>
+              <span className="hidden 2xl:inline">{t('App installieren')}</span>
             </button>
           )}
 
@@ -327,7 +337,7 @@ export default function DashboardHeader({
               type="button"
               onClick={handleOpenCsvModal}
               className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-              title={canEdit ? 'Sammlung als CSV exportieren oder aus CSV importieren' : 'Sammlung als CSV exportieren'}
+              title={canEdit ? t('Sammlung als CSV exportieren oder aus CSV importieren') : t('Sammlung als CSV exportieren')}
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
               <span>CSV</span>
@@ -341,11 +351,11 @@ export default function DashboardHeader({
                   id="btn-open-users"
                   onClick={handleOpenUsersModal}
                   className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title="Benutzer anlegen und verwalten"
-                  aria-label="Benutzer"
+                  title={t('Benutzer anlegen und verwalten')}
+                  aria-label={t('Benutzer')}
                 >
                   <Users className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="hidden 2xl:inline">Benutzer</span>
+                  <span className="hidden 2xl:inline">{t('Benutzer')}</span>
                 </button>
               )}
 
@@ -353,11 +363,11 @@ export default function DashboardHeader({
                 id="btn-open-backups"
                 onClick={openBackups}
                 className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                title={local ? 'Sicherung als ZIP exportieren oder importieren' : 'Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung'}
-                aria-label="Backups"
+                title={local ? t('Sicherung als ZIP exportieren oder importieren') : t('Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung')}
+                aria-label={t('Backups')}
               >
                 <CloudUpload className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-                <span className="hidden 2xl:inline">Backups</span>
+                <span className="hidden 2xl:inline">{t('Backups')}</span>
               </button>
 
               {showSystemEntry && (
@@ -366,11 +376,11 @@ export default function DashboardHeader({
                   type="button"
                   onClick={() => setSystemOpen(true)}
                   className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title="System: Version, Speicher, Backups, Quellen"
-                  aria-label="System"
+                  title={t('System: Version, Speicher, Backups, Quellen')}
+                  aria-label={t('System')}
                 >
                   <Server className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="hidden 2xl:inline">System</span>
+                  <span className="hidden 2xl:inline">{t('System')}</span>
                 </button>
               )}
             </>
@@ -379,7 +389,7 @@ export default function DashboardHeader({
           <div aria-hidden="true" className="h-6 w-[1px] bg-slate-800 mx-0.5 shrink-0"></div>
 
           <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2 py-1.5 2xl:px-2.5 rounded-xl border border-slate-700/50 shrink-0">
-            <span className="text-slate-400 hidden 2xl:inline">Angemeldet:</span>
+            <span className="text-slate-400 hidden 2xl:inline">{t('Angemeldet:')}</span>
             <span className="font-semibold text-slate-200 truncate max-w-[90px] 2xl:max-w-none">{user?.username}</span>
             <span className={`${roleBadgeClass(user)} border text-[10px] px-1.5 py-px rounded font-mono font-bold uppercase shrink-0`}>
               {roleLabel(user)}
@@ -416,7 +426,7 @@ export default function DashboardHeader({
       {mobileMenuOpen && sheet(
         <nav
           id="mobile-menu-drawer"
-          aria-label="Menü"
+          aria-label={t('Menü')}
           className={narrow
             ? 'fixed inset-x-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-slate-700/80 bg-slate-950/[0.98] p-4 space-y-2 animate-fade-in shadow-2xl'
             : 'xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto'}
@@ -424,7 +434,7 @@ export default function DashboardHeader({
         >
           <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
             <div className="flex items-center gap-2">
-              <span className="text-slate-400">Angemeldet als:</span>
+              <span className="text-slate-400">{t('Angemeldet als:')}</span>
               <span className="font-bold text-white">{user?.username}</span>
             </div>
             <span className={`${roleBadgeClass(user)} border text-[10px] px-2 py-0.5 rounded font-mono uppercase font-bold`}>
@@ -440,7 +450,7 @@ export default function DashboardHeader({
               disabled={isOfflineMode}
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ChartColumn className="w-4 h-4 text-emerald-400" /> Statistiken
+              <ChartColumn className="w-4 h-4 text-emerald-400" /> {t('Statistiken')}
             </button>
 
             <button 
@@ -452,7 +462,7 @@ export default function DashboardHeader({
               }}
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
             >
-              <Calendar className="w-4 h-4 text-sky-400" /> Release-Radar
+              <Calendar className="w-4 h-4 text-sky-400" /> {t('Release-Radar')}
             </button>
 
             <button
@@ -464,7 +474,7 @@ export default function DashboardHeader({
               }}
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-fuchsia-200 border-fuchsia-500/30"
             >
-              <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" /> Anime
+              <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" /> {t('Anime')}
             </button>
 
             {canEdit && (
@@ -474,7 +484,7 @@ export default function DashboardHeader({
                 onClick={() => runFromMenu(handleOpenModal)}
                 className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-2"
               >
-                <Plus className="w-4 h-4" /> Neuer Manga
+                <Plus className="w-4 h-4" /> {t('Neuer Manga')}
               </button>
             )}
 
@@ -498,7 +508,7 @@ export default function DashboardHeader({
                     onClick={() => runFromMenu(handleOpenUsersModal)}
                     className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
                   >
-                    <Users className="w-4 h-4 text-brand-400" /> Benutzer
+                    <Users className="w-4 h-4 text-brand-400" /> {t('Benutzer')}
                   </button>
                 )}
 
@@ -508,7 +518,7 @@ export default function DashboardHeader({
                   onClick={() => runFromMenu(openBackups)}
                   className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
                 >
-                  <CloudUpload className="w-4 h-4 text-emerald-400" /> Backups
+                  <CloudUpload className="w-4 h-4 text-emerald-400" /> {t('Backups')}
                 </button>
 
                 {showSystemEntry && (
@@ -518,7 +528,7 @@ export default function DashboardHeader({
                     onClick={() => runFromMenu(() => setSystemOpen(true))}
                     className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
                   >
-                    <Server className="w-4 h-4 text-brand-400" aria-hidden="true" /> System
+                    <Server className="w-4 h-4 text-brand-400" aria-hidden="true" /> {t('System')}
                   </button>
                 )}
               </>
@@ -532,7 +542,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleInstallClick)}
               className="w-full btn-secondary text-xs py-2 text-brand-300 bg-brand-500/10 border-brand-500/40 hover:bg-brand-500/20 flex items-center justify-center gap-2 font-medium"
             >
-              <Download className="w-4 h-4 text-brand-400" /> MangaShelf als App installieren
+              <Download className="w-4 h-4 text-brand-400" /> {t('MangaShelf als App installieren')}
             </button>
           )}
 
@@ -543,7 +553,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleOpenPasswordModal)}
               className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
             >
-              <Lock className="w-4 h-4 text-brand-400" /> {local ? 'API-Schlüssel' : 'Passwort & API-Schlüssel'}
+              <Lock className="w-4 h-4 text-brand-400" /> {t('Konto & Sprache')}
             </button>
           )}
 

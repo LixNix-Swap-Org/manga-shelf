@@ -1,5 +1,6 @@
 // the password marker of local profiles: no bcrypt hash, so no password ever matches it
 export const LOCAL_PASSWORD_HASH = '!local-profile';
+// i18n-ignore: SQL
 const SERVER_ONLY_SETTINGS = "substr(key, 1, 14) = 'calendar_feed:' OR key IN ('revoked_sessions', 'jwt_secret')";
 
 const tableExists = (conn, name) => Boolean(conn.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));

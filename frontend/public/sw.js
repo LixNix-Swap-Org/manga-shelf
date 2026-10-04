@@ -7,14 +7,18 @@ const BUILD_ID = '__BUILD_ID__';
 const CACHE_NAME = BUILD_ID && !BUILD_ID.startsWith('__') ? `mangashelf-app-__APP_VERSION__-${BUILD_ID}` : 'mangashelf-app-__APP_VERSION__';
 // Same name as UPLOADS_CACHE in src/appShell.js (cleared on logout). v2 dropped v1 entries that held index.html.
 const UPLOADS_CACHE = 'mangashelf-uploads-v2';
+// The web app manifest of the active language is cached by WARM_LANGUAGE (below), not here.
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json',
   '/favicon.svg',
   '/icon-192.png',
   '/icon-512.png'
 ];
 const BUILD_FILES = [/*__PRECACHE__*/];
+// Translation catalogs (one lazy chunk per language, ~60 KB gzip each) are left out of BUILD_FILES: a catalog is cached
+// when it is first loaded, and the page asks for its own language's catalog after boot (WARM_LANGUAGE).
+const CATALOGS = {/*__CATALOGS__*/};
+const LANGUAGE_CODE = /^[a-z]{2}(?:-[A-Za-z]{2,4})?$/;
 const NAVIGATION_TIMEOUT_MS = 3000;
 
 /** Build files (/assets/<name>-<hash>.js|css|woff2) referenced in an HTML, JS or CSS text. */
@@ -56,8 +60,23 @@ self.addEventListener('install', (event) => {
   }));
 });
 
+/** Catalog chunk and manifest of one UI language ('de' has no catalog and uses /manifest.json). */
+function languageFiles(language) {
+  if (!LANGUAGE_CODE.test(String(language || '')) || language === 'de') return ['/manifest.json'];
+  return [`/manifest.${language}.json`, ...(CATALOGS[language] ? [CATALOGS[language]] : [])];
+}
+
+// best effort: a missing file (an old page asking a newer worker) must not fail the others
+async function warmLanguage(language) {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.allSettled(languageFiles(language).map(async (url) => {
+    if (!(await cache.match(url))) await cache.add(url);
+  }));
+}
+
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data && event.data.type === 'WARM_LANGUAGE') event.waitUntil(warmLanguage(event.data.language).catch(() => {}));
 });
 
 self.addEventListener('activate', (event) => {

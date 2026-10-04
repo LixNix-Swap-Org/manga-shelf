@@ -1,7 +1,11 @@
 import { formatCount, formatMegabytes } from '../../../utils/format';
+import { t } from '../../../i18n/index.js';
+import { serverText } from '../../../i18n/serverText.js';
 
+// i18n
 export const SESSION_EXPIRED = 'Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.';
 
+// i18n
 export const CATEGORY_LABELS = {
   daily: 'Täglich',
   manual: 'Manuell',
@@ -22,15 +26,21 @@ export async function readJson(res) {
   }
 }
 
-/** German message for a failed response; the server's own error text wins except for 401. */
+/**
+ * Message for a failed response in the UI language; the server's own error text wins except for 401. `fallback` is
+ * translated by the caller, `tooLarge`/`timeout` are `// i18n`-marked texts translated here.
+ */
 export function httpErrorMessage(status, data, fallback, { tooLarge, timeout } = {}) {
-  if (status === 401) return SESSION_EXPIRED;
-  if (data && typeof data.error === 'string' && data.error.trim()) return data.error;
-  if (status === 413) return tooLarge || 'Die Anfrage ist zu groß für den Server oder Proxy.';
+  if (status === 401) return t(SESSION_EXPIRED);
+  const server = serverText(data);
+  if (server) return server;
+  // i18n-dynamic: the callers' marked RESTORE_HTTP/INSPECT_HTTP/CSV_TOO_LARGE texts
+  if (status === 413) return tooLarge ? t(tooLarge) : t('Die Anfrage ist zu groß für den Server oder Proxy.');
   if (status === 502 || status === 503 || status === 504) {
-    return timeout || 'Der Server hat nicht rechtzeitig geantwortet. Bitte später erneut versuchen.';
+    // i18n-dynamic: as above
+    return timeout ? t(timeout) : t('Der Server hat nicht rechtzeitig geantwortet. Bitte später erneut versuchen.');
   }
-  return `${fallback} (HTTP ${status})`;
+  return t('{message} (HTTP {status})', { message: fallback, status });
 }
 
 /** '120 Reihen · 2.400 Bände · 35 Bilder (1,20 MB)'; 'nur Datenbank' instead of the images when the ZIP has none. */
@@ -40,7 +50,7 @@ export function manifestSummary(manifest) {
   const parts = [formatCount(counts.mangas, 'Reihe', 'Reihen'), formatCount(counts.volumes, 'Band', 'Bände')];
   const uploads = manifest.uploads;
   if (uploads) parts.push(`${formatCount(uploads.count, 'Bild', 'Bilder')}${uploads.bytes ? ` (${formatMegabytes(uploads.bytes)})` : ''}`);
-  else parts.push('nur Datenbank');
+  else parts.push(t('nur Datenbank'));
   return parts.join(' · ');
 }
 
@@ -48,8 +58,8 @@ export function manifestSummary(manifest) {
 export function versionSummary(manifest) {
   if (!manifest) return '';
   const parts = [];
-  if (manifest.app_version) parts.push(`App ${manifest.app_version}`);
-  if (Number.isFinite(manifest.schema_version)) parts.push(`Schema v${manifest.schema_version}`);
+  if (manifest.app_version) parts.push(t('App {version}', { version: manifest.app_version }));
+  if (Number.isFinite(manifest.schema_version)) parts.push(t('Schema v{version}', { version: manifest.schema_version }));
   return parts.join(' · ');
 }
 

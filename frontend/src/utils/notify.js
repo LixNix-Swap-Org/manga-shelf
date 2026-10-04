@@ -1,8 +1,10 @@
 import { ApiError, errorFromResponse, isAbortError } from './api.js';
+import { t } from '../i18n/index.js';
 
 /** Fired on window for every toast; the browser suites listen to it instead of to alert(). */
 export const NOTIFY_EVENT = 'mangashelf:notify';
 export const DURATIONS = { info: 5000, success: 5000, error: 8000 };
+// i18n
 export const UNEXPECTED_ERROR = 'Unerwarteter Fehler – bitte erneut versuchen.';
 
 const listeners = new Set();
@@ -13,8 +15,8 @@ export function toastText(input, fallback) {
   if (input === null || input === undefined || input === '') return fallback ? { message: fallback, ref: null } : null;
   if (typeof input === 'string') return { message: input, ref: null };
   if (isAbortError(input)) return null;
-  if (input instanceof ApiError) return { message: input.message || fallback || UNEXPECTED_ERROR, ref: input.ref || null };
-  return { message: fallback || UNEXPECTED_ERROR, ref: null };
+  if (input instanceof ApiError) return { message: input.message || fallback || t(UNEXPECTED_ERROR), ref: input.ref || null };
+  return { message: fallback || t(UNEXPECTED_ERROR), ref: null };
 }
 
 function emit(kind, input, { action = null, fallback, duration } = {}) {
@@ -25,7 +27,7 @@ function emit(kind, input, { action = null, fallback, duration } = {}) {
     kind,
     message: text.message,
     ref: text.ref,
-    action: action && typeof action.onClick === 'function' ? { label: action.label || 'Rückgängig', onClick: action.onClick } : null,
+    action: action && typeof action.onClick === 'function' ? { label: action.label || t('Rückgängig'), onClick: action.onClick } : null,
     duration: duration ?? DURATIONS[kind]
   };
   for (const listener of [...listeners]) listener({ type: 'show', toast });

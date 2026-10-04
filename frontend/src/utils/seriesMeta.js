@@ -2,6 +2,7 @@
 // search index into whatever chunk imports it).
 
 /** Whether the household still collects a series (mangas.collecting); older answers without the field count as 'aktiv'. */
+// i18n
 export const COLLECTING_OPTIONS = [
   { value: 'aktiv', label: 'Wird gesammelt' },
   { value: 'pausiert', label: 'Pausiert' },

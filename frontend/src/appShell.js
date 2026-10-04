@@ -19,6 +19,7 @@ export const BEFORE_LOGOUT_EVENT = 'mangashelf:before-logout';
 export const PURCHASE_RECORDED_EVENT = 'mangashelf:purchase-recorded';
 const BEFORE_LOGOUT_TIMEOUT_MS = 10000;
 
+// i18n
 export const MESSAGES = {
   sessionExpired: 'Deine Sitzung ist abgelaufen – bitte melde dich neu an.',
   logoutPending: 'Abmelden wird beim nächsten Verbindungsaufbau abgeschlossen. Bis dahin bleibt die Sitzung auf dem Server gültig.',

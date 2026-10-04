@@ -27,6 +27,9 @@ import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
 import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
+import { t } from './i18n/index.js';
+import { editionCurrency } from './utils/editions';
+import { rich } from './i18n/react.jsx';
 
 // dialogs are loaded on first use and mounted only while open
 const VolumeEditModal = lazy(() => import('./components/detail/VolumeEditModal'));
@@ -106,6 +109,7 @@ const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-clip max-sm:[&_#bulk-action-ba
 const PHONE_PADDING = 'max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]';
 const PHONE_PADDING_OFFLINE = 'max-sm:pb-[calc(8rem+env(safe-area-inset-bottom))]';
 
+// i18n
 const LOAD_ERRORS = {
   server: { title: 'Server nicht erreichbar', text: 'Die Reihe konnte gerade nicht geladen werden.' },
   'offline-missing': { title: 'Nicht in der Offline-Kopie', text: 'Diese Reihe war beim letzten Abgleich noch nicht gespeichert. Mit Verbindung erneut öffnen.' },
@@ -168,10 +172,10 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const {
     showGaps, handleToggleShowGaps, fillingGapLoading,
     mpGapData, mpGapLoading, mpGapError, mpGapNotice, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
-    handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition,
+    handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition, mpEnabled,
     gapEditionUnconfirmed, canSyncVolumeCount,
     mpGapMap, detectedGapEntries, detectedGaps
-  } = useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal });
+  } = useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal, user });
 
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
@@ -277,9 +281,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
     [user, id]
   );
   let documentTitle = listTitle;
-  if (notFound) documentTitle = 'Manga nicht gefunden';
+  if (notFound) documentTitle = t('Manga nicht gefunden');
   else if (!loading && manga?.title) documentTitle = manga.title;
-  else if (!loading && loadError) documentTitle = (LOAD_ERRORS[loadError] || LOAD_ERRORS.server).title;
+  else if (!loading && loadError) documentTitle = t((LOAD_ERRORS[loadError] || LOAD_ERRORS.server).title);
   useDocumentTitle(documentTitle);
   const headingRef = usePageHeading(!loading);
   useDetailScroll(!loading && Boolean(manga));
@@ -344,7 +348,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex items-center justify-center text-slate-400">
         <div role="status" className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-          <p className="text-sm">Lade Manga-Details...</p>
+          <p className="text-sm">{t('Lade Manga-Details...')}</p>
         </div>
       </main>
     );
@@ -357,15 +361,15 @@ export default function MangaDetail({ user, onUnauthorized }) {
           <Library className="w-10 h-10 text-slate-500" />
         </div>
         <div className="text-center">
-          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h1>
-          <p className="text-slate-400 text-sm">Dieser Manga existiert nicht oder wurde gelöscht.</p>
+          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{t('Manga nicht gefunden')}</h1>
+          <p className="text-slate-400 text-sm">{t('Dieser Manga existiert nicht oder wurde gelöscht.')}</p>
         </div>
         <Link
           to={backTo}
           className="btn-primary flex items-center gap-2 px-5 py-2.5"
         >
           <ArrowLeft className="w-4 h-4" />
-          Zurück zur Übersicht
+          {t('Zurück zur Übersicht')}
         </Link>
       </main>
     );
@@ -379,24 +383,24 @@ export default function MangaDetail({ user, onUnauthorized }) {
           <Library className="w-10 h-10 text-slate-500" />
         </div>
         <div className="text-center" role="alert">
-          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{info.title}</h1>
-          <p className="text-slate-400 text-sm">{info.text}</p>
+          <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{t(info.title)}</h1>
+          <p className="text-slate-400 text-sm">{t(info.text)}</p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
           {loadError === 'server' && (
             <button type="button" onClick={() => fetchManga()} className="btn-secondary flex items-center gap-2 px-5 py-2.5">
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
-              Erneut versuchen
+              {t('Erneut versuchen')}
             </button>
           )}
           {loadError === 'unauthorized' ? (
             <Link to="/login" className="btn-primary flex items-center gap-2 px-5 py-2.5">
-              Zur Anmeldung
+              {t('Zur Anmeldung')}
             </Link>
           ) : (
             <Link to={backTo} className="btn-primary flex items-center gap-2 px-5 py-2.5">
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-              Zurück zur Übersicht
+              {t('Zurück zur Übersicht')}
             </Link>
           )}
         </div>
@@ -409,12 +413,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
   return (
     <div className={`${PAGE_CLASS} ${isOffline ? PHONE_PADDING_OFFLINE : PHONE_PADDING}`}>
       <SkipLink />
-      <nav aria-label="Seitennavigation" className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4">
+      <nav aria-label={t('Seitennavigation')} className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4">
         <Link 
           to={backTo} 
           className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium bg-slate-900/60 hover:bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-800 shadow-sm"
         >
-          <ArrowLeft className="w-4 h-4 text-brand-400" /> Zurück zur Übersicht
+          <ArrowLeft className="w-4 h-4 text-brand-400" /> {t('Zurück zur Übersicht')}
         </Link>
       </nav>
 
@@ -431,7 +435,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
               onClick={clearRefreshError}
               className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium cursor-pointer"
             >
-              Schließen
+              {t('Schließen')}
             </button>
           </div>
         )}
@@ -469,6 +473,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
           canFillTags={canFillTags}
           fillingTags={fillingTags}
           handleFillTags={handleFillTags}
+          onEditionsChanged={fetchManga}
         />
 
         {/* VOLUMES CHECKLIST SECTION */}
@@ -479,10 +484,10 @@ export default function MangaDetail({ user, onUnauthorized }) {
             <div>
               <h2 id="volumes-heading" className="text-xl font-bold text-white flex items-center gap-2.5">
                 <Layers className="w-5 h-5 text-brand-400" />
-                Bände-Checkliste
+                {t('Bände-Checkliste')}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Klicke auf das Häkchen für Schnell-Status oder auf die Karte für <b>Preise & Detailangaben</b>
+                {rich('Klicke auf das Häkchen für Schnell-Status oder auf die Karte für {details}', { details: <b>{t('Preise & Detailangaben')}</b> })}
               </p>
             </div>
 
@@ -492,15 +497,15 @@ export default function MangaDetail({ user, onUnauthorized }) {
                 <button 
                   onClick={() => setShowBatchReadModal(true)} 
                   className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
-                  title="Mehrere Bände auf einmal als gelesen oder ungelesen markieren"
+                  title={t('Mehrere Bände auf einmal als gelesen oder ungelesen markieren')}
                 >
-                  <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> Bis Band X als gelesen
+                  <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
                 </button>
                 <button 
                   onClick={() => setShowBatchModal(true)} 
                   className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
                 >
-                  <Plus className="w-3.5 h-3.5 text-brand-400" /> Mehrere Bände anlegen
+                  <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
                 </button>
               </div>
             )}
@@ -548,6 +553,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             mpGapData={mpGapData}
             mpGapError={mpGapError}
             mpGapLoading={mpGapLoading}
+            mpEnabled={mpEnabled}
             ownedCount={ownedCount}
             preorderedCount={preorderedCount}
             regularVolumeCount={regularVolumeCount}
@@ -607,8 +613,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
               <BookOpen className="w-8 h-8 text-slate-500 mx-auto mb-2" />
               <p className="text-sm text-slate-400">
                 {volumes.length === 0 
-                  ? 'Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.' 
-                  : 'Keine Bände mit diesen Filtereinstellungen gefunden.'}
+                  ? t('Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.') 
+                  : t('Keine Bände mit diesen Filtereinstellungen gefunden.')}
               </p>
               {volumes.length > 0 && hasActiveFilters && (
                 <button
@@ -616,7 +622,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   onClick={handleResetFilters}
                   className="mt-3.5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600/30 hover:bg-brand-600/50 text-brand-300 border border-brand-500/40 transition-all cursor-pointer shadow-sm"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Filter zurücksetzen
+                  <RotateCcw className="w-3.5 h-3.5" /> {t('Filter zurücksetzen')}
                 </button>
               )}
             </div>
@@ -699,6 +705,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
               onApply={applyBulk}
               busy={bulkBusy}
               userId={user?.id}
+              currency={editionCurrency(manga)}
               readerId={canToggleOthers && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id}
             />
           )}
@@ -725,6 +732,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
               setNewVolumeStatus={setNewVolumeStatus}
               setNewVolumeType={setNewVolumeType}
               uploadingNewCover={uploadingNewCover}
+              currency={editionCurrency(manga)}
             />
           </div>
 
@@ -807,7 +815,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
           />
         )}
 
-        {showMpEditionModal && (
+        {showMpEditionModal && mpEnabled && (
           <MpEditionModal
             isOpen
             onClose={() => setShowMpEditionModal(false)}

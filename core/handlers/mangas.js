@@ -1,7 +1,12 @@
 // Series: list, detail, create, edit, delete (GET/POST /mangas, GET/PUT/DELETE /mangas/:id).
 const { normalizePublisher } = require('../lib/publishers');
-const { badRequest, notFound } = require('../errors');
-const { MANGA_STATUSES, parseOptionalId, parseWishPriority } = require('../lib/validate');
+const { msg, msgList, badRequest, notFound } = require('../errors');
+const {
+    parseLanguage, normalizeRegion, normalizeCurrency, isWorkKey, isManualWorkKey, manualWorkKey, preferredWorkKey, isMpLanguage,
+    DEFAULT_LANGUAGE, DEFAULT_CURRENCY
+} = require('../lib/language');
+const { readProfile } = require('../lib/locales');
+const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority } = require('../lib/validate');
 const snapshot = require('../snapshot');
 const { moveMangaToTrash } = require('../lib/trash');
 const { normalizeTags, splitTags } = require('../lib/tags');
@@ -11,32 +16,85 @@ const MANGA_STATUS_ALIASES = { Unbekannt: 'Laufend' };
 
 // whether the household still collects a series (separate from the publication status)
 const COLLECTING_STATUSES = ['aktiv', 'pausiert', 'abgebrochen'];
-const COLLECTING_ERROR = 'Ungültiger Sammelstatus (erlaubt: ' + COLLECTING_STATUSES.join(', ') + ')';
+const COLLECTING_ERROR = msg('Ungültiger Sammelstatus (erlaubt: {allowed})', { allowed: msgList(COLLECTING_STATUSES) });
 
 // strict: reject an over-long value (a cut URL is broken); otherwise cut it like the POST handler always did
 const TEXT_FIELDS = {
-    alt_title: { max: 300, label: 'Alternativtitel' },
-    author: { max: 300, label: 'Autor' },
-    publisher: { max: 300, label: 'Verlag' },
-    language: { max: 50, label: 'Sprache' },
-    tags: { max: 500, label: 'Tags' },
-    description: { max: 10000, label: 'Beschreibung' },
-    cover_image: { max: 2048, label: 'Cover', strict: true },
-    banner_image: { max: 2048, label: 'Banner', strict: true }
+    alt_title: { max: 300 },
+    author: { max: 300 },
+    publisher: { max: 300 },
+    tags: { max: 500 },
+    description: { max: 10000 },
+    cover_image: { max: 2048, strict: true },
+    banner_image: { max: 2048, strict: true }
+};
+// one text per field (no German label as a parameter); the length texts only for the strict fields
+const TEXT_TYPE_ERRORS = {
+    alt_title: 'Alternativtitel muss ein Text sein',
+    author: 'Autor muss ein Text sein',
+    publisher: 'Verlag muss ein Text sein',
+    language: 'Sprache muss ein Text sein',
+    tags: 'Tags muss ein Text sein',
+    description: 'Beschreibung muss ein Text sein',
+    cover_image: 'Cover muss ein Text sein',
+    banner_image: 'Banner muss ein Text sein'
+};
+const TEXT_LENGTH_ERRORS = {
+    cover_image: 'Cover ist zu lang (maximal {max} Zeichen)',
+    banner_image: 'Banner ist zu lang (maximal {max} Zeichen)'
 };
 
 const TOTAL_VOLUMES_ERROR = 'Gesamtbände muss eine ganze Zahl zwischen 1 und 5000 sein';
+const EDITION_ERRORS = {
+    language: 'Unbekannte Sprache',
+    region: 'Ungültige Region (zwei Buchstaben, z. B. US)',
+    currency: 'Ungültige Währung (drei Buchstaben, z. B. EUR)',
+    work_key: 'Ungültiger Werk-Schlüssel'
+};
+
+/** language, region and currency of an edition from a body; only fields present are returned. */
+function readEditionFields(body) {
+    const fields = {};
+    if (body.language !== undefined) {
+        if (body.language !== null && typeof body.language !== 'string') return { error: TEXT_TYPE_ERRORS.language };
+        const parsed = parseLanguage(body.language);
+        if (!parsed) return { error: EDITION_ERRORS.language, code: 'LANGUAGE_INVALID' };
+        fields.language = parsed.language;
+        // a BCP-47 tag ('en-US') names the region unless the body sends one
+        if (parsed.region && body.region === undefined) fields.region = parsed.region;
+    }
+    if (body.region !== undefined) {
+        if (body.region === null || body.region === '') fields.region = null;
+        else {
+            const region = normalizeRegion(body.region);
+            if (!region) return { error: EDITION_ERRORS.region };
+            fields.region = region;
+        }
+    }
+    if (body.currency !== undefined && body.currency !== null && body.currency !== '') {
+        const currency = normalizeCurrency(body.currency);
+        if (!currency) return { error: EDITION_ERRORS.currency };
+        fields.currency = currency;
+    }
+    return { fields };
+}
+
+/** A fresh manual work key; random, so a key left behind by an unlink never pulls a series back into that group. */
+const newManualWorkKey = (ctx) => manualWorkKey(ctx.randomId());
+
+/** The edition language of the acting user's new series (users.default_language). */
+const defaultLanguageOf = (ctx) => (ctx.user ? readProfile(ctx.db, ctx.user.id).default_language : DEFAULT_LANGUAGE);
 
 function cleanText(field, value) {
     const spec = TEXT_FIELDS[field];
     if (value === undefined || value === null) return { value: null };
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
-        return { error: `${spec.label} muss ein Text sein` };
+        return { error: TEXT_TYPE_ERRORS[field] };
     }
     const text = String(value).trim();
     if (!text) return { value: null };
     if (text.length > spec.max) {
-        if (spec.strict) return { error: `${spec.label} ist zu lang (maximal ${spec.max} Zeichen)` };
+        if (spec.strict) return { error: msg(TEXT_LENGTH_ERRORS[field], { max: spec.max }) };
         return { value: text.slice(0, spec.max) };
     }
     return { value: text };
@@ -54,7 +112,7 @@ function parseSeriesStatus(value) {
     if (value === undefined || value === null || value === '') return { value: 'Laufend' };
     const status = typeof value === 'string' ? (MANGA_STATUS_ALIASES[value.trim()] || value.trim()) : null;
     if (!MANGA_STATUSES.includes(status)) {
-        return { error: 'Ungültiger Status (erlaubt: ' + MANGA_STATUSES.join(', ') + ')' };
+        return { error: msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(MANGA_STATUSES) }) };
     }
     return { value: status };
 }
@@ -92,6 +150,9 @@ function readMangaFields(body, stored = null) {
         fields[field] = r.value;
     }
     if (fields.publisher !== undefined) fields.publisher = normalizePublisher(fields.publisher);
+    const edition = readEditionFields(body);
+    if (edition.error) return edition;
+    Object.assign(fields, edition.fields);
     if (body.total_volumes !== undefined) {
         const r = parseTotalVolumes(body.total_volumes);
         if (r.error) return { error: r.error };
@@ -143,27 +204,38 @@ function create(ctx, { body }) {
     if (cleanTitle.length > 300) {
         throw badRequest('Titel ist zu lang (maximal 300 Zeichen)');
     }
-    const { fields, error } = readMangaFields(body);
-    if (error) throw badRequest(error);
+    const { fields, error, code } = readMangaFields(body);
+    if (error) throw badRequest(error, code);
     const status = parseSeriesStatus(body.status);
     if (status.error) throw badRequest(status.error);
+    // a picked AniList/MyAnimeList hit names the work, so its editions find each other; manual groups only via /editions and /work
+    let workKey = null;
+    if (body.work_key !== undefined && body.work_key !== null && body.work_key !== '') {
+        if (!isWorkKey(body.work_key) || isManualWorkKey(body.work_key)) throw badRequest(EDITION_ERRORS.work_key, 'WORK_KEY_INVALID');
+        workKey = body.work_key;
+    }
+    const language = fields.language || defaultLanguageOf(ctx);
 
     const result = ctx.db.prepare(`
-        INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         cleanTitle,
         fields.alt_title ?? null,
         fields.author ?? null,
         fields.publisher ?? null,
-        fields.language || 'Deutsch',
+        language,
+        fields.region ?? null,
+        fields.currency || DEFAULT_CURRENCY,
+        workKey,
         status.value,
         fields.tags ?? null,
         fields.total_volumes ?? null,
         fields.description ?? null,
         fields.cover_image ?? null,
         fields.banner_image ?? null,
-        fields.manga_passion_id ?? null,
+        // Manga Passion only knows German editions
+        isMpLanguage(language) ? fields.manga_passion_id ?? null : null,
         fields.wish_priority ?? null,
         fields.collecting ?? 'aktiv',
         ctx.user.id
@@ -190,8 +262,8 @@ function update(ctx, { params, body }) {
             throw badRequest('Titel ist zu lang (maximal 300 Zeichen)');
         }
     }
-    const { fields, error } = readMangaFields(body, manga);
-    if (error) throw badRequest(error);
+    const { fields, error, code } = readMangaFields(body, manga);
+    if (error) throw badRequest(error, code);
     // a stored status from before the whitelist may be sent back unchanged
     let status = manga.status || 'Laufend';
     if (body.status !== undefined && body.status !== manga.status) {
@@ -200,10 +272,11 @@ function update(ctx, { params, body }) {
         status = r.value;
     }
     const pick = (field) => (fields[field] !== undefined ? fields[field] : manga[field]);
+    const language = fields.language === null ? defaultLanguageOf(ctx) : (pick('language') || DEFAULT_LANGUAGE);
 
     ctx.db.prepare(`
         UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?,
-        language = ?, status = ?, tags = ?, total_volumes = ?,
+        language = ?, region = ?, currency = ?, status = ?, tags = ?, total_volumes = ?,
         description = ?, cover_image = ?,
         banner_image = ?, manga_passion_id = ?, wish_priority = ?, collecting = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -212,20 +285,94 @@ function update(ctx, { params, body }) {
         pick('alt_title') || null,
         pick('author') || null,
         fields.publisher !== undefined ? fields.publisher : (normalizePublisher(manga.publisher) || null),
-        pick('language') || 'Deutsch',
+        language,
+        pick('region') ?? null,
+        pick('currency') || DEFAULT_CURRENCY,
         status,
         pick('tags') || null,
         pick('total_volumes') ?? null,
         pick('description') || null,
         pick('cover_image') || null,
         pick('banner_image') || null,
-        pick('manga_passion_id') ?? null,
+        isMpLanguage(language) ? pick('manga_passion_id') ?? null : null,
         pick('wish_priority') ?? null,
         pick('collecting') || 'aktiv',
         ctx.user.id,
         params.id
     );
     return { body: { success: true } };
+}
+
+/**
+ * POST /mangas/:id/editions: the same work in another language as a new series. Copies the descriptive fields of the
+ * source; both share the source's work key (a fresh manual one when it has none).
+ */
+function createEdition(ctx, { params, body }) {
+    const source = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(params.id);
+    if (!source) throw notFound('Manga');
+    if (body.language === undefined || body.language === null || body.language === '') {
+        throw badRequest('Sprache ist erforderlich', 'LANGUAGE_INVALID');
+    }
+    const edition = readEditionFields(body);
+    if (edition.error) throw badRequest(edition.error, edition.code);
+    let title = source.title;
+    if (body.title !== undefined && body.title !== null && body.title !== '') {
+        if (typeof body.title !== 'string' || !body.title.trim()) throw badRequest('Titel darf nicht leer sein');
+        if (body.title.trim().length > 300) throw badRequest('Titel ist zu lang (maximal 300 Zeichen)');
+        title = body.title.trim();
+    }
+    let publisher = null;
+    if (body.publisher !== undefined) {
+        const r = cleanText('publisher', body.publisher);
+        if (r.error) throw badRequest(r.error);
+        publisher = normalizePublisher(r.value) || null;
+    }
+    const workKey = source.work_key || newManualWorkKey(ctx);
+    const { fields } = edition;
+    const id = ctx.db.transaction(() => {
+        if (!source.work_key) ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?').run(workKey, source.id);
+        return Number(ctx.db.prepare(`
+            INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes,
+                                description, cover_image, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, ?, ?, ?, ?)
+        `).run(title, source.alt_title, source.author, publisher, fields.language, fields.region ?? null, fields.currency || DEFAULT_CURRENCY,
+            workKey, source.tags, source.total_volumes, source.description, source.cover_image, ctx.user.id).lastInsertRowid);
+    });
+    return { status: 201, body: { success: true, id, work_key: workKey } };
+}
+
+/**
+ * PUT /mangas/:id/work { link_to }: joins the work of another series (both groups merge into one key: an AniList key
+ * wins, else the target's) or, with null, takes this series out of its work.
+ */
+function linkWork(ctx, { params, body }) {
+    const manga = ctx.db.prepare('SELECT id, work_key FROM mangas WHERE id = ?').get(params.id);
+    if (!manga) throw notFound('Manga');
+    if (body.link_to === undefined) throw badRequest('link_to ist erforderlich (Reihen-ID oder null)');
+    let workKey = null;
+    if (body.link_to === null || body.link_to === '') {
+        ctx.db.transaction(() => {
+            ctx.db.prepare('UPDATE mangas SET work_key = NULL WHERE id = ?').run(manga.id);
+            // a manual group of one is no group: its key would otherwise wait for the next link
+            if (isManualWorkKey(manga.work_key)) {
+                const left = ctx.db.prepare('SELECT id FROM mangas WHERE work_key = ? LIMIT 2').all(manga.work_key);
+                if (left.length === 1) ctx.db.prepare('UPDATE mangas SET work_key = NULL WHERE id = ?').run(left[0].id);
+            }
+        });
+    } else {
+        const targetId = parsePositiveInt(body.link_to);
+        if (!targetId) throw badRequest('Ungültige Reihen-ID in link_to');
+        if (targetId === manga.id) throw badRequest('Eine Reihe kann nicht mit sich selbst verknüpft werden');
+        const target = ctx.db.prepare('SELECT id, work_key FROM mangas WHERE id = ?').get(targetId);
+        if (!target) throw notFound('Manga');
+        workKey = preferredWorkKey(manga.work_key, target.work_key) || newManualWorkKey(ctx);
+        ctx.db.transaction(() => {
+            const regroup = ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE work_key = ?');
+            for (const key of new Set([manga.work_key, target.work_key])) if (key && key !== workKey) regroup.run(workKey, key);
+            ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id IN (?, ?)').run(workKey, manga.id, target.id);
+        });
+    }
+    return { body: { success: true, work_key: workKey, editions: snapshot.loadEditions(ctx, { id: manga.id, work_key: workKey }) } };
 }
 
 /** The series goes to the trash (restorable for 30 days); `trash_id` is what POST /trash/:id/restore takes. */
@@ -238,4 +385,4 @@ function remove(ctx, { params }) {
     return { body: { success: true, trash_id: trashId } };
 }
 
-module.exports = { list, create, detail, update, remove, tags, readMangaFields, COLLECTING_STATUSES };
+module.exports = { list, create, detail, update, remove, tags, createEdition, linkWork, readMangaFields, COLLECTING_STATUSES };

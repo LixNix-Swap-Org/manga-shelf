@@ -7,6 +7,7 @@ const log = require('./utils/logger').child('db');
 const { config } = require('./utils/config');
 const schema = require('./core/schema');
 const { loadPublisherAliases } = require('./core/lib/publishers');
+const { msg } = require('./core/errors');
 
 // DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
 const dataDir = config.dataDir;
@@ -129,30 +130,45 @@ function openRawDb(file, options = {}) {
     }
 }
 
+/** 400 for an uploaded database; `reason` is a msg() or SQLite's own text (both reach the client nested). */
+function invalidDbFile(reason) {
+    const text = msg('Ungültige Backup-Datenbank: {reason}', { reason });
+    const invalid = new Error(text.text);
+    invalid.status = 400; // the uploaded file is at fault, not the server
+    invalid.extra = { msg: text.template, params: text.params };
+    return invalid;
+}
+
+/** What makes an open SQLite file unusable as a Manga Shelf database (a msg()), or null. */
+function dbFileProblem(probe) {
+    const check = probe.prepare('PRAGMA integrity_check').get();
+    const result = check && Object.values(check)[0];
+    if (result !== 'ok') return msg('Integritätsprüfung fehlgeschlagen: {result}', { result });
+    const tables = new Set(probe.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name));
+    for (const t of ['users', 'mangas', 'volumes']) {
+        if (!tables.has(t)) return msg('Tabelle "{table}" fehlt in der Datenbank', { table: t });
+    }
+    const admins = probe.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin'").get();
+    if (!admins || admins.count < 1) return msg('Die Datenbank enthält keinen Administrator');
+    return null;
+}
+
 /**
  * Verifies that a SQLite file is intact and looks like a Manga Shelf database
  * (integrity_check, required tables, at least one admin). Throws a descriptive Error otherwise.
  */
 function validateDbFile(file) {
     let probe;
+    let problem = null;
     try {
         probe = openRawDb(file, { readOnly: true });
-        const check = probe.prepare('PRAGMA integrity_check').get();
-        const result = check && Object.values(check)[0];
-        if (result !== 'ok') throw new Error('Integritätsprüfung fehlgeschlagen: ' + result);
-        const tables = new Set(probe.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name));
-        for (const t of ['users', 'mangas', 'volumes']) {
-            if (!tables.has(t)) throw new Error(`Tabelle "${t}" fehlt in der Datenbank`);
-        }
-        const admins = probe.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin'").get();
-        if (!admins || admins.count < 1) throw new Error('Die Datenbank enthält keinen Administrator');
+        problem = dbFileProblem(probe);
     } catch (err) {
-        const invalid = new Error('Ungültige Backup-Datenbank: ' + err.message);
-        invalid.status = 400; // the uploaded file is at fault, not the server
-        throw invalid;
+        problem = err.message;
     } finally {
         try { probe && probe.close(); } catch (e) { /* ignore */ }
     }
+    if (problem !== null) throw invalidDbFile(problem);
 }
 
 
@@ -167,9 +183,7 @@ function migrateDbFile(file) {
         conn.exec('PRAGMA journal_mode = DELETE;');
         applySchema(conn);
     } catch (err) {
-        const invalid = new Error('Ungültige Backup-Datenbank: Migration fehlgeschlagen: ' + err.message);
-        invalid.status = 400;
-        throw invalid;
+        throw invalidDbFile(msg('Migration fehlgeschlagen: {cause}', { cause: err.message }));
     } finally {
         try { conn && conn.close(); } catch (e) { /* ignore */ }
         for (const suffix of ['-wal', '-shm']) {

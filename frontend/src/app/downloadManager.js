@@ -3,6 +3,7 @@ import { notify } from '../utils/notify';
 import { formatNumber } from '../utils/format';
 import { getActiveServer, subscribeServers } from './serverStore';
 import { getLocalProfile, subscribeMode } from '../local/profile';
+import { t } from '../i18n/index.js';
 
 const MB = 1024 * 1024;
 const UNKNOWN_SIZE_STEP = 5 * MB;
@@ -12,8 +13,8 @@ export function downloadProgressText(progress) {
   if (!progress) return '';
   const loaded = formatNumber(progress.loaded / MB, 1);
   return progress.total > 0
-    ? `Lädt… ${loaded} von ${formatNumber(progress.total / MB, 1)} MB`
-    : `Lädt… ${loaded} MB`;
+    ? t('Lädt… {loaded} von {total} MB', { loaded, total: formatNumber(progress.total / MB, 1) })
+    : t('Lädt… {loaded} MB', { loaded });
 }
 
 // session key + path -> running download; path -> number of mounted links showing it
@@ -65,12 +66,12 @@ const toastStep = ({ loaded, total }) => (total > 0 ? Math.floor((loaded / total
 // a toast the user closed is not shown again for this background phase
 function showToast(d) {
   d.toastStep = toastStep(d.progress);
-  const text = `Download läuft weiter (${downloadProgressText(d.progress)})`;
+  const text = t('Download läuft weiter ({progress})', { progress: downloadProgressText(d.progress) });
   if (d.toastId !== null) {
     notify.update(d.toastId, text);
     return;
   }
-  d.toastId = notify.info(text, { duration: 0, action: { label: 'Abbrechen', onClick: () => d.controller.abort() } });
+  d.toastId = notify.info(text, { duration: 0, action: { label: t('Abbrechen'), onClick: () => d.controller.abort() } });
 }
 
 function hideToast(d) {
@@ -121,11 +122,11 @@ export function startDownload(path, { filename } = {}) {
   d.promise = (async () => {
     try {
       const saved = await downloadFile(path, { filename, signal: d.controller.signal, onProgress });
-      if (d.background) notify.success(`Download gespeichert: ${saved?.filename || filename || 'Datei'}`);
+      if (d.background) notify.success(t('Download gespeichert: {filename}', { filename: saved?.filename || filename || t('Datei') }));
       return true;
     } catch (e) {
-      if (!isAbortError(e)) notify.error(e, { fallback: 'Download fehlgeschlagen' });
-      else if (d.background) notify.info('Download abgebrochen');
+      if (!isAbortError(e)) notify.error(e, { fallback: t('Download fehlgeschlagen') });
+      else if (d.background) notify.info(t('Download abgebrochen'));
       return false;
     } finally {
       hideToast(d);

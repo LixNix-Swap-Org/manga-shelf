@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   normalizePubName, compareVolumesByNumber, getVolumeSortInfo, hasUserRead, inferVolumeType,
-  getVolumeDisplayTitle, getEditionLabel, matchesConditionFilter, filtersAllowGaps, VOLUME_CONDITIONS
+  getVolumeDisplayTitle, getEditionLabel, matchesConditionFilter, filtersAllowGaps, VOLUME_CONDITIONS,
+  READ_FILTER, UNREAD_FILTER, normalizeVolumeFilter
 } from '../utils/volumeHelpers';
 import { createSearch, prepareQuery, compareNatural } from '../utils/search';
 import { isCollectibleVolume } from '../components/detail/volumeViewHelpers';
@@ -28,7 +29,11 @@ const readViewMode = () => {
 /** Filter, search, sort and view-mode state of the volume list plus the filtered/sorted result and the type counts. */
 export default function useVolumeFilters({ volumes, manga, user, selectedReaderId }) {
   // Filters & Sorting for Volumes
-  const [volumeFilter, setVolumeFilter] = useState('ALL'); // 'ALL' | 'Vorhanden' | 'Fehlt' | 'Gelesen' | 'Ungelesen'
+  const [volumeFilter, setRawVolumeFilter] = useState('ALL'); // 'ALL' | stored status ('Vorhanden' …) | READ_FILTER | UNREAD_FILTER
+  const setVolumeFilter = useCallback(
+    (next) => setRawVolumeFilter((prev) => normalizeVolumeFilter(typeof next === 'function' ? next(prev) : next)),
+    []
+  );
   const [volumeTypeFilter, setVolumeTypeFilter] = useState('ALL'); // 'ALL' | 'volume' | 'special_edition' | 'schuber' | 'special'
   const [volumePublisherFilter, setVolumePublisherFilter] = useState('ALL');
   const [volumeConditionFilter, setVolumeConditionFilter] = useState('ALL');
@@ -78,8 +83,8 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
       if (volumeFilter === 'Vorbestellt' && v.status !== 'Vorbestellt') return false;
       if (volumeFilter === 'Erscheint bald' && v.status !== 'Erscheint bald') return false;
       // owned only, like reader_stats.read_count shown on the chip
-      if (volumeFilter === 'Gelesen' && (v.status !== 'Vorhanden' || !isReadByTarget)) return false;
-      if (volumeFilter === 'Ungelesen') {
+      if (volumeFilter === READ_FILTER && (v.status !== 'Vorhanden' || !isReadByTarget)) return false;
+      if (volumeFilter === UNREAD_FILTER) {
         if (v.status !== 'Vorhanden' || isReadByTarget) return false;
       }
       

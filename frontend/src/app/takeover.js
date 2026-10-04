@@ -7,6 +7,8 @@ import { buildBackupZip, readBackupZip, restorableUploadName } from '../local/ba
 import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
+import { t } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
 export class TakeoverError extends Error {
   constructor(message, { status = 0, code = null, data = null } = {}) {
@@ -18,13 +20,14 @@ export class TakeoverError extends Error {
   }
 }
 
+// i18n
 const NETWORK_TEXT = 'Server nicht erreichbar – Adresse und Verbindung prüfen.';
 
 /** The server address as stored (https, or http in the home network); throws with a German message otherwise. */
 export function checkedBase(url) {
   const base = normalizeBase(url);
-  if (!base) throw new TakeoverError('Bitte eine Adresse mit http:// oder https:// eingeben.');
-  if (!isSecureEnough(base)) throw new TakeoverError(INSECURE_URL_TEXT);
+  if (!base) throw new TakeoverError(t('Bitte eine Adresse mit http:// oder https:// eingeben.'));
+  if (!isSecureEnough(base)) throw new TakeoverError(t(INSECURE_URL_TEXT));
   return base;
 }
 
@@ -41,13 +44,13 @@ async function call(session, path, { method = 'GET', body, form, raw = false, fe
   try {
     res = await fetchImpl(`${session.base}${path}`, { method, headers, body: payload, credentials: 'omit' });
   } catch (err) {
-    throw new TakeoverError(NETWORK_TEXT, { code: 'NETWORK' });
+    throw new TakeoverError(t(NETWORK_TEXT), { code: 'NETWORK' });
   }
   if (raw && res.ok) return res;
   let data = null;
   try { data = await res.json(); } catch (_) { /* not JSON */ }
   if (!res.ok) {
-    throw new TakeoverError(data?.error || `Anfrage fehlgeschlagen (HTTP ${res.status})`, { status: res.status, code: data?.code || null, data });
+    throw new TakeoverError(serverText(data) || t('Anfrage fehlgeschlagen (HTTP {status})', { status: res.status }), { status: res.status, code: data?.code || null, data });
   }
   return data;
 }
@@ -56,7 +59,7 @@ async function call(session, path, { method = 'GET', body, form, raw = false, fe
 export async function remoteLogin({ url, username, password, fetchImpl }) {
   const base = checkedBase(url);
   const data = await call({ base, fetchImpl }, '/api/auth/login', { method: 'POST', body: { username, password } });
-  if (!data?.token || !data.user) throw new TakeoverError('Der Server hat keine Sitzung für die App ausgegeben (Version zu alt?).');
+  if (!data?.token || !data.user) throw new TakeoverError(t('Der Server hat keine Sitzung für die App ausgegeben (Version zu alt?).'));
   return { base, token: data.token, user: data.user, fetchImpl };
 }
 
@@ -111,7 +114,7 @@ export const cancelTransfer = (session, stagingId) => call(session, `/api/backup
 /** "Zusammenführen": the local CSV export into the server, as dry run first (the preview) or for real. */
 export async function mergeCsv(session, runtime, { dryRun }) {
   const exported = await runtime.request('GET', '/api/export/csv');
-  if (exported.status !== 200 || typeof exported.body !== 'string') throw new TakeoverError('Der CSV-Export der lokalen Sammlung ist fehlgeschlagen.');
+  if (exported.status !== 200 || typeof exported.body !== 'string') throw new TakeoverError(t('Der CSV-Export der lokalen Sammlung ist fehlgeschlagen.'));
   return call(session, '/api/import/csv', { method: 'POST', body: { csv: exported.body.replace(/^\uFEFF/, ''), dry_run: Boolean(dryRun) } });
 }
 
@@ -221,7 +224,7 @@ export async function pullFromServer(session, runtime, { onProgress } = {}) {
     return { kind: 'backup', profile, counts: runtime.facts().counts };
   }
   const snapshot = await call(session, '/api/offline-snapshot');
-  if (!snapshot?.user || !snapshot.details) throw new TakeoverError('Der Server hat keine vollständige Offline-Kopie geliefert.');
+  if (!snapshot?.user || !snapshot.details) throw new TakeoverError(t('Der Server hat keine vollständige Offline-Kopie geliefert.'));
   const dbBytes = runtime.databaseCopy((conn) => fillFromSnapshot(conn, snapshot), { from: 'empty' });
   const uploads = await downloadUploads(session, uploadPaths(snapshot), onProgress);
   const profile = await runtime.replaceDatabase(dbBytes, { uploads, profileName: snapshot.user.username });

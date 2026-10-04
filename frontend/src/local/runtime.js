@@ -13,12 +13,14 @@ import { createLocalServer } from './localServer.js';
 import { LOCAL_STORE_EVENT, SAVE_FAILED_TEXT, LOCKED_TEXT, CONFLICT_TEXT } from './store.js';
 import { windowLocks as sharedWindowLocks } from './localTransport.js';
 import { LOCAL_PASSWORD_HASH, sanitizeImportedDatabase } from './sanitize.js';
+import { t } from '../i18n/index.js';
 
 export const DB_KEY = 'manga.db';
 // save counter next to the bytes (as text bytes: the native store only takes bytes)
 export const SAVE_SEQ_KEY = 'manga.db.seq';
 export { LOCAL_PASSWORD_HASH };
 export const STAGED_PREFIX = '.incoming-';
+// i18n
 export const BUSY_TEXT = 'Die Sammlung wird gerade ersetzt – bitte gleich noch einmal versuchen.';
 // a follower's profile that the stored database does not have yet: no row until this window holds the lock
 export const PENDING_PROFILE_ID = -1;
@@ -44,14 +46,14 @@ export function openDatabase(SQL, bytes, { live = false } = {}) {
     const conn = sqljs.connectionFromSqlJs(database);
     if (bytes) {
       const check = conn.prepare('PRAGMA quick_check').get();
-      const result = check ? String(Object.values(check)[0]) : 'unbekannt';
-      if (result !== 'ok') throw new Error(`Datenbank ist beschädigt (${result})`);
+      const result = check ? String(Object.values(check)[0]) : t('unbekannt');
+      if (result !== 'ok') throw new Error(t('Datenbank ist beschädigt ({result})', { result }));
       if (!conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mangas'").get()) {
-        throw new Error('Keine Manga-Shelf-Datenbank');
+        throw new Error(t('Keine Manga-Shelf-Datenbank'));
       }
       const version = schema.appliedSchemaVersion(conn);
       if (version > schema.LATEST_SCHEMA_VERSION) {
-        throw Object.assign(new Error(`Die Sicherung stammt aus einer neueren Version (Schema v${version} > v${schema.LATEST_SCHEMA_VERSION}) – bitte erst die App aktualisieren.`), { code: 'SCHEMA_NEWER' });
+        throw Object.assign(new Error(t('Die Sicherung stammt aus einer neueren Version (Schema v{version} > v{latestSchemaVersion}) – bitte erst die App aktualisieren.', { version, latestSchemaVersion: schema.LATEST_SCHEMA_VERSION })), { code: 'SCHEMA_NEWER' });
       }
     }
     schema.applySchema(conn, { loadAliases: live });
@@ -69,7 +71,8 @@ const profileOf = (row) => (row ? { id: row.id, username: row.username, role: 'a
  * (case-insensitive), else a new admin row (null with `create: false`).
  */
 export function ensureProfileRow(conn, { id = null, name } = {}, { create = true, sameName = false } = {}) {
-  const username = String(name || '').trim() || 'Ich';
+  // stored profile name: stays German like every stored default
+  const username = String(name || '').trim() || 'Ich'; // i18n-ignore
   if (id !== null && id !== undefined) {
     const row = conn.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
     if (row && (!sameName || String(row.username).toLowerCase() === username.toLowerCase())) return profileOf(row);
@@ -245,7 +248,7 @@ export async function createLocalRuntime({
   /** A follower never writes: a profile the stored database lacks stays pending until this window holds the lock. */
   function resolveProfile(selection, options = {}) {
     return ensureProfileRow(conn, selection, { ...options, create: !follower })
-      || { id: PENDING_PROFILE_ID, username: String(selection?.name || '').trim() || 'Ich', role: 'admin' };
+      || { id: PENDING_PROFILE_ID, username: String(selection?.name || '').trim() || 'Ich', role: 'admin' }; // i18n-ignore
   }
 
   try {
@@ -341,7 +344,7 @@ export async function createLocalRuntime({
   async function flush() {
     if (timer || dirty) await save();
     else await saving;
-    if (lastError) throw codedError(`${SAVE_FAILED_TEXT}: ${lastError.message || lastError}`, lastError.code || 'LOCAL_SAVE_FAILED');
+    if (lastError) throw codedError(`${t(SAVE_FAILED_TEXT)}: ${lastError.message || lastError}`, lastError.code || 'LOCAL_SAVE_FAILED');
   }
 
   // a new database or a new profile row is stored right away, not only with the first change
@@ -440,7 +443,7 @@ export async function createLocalRuntime({
   async function request(method, url, body) {
     const m = String(method || 'GET').toUpperCase();
     const target = String(url);
-    if (!target.startsWith('/api/')) return { status: 404, headers: {}, body: { error: 'Nicht gefunden', code: 'NOT_FOUND' } };
+    if (!target.startsWith('/api/')) return { status: 404, headers: {}, body: { error: 'Nicht gefunden', code: 'NOT_FOUND' } }; // i18n-ignore: answer text
     const sub = target.slice(4);
     const path = sub.split('?')[0];
     // writes that cannot be kept are refused instead of acknowledged
@@ -509,7 +512,8 @@ export async function createLocalRuntime({
      */
     async replaceDatabase(bytes, { uploads = null, profileName, prepare = null } = {}) {
       const refused = refusal();
-      if (refused && refused.status !== 507) throw codedError(refused.body.error, refused.body.code);
+      // i18n-dynamic: the refusal texts are the marked constants of store.js and BUSY_TEXT
+      if (refused && refused.status !== 507) throw codedError(t(refused.body.error), refused.body.code);
       // fenced until the end: a save of the old database queued behind the new bytes would bring it back
       replacing = true;
       clearTimeout(timer);

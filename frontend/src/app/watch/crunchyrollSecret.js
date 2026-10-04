@@ -2,6 +2,7 @@
 // Keychain/Keystore, never in Preferences, the device database or a request to a Manga Shelf server; per device, so a
 // server switch keeps it.
 import crunchyroll from '../../../../core/watch/crunchyroll.js';
+import { t } from '../../i18n/index.js';
 
 export const SECRET_KEY = 'watch-secret:crunchyroll';
 // KeychainAccess.whenUnlockedThisDeviceOnly of @aparajita/capacitor-secure-storage: no iCloud, no device migration
@@ -23,7 +24,7 @@ export async function readSecret(bridge) {
 /** Stores the secret (checked by core/watch/crunchyroll.js parseSecret) with this-device-only access, never synced. */
 export async function writeSecret(bridge, secret, now = Date.now()) {
   const value = crunchyroll.parseSecret({ ...secret, saved_at: now });
-  if (!value) throw new TypeError('Crunchyroll-Anmeldung unvollständig');
+  if (!value) throw new TypeError(t('Crunchyroll-Anmeldung unvollständig'));
   await bridge.plugins.SecureStorage.set(SECRET_KEY, value, false, false, accessOf(bridge));
   return value;
 }

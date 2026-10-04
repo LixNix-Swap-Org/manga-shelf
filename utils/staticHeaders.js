@@ -6,7 +6,7 @@ const path = require('path');
  * files of exactly one build: a cached copy would, after an update, point at files that no longer exist (blank page).
  */
 function setStaticHeaders(res, filePath) {
-    if (/(^|[\\/])(sw\.js|manifest\.json|index\.html)$/.test(filePath)) {
+    if (/(^|[\\/])(sw\.js|manifest(\.[a-z]{2}(-[A-Za-z]+)?)?\.json|index\.html)$/.test(filePath)) {
         res.setHeader('Cache-Control', 'no-cache');
     }
 }

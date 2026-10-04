@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { manualWorkKey } = require('../core/lib/language');
 
 const DEFAULTS = { series: 1500, volumes: 45000, seed: 42 };
 const USERS_FILE = 'seed-users.json';
@@ -15,6 +16,9 @@ const PUBLISHERS = ['Carlsen Manga', 'Egmont Manga', 'Tokyopop', 'Altraverse', '
 const WORDS = ['Blade', 'Shadow', 'Dragon', 'Ninja', 'Hero', 'Academy', 'Ghost', 'Moon', 'Sun', 'Kaiser', 'Titan', 'Hunter', 'Spirit', 'Sword', 'Hearts', 'Kingdom', 'Chainsaw', 'Detektiv', 'Attack', 'Saga', 'Magic', 'Returner', 'Witch', 'Akira', 'Berserk', 'Fullmetal', 'one', 'my', 'a'];
 const LOREM = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ';
 const CONDITIONS = ['Neuwertig', 'Sehr gut', 'Gut'];
+// every 12th series from the 6th on is the English edition of the one before, from the 11th on a Japanese one of its own;
+// chosen by position, not by rand(), so a seed keeps its collection
+const OTHER_EDITIONS = { 5: { language: 'en', region: 'US', currency: 'USD', linked: true }, 10: { language: 'ja', region: 'JP', currency: 'JPY', linked: false } };
 
 function mulberry32(a) {
   return function () {
@@ -76,8 +80,10 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
   runTransaction(() => {
     const insUser = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
     const users = DEMO_USERS.map(([name, role]) => Number(insUser.run(name, passwordHashes[name], role).lastInsertRowid));
-    const insManga = db.prepare(`INSERT INTO mangas (title, alt_title, author, publisher, language, status, tags, total_volumes, description, cover_image, manga_passion_id, manga_passion_edition_data, updated_by)
-      VALUES (?, ?, ?, ?, 'Deutsch', ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insManga = db.prepare(`INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, manga_passion_id, manga_passion_edition_data, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const setWorkKey = db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?');
+    let previous = null;
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
@@ -86,15 +92,24 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
     for (let s = 0; s < series; s++) {
       const size = sizes[s];
       const publisher = pick(PUBLISHERS);
-      const title = `${pick(WORDS)} ${pick(WORDS)} ${String(s + 1).padStart(4, '0')}`;
+      const generated = `${pick(WORDS)} ${pick(WORDS)} ${String(s + 1).padStart(4, '0')}`;
+      const other = OTHER_EDITIONS[s % 12] || null;
+      const linkedTo = other && other.linked && previous ? previous : null;
+      const title = linkedTo ? linkedTo.title : generated;
+      // a manual key like the API's, derived from seed and position so the collection stays reproducible
+      const workKey = linkedTo ? manualWorkKey(crypto.createHash('sha256').update(`${seed}:${s}`).digest('hex')) : null;
       const linked = rand() < 0.4;
       const mangaStatus = rand() < 0.3 ? 'Abgeschlossen' : 'Laufend';
       const edition = linked ? JSON.stringify({
         id: 10000 + s, title, publisher, total_volumes: size, status: mangaStatus,
         volumes: Array.from({ length: Math.min(6, size) }, (_, k) => ({ number: k + 1, date: '2024-01-01', price: 7.5 }))
       }) : null;
-      const mangaId = Number(insManga.run(title, rand() < 0.5 ? title.toUpperCase() : null, `Autor ${int(1, 400)}`, publisher, mangaStatus,
-        'Action, Fantasy', size, LOREM.repeat(int(1, 4)), `/uploads/cover-${s}.jpg`, linked ? 10000 + s : null, edition, users[0]).lastInsertRowid);
+      const mangaId = Number(insManga.run(title, rand() < 0.5 ? title.toUpperCase() : null, `Autor ${int(1, 400)}`, publisher,
+        other ? other.language : 'de', other ? other.region : null, other ? other.currency : 'EUR', workKey, mangaStatus,
+        'Action, Fantasy', size, LOREM.repeat(int(1, 4)), `/uploads/cover-${s}.jpg`, linked && !other ? 10000 + s : null, linked && !other ? edition : null,
+        users[0]).lastInsertRowid);
+      if (workKey) setWorkKey.run(workKey, linkedTo.id);
+      previous = { id: mangaId, title };
       stats.series++;
 
       const giant = size >= 100;

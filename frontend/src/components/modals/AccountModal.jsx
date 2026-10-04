@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
-import { KeyRound, Lock, X } from 'lucide-react';
+import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
+import { KeyRound, Languages, Lock, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
 import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils/api';
@@ -7,6 +7,12 @@ import { notify } from '../../utils/notify';
 import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
 import ApiKeyCard from './ApiKeyCard';
 import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
+import LanguageSelect from '../common/LanguageSelect';
+import { t } from '../../i18n/index.js';
+import { serverText } from '../../i18n/serverText.js';
+import { markReopenAccount } from '../../i18n/preference.js';
+import { useDefaultLanguage } from '../common/LanguagePill';
+import { EDITION_LANGUAGES, languageName, setDefaultLanguage, withCurrent } from '../../utils/editions';
 
 // apps only (feature-detected): the Crunchyroll history card and its sync code load on demand; other builds drop them
 const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/CrunchyrollCard')) : null;
@@ -24,7 +30,7 @@ function PasswordTab({ onClose }) {
     e.preventDefault();
     setError('');
     if (next !== repeat) {
-      setError('Die beiden neuen Passwörter sind nicht gleich.');
+      setError(t('Die beiden neuen Passwörter sind nicht gleich.'));
       return;
     }
     setSaving(true);
@@ -38,9 +44,9 @@ function PasswordTab({ onClose }) {
         rememberToken(data, { rotate: true });
         setDone(true);
       }
-      else setError(data.error || 'Das Passwort konnte nicht geändert werden.');
+      else setError(serverText(data) || t('Das Passwort konnte nicht geändert werden.'));
     } catch (err) {
-      setError('Netzwerkfehler');
+      setError(t('Netzwerkfehler'));
     } finally {
       setSaving(false);
     }
@@ -50,10 +56,10 @@ function PasswordTab({ onClose }) {
     return (
       <div className="space-y-4">
         <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 p-3.5 rounded-xl text-sm">
-          Dein Passwort wurde geändert. Auf anderen Geräten musst du dich neu anmelden.
+          {t('Dein Passwort wurde geändert. Auf anderen Geräten musst du dich neu anmelden.')}
         </div>
         <div className="flex justify-end">
-          <button type="button" onClick={onClose} className="btn-primary text-sm">Schließen</button>
+          <button type="button" onClick={onClose} className="btn-primary text-sm">{t('Schließen')}</button>
         </div>
       </div>
     );
@@ -64,20 +70,20 @@ function PasswordTab({ onClose }) {
         <div role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3 rounded-xl text-sm">{error}</div>
       )}
       <div>
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-current">Aktuelles Passwort</label>
+        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-current">{t('Aktuelles Passwort')}</label>
         <input id="pw-current" type="password" autoComplete="current-password" className="input-field" required autoFocus value={current} onChange={(e) => setCurrent(e.target.value)} />
       </div>
       <div>
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-new">Neues Passwort (mind. 8 Zeichen)</label>
+        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-new">{t('Neues Passwort (mind. 8 Zeichen)')}</label>
         <input id="pw-new" type="password" autoComplete="new-password" className="input-field" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} />
       </div>
       <div>
-        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-repeat">Neues Passwort wiederholen</label>
+        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-repeat">{t('Neues Passwort wiederholen')}</label>
         <input id="pw-repeat" type="password" autoComplete="new-password" className="input-field" required minLength={8} value={repeat} onChange={(e) => setRepeat(e.target.value)} />
       </div>
       <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
-        <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Abbrechen</button>
-        <button type="submit" className="btn-primary text-sm" disabled={saving}>{saving ? 'Wird gespeichert...' : 'Passwort ändern'}</button>
+        <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>{t('Abbrechen')}</button>
+        <button type="submit" className="btn-primary text-sm" disabled={saving}>{saving ? t('Wird gespeichert...') : t('Passwort ändern')}</button>
       </div>
     </form>
   );
@@ -116,7 +122,7 @@ export function useApiKeys({ admin = false, user = true, listSync: withListSync 
       setListSync(sync?.anilist || null);
       return sync?.anilist || null;
     } catch (err) {
-      setError(err.message || 'Schlüssel konnten nicht geladen werden');
+      setError(err.message || t('Schlüssel konnten nicht geladen werden'));
       return null;
     }
   }, [admin, user, withListSync]);
@@ -132,10 +138,10 @@ export function useApiKeys({ admin = false, user = true, listSync: withListSync 
     try {
       const body = scope === 'instance' ? { secret } : { secret, allow_background: allowBackground };
       replace(scope, await api.put(`${base(scope)}/${provider}`, body, { timeout: 30000 }));
-      notify.success('Schlüssel geprüft und gespeichert');
+      notify.success(t('Schlüssel geprüft und gespeichert'));
       return true;
     } catch (err) {
-      return err.message || 'Schlüssel konnte nicht gespeichert werden';
+      return err.message || t('Schlüssel konnte nicht gespeichert werden');
     } finally {
       setBusy(null);
     }
@@ -148,7 +154,7 @@ export function useApiKeys({ admin = false, user = true, listSync: withListSync 
       const sync = await load();
       // the server switches the list sync off with the key; the anime tab drops its hint
       if (scope === 'user' && provider === 'anilist' && sync) announceListSync(sync);
-      notify.success('Schlüssel entfernt');
+      notify.success(t('Schlüssel entfernt'));
     } catch (err) {
       notify.error(err);
     } finally {
@@ -195,8 +201,8 @@ export function useApiKeys({ admin = false, user = true, listSync: withListSync 
       }));
       window.dispatchEvent(new CustomEvent(ANIME_SYNC_EVENT, { detail: result }));
       if (result.last_error) notify.error(result.last_error);
-      else if (result.ran) notify.success('AniList-Liste abgeglichen');
-      else notify.info('Gerade erst abgeglichen – in einer Minute geht es wieder.');
+      else if (result.ran) notify.success(t('AniList-Liste abgeglichen'));
+      else notify.info(t('Gerade erst abgeglichen – in einer Minute geht es wieder.'));
     } catch (err) {
       notify.error(err);
     } finally {
@@ -224,12 +230,11 @@ export function listSyncProps(keys, provider) {
 function KeysTab({ isAdmin, canEdit }) {
   const keys = useApiKeys({ admin: isAdmin, listSync: canEdit });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
-  if (!keys.guides) return <p className="text-sm text-slate-400" role="status">Wird geladen…</p>;
+  if (!keys.guides) return <p className="text-sm text-slate-400" role="status">{t('Wird geladen…')}</p>;
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-400">
-        Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit.
-        Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.
+        {t('Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.')}
       </p>
       {keys.userKeys.map((state) => {
         const guide = keys.guideOf(state.provider);
@@ -254,8 +259,8 @@ function KeysTab({ isAdmin, canEdit }) {
       )}
       {isAdmin && keys.instanceKeys.length > 0 && (
         <div className="space-y-3 border-t border-slate-800 pt-4" data-testid="instance-keys">
-          <h3 className="text-sm font-bold text-white">Für alle (Instanz)</h3>
-          <p className="text-xs text-slate-400">Gilt für alle Benutzer ohne eigenen Schlüssel. Eine Umgebungsvariable hat Vorrang.</p>
+          <h3 className="text-sm font-bold text-white">{t('Für alle (Instanz)')}</h3>
+          <p className="text-xs text-slate-400">{t('Gilt für alle Benutzer ohne eigenen Schlüssel. Eine Umgebungsvariable hat Vorrang.')}</p>
           {keys.instanceKeys.map((state) => {
             const guide = keys.guideOf(state.provider);
             return guide ? (
@@ -276,9 +281,73 @@ function KeysTab({ isAdmin, canEdit }) {
   );
 }
 
+/**
+ * Default edition language of the collection (users.default_language): series in it get no language pill, new series
+ * start in it. Saved at once with PUT /api/auth/profile.
+ */
+function DefaultLanguageField({ offline }) {
+  const id = useId();
+  const current = useDefaultLanguage();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async (code) => {
+    setSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { default_language: code } });
+      const data = await readJson(res);
+      if (!res.ok) {
+        setError(serverText(data) || t('Speichern fehlgeschlagen'));
+        return;
+      }
+      setDefaultLanguage(data?.user?.default_language || code);
+      notify.success(t('Standardsprache: {language}', { language: languageName(data?.user?.default_language || code) }));
+    } catch (_) {
+      setError(t('Netzwerkfehler – bitte erneut versuchen.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-4 border-t border-slate-800">
+      <label htmlFor={`${id}-default-language`} className="block text-xs font-semibold text-slate-300">{t('Standardsprache deiner Ausgaben')}</label>
+      <select
+        id={`${id}-default-language`}
+        className="input-field bg-slate-950"
+        value={current}
+        disabled={saving || offline}
+        onChange={(e) => save(e.target.value)}
+      >
+        {withCurrent(EDITION_LANGUAGES, current).map((code) => <option key={code} value={code}>{languageName(code)}</option>)}
+      </select>
+      <p className="text-xs text-slate-400">
+        {t('Neue Reihen starten in dieser Sprache. Reihen in anderen Sprachen tragen ein Sprachkürzel (z. B. EN) und lassen sich in der Sammlung nach Sprache filtern.')}
+      </p>
+      {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+    </div>
+  );
+}
+
+/** UI language of this account; the switch remounts the page, the dialog reopens on this tab. */
+function LanguageTab({ offline = false }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-400">
+        {t('Die Sprache gilt für dein Konto auf allen Geräten. „Gerätesprache“ folgt der Sprache des Geräts, auf dem du gerade bist.')}
+      </p>
+      <LanguageSelect beforeChange={() => markReopenAccount('language')} />
+      <DefaultLanguageField offline={offline} />
+    </div>
+  );
+}
+
+// i18n
 const TABS = [
   { id: 'password', label: 'Passwort', Icon: Lock },
-  { id: 'keys', label: 'API-Schlüssel', Icon: KeyRound }
+  { id: 'keys', label: 'API-Schlüssel', Icon: KeyRound },
+  { id: 'language', label: 'Sprache', Icon: Languages }
 ];
 // without a server there is no password, only the keys
 const LOCAL_TABS = TABS.filter((t) => t.id !== 'password');
@@ -302,7 +371,7 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={tab === 'password' ? 'Passwort ändern' : 'API-Schlüssel'}
+      aria-label={tab === 'password' ? t('Passwort ändern') : tab === 'language' ? t('Sprache') : t('API-Schlüssel')}
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
@@ -314,27 +383,29 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
             <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center">
               <Lock className="w-5 h-5" aria-hidden="true" />
             </div>
-            <h2 className="text-xl font-bold text-white">Konto</h2>
+            <h2 className="text-xl font-bold text-white">{t('Konto')}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+          <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div {...tabListProps} aria-label="Bereich" className="flex gap-1 mb-5 bg-slate-900/80 border border-slate-800 p-1 rounded-xl w-fit">
+        <div {...tabListProps} aria-label={t('Bereich')} className="flex gap-1 mb-5 bg-slate-900/80 border border-slate-800 p-1 rounded-xl w-fit">
           {tabs.map(({ id, label, Icon }) => (
             <button
               key={id}
               {...tabProps(id)}
               className={`text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 ${tab === id ? 'bg-brand-700 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {label}
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {t(label)}
             </button>
           ))}
         </div>
 
         <div {...panelProps}>
-          {tab === 'password' ? <PasswordTab onClose={onClose} /> : <KeysTab isAdmin={user?.role === 'admin'} canEdit={!user?.offline && (user?.role === 'admin' || user?.role === 'editor')} />}
+          {tab === 'password' ? <PasswordTab onClose={onClose} />
+            : tab === 'language' ? <LanguageTab offline={Boolean(user?.offline)} />
+              : <KeysTab isAdmin={user?.role === 'admin'} canEdit={!user?.offline && (user?.role === 'admin' || user?.role === 'editor')} />}
         </div>
       </div>
     </div>

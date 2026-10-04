@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
 import { buildScanVolumePayload, prefillTotalVolumes } from '../../utils/scanHelpers';
-import { MANGA_STATUSES, normalizeLookupStatus } from '../../hooks/useMangaData';
+import { MANGA_STATUSES, lookupMangaUrl, normalizeLookupStatus } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError } from '../../utils/api';
@@ -10,7 +10,13 @@ import { formatCount } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { prepareImageForUpload } from '../../utils/imageResize';
 import { PRIORITY_OPTIONS, DEFAULT_WISH_PRIORITY } from '../../utils/priority';
+import { t } from '../../i18n/index.js';
+import { serverText } from '../../i18n/serverText.js';
+import { mangaStatusLabel } from '../../utils/enumLabels';
+import EditionFields from '../common/EditionFields';
+import { editionDefaults, isMpEdition, workKeyOfHit } from '../../utils/editions';
 
+// i18n
 const EMPTY_FORM = {
   title: '',
   alt_title: '',
@@ -21,12 +27,21 @@ const EMPTY_FORM = {
   description: '',
   cover_image: '',
   manga_passion_id: null,
+  // edition (ISO codes); the dialog starts with the account's default language (editionDefaults)
+  language: 'de',
+  region: '',
+  currency: 'EUR',
+  work_key: null,
   wish: false,
   wish_priority: String(DEFAULT_WISH_PRIORITY)
 };
 const MAX_COVER_BYTES = 15 * 1024 * 1024;
+// i18n
 const NETWORK_ERROR = 'Netzwerkfehler – bitte Verbindung prüfen und erneut versuchen.';
+// i18n
 const LOOKUP_SOURCES_HINT = 'Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList';
+// i18n
+const LOOKUP_SOURCES_HINT_OTHER = 'Sucht in AniList und MyAnimeList (Manga Passion kennt nur deutsche Ausgaben)';
 
 const isRemoteUrl = (url) => /^https?:\/\//i.test(url || '');
 const isBlobUrl = (url) => typeof url === 'string' && url.startsWith('blob:');
@@ -45,7 +60,7 @@ async function request(url, init) {
   try {
     return await apiFetch(url, init);
   } catch {
-    throw new Error(NETWORK_ERROR);
+    throw new Error(t(NETWORK_ERROR));
   }
 }
 
@@ -100,7 +115,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       replacePreview('');
       return undefined;
     }
-    setForm({ ...EMPTY_FORM, ...(prefill?.form || {}) });
+    setForm({ ...EMPTY_FORM, ...editionDefaults(), ...(prefill?.form || {}) });
     setScanVolume(prefill?.volume || null);
     setCreatedManga(null);
     setErrorMessage('');
@@ -151,7 +166,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
   const handleLookupMetadata = async () => {
     if (!form.title.trim()) {
-      setLookupError('Bitte gib zuerst einen Titel ein.');
+      setLookupError(t('Bitte gib zuerst einen Titel ein.'));
       return;
     }
     const session = sessionRef.current;
@@ -159,13 +174,13 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     setLookupError('');
     setLookupResults(null);
     try {
-      const res = await apiFetch(`/api/lookup/manga?q=${encodeURIComponent(form.title.trim())}`, { timeout: TIMEOUTS.lookup });
+      const res = await apiFetch(lookupMangaUrl(form.title.trim(), form.language), { timeout: TIMEOUTS.lookup });
       const data = await readJson(res);
       if (session !== sessionRef.current) return;
       if (!res.ok) {
-        setLookupError(data?.error || 'Fehler bei der Suche');
+        setLookupError(serverText(data) || t('Fehler bei der Suche'));
       } else if (!Array.isArray(data) || data.length === 0) {
-        setLookupError('Keine Treffer gefunden.');
+        setLookupError(t('Keine Treffer gefunden.'));
       } else if (data.length === 1) {
         await applyLookupResult(data[0]);
       } else {
@@ -174,8 +189,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     } catch (e) {
       if (session !== sessionRef.current) return;
       setLookupError(e?.code === 'TIMEOUT'
-        ? 'Die Metadatensuche hat zu lange gedauert. Bitte erneut versuchen.'
-        : 'Netzwerkfehler bei der Metadatensuche');
+        ? t('Die Metadatensuche hat zu lange gedauert. Bitte erneut versuchen.')
+        : t('Netzwerkfehler bei der Metadatensuche'));
     } finally {
       if (session === sessionRef.current) setLookingUp(false);
     }
@@ -200,7 +215,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         total_volumes: prefillTotalVolumes(item, prev.total_volumes),
         description: item.description || prev.description,
         cover_image: cover || prev.cover_image,
-        manga_passion_id: item.manga_passion_id || null
+        manga_passion_id: isMpEdition(prev) ? (item.manga_passion_id || null) : null,
+        // an AniList/MyAnimeList hit names the work, so other language editions can be linked to it
+        work_key: item.source === 'manga_passion' ? null : (item.work_key || workKeyOfHit(item))
       }));
       if (cover) {
         setCoverFile(null);
@@ -223,7 +240,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_COVER_BYTES) {
-      setErrorMessage('Bild ist größer als 15 MB');
+      setErrorMessage(t('Bild ist größer als 15 MB'));
       return;
     }
     setErrorMessage('');
@@ -245,11 +262,11 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         try {
           upRes = await apiFetch('/api/upload', { method: 'POST', body: fd, signal: controller.signal });
         } catch (err) {
-          throw isAbortError(err) ? err : new Error(NETWORK_ERROR);
+          throw isAbortError(err) ? err : new Error(t(NETWORK_ERROR));
         }
         const upData = await readJson(upRes);
         if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
-        if (!upRes.ok || !upData?.url) throw new Error(upData?.error || 'Fehler beim Cover-Upload');
+        if (!upRes.ok || !upData?.url) throw new Error(serverText(upData) || t('Fehler beim Cover-Upload'));
         return upData.url;
       } finally {
         if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
@@ -272,25 +289,25 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         body: buildScanVolumePayload(mangaId, scanVolume)
       });
     } catch {
-      return 'Netzwerkfehler – bitte Verbindung prüfen';
+      return t('Netzwerkfehler – bitte Verbindung prüfen');
     }
     if (res.ok) return null;
     const body = await readJson(res);
     // the earlier attempt reached the server but its answer got lost
     if (isRetry && res.status === 409 && body?.existing_id) return null;
-    return body?.error || 'Fehler beim Anlegen des Bands';
+    return serverText(body) || t('Fehler beim Anlegen des Bands');
   };
 
   const handleCreateManga = async (e) => {
     e.preventDefault();
     if (submitting || applyingId !== null) return;
     if (!createdManga && !form.title.trim()) {
-      setErrorMessage('Bitte gib einen Titel ein.');
+      setErrorMessage(t('Bitte gib einen Titel ein.'));
       return;
     }
     const withVolume = Boolean(scanVolume?.enabled);
     if (withVolume && !String(scanVolume.volume_number ?? '').trim()) {
-      setErrorMessage('Bitte gib die Bandnummer des gescannten Buchs ein (oder deaktiviere „Gescannten Band gleich anlegen“).');
+      setErrorMessage(t('Bitte gib die Bandnummer des gescannten Buchs ein (oder deaktiviere „Gescannten Band gleich anlegen“).'));
       return;
     }
 
@@ -314,13 +331,17 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             description: form.description.trim() || null,
             cover_image: cover,
             manga_passion_id: form.manga_passion_id || null,
-            wish_priority: form.wish ? Number(form.wish_priority) : null
+            wish_priority: form.wish ? Number(form.wish_priority) : null,
+            language: form.language,
+            region: form.region || null,
+            currency: form.currency,
+            ...(form.work_key ? { work_key: form.work_key } : {})
           }
         });
         const data = await readJson(res);
-        if (!res.ok) throw new Error(data?.error || 'Fehler beim Erstellen des Mangas');
+        if (!res.ok) throw new Error(serverText(data) || t('Fehler beim Erstellen des Mangas'));
         if (!data?.id) {
-          throw new Error('Die Antwort des Servers war unlesbar. Die Reihe wurde eventuell trotzdem angelegt – bitte die Sammlung prüfen, bevor du es erneut versuchst.');
+          throw new Error(t('Die Antwort des Servers war unlesbar. Die Reihe wurde eventuell trotzdem angelegt – bitte die Sammlung prüfen, bevor du es erneut versuchst.'));
         }
         manga = data;
         setCreatedManga(data);
@@ -330,7 +351,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         const volumeError = await createScanVolume(manga.id, isRetry);
         if (volumeError) {
           if (!isRetry && onSeriesCreated) onSeriesCreated(manga);
-          setErrorMessage(`Die Reihe wurde angelegt, der Band aber nicht: ${volumeError.replace(/[.\s]+$/, '')}. Mit „Band anlegen“ erneut versuchen.`);
+          setErrorMessage(t('Die Reihe wurde angelegt, der Band aber nicht: {reason}. Mit „Band anlegen“ erneut versuchen.', { reason: volumeError.replace(/[.\s]+$/, '') }));
           return;
         }
       }
@@ -338,7 +359,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       handleClose();
       if (onSuccess) onSuccess(manga);
     } catch (err) {
-      setErrorMessage(isAbortError(err) ? UPLOAD_CANCELLED : (err?.message || 'Unbekannter Fehler'));
+      setErrorMessage(isAbortError(err) ? t(UPLOAD_CANCELLED) : (err?.message || t('Unbekannter Fehler')));
     } finally {
       setSubmitting(false);
     }
@@ -352,7 +373,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
   const seriesLocked = Boolean(createdManga);
   const applying = applyingId !== null;
-  const submitLabel = seriesLocked ? (scanVolume?.enabled ? 'Band anlegen' : 'Fertig') : 'Manga anlegen';
+  const submitLabel = seriesLocked ? (scanVolume?.enabled ? t('Band anlegen') : t('Fertig')) : t('Manga anlegen');
 
   return (
     <div
@@ -372,7 +393,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Neuen Manga anlegen"
+      aria-label={t('Neuen Manga anlegen')}
       data-busy={submitting ? 'true' : undefined}
       tabIndex={-1}
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
@@ -386,8 +407,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               <Plus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Neuen Manga anlegen</h2>
-              <p className="text-xs text-slate-400 short:hidden">Erfasse eine neue Reihe in deiner Sammlung</p>
+              <h2 className="text-xl font-bold text-white">{t('Neuen Manga anlegen')}</h2>
+              <p className="text-xs text-slate-400 short:hidden">{t('Erfasse eine neue Reihe in deiner Sammlung')}</p>
             </div>
           </div>
           <button
@@ -395,7 +416,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             type="button"
             onClick={handleClose}
             disabled={submitting}
-            aria-label="Schließen"
+            aria-label={t('Schließen')}
             className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
@@ -413,7 +434,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         <form onSubmit={handleCreateManga} className="space-y-4">
           {seriesLocked && (
             <p className="bg-emerald-950/30 border border-emerald-500/30 text-emerald-200 rounded-xl p-3 text-xs">
-              Reihe „{form.title.trim()}“ ist bereits angelegt. Änderungen an der Reihe später über „Bearbeiten“ auf ihrer Seite.
+              {t('Reihe „{title}“ ist bereits angelegt. Änderungen an der Reihe später über „Bearbeiten“ auf ihrer Seite.', { title: form.title.trim() })}
             </p>
           )}
 
@@ -421,15 +442,15 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           <div>
             <div className="mb-1.5 flex justify-between items-center gap-2">
               <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Titel <span className="text-red-400">*</span>
+                {t('Titel')} <span className="text-red-400">*</span>
               </label>
-              <span className="text-[11px] text-brand-400 font-normal">Tipp: Titel eingeben & auf „Auto-Fill“ klicken</span>
+              <span className="text-[11px] text-brand-400 font-normal">{t('Tipp: Titel eingeben & auf „Auto-Fill“ klicken')}</span>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 id={`${ids}-title`}
                 type="text"
-                placeholder="z.B. One Piece, Chainsaw Man, Frieren..."
+                placeholder={t('z.B. One Piece, Chainsaw Man, Frieren...')}
                 className="input-field flex-1"
                 required
                 data-autofocus
@@ -441,17 +462,17 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 onClick={handleLookupMetadata}
                 disabled={lookingUp || applying || !form.title.trim()}
                 className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-emerald-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
-                title={LOOKUP_SOURCES_HINT}
+                title={t(isMpEdition(form) ? LOOKUP_SOURCES_HINT : LOOKUP_SOURCES_HINT_OTHER)}
               >
                 {lookingUp ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Suche...</span>
+                    <span>{t('Suche...')}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Auto-Fill</span>
+                    <span>{t('Auto-Fill')}</span>
                   </>
                 )}
               </button>
@@ -471,7 +492,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl" aria-busy={applying || undefined}>
               <div className="flex justify-between items-center text-xs">
                 <span className="font-semibold text-brand-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> Treffer auswählen (Manga Passion zuerst):
+                  <Sparkles className="w-3.5 h-3.5" /> {isMpEdition(form) ? t('Treffer auswählen (Manga Passion zuerst):') : t('Treffer auswählen (AniList / MyAnimeList):')}
                 </span>
                 <button
                   type="button"
@@ -479,7 +500,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                   disabled={applying}
                   className="text-slate-400 hover:text-white text-[11px] disabled:opacity-50"
                 >
-                  Schließen
+                  {t('Schließen')}
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
@@ -516,7 +537,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                       <div className="flex items-center gap-1.5 mb-0.5">
                         {item.source === 'manga_passion' ? (
                           <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                            <Library className="w-3 h-3" aria-hidden="true" />Manga Passion
+                            <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
                           </span>
                         ) : lookupSourceLabels(item).map((label) => (
                           <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
@@ -525,7 +546,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                         ))}
                         {isApplying && (
                           <span className="flex items-center gap-1 text-[10px] text-brand-300">
-                            <RefreshCw className="w-3 h-3 animate-spin" /> Wird übernommen…
+                            <RefreshCw className="w-3 h-3 animate-spin" /> {t('Wird übernommen…')}
                           </span>
                         )}
                       </div>
@@ -533,7 +554,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                         {item.title}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate">
-                        {item.author || item.alt_title || 'Unbekannt'}
+                        {item.author || item.alt_title || t('Unbekannt')}
                       </p>
                       <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
                         {item.publisher && (
@@ -547,7 +568,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                           </span>
                         )}
                         <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
-                          {item.status}
+                          {mangaStatusLabel(item.status)}
                         </span>
                       </div>
                     </div>
@@ -561,12 +582,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Autor / Mangaka
+                {t('Autor / Mangaka')}
               </label>
               <input
                 id={`${ids}-author`}
                 type="text"
-                placeholder="z.B. Eiichiro Oda"
+                placeholder={t('z.B. Eiichiro Oda')}
                 className="input-field"
                 value={form.author}
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, author: value })); }}
@@ -575,12 +596,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
             <div>
               <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Verlag
+                {t('Verlag')}
               </label>
               <input
                 id={`${ids}-publisher`}
                 type="text"
-                placeholder="z.B. Carlsen Manga, Tokyopop..."
+                placeholder={t('z.B. Carlsen Manga, Tokyopop...')}
                 className="input-field"
                 value={form.publisher}
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, publisher: value })); }}
@@ -591,7 +612,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Status
+                {t('Status')}
               </label>
               <select
                 id={`${ids}-status`}
@@ -599,13 +620,13 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 value={form.status}
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, status: value })); }}
               >
-                {MANGA_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+                {MANGA_STATUSES.map(status => <option key={status} value={status}>{mangaStatusLabel(status)}</option>)}
               </select>
             </div>
 
             <div>
               <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Geplante / Gesamtbände
+                {t('Geplante / Gesamtbände')}
               </label>
               <input
                 id={`${ids}-total`}
@@ -614,13 +635,20 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 min="1"
                 max="5000"
                 step="1"
-                placeholder="z.B. 108"
+                placeholder={t('z.B. 108')}
                 className="input-field"
                 value={form.total_volumes}
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, total_volumes: value })); }}
               />
             </div>
           </div>
+
+          <EditionFields
+            idPrefix={`${ids}-edition`}
+            value={form}
+            // a picked Manga Passion hit names a German edition: another language must not keep its id (409 MP_LANGUAGE later)
+            onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.language && !isMpEdition(patch) ? { manga_passion_id: null } : {}) }))}
+          />
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
             <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
@@ -631,18 +659,18 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 checked={form.wish}
                 onChange={e => { const checked = e.target.checked; setForm(prev => ({ ...prev, wish: checked })); }}
               />
-              Auf die Wunschliste
+              {t('Auf die Wunschliste')}
             </label>
             {form.wish && (
               <label className="flex items-center gap-2 text-xs text-slate-300">
-                Priorität
+                {t('Priorität')}
                 <select
                   id={`${ids}-wish-priority`}
                   className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
                   value={form.wish_priority}
                   onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, wish_priority: value })); }}
                 >
-                  {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+                  {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{t(o.label)}</option>)}
                 </select>
               </label>
             )}
@@ -651,13 +679,13 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           {/* Cover Upload / URL */}
           <div>
             <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Cover-Bild (Datei hochladen oder URL)
+              {t('Cover-Bild (Datei hochladen oder URL)')}
             </label>
             <div className="flex flex-col sm:flex-row gap-3 items-center">
               <input
                 id={`${ids}-cover`}
                 type="text"
-                placeholder="https://example.com/cover.jpg oder /uploads/..."
+                placeholder={t('https://example.com/cover.jpg oder /uploads/...')}
                 className="input-field flex-1 text-base sm:text-sm"
                 value={form.cover_image}
                 onChange={e => {
@@ -667,21 +695,21 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                   setCoverFile(null);
                 }}
               />
-              <span className="text-xs text-slate-400">oder</span>
+              <span className="text-xs text-slate-400">{t('oder')}</span>
               <FilePickerButton
                 accept="image/*"
                 onChange={handleCoverChange}
-                label="Cover-Datei wählen"
+                label={t('Cover-Datei wählen')}
                 className="btn-secondary text-xs flex items-center gap-2 cursor-pointer shrink-0 py-2.5"
               >
-                <Upload className="w-4 h-4" /> Datei wählen
+                <Upload className="w-4 h-4" /> {t('Datei wählen')}
               </FilePickerButton>
             </div>
             {coverPreview && (
               <div className="mt-2.5 flex items-center gap-3 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
-                <img {...assetImgProps(coverPreview)} alt="Cover-Vorschau" className="w-10 h-14 object-cover rounded-lg" />
+                <img {...assetImgProps(coverPreview)} alt={t('Cover-Vorschau')} className="w-10 h-14 object-cover rounded-lg" />
                 <span className="text-xs text-slate-300 truncate">
-                  {coverCaching && isRemoteUrl(coverPreview) ? 'Cover wird geladen…' : 'Vorschau aktiv'}
+                  {coverCaching && isRemoteUrl(coverPreview) ? t('Cover wird geladen…') : t('Vorschau aktiv')}
                 </span>
               </div>
             )}
@@ -689,12 +717,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
           <div>
             <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Beschreibung
+              {t('Beschreibung')}
             </label>
             <textarea
               id={`${ids}-description`}
               rows="3"
-              placeholder="Kurze Inhaltsangabe..."
+              placeholder={t('Kurze Inhaltsangabe...')}
               className="input-field resize-none text-base sm:text-sm"
               value={form.description}
               onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, description: value })); }}
@@ -710,36 +738,38 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                   checked={scanVolume.enabled}
                   onChange={e => { const checked = e.target.checked; setScanVolume(prev => ({ ...prev, enabled: checked })); }}
                 />
-                <ScanBarcode className="w-4 h-4" /> Gescannten Band gleich anlegen
+                <ScanBarcode className="w-4 h-4" /> {t('Gescannten Band gleich anlegen')}
               </label>
               {scanVolume.enabled && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label htmlFor={`${ids}-volume-number`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Bandnummer <span className="text-red-400">*</span></label>
+                    <label htmlFor={`${ids}-volume-number`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Bandnummer')} <span className="text-red-400">*</span></label>
                     <input
                       id={`${ids}-volume-number`}
                       type="text"
                       className="input-field"
-                      placeholder="z.B. 1"
+                      placeholder={t('z.B. 1')}
                       maxLength={80}
                       value={scanVolume.volume_number}
                       onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, volume_number: value })); }}
                     />
                   </div>
                   <div>
-                    <label htmlFor={`${ids}-volume-status`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Status</label>
+                    <label htmlFor={`${ids}-volume-status`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Status')}</label>
                     <select
                       id={`${ids}-volume-status`}
                       className="input-field"
                       value={scanVolume.status}
                       onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, status: value })); }}
                     >
-                      <option value="Vorhanden">Vorhanden</option>
-                      <option value="Fehlt">Fehlt (Einkaufsliste)</option>
+                      <option value="Vorhanden">{t('Vorhanden')}</option>
+                      <option value="Fehlt">{t('Fehlt (Einkaufsliste)')}</option>
                     </select>
                   </div>
                   <p className="col-span-2 text-[11px] text-slate-400">
-                    ISBN {scanVolume.isbn || '–'}{scanVolume.price ? ` · ${scanVolume.price} €` : ''}{scanVolume.pages ? ` · ${scanVolume.pages} Seiten` : ''}{scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''} werden mit übernommen.
+                    {t('ISBN {details} werden mit übernommen.', {
+                      details: `${scanVolume.isbn || '–'}${scanVolume.price ? ` · ${scanVolume.price} €` : ''}${scanVolume.pages ? ` · ${t('{pages} Seiten', { pages: scanVolume.pages })}` : ''}${scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''}`
+                    })}
                   </p>
                 </div>
               )}
@@ -755,16 +785,16 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               className="btn-secondary text-sm"
               disabled={submitting}
             >
-              {seriesLocked ? 'Schließen' : 'Abbrechen'}
+              {seriesLocked ? t('Schließen') : t('Abbrechen')}
             </button>
             {uploadingCover && (
               <button
                 type="button"
                 onClick={cancelCoverUpload}
                 className="btn-secondary text-sm flex items-center gap-1.5 text-red-300 hover:text-red-200"
-                title="Cover-Upload abbrechen"
+                title={t('Cover-Upload abbrechen')}
               >
-                <X className="w-4 h-4" aria-hidden="true" /> Upload abbrechen
+                <X className="w-4 h-4" aria-hidden="true" /> {t('Upload abbrechen')}
               </button>
             )}
             <button
@@ -775,7 +805,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               {submitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  {uploadingCover ? 'Cover wird hochgeladen…' : coverCaching ? 'Cover wird geladen…' : 'Wird angelegt...'}
+                  {uploadingCover ? t('Cover wird hochgeladen…') : coverCaching ? t('Cover wird geladen…') : t('Wird angelegt...')}
                 </>
               ) : (
                 <>

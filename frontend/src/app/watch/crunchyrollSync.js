@@ -13,6 +13,7 @@ import {
 export const SYNC_FLOOR_MS = 15 * 60 * 1000;
 const POST_TIMEOUT_MS = 30000;
 
+// i18n
 export const SYNC_TEXTS = {
   failed: 'Abgleich fehlgeschlagen',
   loginFailed: 'Anmeldung bei Crunchyroll fehlgeschlagen',

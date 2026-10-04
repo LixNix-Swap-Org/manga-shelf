@@ -12,7 +12,7 @@ const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
 const assert = require('node:assert/strict');
-const { findChrome } = require('./chrome');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 
 async function horizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
@@ -203,6 +203,79 @@ async function shelfProblems(page, minEntries = 26) {
   }, minEntries);
 }
 
+/**
+ * Account dialog, tab "Sprache": English (PUT /auth/profile, remount, the dialog reopens in English, survives a
+ * reload), then back to the device language (--lang=de-DE). Ends with the dialog closed on the German shelf.
+ */
+async function languageSwitch(page, snap = async () => {}) {
+    await clickSelector(page, '#btn-change-password');
+    await clickSelector(page, '#account-tab-language');
+    const languageSelect = '[role="dialog"] [role="tabpanel"] select';
+    await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
+    const toEnglish = waitForApi(page, 'PUT', '/api/auth/profile');
+    await page.select(languageSelect, 'en');
+    assert.ok((await toEnglish).ok(), 'PUT /api/auth/profile (en) failed');
+    // the switch remounts the page; the account dialog comes back on its language tab, now English
+    await page.waitForSelector('[role="dialog"][aria-label="Language"]', { visible: true, timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
+    assert.equal(await page.evaluate(() => localStorage.getItem('mangashelf_locale')), 'en');
+    assert.equal((await apiOk(page, 'GET', '/api/auth/me')).user.locale, 'en');
+    const englishLabel = await page.$eval(languageSelect, (el) => document.querySelector(`label[for="${el.id}"]`)?.textContent);
+    assert.equal(englishLabel, 'Language');
+    await snap('15c_language_english');
+    await page.reload({ waitUntil: 'networkidle0' });
+    assert.equal(await page.evaluate(() => document.documentElement.lang), 'en', 'the choice survives a reload');
+    await clickSelector(page, '#btn-change-password');
+    await clickSelector(page, '#account-tab-language');
+    await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
+    const toDevice = waitForApi(page, 'PUT', '/api/auth/profile');
+    await page.select(languageSelect, '');
+    assert.ok((await toDevice).ok(), 'PUT /api/auth/profile (device) failed');
+    await page.waitForSelector('[role="dialog"][aria-label="Sprache"]', { visible: true, timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.documentElement.lang), 'de', 'back to the device language (--lang=de-DE)');
+    assert.equal((await apiOk(page, 'GET', '/api/auth/me')).user.locale, null);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[role="dialog"]'), { timeout: 5000 });
+}
+
+/**
+ * Editions (wave I18N-D): "+ Ausgabe" on Frieren creates an English (US) edition and opens it; the switcher links both,
+ * the hero and the shelf card carry the EN pill, the shelf's 'Sprache' filter shows only it (URL ?lang=en). The edition
+ * goes to the trash afterwards, so the later steps see the two seeded series again.
+ */
+async function editionTour(page, frierenId, snap = async () => {}) {
+    await page.goto(`${BASE_URL}/manga/${frierenId}`, { waitUntil: 'networkidle0' });
+    await clickSelector(page, '#btn-add-edition');
+    const languageSelect = '#edition-dialog select[id$="-language"]';
+    await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
+    assert.equal(await page.$eval(languageSelect, (el) => el.value), 'en', 'a German series suggests an English edition');
+    await page.select('#edition-dialog select[id$="-region"]', 'US');
+    assert.equal(await page.$eval('#edition-dialog select[id$="-currency"]', (el) => el.value), 'USD', 'the region picks its currency');
+    const created = waitForApi(page, 'POST', `/api/mangas/${frierenId}/editions`);
+    await clickSelector(page, '#btn-create-edition');
+    const answer = await created;
+    assert.ok(answer.ok(), `POST /api/mangas/${frierenId}/editions answered ${answer.status()}`);
+    const englishId = (await answer.json()).id;
+    await page.waitForFunction((id) => window.location.pathname === `/manga/${id}`, { timeout: 10000 }, englishId);
+    await page.waitForSelector(`#edition-switcher a[href="/manga/${frierenId}"]`, { visible: true, timeout: 10000 });
+    assert.ok((await page.$eval('#edition-switcher [aria-current="page"]', (el) => el.textContent)).startsWith('EN-US'));
+    assert.ok(await page.$('.language-pill[data-language="en"]'), 'no language pill in the hero of the English edition');
+    await snap('04c_edition_switcher');
+
+    await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#filter-language-select', { visible: true, timeout: 10000 });
+    assert.ok(await page.$('.language-pill[data-language="en"]'), 'no language pill on the shelf');
+    await page.select('#filter-language-select', 'en');
+    await waitUntil(async () => JSON.stringify(await visibleSeriesIds(page)) === JSON.stringify([englishId]),
+      { message: 'the language filter should show only the English edition' });
+    assert.ok(page.url().includes('lang=en'), 'the language filter is kept in the URL');
+    await snap('04d_filter_language');
+    await page.select('#filter-language-select', 'ALL');
+    await apiOk(page, 'DELETE', `/api/mangas/${englishId}`);
+    await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
+    await waitUntil(async () => (await visibleSeriesIds(page)).length === 2, { message: 'the edition did not leave the shelf' });
+}
+
 const NARROW_PHONE = { width: 360, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
 const SHELF_LAYOUTS = [['rows', 'm'], ['fit', 'm'], ['rows', 'l']];
 
@@ -219,7 +292,7 @@ async function runDeepTestSuite() {
     executablePath,
     headless: 'new',
     defaultViewport: { width: 1440, height: 900 },
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: CHROME_ARGS
   });
   const page = await browser.newPage();
   const watcher = watchPage(page);
@@ -286,6 +359,10 @@ async function runDeepTestSuite() {
       { message: 'publisher filter should show only Frieren' });
     await snap('04b_filter_publisher');
     await page.select('#filter-publisher-select', 'ALL');
+
+    // STEP 3b: Editions in other languages
+    console.log('\n--- Step 3b: Editions (Switcher, Language Pill, Sprache Filter) ---');
+    await editionTour(page, frierenId, snap);
 
     // STEP 4: Statistics
     console.log('\n--- Step 4: Statistics Modal & Tabs ---');
@@ -370,6 +447,10 @@ async function runDeepTestSuite() {
     await page.waitForSelector('#backup-file-input', { timeout: 5000 });
     await snap('15b_backup_upload_tab');
     await clickSelector(page, '#btn-close-restore-modal');
+
+    // STEP 8b: UI language through the account dialog (tab "Sprache"): English and back to the device language
+    console.log('\n--- Step 8b: Language Switch (Account → Sprache) ---');
+    await languageSwitch(page, snap);
 
     // STEP 9: Phone viewport
     console.log('\n--- Step 9: Mobile Viewport Emulation (390 x 844) ---');
@@ -516,4 +597,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { focusUnderHeader, shelfProblems };
+module.exports = { focusUnderHeader, shelfProblems, languageSwitch };

@@ -1,5 +1,5 @@
 // Publisher names and aliases: GET /publishers, POST /publishers/merge, DELETE /publishers/aliases/:alias.
-const { badRequest, notFound } = require('../errors');
+const { msg, badRequest, notFound } = require('../errors');
 const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases, isKnownPublisher } = require('../lib/publishers');
 
 const MAX_NAME = 300;
@@ -58,7 +58,7 @@ function merge(ctx, { body }) {
     const to = cleanName(body.to);
     if (!to) throw badRequest('Ziel-Verlag fehlt oder ist zu lang (maximal 300 Zeichen)');
     const rawFrom = Array.isArray(body.from) ? body.from : [body.from];
-    if (rawFrom.length === 0 || rawFrom.length > MAX_FROM) throw badRequest(`Bitte 1 bis ${MAX_FROM} Verlage zum Zusammenführen angeben`);
+    if (rawFrom.length === 0 || rawFrom.length > MAX_FROM) throw badRequest(msg('Bitte 1 bis {max_from} Verlage zum Zusammenführen angeben', { max_from: MAX_FROM }));
     const from = rawFrom.map(cleanName);
     if (from.some(f => !f)) throw badRequest('Ungültiger Verlagsname');
     const toKey = publisherKey(to);

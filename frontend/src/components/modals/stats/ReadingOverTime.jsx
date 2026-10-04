@@ -6,6 +6,7 @@ import api from '../../../utils/api';
 import useLatestRequest from '../../../hooks/useLatestRequest';
 import { countLabel, fmtNumber, monthLabel, monthShort } from '../statsFormat';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
+import { t, tn } from '../../../i18n/index.js';
 
 const readSummary = (m, sep = ' · ') => `${monthLabel(m.month)}: ${countLabel(m.volumes, 'Band', 'Bände')}${sep}${countLabel(m.pages, 'Seite', 'Seiten')}`;
 
@@ -60,11 +61,11 @@ export default function ReadingOverTime({ readers = [], user, onNavigate }) {
     const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
     api.get(`/api/stats/reading${query}`, { signal })
       .then((body) => { if (isCurrent()) setData(body); })
-      .catch((e) => { if (isCurrent() && e?.name !== 'AbortError') setError(e?.message || 'Leseverlauf konnte nicht geladen werden.'); });
+      .catch((e) => { if (isCurrent() && e?.name !== 'AbortError') setError(e?.message || t('Leseverlauf konnte nicht geladen werden.')); });
   }, [userId, begin]);
 
   if (error) return <p role="alert" className="text-sm text-rose-300 py-8 text-center">{error}</p>;
-  if (!data) return <p role="status" className="text-sm text-slate-400 py-8 text-center">Leseverlauf wird geladen…</p>;
+  if (!data) return <p role="status" className="text-sm text-slate-400 py-8 text-center">{t('Leseverlauf wird geladen…')}</p>;
 
   const months = data.by_month || [];
   const backlog = data.backlog_by_month || [];
@@ -76,7 +77,7 @@ export default function ReadingOverTime({ readers = [], user, onNavigate }) {
     <div id="stats-reading-over-time" className="space-y-5 animate-fade-in">
       {readers.length > 1 && (
         <label htmlFor={selectId} className="flex items-center gap-2 text-xs text-slate-300">
-          Leser
+          {t('Leser')}
           <select id={selectId} className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-xs" value={userId ?? ''} onChange={(e) => setUserId(Number(e.target.value))}>
             {readers.map(r => <option key={r.user_id} value={r.user_id}>{r.username}</option>)}
           </select>
@@ -87,54 +88,63 @@ export default function ReadingOverTime({ readers = [], user, onNavigate }) {
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
           <p className="text-[10px] uppercase font-bold text-slate-400">{data.this_year.year}</p>
           <p className="text-lg font-extrabold text-white">{countLabel(data.this_year.volumes, 'Band', 'Bände')}</p>
-          <p className="text-[11px] text-slate-400">Vorjahr: {countLabel(data.last_year.volumes, 'Band', 'Bände')}</p>
+          <p className="text-[11px] text-slate-400">{t('Vorjahr: {count}', { count: countLabel(data.last_year.volumes, 'Band', 'Bände') })}</p>
         </div>
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-          <p className="text-[10px] uppercase font-bold text-slate-400">Seiten {data.this_year.year}</p>
+          <p className="text-[10px] uppercase font-bold text-slate-400">{t('Seiten {year}', { year: data.this_year.year })}</p>
           <p className="text-lg font-extrabold text-white">{fmtNumber(data.this_year.pages)}</p>
-          <p className="text-[11px] text-slate-400">Vorjahr: {fmtNumber(data.last_year.pages)}</p>
+          <p className="text-[11px] text-slate-400">{t('Vorjahr: {number}', { number: fmtNumber(data.last_year.pages) })}</p>
         </div>
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-          <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1"><Flame className="w-3 h-3 text-amber-400" aria-hidden="true" /> Lesesträhne</p>
+          <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1"><Flame className="w-3 h-3 text-amber-400" aria-hidden="true" /> {t('Lesesträhne')}</p>
           <p className="text-lg font-extrabold text-white">{countLabel(data.streak.current, 'Monat', 'Monate')}</p>
-          <p className="text-[11px] text-slate-400">Rekord: {countLabel(data.streak.longest, 'Monat', 'Monate')}</p>
+          <p className="text-[11px] text-slate-400">{t('Rekord: {count}', { count: countLabel(data.streak.longest, 'Monat', 'Monate') })}</p>
         </div>
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-          <p className="text-[10px] uppercase font-bold text-slate-400">Stapel ungelesen</p>
+          <p className="text-[10px] uppercase font-bold text-slate-400">{t('Stapel ungelesen')}</p>
           <p className="text-lg font-extrabold text-white">{countLabel(lastBacklog?.backlog || 0, 'Band', 'Bände')}</p>
-          <p className="text-[11px] text-slate-400">vorhanden minus gelesen</p>
+          <p className="text-[11px] text-slate-400">{t('vorhanden minus gelesen')}</p>
         </div>
       </div>
 
       <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
-        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-1">Gelesene Bände je Monat</h3>
-        <p className="text-[11px] text-slate-400 mb-3">Letzte 24 Monate{range && ` (${range})`}</p>
+        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-1">{t('Gelesene Bände je Monat')}</h3>
+        <p className="text-[11px] text-slate-400 mb-3">{range ? t('Letzte 24 Monate ({range})', { range }) : t('Letzte 24 Monate')}</p>
         {totalRead === 0 ? (
-          <p className="text-xs text-slate-400">In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.</p>
+          <p className="text-xs text-slate-400">{t('In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.')}</p>
         ) : (
-          <MonthBars months={months} value={m => m.volumes} label={`Gelesene Bände je Monat, ${range}`} color="bg-emerald-500/70" activeColor="bg-emerald-400" describe={readSummary} />
+          <MonthBars months={months} value={m => m.volumes} label={t('Gelesene Bände je Monat, {range}', { range })} color="bg-emerald-500/70" activeColor="bg-emerald-400" describe={readSummary} />
         )}
         {data.unknown_date > 0 && (
-          <p className="text-[11px] text-slate-400 mt-3">{countLabel(data.unknown_date, 'Band', 'Bände')} ohne Lesedatum {data.unknown_date === 1 ? 'zählt' : 'zählen'} als gelesen, aber in keinem Monat.</p>
+          <p className="text-[11px] text-slate-400 mt-3">
+            {tn(
+              '{volumes} ohne Lesedatum zählt als gelesen, aber in keinem Monat.',
+              '{volumes} ohne Lesedatum zählen als gelesen, aber in keinem Monat.',
+              data.unknown_date,
+              { volumes: countLabel(data.unknown_date, 'Band', 'Bände') }
+            )}
+          </p>
         )}
       </div>
 
       <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
-        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Ungelesener Stapel am Monatsende</h3>
+        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">{t('Ungelesener Stapel am Monatsende')}</h3>
         <MonthBars
           months={backlog}
           value={m => m.backlog}
-          label={`Ungelesene vorhandene Bände am Monatsende, ${range}`}
+          label={t('Ungelesene vorhandene Bände am Monatsende, {range}', { range })}
           color="bg-amber-500/60"
           activeColor="bg-amber-400"
-          describe={(m, sep = ' · ') => `${monthLabel(m.month)}: ${countLabel(m.backlog, 'Band', 'Bände')} ungelesen${sep}${countLabel(m.owned, 'Band', 'Bände')} vorhanden`}
+          describe={(m, sep = ' · ') => t('{month}: {backlog} ungelesen{sep}{owned} vorhanden', {
+            month: monthLabel(m.month), backlog: countLabel(m.backlog, 'Band', 'Bände'), sep, owned: countLabel(m.owned, 'Band', 'Bände')
+          })}
         />
       </div>
 
       <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
-        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Weiterlesen</h3>
+        <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">{t('Weiterlesen')}</h3>
         {data.continue_reading.length === 0 ? (
-          <p className="text-xs text-slate-400">Keine angefangene Reihe mit einem ungelesenen nächsten Band im Regal.</p>
+          <p className="text-xs text-slate-400">{t('Keine angefangene Reihe mit einem ungelesenen nächsten Band im Regal.')}</p>
         ) : (
           <ul id="continue-reading" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {data.continue_reading.map(c => (
@@ -147,8 +157,8 @@ export default function ReadingOverTime({ readers = [], user, onNavigate }) {
                   />
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-white truncate">{c.title}</span>
-                    <span className="block text-[11px] text-emerald-300">Weiter mit {getVolumeDisplayTitle({ volume_number: c.next_volume?.volume_number, type: 'volume' })}</span>
-                    {c.unread_after > 1 && <span className="block text-[11px] text-slate-400">{countLabel(c.unread_after, 'Band', 'Bände')} ungelesen im Regal</span>}
+                    <span className="block text-[11px] text-emerald-300">{t('Weiter mit {volume}', { volume: getVolumeDisplayTitle({ volume_number: c.next_volume?.volume_number, type: 'volume' }) })}</span>
+                    {c.unread_after > 1 && <span className="block text-[11px] text-slate-400">{t('{count} ungelesen im Regal', { count: countLabel(c.unread_after, 'Band', 'Bände') })}</span>}
                   </span>
                 </Link>
               </li>

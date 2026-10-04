@@ -148,3 +148,11 @@ test('QR code of the connect link from the frontend encoder, also as the staged 
     fs.copyFileSync(source, path.join(dir, 'qr.mjs'));
     assert.deepEqual(await qrSvgData(link, path.join(dir, 'qr.mjs')), qr);
 });
+
+test('the preload hands app.getLocale() to the page (own pages only) for the language detection', () => {
+    const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+    const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    assert.match(preload, /locale = ipcRenderer\.sendSync\('desktop:locale'\)/);
+    assert.match(preload, /exposeInMainWorld\('mangashelfDesktop', \{[^}]*\blocale,/s);
+    assert.match(main, /ipcMain\.on\('desktop:locale', \(event\) => \{\s*event\.returnValue = fromOwnPage\(event\) \? app\.getLocale\(\) : null;/);
+});

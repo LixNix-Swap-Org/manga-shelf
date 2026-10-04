@@ -3,7 +3,9 @@ import { BuildingComplex } from 'lucide-react';
 import {
   fmtNumber, fmtEuro, fmtPct, countLabel, cssPct, publisherColor, publisherSegments, OTHER_PUBLISHERS_COLOR, PUBLISHER_COLORS
 } from '../statsFormat';
+import { t, tn } from '../../../i18n/index.js';
 
+// i18n
 export const PUBLISHER_SORTS = [
   { id: 'volumes', label: 'Bände' },
   { id: 'value', label: 'Wert' },
@@ -34,7 +36,7 @@ export function valueSegments(list, topN = PUBLISHER_COLORS.length) {
   const rest = pubs.slice(topN);
   if (rest.length > 0) {
     const value = rest.reduce((sum, p) => sum + num(p.total_value), 0);
-    segments.push({ key: '__other__', label: `Sonstige (${countLabel(rest.length, 'Verlag', 'Verlage')})`, value, width: share(value), color: OTHER_PUBLISHERS_COLOR });
+    segments.push({ key: '__other__', label: t('Sonstige ({count})', { count: countLabel(rest.length, 'Verlag', 'Verlage') }), value, width: share(value), color: OTHER_PUBLISHERS_COLOR });
   }
   return segments;
 }
@@ -62,24 +64,24 @@ export default function PublisherTab({ publishers }) {
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <BuildingComplex className="w-4 h-4 text-sky-400" aria-hidden="true" />
-              Verlagsverteilung & Sammlungsanteile
+              {t('Verlagsverteilung & Sammlungsanteile')}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              {byValue ? 'Anteil jedes Verlags am Wert aller vorhandenen Bände' : 'Prozentualer Anteil jedes Verlags an allen vorhandenen Bänden'}
+              {byValue ? t('Anteil jedes Verlags am Wert aller vorhandenen Bände') : t('Prozentualer Anteil jedes Verlags an allen vorhandenen Bänden')}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div role="group" aria-label="Verlage sortieren nach" className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 text-xs">
+            <div role="group" aria-label={t('Verlage sortieren nach')} className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 text-xs">
               {PUBLISHER_SORTS.map(s => (
                 <button
                   key={s.id}
                   type="button"
                   aria-pressed={sortBy === s.id}
                   onClick={() => setSortBy(s.id)}
-                  title={s.id === 'avg' ? 'Durchschnittspreis' : undefined}
+                  title={s.id === 'avg' ? t('Durchschnittspreis') : undefined}
                   className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${sortBy === s.id ? 'bg-sky-700 text-white' : 'text-slate-400 hover:text-white'}`}
                 >
-                  {s.id === 'avg' ? <><span aria-hidden="true">Ø</span><span className="sr-only">Durchschnittspreis</span></> : s.label}
+                  {s.id === 'avg' ? <><span aria-hidden="true">Ø</span><span className="sr-only">{t('Durchschnittspreis')}</span></> : t(s.label)}
                 </button>
               ))}
             </div>
@@ -102,7 +104,7 @@ export default function PublisherTab({ publishers }) {
             ))}
           </div>
           <p className="text-[11px] text-slate-400 text-center">
-            Farben wie in der Liste unten{list.length > 8 ? '; ab Platz 9 grau als „Sonstige“' : ''}.
+            {list.length > 8 ? t('Farben wie in der Liste unten; ab Platz 9 grau als „Sonstige“.') : t('Farben wie in der Liste unten.')}
           </p>
         </div>
 
@@ -122,7 +124,7 @@ export default function PublisherTab({ publishers }) {
 
                 <div className="flex-1 w-full lg:w-auto lg:max-w-[180px]">
                   <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span>{byValue ? 'Wertanteil:' : 'Anteil:'}</span>
+                    <span>{byValue ? t('Wertanteil:') : t('Anteil:')}</span>
                     <strong className="text-white font-mono">{fmtPct(pct ?? 0)}</strong>
                   </div>
                   <div aria-hidden="true" className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
@@ -131,13 +133,13 @@ export default function PublisherTab({ publishers }) {
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 text-right w-full lg:w-auto">
-                  <Figure value={fmtNumber(pub.volume_count)} label={pub.volume_count === 1 ? 'Band' : 'Bände'} />
-                  <Figure value={fmtNumber(pub.series_count)} label={pub.series_count === 1 ? 'Reihe' : 'Reihen'} />
-                  <Figure value={fmtEuro(pub.total_value)} label="Wert" className="text-emerald-400" />
-                  <Figure value={pub.avg_price === null || pub.avg_price === undefined ? '–' : fmtEuro(pub.avg_price)} label="Ø Preis" />
+                  <Figure value={fmtNumber(pub.volume_count)} label={tn('Band', 'Bände', pub.volume_count)} />
+                  <Figure value={fmtNumber(pub.series_count)} label={tn('Reihe', 'Reihen', pub.series_count)} />
+                  <Figure value={fmtEuro(pub.total_value)} label={t('Wert')} className="text-emerald-400" />
+                  <Figure value={pub.avg_price === null || pub.avg_price === undefined ? '–' : fmtEuro(pub.avg_price)} label={t('Ø Preis')} />
                   <Figure
                     value={pub.missing_count > 0 ? fmtEuro(pub.missing_value) : '–'}
-                    label={pub.missing_count > 0 ? `fehlt (${fmtNumber(pub.missing_count)})` : 'fehlt'}
+                    label={pub.missing_count > 0 ? t('fehlt ({count})', { count: fmtNumber(pub.missing_count) }) : t('fehlt')}
                     className="text-amber-300"
                   />
                 </div>
@@ -157,10 +159,10 @@ export function TopPublishersCard({ publishers, onShowAll }) {
     <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
-          <BuildingComplex className="w-4 h-4 text-sky-400" aria-hidden="true" /> Größte Verlage im Regal
+          <BuildingComplex className="w-4 h-4 text-sky-400" aria-hidden="true" /> {t('Größte Verlage im Regal')}
         </h3>
         <button type="button" onClick={onShowAll} className="text-sky-400 hover:text-sky-300 font-medium text-xs">
-          Alle anzeigen ↗
+          {t('Alle anzeigen ↗')}
         </button>
       </div>
       <div className="space-y-3">
@@ -169,7 +171,7 @@ export function TopPublishersCard({ publishers, onShowAll }) {
             <div className="flex justify-between items-center text-xs">
               <span className="font-medium text-slate-200 truncate">{pub.publisher}</span>
               <span className="font-mono text-slate-400 shrink-0">
-                <strong className="text-white">{fmtNumber(pub.volume_count)}</strong> {pub.volume_count === 1 ? 'Band' : 'Bände'} ({fmtPct(pub.percentage)})
+                <strong className="text-white">{fmtNumber(pub.volume_count)}</strong> {tn('Band', 'Bände', pub.volume_count)} ({fmtPct(pub.percentage)})
               </span>
             </div>
             <div aria-hidden="true" className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">

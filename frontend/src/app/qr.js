@@ -244,6 +244,7 @@ export function encodeQr(text, { mask: fixedMask } = {}) {
   let ver = 1;
   const fits = (v) => 4 + (v <= 9 ? 8 : 16) + bytes.length * 8 <= dataCodewords(v) * 8;
   while (ver <= MAX_VERSION && !fits(ver)) ver++;
+  // i18n-ignore: a programming error, never shown; no imports here (desktop/lib/qrCode.js loads this file standalone)
   if (ver > MAX_VERSION) throw new RangeError('Text zu lang für den QR-Code');
   const codewords = addEccAndInterleave(encodeData(bytes, ver), ver);
   if (fixedMask !== undefined) return buildMatrix(ver, codewords, fixedMask);

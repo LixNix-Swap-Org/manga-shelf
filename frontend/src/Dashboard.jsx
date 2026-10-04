@@ -16,7 +16,8 @@ import { RefreshCw } from 'lucide-react';
 import { normalizePubName } from './utils/volumeHelpers';
 import { buildScanPrefill, parseSharedScan } from './utils/scanHelpers';
 import { lookupLocalIsbn } from './utils/offlineStore';
-import { GERMAN_MONTHS, getStatusBadge } from './utils/collectionHelpers';
+import { getStatusBadge } from './utils/collectionHelpers';
+import { monthNames } from './utils/format';
 import { mpMatchesSelection } from './utils/radarHelpers';
 import {
   parseInitialView, viewSearch, scanDashboardAction, SCAN_OFFLINE_MESSAGE, SCAN_FAILED_MESSAGE
@@ -36,6 +37,8 @@ import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
 import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { notify } from './utils/notify';
+import { takeReopenAccount } from './i18n/preference.js';
+import { t } from './i18n/index.js';
 
 // dialogs are loaded on first use and mounted only while open
 const UserManagementModal = lazy(() => import('./components/modals/UserManagementModal'));
@@ -48,6 +51,7 @@ const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 
+// i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime' };
 const ANIME_VIEW = 'anime';
 const savedShelfScroll = () => {
@@ -69,7 +73,9 @@ const addTargetOf = (search) => {
     return null;
   }
 };
+// i18n
 export const SHARED_NO_ISBN_MESSAGE = 'Im geteilten Text wurde keine ISBN gefunden.';
+// i18n
 export const SHARED_MP_LINK_MESSAGE = 'Manga-Passion-Link erkannt: Lege die Reihe an und übernimm die Daten per Auto-Fill.';
 
 export default function Dashboard({ user, onLogout, onLocalReplaced }) {
@@ -86,7 +92,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   // ?view=stats (app shortcut) opens the statistics over the shelf
   const [initialView] = useState(() => parseInitialView(location.search));
   const activeMainView = parseInitialView(location.search).mainView;
-  useDocumentTitle(VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf);
+  useDocumentTitle(t(VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf));
   const headingRef = usePageHeading();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -130,7 +136,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter,
+    otherCurrencyTotals
   } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
 
@@ -293,17 +300,17 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       return;
     }
     if (isOfflineMode) {
-      showScanToast('error', SCAN_OFFLINE_MESSAGE);
+      showScanToast('error', t(SCAN_OFFLINE_MESSAGE));
       return;
     }
-    showScanToast('info', `ISBN ${scannedCode} wird gesucht...`, { duration: 0 });
+    showScanToast('info', t('ISBN {isbn} wird gesucht...', { isbn: scannedCode }), { duration: 0 });
     let res;
     let data = null;
     try {
       res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`, { timeout: TIMEOUTS.lookup });
       data = await readJson(res); // a proxy 502/504 answers with HTML
     } catch (_) {
-      if (isLatest()) showScanToast('error', SCAN_FAILED_MESSAGE);
+      if (isLatest()) showScanToast('error', t(SCAN_FAILED_MESSAGE));
       return;
     }
     if (!isLatest()) return;
@@ -325,7 +332,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       case 'notFound':
         showScanToast('info', action.message, action.canAdd ? {
           duration: 0,
-          action: { label: 'Reihe manuell anlegen', onClick: () => openAddWithPrefill(buildScanPrefill({}, isbn)) }
+          action: { label: t('Reihe manuell anlegen'), onClick: () => openAddWithPrefill(buildScanPrefill({}, isbn)) }
         } : { duration: 8000 });
         break;
       case 'notice':
@@ -343,8 +350,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     const shared = parseSharedScan({ text: input.text || '', url: input.url || '' });
     if (shared?.isbn) handleBarcodeDetected(shared.isbn);
     else if (shared?.mpUrl && canEdit) {
-      showScanToast('info', SHARED_MP_LINK_MESSAGE, { duration: 0, action: { label: 'Reihe anlegen', onClick: () => openAddWithPrefill(null) } });
-    } else showScanToast('info', SHARED_NO_ISBN_MESSAGE, { duration: 8000 });
+      showScanToast('info', t(SHARED_MP_LINK_MESSAGE), { duration: 0, action: { label: t('Reihe anlegen'), onClick: () => openAddWithPrefill(null) } });
+    } else showScanToast('info', t(SHARED_NO_ISBN_MESSAGE), { duration: 8000 });
   };
 
   // share target (manifest share_text / share_url): the parameters are removed at once, a streaming link opens ?view=anime
@@ -416,6 +423,13 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     };
     window.addEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
     return () => window.removeEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
+  }, []);
+  // a language switch from the account dialog remounted the page: the dialog comes back on its language tab
+  useEffect(() => {
+    const tab = takeReopenAccount();
+    if (!tab) return;
+    setAccountTab(tab);
+    setShowPasswordModal(true);
   }, []);
   const openAccount = location.state?.openAccount;
   useEffect(() => {
@@ -496,7 +510,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             style={pulling ? undefined : { transform: `rotate(${pullDistance * 4}deg)`, opacity: Math.min(1, pullDistance / PULL_THRESHOLD_PX) }}
             aria-hidden="true"
           />
-          {pulling && <span className="sr-only">Wird aktualisiert…</span>}
+          {pulling && <span className="sr-only">{t('Wird aktualisiert…')}</span>}
         </div>
       )}
 
@@ -514,11 +528,12 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         {/* SHELF VIEW */}
         {activeMainView === 'shelf' && (
           <>
-            <h2 className="sr-only">Sammlung</h2>
+            <h2 className="sr-only">{t('Sammlung')}</h2>
             <CollectionStats
               totalSeries={totalSeries}
               totalOwnedVolumes={totalOwnedVolumes}
               totalCollectionValue={totalCollectionValue}
+              otherCurrencyTotals={otherCurrencyTotals}
               completedSeries={completedSeries}
               handleOpenStats={handleOpenStats}
               isOfflineMode={isOfflineMode}
@@ -551,6 +566,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableTags={availableTags}
           tagFilter={tagFilter}
           setTagFilter={setTagFilter}
+          availableLanguages={availableLanguages}
+          languageFilter={languageFilter}
+          setLanguageFilter={setLanguageFilter}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
@@ -579,6 +597,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           setCollectFilter={setCollectFilter}
           authorFilter={authorFilter}
           setAuthorFilter={setAuthorFilter}
+          tagFilter={tagFilter}
+          setTagFilter={setTagFilter}
+          languageFilter={languageFilter}
+          setLanguageFilter={setLanguageFilter}
           onAuthorClick={handleAuthorClick}
         />
       </>
@@ -637,6 +659,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     {activeMainView === 'radar' && (
       <ReleaseRadarView
         isOffline={Boolean(user?.offline)}
+        foreignEditions={availableLanguages.some((l) => l.code !== 'de')}
         radarError={radarError}
         mpError={mpError}
         radarSubView={radarSubView}
@@ -673,7 +696,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         importingMpIds={importingMpIds}
         handleMarkDelivered={handleMarkDelivered}
         markingDeliveredIds={markingDeliveredIds}
-        GERMAN_MONTHS={GERMAN_MONTHS}
+        GERMAN_MONTHS={monthNames('long')}
       />
     )}
     </main>

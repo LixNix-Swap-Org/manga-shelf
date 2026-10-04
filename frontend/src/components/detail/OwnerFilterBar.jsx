@@ -1,6 +1,7 @@
 import { Users } from 'lucide-react';
 import { ownerColor } from './OwnerBadges';
 import { isCollectibleVolume } from './volumeViewHelpers';
+import { t } from '../../i18n/index.js';
 
 /** Ownership per person: how many volumes each person owns, filter "hat" / "fehlt noch". Only with two or more users. */
 export default function OwnerFilterBar({ users, volumes, ownerFilter, setOwnerFilter, ownerMissing, setOwnerMissing }) {
@@ -14,16 +15,16 @@ export default function OwnerFilterBar({ users, volumes, ownerFilter, setOwnerFi
   return (
     <div className="mb-4 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-wrap items-center gap-2.5">
       <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-        <Users className="w-4 h-4 text-amber-400" /> Besitz:
+        <Users className="w-4 h-4 text-amber-400" /> {t('Besitz:')}
       </span>
-      <div role="group" aria-label="Besitz filtern" className="flex flex-wrap items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+      <div role="group" aria-label={t('Besitz filtern')} className="flex flex-wrap items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
         <button
           type="button"
           aria-pressed={ownerFilter === 'ALL'}
           onClick={() => { setOwnerFilter('ALL'); setOwnerMissing(false); }}
           className={`px-3 py-1.5 rounded-lg font-medium ${ownerFilter === 'ALL' ? 'bg-brand-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
         >
-          Alle
+          {t('Alle')}
         </button>
         {shown.map(u => {
           const selected = String(ownerFilter) === String(u.user_id);
@@ -47,7 +48,7 @@ export default function OwnerFilterBar({ users, volumes, ownerFilter, setOwnerFi
       {ownerFilter !== 'ALL' && (
         <label className="text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={ownerMissing} onChange={e => setOwnerMissing(e.target.checked)} />
-          Nur zeigen, was noch fehlt
+          {t('Nur zeigen, was noch fehlt')}
         </label>
       )}
     </div>

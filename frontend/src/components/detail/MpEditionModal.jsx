@@ -6,7 +6,10 @@ import { readApiError } from '../../hooks/useVolumeActions';
 import { canFixVolumeCount, isGapEditionUnconfirmed } from '../../utils/volumeHelpers';
 import { apiFetch, readJson, assetImgProps, TIMEOUTS } from '../../utils/api';
 import { formatCount } from '../../utils/format';
+import { t } from '../../i18n/index.js';
+import { mangaStatusLabel } from '../../utils/enumLabels';
 
+// i18n
 const EDITION_STATUS = { 1: 'Laufend', 2: 'Abgeschlossen' };
 
 /**
@@ -66,11 +69,11 @@ export default function MpEditionModal({
         if (seq !== searchSeqRef.current) return;
         setMpEditionSearchResults(Array.isArray(data?.candidates) ? data.candidates : []);
       } else {
-        const message = await readApiError(res, 'Editionssuche fehlgeschlagen');
+        const message = await readApiError(res, t('Editionssuche fehlgeschlagen'));
         if (seq === searchSeqRef.current) setSearchError(message);
       }
     } catch (err) {
-      if (seq === searchSeqRef.current) setSearchError(err?.isTimeout ? `Editionssuche: ${err.message}` : 'Editionssuche nicht möglich (Netzwerkfehler).');
+      if (seq === searchSeqRef.current) setSearchError(err?.isTimeout ? t('Editionssuche: {message}', { message: err.message }) : t('Editionssuche nicht möglich (Netzwerkfehler).'));
     } finally {
       if (seq === searchSeqRef.current) setSearchingMpEditions(false);
     }
@@ -112,7 +115,7 @@ export default function MpEditionModal({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Manga-Passion-Edition wählen"
+      aria-label={t('Manga-Passion-Edition wählen')}
       tabIndex={-1}
       className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
@@ -124,13 +127,13 @@ export default function MpEditionModal({
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
             <Globe className="w-5 h-5 text-sky-400" aria-hidden="true" />
-            <h2 className="font-bold text-white text-base">{readOnly ? 'Manga-Passion-Edition ansehen' : 'Deutsche Ausgabe synchronisieren'}</h2>
+            <h2 className="font-bold text-white text-base">{readOnly ? t('Manga-Passion-Edition ansehen') : t('Deutsche Ausgabe synchronisieren')}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Schließen"
-            title="Schließen"
+            aria-label={t('Schließen')}
+            title={t('Schließen')}
             className="hit-44 text-slate-400 hover:text-white p-1 rounded-lg"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -140,18 +143,18 @@ export default function MpEditionModal({
         <div className="overflow-y-auto short:overflow-visible custom-scrollbar flex-1 py-4 pr-1 space-y-4">
           <p className="text-xs text-slate-300 leading-relaxed">
             {readOnly
-              ? 'Die offizielle deutsche Edition auf Manga Passion liefert Bandzahlen, Lücken, Veröffentlichungsdaten und Preise dieser Reihe.'
-              : 'Verbinde diese Reihe mit der offiziellen deutschen Edition auf Manga-Passion, um Bandzahlen, Lücken, Veröffentlichungsdaten und Preise automatisch abzugleichen.'}
+              ? t('Die offizielle deutsche Edition auf Manga Passion liefert Bandzahlen, Lücken, Veröffentlichungsdaten und Preise dieser Reihe.')
+              : t('Verbinde diese Reihe mit der offiziellen deutschen Edition auf Manga-Passion, um Bandzahlen, Lücken, Veröffentlichungsdaten und Preise automatisch abzugleichen.')}
           </p>
 
           {isOffline && (
             <p className="text-xs text-slate-400 bg-slate-900/80 border border-slate-800 rounded-xl p-2.5">
-              Offline nicht verfügbar: Der Manga-Passion-Abgleich braucht eine Verbindung.
+              {t('Offline nicht verfügbar: Der Manga-Passion-Abgleich braucht eine Verbindung.')}
             </p>
           )}
           {!isOffline && readOnly && (
             <p className="text-xs text-slate-400 bg-slate-900/80 border border-slate-800 rounded-xl p-2.5">
-              Nur Leseansicht: Nur Bearbeiter können die Edition ändern.
+              {t('Nur Leseansicht: Nur Bearbeiter können die Edition ändern.')}
             </p>
           )}
           {mpGapNotice && (
@@ -164,7 +167,7 @@ export default function MpEditionModal({
           {/* Currently linked (or only suggested) edition */}
           {mpGapData?.edition && (
             <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
-              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">{unconfirmed ? 'Vorgeschlagene Edition (noch nicht bestätigt)' : 'Aktuell verknüpfte Edition'}</div>
+              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">{unconfirmed ? t('Vorgeschlagene Edition (noch nicht bestätigt)') : t('Aktuell verknüpfte Edition')}</div>
               <div className="flex gap-3 items-center">
                 {mpGapData.edition.cover_image && (
                   <img
@@ -176,7 +179,7 @@ export default function MpEditionModal({
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-white text-sm truncate">{mpGapData.edition.title}</h3>
                   <p className="text-xs text-slate-400">
-                    {[mpGapData.edition.publisher, (mpGapData.edition.total_volumes ? formatCount(mpGapData.edition.total_volumes, 'Band', 'Bände') : '? Bände'), mpGapData.edition.status ? `Status: ${mpGapData.edition.status}` : null].filter(Boolean).join(' • ')}
+                    {[mpGapData.edition.publisher, (mpGapData.edition.total_volumes ? formatCount(mpGapData.edition.total_volumes, 'Band', 'Bände') : t('? Bände')), mpGapData.edition.status ? t('Status: {status}', { status: mangaStatusLabel(mpGapData.edition.status) }) : null].filter(Boolean).join(' • ')}
                   </p>
                 </div>
               </div>
@@ -191,7 +194,7 @@ export default function MpEditionModal({
                       className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Bandzahl auf {mpGapData.discrepancy.official_total} korrigieren</span>
+                      <span>{t('Bandzahl auf {official_total} korrigieren', { official_total: mpGapData.discrepancy.official_total })}</span>
                     </button>
                   )}
                   {actions.confirm && (
@@ -202,7 +205,7 @@ export default function MpEditionModal({
                       className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Edition bestätigen</span>
+                      <span>{t('Edition bestätigen')}</span>
                     </button>
                   )}
                   {actions.reload && (
@@ -213,7 +216,7 @@ export default function MpEditionModal({
                       className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${mpGapLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
-                      <span>Daten neu laden</span>
+                      <span>{t('Daten neu laden')}</span>
                     </button>
                   )}
                   {actions.autofill && (
@@ -222,18 +225,18 @@ export default function MpEditionModal({
                       onClick={() => handleBatchAutofillManga()}
                       disabled={batchAutofilling || mpGapLoading}
                       className="px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-sky-900/30 disabled:opacity-50"
-                      title="Füllt fehlende Erscheinungsdaten, Jahr, Seiten und Preise für alle Bände dieser Reihe aus"
+                      title={t('Füllt fehlende Erscheinungsdaten, Jahr, Seiten und Preise für alle Bände dieser Reihe aus')}
                     >
                       <Sparkles className={`w-3.5 h-3.5 ${batchAutofilling ? 'animate-spin' : ''}`} aria-hidden="true" />
-                      {batchAutofilling ? <span>Fülle Bände aus...</span> : (
-                        <span>Alle Bände mit Erscheinungsdaten anreichern</span>
+                      {batchAutofilling ? <span>{t('Fülle Bände aus...')}</span> : (
+                        <span>{t('Alle Bände mit Erscheinungsdaten anreichern')}</span>
                       )}
                     </button>
                   )}
                 </div>
               )}
               {canEdit && !isOffline && unconfirmed && (
-                <p className="text-[11px] text-slate-400">Bände anreichern geht erst, wenn die Edition bestätigt ist.</p>
+                <p className="text-[11px] text-slate-400">{t('Bände anreichern geht erst, wenn die Edition bestätigt ist.')}</p>
               )}
             </div>
           )}
@@ -241,14 +244,14 @@ export default function MpEditionModal({
           {/* Search other editions */}
           {actions.search && (
             <div className="space-y-2">
-              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">{readOnly ? 'Deutsche Editionen suchen' : 'Andere deutsche Edition wählen'}</div>
+              <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">{readOnly ? t('Deutsche Editionen suchen') : t('Andere deutsche Edition wählen')}</div>
               <form onSubmit={handleSearchMpEditions} className="flex gap-2">
                 <input
                   type="text"
                   value={mpEditionSearchQuery}
                   onChange={e => setMpEditionSearchQuery(e.target.value)}
-                  placeholder="Titel bei Manga Passion suchen..."
-                  aria-label="Titel bei Manga Passion suchen"
+                  placeholder={t('Titel bei Manga Passion suchen...')}
+                  aria-label={t('Titel bei Manga Passion suchen')}
                   className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder-slate-400 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400"
                 />
                 <button
@@ -257,25 +260,25 @@ export default function MpEditionModal({
                   className="btn-primary px-3 py-2 text-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Search className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Suchen</span>
+                  <span>{t('Suchen')}</span>
                 </button>
               </form>
 
               <div className="space-y-2 pt-2" aria-live="polite">
                 {searchingMpEditions && (
                   <p className="text-xs text-slate-400 flex items-center gap-2">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Suche Editionen...
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> {t('Suche Editionen...')}
                   </p>
                 )}
                 {!searchingMpEditions && searchError && (
                   <p role="alert" className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5">{searchError}</p>
                 )}
                 {!searchingMpEditions && !searchError && mpEditionSearchResults && mpEditionSearchResults.length === 0 && (
-                  <p className="text-xs text-slate-400">Keine Editionen gefunden.</p>
+                  <p className="text-xs text-slate-400">{t('Keine Editionen gefunden.')}</p>
                 )}
                 {candidates.map(candidate => {
                   const isCurrent = mpGapData?.edition?.id === candidate.id;
-                  const status = EDITION_STATUS[candidate.status] || candidate.status || 'Unbekannt';
+                  const status = mangaStatusLabel(EDITION_STATUS[candidate.status] || candidate.status) || t('Unbekannt');
                   return (
                     <div
                       key={candidate.id}
@@ -288,13 +291,13 @@ export default function MpEditionModal({
                       <div className="min-w-0">
                         <div className="font-semibold text-white truncate">{candidate.title}</div>
                         <div className="text-[11px] text-slate-400">
-                          {candidate.publisher} • {(candidate.total_volumes || candidate.numVolumes) ? formatCount(candidate.total_volumes || candidate.numVolumes, 'Band', 'Bände') : '? Bände'} • Status: {status}
+                          {candidate.publisher} • {(candidate.total_volumes || candidate.numVolumes) ? formatCount(candidate.total_volumes || candidate.numVolumes, 'Band', 'Bände') : t('? Bände')} • {t('Status: {status}', { status })}
                         </div>
                       </div>
                       <div>
                         {isCurrent && !unconfirmed ? (
                           <span className="text-[10px] font-bold uppercase bg-brand-500/20 text-brand-300 px-2 py-1 rounded-md border border-brand-500/30">
-                            Aktiv
+                            {t('Aktiv')}
                           </span>
                         ) : actions.select ? (
                           <button
@@ -303,10 +306,10 @@ export default function MpEditionModal({
                             disabled={mpGapLoading}
                             className="px-2.5 py-1 bg-slate-800 hover:bg-brand-700 text-slate-200 hover:text-white rounded-lg transition-all font-medium border border-slate-700 cursor-pointer disabled:opacity-50"
                           >
-                            {isCurrent ? 'Bestätigen' : 'Übernehmen'}
+                            {isCurrent ? t('Bestätigen') : t('Übernehmen')}
                           </button>
                         ) : isCurrent ? (
-                          <span className="text-[10px] font-semibold text-slate-400">Vorschlag</span>
+                          <span className="text-[10px] font-semibold text-slate-400">{t('Vorschlag')}</span>
                         ) : null}
                       </div>
                     </div>
@@ -324,7 +327,7 @@ export default function MpEditionModal({
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
           >
-            Schließen
+            {t('Schließen')}
           </button>
         </div>
       </div>

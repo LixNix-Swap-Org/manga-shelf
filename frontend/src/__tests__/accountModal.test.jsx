@@ -264,14 +264,20 @@ describe('AccountModal: tabs', () => {
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(keys.id);
     expect(await screen.findByRole('heading', { name: 'AniList' })).toBeTruthy();
 
+    // third tab since I18N-A: Sprache
+    const language = screen.getByRole('tab', { name: 'Sprache' });
     fireEvent.keyDown(keys, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(language);
+    fireEvent.keyDown(language, { key: 'ArrowRight' });
     expect(document.activeElement).toBe(password);
     expect(screen.getByLabelText('Aktuelles Passwort')).toBeTruthy();
     fireEvent.keyDown(password, { key: 'End' });
-    expect(document.activeElement).toBe(keys);
-    fireEvent.keyDown(keys, { key: 'Home' });
+    expect(document.activeElement).toBe(language);
+    fireEvent.keyDown(language, { key: 'Home' });
     expect(document.activeElement).toBe(password);
     fireEvent.keyDown(password, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(language);
+    fireEvent.keyDown(language, { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(keys);
     fireEvent.keyDown(keys, { key: 'Enter' });
     expect(keys.getAttribute('aria-selected')).toBe('true');

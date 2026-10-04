@@ -44,7 +44,8 @@ async function verify() {
     executablePath: findBrowser(),
     headless: 'new',
     defaultViewport: { width: 1440, height: 900 },
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    // German UI whatever the machine's language (test/browser/chrome.js CHROME_ARGS)
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=de-DE', '--accept-lang=de-DE']
   });
   try {
     const page = await browser.newPage();

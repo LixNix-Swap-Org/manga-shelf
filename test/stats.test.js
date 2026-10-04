@@ -38,7 +38,7 @@ test('response carries summary and the lists once, without legacy duplicates', a
     const id = await newSeries('Form Reihe', { publisher: 'Carlsen' });
     await addVolume(id, '1', { price: 7 });
     const body = await getStats();
-    assert.deepEqual(Object.keys(body).sort(), ['owner_publishers', 'owner_stats', 'publishers', 'spending', 'summary', 'top_series', 'user_reading_stats']);
+    assert.deepEqual(Object.keys(body).sort(), ['currencies', 'languages', 'owner_publishers', 'owner_stats', 'publishers', 'spending', 'summary', 'top_series', 'user_reading_stats']);
     assert.deepEqual(body.owner_publishers, [], 'one user: no owner x publisher breakdown');
     assert.equal(typeof body.summary.total_series, 'number');
     assert.ok(body.summary.collection_start_date);
@@ -199,6 +199,13 @@ test('avg_price_per_volume ignores volumes without a price but keeps a price of 
     s = (await getStats()).summary;
     assert.equal(s.priced_owned_volumes, 4);
     assert.equal(s.avg_price_per_volume, 20);
+
+    // a USD price is a price ("ohne Preis" = owned - priced), it just stays out of the euro average
+    const usd = await newSeries('Preisreihe USD', { language: 'en', currency: 'USD' });
+    await addVolume(usd, '1', { price: 100 });
+    await addVolume(usd, '2');
+    s = (await getStats()).summary;
+    assert.deepEqual([s.total_owned_volumes, s.priced_owned_volumes, s.avg_price_per_volume, s.total_owned_value], [8, 5, 20, 80]);
 });
 
 test('PUT /stats/settings rejects missing, non-string, pre-1900 and future dates', async () => {

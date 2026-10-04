@@ -11,7 +11,7 @@ function loadYaml() {
             return require(require.resolve('js-yaml', { paths: [base] }));
         } catch (e) { /* next */ }
     }
-    throw new Error('js-yaml nicht gefunden (npm ci)');
+    throw new Error('js-yaml not found (npm ci)');
 }
 
 const yaml = loadYaml();
@@ -36,7 +36,7 @@ function* steps() {
 
 describe('workflows', () => {
     test('the four distribution workflows exist and parse', () => {
-        for (const f of ['ci.yml', 'build.yml', 'release.yml', 'mobile.yml']) assert.ok(workflows[f], `${f} fehlt`);
+        for (const f of ['ci.yml', 'build.yml', 'release.yml', 'mobile.yml']) assert.ok(workflows[f], `${f} missing`);
         assert.ok(!fs.existsSync(path.join(__dirname, '..', 'deploy')), 'the old deploy/ draft is gone');
     });
 
@@ -110,10 +110,12 @@ describe('workflows', () => {
 
     test('steps that use signing secrets only run when the detection step found them', () => {
         const signingSecret = /secrets\.(WIN_CSC_LINK|MAC_CSC_LINK)\b/;
+        const names = new Set([...steps()].map(({ step }) => step.name));
+        for (const name of ['Detect signing', 'Release text', 'Build installers']) assert.ok(names.has(name), `step "${name}" missing`);
         for (const { f, name, step } of steps()) {
             const env = JSON.stringify(step.env || {});
-            if (!signingSecret.test(env) || /Signierung erkennen|Release-Text/.test(step.name || '')) continue;
-            if (/Installer bauen/.test(step.name || '')) {
+            if (!signingSecret.test(env) || /Detect signing|Release text/.test(step.name || '')) continue;
+            if (/Build installers/.test(step.name || '')) {
                 // electron-builder: exported only when the detection says so, otherwise left unset
                 assert.match(step.run, /SIGN_WINDOWS" = true/);
                 assert.match(step.run, /CSC_IDENTITY_AUTO_DISCOVERY=false/);
@@ -142,7 +144,7 @@ describe('workflows', () => {
             for (const [name, job] of jobsOf(f)) {
                 if (!job.uses) continue;
                 const callee = workflows[path.basename(job.uses)];
-                assert.ok(callee, `${f} ${name}: ${job.uses} fehlt`);
+                assert.ok(callee, `${f} ${name}: ${job.uses} missing`);
                 const declared = callee.on.workflow_call;
                 for (const input of Object.keys(job.with || {})) assert.ok(input in (declared.inputs || {}), `${f} ${name}: input ${input}`);
                 if (job.secrets && job.secrets !== 'inherit') {

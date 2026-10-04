@@ -8,7 +8,7 @@ if (!BASE_URL || !E2E_USER || !E2E_PASSWORD) {
 }
 
 const puppeteer = require('puppeteer-core');
-const { findChrome } = require('./chrome');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 const fs = require('fs');
 const path = require('path');
 
@@ -23,7 +23,7 @@ const releaseDotted = releaseIso.split('-').reverse().join('.');
     const browser = await puppeteer.launch({
         headless: 'new',
         executablePath: findChrome(),
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: CHROME_ARGS
     });
 
     const page = await browser.newPage();

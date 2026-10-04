@@ -30,7 +30,7 @@ function listMangas(ctx, userId, { volumeSearch = false } = {}) {
             SELECT m.id, m.title, m.alt_title, m.author, m.publisher, m.language, m.status, m.tags, m.total_volumes,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
-                   m.collecting,
+                   m.collecting, m.region, m.work_key, m.currency,
                    COUNT(DISTINCT CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
                    COUNT(DISTINCT CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
                    CASE WHEN m.wish_priority IS NOT NULL AND COUNT(CASE WHEN v.status = 'Vorhanden' THEN 1 END) = 0 THEN 1 ELSE 0 END as wished,
@@ -79,6 +79,27 @@ const OWNERS_SELECT = `
 
 const USERS_SQL = 'SELECT id, username, role FROM users ORDER BY id ASC';
 
+// other editions of a work (same work_key): what the edition switcher shows
+const EDITIONS_SELECT = `
+        SELECT m.id, m.title, m.language, m.region, m.currency, m.publisher, m.cover_image, m.owned_volumes,
+               (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count, m.work_key
+        FROM mangas m`;
+const EDITIONS_ORDER = 'ORDER BY m.language, m.id';
+
+/** The other editions of `manga` from rows of its work (any order), in the detail shape. */
+function editionsOf(manga, rows) {
+    if (!manga.work_key) return [];
+    return rows.filter(r => r.work_key === manga.work_key && r.id !== manga.id)
+        .sort((a, b) => (a.language < b.language ? -1 : a.language > b.language ? 1 : a.id - b.id))
+        .map(({ work_key, ...edition }) => edition);
+}
+
+/** GET /mangas/:id `editions`: the other series sharing the work key of `manga`. */
+function loadEditions(ctx, manga) {
+    if (!manga.work_key) return [];
+    return editionsOf(manga, ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key = ? ${EDITIONS_ORDER}`).all(manga.work_key));
+}
+
 function groupBy(rows, key) {
     const map = new Map();
     for (const row of rows) {
@@ -93,8 +114,9 @@ function groupBy(rows, key) {
  * Turns a mangas row plus its volumes (already in display order) into the detail shape of GET /mangas/:id:
  * owners, read info, parsed images, values and reader_stats. Shared by the detail route and the offline snapshot.
  */
-function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId) {
+function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = []) {
     delete manga.manga_passion_edition_data;
+    manga.editions = editions;
     manga.volumes = volumes;
 
     let total_value = 0;
@@ -165,7 +187,7 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.rowid`).all(mangaId);
     const owners = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id = ? ORDER BY vo.created_at, vo.rowid`).all(mangaId);
     const users = ctx.db.prepare(USERS_SQL).all();
-    return buildMangaDetail(manga, volumes, groupBy(reads, 'volume_id'), groupBy(owners, 'volume_id'), users, userId);
+    return buildMangaDetail(manga, volumes, groupBy(reads, 'volume_id'), groupBy(owners, 'volume_id'), users, userId, loadEditions(ctx, manga));
 }
 
 function assertSameConnection(ctx, generation) {
@@ -187,6 +209,7 @@ async function buildOfflineSnapshot(ctx, user) {
 
     const series = ctx.db.prepare('SELECT * FROM mangas ORDER BY id').all();
     const users = ctx.db.prepare(USERS_SQL).all();
+    const editionsByWork = groupBy(ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key IS NOT NULL ${EDITIONS_ORDER}`).all(), 'work_key');
     const volumesStmt = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id BETWEEN ? AND ? ORDER BY v.manga_id, ${volumeOrderSql('v')}, v.id ASC`);
     const readsStmt = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vr.volume_id, vr.read_at, vr.rowid`);
     const ownersStmt = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vo.volume_id, vo.created_at, vo.rowid`);
@@ -205,7 +228,8 @@ async function buildOfflineSnapshot(ctx, user) {
         const readsByVolume = groupBy(readsStmt.all(from, to), 'volume_id');
         const ownersByVolume = groupBy(ownersStmt.all(from, to), 'volume_id');
         for (const m of block) {
-            details[m.id] = buildMangaDetail(m, volumesByManga.get(m.id) || [], readsByVolume, ownersByVolume, users, user.id);
+            details[m.id] = buildMangaDetail(m, volumesByManga.get(m.id) || [], readsByVolume, ownersByVolume, users, user.id,
+                editionsOf(m, editionsByWork.get(m.work_key) || []));
         }
     }
     assertSameConnection(ctx, generation);
@@ -217,4 +241,4 @@ async function buildOfflineSnapshot(ctx, user) {
     };
 }
 
-module.exports = { options, listMangas, listVolumeSearch, loadMangaDetail, buildMangaDetail, buildOfflineSnapshot };
+module.exports = { options, listMangas, listVolumeSearch, loadMangaDetail, loadEditions, buildMangaDetail, buildOfflineSnapshot };

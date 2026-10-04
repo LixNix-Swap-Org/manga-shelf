@@ -92,6 +92,18 @@ describe('scripts/seed.js', () => {
     }
   });
 
+  test('every series has a language code; a few are editions in other languages, one linked to its German edition', () => {
+    const { mangas } = dump(path.join(dir, 'a'));
+    assert.ok(mangas.every(m => /^[a-z]{2}$/.test(m.language) && /^[A-Z]{3}$/.test(m.currency)));
+    assert.deepEqual(mangas.filter(m => m.language !== 'de').map(m => [m.language, m.region, m.currency]), [['en', 'US', 'USD'], ['ja', 'JP', 'JPY']]);
+    const english = mangas.find(m => m.language === 'en');
+    const linked = mangas.filter(m => m.work_key === english.work_key);
+    assert.deepEqual(linked.map(m => m.language).sort(), ['de', 'en']);
+    assert.match(english.work_key, /^manual:[0-9a-f]{24}$/, 'a random-looking key like the API makes, not a series id');
+    assert.equal(linked[0].title, linked[1].title);
+    assert.ok(mangas.filter(m => m.language !== 'de').every(m => m.manga_passion_id === null), 'no Manga Passion link for other languages');
+  });
+
   test('demo logins are random, stored only as bcrypt hashes and written to a private file', () => {
     const dataDir = path.join(dir, 'a');
     const file = path.join(dataDir, USERS_FILE);

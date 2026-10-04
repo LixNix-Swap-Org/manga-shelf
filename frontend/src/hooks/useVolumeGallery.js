@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getVolumeDisplayTitle } from '../utils/volumeHelpers';
-import { formatEuro } from '../components/detail/volumeViewHelpers';
+import { formatMoney } from '../utils/format';
+import { editionCurrency } from '../utils/editions';
 
 /** Photo lightbox state for volume covers and extra photos. */
 export default function useVolumeGallery({ manga }) {
@@ -25,11 +26,12 @@ export default function useVolumeGallery({ manga }) {
       if (found !== -1) startIndex = found;
     }
 
+    const price = formatMoney(vol.price, editionCurrency(manga));
     setLightboxData({
       volumeId: vol.id,
       volume: vol,
       title: getVolumeDisplayTitle(vol),
-      subtitle: `${manga?.title || ''}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatEuro(vol.price) ? ` • ${formatEuro(vol.price)}` : ''}`,
+      subtitle: `${manga?.title || ''}${vol.publisher ? ` • ${vol.publisher}` : ''}${price ? ` • ${price}` : ''}`,
       images: allImages,
       currentIndex: Math.max(0, Math.min(startIndex, allImages.length - 1))
     });

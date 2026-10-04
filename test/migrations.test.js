@@ -90,7 +90,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
     rerunMigration16();
     assert.equal(dbm.getConnectionGeneration(), generation + 1, 'reopening bumps the connection generation');
     const report = dbm.getLastMigrationReport();
-    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
     assert.equal(report[0].changes, db().prepare('SELECT count(*) AS n FROM mangas').get().n, 'the backfill touched every series');
     for (const row of db().prepare("SELECT m.owned_volumes AS stored, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS counted FROM mangas m").all()) {
         assert.equal(row.stored, row.counted);
@@ -98,7 +98,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
 
     const snapshots = safetySnapshots();
     assert.equal(snapshots.length, 1);
-    assert.match(snapshots[0], /^vor-update-v15-auf-v25-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
+    assert.match(snapshots[0], /^vor-update-v15-auf-v27-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
     const zip = new AdmZip(path.join(backupsDir, snapshots[0]));
     assert.deepEqual(zip.getEntries().map(e => e.entryName), ['manga.db']);
     const extracted = path.join(dataDir, 'temp', 'check.db');
@@ -151,7 +151,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'migrate-dry-run.js'), original], {
         encoding: 'utf8', env: { ...process.env, DATA_DIR: '', LOG_LEVEL: 'silent' }
     });
-    assert.match(out, /Schema:\s+v14 -> v25/);
+    assert.match(out, /Schema:\s+v14 -> v27/);
     assert.match(out, /v15 add_volumes_number_sort: [\d.]+ Zeilen geändert, \d+ ms/);
     assert.match(out, /v16 maintain_mangas_owned_volumes_by_triggers: /);
     assert.match(out, /v17 add_mangas_wish_priority: /);
@@ -162,6 +162,8 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     assert.match(out, /v23 add_publisher_identity_aliases: /);
     assert.match(out, /v24 clear_seeded_start_date: /);
     assert.match(out, /v25 add_anime_watch: /);
+    assert.match(out, /v26 add_users_locale: /);
+    assert.match(out, /v27 add_editions: /);
     assert.match(out, /volumes\s+\d+ -> \d+/);
     assert.match(out, /integrity_check:\s+ok/);
     assert.match(out, /foreign_key_check: ok/);
@@ -207,7 +209,7 @@ test('no safety snapshot, no migration: the start stops unless MIGRATE_WITHOUT_S
         delete process.env.MIGRATE_WITHOUT_SNAPSHOT;
         failing.mock.restore();
     }
-    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
     assert.deepEqual(safetySnapshots(), before, 'migrated without a snapshot');
     assert.equal(require('../utils/config').readConfig({ MIGRATE_WITHOUT_SNAPSHOT: 'vielleicht' }).warnings.length, 1);
 });
@@ -329,7 +331,81 @@ test('migration 25 adds resume links, link lists, anime_links (one per entry and
 
         conn.exec('DELETE FROM schema_migrations WHERE version >= 25');
         schema.runSequentialMigrations(conn);
-        assert.equal(schema.appliedSchemaVersion(conn), 25, 'a second run is harmless');
+        assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
+});
+
+test('migration 26 adds users.locale (NULL = follow the device) and users.default_language (de)', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'users-locale.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        schema.applySchema(conn);
+        conn.prepare("INSERT INTO users (username, password_hash) VALUES ('alt', 'x')").run();
+        conn.exec(`
+            DELETE FROM schema_migrations WHERE version >= 26;
+            ALTER TABLE users DROP COLUMN locale;
+            ALTER TABLE users DROP COLUMN default_language;
+        `);
+        schema.runSequentialMigrations(conn);
+        assert.deepEqual({ ...conn.prepare("SELECT locale, default_language FROM users WHERE username = 'alt'").get() }, { locale: null, default_language: 'de' });
+        conn.prepare("INSERT INTO users (username, password_hash) VALUES ('neu', 'x')").run();
+        assert.deepEqual({ ...conn.prepare("SELECT locale, default_language FROM users WHERE username = 'neu'").get() }, { locale: null, default_language: 'de' });
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 26');
+        schema.runSequentialMigrations(conn);
+        assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
+});
+
+test('migration 27 turns language names into codes, adds region, work key, currency and volumes.language, and logs unknown text', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'editions.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        schema.applySchema(conn);
+        conn.exec(`
+            DELETE FROM schema_migrations WHERE version >= 27;
+            DROP INDEX idx_mangas_work_key;
+            ALTER TABLE mangas DROP COLUMN region;
+            ALTER TABLE mangas DROP COLUMN work_key;
+            ALTER TABLE mangas DROP COLUMN currency;
+            ALTER TABLE volumes DROP COLUMN language;
+        `);
+        const insert = conn.prepare('INSERT INTO mangas (title, language) VALUES (?, ?)');
+        const stored = [['A', 'Deutsch'], ['B', 'Englisch'], ['C', 'English'], ['D', 'ja'], ['E', 'en-US'], ['F', null], ['G', ''],
+            ['H', 'Klingonisch'], ['I', 'Klingonisch'], ['J', 'Französisch']];
+        for (const [title, language] of stored) insert.run(title, language);
+        const series = Number(conn.prepare("SELECT id FROM mangas WHERE title = 'A'").get().id);
+        conn.prepare("INSERT INTO volumes (manga_id, volume_number, status, price) VALUES (?, '1', 'Fehlt', 7)").run(series);
+
+        const warnings = [];
+        const log = { debug() {}, info() {}, error() {}, warn: (...args) => warnings.push(args.join(' ')) };
+        const report = schema.runSequentialMigrations(conn, { log });
+        assert.deepEqual(report.map(r => r.version), [27]);
+        const rows = conn.prepare('SELECT title, language, region, work_key, currency FROM mangas ORDER BY title').all().map(r => ({ ...r }));
+        assert.deepEqual(rows.map(r => [r.title, r.language, r.region]), [
+            ['A', 'de', null], ['B', 'en', null], ['C', 'en', null], ['D', 'ja', null], ['E', 'en', 'US'], ['F', 'de', null], ['G', 'de', null],
+            ['H', 'de', null], ['I', 'de', null], ['J', 'fr', null]
+        ]);
+        assert.ok(rows.every(r => r.work_key === null && r.currency === 'EUR'));
+        assert.equal(conn.prepare('SELECT language FROM volumes').get().language, null, 'a volume inherits the series language');
+        assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mangas_work_key'").get());
+        assert.equal(warnings.length, 1);
+        assert.match(warnings[0], /v27: unknown series languages set to 'de': "Klingonisch" \(2\)/);
+
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 27');
+        schema.runSequentialMigrations(conn);
+        assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+        assert.equal(conn.prepare("SELECT region FROM mangas WHERE title = 'E'").get().region, 'US');
+        assert.equal(conn.prepare("INSERT INTO mangas (title) VALUES ('neu') RETURNING currency").get().currency, 'EUR');
     } finally {
         conn.close();
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });

@@ -9,7 +9,7 @@ const puppeteer = require('puppeteer-core');
 const path = require('path');
 const fs = require('fs');
 const assert = require('node:assert/strict');
-const { findChrome } = require('./chrome');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 
 const EDIT_BUTTON = 'button[title="Band-Details & Fotos bearbeiten"]';
 
@@ -41,7 +41,7 @@ async function runTestSuite() {
     executablePath,
     headless: 'new',
     defaultViewport: { width: 1440, height: 900 },
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: CHROME_ARGS
   });
   const page = await browser.newPage();
   const watcher = watchPage(page);

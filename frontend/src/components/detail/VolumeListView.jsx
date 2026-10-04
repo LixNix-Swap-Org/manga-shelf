@@ -4,7 +4,13 @@ import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, releaseVerb, volumeStatusKind } from './volumeViewHelpers';
 import { assetImgProps } from '../../utils/api';
+import { t } from '../../i18n/index.js';
+import { conditionLabel } from '../../utils/enumLabels';
+import { formatMoney } from '../../utils/format';
+import { editionCurrency } from '../../utils/editions';
+import { VolumeLanguagePill } from '../common/LanguagePill';
 
+// i18n
 const TYPE_BADGES = {
   schuber: ['Schuber', 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'],
   special_edition: ['Special Edition', 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'],
@@ -39,16 +45,16 @@ export default function VolumeListView({
       <table className="w-full text-left border-collapse text-xs">
         <thead>
           <tr className="border-b border-slate-800/90 bg-slate-900/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-            {selectionMode && <th scope="col" className="py-3 px-3 w-10 text-center"><span className="sr-only">Auswahl</span></th>}
-            <th scope="col" className="py-3 px-3 w-12 text-center">Cover</th>
-            <th scope="col" className="py-3 px-3">Band / Titel</th>
-            <th scope="col" className="py-3 px-3">Typ</th>
-            <th scope="col" className="py-3 px-3">Status</th>
-            <th scope="col" className="py-3 px-3">Lesestatus</th>
-            <th scope="col" className="py-3 px-3">Verlag</th>
-            <th scope="col" className="py-3 px-3">Preis</th>
-            <th scope="col" className="py-3 px-3">Zustand</th>
-            <th scope="col" className="py-3 px-3 text-right">Aktionen</th>
+            {selectionMode && <th scope="col" className="py-3 px-3 w-10 text-center"><span className="sr-only">{t('Auswahl')}</span></th>}
+            <th scope="col" className="py-3 px-3 w-12 text-center">{t('Cover')}</th>
+            <th scope="col" className="py-3 px-3">{t('Band / Titel')}</th>
+            <th scope="col" className="py-3 px-3">{t('Typ')}</th>
+            <th scope="col" className="py-3 px-3">{t('Status')}</th>
+            <th scope="col" className="py-3 px-3">{t('Lesestatus')}</th>
+            <th scope="col" className="py-3 px-3">{t('Verlag')}</th>
+            <th scope="col" className="py-3 px-3">{t('Preis')}</th>
+            <th scope="col" className="py-3 px-3">{t('Zustand')}</th>
+            <th scope="col" className="py-3 px-3 text-right">{t('Aktionen')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -82,14 +88,14 @@ export default function VolumeListView({
                     )}
                   </td>
                   <td className="py-2 px-3 font-bold text-amber-300 text-sm">
-                    Band {item.gapNumber}
+                    {t('Band {gapNumber}', { gapNumber: item.gapNumber })}
                     <span className="block text-[10px] text-amber-400/80 font-normal">
                       {gapLabel(gapsOfficial)}{gapDate ? ` · ${releaseVerb(gapMeta.release_date, gapMeta.is_released)} ${gapDate}` : ''}
                     </span>
                   </td>
                   <td className="py-2 px-3">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Lücke
+                      {t('Lücke')}
                     </span>
                   </td>
                   <td className="py-2 px-3">
@@ -101,28 +107,28 @@ export default function VolumeListView({
                           setFillingGapNumber(item.gapNumber);
                         }}
                         className="hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 cursor-pointer"
-                        title="Band erfassen"
-                        aria-label={`Band ${item.gapNumber}: Fehlt (Lücke) – erfassen`}
+                        title={t('Band erfassen')}
+                        aria-label={t('Band {gapNumber}: Fehlt (Lücke) – erfassen', { gapNumber: item.gapNumber })}
                       >
-                        ✕ Fehlt (Lücke)
+                        {t('✕ Fehlt (Lücke)')}
                       </button>
                     ) : (
                       <span
                         className="inline-flex px-2 py-1 rounded-lg text-xs font-semibold items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        title="Fehlender Band"
+                        title={t('Fehlender Band')}
                       >
-                        ✕ Fehlt (Lücke)
+                        {t('✕ Fehlt (Lücke)')}
                       </span>
                     )}
                   </td>
-                  <td className="py-2 px-3 text-xs text-center"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">keine Angabe</span></td>
+                  <td className="py-2 px-3 text-xs text-center"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
                   <td className="py-2 px-3 text-slate-400 text-xs">
                     {gapMeta?.publisher || manga.publisher || '-'}
                   </td>
                   <td className="py-2 px-3 font-mono text-emerald-400 text-xs">
                     {gapMeta?.price ? formatEuro(gapMeta.price) : '-'}
                   </td>
-                  <td className="py-2 px-3 text-xs"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">keine Angabe</span></td>
+                  <td className="py-2 px-3 text-xs"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
                   <td className="py-2 px-3 text-right">
                     {canEdit && (
                       <button
@@ -132,10 +138,10 @@ export default function VolumeListView({
                           setFillingGapNumber(item.gapNumber);
                         }}
                         className="hit-44 px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all ml-auto cursor-pointer"
-                        title="Band in Sammlung aufnehmen"
-                        aria-label={`Band ${item.gapNumber} erfassen`}
+                        title={t('Band in Sammlung aufnehmen')}
+                        aria-label={t('Band {gapNumber} erfassen', { gapNumber: item.gapNumber })}
                       >
-                        <Plus className="w-3.5 h-3.5" /> Erfassen
+                        <Plus className="w-3.5 h-3.5" /> {t('Erfassen')}
                       </button>
                     )}
                   </td>
@@ -171,7 +177,7 @@ export default function VolumeListView({
                         type="checkbox"
                         checked={selected}
                         onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
-                        aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                        aria-label={t('{volume} auswählen', { volume: getVolumeDisplayTitle(vol) })}
                         className="w-6 h-6 m-0 accent-brand-500 cursor-pointer"
                       />
                     </label>
@@ -184,8 +190,8 @@ export default function VolumeListView({
                       type="button"
                       className="hit-44 relative inline-block cursor-pointer group/thumb rounded"
                       onClick={() => openVolumeGallery(vol)}
-                      title="Fotogalerie öffnen"
-                      aria-label={`Fotogalerie öffnen: ${getVolumeDisplayTitle(vol)}`}
+                      title={t('Fotogalerie öffnen')}
+                      aria-label={t('Fotogalerie öffnen: {volume}', { volume: getVolumeDisplayTitle(vol) })}
                     >
                       <img loading="lazy" decoding="async"
                         {...assetImgProps(vol.cover_image)} 
@@ -212,6 +218,7 @@ export default function VolumeListView({
                 {/* Volume / title */}
                 <td className="py-2 px-3 font-bold text-white text-sm">
                   {getVolumeDisplayTitle(vol)}
+                  <VolumeLanguagePill volume={vol} manga={manga} className="ml-1.5 align-middle" />
                   <span className="ml-1.5 align-middle">
                     <OwnerBadges vol={vol} multiUser={(manga?.reader_stats?.length || 0) > 1} />
                   </span>
@@ -225,7 +232,7 @@ export default function VolumeListView({
                 {/* Typ Badge */}
                 <td className="py-2 px-3">
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${typeClass}`}>
-                    {typeLabel}
+                    {t(typeLabel)}
                   </span>
                 </td>
 
@@ -248,19 +255,19 @@ export default function VolumeListView({
                               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     }`}
-                    title={canToggle ? 'Klicken zum Status umschalten' : ''}
-                    aria-label={`Status: ${isOwned ? 'Im Besitz' : statusKind === 'preordered' ? 'Vorbestellt' : statusKind === 'ordered' ? 'Bestellt' : statusKind === 'upcoming' ? 'Erscheint bald' : 'Fehlt'} – ${getVolumeDisplayTitle(vol)}`}
+                    title={canToggle ? t('Klicken zum Status umschalten') : ''}
+                    aria-label={t('Status: {status} – {volume}', { status: isOwned ? t('Im Besitz') : statusKind === 'preordered' ? t('Vorbestellt') : statusKind === 'ordered' ? t('Bestellt') : statusKind === 'upcoming' ? t('Erscheint bald') : t('Fehlt'), volume: getVolumeDisplayTitle(vol) })}
                   >
                     {isOwned ? (
-                      '✓ Im Besitz'
+                      t('✓ Im Besitz')
                     ) : statusKind === 'preordered' ? (
-                      <><Truck className="w-3 h-3 text-sky-400" /> Vorbestellt</>
+                      <><Truck className="w-3 h-3 text-sky-400" /> {t('Vorbestellt')}</>
                     ) : statusKind === 'ordered' ? (
-                      <><ShoppingCart className="w-3 h-3 text-orange-400" /> Bestellt</>
+                      <><ShoppingCart className="w-3 h-3 text-orange-400" /> {t('Bestellt')}</>
                     ) : statusKind === 'upcoming' ? (
-                      <><Calendar className="w-3 h-3 text-purple-400" /> Erscheint bald</>
+                      <><Calendar className="w-3 h-3 text-purple-400" /> {t('Erscheint bald')}</>
                     ) : (
-                      '✕ Fehlt'
+                      t('✕ Fehlt')
                     )}
                   </button>
                 </td>
@@ -272,8 +279,8 @@ export default function VolumeListView({
                       type="button"
                       disabled={!canToggleRead}
                       onClick={(e) => canToggleRead && handleToggleVolumeRead(vol, effUserId, e)}
-                      title={canToggle && !canToggleRead ? READ_OTHERS_ADMIN_ONLY : undefined}
-                      aria-label={`${isRead ? 'Gelesen' : 'Ungelesen'} – ${getVolumeDisplayTitle(vol)}`}
+                      title={canToggle && !canToggleRead ? t(READ_OTHERS_ADMIN_ONLY) : undefined}
+                      aria-label={t('{state} – {volume}', { state: isRead ? t('Gelesen') : t('Ungelesen'), volume: getVolumeDisplayTitle(vol) })}
                       className={`hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                         canToggleRead ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                       } ${
@@ -283,10 +290,10 @@ export default function VolumeListView({
                       }`}
                     >
                       <BookCheck className={`w-3 h-3 ${isRead ? 'text-teal-400' : 'text-slate-400'}`} />
-                      <span>{isRead ? 'Gelesen' : 'Ungelesen'}</span>
+                      <span>{isRead ? t('Gelesen') : t('Ungelesen')}</span>
                     </button>
                   ) : (
-                    <span><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">keine Angabe</span></span>
+                    <span><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></span>
                   )}
                 </td>
 
@@ -295,12 +302,12 @@ export default function VolumeListView({
 
                 {/* Price */}
                 <td className="py-2 px-3 font-mono text-emerald-400">
-                  {formatEuro(vol.price) || '-'}
+                  {formatMoney(vol.price, editionCurrency(manga)) || '-'}
                 </td>
 
                 {/* Condition */}
                 <td className="py-2 px-3 text-slate-400">
-                  {vol.condition || '-'}
+                  {conditionLabel(vol.condition) || '-'}
                 </td>
 
                 {/* Actions */}
@@ -311,8 +318,8 @@ export default function VolumeListView({
                         type="button"
                         onClick={() => handleOpenEditVolume(vol)}
                         className="hit-44 p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                        title="Bearbeiten"
-                        aria-label={`${getVolumeDisplayTitle(vol)} bearbeiten`}
+                        title={t('Bearbeiten')}
+                        aria-label={t('{volume} bearbeiten', { volume: getVolumeDisplayTitle(vol) })}
                       >
                         <PenLine className="w-3.5 h-3.5" />
                       </button>
@@ -322,8 +329,8 @@ export default function VolumeListView({
                         type="button"
                         onClick={(e) => handleDeleteVolume(e, vol)}
                         className="hit-44 p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition-colors"
-                        title="Löschen"
-                        aria-label={`${getVolumeDisplayTitle(vol)} löschen`}
+                        title={t('Löschen')}
+                        aria-label={t('{volume} löschen', { volume: getVolumeDisplayTitle(vol) })}
                       >
                         <Trash className="w-3.5 h-3.5" />
                       </button>

@@ -1,6 +1,6 @@
 // POST /anime/watch-sync: progress from a streaming history the app read on the device (core/watch/crunchyroll.js).
 // Only series ids, episode numbers and episode links arrive here, never cookies, tokens or the raw history.
-const { HttpError, badRequest } = require('../errors');
+const { HttpError, msg, badRequest } = require('../errors');
 const { writeProgress, readProgress } = require('../anime/progress');
 const { searchKey, keyScore } = require('../anime/normalize');
 const gateway = require('../anime/gateway');
@@ -21,11 +21,11 @@ function readBody(body) {
     const service = body && SYNC_SERVICES.includes(body.service) ? links.findService(body.service) : null;
     if (!service) throw badRequest('Abgleich gibt es nur für Crunchyroll');
     if (!Array.isArray(body.items) || body.items.length > crunchyroll.MAX_ITEMS) {
-        throw badRequest(`Erwartet: { service, items: [...] } mit höchstens ${crunchyroll.MAX_ITEMS} Einträgen`);
+        throw badRequest(msg('Erwartet: { service, items: [...] } mit höchstens {max_items} Einträgen', { max_items: crunchyroll.MAX_ITEMS }));
     }
     const items = body.items.map((raw, i) => {
         const item = crunchyroll.cleanItem(raw);
-        if (!item) throw badRequest(`Ungültiger Eintrag Nr. ${i + 1}`);
+        if (!item) throw badRequest(msg('Ungültiger Eintrag Nr. {number}', { number: i + 1 }));
         return item;
     });
     // one item per series and season, whatever the client sent

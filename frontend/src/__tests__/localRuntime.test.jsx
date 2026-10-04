@@ -30,7 +30,7 @@ const newRuntime = (options = {}) => createLocalRuntime({ SQL, store: memoryStor
 describe('local runtime (standalone core on the device)', () => {
   it('answers like the server: the profile is an admin without login, server-only areas say they need a server', async () => {
     const rt = await newRuntime();
-    expect((await rt.request('GET', '/api/auth/me')).body.user).toEqual({ id: 1, username: 'Felix', role: 'admin', local: true });
+    expect((await rt.request('GET', '/api/auth/me')).body.user).toEqual({ id: 1, username: 'Felix', role: 'admin', local: true, locale: null, default_language: 'de' });
     expect((await rt.request('GET', '/api/setup/status')).body).toEqual({ needsSetup: false });
     const created = await rt.request('POST', '/api/mangas', { title: 'Lokal' });
     expect(created.status).toBe(200);

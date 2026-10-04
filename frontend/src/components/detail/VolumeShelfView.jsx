@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Layers, Library, Maximize2, MoveHorizontal } from 'lucide-react';
 import { countShelfItems } from './volumeViewHelpers';
 import { formatCount } from '../../utils/format';
+import { t, tn } from '../../i18n/index.js';
 
 const KBD = 'px-1 bg-slate-900 border border-slate-700 rounded text-slate-300 font-mono text-[9px]';
 
@@ -27,23 +28,23 @@ export default function VolumeShelfView({
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
             <Library className="w-4 h-4 text-brand-400" />
-            Manga-Regal
+            {t('Manga-Regal')}
           </h3>
           <span className="text-[11px] text-slate-400 font-mono">
             ({formatCount(counts.volumes, 'Band', 'Bände')}{counts.gaps > 0 ? ` + ${formatCount(counts.gaps, 'Lücke', 'Lücken')}` : ''})
           </span>
-          <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 font-medium" title="Tastatur-Navigation im Regal">
-            <span>Tasten:</span>
+          <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 font-medium" title={t('Tastatur-Navigation im Regal')}>
+            <span>{t('Tasten:')}</span>
             <kbd className={KBD}>J</kbd>
             <kbd className={KBD}>K</kbd>
             {canEdit && (
               <>
                 <span className="text-slate-500" aria-hidden="true">•</span>
-                <kbd className={KBD}>Leertaste</kbd>
-                <span className="text-slate-400">Gelesen</span>
+                <kbd className={KBD}>{t('Leertaste')}</kbd>
+                <span className="text-slate-400">{t('Gelesen')}</span>
                 <span className="text-slate-500" aria-hidden="true">•</span>
                 <kbd className={KBD}>E</kbd>
-                <span className="text-slate-400">Bearbeiten</span>
+                <span className="text-slate-400">{t('Bearbeiten')}</span>
               </>
             )}
           </span>
@@ -51,7 +52,7 @@ export default function VolumeShelfView({
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Shelf Layout Mode: Auto-Fit | Regalbretter | Scrollen */}
-          <div role="group" aria-label="Regal-Layout" className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+          <div role="group" aria-label={t('Regal-Layout')} className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               aria-pressed={shelfMode === 'fit'}
@@ -61,10 +62,10 @@ export default function VolumeShelfView({
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
-              title="Auto-Fit: Alle Bände passen sich dynamisch an die Bildschirmbreite an"
+              title={t('Auto-Fit: Alle Bände passen sich dynamisch an die Bildschirmbreite an')}
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span>Auto-Fit</span>
+              <span>{t('Auto-Fit')}</span>
             </button>
 
             <button
@@ -76,10 +77,10 @@ export default function VolumeShelfView({
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
-              title="Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe"
+              title={t('Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe')}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Regalbretter</span>
+              <span>{t('Regalbretter')}</span>
             </button>
 
             <button
@@ -91,54 +92,54 @@ export default function VolumeShelfView({
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
-              title="Scrollen: Klassische horizontale Leiste mit Scrollbalken"
+              title={t('Scrollen: Klassische horizontale Leiste mit Scrollbalken')}
             >
               <MoveHorizontal className="w-3.5 h-3.5" />
-              <span>Scrollen</span>
+              <span>{t('Scrollen')}</span>
             </button>
           </div>
 
           {/* Shelf Scale (S / M / L) */}
-          <div role="group" aria-label="Regal-Größe" className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+          <div role="group" aria-label={t('Regal-Größe')} className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               aria-pressed={shelfScale === 's'}
-              aria-label="Kompakt"
+              aria-label={t('Kompakt')}
               onClick={() => handleSetShelfScale('s')}
               className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 's'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
               }`}
-              title="Kompakte Ansicht (S)"
+              title={t('Kompakte Ansicht (S)')}
             >
               S
             </button>
             <button
               type="button"
               aria-pressed={shelfScale === 'm'}
-              aria-label="Standard"
+              aria-label={t('Standard')}
               onClick={() => handleSetShelfScale('m')}
               className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 'm'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
               }`}
-              title="Standard Ansicht (M)"
+              title={t('Standard Ansicht (M)')}
             >
               M
             </button>
             <button
               type="button"
               aria-pressed={shelfScale === 'l'}
-              aria-label="Groß"
+              aria-label={t('Groß')}
               onClick={() => handleSetShelfScale('l')}
               className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 'l'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
               }`}
-              title="Große Ansicht (L)"
+              title={t('Große Ansicht (L)')}
             >
               L
             </button>
@@ -150,18 +151,18 @@ export default function VolumeShelfView({
               <button
                 type="button"
                 onClick={() => scrollShelf(-350)}
-                aria-label="Nach links scrollen"
+                aria-label={t('Nach links scrollen')}
                 className="hit-44 p-1 [@media(pointer:coarse)]:p-2.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Nach links scrollen"
+                title={t('Nach links scrollen')}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollShelf(350)}
-                aria-label="Nach rechts scrollen"
+                aria-label={t('Nach rechts scrollen')}
                 className="hit-44 p-1 [@media(pointer:coarse)]:p-2.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Nach rechts scrollen"
+                title={t('Nach rechts scrollen')}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -179,7 +180,7 @@ export default function VolumeShelfView({
             <div ref={shelfMeasureRef} className="space-y-5 pt-2 pb-2 px-1">
               <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1.5">
                 <Layers className="w-3 h-3 text-slate-500" />
-                Auto-Fit: {shelfRows.length} Reihen für {spineShelfItems.length} Einträge
+                {tn('Auto-Fit: {n} Reihen für {items}', 'Auto-Fit: {n} Reihen für {items}', shelfRows.length, { items: tn('{n} Einträge', '{n} Einträge', spineShelfItems.length) })}
               </div>
               {shelfRows.map((row, rIdx) => (
                 <div key={rIdx} className="relative">

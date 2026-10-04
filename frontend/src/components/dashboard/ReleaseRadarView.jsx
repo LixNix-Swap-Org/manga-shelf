@@ -10,11 +10,13 @@ import PersonalFilters from './radar/PersonalFilters';
 import PersonalTimeline from './radar/PersonalTimeline';
 import useRadarDateChanges from './radar/useRadarDateChanges';
 import { filterMpItems, groupMpItemsByDate, mpMatchesSelection, importNotice } from '../../utils/radarHelpers';
+import { t } from '../../i18n/index.js';
 
 const NOTICE_MS = 8000;
 
 export default function ReleaseRadarView({
   isOffline = false,
+  foreignEditions = false,
   radarSubView,
   setRadarSubView,
   radarData,
@@ -71,9 +73,9 @@ export default function ReleaseRadarView({
         <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center justify-center mx-auto mb-4 text-slate-400">
           <WifiOff className="w-8 h-8" />
         </div>
-        <h2 className="text-base font-bold text-white mb-1">Release-Radar ist offline nicht verfügbar</h2>
+        <h2 className="text-base font-bold text-white mb-1">{t('Release-Radar ist offline nicht verfügbar')}</h2>
         <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-          Neuerscheinungen und Vorbestellungen werden geladen, sobald der Server wieder erreichbar ist.
+          {t('Neuerscheinungen und Vorbestellungen werden geladen, sobald der Server wieder erreichbar ist.')}
         </p>
       </div>
     );
@@ -119,7 +121,13 @@ export default function ReleaseRadarView({
 
       {radarSubView === 'passion' && (
         <div id={RADAR_PANEL_ID} role="tabpanel" aria-labelledby={radarTabId('passion')} className="space-y-6">
-          <h2 className="sr-only">Deutsche Neuheiten</h2>
+          <h2 className="sr-only">{t('Deutsche Neuheiten')}</h2>
+          {foreignEditions && (
+            <p id="radar-mp-market-note" className="flex items-start gap-2 text-xs text-slate-300 bg-slate-900/70 border border-slate-800 rounded-xl px-3 py-2">
+              <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>{t('Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.')}</span>
+            </p>
+          )}
           <MpMonthNav
             mpData={mpData}
             mpCurrent={mpCurrent}
@@ -152,7 +160,7 @@ export default function ReleaseRadarView({
           {notice && (
             <div className="p-3 rounded-xl border border-sky-500/40 bg-sky-500/10 text-xs text-sky-200 flex items-start justify-between gap-2">
               <span aria-hidden="true" className="flex items-center gap-2"><Info className="w-4 h-4 shrink-0" />{notice}</span>
-              <button type="button" onClick={() => setNotice(null)} className="p-1 -m-1 rounded text-sky-300 hover:text-white" aria-label="Hinweis schließen">
+              <button type="button" onClick={() => setNotice(null)} className="p-1 -m-1 rounded text-sky-300 hover:text-white" aria-label={t('Hinweis schließen')}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

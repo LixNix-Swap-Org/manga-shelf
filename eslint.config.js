@@ -68,6 +68,12 @@ module.exports = [
         languageOptions: { globals: { ...globals.node, ...globals.browser } }
     },
     {
+        // ESM dev tools (scripts/i18n): Node only
+        files: ['scripts/**/*.mjs'],
+        languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node } },
+        rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }] }
+    },
+    {
         files: ['frontend/*.js'],
         languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node } }
     },

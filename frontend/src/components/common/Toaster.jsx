@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, CircleCheck, Info, X } from 'lucide-react';
 import { dismiss, subscribe } from '../../utils/notify';
+import { rich } from '../../i18n/react.jsx';
+import { t as tr } from '../../i18n/index.js';
 
 const MAX_TOASTS = 4;
 const MAX_UNDO_TOASTS = 3;
@@ -133,18 +135,18 @@ function Toast({ toast, onClose, hidden = false }) {
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${icon}`} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="break-words" aria-live={toast.updated ? 'off' : undefined}>{toast.message}</p>
-        {toast.ref && <p className="mt-0.5 text-[11px] opacity-75">Fehler-ID: <span className="font-mono">{toast.ref}</span></p>}
+        {toast.ref && <p className="mt-0.5 text-[11px] opacity-75">{rich('Fehler-ID: {ref}', { ref: <span className="font-mono">{toast.ref}</span> })}</p>}
       </div>
       {toast.action && (
-        <button type="button" onClick={runAction} className={`hit-44 shrink-0 font-semibold underline hover:text-white ${action}`}>
+        <button type="button" onClick={runAction} className={`hit-44 shrink-0 font-semibold underline hover:text-white ${action}`}>{/* i18n-ignore: the label is translated where the toast is created */}
           {toast.action.label}
         </button>
       )}
       <button
         type="button"
         onClick={() => onClose(toast.id)}
-        aria-label="Meldung schließen"
-        title="Schließen (Esc)"
+        aria-label={tr('Meldung schließen')}
+        title={tr('Schließen (Esc)')}
         className="hit-44 -m-1 shrink-0 rounded p-1 text-slate-400 hover:text-white"
       >
         <X className="h-4 w-4" aria-hidden="true" />

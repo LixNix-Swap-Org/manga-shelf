@@ -162,10 +162,10 @@ test('a duplicate entry does not raise the progress of a series', async () => {
 test('static headers: index.html, sw.js and manifest.json are revalidated, hashed assets are not touched', () => {
     const { setStaticHeaders } = require('../utils/staticHeaders');
     const headersFor = (file) => { const h = {}; setStaticHeaders({ setHeader: (k, v) => { h[k] = v; } }, file); return h; };
-    for (const file of ['C:\\app\\frontend\\dist\\index.html', '/app/frontend/dist/index.html', '/app/dist/sw.js', '/app/dist/manifest.json']) {
+    for (const file of ['C:\\app\\frontend\\dist\\index.html', '/app/frontend/dist/index.html', '/app/dist/sw.js', '/app/dist/manifest.json', '/app/dist/manifest.en.json', '/app/dist/manifest.pt-BR.json']) {
         assert.deepEqual(headersFor(file), { 'Cache-Control': 'no-cache' }, file);
     }
-    for (const file of ['/app/dist/assets/index-abc123.js', '/app/dist/assets/Dashboard-x.js', '/app/dist/favicon.svg', '/app/dist/assets/notindex.html.js']) {
+    for (const file of ['/app/dist/assets/index-abc123.js', '/app/dist/assets/Dashboard-x.js', '/app/dist/favicon.svg', '/app/dist/assets/notindex.html.js', '/app/dist/assets/en-abc123.js']) {
         assert.deepEqual(headersFor(file), {}, file);
     }
 });

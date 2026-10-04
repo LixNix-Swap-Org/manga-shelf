@@ -24,6 +24,10 @@ function parseStartDate(value) {
     return parsed;
 }
 
+// money figures add euro prices only (series currency); other currencies are listed in `currencies`, never converted
+const EURO = "m.currency = 'EUR'";
+const EURO_PRICE = `CASE WHEN ${EURO} THEN v.price END`;
+
 const PURCHASE_YEAR = "(TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]*' AND SUBSTR(TRIM(purchase_date), 1, 4) >= '1900')";
 const PURCHASE_MONTH = `(${PURCHASE_YEAR} AND TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*')`;
 
@@ -35,9 +39,9 @@ function buildSpending(ctx, now = new Date()) {
     const rows = ctx.db.prepare(`
         SELECT CASE WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) END AS month,
                CASE WHEN ${PURCHASE_YEAR} THEN CAST(SUBSTR(TRIM(purchase_date), 1, 4) AS INTEGER) END AS year,
-               count(*) AS volumes, sum(COALESCE(price, 0)) AS total
-        FROM volumes
-        WHERE status = 'Vorhanden'
+               count(*) AS volumes, sum(COALESCE(${EURO_PRICE}, 0)) AS total
+        FROM volumes v JOIN mangas m ON m.id = v.manga_id
+        WHERE v.status = 'Vorhanden'
         GROUP BY month, year
     `).all();
     const byMonth = new Map();
@@ -98,11 +102,11 @@ const PUBLISHERS_SQL = `
     SELECT ${EFF_PUB} AS pub_name,
            COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN m.id END) AS series_count,
            SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS volume_count,
-           SUM(CASE WHEN v.status = 'Vorhanden' THEN COALESCE(v.price, 0) ELSE 0 END) AS total_value,
-           SUM(CASE WHEN v.status = 'Vorhanden' AND v.price IS NOT NULL THEN 1 ELSE 0 END) AS priced_count,
-           AVG(CASE WHEN v.status = 'Vorhanden' THEN v.price END) AS avg_price,
+           SUM(CASE WHEN v.status = 'Vorhanden' THEN COALESCE(${EURO_PRICE}, 0) ELSE 0 END) AS total_value,
+           SUM(CASE WHEN v.status = 'Vorhanden' AND ${EURO_PRICE} IS NOT NULL THEN 1 ELSE 0 END) AS priced_count,
+           AVG(CASE WHEN v.status = 'Vorhanden' THEN ${EURO_PRICE} END) AS avg_price,
            SUM(CASE WHEN v.status = 'Fehlt' THEN 1 ELSE 0 END) AS missing_count,
-           SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(v.price, 0) ELSE 0 END) AS missing_value
+           SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(${EURO_PRICE}, 0) ELSE 0 END) AS missing_value
     FROM volumes v
     JOIN mangas m ON v.manga_id = m.id
     WHERE v.status IN ('Vorhanden', 'Fehlt')
@@ -120,6 +124,7 @@ const TOP_SERIES_SQL = `
            SUM(CASE WHEN v.status = 'Vorhanden' AND v.price IS NULL THEN 1 ELSE 0 END) AS unpriced
     FROM mangas m
     JOIN volumes v ON v.manga_id = m.id
+    WHERE ${EURO}
     GROUP BY m.id
     HAVING owned_value > 0
     ORDER BY owned_value DESC, owned_volumes DESC, m.title COLLATE NOCASE ASC
@@ -130,19 +135,20 @@ const TOP_SERIES_SQL = `
 const OWNER_STATS_SQL = `
     SELECT u.id as user_id, u.username,
            count(v.id) as volume_count,
-           COALESCE(SUM(COALESCE(v.price, 0)), 0) as total_value,
+           COALESCE(SUM(COALESCE(${EURO_PRICE}, 0)), 0) as total_value,
            COUNT(DISTINCT v.manga_id) as series_count,
            COALESCE(SUM(CASE WHEN v.id IS NOT NULL AND (SELECT count(*) FROM volume_owners o2 WHERE o2.volume_id = vo.volume_id) > 1 THEN 1 ELSE 0 END), 0) as shared_count
     FROM users u
     LEFT JOIN volume_owners vo ON vo.user_id = u.id
     LEFT JOIN volumes v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
+    LEFT JOIN mangas m ON m.id = v.manga_id
     GROUP BY u.id
     ORDER BY u.id
 `;
 
 const OWNER_PUBLISHERS_SQL = `
     SELECT u.id AS user_id, u.username, ${EFF_PUB} AS pub_name, COUNT(*) AS volume_count,
-           SUM(COALESCE(v.price, 0)) AS total_value
+           SUM(COALESCE(${EURO_PRICE}, 0)) AS total_value
     FROM volume_owners vo
     JOIN users u ON u.id = vo.user_id
     JOIN volumes v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
@@ -152,6 +158,41 @@ const OWNER_PUBLISHERS_SQL = `
 `;
 
 
+// series by their language, volumes by their own language (NULL = the series')
+const LANGUAGE_SERIES_SQL = "SELECT COALESCE(language, 'de') AS language, count(*) AS series FROM mangas GROUP BY 1";
+const LANGUAGE_VOLUMES_SQL = `
+    SELECT COALESCE(v.language, m.language, 'de') AS language, count(*) AS volumes,
+           SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS owned_volumes
+    FROM volumes v JOIN mangas m ON m.id = v.manga_id
+    GROUP BY 1`;
+
+const CURRENCIES_SQL = `
+    SELECT m.currency, count(DISTINCT m.id) AS series,
+           SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS owned_volumes,
+           SUM(CASE WHEN v.status = 'Vorhanden' THEN COALESCE(v.price, 0) ELSE 0 END) AS owned_value,
+           SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(v.price, 0) ELSE 0 END) AS missing_value
+    FROM mangas m LEFT JOIN volumes v ON v.manga_id = m.id
+    GROUP BY m.currency`;
+
+/** `languages` of GET /stats: [{ language, series, volumes, owned_volumes }], most owned first. */
+function languageStats(ctx) {
+    const byLanguage = new Map();
+    const entry = (language) => {
+        if (!byLanguage.has(language)) byLanguage.set(language, { language, series: 0, volumes: 0, owned_volumes: 0 });
+        return byLanguage.get(language);
+    };
+    for (const row of ctx.db.prepare(LANGUAGE_SERIES_SQL).all()) entry(row.language).series = row.series;
+    for (const row of ctx.db.prepare(LANGUAGE_VOLUMES_SQL).all()) Object.assign(entry(row.language), { volumes: row.volumes, owned_volumes: row.owned_volumes || 0 });
+    return [...byLanguage.values()].sort((a, b) => b.owned_volumes - a.owned_volumes || b.series - a.series || a.language.localeCompare(b.language));
+}
+
+/** `currencies` of GET /stats: owned and missing value per series currency, euro first (the totals count only euro). */
+function currencyStats(ctx) {
+    return ctx.db.prepare(CURRENCIES_SQL).all()
+        .map(r => ({ currency: r.currency, series: r.series, owned_volumes: r.owned_volumes || 0, owned_value: round2(r.owned_value), missing_value: round2(r.missing_value) }))
+        .sort((a, b) => (a.currency === 'EUR' ? -1 : b.currency === 'EUR' ? 1 : a.currency.localeCompare(b.currency)));
+}
+
 const round1 = (n) => Math.round(n * 10) / 10;
 const avgOrNull = (n) => (n === null || n === undefined ? null : round2(n));
 
@@ -159,16 +200,22 @@ function stats(ctx) {
     const totalSeriesRow = ctx.db.prepare('SELECT count(*) as count FROM mangas').get();
     const totalSeries = totalSeriesRow ? totalSeriesRow.count : 0;
 
-    const ownedRow = ctx.db.prepare("SELECT count(*) as count, sum(COALESCE(price, 0)) as total_value, count(price) as priced_count, avg(price) as avg_price FROM volumes WHERE status = 'Vorhanden'").get();
+    const ownedRow = ctx.db.prepare(`
+        SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as total_value, count(v.price) as priced_count,
+               count(${EURO_PRICE}) as euro_priced_count, avg(${EURO_PRICE}) as avg_price
+        FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Vorhanden'`).get();
     const totalOwnedVolumes = ownedRow ? ownedRow.count : 0;
     const totalOwnedValue = round2(ownedRow?.total_value);
+    // priced in any currency: a USD volume has a price, it is just not part of the euro average
     const pricedOwnedVolumes = ownedRow ? ownedRow.priced_count : 0;
 
-    const missingRow = ctx.db.prepare("SELECT count(*) as count, sum(COALESCE(price, 0)) as missing_value FROM volumes WHERE status = 'Fehlt'").get();
+    const missingRow = ctx.db.prepare(`
+        SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as missing_value
+        FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Fehlt'`).get();
     const totalMissingVolumes = missingRow ? missingRow.count : 0;
     const totalMissingValue = round2(missingRow?.missing_value);
 
-    const allVolsRow = ctx.db.prepare('SELECT count(*) as count, sum(COALESCE(price, 0)) as full_value FROM volumes').get();
+    const allVolsRow = ctx.db.prepare(`SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as full_value FROM volumes v JOIN mangas m ON m.id = v.manga_id`).get();
     const totalVolumesRecorded = allVolsRow ? allVolsRow.count : 0;
     const totalPossibleValue = round2(allVolsRow?.full_value);
 
@@ -185,7 +232,7 @@ function stats(ctx) {
     const totalYears = (totalDays / 365.25).toFixed(2);
     const avgMonthlySpending = round2(totalOwnedValue / totalMonths);
     // A stored price of 0 (gift) counts; volumes without a price do not.
-    const avgPricePerVolume = pricedOwnedVolumes > 0 ? round2(ownedRow.avg_price) : 0;
+    const avgPricePerVolume = ownedRow?.euro_priced_count > 0 ? round2(ownedRow.avg_price) : 0;
 
     const publishers = ctx.db.prepare(PUBLISHERS_SQL).all().map(p => ({
         publisher: p.pub_name,
@@ -278,6 +325,8 @@ function stats(ctx) {
             owner_publishers: ownerPublishers,
             top_series: topSeries,
             spending: buildSpending(ctx, now),
+            languages: languageStats(ctx),
+            currencies: currencyStats(ctx),
             ...animeBlock(ctx)
         }
     };

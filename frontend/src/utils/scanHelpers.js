@@ -2,6 +2,8 @@
 import { getVolumeDisplayTitle } from './volumeHelpers.js';
 import { formatDayMonth, formatTime } from './format.js';
 import { createSearch, prepareQuery } from './search.js';
+import { t } from '../i18n/index.js';
+import { statusLabel } from './enumLabels.js';
 
 /** Series name of a catalogue hit: the catalogue's series if it knows one, else the book title (the DNB title is often only the volume title). */
 export const scanSeriesTitle = (book) => String(book?.series || book?.title || '').trim();
@@ -38,7 +40,7 @@ export const buildScanPrefill = (book, isbn) => {
 export const buildScanVolumePayload = (mangaId, vol) => ({
   manga_id: mangaId,
   volume_number: String(vol.volume_number).trim(),
-  status: vol.status || 'Vorhanden',
+  status: vol.status || 'Vorhanden', // i18n-ignore: stored status value
   isbn: vol.isbn || null,
   price: vol.price || null,
   pages: vol.pages || null,
@@ -57,6 +59,7 @@ export const prefillTotalVolumes = (item, previous = '') => {
 };
 
 /** Stored statuses that mean "in the collection" ('Gelesen' is the legacy alias of 'Vorhanden'). */
+// i18n
 export const OWNED_STATUSES = ['Vorhanden', 'Gelesen'];
 
 const isbnDigits = (value) => String(value || '').replace(/[^0-9X]/gi, '').toUpperCase();
@@ -104,7 +107,7 @@ export const classifyShopScan = (isbn, data, shoppingItems = []) => {
   if (fromList) return buyEntry(fromList);
 
   const book = data?.book;
-  const name = scanSeriesTitle(book) || 'Unbekannt';
+  const name = scanSeriesTitle(book) || t('Unbekannt');
   const mv = data?.matched_volume;
   if (!data?.found) return entry('unknown', clean);
   const seriesTitle = data.matched_manga?.title || name;
@@ -112,24 +115,24 @@ export const classifyShopScan = (isbn, data, shoppingItems = []) => {
     // owned_by_me is missing in older answers: then the shared status decides as before
     if (mv.owned_by_me === false) {
       const names = ownerNames(mv.owners);
-      return entry('partner', `${volumeLabel(seriesTitle, mv)}: bei ${names.length ? names.join(', ') : 'anderen'} vorhanden`);
+      return entry('partner', t('{volume}: bei {owners} vorhanden', { volume: volumeLabel(seriesTitle, mv), owners: names.length ? names.join(', ') : t('anderen') }));
     }
     return entry('owned', volumeLabel(seriesTitle, mv));
   }
   const onList = mv && shoppingItems.find((it) => it.id === mv.id);
   if (onList) return buyEntry(onList);
   if (data.matched_manga && book?.volume_number_known === false && !mv) {
-    return entry('check', `${data.matched_manga.title}: Bandnummer im Katalog unbekannt, bitte selbst prüfen`);
+    return entry('check', t('{series}: Bandnummer im Katalog unbekannt, bitte selbst prüfen', { series: data.matched_manga.title }));
   }
   if (data.matched_manga) {
     return entry('check', mv
-      ? `${volumeLabel(data.matched_manga.title, mv)} (Status ${mv.status})`
-      : `${volumeLabel(data.matched_manga.title, { volume_number: book?.volume_number ?? '' })}: fehlt noch und steht nicht auf der Einkaufsliste`);
+      ? t('{volume} (Status {status})', { volume: volumeLabel(data.matched_manga.title, mv), status: statusLabel(mv.status) })
+      : t('{volume}: fehlt noch und steht nicht auf der Einkaufsliste', { volume: volumeLabel(data.matched_manga.title, { volume_number: book?.volume_number ?? '' }) }));
   }
   if (data.matched_candidates?.length > 0) {
-    return entry('check', `${name} passt zu mehreren Reihen (${data.matched_candidates.map((c) => c.title).join(', ')})`);
+    return entry('check', t('{name} passt zu mehreren Reihen ({candidates})', { name, candidates: data.matched_candidates.map((c) => c.title).join(', ') }));
   }
-  return entry('new', `${name}: Reihe noch nicht in der Sammlung`);
+  return entry('new', t('{name}: Reihe noch nicht in der Sammlung', { name }));
 };
 
 /**
@@ -182,17 +185,18 @@ export const findVolumeByIsbn = (index, isbn) => {
  * Scan result for a volume of the offline copy ({ manga, volume }). Always provisional (`offline: true`, note in the
  * label) so the server's answer replaces it and it is not bookable before (isBookable).
  */
-export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note = 'offline geprüft', source = 'offline' } = {}) => {
+export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note, source = 'offline' } = {}) => {
   const clean = isbnDigits(isbn);
   const result = classifyShopScan(clean, { found: true, matched_manga: hit.manga, matched_volume: hit.volume, book: {} }, shoppingItems);
-  return { ...result, label: `${result.label} (${note})`, offline: true, source };
+  const shownNote = note === undefined ? t('offline geprüft') : note;
+  return { ...result, label: `${result.label} (${shownNote})`, offline: true, source };
 };
 
 /** A `buy` entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
 export const isBookable = (entry) => entry.kind === 'buy' && !entry.done && !entry.booking && !entry.offline;
 
 /** Label note of a scan answered from the offline copy before asking the server. */
-export const localSourceNote = (age) => `Stand Offline-Kopie${age ? ` ${age}` : ''}`;
+export const localSourceNote = (age) => (age ? t('Stand Offline-Kopie {age}', { age }) : t('Stand Offline-Kopie'));
 
 /** Scan result without the server: shopping list first, then the offline copy; a miss is `offline` (not checked). */
 export const classifyShopScanOffline = (isbn, index, shoppingItems = []) => {
@@ -200,7 +204,7 @@ export const classifyShopScanOffline = (isbn, index, shoppingItems = []) => {
   const listed = classifyShopScan(clean, { found: false }, shoppingItems);
   if (listed.kind === 'buy') return listed;
   const hit = index instanceof Map ? findVolumeByIsbn(index, clean) : index;
-  if (!hit) return { isbn: clean, kind: 'offline', label: `${clean} – offline, nicht geprüft`, offline: true };
+  if (!hit) return { isbn: clean, kind: 'offline', label: t('{clean} – offline, nicht geprüft', { clean }), offline: true };
   return classifyLocalHit(clean, hit, shoppingItems);
 };
 
@@ -261,7 +265,7 @@ export const applyBookingResults = (list, results) => {
     if (r.status === 'ok') return { ...rest, done: true };
     if (r.status === 'queued') return { ...rest, done: true, queued: true };
     if (r.httpStatus === 404) return { ...rest, done: true, gone: true };
-    return { ...rest, failed: true, error: r.error || 'nicht gebucht' };
+    return { ...rest, failed: true, error: r.error || t('nicht gebucht') };
   });
 };
 
@@ -278,12 +282,13 @@ export const bookingSummary = (results, total) => {
   const gone = results.filter((r) => r.httpStatus === 404 && r.status === 'failed').length;
   const skipped = total - results.length;
   if (!failed.length && !skipped && !gone) return '';
-  const parts = [`${ok + queued} von ${total} gebucht`];
-  if (queued) parts.push(`${queued} vorgemerkt`);
-  if (gone) parts.push(`${gone} nicht mehr auf der Liste`);
-  if (skipped) parts.push(`${skipped} nicht versucht`);
+  const parts = [t('{booked} von {total} gebucht', { booked: ok + queued, total })];
+  if (queued) parts.push(t('{queued} vorgemerkt', { queued }));
+  if (gone) parts.push(t('{gone} nicht mehr auf der Liste', { gone }));
+  if (skipped) parts.push(t('{skipped} nicht versucht', { skipped }));
   const errors = [...new Set(failed.map((r) => r.error).filter(Boolean))];
-  return `${parts.join(', ')}${errors.length ? `. Fehler: ${errors.join('; ')}` : ''}`;
+  const summary = parts.join(', ');
+  return errors.length ? t('{summary}. Fehler: {errors}', { summary, errors: errors.join('; ') }) : summary;
 };
 
 // localStorage: iOS may kill a backgrounded home-screen app (e.g. while the camera takes a photo), which ends a sessionStorage
@@ -302,7 +307,7 @@ export const loadScanList = (storage, { userId = null, now = Date.now() } = {}) 
     return saved.entries
       .filter((e) => e && typeof e.isbn === 'string' && typeof e.kind === 'string')
       .map(({ booking: _booking, ...e }) => (e.kind === 'pending'
-        ? { isbn: e.isbn, kind: 'offline', label: `${e.isbn} – nicht geprüft`, offline: true }
+        ? { isbn: e.isbn, kind: 'offline', label: t('{isbn} – nicht geprüft', { isbn: e.isbn }), offline: true }
         : e));
   } catch (_) {
     return [];
@@ -332,6 +337,7 @@ export const reconcileScanList = (list, items) => {
 // Chip key as the server builds it (services/radar.js: normalised publisher or 'Unbekannt')
 const publisherKey = (publisher, normalizePubName) => {
   const raw = String(publisher || '');
+  // i18n-ignore: stored publisher value, compared as data
   return ((normalizePubName ? normalizePubName(raw) : raw.trim()) || 'Unbekannt').toLowerCase();
 };
 
@@ -377,8 +383,8 @@ export const formatShoppingStand = (timestamp, now = new Date()) => {
   if (!timestamp || Number.isNaN(d.getTime())) return '';
   const time = formatTime(d);
   const today = new Date(now);
-  if (d.toDateString() === today.toDateString()) return `heute, ${time} Uhr`;
-  return `${formatDayMonth(d, today)}, ${time} Uhr`;
+  if (d.toDateString() === today.toDateString()) return t('heute, {time} Uhr', { time });
+  return t('{day}, {time} Uhr', { day: formatDayMonth(d, today), time });
 };
 
 /** Live camera scanning needs a secure context (HTTPS, localhost, the app shells) with getUserMedia. */

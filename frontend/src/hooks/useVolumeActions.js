@@ -6,6 +6,8 @@ import { formatCount, formatDate } from '../utils/format';
 import { prepareImageForUpload } from '../utils/imageResize';
 import { submitChange, applyChangeToCaches } from '../utils/outbox';
 import { applyVolumeChange } from '../utils/volumePatch';
+import { t, tn } from '../i18n/index.js';
+import { serverText } from '../i18n/serverText.js';
 
 /** Error text of a failed response: the JSON `error`, else the fallback (proxies answer 502/504/413 with HTML). */
 export async function readApiError(res, fallback) {
@@ -19,16 +21,23 @@ export function localDateString(d = new Date()) {
 }
 
 export function volumeDeleteConfirmText(vol) {
-  const name = vol ? `"${getVolumeDisplayTitle(vol)}"` : 'Diesen Band';
-  return `${name} wirklich entfernen? Der Band kommt mit Besitz und Lesestatus aller Benutzer in den Papierkorb (30 Tage wiederherstellbar).`;
+  if (!vol) return t('Diesen Band wirklich entfernen? Der Band kommt mit Besitz und Lesestatus aller Benutzer in den Papierkorb (30 Tage wiederherstellbar).');
+  return t('"{title}" wirklich entfernen? Der Band kommt mit Besitz und Lesestatus aller Benutzer in den Papierkorb (30 Tage wiederherstellbar).', { title: getVolumeDisplayTitle(vol) });
 }
 
+// i18n
 export const READ_OTHERS_ADMIN_ONLY = 'Nur Admins können den Lesestatus anderer Benutzer ändern.';
+// i18n
 export const UNAUTHORIZED_TEXT = 'Nicht autorisiert (HTTP 401) – bitte die Seite neu laden oder neu anmelden.';
+// i18n
 export const QUEUED_TEXT = 'Keine Verbindung – die Änderung ist vorgemerkt und wird automatisch übertragen.';
+// i18n
 export const UPLOAD_CANCELLED = 'Upload abgebrochen';
+// i18n
 const NOT_STORED_TEXT = 'Keine Verbindung, und die Änderung ließ sich auf diesem Gerät nicht speichern (Speicher voll oder gesperrt).';
+// i18n
 const READ_FAILED = 'Fehler beim Aktualisieren des Lesestatus';
+// i18n
 const STATUS_FAILED = 'Fehler beim Ändern des Status';
 
 const browserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -62,7 +71,7 @@ export async function restoreTrashed(trashId, onDone) {
   try {
     const res = await apiFetch(`/api/trash/${trashId}/restore`, { method: 'POST' });
     if (res.ok) ok = true;
-    else await notifyResponseError(res, 'Wiederherstellen fehlgeschlagen');
+    else await notifyResponseError(res, t('Wiederherstellen fehlgeschlagen'));
   } catch (err) {
     notify.error(err);
   }
@@ -73,9 +82,11 @@ export async function restoreTrashed(trashId, onDone) {
 /** "<label> in den Papierkorb gelegt" with "Rückgängig"; nothing without a trash id (older server, already gone). */
 export function notifyTrashed(label, trashId, onDone) {
   if (!trashId) return null;
-  return notify.success(`${label} in den Papierkorb gelegt`, {
+  // no label: the generic 'Band' sentence
+  const text = label ? t('{label} in den Papierkorb gelegt', { label }) : t('Band in den Papierkorb gelegt');
+  return notify.success(text, {
     duration: TRASH_UNDO_MS,
-    action: { label: 'Rückgängig', onClick: () => restoreTrashed(trashId, onDone) }
+    action: { label: t('Rückgängig'), onClick: () => restoreTrashed(trashId, onDone) }
   });
 }
 
@@ -137,7 +148,7 @@ export default function useVolumeActions({
   const reportFailure = async (res, fallback) => {
     if (res.status === 401) {
       if (sessionEndAnnounced(res)) onUnauthorized?.();
-      else notify.error(UNAUTHORIZED_TEXT);
+      else notify.error(t(UNAUTHORIZED_TEXT));
       return;
     }
     await notifyResponseError(res, fallback);
@@ -174,7 +185,7 @@ export default function useVolumeActions({
       // the app itself answered with an error (5xx): its text; no answer or a proxy page: queued for later
       const err = res ? await errorFromResponse(res) : null;
       if (err?.data?.error) notify.error(err);
-      else notify.info(QUEUED_TEXT);
+      else notify.info(t(QUEUED_TEXT));
       // offline: the patched offline copy (once written); online without answer: patchManga already shows the change
       if (offline) {
         await cached;
@@ -183,7 +194,7 @@ export default function useVolumeActions({
       return null;
     }
     if (res) await reportFailure(res, fallback);
-    else if (result.reason === 'storage') notify.error(NOT_STORED_TEXT);
+    else if (result.reason === 'storage') notify.error(t(NOT_STORED_TEXT));
     // refused (4xx): back to the server state; 401: the change stays queued for the next login
     if (status === 'failed' && res?.status !== 404) await fetchManga();
     return null;
@@ -230,7 +241,7 @@ export default function useVolumeActions({
         setNewVolumeType('volume');
         await fetchManga();
       } else {
-        await reportFailure(res, 'Fehler beim Hinzufügen');
+        await reportFailure(res, t('Fehler beim Hinzufügen'));
       }
     } catch (err) {
       notify.error(err);
@@ -256,16 +267,16 @@ export default function useVolumeActions({
       const res = await apiFetch('/api/upload', { method: 'POST', body: fd, signal: controller.signal });
       if (res.ok) {
         const data = await readJson(res);
-        if (!data?.url) throw new Error('Antwort ohne Bild-URL');
+        if (!data?.url) throw new Error(t('Antwort ohne Bild-URL'));
         if (current()) setNewVolumeCover(data.url);
       } else if (current()) {
-        await reportFailure(res, 'Fehler beim Hochladen');
+        await reportFailure(res, t('Fehler beim Hochladen'));
       }
     } catch (e) {
       if (isAbortError(e)) {
-        if (uploadId === latestUploadRef.current) notify.info(UPLOAD_CANCELLED);
+        if (uploadId === latestUploadRef.current) notify.info(t(UPLOAD_CANCELLED));
       } else if (current()) {
-        notify.error(e, { fallback: 'Upload-Fehler' });
+        notify.error(e, { fallback: t('Upload-Fehler') });
       }
     } finally {
       if (uploadId === latestUploadRef.current) {
@@ -295,7 +306,7 @@ export default function useVolumeActions({
     try {
       const res = await apiFetch(`/api/volumes/${vol.id}/owners`, { method: 'POST', body });
       if (res.ok) await fetchManga();
-      else await reportFailure(res, STATUS_FAILED);
+      else await reportFailure(res, t(STATUS_FAILED));
     } catch (err) {
       notify.error(err);
     }
@@ -305,10 +316,10 @@ export default function useVolumeActions({
     if (!canToggle) return undefined;
     return withVolumeLock(vol.id, async () => {
       const change = { ...ownedToggleChange(vol, user), volumeId: vol.id, mangaId: id };
-      const data = await submitToggle(change, STATUS_FAILED);
+      const data = await submitToggle(change, t(STATUS_FAILED));
       if (data?.removed_owner && change.kind === 'owned' && change.value === false) {
-        notify.success(`„${getVolumeDisplayTitle(vol)}“ nicht mehr im Besitz`, {
-          action: { label: 'Rückgängig', onClick: () => undoUnown(vol, data) }
+        notify.success(t('„{title}“ nicht mehr im Besitz', { title: getVolumeDisplayTitle(vol) }), {
+          action: { label: t('Rückgängig'), onClick: () => undoUnown(vol, data) }
         });
       }
     });
@@ -320,22 +331,26 @@ export default function useVolumeActions({
     const effUserId = targetUserId || (selectedReaderId && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id);
     // the server answers 403 for another user's id; never derive "read" from someone else's state and apply it to oneself
     if (!canToggleOthers && String(effUserId) !== String(user?.id)) {
-      notify.error(READ_OTHERS_ADMIN_ONLY);
+      notify.error(t(READ_OTHERS_ADMIN_ONLY));
       return undefined;
     }
     const hasRead = hasUserRead(vol, effUserId, user?.id);
     const setRead = (read, readAt) => withVolumeLock(vol.id, () => submitToggle({
       kind: 'read', volumeId: vol.id, mangaId: id, targetUserId: effUserId, value: read, ...(read && readAt ? { read_at: readAt } : {})
-    }, READ_FAILED));
+    }, t(READ_FAILED)));
     // a pick of "today" stays "now" after midnight
     const pickedReadAt = hasRead || !readDate ? null : readAtForDate(readDate, readPick.on);
     return setRead(!hasRead, pickedReadAt).then((data) => {
       if (!data) return;
       const restoreAt = hasRead ? previousReadAt(data) : null;
       const undoable = !hasRead || restoreAt;
-      const on = pickedReadAt ? ` (gelesen am ${formatDate(readDate)})` : '';
-      notify.success(`„${getVolumeDisplayTitle(vol)}“ als ${hasRead ? 'ungelesen' : 'gelesen'} markiert${on}`, undoable ? {
-        action: { label: 'Rückgängig', onClick: () => setRead(hasRead, restoreAt) }
+      const title = getVolumeDisplayTitle(vol);
+      let text;
+      if (hasRead) text = t('„{title}“ als ungelesen markiert', { title });
+      else if (pickedReadAt) text = t('„{title}“ als gelesen markiert (gelesen am {date})', { title, date: formatDate(readDate) });
+      else text = t('„{title}“ als gelesen markiert', { title });
+      notify.success(text, undoable ? {
+        action: { label: t('Rückgängig'), onClick: () => setRead(hasRead, restoreAt) }
       } : undefined);
     });
   };
@@ -347,15 +362,17 @@ export default function useVolumeActions({
     try {
       const res = await apiFetch('/api/volumes/bulk', { method: 'POST', body: { revert: token } });
       if (!res.ok && res.status !== 409) {
-        await reportFailure(res, 'Rückgängig fehlgeschlagen');
+        await reportFailure(res, t('Rückgängig fehlgeschlagen'));
       } else {
         const data = (await readJson(res)) ?? {};
         const conflicts = Array.isArray(data.conflicts) ? data.conflicts : [];
         const gone = Array.isArray(data.not_found) ? data.not_found.length : 0;
         if (conflicts.length) {
-          notify.error(`${formatCount(conflicts.length, 'Band konnte', 'Bände konnten')} nicht wiederhergestellt werden: ${conflicts[0].error}`);
+          notify.error(t('{volumes} nicht wiederhergestellt werden: {error}', { volumes: formatCount(conflicts.length, 'Band konnte', 'Bände konnten'), error: serverText(conflicts[0]) }));
         } else if (gone) {
-          notify.info(`${formatCount(gone, 'Band wurde', 'Bände wurden')} inzwischen gelöscht und ${gone === 1 ? 'bleibt' : 'bleiben'} unverändert.`);
+          notify.info(tn('{volumes} inzwischen gelöscht und bleibt unverändert.', '{volumes} inzwischen gelöscht und bleiben unverändert.', gone, {
+            volumes: formatCount(gone, 'Band wurde', 'Bände wurden')
+          }));
         }
       }
     } catch (err) {
@@ -374,7 +391,7 @@ export default function useVolumeActions({
     try {
       const res = await apiFetch('/api/volumes/bulk', { method: 'POST', body: { ids, ...change } });
       if (!res.ok) {
-        await reportFailure(res, 'Sammelbearbeitung fehlgeschlagen');
+        await reportFailure(res, t('Sammelbearbeitung fehlgeschlagen'));
         return false;
       }
       const data = (await readJson(res)) ?? {};
@@ -382,13 +399,18 @@ export default function useVolumeActions({
       await fetchManga();
       const token = typeof data.undo_token === 'string' && data.undo_token ? data.undo_token : null;
       const skippedCount = data.read_skipped?.length || 0;
-      const skipped = skippedCount ? ` (${formatCount(skippedCount, 'Band', 'Bände')} nicht im Besitz übersprungen)` : '';
       // `updated` counts every matched volume; a pure read change did nothing to the skipped ones
       const readOnly = change.read && !change.set && !change.owners;
       const changed = Math.max(0, (data.updated ?? ids.length) - (readOnly ? skippedCount : 0));
-      notify.success(`${formatCount(changed, 'Band', 'Bände')} ${doneText}${skipped}`, token ? {
+      // doneText ('als gelesen markiert' …) comes from the caller already translated (BulkActionBar runs t())
+      const done = doneText;
+      const volumes = formatCount(changed, 'Band', 'Bände');
+      const text = skippedCount
+        ? t('{volumes} {done} ({skipped} nicht im Besitz übersprungen)', { volumes, done, skipped: formatCount(skippedCount, 'Band', 'Bände') })
+        : t('{volumes} {done}', { volumes, done });
+      notify.success(text, token ? {
         duration: BULK_UNDO_MS,
-        action: { label: 'Rückgängig', onClick: () => revertBulk(token) }
+        action: { label: t('Rückgängig'), onClick: () => revertBulk(token) }
       } : undefined);
       return true;
     } catch (err) {
@@ -419,18 +441,18 @@ export default function useVolumeActions({
     try {
       res = await apiFetch(`/api/volumes/${volId}`, { method: 'DELETE' });
     } catch (err) {
-      notify.error(err, { fallback: 'Netzwerkfehler beim Löschen des Bands' });
+      notify.error(err, { fallback: t('Netzwerkfehler beim Löschen des Bands') });
       return;
     }
     // 404 counts as done: the volume was already removed in another tab
     if (!res.ok && res.status !== 404) {
-      await reportFailure(res, 'Fehler beim Löschen des Bands');
+      await reportFailure(res, t('Fehler beim Löschen des Bands'));
       return;
     }
     if (String(activeVolume?.id) === String(volId)) setActiveVolume(null);
     await fetchManga();
     const trashId = res.ok ? (await readJson(res))?.trash_id : null;
-    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : 'Band', trashId, () => fetchManga());
+    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, trashId, () => fetchManga());
   };
 
   return {

@@ -13,8 +13,8 @@ maintainer: Manga Shelf <manga-shelf@users.noreply.github.com>
 vendor: Manga Shelf
 homepage: https://github.com/LixNix-Swap-Org/manga-shelf
 description: |-
-  Manga Shelf Server: Manga-Sammlung mit Web-Portal, ohne grafische Oberfläche.
-  Läuft als systemd-Dienst manga-shelf (Benutzer manga-shelf, Daten in /var/lib/manga-shelf).
+  Manga Shelf Server: manga collection with a web portal, without a desktop interface.
+  Runs as the systemd service manga-shelf (user manga-shelf, data in /var/lib/manga-shelf).
 
 contents:
   - src: dist/server/manga-shelf-server-linux

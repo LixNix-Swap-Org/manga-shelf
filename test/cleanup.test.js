@@ -43,6 +43,10 @@ test('quality report: counts and entries per check, trashed series stay out', as
     assert.deepEqual(c.duplicate_titles.items[0].series.map(s => s.publisher), ['Kleiner Verlag', 'Carlsen Verlag GmbH']);
     assert.deepEqual(c.series_without_cover.items.map(s => s.id), [bare]);
     assert.equal(c.series_without_mp_link.count, 1);
+    // Manga Passion only knows German editions: an English one is no missing link
+    const english = Number(db.prepare("INSERT INTO mangas (title, language, author, cover_image, total_volumes) VALUES ('Englische Ausgabe', 'en', 'C', '/uploads/c.jpg', 1)").run().lastInsertRowid);
+    assert.equal((await checksOf()).series_without_mp_link.count, 1);
+    db.prepare('DELETE FROM mangas WHERE id = ?').run(english);
     assert.equal(c.series_without_author.count, 1);
     assert.equal(c.series_without_total.count, 1);
     assert.deepEqual(c.volumes_without_price.items.map(v => v.volume_number), ['2']);

@@ -4,6 +4,7 @@ import { Camera, LoaderCircle } from 'lucide-react';
 import { pickIsbnBarcode, isIsbnBarcode, computeScaledSize, liveScanSupported } from '../../utils/scanHelpers';
 import { notify } from '../../utils/notify';
 import { haptic } from '../../utils/haptics';
+import { t } from '../../i18n/index.js';
 
 // Below iOS Safari's canvas area limit (about 16.7 MP); a 12-48 MP photo drawn at full size can come out blank.
 const MAX_DIM = 1600;
@@ -93,7 +94,7 @@ async function decodeWithZxing(image, firstCanvas) {
 // input (works over plain HTTP): BarcodeDetector, then ZXing. `continuous` keeps the scanner open; `scannerChildren`
 // renders inside it.
 export default function BarcodeScannerButton({
-  onDetected, className = '', buttonText = 'Barcode scannen', compact = false, continuous = false, live = true,
+  onDetected, className = '', buttonText = t('Barcode scannen'), compact = false, continuous = false, live = true,
   scannerTitle, scannerChildren = null, id, children
 }) {
   const fileInputRef = useRef(null);
@@ -129,11 +130,11 @@ export default function BarcodeScannerButton({
         onDetected(cleanIsbn || detectedCode);
       } else {
         haptic('error');
-        notify.error('Kein Barcode erkannt. Bitte fotografiere den Barcode scharf, nah und gut ausgeleuchtet auf der Buchrückseite.');
+        notify.error(t('Kein Barcode erkannt. Bitte fotografiere den Barcode scharf, nah und gut ausgeleuchtet auf der Buchrückseite.'));
       }
     } catch (err) {
       console.error('Fehler beim Barcode-Scannen:', err);
-      notify.error(`Konnte Bild nicht analysieren: ${err?.message || 'Unbekannter Fehler'}`);
+      notify.error(t('Konnte Bild nicht analysieren: {reason}', { reason: err?.message || t('Unbekannter Fehler') }));
     } finally {
       releaseCanvas(canvas);
       image?.release();
@@ -159,20 +160,20 @@ export default function BarcodeScannerButton({
         id={id}
         disabled={scanning}
         aria-busy={scanning || undefined}
-        aria-label={compact ? (scanning ? 'Scanne...' : buttonText) : undefined}
+        aria-label={compact ? (scanning ? t('Scanne...') : buttonText) : undefined}
         onClick={(e) => {
           // the header search box focuses its input on any click inside it, which would pop up the keyboard
           e.stopPropagation();
           if (live && (nativeScanAvailable() || liveScanSupported())) setLiveOpen(true);
           else openPhoto();
         }}
-        title="ISBN / EAN-Barcode per Kamera scannen (funktioniert auch ohne HTTPS)"
+        title={t('ISBN / EAN-Barcode per Kamera scannen (funktioniert auch ohne HTTPS)')}
         className={className || `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white transition shadow-sm active:scale-95 disabled:opacity-50`}
       >
         {children || (scanning ? (
           <>
             <LoaderCircle className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-            {!compact && <span>Scanne...</span>}
+            {!compact && <span>{t('Scanne...')}</span>}
           </>
         ) : (
           <>

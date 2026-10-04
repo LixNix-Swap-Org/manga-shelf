@@ -14,9 +14,12 @@ import { readApiError } from '../../hooks/useVolumeActions';
 import { apiFetch, readJson, sessionEndAnnounced, TIMEOUTS } from '../../utils/api';
 import { BEFORE_LOGOUT_EVENT } from '../../appShell';
 import { notify } from '../../utils/notify';
-import { formatCount, formatEuro, formatNumber } from '../../utils/format';
+import { formatCount, formatEuro, formatMoney, formatNumber } from '../../utils/format';
+import LanguagePill from '../common/LanguagePill';
+import OtherCurrencies from '../common/OtherCurrencies';
+import { editionCurrency } from '../../utils/editions';
 import { createSearch, naturalCollator } from '../../utils/search';
-import { buildShareText, canShareText, groupByPublisher, itemText, shareText } from '../../utils/shareList';
+import { buildShareText, canShareText, groupByPublisher, itemText, publisherLabel, shareText, summaryText } from '../../utils/shareList';
 import {
   PRIORITY_LABELS, priorityBadgeClass, filterWishedSeries, mergeWishedPublisherChips
 } from '../../utils/priority';
@@ -28,6 +31,8 @@ import {
   BookOpen, BuildingComplex, Check, WifiOff, ScanBarcode, Heart, Share2, Copy, Printer,
   Users, Info, CircleQuestionMark, Clock, TriangleAlert
 } from 'lucide-react';
+import { t, tn } from '../../i18n/index.js';
+import { serverText } from '../../i18n/serverText.js';
 
 const PAGE_STEP = 50;
 // content-visibility skips layout and paint of off-screen cards
@@ -36,6 +41,7 @@ const wishedSearch = createSearch((s) => ({ primary: [s.title], secondary: [s.pu
 const byTitle = (a, b) => naturalCollator.compare(a.title || '', b.title || '');
 const UNDO_MS = 5000;
 const LOAD_SETTLE_MS = 400;
+// i18n
 const SESSION_EXPIRED_TEXT = 'Sitzung abgelaufen – bitte neu anmelden.';
 // MangaDetail's back link returns here instead of the shelf
 const FROM_SHOPPING = { from: '/?view=shopping' };
@@ -84,12 +90,13 @@ const PRINT_CSS = `
 function PrintSheet({ items, wished, normalizePubName, filtered, summary }) {
   return createPortal(
     <div id={PRINT_SHEET_ID}>
+      {/* i18n-ignore: style sheet, no text */}
       <style>{PRINT_CSS}</style>
-      <h1>Einkaufsliste</h1>
-      <p>{summary}{filtered ? ' · gefiltert' : ''}</p>
+      <h1>{t('Einkaufsliste')}</h1>
+      <p>{summary}{filtered ? t(' · gefiltert') : ''}</p>
       {groupByPublisher(items, normalizePubName).map((group) => (
         <section key={group.publisher}>
-          <h2>{group.publisher}</h2>
+          <h2>{publisherLabel(group.publisher)}</h2>
           <ul>
             {group.items.map((item) => <li key={item.id}>☐ {itemText(item)}</li>)}
           </ul>
@@ -97,9 +104,9 @@ function PrintSheet({ items, wished, normalizePubName, filtered, summary }) {
       ))}
       {wished.length > 0 && (
         <section>
-          <h2>Gewünschte Reihen</h2>
+          <h2>{t('Gewünschte Reihen')}</h2>
           <ul>
-            {wished.map((s) => <li key={s.id}>♡ {s.title}{s.publisher ? ` (${s.publisher})` : ''}</li>)}
+            {wished.map((s) => <li key={s.id}>♡ {s.title}{s.publisher ? ` (${publisherLabel(s.publisher)})` : ''}</li>)}
           </ul>
         </section>
       )}
@@ -111,9 +118,9 @@ function PrintSheet({ items, wished, normalizePubName, filtered, summary }) {
 function ListProgress({ shown, total, onMore, sentinelRef }) {
   return (
     <div ref={sentinelRef} className="mt-4 flex flex-col items-center gap-2 text-xs text-slate-400">
-      <p>Zeige {formatNumber(shown)} von {formatNumber(total)}</p>
+      <p>{t('Zeige {shown} von {total}', { shown: formatNumber(shown), total: formatNumber(total) })}</p>
       <button type="button" onClick={onMore} className="btn-secondary text-xs py-1.5 px-3">
-        Weitere anzeigen
+        {t('Weitere anzeigen')}
       </button>
     </div>
   );
@@ -125,7 +132,7 @@ function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
     <section id="shop-wished-series" aria-labelledby="shop-wished-heading" className="space-y-3">
       <h3 id="shop-wished-heading" className="text-sm font-bold text-slate-200 flex items-center gap-2">
         <Heart className="w-4 h-4 text-rose-400" aria-hidden="true" />
-        Gewünschte Reihen <span className="text-xs font-normal text-slate-400">({series.length})</span>
+        {t('Gewünschte Reihen')} <span className="text-xs font-normal text-slate-400">({series.length})</span>
       </h3>
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {series.map((s) => (
@@ -140,16 +147,16 @@ function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
                 <p className="text-xs font-bold text-white line-clamp-2 break-words hyphens-auto" title={s.title}>{s.title}</p>
                 <p className="text-[11px] text-slate-400 mt-1 truncate flex items-center gap-1">
                   <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{s.publisher}</span>
+                  <span className="truncate">{publisherLabel(s.publisher)}</span>
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-lg border ${priorityBadgeClass(s.wish_priority)}`} title="Wunsch-Priorität">
-                    {s.wish_priority > 0 ? PRIORITY_LABELS[s.wish_priority] : 'Wunsch'}
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-lg border ${priorityBadgeClass(s.wish_priority)}`} title={t('Wunsch-Priorität')}>
+                    {s.wish_priority > 0 ? t(PRIORITY_LABELS[s.wish_priority]) : t('Wunsch')}
                   </span>
                   <span className="text-[11px] text-slate-300">
                     {s.known_missing_count > 0
-                      ? `${formatCount(s.known_missing_count, 'Band', 'Bände')} bekannt · ${formatEuro(s.known_missing_cost)}`
-                      : 'Noch keine Bände bekannt'}
+                      ? t('{count} bekannt · {price}', { count: formatCount(s.known_missing_count, 'Band', 'Bände'), price: formatMoney(s.known_missing_cost, editionCurrency(s)) })
+                      : t('Noch keine Bände bekannt')}
                   </span>
                 </div>
               </div>
@@ -158,9 +165,9 @@ function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
                   to={`/manga/${s.id}`}
                   state={FROM_SHOPPING}
                   className="px-2.5 py-1.5 rounded-xl border border-brand-500/40 text-brand-300 hover:bg-brand-700 hover:text-white text-xs font-semibold"
-                  aria-label={`Zur Reihe ${s.title}`}
+                  aria-label={t('Zur Reihe {title}', { title: s.title })}
                 >
-                  Zur Reihe
+                  {t('Zur Reihe')}
                 </Link>
                 {canRemove && (
                   <button
@@ -168,10 +175,10 @@ function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
                     onClick={() => onRemove(s)}
                     disabled={removing.has(s.id)}
                     aria-busy={removing.has(s.id) || undefined}
-                    aria-label={`${s.title} von der Wunschliste nehmen`}
+                    aria-label={t('{title} von der Wunschliste nehmen', { title: s.title })}
                     className="px-2.5 py-1.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500/50 text-xs font-semibold disabled:opacity-50"
                   >
-                    Von der Wunschliste
+                    {t('Von der Wunschliste')}
                   </button>
                 )}
               </div>
@@ -259,7 +266,7 @@ export default function ShoppingListView({
     }
     if (!canStartLookup(scannedRef.current, cleanIsbn) || lookupsRef.current.has(cleanIsbn)) return;
     const previous = scannedRef.current.find((e) => e.isbn === cleanIsbn) || null;
-    updateScanned((prev) => mergeScanEntry(prev, { isbn: cleanIsbn, kind: 'pending', label: `${cleanIsbn} – wird geprüft…` }));
+    updateScanned((prev) => mergeScanEntry(prev, { isbn: cleanIsbn, kind: 'pending', label: t('{isbn} – wird geprüft…', { isbn: cleanIsbn }) }));
 
     const finish = (entry) => updateScanned((prev) => mergeScanEntry(prev, entry));
     const checkOffline = async () => finish(classifyShopScanOffline(cleanIsbn, await lookupLocalIsbn(cleanIsbn), itemsRef.current));
@@ -297,11 +304,11 @@ export default function ShoppingListView({
       abandon();
       if (failure === 'auth') {
         // an ended session was announced by the API client; a proxy's 401 would otherwise drop the scan silently
-        if (!sessionEndAnnounced(res)) notify.error(data?.error || SESSION_EXPIRED_TEXT);
+        if (!sessionEndAnnounced(res)) notify.error(serverText(data) || t(SESSION_EXPIRED_TEXT));
         return;
       }
       // e.g. a wrong check digit: a misread barcode, scan again
-      notify.error(data?.error || `ISBN-Abfrage fehlgeschlagen (HTTP ${res.status})`);
+      notify.error(serverText(data) || t('ISBN-Abfrage fehlgeschlagen (HTTP {status})', { status: res.status }));
       return;
     }
     if (!data) return checkOffline();
@@ -359,9 +366,9 @@ export default function ShoppingListView({
   const startBuy = (item) => {
     if (deferredTimers.current.has(item.id) || inFlight.has(item.id)) return;
     deferredTimers.current.set(item.id, setTimeout(() => commitBuy(item.id), UNDO_MS));
-    const toastId = notify.success(`„${item.manga_title} ${getVolumeDisplayTitle(item)}“ als gekauft markiert`, {
+    const toastId = notify.success(t('„{title} {volume}“ als gekauft markiert', { title: item.manga_title, volume: getVolumeDisplayTitle(item) }), {
       duration: UNDO_MS,
-      action: { label: 'Rückgängig', onClick: () => dropDeferred(item.id) }
+      action: { label: t('Rückgängig'), onClick: () => dropDeferred(item.id) }
     });
     deferredToasts.current.set(item.id, toastId);
     setDeferred((prev) => [...prev, { id: item.id }]);
@@ -450,10 +457,10 @@ export default function ShoppingListView({
         fetchShoppingList();
         if (fetchMangas) fetchMangas();
       } else {
-        message = res.status === 401 ? SESSION_EXPIRED_TEXT : await readApiError(res, 'Besitz konnte nicht gespeichert werden');
+        message = res.status === 401 ? t(SESSION_EXPIRED_TEXT) : await readApiError(res, t('Besitz konnte nicht gespeichert werden'));
       }
     } catch (_) {
-      message = 'Keine Verbindung – bitte später erneut versuchen.';
+      message = t('Keine Verbindung – bitte später erneut versuchen.');
     } finally {
       setClaiming((prev) => withoutId(prev, item.id));
     }
@@ -512,16 +519,16 @@ export default function ShoppingListView({
       const res = await apiFetch(`/api/mangas/${series.id}`, { method: 'PUT', body: { wish_priority: null } });
       if (res.ok) {
         setRemovedWish((prev) => new Set(prev).add(series.id));
-        notify.success(`„${series.title}“ ist nicht mehr auf der Wunschliste`);
+        notify.success(t('„{title}“ ist nicht mehr auf der Wunschliste', { title: series.title }));
         fetchShoppingList();
         if (fetchMangas) fetchMangas();
       } else if (res.status === 401) {
-        if (!sessionEndAnnounced(res)) notify.error(SESSION_EXPIRED_TEXT);
+        if (!sessionEndAnnounced(res)) notify.error(t(SESSION_EXPIRED_TEXT));
       } else {
-        notify.error(await readApiError(res, 'Wunschliste konnte nicht geändert werden'));
+        notify.error(await readApiError(res, t('Wunschliste konnte nicht geändert werden')));
       }
     } catch (_) {
-      notify.error('Keine Verbindung – bitte später erneut versuchen.');
+      notify.error(t('Keine Verbindung – bitte später erneut versuchen.'));
     } finally {
       setRemovingWish((prev) => withoutId(prev, series.id));
     }
@@ -536,10 +543,10 @@ export default function ShoppingListView({
     const text = buildShareText({ items: visibleItems, wished: visibleWished, normalizePubName, filtered: filtersActive });
     try {
       const how = await shareText(text, { share });
-      if (how === 'copied') notify.success('Einkaufsliste als Text kopiert');
-      else if (how === 'downloaded') notify.info('Einkaufsliste als Textdatei gespeichert (einkaufsliste.txt)');
+      if (how === 'copied') notify.success(t('Einkaufsliste als Text kopiert'));
+      else if (how === 'downloaded') notify.info(t('Einkaufsliste als Textdatei gespeichert (einkaufsliste.txt)'));
     } catch (_) {
-      notify.error('Einkaufsliste konnte nicht weitergegeben werden');
+      notify.error(t('Einkaufsliste konnte nicht weitergegeben werden'));
     }
   };
   // 'button': rendered, then printed; 'browser': the browser's own print command, the sheet is only rendered
@@ -569,7 +576,7 @@ export default function ShoppingListView({
     }, 0);
     return () => clearTimeout(timer);
   }, [printSheet]);
-  const printSummary = `${formatCount(visibleItems.length, 'Band', 'Bände')}${visibleItems.length ? ` · ca. ${formatEuro(visibleItems.reduce((sum, i) => sum + (Number(i.price) > 0 ? Number(i.price) : 0), 0))}` : ''}`;
+  const printSummary = summaryText(visibleItems, { always: true });
   const noMatch = (items.length > 0 || wishedCount > 0) && filteredItems.length === 0 && visibleWished.length === 0;
   const resetFilters = () => {
     setShoppingSearch('');
@@ -581,12 +588,12 @@ export default function ShoppingListView({
   const failedCount = Array.isArray(failedPurchases) ? failedPurchases.length : Number(failedPurchases) || 0;
   const stand = formatShoppingStand(offlineLastUpdated);
   const connectionText = shoppingError === 'server'
-    ? 'Server nicht erreichbar.'
-    : (browserOffline() ? 'Keine Internetverbindung.' : 'Keine Verbindung zum Server.');
+    ? t('Server nicht erreichbar.')
+    : (browserOffline() ? t('Keine Internetverbindung.') : t('Keine Verbindung zum Server.'));
 
   const checkConnection = async () => {
     if (browserOffline()) {
-      notify.info('Gerät ist noch immer offline. Sobald wieder Netz vorhanden ist, wird automatisch synchronisiert.');
+      notify.info(t('Gerät ist noch immer offline. Sobald wieder Netz vorhanden ist, wird automatisch synchronisiert.'));
       return;
     }
     // send queued purchases first, otherwise the list briefly shows them as missing again
@@ -599,15 +606,18 @@ export default function ShoppingListView({
     <div id="shop-scan-feed" className="space-y-1 text-xs">
       {scanned.length > 0 && (
         <p className="text-slate-400">
-          Gescannt: {scanned.length}{buyable.length > 0 ? ` · ${buyable.length} zum Abhaken` : ''}
+          {buyable.length > 0
+            ? t('Gescannt: {scanned} · {buyable} zum Abhaken', { scanned: scanned.length, buyable: buyable.length })
+            : t('Gescannt: {scanned}', { scanned: scanned.length })}
         </p>
       )}
-      <ul className="space-y-1" aria-label="Zuletzt gescannt">
+      <ul className="space-y-1" aria-label={t('Zuletzt gescannt')}>
         {scanned.slice(0, 3).map((e) => {
           const [Icon, color] = KIND_STYLE[e.kind] || KIND_STYLE.unknown;
           return (
             <li key={e.isbn} className={`flex items-start gap-2 ${color}`} data-kind={e.kind}>
               <span aria-hidden="true" className="shrink-0"><Icon className="w-3.5 h-3.5" /></span>
+              {/* i18n-ignore: scanHelpers builds the label with t() */}
               <span className="min-w-0 truncate">{e.label}</span>
             </li>
           );
@@ -631,15 +641,17 @@ export default function ShoppingListView({
             </div>
             <div>
               <p className="font-bold text-amber-200 text-sm flex items-center gap-2">
-                <span>Offline-Einkaufsmodus aktiv</span>
+                <span>{t('Offline-Einkaufsmodus aktiv')}</span>
                 <span aria-hidden="true" className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
               </p>
               <p className="text-amber-300/90 text-xs mt-0.5">
                 {connectionText}{' '}
                 {shoppingData
-                  ? `Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt${stand ? ` (Stand: ${stand})` : ''}.`
-                  : 'Auf diesem Gerät ist keine Offline-Kopie der Einkaufsliste gespeichert.'}
-                {' '}Im Laden getätigte Käufe werden vorgemerkt und automatisch synchronisiert.
+                  ? (stand
+                    ? t('Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).', { stand })
+                    : t('Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.'))
+                  : t('Auf diesem Gerät ist keine Offline-Kopie der Einkaufsliste gespeichert.')}
+                {' '}{t('Im Laden getätigte Käufe werden vorgemerkt und automatisch synchronisiert.')}
               </p>
             </div>
           </div>
@@ -649,7 +661,7 @@ export default function ShoppingListView({
             className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-xl text-amber-200 text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-1.5 self-stretch sm:self-auto cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Verbindung prüfen</span>
+            <span>{t('Verbindung prüfen')}</span>
           </button>
         </div>
       )}
@@ -659,22 +671,22 @@ export default function ShoppingListView({
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <ScanBarcode className="w-6 h-6 text-indigo-300 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="min-w-0">
-              <p className="text-sm font-bold text-white">Band im Laden prüfen</p>
+              <p className="text-sm font-bold text-white">{t('Band im Laden prüfen')}</p>
               <p className="text-xs text-slate-400 mt-0.5">
                 {liveScan
-                  ? 'Halte die Kamera auf den Barcode der Rückseite. Der Scanner bleibt offen, jeder Band erscheint sofort unter „Gescannt“.'
-                  : 'Fotografiere den Barcode auf der Rückseite. Das Ergebnis erscheint unter „Gescannt“.'}
+                  ? t('Halte die Kamera auf den Barcode der Rückseite. Der Scanner bleibt offen, jeder Band erscheint sofort unter „Gescannt“.')
+                  : t('Fotografiere den Barcode auf der Rückseite. Das Ergebnis erscheint unter „Gescannt“.')}
               </p>
             </div>
-            <button type="button" onClick={closeScanStart} className="ml-auto text-slate-400 hover:text-white p-1.5 -m-1 rounded shrink-0" aria-label="Scan-Hinweis schließen">
+            <button type="button" onClick={closeScanStart} className="ml-auto text-slate-400 hover:text-white p-1.5 -m-1 rounded shrink-0" aria-label={t('Scan-Hinweis schließen')}>
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           <BarcodeScannerButton
             onDetected={handleBarcodeScan}
-            buttonText={liveScan ? 'Scanner starten' : 'Foto aufnehmen'}
+            buttonText={liveScan ? t('Scanner starten') : t('Foto aufnehmen')}
             continuous
-            scannerTitle="Laden-Scan"
+            scannerTitle={t('Laden-Scan')}
             scannerChildren={scanFeed}
             className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 rounded-2xl text-base font-bold bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-lg transition active:scale-95 disabled:opacity-50"
           />
@@ -685,18 +697,18 @@ export default function ShoppingListView({
         <div id="shop-sync-notes" className="space-y-1 text-xs" role="status">
           {pendingPurchases > 0 && (
             <p className="text-amber-300">
-              {pendingPurchases === 1 ? '1 Kauf vorgemerkt, wird' : `${pendingPurchases} Käufe vorgemerkt, werden`} automatisch übertragen.
+              {tn('{n} Kauf vorgemerkt, wird automatisch übertragen.', '{n} Käufe vorgemerkt, werden automatisch übertragen.', pendingPurchases)}
             </p>
           )}
           {failedCount > 0 && (
             <p className="text-rose-300">
-              {failedCount === 1 ? '1 vorgemerkter Kauf wurde' : `${failedCount} vorgemerkte Käufe wurden`} vom Server abgelehnt.
+              {tn('{n} vorgemerkter Kauf wurde vom Server abgelehnt.', '{n} vorgemerkte Käufe wurden vom Server abgelehnt.', failedCount)}
             </p>
           )}
           {cacheWriteFailed && (
-            <p className="text-slate-400">Offline-Kopie der Einkaufsliste konnte nicht gespeichert werden (Speicher voll).</p>
+            <p className="text-slate-400">{t('Offline-Kopie der Einkaufsliste konnte nicht gespeichert werden (Speicher voll).')}</p>
           )}
-          {shoppingError === 'auth' && <p className="text-rose-300">{SESSION_EXPIRED_TEXT}</p>}
+          {shoppingError === 'auth' && <p className="text-rose-300">{t(SESSION_EXPIRED_TEXT)}</p>}
         </div>
       )}
 
@@ -704,7 +716,7 @@ export default function ShoppingListView({
       {scanned.length > 0 && (
         <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3" id="shop-scan-list">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold text-white">Gescannt ({scanned.length})</p>
+            <p className="text-sm font-bold text-white">{t('Gescannt ({count})', { count: scanned.length })}</p>
             <div className="flex items-center gap-2">
               {canEdit && buyable.length > 0 && (
                 <button
@@ -713,10 +725,10 @@ export default function ShoppingListView({
                   disabled={booking}
                   className="btn-primary text-xs !bg-emerald-700 hover:!bg-emerald-800 disabled:opacity-50"
                 >
-                  {booking ? 'Wird gebucht...' : `${buyable.length} als gekauft abhaken`}
+                  {booking ? t('Wird gebucht...') : t('{count} als gekauft abhaken', { count: buyable.length })}
                 </button>
               )}
-              <button type="button" onClick={clearScanned} className="btn-secondary text-xs px-3 py-1.5" disabled={booking}>Leeren</button>
+              <button type="button" onClick={clearScanned} className="btn-secondary text-xs px-3 py-1.5" disabled={booking}>{t('Leeren')}</button>
             </div>
           </div>
           {bookingNote && <p className="text-xs text-rose-300" role="status">{bookingNote}</p>}
@@ -729,11 +741,12 @@ export default function ShoppingListView({
                 <li key={e.isbn} className={`text-xs flex items-start gap-2 ${color}`} data-kind={e.kind}>
                   <span aria-hidden="true" className="shrink-0"><Marker className="w-3.5 h-3.5" /></span>
                   <span className="min-w-0 flex-1">
+                    {/* i18n-ignore: scanHelpers builds the label with t() */}
                     <span className={e.done ? 'line-through opacity-60' : ''}>{e.label}</span>
-                    {e.done && e.queued && <span className="ml-1 text-slate-400">(vorgemerkt)</span>}
-                    {e.done && e.gone && <span className="ml-1 text-slate-400">(nicht mehr auf der Liste)</span>}
-                    {e.booking && <span className="ml-1 text-slate-400">(wird gebucht…)</span>}
-                    {!e.done && e.failed && <span className="ml-1 text-rose-300">– nicht gebucht: {e.error}</span>}
+                    {e.done && e.queued && <span className="ml-1 text-slate-400">{t('(vorgemerkt)')}</span>}
+                    {e.done && e.gone && <span className="ml-1 text-slate-400">{t('(nicht mehr auf der Liste)')}</span>}
+                    {e.booking && <span className="ml-1 text-slate-400">{t('(wird gebucht…)')}</span>}
+                    {!e.done && e.failed && <span className="ml-1 text-rose-300">{t('– nicht gebucht: {error}', { error: e.error })}</span>}
                   </span>
                   {recheck && (
                     <button
@@ -741,7 +754,7 @@ export default function ShoppingListView({
                       onClick={() => handleBarcodeScan(e.isbn, { network: true })}
                       className="shrink-0 text-[11px] text-brand-300 hover:text-white underline"
                     >
-                      Erneut prüfen
+                      {t('Erneut prüfen')}
                     </button>
                   )}
                 </li>
@@ -759,7 +772,7 @@ export default function ShoppingListView({
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-white flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>Einkaufsliste & Wunschbände</span>
+              <span>{t('Einkaufsliste & Wunschbände')}</span>
               {shoppingData && (
                 <span id="shop-total-pill" className="whitespace-nowrap bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                   {formatCount(shoppingData.total_missing, 'Band', 'Bände')}
@@ -767,20 +780,21 @@ export default function ShoppingListView({
               )}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden
+              {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="bg-slate-950/70 border border-slate-800 px-4 py-2 rounded-xl text-right flex-1 sm:flex-initial">
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Geschätzter Gesamtpreis</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{t('Geschätzter Gesamtpreis')}</p>
             <p className="text-lg font-extrabold text-emerald-400 font-mono">
               {formatEuro(shoppingData?.total_cost ?? 0)}
             </p>
+            <OtherCurrencies list={shoppingData?.other_currencies} />
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1.5" role="group" aria-label="Liste weitergeben">
+            <div className="flex items-center gap-1.5" role="group" aria-label={t('Liste weitergeben')}>
               {canShareText() && (
                 <button
                   type="button"
@@ -788,11 +802,11 @@ export default function ShoppingListView({
                   onClick={() => handOn(true)}
                   disabled={!canHandOn}
                   className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 disabled:opacity-40"
-                  title="Liste teilen (z. B. per Messenger)"
-                  aria-label="Liste teilen"
+                  title={t('Liste teilen (z. B. per Messenger)')}
+                  aria-label={t('Liste teilen')}
                 >
                   <Share2 className="w-4 h-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Teilen</span>
+                  <span className="hidden sm:inline">{t('Teilen')}</span>
                 </button>
               )}
               <button
@@ -801,11 +815,11 @@ export default function ShoppingListView({
                 onClick={() => handOn(false)}
                 disabled={!canHandOn}
                 className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 disabled:opacity-40"
-                title="Liste als Text kopieren"
-                aria-label="Liste als Text kopieren"
+                title={t('Liste als Text kopieren')}
+                aria-label={t('Liste als Text kopieren')}
               >
                 <Copy className="w-4 h-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Kopieren</span>
+                <span className="hidden sm:inline">{t('Kopieren')}</span>
               </button>
               <button
                 type="button"
@@ -813,11 +827,11 @@ export default function ShoppingListView({
                 onClick={() => setPrintSheet('button')}
                 disabled={!canHandOn}
                 className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5 disabled:opacity-40"
-                title="Liste drucken"
-                aria-label="Liste drucken"
+                title={t('Liste drucken')}
+                aria-label={t('Liste drucken')}
               >
                 <Printer className="w-4 h-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Drucken</span>
+                <span className="hidden sm:inline">{t('Drucken')}</span>
               </button>
             </div>
             <button
@@ -825,11 +839,11 @@ export default function ShoppingListView({
               onClick={fetchShoppingList}
               disabled={loadingShopping}
               className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1.5"
-              title="Liste aktualisieren"
-              aria-label="Liste aktualisieren"
+              title={t('Liste aktualisieren')}
+              aria-label={t('Liste aktualisieren')}
             >
               <RefreshCw className={`w-4 h-4 ${loadingShopping ? 'animate-spin' : ''}`} aria-hidden="true" />
-              <span className="hidden sm:inline">Aktualisieren</span>
+              <span className="hidden sm:inline">{t('Aktualisieren')}</span>
             </button>
           </div>
         </div>
@@ -842,16 +856,16 @@ export default function ShoppingListView({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" aria-hidden="true" />
           <input
             type="text"
-            placeholder="Titel oder Band filtern..."
-            aria-label="Einkaufsliste filtern"
+            placeholder={t('Titel oder Band filtern...')}
+            aria-label={t('Einkaufsliste filtern')}
             className="w-full min-w-0 bg-transparent border-0 rounded-xl pl-[2.125rem] pr-0 py-2 text-base sm:text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-0"
             value={shoppingSearch}
             onChange={e => setShoppingSearch(e.target.value)}
           />
           <div className="flex items-center gap-1 shrink-0">
-            <BarcodeScannerButton compact continuous onDetected={handleBarcodeScan} buttonText="Laden-Scan" scannerChildren={scanFeed} />
+            <BarcodeScannerButton compact continuous onDetected={handleBarcodeScan} buttonText={t('Laden-Scan')} scannerChildren={scanFeed} />
             {shoppingSearch && (
-              <button type="button" onClick={() => setShoppingSearch('')} className="text-slate-400 hover:text-white p-1.5 -m-1 rounded" aria-label="Suche leeren">
+              <button type="button" onClick={() => setShoppingSearch('')} className="text-slate-400 hover:text-white p-1.5 -m-1 rounded" aria-label={t('Suche leeren')}>
                 <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             )}
@@ -866,9 +880,9 @@ export default function ShoppingListView({
           className={`text-xs px-3 py-1.5 rounded-xl border font-semibold shrink-0 transition-colors ${
             prioritySort ? 'bg-amber-500/20 text-amber-200 border-amber-500/50' : 'text-slate-400 border-slate-700 hover:text-slate-200'
           }`}
-          title="Bände mit hoher Wunsch-Priorität zuerst zeigen"
+          title={t('Bände mit hoher Wunsch-Priorität zuerst zeigen')}
         >
-          ★ Wichtigste zuerst
+          {t('★ Wichtigste zuerst')}
         </button>
 
         {/* Publisher Filter Chips */}
@@ -884,7 +898,7 @@ export default function ShoppingListView({
                   : 'bg-slate-800/60 text-slate-400 hover:text-white border border-slate-700/50'
               }`}
             >
-              Alle Verlage ({(shoppingData.items?.length || 0) + wishedSeries.length})
+              {t('Alle Verlage ({count})', { count: (shoppingData.items?.length || 0) + wishedSeries.length })}
             </button>
             {publisherChips.map(p => {
               const active = activePublisher !== 'ALL' && activePublisher.toLowerCase() === String(p.publisher).toLowerCase();
@@ -900,7 +914,7 @@ export default function ShoppingListView({
                       : 'bg-slate-800/60 text-slate-400 hover:text-white border border-slate-700/50'
                   }`}
                 >
-                  <span>{p.publisher}</span>
+                  <span>{publisherLabel(p.publisher)}</span>
                   <span className="text-[10px] bg-slate-900/80 px-1.5 py-0.5 rounded-full font-mono">
                     {p.count + (p.wished_count || 0)}
                   </span>
@@ -915,7 +929,7 @@ export default function ShoppingListView({
       {!shoppingData && !loadFailed && (
         <div role="status" className="flex justify-center items-center py-20 text-slate-400 gap-2">
           <RefreshCw className="w-5 h-5 animate-spin text-brand-400" aria-hidden="true" />
-          <span>Einkaufsliste wird geladen...</span>
+          <span>{t('Einkaufsliste wird geladen...')}</span>
         </div>
       )}
 
@@ -925,14 +939,14 @@ export default function ShoppingListView({
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto mb-4">
             <CircleAlert className="w-7 h-7 text-rose-400" aria-hidden="true" />
           </div>
-          <h3 className="text-lg font-bold text-white">Einkaufsliste konnte nicht geladen werden</h3>
+          <h3 className="text-lg font-bold text-white">{t('Einkaufsliste konnte nicht geladen werden')}</h3>
           <p className="text-xs text-slate-400 mt-2 leading-relaxed">
             {shoppingError === 'auth'
-              ? SESSION_EXPIRED_TEXT
-              : 'Der Server hat nicht geantwortet und auf diesem Gerät ist noch keine Offline-Kopie gespeichert.'}
+              ? t(SESSION_EXPIRED_TEXT)
+              : t('Der Server hat nicht geantwortet und auf diesem Gerät ist noch keine Offline-Kopie gespeichert.')}
           </p>
           <button type="button" onClick={fetchShoppingList} className="btn-primary text-xs px-4 py-2 mt-6">
-            Erneut versuchen
+            {t('Erneut versuchen')}
           </button>
         </div>
       )}
@@ -943,9 +957,9 @@ export default function ShoppingListView({
           <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
             <CircleCheck className="w-8 h-8 text-emerald-400" />
           </div>
-          <h3 className="text-lg font-bold text-white">Alles komplett im Regal!</h3>
+          <h3 className="text-lg font-bold text-white">{t('Alles komplett im Regal!')}</h3>
           <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Aktuell hast du keine Bände mit dem Status „Fehlt“. Sobald du bei einer Reihe Bände als fehlend markierst, erscheinen sie hier automatisch in deiner Einkaufsliste.
+            {t('Aktuell hast du keine Bände mit dem Status „Fehlt“. Sobald du bei einer Reihe Bände als fehlend markierst, erscheinen sie hier automatisch in deiner Einkaufsliste.')}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
             <button
@@ -953,7 +967,7 @@ export default function ShoppingListView({
               onClick={() => setActiveMainView('shelf')}
               className="btn-primary text-xs px-4 py-2"
             >
-              Zurück zur Sammlung
+              {t('Zurück zur Sammlung')}
             </button>
           </div>
         </div>
@@ -963,16 +977,16 @@ export default function ShoppingListView({
       {noMatch && (
         <div id="shop-no-match" className="glass-panel p-8 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto">
           <SearchX className="w-8 h-8 text-slate-400 mx-auto mb-3" aria-hidden="true" />
-          <h3 className="text-sm font-bold text-white">Keine Treffer für diese Filter</h3>
+          <h3 className="text-sm font-bold text-white">{t('Keine Treffer für diese Filter')}</h3>
           <p className="text-xs text-slate-400 mt-1">
             {items.length === 0
-              ? 'Keine gewünschte Reihe passt zu Suche oder Verlag.'
+              ? t('Keine gewünschte Reihe passt zu Suche oder Verlag.')
               : (items.length === 1
-                ? 'Der fehlende Band passt nicht zu Suche oder Verlag.'
-                : `Keiner der ${items.length} fehlenden Bände passt zu Suche oder Verlag.`)}
+                ? t('Der fehlende Band passt nicht zu Suche oder Verlag.')
+                : t('Keiner der {count} fehlenden Bände passt zu Suche oder Verlag.', { count: items.length }))}
           </p>
           <button type="button" onClick={resetFilters} className="btn-secondary text-xs px-4 py-2 mt-4">
-            Filter zurücksetzen
+            {t('Filter zurücksetzen')}
           </button>
         </div>
       )}
@@ -1004,7 +1018,7 @@ export default function ShoppingListView({
                     fallback={COVER_FALLBACK}
                   />
                   <span className="absolute top-1 left-1 bg-amber-500/90 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded shadow uppercase">
-                    Fehlt
+                    {t('Fehlt')}
                   </span>
                 </Link>
 
@@ -1024,26 +1038,27 @@ export default function ShoppingListView({
                       <span className="max-w-full break-words bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
                         {keepNumberWithWord(getVolumeDisplayTitle(item))}
                       </span>
+                      {item.language && <LanguagePill language={item.language} />}
                       {item.priority > 0 && (
-                        <span className="whitespace-nowrap bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-lg" title="Wunsch-Priorität">
-                          {PRIORITY_LABELS[item.priority]}
+                        <span className="whitespace-nowrap bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-lg" title={t('Wunsch-Priorität')}>
+                          {t(PRIORITY_LABELS[item.priority])}
                         </span>
                       )}
                       {item.price > 0 && (
                         <span className="whitespace-nowrap bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono px-2 py-0.5 rounded-lg font-bold">
-                          {formatEuro(item.price)}
+                          {formatMoney(item.price, editionCurrency(item))}
                         </span>
                       )}
                     </div>
 
                     {item.target_price > 0 && (
                       <p className="text-[11px] text-amber-300 mt-1">
-                        Zielpreis: max. {formatEuro(item.target_price)}
+                        {t('Zielpreis: max. {price}', { price: formatMoney(item.target_price, editionCurrency(item)) })}
                       </p>
                     )}
                     <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
                       <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
-                      <span className="truncate">{item.effective_publisher}</span>
+                      <span className="truncate">{publisherLabel(item.effective_publisher)}</span>
                     </p>
                     {item.isbn && (
                       <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
@@ -1059,16 +1074,16 @@ export default function ShoppingListView({
                       onClick={() => startBuy(item)}
                       disabled={busy}
                       aria-busy={busy || undefined}
-                      aria-label={`Gekauft: ${item.manga_title} ${getVolumeDisplayTitle(item)}`}
+                      aria-label={t('Gekauft: {title} {volume}', { title: item.manga_title, volume: getVolumeDisplayTitle(item) })}
                       className="mt-2.5 w-full bg-emerald-600/20 hover:bg-emerald-700 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm"
-                      title="Als gekauft markieren und ins Regal stellen"
+                      title={t('Als gekauft markieren und ins Regal stellen')}
                     >
                       {busy ? (
                         <RefreshCw className="w-3 h-3 animate-spin" aria-hidden="true" />
                       ) : (
                         <Check className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" aria-hidden="true" />
                       )}
-                      <span>Gekauft</span>
+                      <span>{t('Gekauft')}</span>
                     </button>
                   )}
                 </div>
@@ -1085,8 +1100,8 @@ export default function ShoppingListView({
       {/* Volumes that other users own in series I also collect */}
       {visibleOthers.length > 0 && (
         <div className="mt-8">
-          <h3 className="text-sm font-bold text-slate-200 mb-1">Bei anderen vorhanden</h3>
-          <p className="text-xs text-slate-400 mb-3">Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.</p>
+          <h3 className="text-sm font-bold text-slate-200 mb-1">{t('Bei anderen vorhanden')}</h3>
+          <p className="text-xs text-slate-400 mb-3">{t('Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.')}</p>
           <ul className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800 bg-slate-950/60">
             {otherPages.visible.map(item => {
               const busy = claiming.has(item.id);
@@ -1096,7 +1111,7 @@ export default function ShoppingListView({
                     <Link to={`/manga/${item.manga_id}`} state={FROM_SHOPPING} className="font-semibold text-slate-100 hover:text-brand-300 truncate block">
                       {item.manga_title} {getVolumeDisplayTitle({ volume_number: item.volume_number, type: item.type, notes: item.notes })}
                     </Link>
-                    <span className="text-slate-400">Besitzt: {item.owned_by_others}</span>
+                    <span className="text-slate-400">{t('Besitzt: {owners}', { owners: item.owned_by_others })}</span>
                     {claimErrors[item.id] && <span className="block text-rose-300" role="alert">{claimErrors[item.id]}</span>}
                   </div>
                   {canEdit && (
@@ -1106,10 +1121,10 @@ export default function ShoppingListView({
                       disabled={busy || isOfflineMode}
                       aria-busy={busy || undefined}
                       className="shrink-0 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-700 hover:text-white font-semibold disabled:opacity-50 disabled:hover:bg-transparent flex items-center gap-1"
-                      title={isOfflineMode ? 'Nur online möglich' : 'Ich besitze diesen Band auch'}
+                      title={isOfflineMode ? t('Nur online möglich') : t('Ich besitze diesen Band auch')}
                     >
                       {busy && <RefreshCw className="w-3 h-3 animate-spin" aria-hidden="true" />}
-                      Ich habe ihn auch
+                      {t('Ich habe ihn auch')}
                     </button>
                   )}
                 </li>

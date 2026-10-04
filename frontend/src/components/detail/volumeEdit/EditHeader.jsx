@@ -1,5 +1,6 @@
 import { Package, Sparkles, Layers, X } from 'lucide-react';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
+import { t } from '../../../i18n/index.js';
 
 /** The entry as the form describes it right now; an emptied number field falls back to the stored one. */
 export const headerVolume = (activeVolume, editVolForm) => {
@@ -23,18 +24,18 @@ export default function EditHeader({
            editVolForm.type === 'special' ? <Sparkles className="w-5 h-5 text-amber-400 shrink-0" /> :
            <Layers className="w-5 h-5 text-brand-400 shrink-0" />}
           <span className="truncate">
-            {getVolumeDisplayTitle(headerVolume(activeVolume, editVolForm))} bearbeiten
+            {t('{volume} bearbeiten', { volume: getVolumeDisplayTitle(headerVolume(activeVolume, editVolForm)) })}
           </span>
         </h2>
         <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate short:hidden">
-          Typ, Details, Preis und Sammlerangaben für diesen Eintrag
+          {t('Typ, Details, Preis und Sammlerangaben für diesen Eintrag')}
         </p>
       </div>
       <button 
         type="button" 
         onClick={() => onClose()} 
         className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0 bg-slate-800/40"
-        aria-label="Schließen"
+        aria-label={t('Schließen')}
       >
         <X className="w-5 h-5" aria-hidden="true" />
       </button>

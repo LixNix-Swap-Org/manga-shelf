@@ -5,6 +5,7 @@ import OwnerStatsCard from './OwnerStatsCard';
 import KpiCards from './stats/KpiCards';
 import TopSeriesCard from './stats/TopSeriesCard';
 import AnimeStatsCard from './stats/AnimeStatsCard';
+import EditionsCard from './stats/EditionsCard';
 import PublisherTab, { TopPublishersCard } from './stats/PublisherTab';
 import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -12,18 +13,21 @@ import { readApiError } from '../../hooks/useVolumeActions';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import { apiFetch, readJson } from '../../utils/api';
 import { localISODate } from '../../utils/radarHelpers';
+import { t } from '../../i18n/index.js';
 
 const ReadingOverTime = lazy(() => import('./stats/ReadingOverTime'));
 const TrashModal = lazy(() => import('./TrashModal'));
 const PublishersModal = lazy(() => import('./PublishersModal'));
 const CleanupModal = lazy(() => import('./CleanupModal'));
 
+// i18n
 const TABS = [
   { id: 'overview', label: 'Finanzen & Sammelzeit', Icon: Coins },
   { id: 'publishers', label: 'Verlagsdiagramm', Icon: BuildingComplex },
   { id: 'reading', label: 'Lese-Tracking (Nutzer)', Icon: BookCheck },
   { id: 'timeline', label: 'Leseverlauf', Icon: ChartColumn }
 ];
+// i18n
 const LOADING_TEXT = 'Berechne Statistiken & Finanzdaten...';
 
 // without a stored start date the editor starts at today (the server derives the real one from the oldest purchase)
@@ -62,7 +66,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       const res = await apiFetch('/api/stats', { signal });
       if (!isCurrent()) return;
       if (!res.ok) {
-        const message = await readApiError(res, 'Statistiken konnten nicht geladen werden');
+        const message = await readApiError(res, t('Statistiken konnten nicht geladen werden'));
         if (!isCurrent()) return;
         setStatsData(null);
         setStatsError(message);
@@ -70,13 +74,13 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       }
       const data = await readJson(res);
       if (!isCurrent()) return;
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       setStatsData(data);
       setNewStartDate(data.summary?.collection_start_date || defaultStartDate());
     } catch (e) {
       if (!isCurrent()) return;
       setStatsData(null);
-      setStatsError('Netzwerkfehler: Statistiken konnten nicht geladen werden.');
+      setStatsError(t('Netzwerkfehler: Statistiken konnten nicht geladen werden.'));
     } finally {
       if (isCurrent()) setLoadingStats(false);
     }
@@ -109,17 +113,17 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       const res = await apiFetch(`/api/users/${userId}/stats`, { signal });
       if (!isCurrent()) return;
       if (!res.ok) {
-        const message = await readApiError(res, 'Fehler beim Laden der Leser-Details');
+        const message = await readApiError(res, t('Fehler beim Laden der Leser-Details'));
         if (isCurrent()) setReaderError(message);
         return;
       }
       const data = await readJson(res);
       if (!isCurrent()) return;
-      if (data === null) throw new Error('Antwort ist kein JSON');
+      if (data === null) throw new Error(t('Antwort ist kein JSON'));
       setVisibleReaderSeries(READER_SERIES_STEP);
       setDetailedReaderStats(data);
     } catch (e) {
-      if (isCurrent()) setReaderError('Netzwerkfehler: Leser-Details konnten nicht geladen werden.');
+      if (isCurrent()) setReaderError(t('Netzwerkfehler: Leser-Details konnten nicht geladen werden.'));
     } finally {
       if (isCurrent()) setLoadingDetailedStats(false);
     }
@@ -142,10 +146,10 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
         setEditingStartDate(false);
         await fetchStats();
       } else {
-        setStartDateError(await readApiError(res, 'Fehler beim Speichern'));
+        setStartDateError(await readApiError(res, t('Fehler beim Speichern')));
       }
     } catch (err) {
-      setStartDateError('Netzwerkfehler: Datum wurde nicht gespeichert.');
+      setStartDateError(t('Netzwerkfehler: Datum wurde nicht gespeichert.'));
     } finally {
       setSavingStartDate(false);
     }
@@ -191,10 +195,10 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             </div>
             <div>
               <h2 id={titleId} className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                Statistik- & Finanz-Dashboard
+                {t('Statistik- & Finanz-Dashboard')}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5 short:hidden max-sm:hidden">
-                Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking
+                {t('Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking')}
               </p>
             </div>
           </div>
@@ -203,14 +207,14 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             type="button"
             onClick={onClose} 
             className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
-            title="Schließen"
-            aria-label="Schließen"
+            title={t('Schließen')}
+            aria-label={t('Schließen')}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div role="group" aria-label="Bereiche" className="flex flex-nowrap items-center gap-2 pt-4 pb-2 shrink-0 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
+        <div role="group" aria-label={t('Bereiche')} className="flex flex-nowrap items-center gap-2 pt-4 pb-2 shrink-0 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
           {TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -223,29 +227,29 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {label}
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {t(label)}
             </button>
           ))}
         </div>
 
         {/* one live region that stays mounted, so the loading text is announced */}
-        <p role="status" className="sr-only">{loadingStats ? LOADING_TEXT : ''}</p>
+        <p role="status" className="sr-only">{loadingStats ? t(LOADING_TEXT) : ''}</p>
         <div className="overflow-y-auto max-sm:overflow-visible short:overflow-visible custom-scrollbar flex-1 pr-1 pt-4 space-y-6">
           {loadingStats ? (
             <div aria-hidden="true" className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs">{LOADING_TEXT}</p>
+              <p className="text-xs">{t(LOADING_TEXT)}</p>
             </div>
           ) : statsError ? (
             <div role="alert" className="py-12 flex flex-col items-center gap-3 text-center">
               <p className="text-sm text-rose-300">{statsError}</p>
               <button type="button" onClick={fetchStats} className="btn-secondary text-xs px-4 py-2">
-                Erneut versuchen
+                {t('Erneut versuchen')}
               </button>
             </div>
           ) : !statsData ? (
             <div className="py-12 text-center text-slate-400 text-sm">
-              Keine Statistikdaten verfügbar.
+              {t('Keine Statistikdaten verfügbar.')}
             </div>
           ) : (() => {
               const summary = statsData.summary || {};
@@ -269,7 +273,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                           <Calendar className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
                           <div className="flex-1 min-w-[200px]">
                             <label htmlFor={startDateId} className="block text-xs font-semibold text-slate-300 mb-1">
-                              Sammlungs-Startdatum festlegen (Berechnung der Sammelzeit & Monatsausgaben)
+                              {t('Sammlungs-Startdatum festlegen (Berechnung der Sammelzeit & Monatsausgaben)')}
                             </label>
                             <input
                               id={startDateId}
@@ -288,7 +292,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                             disabled={savingStartDate}
                             className="btn-primary text-xs py-2 px-3 !bg-amber-700 hover:!bg-amber-800 text-white mt-auto"
                           >
-                            {savingStartDate ? 'Speichert...' : 'Datum speichern'}
+                            {savingStartDate ? t('Speichert...') : t('Datum speichern')}
                           </button>
                         </form>
                       )}
@@ -299,6 +303,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                         <OwnerStatsCard ownerStats={statsData.owner_stats} ownerPublishers={statsData.owner_publishers} />
                         <TopPublishersCard publishers={publishersList} onShowAll={() => setStatsTab('publishers')} />
                         <AnimeStatsCard anime={statsData.anime} />
+                        <EditionsCard languages={statsData.languages} currencies={statsData.currencies} />
                       </div>
 
                       <TopSeriesCard topSeries={statsData.top_series} onNavigate={onClose} />
@@ -308,7 +313,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                   {statsTab === 'publishers' && <PublisherTab publishers={publishersList} />}
 
                   {statsTab === 'timeline' && (
-                    <Suspense fallback={<p className="text-sm text-slate-400 py-8 text-center">Leseverlauf wird geladen…</p>}>
+                    <Suspense fallback={<p className="text-sm text-slate-400 py-8 text-center">{t('Leseverlauf wird geladen…')}</p>}>
                       <ReadingOverTime readers={readersList} user={user} onNavigate={onClose} />
                     </Suspense>
                   )}
@@ -333,16 +338,16 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
         </div>
 
         <div className="pt-4 mt-4 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2 shrink-0">
-          <div role="group" aria-label="Werkzeuge" className="flex flex-wrap gap-2 mr-auto">
+          <div role="group" aria-label={t('Werkzeuge')} className="flex flex-wrap gap-2 mr-auto">
             <button id="btn-open-trash" type="button" onClick={() => setTool('trash')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Papierkorb
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> {t('Papierkorb')}
             </button>
             <button id="btn-open-cleanup" type="button" onClick={() => setTool('cleanup')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
-              <BrushCleaning className="w-3.5 h-3.5" aria-hidden="true" /> Sammlung aufräumen
+              <BrushCleaning className="w-3.5 h-3.5" aria-hidden="true" /> {t('Sammlung aufräumen')}
             </button>
             {user?.role === 'admin' && (
               <button id="btn-open-publishers" type="button" onClick={() => setTool('publishers')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
-                <GitMerge className="w-3.5 h-3.5" aria-hidden="true" /> Verlage zusammenführen
+                <GitMerge className="w-3.5 h-3.5" aria-hidden="true" /> {t('Verlage zusammenführen')}
               </button>
             )}
           </div>
@@ -352,7 +357,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             onClick={onClose} 
             className="btn-secondary text-xs px-4 py-2"
           >
-            Schließen
+            {t('Schließen')}
           </button>
         </div>
 

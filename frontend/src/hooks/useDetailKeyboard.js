@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { t } from '../i18n/index.js';
 
 // Space on these is the control's own key; a focused spine (role=button) is the shortcut's target instead
 const CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]:not(.manga-spine)';
@@ -107,7 +108,7 @@ export default function useDetailKeyboard({
         if (isTextEntry(e.target) && dirty !== false) return;
         // cancelEditing resets the form: without a dirty flag from the caller, ask rather than lose input
         const mayLoseInput = cancel ? dirty !== false : Boolean(dirty);
-        if (mayLoseInput && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
+        if (mayLoseInput && !confirm(t('Ungespeicherte Änderungen verwerfen?'))) return;
         if (cancel) cancel();
         else set(false);
       }

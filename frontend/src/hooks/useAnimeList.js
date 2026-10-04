@@ -8,6 +8,7 @@ import {
 import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
 import { WATCH_SYNC_EVENT } from '../app/watch/watchState';
 import useLatestRequest from './useLatestRequest';
+import { t } from '../i18n/index.js';
 
 /**
  * The anime tab: shared list with my progress (GET /api/anime), the sources state and the actions. Offline (or when
@@ -59,7 +60,7 @@ export default function useAnimeList({ user }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get('/api/anime', { signal, fallback: 'Anime-Liste konnte nicht geladen werden' });
+      const data = await api.get('/api/anime', { signal, fallback: t('Anime-Liste konnte nicht geladen werden') });
       if (!isCurrent()) return;
       const next = Array.isArray(data) ? data : [];
       setList(next);
@@ -72,7 +73,7 @@ export default function useAnimeList({ user }) {
         setList(cached.list);
         setFromCache(true);
       }
-      setError(err.message || 'Anime-Liste konnte nicht geladen werden');
+      setError(err.message || t('Anime-Liste konnte nicht geladen werden'));
     } finally {
       if (isCurrent()) {
         setLoading(false);
@@ -92,13 +93,13 @@ export default function useAnimeList({ user }) {
 
   /** { results, sources_used, partial, cached, credential_used } or throws ApiError (429 with retry_after). */
   const search = useCallback(async (q, { signal } = {}) => {
-    const data = await api.get(`/api/anime/search?q=${encodeURIComponent(q)}`, { signal, timeout: TIMEOUTS.lookup, fallback: 'Suche fehlgeschlagen' });
+    const data = await api.get(`/api/anime/search?q=${encodeURIComponent(q)}`, { signal, timeout: TIMEOUTS.lookup, fallback: t('Suche fehlgeschlagen') });
     fetchSources();
     return data;
   }, [fetchSources]);
 
   /** Anime adaptations of a series: { results, source, cached }. */
-  const adaptations = useCallback((mangaId, { signal } = {}) => api.get(`/api/mangas/${mangaId}/adaptations`, { signal, timeout: TIMEOUTS.lookup, fallback: 'Adaptionen konnten nicht geladen werden' }), []);
+  const adaptations = useCallback((mangaId, { signal } = {}) => api.get(`/api/mangas/${mangaId}/adaptations`, { signal, timeout: TIMEOUTS.lookup, fallback: t('Adaptionen konnten nicht geladen werden') }), []);
 
   const replaceEntry = useCallback((detail) => {
     const current = listRef.current;
@@ -112,18 +113,18 @@ export default function useAnimeList({ user }) {
 
   /** POST /api/anime from a search hit ({ anilist_id, mal_id }) or manual ({ title, episodes }); resolves with the detail. */
   const add = useCallback(async (body) => {
-    const detail = await api.post('/api/anime', body, { timeout: TIMEOUTS.lookup, fallback: 'Anime konnte nicht hinzugefügt werden' });
+    const detail = await api.post('/api/anime', body, { timeout: TIMEOUTS.lookup, fallback: t('Anime konnte nicht hinzugefügt werden') });
     replaceEntry(detail);
     return detail;
   }, [replaceEntry]);
 
   const update = useCallback(async (id, body) => {
-    const detail = await api.put(`/api/anime/${id}`, body, { fallback: 'Änderung konnte nicht gespeichert werden' });
+    const detail = await api.put(`/api/anime/${id}`, body, { fallback: t('Änderung konnte nicht gespeichert werden') });
     replaceEntry(detail);
     return detail;
   }, [replaceEntry]);
 
-  const fetchDetail = useCallback((id, { signal } = {}) => api.get(`/api/anime/${id}`, { signal, fallback: 'Anime konnte nicht geladen werden' }), []);
+  const fetchDetail = useCallback((id, { signal } = {}) => api.get(`/api/anime/${id}`, { signal, fallback: t('Anime konnte nicht geladen werden') }), []);
 
   // `watch` (the "Weiter" target) is computed by the server from the progress: after a change it is read again
   const refreshWatch = useCallback(async (id) => {
@@ -140,13 +141,13 @@ export default function useAnimeList({ user }) {
     const predicted = predictProgress(before.my_progress, change, before.episodes);
     setList((cur) => cur.map((a) => (a.id === id ? withProgress(a, predicted, user) : a)));
     try {
-      const saved = await api.put(`/api/anime/${id}/progress`, change, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      const saved = await api.put(`/api/anime/${id}/progress`, change, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
       store(listRef.current.map((a) => (a.id === id ? withProgress(a, saved, user) : a)));
       if (before.watch) refreshWatch(id);
       return saved;
     } catch (err) {
       setList((cur) => cur.map((a) => (a.id === id ? before : a)));
-      notify.error(err, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      notify.error(err, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
       return null;
     }
   }, [refreshWatch, store, user]);
@@ -168,7 +169,7 @@ export default function useAnimeList({ user }) {
     if (remember) body.remember = remember;
     if (complete) body.complete = true;
     try {
-      const saved = await api.post(`/api/anime/${id}/watched`, body, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      const saved = await api.post(`/api/anime/${id}/watched`, body, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
       const progress = saved?.progress ?? null;
       if (listRef.current.some((a) => a.id === id)) {
         store(listRef.current.map((a) => (a.id === id ? withProgress(a, progress, user) : a)));
@@ -178,7 +179,7 @@ export default function useAnimeList({ user }) {
     } catch (err) {
       if (before) setList((cur) => cur.map((a) => (a.id === id ? before : a)));
       if (err?.code === 'EPISODE_ABOVE_TOTAL') throw err;
-      notify.error(err, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
+      notify.error(err, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
       return null;
     }
   }, [fetchAnime, refreshWatch, store, user]);
@@ -229,7 +230,7 @@ export default function useAnimeList({ user }) {
     if (!before) return false;
     setList((cur) => cur.map((a) => (a.id === id ? withProgress(a, null, user) : a)));
     try {
-      await api.del(`/api/anime/${id}/progress`, { fallback: 'Konnte nicht von deiner Liste entfernt werden' });
+      await api.del(`/api/anime/${id}/progress`, { fallback: t('Konnte nicht von deiner Liste entfernt werden') });
       store(listRef.current);
       if (before.watch) refreshWatch(id);
       return true;
@@ -248,8 +249,8 @@ export default function useAnimeList({ user }) {
     const change = previous ? { status: previous.status, episodes_watched: previous.episodes_watched || 0 } : null;
     if (listRef.current.some((a) => a.id === id)) return change ? Boolean(await updateProgress(id, change)) : removeFromMyList(id);
     try {
-      if (change) await api.put(`/api/anime/${id}/progress`, change, { fallback: 'Fortschritt konnte nicht gespeichert werden' });
-      else await api.del(`/api/anime/${id}/progress`, { fallback: 'Konnte nicht von deiner Liste entfernt werden' });
+      if (change) await api.put(`/api/anime/${id}/progress`, change, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
+      else await api.del(`/api/anime/${id}/progress`, { fallback: t('Konnte nicht von deiner Liste entfernt werden') });
       fetchAnime();
       return true;
     } catch (err) {
@@ -259,14 +260,14 @@ export default function useAnimeList({ user }) {
   }, [fetchAnime, updateProgress, removeFromMyList]);
 
   const remove = useCallback(async (id) => {
-    await api.del(`/api/anime/${id}`, { fallback: 'Anime konnte nicht gelöscht werden' });
+    await api.del(`/api/anime/${id}`, { fallback: t('Anime konnte nicht gelöscht werden') });
     store(listRef.current.filter((a) => a.id !== id));
     return true;
   }, [store]);
 
   /** Manual refresh; the server allows one per 60 s and entry (429 with retry_after). */
   const refresh = useCallback(async (id) => {
-    const detail = await api.post(`/api/anime/${id}/refresh`, undefined, { timeout: TIMEOUTS.lookup, fallback: 'Aktualisierung fehlgeschlagen' });
+    const detail = await api.post(`/api/anime/${id}/refresh`, undefined, { timeout: TIMEOUTS.lookup, fallback: t('Aktualisierung fehlgeschlagen') });
     replaceEntry(detail);
     fetchSources();
     return detail;

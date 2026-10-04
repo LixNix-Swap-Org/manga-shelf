@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { notify } from '../utils/notify';
 import { reloadForStaleChunk } from '../appShell';
+import { deviceLanguage, getLanguage, subscribe as subscribeLanguage, t } from '../i18n/index.js';
 
 export const IOS_HINT_KEY = 'mangashelf_ios_install_hint';
+// i18n
 export const IOS_HINT_TEXT = 'Für Offline im Laden: Teilen → Zum Home-Bildschirm';
+// i18n
 export const UPDATE_TEXT = 'Neue Version verfügbar';
 export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -33,11 +36,28 @@ export function maybeShowIosInstallHint({ win = globalThis.window, storage = glo
   } catch (_) {
     return false;
   }
-  notify.info(IOS_HINT_TEXT, { duration: 0 });
+  notify.info(t(IOS_HINT_TEXT), { duration: 0 });
   return true;
 }
 
 let watcher = null;
+
+/** The languages a device needs offline: the active one and the device language ("follow the device" switches back to it). */
+export const warmLanguages = () => [...new Set([getLanguage(), deviceLanguage()])];
+
+/**
+ * Asks the workers of a registration to cache the catalog and manifest of each language (public/sw.js WARM_LANGUAGE):
+ * the release precache leaves the 12 catalogs out, so an offline start or switch in English still needs its catalog cached.
+ */
+export function warmLanguageCache(reg, languages = warmLanguages()) {
+  for (const worker of [reg?.active, reg?.waiting, reg?.installing]) {
+    for (const language of [].concat(languages)) {
+      try {
+        worker?.postMessage({ type: 'WARM_LANGUAGE', language });
+      } catch (_) { /* a redundant worker */ }
+    }
+  }
+}
 
 /**
  * Offers a waiting service worker as a toast ('Neu laden' posts SKIP_WAITING), reloads once the new worker took over
@@ -60,6 +80,8 @@ export function watchServiceWorkerUpdates({
     reload();
   });
   win?.addEventListener?.('vite:preloadError', (event) => {
+    // offline a reload cannot fetch a newer release: the caller handles the failed import (e.g. an uncached catalog)
+    if (win.navigator?.onLine === false) return;
     if (reloadForStaleChunk({ reload })) event.preventDefault();
   });
 
@@ -67,20 +89,24 @@ export function watchServiceWorkerUpdates({
   const offer = (worker) => {
     if (!worker || offered.has(worker) || !container.controller) return;
     offered.add(worker);
-    notify.info(UPDATE_TEXT, {
+    notify.info(t(UPDATE_TEXT), {
       duration: 0,
-      action: { label: 'Neu laden', onClick: () => worker.postMessage({ type: 'SKIP_WAITING' }) }
+      action: { label: t('Neu laden'), onClick: () => worker.postMessage({ type: 'SKIP_WAITING' }) }
     });
   };
 
   const track = (worker) => {
     if (!worker) return;
+    // an update caches the active and the device language too, so the next start or switch back also works offline
+    warmLanguageCache({ installing: worker });
     if (worker.state === 'installed') offer(worker);
     else worker.addEventListener('statechange', () => { if (worker.state === 'installed') offer(worker); });
   };
 
   watcher = container.getRegistration().then((reg) => {
     if (!reg) return null;
+    warmLanguageCache(reg);
+    subscribeLanguage((language) => warmLanguageCache(reg, language));
     if (reg.waiting) offer(reg.waiting);
     // the update check of register() often runs already when the watcher attaches
     track(reg.installing);

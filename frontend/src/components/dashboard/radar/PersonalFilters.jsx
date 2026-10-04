@@ -1,5 +1,6 @@
 import { ChevronDown, Search, X, BuildingComplex, Package, Clock, ShoppingCart } from 'lucide-react';
 import { RADAR_STATUS_CHIPS, publisherOptions } from '../../../utils/radarHelpers';
+import { t } from '../../../i18n/index.js';
 
 const CHIP_ICONS = { Vorbestellt: Package, 'Erscheint bald': Clock, Geplant: ShoppingCart };
 
@@ -22,21 +23,21 @@ export default function PersonalFilters({
         <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         <input
           type="text"
-          placeholder="Reihe oder Verlag suchen..."
-          aria-label="Vorbestellungen durchsuchen"
+          placeholder={t('Reihe oder Verlag suchen...')}
+          aria-label={t('Vorbestellungen durchsuchen')}
           className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-xs"
           value={radarSearch}
           onChange={e => setRadarSearch(e.target.value)}
         />
         {radarSearch && (
-          <button type="button" onClick={() => setRadarSearch('')} className="p-1.5 -m-1 text-slate-400 hover:text-white" aria-label="Suche löschen">
+          <button type="button" onClick={() => setRadarSearch('')} className="p-1.5 -m-1 text-slate-400 hover:text-white" aria-label={t('Suche löschen')}>
             <X className="w-3 h-3" aria-hidden="true" />
           </button>
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="Status-Filter" className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+        <div role="group" aria-label={t('Status-Filter')} className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
           {RADAR_STATUS_CHIPS.map(st => {
             const Icon = CHIP_ICONS[st.id];
             return (
@@ -52,7 +53,7 @@ export default function PersonalFilters({
                 }`}
               >
                 {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
-                {st.label}
+                {t(st.label)}
               </button>
             );
           })}
@@ -64,11 +65,12 @@ export default function PersonalFilters({
             <select
               value={radarPublisherFilter}
               onChange={e => setRadarPublisherFilter(e.target.value)}
-              aria-label="Verlag"
+              aria-label={t('Verlag')}
               className="seamless-select filter-chip-select font-medium text-slate-200 group-hover:text-white cursor-pointer"
             >
-              <option value="ALL" className="bg-slate-900 text-white">Alle Verlage</option>
+              <option value="ALL" className="bg-slate-900 text-white">{t('Alle Verlage')}</option>
               {options.map(o => (
+                // i18n-ignore: publisher name and count
                 <option key={o.value} value={o.value} className="bg-slate-900 text-white">
                   {o.label}
                 </option>
@@ -84,7 +86,7 @@ export default function PersonalFilters({
             onClick={onResetFilters}
             className="btn-secondary text-xs py-2 px-3 text-slate-400 hover:text-white"
           >
-            Filter zurücksetzen
+            {t('Filter zurücksetzen')}
           </button>
         )}
       </div>

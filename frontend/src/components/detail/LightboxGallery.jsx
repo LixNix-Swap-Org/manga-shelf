@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Camera, Star, ExternalLink, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, assetUrl, assetImgProps } from '../../utils/api';
+import { t } from '../../i18n/index.js';
 
 const SWIPE_MIN_PX = 50;
 
@@ -60,7 +61,7 @@ export default function LightboxGallery({
 
   const canSetCover = canEdit && Boolean(onSetCover || lightboxData.volumeId);
   const isCover = lightboxData.volume?.cover_image === lightboxData.images[lightboxData.currentIndex];
-  const coverLabel = isCover ? 'Aktuelles Cover' : 'Als Cover festlegen';
+  const coverLabel = isCover ? t('Aktuelles Cover') : t('Als Cover festlegen');
 
   const handleSetCoverFromLightbox = async () => {
     if (!canSetCover || isCover) return;
@@ -95,7 +96,7 @@ export default function LightboxGallery({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Bildergalerie"
+      aria-label={t('Bildergalerie')}
       tabIndex={-1}
       className="outline-none fixed inset-0 z-60 bg-black/95 flex flex-col justify-between dialog-safe-area animate-fade-in select-none"
       onClick={onClose}
@@ -112,15 +113,16 @@ export default function LightboxGallery({
               {lightboxData.images.length > 1 && (
                 <span className="bg-slate-800 text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded-full border border-slate-700" aria-live="polite">
                   <span aria-hidden="true">{lightboxData.currentIndex + 1} / {lightboxData.images.length}</span>
-                  <span className="sr-only">Bild {lightboxData.currentIndex + 1} von {lightboxData.images.length}</span>
+                  <span className="sr-only">{t('Bild {current} von {total}', { current: lightboxData.currentIndex + 1, total: lightboxData.images.length })}</span>
                 </span>
               )}
               {isCover && (
                 <span className="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Star className="w-2.5 h-2.5 fill-current text-brand-400" /> Cover
+                  <Star className="w-2.5 h-2.5 fill-current text-brand-400" /> {t('Cover')}
                 </span>
               )}
             </h2>
+            {/* i18n-ignore: title, publisher and price, built by useVolumeGallery / VolumePhotoManager */}
             <p className="text-xs text-slate-400">{lightboxData.subtitle}</p>
           </div>
         </div>
@@ -136,7 +138,7 @@ export default function LightboxGallery({
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/50 cursor-default'
                   : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700'
               }`}
-              title={isCover ? 'Dieses Bild ist das aktuelle Cover' : 'Dieses Bild als Coverbild für diesen Eintrag festlegen'}
+              title={isCover ? t('Dieses Bild ist das aktuelle Cover') : t('Dieses Bild als Coverbild für diesen Eintrag festlegen')}
               aria-label={coverLabel}
             >
               <Star className={`w-3.5 h-3.5 ${isCover ? 'fill-current text-brand-400' : 'text-slate-400'}`} />
@@ -149,19 +151,19 @@ export default function LightboxGallery({
             target="_blank" 
             rel="noreferrer" 
             className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 sm:px-3 sm:py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
-            title="In Originalgröße in neuem Tab öffnen"
-            aria-label="Original in neuem Tab öffnen"
+            title={t('In Originalgröße in neuem Tab öffnen')}
+            aria-label={t('Original in neuem Tab öffnen')}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Original</span>
+            <span className="hidden sm:inline">{t('Original')}</span>
           </a>
 
           <button 
             type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-colors"
-            title="Galerie schließen (Esc)"
-            aria-label="Galerie schließen"
+            title={t('Galerie schließen (Esc)')}
+            aria-label={t('Galerie schließen')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -176,8 +178,8 @@ export default function LightboxGallery({
             type="button"
             onClick={() => step(-1)}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
-            title="Vorheriges Bild (Pfeiltaste links)"
-            aria-label="Vorheriges Bild"
+            title={t('Vorheriges Bild (Pfeiltaste links)')}
+            aria-label={t('Vorheriges Bild')}
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
@@ -191,7 +193,7 @@ export default function LightboxGallery({
           <img 
             key={lightboxData.images[lightboxData.currentIndex]}
             {...assetImgProps(lightboxData.images[lightboxData.currentIndex])} 
-            alt={`Foto ${lightboxData.currentIndex + 1}`} 
+            alt={t('Foto {number}', { number: lightboxData.currentIndex + 1 })} 
             className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain border border-slate-800/80 transition-all duration-200 animate-fade-in"
           />
         </div>
@@ -202,8 +204,8 @@ export default function LightboxGallery({
             type="button"
             onClick={() => step(1)}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
-            title="Nächstes Bild (Pfeiltaste rechts)"
-            aria-label="Nächstes Bild"
+            title={t('Nächstes Bild (Pfeiltaste rechts)')}
+            aria-label={t('Nächstes Bild')}
           >
             <ChevronRight className="w-6 h-6" />
           </button>
@@ -220,7 +222,7 @@ export default function LightboxGallery({
               <button
                 type="button"
                 key={idx}
-                aria-label={`Bild ${idx + 1} anzeigen${thumbIsCover ? ' (Cover)' : ''}`}
+                aria-label={thumbIsCover ? t('Bild {number} anzeigen (Cover)', { number: idx + 1 }) : t('Bild {number} anzeigen', { number: idx + 1 })}
                 aria-current={isActive ? 'true' : undefined}
                 onClick={() => setLightboxData(prev => ({ ...prev, currentIndex: idx }))}
                 className={`relative rounded-xl overflow-hidden shrink-0 transition-all ${
@@ -236,7 +238,7 @@ export default function LightboxGallery({
                 />
                 {thumbIsCover && (
                   <div aria-hidden="true" className="absolute bottom-0 inset-x-0 bg-brand-700/90 text-[8px] text-white font-bold py-px text-center">
-                    Cover
+                    {t('Cover')}
                   </div>
                 )}
               </button>

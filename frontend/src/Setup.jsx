@@ -4,6 +4,9 @@ import { apiFetch, readJson, rememberToken } from './utils/api';
 import { useDocumentTitle } from './components/common/PageChrome';
 import ApiKeyCard from './components/modals/ApiKeyCard';
 import { useApiKeys } from './components/modals/AccountModal';
+import LanguageSelect from './components/common/LanguageSelect';
+import { t as tr } from './i18n/index.js';
+import { serverText } from './i18n/serverText.js';
 
 const MIN_PASSWORD_LENGTH = 8; // routes/auth.js enforces the same minimum
 
@@ -28,10 +31,9 @@ function SourcesStep({ onDone }) {
         <div className="mx-auto w-12 h-12 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center mb-3">
           <Plug className="w-6 h-6 text-brand-300" aria-hidden="true" />
         </div>
-        <h1 ref={headingRef} tabIndex={-1} className="text-xl font-extrabold text-white focus:outline-none">Quellen verbinden (später möglich)</h1>
+        <h1 ref={headingRef} tabIndex={-1} className="text-xl font-extrabold text-white focus:outline-none">{tr('Quellen verbinden (später möglich)')}</h1>
         <p className="text-sm text-slate-400 mt-1">
-          Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das
-          anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).
+          {tr('Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).')}
         </p>
       </div>
       {keys.error && <p className="text-sm text-amber-300" role="status">{keys.error}</p>}
@@ -51,9 +53,9 @@ function SourcesStep({ onDone }) {
         ) : null;
       })}
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" className="btn-secondary text-sm" onClick={finish} disabled={finishing}>Überspringen</button>
+        <button type="button" className="btn-secondary text-sm" onClick={finish} disabled={finishing}>{tr('Überspringen')}</button>
         <button type="button" className="btn-primary text-sm flex items-center gap-1.5" onClick={finish} disabled={finishing}>
-          Weiter zur Sammlung <ArrowRight className="w-4 h-4" aria-hidden="true" />
+          {tr('Weiter zur Sammlung')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -61,7 +63,7 @@ function SourcesStep({ onDone }) {
 }
 
 export default function Setup({ onComplete }) {
-  useDocumentTitle('Ersteinrichtung');
+  useDocumentTitle(tr('Ersteinrichtung'));
   const [step, setStep] = useState('account');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -92,11 +94,11 @@ export default function Setup({ onComplete }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim() || !password) {
-      fail('Bitte fülle alle Felder aus.');
+      fail(tr('Bitte fülle alle Felder aus.'));
       return;
     }
     if (password.length < MIN_PASSWORD_LENGTH) {
-      fail(`Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.`);
+      fail(tr('Das Passwort muss mindestens {minPasswordLength} Zeichen lang sein.', { minPasswordLength: MIN_PASSWORD_LENGTH }));
       return;
     }
 
@@ -116,10 +118,10 @@ export default function Setup({ onComplete }) {
         // Another tab or browser finished the setup first: continue to the login
         await onComplete({ adminExists: true });
       } else {
-        fail(data?.error || 'Fehler bei der Einrichtung', { badToken: data?.code === 'SETUP_TOKEN_INVALID' });
+        fail(serverText(data) || tr('Fehler bei der Einrichtung'), { badToken: data?.code === 'SETUP_TOKEN_INVALID' });
       }
     } catch (err) {
-      fail('Verbindungsfehler zum Server');
+      fail(tr('Verbindungsfehler zum Server'));
     } finally {
       setLoading(false);
     }
@@ -133,8 +135,10 @@ export default function Setup({ onComplete }) {
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center mb-4 shadow-xl shadow-brand-500/25">
             <Sparkles className="w-8 h-8 text-white" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Ersteinrichtung</h1>
-          <p className="text-sm text-slate-400 mt-1">Erstelle dein Administrator-Konto für MangaShelf</p>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">{tr('Ersteinrichtung')}</h1>
+          <p className="text-sm text-slate-400 mt-1">{tr('Erstelle dein Administrator-Konto für MangaShelf')}</p>
+          {/* before the admin exists the choice stays on this device; it is sent with the first sign-in */}
+          <LanguageSelect className="justify-center mt-4" />
         </div>
 
         {error && (
@@ -146,7 +150,7 @@ export default function Setup({ onComplete }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor={tokenId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Einrichtungscode
+              {tr('Einrichtungscode')}
             </label>
             <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <KeyRound className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
@@ -168,13 +172,13 @@ export default function Setup({ onComplete }) {
               />
             </div>
             <p id={tokenHintId} className="mt-1.5 text-xs text-slate-400">
-              Steht in der Server-Konsole bzw. im Log beim Start („Einrichtungscode für das erste Admin-Konto“) oder ist der Wert von SETUP_TOKEN.
+              {tr('Steht in der Server-Konsole bzw. im Log beim Start („Einrichtungscode für das erste Admin-Konto“) oder ist der Wert von SETUP_TOKEN.')}
             </p>
           </div>
 
           <div>
             <label htmlFor={usernameId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Admin-Benutzername
+              {tr('Admin-Benutzername')}
             </label>
             <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <User className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
@@ -187,7 +191,7 @@ export default function Setup({ onComplete }) {
                 spellCheck={false}
                 className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
                 required 
-                placeholder="z. B. admin"
+                placeholder={tr('z. B. admin')}
                 value={username} 
                 onChange={e => setUsername(e.target.value)} 
               />
@@ -196,7 +200,7 @@ export default function Setup({ onComplete }) {
 
           <div>
             <label htmlFor={passwordId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Passwort
+              {tr('Passwort')}
             </label>
             <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <Lock className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
@@ -209,12 +213,12 @@ export default function Setup({ onComplete }) {
                 aria-describedby={hintId}
                 className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
                 required 
-                placeholder="Sicheres Passwort"
+                placeholder={tr('Sicheres Passwort')}
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
               />
             </div>
-            <p id={hintId} className="mt-1.5 text-xs text-slate-400">Mindestens {MIN_PASSWORD_LENGTH} Zeichen.</p>
+            <p id={hintId} className="mt-1.5 text-xs text-slate-400">{tr('Mindestens {minPasswordLength} Zeichen.', { minPasswordLength: MIN_PASSWORD_LENGTH })}</p>
           </div>
 
           <button 
@@ -226,11 +230,11 @@ export default function Setup({ onComplete }) {
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-                <span className="sr-only">Konto wird angelegt…</span>
+                <span className="sr-only">{tr('Konto wird angelegt…')}</span>
               </>
             ) : (
               <>
-                Admin-Konto anlegen & starten <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                {tr('Admin-Konto anlegen & starten')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </>
             )}
           </button>

@@ -2,6 +2,7 @@
 // app/shell/capacitor.js before the first request. 'secrets' = Keychain / Keystore, never manga.db.
 // The core stays in sql.js because its ctx.db is synchronous, the native SQLite plugin is not.
 import { createBrowserHttp } from './http.js';
+import { t } from '../i18n/index.js';
 
 // runtime.js DB_KEY (not imported: runtime.js pulls in the core, which belongs to the lazy boot chunk)
 const DB_KEY = 'manga.db';
@@ -26,12 +27,12 @@ async function toBytes(value) {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (typeof Blob !== 'undefined' && value instanceof Blob) return new Uint8Array(await value.arrayBuffer());
-  throw new TypeError('Nur Bytes oder Blobs lassen sich als Datei speichern');
+  throw new TypeError(t('Nur Bytes oder Blobs lassen sich als Datei speichern'));
 }
 
 const safeName = (name) => {
   const text = String(name);
-  if (!text || text.includes('/') || text.includes('\\') || text === '.' || text === '..') throw new Error(`Ungültiger Dateiname: ${text}`);
+  if (!text || text.includes('/') || text.includes('\\') || text === '.' || text === '..') throw new Error(t('Ungültiger Dateiname: {text}', { text }));
   return text;
 };
 
@@ -147,7 +148,7 @@ export function createNativeStore(bridge) {
   const stores = { db, files, secrets };
   const pick = (store) => {
     const target = stores[store];
-    if (!target) throw new Error(`Unbekannter Speicher: ${store}`);
+    if (!target) throw new Error(t('Unbekannter Speicher: {store}', { store }));
     return target;
   };
   return {
@@ -218,7 +219,7 @@ export const createNativeHttp = (fetchImpl = (...args) => globalThis.fetch(...ar
 /** The adapters for setLocalAdapters(); throws without the native bridge (the browser build keeps IndexedDB). */
 export async function createCapacitorAdapters(bridge) {
   if (!bridge?.plugins?.Filesystem || !bridge.plugins.SecureStorage) {
-    throw new Error('Capacitor-Plugins fehlen: der Modus ohne Server nutzt im Browser IndexedDB');
+    throw new Error(t('Capacitor-Plugins fehlen: der Modus ohne Server nutzt im Browser IndexedDB'));
   }
   const store = createNativeStore(bridge);
   const files = await createNativeFiles(bridge, store);

@@ -2,6 +2,7 @@ import { FileArchive, RefreshCw, Download, Trash } from 'lucide-react';
 import { formatDateTime, formatMegabytes } from '../../../utils/format';
 import DownloadLink from './DownloadLink';
 import { CATEGORY_LABELS, manifestSummary, versionSummary } from './backupHelpers';
+import { t } from '../../../i18n/index.js';
 
 const CATEGORY_STYLES = {
   daily: 'bg-sky-500/20 text-sky-300',
@@ -12,21 +13,21 @@ const CATEGORY_STYLES = {
 
 function VerifiedBadge({ verified, error }) {
   if (verified === true) {
-    return <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/20 text-emerald-300">geprüft ✓</span>;
+    return <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/20 text-emerald-300">{t('geprüft ✓')}</span>;
   }
   if (verified === false) {
     return (
       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-rose-500/20 text-rose-300" title={error || undefined}>
-        beschädigt
+        {t('beschädigt')}
       </span>
     );
   }
-  return <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-800 text-slate-400">ungeprüft</span>;
+  return <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-800 text-slate-400">{t('ungeprüft')}</span>;
 }
 
 export default function SnapshotList({ snapshots, disabled, onRestore, onDelete }) {
   return (
-    <ul className="space-y-2" aria-label="Server-Snapshots">
+    <ul className="space-y-2" aria-label={t('Server-Snapshots')}>
       {snapshots.map(b => {
         const label = CATEGORY_LABELS[b.category];
         const summary = manifestSummary(b.manifest);
@@ -48,7 +49,7 @@ export default function SnapshotList({ snapshots, disabled, onRestore, onDelete 
                     {b.filename}
                   </span>
                   {label && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${CATEGORY_STYLES[b.category]}`}>{label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${CATEGORY_STYLES[b.category]}`}>{t(label)}</span>
                   )}
                   <VerifiedBadge verified={b.verified} error={b.verify_error} />
                 </div>
@@ -66,18 +67,18 @@ export default function SnapshotList({ snapshots, disabled, onRestore, onDelete 
                 onClick={() => onRestore(b.filename)}
                 disabled={disabled}
                 className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 text-emerald-300 hover:text-white border-emerald-500/30 hover:bg-emerald-700 transition-all"
-                title="Diesen Snapshot prüfen und wiederherstellen"
-                aria-label={`Snapshot ${b.filename} wiederherstellen`}
+                title={t('Diesen Snapshot prüfen und wiederherstellen')}
+                aria-label={t('Snapshot {filename} wiederherstellen', { filename: b.filename })}
               >
                 <RefreshCw className="w-3 h-3" aria-hidden="true" />
-                <span>Wiederherstellen</span>
+                <span>{t('Wiederherstellen')}</span>
               </button>
               <DownloadLink
                 path={`/api/backups/${encodeURIComponent(b.filename)}/download`}
                 filename={b.filename}
                 className="btn-secondary text-[11px] py-1 px-2 flex items-center gap-1 text-sky-300 hover:text-white border-slate-700"
-                title="Herunterladen"
-                aria-label={`Snapshot ${b.filename} herunterladen`}
+                title={t('Herunterladen')}
+                aria-label={t('Snapshot {filename} herunterladen', { filename: b.filename })}
               >
                 <Download className="w-3 h-3" aria-hidden="true" />
               </DownloadLink>
@@ -86,8 +87,8 @@ export default function SnapshotList({ snapshots, disabled, onRestore, onDelete 
                 onClick={() => onDelete(b.filename)}
                 disabled={disabled}
                 className="btn-secondary text-[11px] py-1 px-2 text-rose-400 hover:text-white hover:bg-rose-600/50 border-slate-700"
-                title="Löschen"
-                aria-label={`Snapshot ${b.filename} löschen`}
+                title={t('Löschen')}
+                aria-label={t('Snapshot {filename} löschen', { filename: b.filename })}
               >
                 <Trash className="w-3 h-3" aria-hidden="true" />
               </button>

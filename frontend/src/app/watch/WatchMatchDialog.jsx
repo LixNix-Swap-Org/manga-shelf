@@ -12,6 +12,7 @@ import { syncNow } from './crunchyrollSync';
 import {
   SERVICE, WATCH_SYNC_EVENT, watchBridge, useWatchUnmatched, resolveUnmatched, skipUnmatched, unmatchedKey
 } from './watchState';
+import { t } from '../../i18n/index.js';
 
 const MAX_CANDIDATES = 5;
 const SURE_SCORE = 0.9;
@@ -24,7 +25,7 @@ const seasonOfItem = (u) => Number(u?.season) || 1;
 export const seasonOfCandidate = (c) => (Number.isInteger(c?.season) ? c.season : crunchyroll.seasonFromTitles([c?.title]));
 
 /** 'Frieren (Staffel 2)'; season 1 only named when `withSeason` (the candidates include other seasons). */
-export const seriesLabel = (u, withSeason = false) => (seasonOfItem(u) > 1 || withSeason ? `${u.series_title} (Staffel ${seasonOfItem(u)})` : u.series_title);
+export const seriesLabel = (u, withSeason = false) => (seasonOfItem(u) > 1 || withSeason ? t('{title} (Staffel {season})', { title: u.series_title, season: seasonOfItem(u) }) : u.series_title);
 
 /**
  * The candidate the dialog may preselect: only a sure title hit of the same season (one Enter must never link a season
@@ -47,11 +48,11 @@ export async function confirmMatch(item, animeId, { complete = false, post = api
   const body = { episode: Number(item.episodes_watched ?? item.episode), remember };
   if (complete) body.complete = true;
   try {
-    await post(`/api/anime/${animeId}/watched`, body, { fallback: 'Zuordnung konnte nicht gespeichert werden' });
+    await post(`/api/anime/${animeId}/watched`, body, { fallback: t('Zuordnung konnte nicht gespeichert werden') });
     return { ok: true };
   } catch (err) {
     if (err?.code === 'EPISODE_ABOVE_TOTAL') return { aboveTotal: Number(err.data?.episodes) || null };
-    return { error: err?.message || 'Zuordnung konnte nicht gespeichert werden' };
+    return { error: err?.message || t('Zuordnung konnte nicht gespeichert werden') };
   }
 }
 
@@ -84,7 +85,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
   const episode = Number(item.episodes_watched ?? item.episode) || 0;
   const above = refused && refused.animeId === chosenId ? refused : null;
   const series = seriesLabel(item, candidates.some((c) => seasonOfCandidate(c) > 1));
-  const question = entryTitle ? `Ist „${series}“ dein Eintrag „${entryTitle}“?` : `Welcher Eintrag ist „${series}“?`;
+  const question = entryTitle ? t('Ist „{series}“ dein Eintrag „{entry}“?', { series, entry: entryTitle }) : t('Welcher Eintrag ist „{series}“?', { series });
 
   const choose = (id) => {
     setChosenId(id);
@@ -92,7 +93,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
   };
   const submit = async (complete = false) => {
     if (!chosenId) {
-      setError('Bitte einen Eintrag wählen.');
+      setError(t('Bitte einen Eintrag wählen.'));
       return;
     }
     setSaving(true);
@@ -106,12 +107,12 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); submit(Boolean(above)); }} className="space-y-4" noValidate data-busy={saving ? 'true' : undefined}>
-      <p id={titleId} className="text-base font-semibold text-white leading-snug break-words [overflow-wrap:anywhere] pr-10" lang="de">{question}</p>
-      <p className="text-xs text-slate-400 -mt-2">Crunchyroll: bis Folge {episode} gesehen</p>
+      <p id={titleId} className="text-base font-semibold text-white leading-snug break-words [overflow-wrap:anywhere] pr-10">{question}</p>
+      <p className="text-xs text-slate-400 -mt-2">{t('Crunchyroll: bis Folge {episode} gesehen', { episode })}</p>
 
       {(candidates.length > 1 || (candidates.length === 1 && !preselected)) && (
         <fieldset className="space-y-2">
-          <legend className="text-xs font-semibold text-slate-300 mb-1.5">Welcher Eintrag?</legend>
+          <legend className="text-xs font-semibold text-slate-300 mb-1.5">{t('Welcher Eintrag?')}</legend>
           {candidates.map((c, i) => (
             <label key={c.id} className="flex items-center gap-3 min-h-11 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-100 cursor-pointer has-[:checked]:border-brand-500/70">
               <input
@@ -131,7 +132,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
       {picking ? (
         others.length > 0 ? (
           <div>
-            <label htmlFor={`${ids}-other`} className="block text-[11px] text-slate-400 mb-1">{candidates.length ? 'Anderer Eintrag' : 'Eintrag aus der Liste'}</label>
+            <label htmlFor={`${ids}-other`} className="block text-[11px] text-slate-400 mb-1">{candidates.length ? t('Anderer Eintrag') : t('Eintrag aus der Liste')}</label>
             <select
               id={`${ids}-other`}
               className="input-field text-base sm:text-sm"
@@ -144,23 +145,23 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
             </select>
           </div>
         ) : (
-          <p className="text-xs text-slate-400">Diese Serie steht noch nicht in der Anime-Liste. Füge sie hinzu oder überspringe sie.</p>
+          <p className="text-xs text-slate-400">{t('Diese Serie steht noch nicht in der Anime-Liste. Füge sie hinzu oder überspringe sie.')}</p>
         )
       ) : (
-        <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>Anderer Eintrag…</button>
+        <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>{t('Anderer Eintrag…')}</button>
       )}
 
       {above && (
         <p className="text-sm text-amber-300" aria-live="polite">
-          {above.total ? aboveTotalText(episode, above.total) : `Folge ${episode} gibt es bei diesem Eintrag nicht.`}
+          {above.total ? aboveTotalText(episode, above.total) : t('Folge {episode} gibt es bei diesem Eintrag nicht.', { episode })}
         </p>
       )}
       {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
 
       <div className="flex flex-wrap justify-end gap-2 [@media(pointer:coarse)]:gap-5 pt-1">
-        <button type="button" className="hit-44 btn-secondary text-sm" onClick={() => onSkip(item)} disabled={saving}>Überspringen</button>
+        <button type="button" className="hit-44 btn-secondary text-sm" onClick={() => onSkip(item)} disabled={saving}>{t('Überspringen')}</button>
         <button type="submit" className="hit-44 btn-primary text-sm" disabled={saving || !chosenId} data-autofocus={preselected ? true : undefined}>
-          {saving ? 'Wird gespeichert…' : above ? 'Als komplett gesehen markieren' : 'Ja, zuordnen'}
+          {saving ? t('Wird gespeichert…') : above ? t('Als komplett gesehen markieren') : t('Ja, zuordnen')}
         </button>
       </div>
     </form>
@@ -203,7 +204,7 @@ export default function WatchMatchDialog({ list = [], onClose, bridge = watchBri
     confirmed.current += 1;
     resolveUnmatched(bridge, matched);
     window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: SERVICE, applied: 1, changed: true } }));
-    notify.success(`${title || seriesLabel(matched)}: zugeordnet`);
+    notify.success(t('{title}: zugeordnet', { title: title || seriesLabel(matched) }));
     dialogRef.current?.focus();
   };
   const skip = (skipped) => {
@@ -225,13 +226,13 @@ export default function WatchMatchDialog({ list = [], onClose, bridge = watchBri
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
       <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative" id="watch-match-dialog">
-        <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 absolute top-3 right-3 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+        <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
         <h2 id={`${ids}-title`} className="text-lg font-bold text-white flex items-center gap-2 pr-10">
-          <History className="w-5 h-5 text-fuchsia-400 short:hidden" aria-hidden="true" /> Crunchyroll-Verlauf zuordnen
+          <History className="w-5 h-5 text-fuchsia-400 short:hidden" aria-hidden="true" /> {t('Crunchyroll-Verlauf zuordnen')}
         </h2>
-        {total > 1 && <p className="text-xs text-slate-400 mt-1 mb-3">Serie {Math.min(position, total)} von {total}</p>}
+        {total > 1 && <p className="text-xs text-slate-400 mt-1 mb-3">{t('Serie {position} von {total}', { position: Math.min(position, total), total })}</p>}
         <div className={total > 1 ? '' : 'mt-3'}>
           <MatchStep key={unmatchedKey(item)} item={item} list={list} ids={ids} titleId={titleId} onDone={done} onSkip={skip} />
         </div>

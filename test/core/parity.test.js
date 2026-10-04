@@ -24,23 +24,29 @@ const month = (offset) => {
 };
 
 const TIME_KEY = /(^|_)at$/;
-/** Row timestamps (created_at, updated_at, read_at, generated_at) and random undo tokens differ between the two. */
-function normalize(value) {
-    if (Array.isArray(value)) return value.map(normalize);
+const MANUAL_KEY = /manual:[0-9a-f]{24}/g;
+/** Random manual work keys become <manual1>, <manual2> … by first appearance, so the grouping is still compared. */
+const manualKeys = (text, seen) => text.replace(MANUAL_KEY, (key) => {
+    if (!seen.has(key)) seen.set(key, `<manual${seen.size + 1}>`);
+    return seen.get(key);
+});
+/** Row timestamps (created_at, updated_at, read_at, generated_at), random undo tokens and manual work keys differ between the two. */
+function normalize(value, seen = new Map()) {
+    if (Array.isArray(value)) return value.map(v => normalize(v, seen));
     if (value && typeof value === 'object') {
         return Object.fromEntries(Object.entries(value).map(([k, v]) => {
             if (k === 'undo_token' && typeof v === 'string') return [k, '<token>'];
-            return [k, TIME_KEY.test(k) && v !== null ? '<time>' : normalize(v)];
+            return [k, TIME_KEY.test(k) && v !== null ? '<time>' : normalize(v, seen)];
         }));
     }
-    return value;
+    return typeof value === 'string' ? manualKeys(value, seen) : value;
 }
 
 /** One request on each side (bodies may differ, e.g. their own undo token); checks that the answers agree. */
 async function pair(user, method, url, expressBody, memoryBody) {
     const [a, b] = await Promise.all([express.client(user).raw(method, url, expressBody), memory.client(user).raw(method, url, memoryBody)]);
     assert.equal(a.status, b.status, `${user} ${method} ${url}: status ${a.status} vs ${b.status} ${a.text} | ${b.text}`);
-    if (a.body === null || b.body === null) assert.equal(a.text, b.text, `${user} ${method} ${url}`);
+    if (a.body === null || b.body === null) assert.equal(manualKeys(a.text, new Map()), manualKeys(b.text, new Map()), `${user} ${method} ${url}`);
     else assert.deepEqual(normalize(a.body), normalize(b.body), `${user} ${method} ${url}`);
     return [a.body, b.body];
 }
@@ -85,12 +91,21 @@ test('a seeded collection reads the same through Express and the in-memory core'
     await pair('ed', 'POST', '/volumes/bulk', { revert: dropA.undo_token }, { revert: dropB.undo_token });
     await both('admin', 'POST', '/volumes/bulk', { ids: [vol('5')], owners: { add: [1] }, set: { purchase_date: '2024-09-09' } });
 
+    // editions: a linked English edition priced in USD, a work group merged and left again, a volume language, CSV edition columns
+    const narutoEn = (await both('ed', 'POST', `/mangas/${naruto}/editions`, { language: 'en', region: 'US', currency: 'USD' })).id;
+    await both('ed', 'POST', '/volumes', { manga_id: narutoEn, volume_number: '1', status: 'Vorbestellt', release_date: `${month(1)}-20`, price: 9.99 });
+    await both('ed', 'PUT', `/mangas/${wish}/work`, { link_to: naruto });
+    await both('ed', 'PUT', `/mangas/${wish}/work`, { link_to: null });
+    await both('ed', 'PUT', `/volumes/${vol('5')}`, { language: 'ja' });
+    await both('ed', 'GET', `/mangas/${naruto}/gaps`);
+    await both('ed', 'POST', '/import/csv', { csv: 'Reihe;Bandnummer;Sprache;Region;Währung;Werk;Bandsprache\nCSV-Edition;1;Englisch;GB;GBP;manual:77;ja\n' });
+
     const anime = (await both('ed', 'POST', '/anime', { title: 'Parität Anime', episodes: 12 })).id;
     await both('ed', 'POST', `/anime/${anime}/watched`, { episode: 4, url: 'https://www.crunchyroll.com/de/watch/GPARITY01/a-title', remember: { service: 'crunchyroll', external_id: 'GPARITY99' } });
     await both('ed', 'POST', '/anime/resolve-link', { url: 'https://www.crunchyroll.com/series/GPARITY99/paritaet-anime' });
 
     const reads = [
-        '/anime', `/anime/${anime}`, '/anime/sync', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
+        '/anime', `/anime/${anime}`, '/anime/sync', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
         '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
         '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
         '/maintenance/quality'
@@ -99,8 +114,13 @@ test('a seeded collection reads the same through Express and the in-memory core'
         for (const url of reads) await both(user, 'GET', url);
     }
     const snapshot = await both('ed', 'GET', '/offline-snapshot');
-    assert.deepEqual(snapshot.mangas.map(m => m.title), ['CSV-Reihe', 'Kalenderreihe', 'Naruto', 'One Piece', 'Wunschreihe']);
-    assert.equal(Object.values(snapshot.details).reduce((n, m) => n + m.volumes.length, 0), 15);
+    assert.deepEqual(snapshot.mangas.map(m => m.title), ['CSV-Edition', 'CSV-Reihe', 'Kalenderreihe', 'Naruto', 'Naruto', 'One Piece', 'Wunschreihe']);
+    assert.equal(Object.values(snapshot.details).reduce((n, m) => n + m.volumes.length, 0), 17);
+    assert.deepEqual(snapshot.details[naruto].editions.map(e => [e.id, e.language, e.currency]), [[narutoEn, 'en', 'USD']]);
+    const [csvEdition] = snapshot.mangas.filter(m => m.title === 'CSV-Edition');
+    assert.deepEqual([csvEdition.language, csvEdition.region, csvEdition.currency], ['en', 'GB', 'GBP']);
+    assert.match(csvEdition.work_key, /^manual:[0-9a-f]{24}$/, 'a manual key of the file gets a fresh one');
+    assert.notEqual(snapshot.mangas.find(m => m.id === naruto).work_key, csvEdition.work_key);
     assert.ok((await both('ed', 'GET', '/release-radar')).groups.length >= 2);
 });
 

@@ -269,7 +269,7 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup', { includeUplo
     const uploads = includeUploads ? zipTools.listUploads() : null;
     const uploadBytes = uploads ? uploads.reduce((sum, u) => sum + u.size, 0) : 0;
     const dbBytes = disk.fileSize(dbPath) + disk.fileSize(dbPath + '-wal');
-    disk.ensureFreeSpace(backupsDir, Math.ceil(SNAPSHOT_SPACE_FACTOR * (dbBytes + uploadBytes)), 'den Snapshot');
+    disk.ensureFreeSpace(backupsDir, Math.ceil(SNAPSHOT_SPACE_FACTOR * (dbBytes + uploadBytes)), 'snapshot');
 
     const dbCopy = copyDatabaseToTemp();
     const created = new Date();

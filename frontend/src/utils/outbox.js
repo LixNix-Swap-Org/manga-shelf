@@ -13,6 +13,7 @@ import { applyVolumeChange, applyDetailToList } from './volumePatch.js';
 import { readQueue, queueKey } from './shoppingQueue.js';
 import { notify } from './notify.js';
 import { formatCount } from './format.js';
+import { t } from '../i18n/index.js';
 
 export const OUTBOX_KINDS = ['read', 'owned', 'status', 'purchase'];
 export const OUTBOX_SYNCED_EVENT = 'mangashelf:outbox-synced';
@@ -287,7 +288,7 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
   /** Adds an entry to the loaded outbox at once; `persisted` resolves to false when the storage refused it. */
   function addNow(raw) {
     const entry = normalizeOutboxEntry({ ...raw, ts: now() }, { now: now() });
-    if (!entry) throw new TypeError('Ungültige Outbox-Änderung');
+    if (!entry) throw new TypeError(t('Ungültige Outbox-Änderung'));
     entries = coalesceEntries(entries, entry);
     unsaved.add(entry.id);
     emit();
@@ -515,9 +516,9 @@ export function sendEntry(entry) {
 export function reportFlush(result, target = globalThis.window) {
   const replayed = result.synced.filter((e) => e.deferred);
   const refused = result.dropped.filter((e) => e.deferred);
-  if (replayed.length) notify.success(`${formatCount(replayed.length, 'Änderung', 'Änderungen')} übertragen`);
+  if (replayed.length) notify.success(t('{count} übertragen', { count: formatCount(replayed.length, 'Änderung', 'Änderungen') }));
   if (refused.length) {
-    notify.error(`${formatCount(refused.length, 'vorgemerkte Änderung', 'vorgemerkte Änderungen')} vom Server abgelehnt`);
+    notify.error(t('{count} vom Server abgelehnt', { count: formatCount(refused.length, 'vorgemerkte Änderung', 'vorgemerkte Änderungen') }));
   }
   if ((replayed.length || refused.length) && typeof target?.dispatchEvent === 'function') {
     target.dispatchEvent(new CustomEvent(OUTBOX_SYNCED_EVENT, { detail: { synced: replayed, dropped: refused } }));

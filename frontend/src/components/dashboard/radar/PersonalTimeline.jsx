@@ -2,11 +2,17 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import {
-  selectVisibleRadarGroups, radarViewState, isOrderedStatus, UPCOMING_STATUS, deliveredLabel, formatReleaseDate
+  selectVisibleRadarGroups, radarViewState, isOrderedStatus, UPCOMING_STATUS, deliveredLabel, formatReleaseDate,
+  radarGroupLabel, radarCountdownLabel
 } from '../../../utils/radarHelpers';
 import { Package, Calendar, RefreshCw, BookOpen, Check, BuildingComplex, Coins, Clock, CircleAlert, SearchX } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
-import { formatCount, formatEuro } from '../../../utils/format';
+import { formatCount, formatEuro, formatMoney } from '../../../utils/format';
+import LanguagePill from '../../common/LanguagePill';
+import { editionCurrency } from '../../../utils/editions';
+import { t, tn } from '../../../i18n/index.js';
+import { rich } from '../../../i18n/react.jsx';
+import { statusLabel } from '../../../utils/enumLabels.js';
 
 const EMPTY_SET = new Set();
 // items per month before 'Alle N anzeigen'; long months otherwise mount hundreds of cards at once
@@ -18,6 +24,7 @@ const COVER_FALLBACK = (
   </div>
 );
 
+// i18n
 const LOADING_TEXT = 'Lade deine Vorbestellungen...';
 
 function RadarCover({ item }) {
@@ -61,12 +68,12 @@ export default function PersonalTimeline({
   return (
     <>
       {/* mounted in every state and empty until a load starts, so the loading text is announced */}
-      <p role="status" className="sr-only">{view === 'loading' ? LOADING_TEXT : ''}</p>
+      <p role="status" className="sr-only">{view === 'loading' ? t(LOADING_TEXT) : ''}</p>
 
       {view === 'loading' && (
         <div aria-hidden="true" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
           <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
-          <p className="text-sm font-semibold text-white">{LOADING_TEXT}</p>
+          <p className="text-sm font-semibold text-white">{t(LOADING_TEXT)}</p>
         </div>
       )}
 
@@ -75,18 +82,18 @@ export default function PersonalTimeline({
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
             <CircleAlert className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-white mb-1">Vorbestellungen konnten nicht geladen werden</h3>
+          <h3 className="text-base font-bold text-white mb-1">{t('Vorbestellungen konnten nicht geladen werden')}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{radarError}</p>
           <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
-            Erneut laden
+            {t('Erneut laden')}
           </button>
         </div>
       )}
 
       {(view === 'empty' || view === 'list') && radarError && (
         <div role="alert" className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
-          <span>Aktualisieren fehlgeschlagen ({radarError}) – angezeigt wird der zuletzt geladene Stand.</span>
-          <button type="button" onClick={onRetry} className="btn-secondary text-xs px-3 py-1.5">Erneut laden</button>
+          <span>{t('Aktualisieren fehlgeschlagen ({error}) – angezeigt wird der zuletzt geladene Stand.', { error: radarError })}</span>
+          <button type="button" onClick={onRetry} className="btn-secondary text-xs px-3 py-1.5">{t('Erneut laden')}</button>
         </div>
       )}
 
@@ -95,18 +102,19 @@ export default function PersonalTimeline({
           <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-4 text-sky-400">
             <Package className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-white mb-1">Keine anstehenden Vorbestellungen eingetragen</h3>
+          <h3 className="text-base font-bold text-white mb-1">{t('Keine anstehenden Vorbestellungen eingetragen')}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
-            Hier erscheinen vorbestellte und bestellte Bände, Bände mit dem Status <strong>„Erscheint bald“</strong> sowie
-            fehlende Bände mit einem Erscheinungstermin ab diesem Monat. Wechsle zum Reiter <strong>„Deutsche Neuheiten“</strong>,
-            um Neuerscheinungen mit 1 Klick vorzubestellen!
+            {rich('Hier erscheinen vorbestellte und bestellte Bände, Bände mit dem Status {status} sowie fehlende Bände mit einem Erscheinungstermin ab diesem Monat. Wechsle zum Reiter {tab}, um Neuerscheinungen mit 1 Klick vorzubestellen!', {
+              status: <strong>{t('„Erscheint bald“')}</strong>,
+              tab: <strong>{t('„Deutsche Neuheiten“')}</strong>
+            })}
           </p>
           <button
             type="button"
             onClick={() => setRadarSubView('passion')}
             className="btn-primary text-xs px-4 py-2"
           >
-            Zu den deutschen Neuheiten
+            {t('Zu den deutschen Neuheiten')}
           </button>
         </div>
       )}
@@ -116,12 +124,12 @@ export default function PersonalTimeline({
           <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-4 text-sky-400">
             <SearchX className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-white mb-1">Keine Bände für diese Filter</h3>
+          <h3 className="text-base font-bold text-white mb-1">{t('Keine Bände für diese Filter')}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
-            Keiner deiner {radarData.total_releases} anstehenden Bände passt zu Suche, Status oder Verlag.
+            {tn('Keiner deiner {n} anstehenden Bände passt zu Suche, Status oder Verlag.', 'Keiner deiner {n} anstehenden Bände passt zu Suche, Status oder Verlag.', radarData.total_releases, { n: radarData.total_releases })}
           </p>
           <button type="button" onClick={onResetFilters} className="btn-primary text-xs px-4 py-2">
-            Filter zurücksetzen
+            {t('Filter zurücksetzen')}
           </button>
         </div>
       )}
@@ -132,7 +140,8 @@ export default function PersonalTimeline({
             const { visibleItems } = group;
             const capped = !expandedGroups.has(group.key) && visibleItems.length > GROUP_PREVIEW;
             const shownItems = capped ? visibleItems.slice(0, GROUP_PREVIEW) : visibleItems;
-            const groupTotalVisible = visibleItems.reduce((sum, it) => sum + (it.price || 0), 0);
+            // euro only: other edition currencies are not converted
+            const groupTotalVisible = visibleItems.reduce((sum, it) => sum + (editionCurrency(it) === 'EUR' ? (it.price || 0) : 0), 0);
             const groupPreorderedVisible = visibleItems.filter(it => isOrderedStatus(it.status)).length;
 
             return (
@@ -144,7 +153,7 @@ export default function PersonalTimeline({
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <span>{group.label}</span>
+                        <span>{radarGroupLabel(group)}</span>
                         <span className="text-xs font-mono font-normal text-slate-400">
                           ({formatCount(visibleItems.length, 'Band', 'Bände')})
                         </span>
@@ -156,7 +165,7 @@ export default function PersonalTimeline({
                     {groupPreorderedVisible > 0 && (
                       <span className="inline-flex items-center gap-1 bg-sky-500/15 border border-sky-500/30 text-sky-300 font-semibold px-2.5 py-1 rounded-xl">
                         <Package className="w-3 h-3 text-sky-400" />
-                        <span>{groupPreorderedVisible} Vorbestellt</span>
+                        <span>{t('{count} Vorbestellt', { count: groupPreorderedVisible })}</span>
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono font-bold px-2.5 py-1 rounded-xl">
@@ -194,7 +203,7 @@ export default function PersonalTimeline({
                                 : 'bg-slate-800 text-slate-300 border-slate-700'
                             }`}>
                               {isPreordered ? <Package className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
-                              <span>{item.status}</span>
+                              <span>{statusLabel(item.status)}</span>
                             </span>
 
                             {item.countdown_label && (
@@ -207,7 +216,7 @@ export default function PersonalTimeline({
                                   ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                                   : 'bg-slate-800/80 border-slate-700/60 text-slate-400'
                               }`}>
-                                {item.countdown_label}
+                                {radarCountdownLabel(item.countdown_label)}
                               </span>
                             )}
                           </div>
@@ -235,6 +244,7 @@ export default function PersonalTimeline({
                                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-bold px-2 py-0.5 rounded-lg font-mono">
                                   {getVolumeDisplayTitle(item)}
                                 </span>
+                                {item.language && <LanguagePill language={item.language} />}
                               </div>
 
                               <p className="text-[11px] text-slate-400 mt-1.5 truncate flex items-center gap-1">
@@ -255,9 +265,9 @@ export default function PersonalTimeline({
                         <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                           <div className="font-mono">
                             {item.price > 0 ? (
-                              <span className="text-sm font-extrabold text-emerald-400">{formatEuro(item.price)}</span>
+                              <span className="text-sm font-extrabold text-emerald-400">{formatMoney(item.price, editionCurrency(item))}</span>
                             ) : (
-                              <span className="text-xs text-slate-400">Preis unbekannt</span>
+                              <span className="text-xs text-slate-400">{t('Preis unbekannt')}</span>
                             )}
                           </div>
 
@@ -265,10 +275,10 @@ export default function PersonalTimeline({
                             <Link
                               to={`/manga/${item.manga_id}`}
                               className="hit-44 p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs"
-                              title="Zu den Manga-Details"
-                              aria-label={`Details: ${getVolumeDisplayTitle(item)} von ${item.manga_title}`}
+                              title={t('Zu den Manga-Details')}
+                              aria-label={t('Details: {volume} von {title}', { volume: getVolumeDisplayTitle(item), title: item.manga_title })}
                             >
-                              Details <span aria-hidden="true">↗</span>
+                              {t('Details')} <span aria-hidden="true">↗</span>
                             </Link>
 
                             {canEdit && (
@@ -276,9 +286,9 @@ export default function PersonalTimeline({
                                 type="button"
                                 onClick={() => onMarkDelivered(item)}
                                 disabled={busy}
-                                aria-label={`${actionLabel}: ${getVolumeDisplayTitle(item)} von ${item.manga_title}`}
+                                aria-label={t('{action}: {volume} von {title}', { action: actionLabel, volume: getVolumeDisplayTitle(item), title: item.manga_title })}
                                 className="hit-44 bg-emerald-600/20 hover:bg-emerald-700 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
-                                title={`Band als ${actionLabel.toLowerCase()} markieren (Status wird auf „Im Besitz“ gesetzt)`}
+                                title={t('Band als {action} markieren (Status wird auf „Im Besitz“ gesetzt)', { action: actionLabel.toLowerCase() })}
                               >
                                 {busy ? (
                                   <RefreshCw className="w-3 h-3 animate-spin" />
@@ -301,7 +311,7 @@ export default function PersonalTimeline({
                       onClick={() => setExpandedGroups((prev) => new Set(prev).add(group.key))}
                       className="btn-secondary text-xs py-1.5 px-3"
                     >
-                      Alle {visibleItems.length} anzeigen
+                      {t('Alle {count} anzeigen', { count: visibleItems.length })}
                     </button>
                   </div>
                 )}

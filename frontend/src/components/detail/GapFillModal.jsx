@@ -7,7 +7,10 @@ import { ApiError, apiFetch, readJson, TIMEOUTS, assetImgProps } from '../../uti
 import { notify, UNEXPECTED_ERROR } from '../../utils/notify';
 import { formatDate, formatEuro } from '../../utils/format';
 import { deleteVolumeRequest } from './volumeEdit/editorUtils';
+import { t } from '../../i18n/index.js';
+import { statusLabel } from '../../utils/enumLabels.js';
 
+// i18n
 const FILL_OPTIONS = {
   Fehlt: {
     title: 'Auf Einkaufsliste setzen',
@@ -51,8 +54,11 @@ export function gapFillOptions(meta) {
 /** 'YYYY-MM-DD' -> '01.02.2027', 'YYYY-MM' -> '02/2027'. */
 export const formatGermanDate = (value) => formatDate(value);
 
-/** Removes the volume a gap fill created ('Rückgängig' in the success toast); it goes to the trash like any delete. */
-export async function undoGapFill(volumeId, onSuccess, label = 'Band') {
+/**
+ * Removes the volume a gap fill created ('Rückgängig' in the success toast); it goes to the trash like any delete.
+ * Without a label the toast uses the generic 'Band in den Papierkorb gelegt' sentence.
+ */
+export async function undoGapFill(volumeId, onSuccess, label = null) {
   const result = await deleteVolumeRequest(volumeId);
   if (!result.ok) {
     if (!result.aborted) notify.error(result.error);
@@ -138,16 +144,16 @@ export default function GapFillModal({
         const created = await readJson(res);
         if (stillOpen()) onClose();
         if (onSuccess) await onSuccess();
-        notify.success(`Band ${requested} als „${targetStatus}“ erfasst`, created?.id ? {
-          action: { label: 'Rückgängig', onClick: () => undoGapFill(created.id, onSuccess, `„Band ${requested}“`) }
+        notify.success(t('Band {number} als „{status}“ erfasst', { number: requested, status: statusLabel(targetStatus) }), created?.id ? {
+          action: { label: t('Rückgängig'), onClick: () => undoGapFill(created.id, onSuccess, t('„Band {number}“', { number: requested })) }
         } : undefined);
       } else {
-        const message = await readApiError(res, 'Fehler beim Erfassen des Bands');
-        notify.error(stillOpen() ? message : `Band ${requested} konnte nicht erfasst werden: ${message}`);
+        const message = await readApiError(res, t('Fehler beim Erfassen des Bands'));
+        notify.error(stillOpen() ? message : t('Band {number} konnte nicht erfasst werden: {message}', { number: requested, message }));
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : UNEXPECTED_ERROR;
-      notify.error(stillOpen() ? message : `Band ${requested} konnte nicht erfasst werden: ${message}`);
+      const message = err instanceof ApiError ? err.message : t(UNEXPECTED_ERROR);
+      notify.error(stillOpen() ? message : t('Band {number} konnte nicht erfasst werden: {message}', { number: requested, message }));
     } finally {
       setLoadingGap(cur => (String(cur) === String(requested) ? null : cur));
     }
@@ -158,7 +164,7 @@ export default function GapFillModal({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Lücke füllen"
+      aria-label={t('Lücke füllen')}
       aria-busy={loading || undefined}
       data-busy={loading ? 'true' : undefined}
       tabIndex={-1}
@@ -175,7 +181,7 @@ export default function GapFillModal({
               +
             </div>
             <div className="min-w-0">
-              <h2 className="font-bold text-white text-base">Lücke erfassen: Band {gapNumber}</h2>
+              <h2 className="font-bold text-white text-base">{t('Lücke erfassen: Band {number}', { number: gapNumber })}</h2>
               <p className="text-xs text-slate-400 break-words [overflow-wrap:anywhere]">{manga?.title}</p>
             </div>
           </div>
@@ -183,8 +189,8 @@ export default function GapFillModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            aria-label="Schließen"
-            title="Schließen"
+            aria-label={t('Schließen')}
+            title={t('Schließen')}
             className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-lg disabled:opacity-50"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -192,13 +198,13 @@ export default function GapFillModal({
         </div>
 
         <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-          Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {gapNumber} erfassen?
+          {t('Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?', { number: gapNumber })}
         </p>
 
         {gapEditionUnconfirmed && meta && (
           <p className="mb-3 p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200 flex items-start gap-2">
             <CircleAlert className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
-            <span>Die Manga-Passion-Edition ist nur vorgeschlagen. Preis, Termin und Cover werden erst nach „Edition bestätigen“ übernommen.</span>
+            <span>{t('Die Manga-Passion-Edition ist nur vorgeschlagen. Preis, Termin und Cover werden erst nach „Edition bestätigen“ übernommen.')}</span>
           </p>
         )}
 
@@ -213,24 +219,28 @@ export default function GapFillModal({
             )}
             <div className="text-xs space-y-1 min-w-0 flex-1">
               <div className="font-bold text-white truncate flex items-center gap-1.5">
-                <span>{manga?.title} – Band {gapNumber}</span>
+                <span>{t('{title} – Band {number}', { title: manga?.title, number: gapNumber })}</span>
               </div>
               {typeof trustedMeta.price === 'number' && trustedMeta.price > 0 && (
                 <div className="text-amber-400 font-mono font-bold text-xs flex items-center gap-1">
                   <Coins className="w-3 h-3 text-amber-400" aria-hidden="true" />
-                  <span>Offizieller Preis: {formatEuro(trustedMeta.price)}</span>
+                  <span>{t('Offizieller Preis: {price}', { price: formatEuro(trustedMeta.price) })}</span>
                 </div>
               )}
               {(trustedMeta.release_date || trustedMeta.is_released === false) && (
                 <div className="text-slate-400 text-[11px] flex flex-wrap items-center gap-1">
                   <Calendar className="w-3 h-3 text-slate-400" aria-hidden="true" />
                   {trustedMeta.release_date ? (
-                    <span>{trustedMeta.is_released === false ? 'Erscheint am' : 'Erschienen am'} {formatGermanDate(trustedMeta.release_date)}</span>
+                    <span>
+                      {trustedMeta.is_released === false
+                        ? t('Erscheint am {date}', { date: formatGermanDate(trustedMeta.release_date) })
+                        : t('Erschienen am {date}', { date: formatGermanDate(trustedMeta.release_date) })}
+                    </span>
                   ) : (
-                    <span>Termin noch nicht bekannt</span>
+                    <span>{t('Termin noch nicht bekannt')}</span>
                   )}
                   <span className={`text-[9px] px-1.5 py-px rounded font-semibold ${trustedMeta.is_released === false ? 'bg-sky-500/20 text-sky-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                    {trustedMeta.is_released === false ? 'Vorbestellbar' : 'Bereits im Handel'}
+                    {trustedMeta.is_released === false ? t('Vorbestellbar') : t('Bereits im Handel')}
                   </span>
                 </div>
               )}
@@ -252,8 +262,8 @@ export default function GapFillModal({
                 <div className="flex items-center gap-2.5 text-left">
                   <Icon className="w-4 h-4 group-hover:scale-110 transition-transform" aria-hidden="true" />
                   <div>
-                    <div className="font-bold">{title}</div>
-                    <div className="text-[11px] opacity-80">{hint}</div>
+                    <div className="font-bold">{t(title)}</div>
+                    <div className="text-[11px] opacity-80">{t(hint)}</div>
                   </div>
                 </div>
                 <span className="text-base font-bold" aria-hidden="true">→</span>
@@ -269,7 +279,7 @@ export default function GapFillModal({
             onClick={onClose}
             className="btn-secondary text-xs"
           >
-            Abbrechen
+            {t('Abbrechen')}
           </button>
         </div>
       </div>

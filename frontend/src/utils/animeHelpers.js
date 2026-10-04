@@ -3,10 +3,20 @@ import { compareNatural, createSearch } from './search';
 import { formatRelative, formatTime } from './format';
 import { OFFLINE_SYNCED_EVENT, getClearGeneration } from './offlineStore';
 import links from '../../../core/watch/links.js';
+import { t, tn } from '../i18n/index.js';
 
+// i18n
 export const PROGRESS_STATUSES = ['Geplant', 'Schaue', 'Gesehen', 'Pausiert', 'Abgebrochen'];
-export const NO_STATUS = 'Ohne Status';
-export const ANIME_FILTERS = ['Alle', 'Schaue', 'Geplant', 'Gesehen', 'Pausiert', 'Abgebrochen', NO_STATUS];
+// filter chips: the pseudo-values are neutral ids, the others stored progress statuses; the label is the view's job
+export const ALL_FILTER = 'all';
+export const NO_STATUS = 'none';
+// i18n-ignore: the old German ids, still accepted
+const LEGACY_FILTERS = { Alle: ALL_FILTER, 'Ohne Status': NO_STATUS };
+// i18n-ignore: filter ids and stored progress values; the view shows them through its labels
+export const ANIME_FILTERS = [ALL_FILTER, 'Schaue', 'Geplant', 'Gesehen', 'Pausiert', 'Abgebrochen', NO_STATUS];
+/** A filter value with the old German pseudo-values ('Alle', 'Ohne Status') mapped to their neutral ids. */
+export const normalizeAnimeFilter = (filter) => (Object.prototype.hasOwnProperty.call(LEGACY_FILTERS, filter) ? LEGACY_FILTERS[filter] : filter);
+// i18n
 export const ANIME_SORTS = [
   { id: 'title', label: 'Titel' },
   { id: 'score', label: 'Bewertung' },
@@ -16,24 +26,27 @@ export const ANIME_SORTS = [
 
 export { ANIME_CACHE_KEY, ANIME_META_KEY };
 
+// i18n
 const FORMAT_LABELS = {
   TV: 'TV', TV_SHORT: 'TV (kurz)', MOVIE: 'Film', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special', MUSIC: 'Musik', UNKNOWN: 'Sonstiges'
 };
+// i18n
 const STATUS_LABELS = {
   FINISHED: 'Abgeschlossen', RELEASING: 'Läuft', NOT_YET_RELEASED: 'Angekündigt', CANCELLED: 'Abgebrochen', HIATUS: 'Pausiert'
 };
+// i18n
 const RELATION_LABELS = {
   SEQUEL: 'Fortsetzung', PREQUEL: 'Vorgeschichte', ADAPTATION: 'Adaption', SOURCE: 'Vorlage', SIDE_STORY: 'Nebengeschichte',
   SPIN_OFF: 'Spin-off', SUMMARY: 'Zusammenfassung', ALTERNATIVE: 'Alternative Fassung', CHARACTER: 'Figuren', PARENT: 'Hauptgeschichte',
   COMPILATION: 'Zusammenschnitt', CONTAINS: 'Enthält', OTHER: 'Sonstiges'
 };
 
-export const formatLabel = (format) => FORMAT_LABELS[format] || format || null;
-export const airingStatusLabel = (status) => STATUS_LABELS[status] || null;
-export const relationLabel = (relation) => RELATION_LABELS[relation] || relation;
+export const formatLabel = (format) => (FORMAT_LABELS[format] ? t(FORMAT_LABELS[format]) : format || null);
+export const airingStatusLabel = (status) => (STATUS_LABELS[status] ? t(STATUS_LABELS[status]) : null);
+export const relationLabel = (relation) => (RELATION_LABELS[relation] ? t(RELATION_LABELS[relation]) : relation);
 
 /** German title first, then the display title. */
-export const displayTitle = (anime) => (anime?.title_de || anime?.title || '').trim() || 'Ohne Titel';
+export const displayTitle = (anime) => (anime?.title_de || anime?.title || '').trim() || t('Ohne Titel');
 
 /** 'TV · 2023' */
 export const formatYearLine = (anime) => [formatLabel(anime?.format), anime?.season_year].filter(Boolean).join(' · ');
@@ -66,15 +79,15 @@ export function countdownText(nextAiring, now = new Date()) {
   const at = new Date(nextAiring.at * 1000);
   if (Number.isNaN(at.getTime()) || at.getTime() < now.getTime() - 60 * 60 * 1000) return null;
   const days = dayNumber(at) - dayNumber(now);
-  const when = days <= 0 ? `heute ${formatTime(at)}` : days === 1 ? 'morgen' : `in ${days} Tagen`;
-  return nextAiring.episode ? `Folge ${nextAiring.episode} · ${when}` : `Nächste Folge ${when}`;
+  const when = days <= 0 ? t('heute {time}', { time: formatTime(at) }) : days === 1 ? t('morgen') : tn('in {n} Tag', 'in {n} Tagen', days);
+  return nextAiring.episode ? t('Folge {episode} · {when}', { episode: nextAiring.episode, when }) : t('Nächste Folge {when}', { when });
 }
 
 /** 'Stand: vor 3 Tagen' for a stale snapshot, else null. */
 export function staleText(anime, now = Date.now()) {
   if (!anime?.stale || !anime.meta_fetched_at) return null;
   const age = formatRelative(anime.meta_fetched_at, now);
-  return age ? `Stand: ${age}` : null;
+  return age ? t('Stand: {age}', { age }) : null;
 }
 
 /** Two letters per co-watcher (like the owner badges). */
@@ -91,12 +104,13 @@ const searchIndex = createSearch((anime) => ({
 }));
 
 /** Filter (status of my progress), search and sort of the list; never mutates. */
-export function filterAnime(list, { search = '', filter = 'Alle', sort = 'title' } = {}) {
+export function filterAnime(list, { search = '', filter: rawFilter = ALL_FILTER, sort = 'title' } = {}) {
   const query = search.trim();
+  const filter = normalizeAnimeFilter(rawFilter);
   let rows = (list || []).filter((anime) => {
     const mine = anime.my_progress?.status || null;
     if (filter === NO_STATUS && mine) return false;
-    if (filter !== 'Alle' && filter !== NO_STATUS && mine !== filter) return false;
+    if (filter !== ALL_FILTER && filter !== NO_STATUS && mine !== filter) return false;
     return true;
   });
   if (query) rows = rows.filter((anime) => searchIndex.matches(anime, query));
@@ -120,11 +134,13 @@ export function filterAnime(list, { search = '', filter = 'Alle', sort = 'title'
 export function filterCounts(list) {
   const counts = Object.fromEntries(ANIME_FILTERS.map((f) => [f, 0]));
   for (const anime of list || []) {
-    counts.Alle++;
+    counts[ALL_FILTER]++;
     const mine = anime.my_progress?.status;
     if (mine && counts[mine] !== undefined) counts[mine]++;
     if (!mine) counts[NO_STATUS]++;
   }
+  // the old German ids count too
+  for (const [legacy, id] of Object.entries(LEGACY_FILTERS)) counts[legacy] = counts[id];
   return counts;
 }
 
@@ -190,12 +206,12 @@ export function continueTarget(anime, { search = true } = {}) {
   if (mine?.status === 'Gesehen') return null;
   if (anime.episodes > 0 && (mine?.episodes_watched || 0) >= anime.episodes) return null;
   const watch = anime.watch || {};
-  if (watch.next_url) return { url: watch.next_url, kind: 'episode', label: 'Weiter auf Crunchyroll' };
-  if (watch.series_url) return { url: watch.series_url, kind: 'series', label: 'Weiter auf Crunchyroll' };
+  if (watch.next_url) return { url: watch.next_url, kind: 'episode', label: t('Weiter auf Crunchyroll') };
+  if (watch.series_url) return { url: watch.series_url, kind: 'series', label: t('Weiter auf Crunchyroll') };
   if (!search) return null;
   const title = anime.title_english || anime.title_romaji || anime.title;
   const url = watch.search_url || (title ? crunchyroll()?.searchUrl(title) : null);
-  return url ? { url, kind: 'search', label: 'Auf Crunchyroll suchen' } : null;
+  return url ? { url, kind: 'search', label: t('Auf Crunchyroll suchen') } : null;
 }
 
 /** The stored list for the offline view (only for the same user and only when no logout happened since `generation`). */

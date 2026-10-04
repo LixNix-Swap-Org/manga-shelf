@@ -9,13 +9,19 @@ import {
   PROGRESS_STATUSES, displayTitle, formatYearLine, progressText, progressPercent, plusOneDisabled, countdownText, staleText,
   initials, sourceBadges, continueTarget
 } from '../../utils/animeHelpers';
+import { t, tn } from '../../i18n/index.js';
+import { animeProgressLabel } from '../../utils/enumLabels.js';
 
-const COVER_FALLBACK = (
-  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
-    <Tv className="w-10 h-10 mb-2 opacity-50 text-slate-500" aria-hidden="true" />
-    <span className="text-xs text-slate-400">Kein Cover</span>
-  </div>
-);
+// a component, so the text is translated at render time (never t() at module scope)
+function CoverFallback() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
+      <Tv className="w-10 h-10 mb-2 opacity-50 text-slate-500" aria-hidden="true" />
+      <span className="text-xs text-slate-400">{t('Kein Cover')}</span>
+    </div>
+  );
+}
+const COVER_FALLBACK = <CoverFallback />;
 
 const ANIME_TITLE_CLASS = 'line-clamp-2 break-words hyphens-auto [overflow-wrap:anywhere]';
 
@@ -45,14 +51,14 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
         type="button"
         onClick={() => onOpen(anime)}
         className="aspect-[2/3] bg-slate-950 relative overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
-        aria-label={`${title} öffnen`}
+        aria-label={t('{title} öffnen', { title })}
       >
         <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={COVER_FALLBACK} />
         <span aria-hidden="true" className="absolute top-2 left-2 right-2 flex flex-wrap gap-1 pointer-events-none">
           {sourceBadges(anime).map((label) => (
             <span key={label} className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-950/85 border border-slate-700 text-slate-200">{label}</span>
           ))}
-          {anime.manual && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-950/85 border border-slate-700 text-slate-300">manuell</span>}
+          {anime.manual && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-950/85 border border-slate-700 text-slate-300">{t('manuell')}</span>}
         </span>
       </button>
 
@@ -66,7 +72,7 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
           <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 min-w-0">
             <span className="truncate">{formatYearLine(anime) || '–'}</span>
             {anime.manga_id && (
-              <Link to={`/manga/${anime.manga_id}`} className="text-brand-300 hover:text-brand-200 shrink-0" title="Zur verknüpften Reihe" aria-label="Zur verknüpften Reihe">
+              <Link to={`/manga/${anime.manga_id}`} className="text-brand-300 hover:text-brand-200 shrink-0" title={t('Zur verknüpften Reihe')} aria-label={t('Zur verknüpften Reihe')}>
                 <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
               </Link>
             )}
@@ -75,8 +81,8 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
 
         <div>
           <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
-            <span className="min-w-0">{mine ? mine.status : 'Nicht auf meiner Liste'}</span>
-            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={`${watched} von ${anime.episodes > 0 ? anime.episodes : 'unbekannt vielen'} Folgen gesehen`}>
+            <span className="min-w-0">{mine ? animeProgressLabel(mine.status) : t('Nicht auf meiner Liste')}</span>
+            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={anime.episodes > 0 ? tn('{watched} von {n} Folgen gesehen', '{watched} von {n} Folgen gesehen', anime.episodes, { watched, n: anime.episodes }) : t('{watched} von unbekannt vielen Folgen gesehen', { watched })}>
               {progressText(watched, anime.episodes)}
             </span>
           </div>
@@ -89,18 +95,18 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
           <p className="text-[11px] text-sky-300 flex items-center gap-1">
             <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
             <span>{countdown}</span>
-            {anime.next_airing?.estimated && <span className="text-[10px] px-1 rounded bg-slate-800 text-slate-300" title="Aus dem Sendeplatz geschätzt">geschätzt</span>}
+            {anime.next_airing?.estimated && <span className="text-[10px] px-1 rounded bg-slate-800 text-slate-300" title={t('Aus dem Sendeplatz geschätzt')}>{t('geschätzt')}</span>}
           </p>
         )}
         {stale && <p className="text-[10px] text-slate-400">{stale}</p>}
 
         {others.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap" role="img" aria-label={`Schauen auch: ${others.map((o) => o.username).join(', ')}`}>
+          <div className="flex items-center gap-1 flex-wrap" role="img" aria-label={t('Schauen auch: {names}', { names: others.map((o) => o.username).join(', ') })}>
             {others.map((o) => (
               <span
                 key={o.user_id}
                 aria-hidden="true"
-                title={`${o.username}: ${o.status}, ${o.episodes_watched} Folgen`}
+                title={tn('{username}: {status}, {n} Folgen', '{username}: {status}, {n} Folgen', o.episodes_watched, { username: o.username, status: animeProgressLabel(o.status), n: o.episodes_watched })}
                 className="px-1 h-4 min-w-4 rounded-full text-[9px] font-bold flex items-center justify-center text-slate-950"
                 style={{ background: ownerColor(o.user_id) }}
               >
@@ -120,7 +126,7 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
             className="hit-44 mt-auto btn-secondary text-[11px] leading-tight py-1.5 px-2 flex items-center justify-center gap-1 min-w-0"
           >
             <Play className="w-3 h-3 shrink-0" aria-hidden="true" />
-            <span className="text-center">{next.label}</span>
+            <span className="text-center">{next.label}</span>{/* i18n-ignore: continueTarget() translates the label */}
           </a>
         )}
 
@@ -131,20 +137,20 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
               onClick={() => onPlusOne(anime)}
               disabled={disabled}
               className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label={`${title}: eine Folge mehr gesehen`}
-              title="Eine Folge mehr gesehen"
+              aria-label={t('{title}: eine Folge mehr gesehen', { title })}
+              title={t('Eine Folge mehr gesehen')}
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />1
             </button>
-            <label className="sr-only" htmlFor={`${titleId}-status`}>Status für {title}</label>
+            <label className="sr-only" htmlFor={`${titleId}-status`}>{t('Status für {title}', { title })}</label>
             <select
               id={`${titleId}-status`}
               value={mine?.status || ''}
               onChange={(e) => onStatusChange(anime, e.target.value)}
               className="input-field text-base sm:text-xs py-1.5 px-2 min-w-0 flex-1"
             >
-              {!mine && <option value="">Status wählen</option>}
-              {PROGRESS_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {!mine && <option value="">{t('Status wählen')}</option>}
+              {PROGRESS_STATUSES.map((s) => <option key={s} value={s}>{animeProgressLabel(s)}</option>)}
             </select>
           </div>
         )}

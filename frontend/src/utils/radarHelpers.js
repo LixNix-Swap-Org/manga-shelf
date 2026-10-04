@@ -1,10 +1,16 @@
-import { formatGermanDate, GERMAN_MONTHS } from './collectionHelpers.js';
+import { formatGermanDate } from './collectionHelpers.js';
+import { formatDate, monthNames } from './format.js';
 import { createSearch, prepareQuery } from './search.js';
+import { getLanguage, SOURCE_LANGUAGE, t, tn } from '../i18n/index.js';
 
 // Same groups as the backend (core/handlers/mangaPassion.js import guard, core/radar.js isPreordered)
+// i18n
 export const OWNED_STATUSES = ['Vorhanden', 'Gelesen'];
+// i18n
 export const ORDERED_STATUSES = ['Vorbestellt', 'Bestellt'];
+// i18n
 export const UPCOMING_STATUS = 'Erscheint bald';
+// i18n
 export const MISSING_STATUS = 'Fehlt';
 
 /** 'owned' | 'ordered' | 'upcoming' | 'missing' | null for a stored volume status. */
@@ -32,6 +38,7 @@ export const mpCardActions = (status) => {
 };
 
 /** Status chips of the personal radar; every radar item belongs to exactly one non-ALL chip. */
+// i18n
 export const RADAR_STATUS_CHIPS = [
   { id: 'ALL', label: 'Alle Status' },
   { id: 'Vorbestellt', label: 'Vorbestellt' },
@@ -49,7 +56,7 @@ const matchesStatusChip = (status, chip) =>
   chip === 'ALL' || !RADAR_STATUS_CHIPS.some(c => c.id === chip) || radarStatusChipOf(status) === chip;
 
 /** Label of the "received" button: a volume that was never ordered is bought, not delivered. */
-export const deliveredLabel = (status) => (status === MISSING_STATUS ? 'Gekauft' : 'Geliefert');
+export const deliveredLabel = (status) => (status === MISSING_STATUS ? t('Gekauft') : t('Geliefert'));
 
 const mpSearchIndex = createSearch(item => ({ primary: [item.title], secondary: [item.volume_number, item.publisher] }));
 
@@ -64,12 +71,13 @@ export const filterMpItems = (items, { mpPrintOnly, mpMySeriesOnly, mpPublisherF
   });
 };
 
+// i18n-ignore: group id (dateKey) of the undated entries, never shown
 const NO_DATE_KEY = 'Ohne Datum';
 const MONTH_ONLY_RE = /^(\d{4})-(\d{1,2})$/;
 
 const monthOnlyLabel = (key) => {
   const [, y, m] = MONTH_ONLY_RE.exec(key);
-  return `${GERMAN_MONTHS[Number(m) - 1] || m} ${y} (Tag noch offen)`;
+  return t('{month} {year} (Tag noch offen)', { month: monthNames('long')[Number(m) - 1] || m, year: y });
 };
 
 // month-only entries after the dated ones of that month, undated entries last
@@ -92,7 +100,7 @@ export const groupMpItemsByDate = (items) => {
     .map(dKey => ({
       dateKey: dKey,
       dateLabel: dKey === NO_DATE_KEY
-        ? 'Erscheinungsdatum unbestätigt'
+        ? t('Erscheinungsdatum unbestätigt')
         : MONTH_ONLY_RE.test(dKey) ? monthOnlyLabel(dKey) : formatGermanDate(dKey),
       items: dateMap.get(dKey)
     }));
@@ -195,13 +203,19 @@ export const withoutId = (set, id) => {
 export const localISODate = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** German short date for YYYY-MM-DD, YYYY-MM (or YYYY-M) and YYYY; other text is returned unchanged. */
+/** Short date for YYYY-MM-DD, YYYY-MM (or YYYY-M) and YYYY; other text is returned unchanged. */
 export const formatReleaseDate = (value) => {
   const text = String(value ?? '').trim();
   if (!text) return '–';
   const m = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec(text);
   if (!m) return text;
   const [, y, mo, d] = m;
+  // other languages use their own date order; German keeps the hand-built dd.mm.yyyy
+  if (mo && getLanguage() !== SOURCE_LANGUAGE) {
+    const iso = d ? `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}` : `${y}-${mo.padStart(2, '0')}`;
+    const local = formatDate(iso);
+    if (local !== iso) return local;
+  }
   if (d) return `${d.padStart(2, '0')}.${mo.padStart(2, '0')}.${y}`;
   if (mo) return `${mo.padStart(2, '0')}.${y}`;
   return y;
@@ -245,10 +259,49 @@ export const applyImportToMpItems = (items, imported, result, targetStatus) => i
 /** Message for an import the server did not apply as asked, or that joined an existing series. */
 export const importNotice = (item, result) => {
   const name = `„${item.title}“ ${item.volume_number ?? ''}`.trim();
-  if (result?.skipped_owned) return `${name} ist bereits im Regal – Status nicht geändert.`;
-  if (result?.skipped_ordered) return `${name} ist bereits bestellt – Status nicht geändert.`;
+  if (result?.skipped_owned) return t('{name} ist bereits im Regal – Status nicht geändert.', { name });
+  if (result?.skipped_ordered) return t('{name} ist bereits bestellt – Status nicht geändert.', { name });
   if (result?.series_created === false && (!item.user_manga_id || item.match_kind === 'prefix')) {
-    return `${name} wurde zur vorhandenen Reihe hinzugefügt.`;
+    return t('{name} wurde zur vorhandenen Reihe hinzugefügt.', { name });
   }
   return null;
 };
+
+/**
+ * Heading of a personal-radar month group. The server sends a German label (core/radar.js monthGroupOf); German shows
+ * it unchanged, other languages rebuild it from the group key ('YYYY-MM', 'YYYY-13' = year only, '9999-99' = no date).
+ */
+export function radarGroupLabel(group) {
+  const label = group?.label ?? '';
+  if (getLanguage() === SOURCE_LANGUAGE) return label;
+  const m = /^(\d{4})-(\d{2})$/.exec(String(group?.key ?? ''));
+  if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return t('{month} {year}', { month: monthNames('long')[Number(m[2]) - 1], year: m[1] });
+  if (m && m[2] === '13') return t('Im Jahr {year}', { year: m[1] });
+  if (m && m[1] === '9999') return t('Ohne konkretes Datum');
+  return label;
+}
+
+/**
+ * Countdown of a radar entry. The server sends a German label (core/radar.js countdownFor / monthCountdown); German
+ * shows it unchanged, other languages translate its fixed patterns. Anything else passes through.
+ */
+export function radarCountdownLabel(label) {
+  if (!label || getLanguage() === SOURCE_LANGUAGE) return label;
+  const text = String(label);
+  const fixed = {
+    'Erscheint heute!': () => t('Erscheint heute!'),
+    'Morgen!': () => t('Morgen!'),
+    'Diesen Monat': () => t('Diesen Monat'),
+    'Nächsten Monat': () => t('Nächsten Monat')
+  };
+  if (Object.prototype.hasOwnProperty.call(fixed, text)) return fixed[text]();
+  let m = /^Vor (\d+) Tage?n?$/.exec(text);
+  if (m) return tn('Vor {n} Tag', 'Vor {n} Tagen', Number(m[1]));
+  m = /^Vor (\d+) Monate?n?$/.exec(text);
+  if (m) return tn('Vor {n} Monat', 'Vor {n} Monaten', Number(m[1]));
+  m = /^In (\d+) Tagen$/.exec(text);
+  if (m) return tn('In {n} Tag', 'In {n} Tagen', Number(m[1]));
+  m = /^In (\d+) Monaten$/.exec(text);
+  if (m) return tn('In {n} Monat', 'In {n} Monaten', Number(m[1]));
+  return text;
+}

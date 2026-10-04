@@ -3,14 +3,22 @@ import { Link, useInRouterContext } from 'react-router-dom';
 import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
-import { formatCount, formatEuro } from '../../utils/format';
+import { formatCount, formatMoney } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { langFor } from '../common/lang';
 import { PRIORITY_OPTIONS, isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
 import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
+import EditionSwitcher from './EditionSwitcher';
+import EditionFields from '../common/EditionFields';
+import LanguagePill from '../common/LanguagePill';
+import { editionCurrency, editionLanguage, editionRegion, editionsOf, isMpEdition } from '../../utils/editions';
 import { joinTags, splitTags, tagKey } from '../../utils/tags';
+import { rich } from '../../i18n/react.jsx';
+import { mangaStatusLabel } from '../../utils/enumLabels';
+import { t as tr, tn } from '../../i18n/index.js';
 
+// i18n
 const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
 
 /**
@@ -77,9 +85,9 @@ export function TagEditor({ id, value, onChange, suggestions = null, offline = f
 
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-semibold text-slate-400 mb-1">Genres / Tags</label>
+      <label htmlFor={id} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Genres / Tags')}</label>
       {tags.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5 mb-2" aria-label="Gesetzte Tags">
+        <ul className="flex flex-wrap gap-1.5 mb-2" aria-label={tr('Gesetzte Tags')}>
           {tags.map((tag) => (
             <li key={tag.toLowerCase()} className="flex items-center gap-1 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-0.5 text-xs text-fuchsia-200">
               {tag}
@@ -87,7 +95,7 @@ export function TagEditor({ id, value, onChange, suggestions = null, offline = f
                 type="button"
                 onClick={() => onChange(joinTags(tags.filter((t) => t !== tag)))}
                 className="text-fuchsia-300 hover:text-white"
-                aria-label={`Tag „${tag}“ entfernen`}
+                aria-label={tr('Tag „{tag}“ entfernen', { tag })}
               >
                 <X className="w-3 h-3" aria-hidden="true" />
               </button>
@@ -99,7 +107,7 @@ export function TagEditor({ id, value, onChange, suggestions = null, offline = f
         id={id}
         type="text"
         className="input-field"
-        placeholder="z. B. Abenteuer, Fantasy – Enter fügt hinzu"
+        placeholder={tr('z. B. Abenteuer, Fantasy – Enter fügt hinzu')}
         value={draft}
         maxLength={200}
         onFocus={loadSuggestions}
@@ -119,7 +127,7 @@ export function TagEditor({ id, value, onChange, suggestions = null, offline = f
         onBlur={() => { if (draft.trim()) commit(draft); }}
       />
       {offers.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2" role="group" aria-label="Vorschläge">
+        <div className="flex flex-wrap gap-1.5 mt-2" role="group" aria-label={tr('Vorschläge')}>
           {offers.map((s) => (
             <button
               key={s.tag}
@@ -172,6 +180,7 @@ export default function MangaHeroCard({
   onCancelCoverUpload,
   onCollectingSaved,
   tagSuggestions = null,
+  onEditionsChanged,
   canFillTags = false,
   fillingTags = false,
   handleFillTags
@@ -184,6 +193,7 @@ export default function MangaHeroCard({
   const authors = splitAuthors(manga.author);
   const seriesTags = splitTags(manga.tags);
   const longDescription = isLongDescription(manga.description);
+  const currency = editionCurrency(manga);
   const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
   const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
   // the hook reads the file synchronously; clearing the input lets the same file be picked again
@@ -215,7 +225,7 @@ export default function MangaHeroCard({
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
               <BookOpen className="w-12 h-12 stroke-[1.5] text-slate-400" />
-              <span className="text-xs font-medium text-slate-400">Kein Cover vorhanden</span>
+              <span className="text-xs font-medium text-slate-400">{tr('Kein Cover vorhanden')}</span>
             </div>
           )}
 
@@ -230,7 +240,7 @@ export default function MangaHeroCard({
                 '[@media(hover:none)]:opacity-100 [@media(hover:none)]:inset-auto [@media(hover:none)]:inset-x-0 [@media(hover:none)]:bottom-0 [@media(hover:none)]:flex-row [@media(hover:none)]:py-2.5 [@media(hover:none)]:bg-black/75'}
             >
               <Upload className="w-6 h-6 text-brand-400 [@media(hover:none)]:w-4 [@media(hover:none)]:h-4" />
-              <span>Cover ändern</span>
+              <span>{tr('Cover ändern')}</span>
             </FilePickerButton>
           )}
 
@@ -242,28 +252,28 @@ export default function MangaHeroCard({
                   type="button"
                   onClick={onCancelCoverUpload}
                   className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 text-red-300 hover:text-red-200"
-                  title="Cover-Upload abbrechen"
+                  title={tr('Cover-Upload abbrechen')}
                 >
-                  <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+                  <X className="w-3.5 h-3.5" aria-hidden="true" /> {tr('Upload abbrechen')}
                 </button>
               )}
             </div>
           )}
         </div>
         {/* one live region that is always mounted: a region mounted together with its text is often not announced */}
-        <p role="status" className="sr-only">{uploadingCover ? COVER_UPLOAD_TEXT : ''}</p>
+        <p role="status" className="sr-only">{uploadingCover ? tr(COVER_UPLOAD_TEXT) : ''}</p>
 
         {/* Quick stats under cover */}
         <div className="w-full mt-4 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex justify-around text-center">
           <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Bände</span>
-            <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title="Schuber, Specials und Extras zusätzlich zu den Bänden">+{extrasCount}</span>}</span>
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block">{tr('Bände')}</span>
+            <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title={tr('Schuber, Specials und Extras zusätzlich zu den Bänden')}>+{extrasCount}</span>}</span>
           </div>
           <div aria-hidden="true" className="w-[1px] bg-slate-800"></div>
           <div>
-            <span className="text-[10px] uppercase font-semibold text-emerald-400 block">Sammlungswert</span>
+            <span className="text-[10px] uppercase font-semibold text-emerald-400 block">{tr('Sammlungswert')}</span>
             <span className="text-sm font-bold text-emerald-400 font-mono">
-              {formatEuro(totalOwnedValue)}
+              {formatMoney(totalOwnedValue, currency)}
             </span>
           </div>
         </div>
@@ -276,7 +286,7 @@ export default function MangaHeroCard({
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
               <h2 className="min-w-0 text-lg font-bold text-white flex items-center gap-2">
-                <PenLine className="w-4 h-4 text-brand-400" aria-hidden="true" /> Manga bearbeiten
+                <PenLine className="w-4 h-4 text-brand-400" aria-hidden="true" /> {tr('Manga bearbeiten')}
               </h2>
               <div className="flex gap-2 ml-auto">
                 <button 
@@ -284,21 +294,21 @@ export default function MangaHeroCard({
                   onClick={endEdit} 
                   className="btn-secondary text-xs py-1.5 px-3"
                 >
-                  Abbrechen
+                  {tr('Abbrechen')}
                 </button>
                 <button 
                   type="submit" 
                   className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                   disabled={saving}
                 >
-                  <Save className="w-3.5 h-3.5" /> {saving ? 'Speichert...' : 'Speichern'}
+                  <Save className="w-3.5 h-3.5" /> {saving ? tr('Speichert...') : tr('Speichern')}
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-400 mb-1">Titel der Reihe</label>
+                <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Titel der Reihe')}</label>
                 <div className="flex gap-2 items-center">
                   <input 
                     id={`${ids}-title`}
@@ -313,24 +323,24 @@ export default function MangaHeroCard({
                     onClick={handleEditLookup}
                     disabled={editLookingUp || !formData.title.trim()}
                     className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 bg-gradient-to-r hover:from-emerald-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white shrink-0"
-                    title="Sucht offizielle deutsche Ausgaben über Manga Passion (mit AniList-Fallback)"
+                    title={isMpEdition(formData) ? tr('Sucht offizielle deutsche Ausgaben über Manga Passion (mit AniList-Fallback)') : tr('Sucht in AniList und MyAnimeList (Manga Passion kennt nur deutsche Ausgaben)')}
                   >
                     {editLookingUp ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Suche...</span>
+                        <span>{tr('Suche...')}</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                        <span>Auto-Fill</span>
+                        <span>{tr('Auto-Fill')}</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
               <div>
-                <label htmlFor={`${ids}-alt`} className="block text-xs font-semibold text-slate-400 mb-1">Alternativer Titel</label>
+                <label htmlFor={`${ids}-alt`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Alternativer Titel')}</label>
                 <input 
                   id={`${ids}-alt`}
                   type="text" 
@@ -354,14 +364,14 @@ export default function MangaHeroCard({
               <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-semibold text-brand-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> Treffer auswählen (Manga Passion zuerst):
+                    <Sparkles className="w-3.5 h-3.5" /> {isMpEdition(formData) ? tr('Treffer auswählen (Manga Passion zuerst):') : tr('Treffer auswählen (AniList / MyAnimeList):')}
                   </span>
                   <button 
                     type="button" 
                     onClick={() => setEditLookupResults(null)}
                     className="text-slate-400 hover:text-white text-[11px]"
                   >
-                    Schließen
+                    {tr('Schließen')}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
@@ -391,7 +401,7 @@ export default function MangaHeroCard({
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {item.source === 'manga_passion' ? (
                             <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                              <Library className="w-3 h-3" aria-hidden="true" />{item.source_label || 'Manga Passion'}
+                              <Library className="w-3 h-3" aria-hidden="true" />{item.source_label || tr('Manga Passion')}
                             </span>
                           ) : lookupBadgeLabels(item).map((label) => (
                             <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
@@ -403,7 +413,7 @@ export default function MangaHeroCard({
                           {item.title}
                         </p>
                         <p className="text-[11px] text-slate-400 truncate">
-                          {item.author || item.alt_title || 'Unbekannt'}
+                          {item.author || item.alt_title || tr('Unbekannt')}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
                           {item.publisher && (
@@ -417,7 +427,7 @@ export default function MangaHeroCard({
                             </span>
                           )}
                           <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
-                            {item.status}
+                            {mangaStatusLabel(item.status)}
                           </span>
                         </div>
                       </div>
@@ -429,7 +439,7 @@ export default function MangaHeroCard({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-400 mb-1">Autor / Mangaka</label>
+                <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Autor / Mangaka')}</label>
                 <input 
                   id={`${ids}-author`}
                   type="text" 
@@ -439,7 +449,7 @@ export default function MangaHeroCard({
                 />
               </div>
               <div>
-                <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-400 mb-1">Standard-Verlag</label>
+                <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Standard-Verlag')}</label>
                 <input 
                   id={`${ids}-publisher`}
                   type="text" 
@@ -449,7 +459,7 @@ export default function MangaHeroCard({
                 />
               </div>
               <div>
-                <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-400 mb-1">Status</label>
+                <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Status')}</label>
                 <select 
                   id={`${ids}-status`}
                   className="input-field bg-slate-950"
@@ -457,11 +467,19 @@ export default function MangaHeroCard({
                   onChange={e => setFormData({ ...formData, status: e.target.value })}
                 >
                   {statusOptions.map(status => (
-                    <option key={status} value={status}>{status}</option>
+                    <option key={status} value={status}>{mangaStatusLabel(status)}</option>
                   ))}
                 </select>
               </div>
             </div>
+
+            <EditionFields
+              idPrefix={`${ids}-edition`}
+              labelClassName="block text-xs font-semibold text-slate-400 mb-1"
+              follow={false}
+              value={formData}
+              onChange={(patch) => setFormData({ ...formData, ...patch })}
+            />
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
@@ -472,27 +490,27 @@ export default function MangaHeroCard({
                   checked={Boolean(formData.wish)}
                   onChange={e => setFormData({ ...formData, wish: e.target.checked })}
                 />
-                Wunschliste
+                {tr('Wunschliste')}
               </label>
               {formData.wish && (
                 <label className="flex items-center gap-2 text-xs text-slate-400">
-                  Priorität
+                  {tr('Priorität')}
                   <select
                     id={`${ids}-wish-priority`}
                     className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
                     value={formData.wish_priority}
                     onChange={e => setFormData({ ...formData, wish_priority: e.target.value })}
                   >
-                    {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+                    {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{tr(o.label)}</option>)}
                   </select>
                 </label>
               )}
-              <span className="text-[11px] text-slate-400 basis-full">Zählt als Wunschreihe, solange noch kein Band vorhanden ist.</span>
+              <span className="text-[11px] text-slate-400 basis-full">{tr('Zählt als Wunschreihe, solange noch kein Band vorhanden ist.')}</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-400 mb-1">Geplante Gesamtbände</label>
+                <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Geplante Gesamtbände')}</label>
                 <input 
                   id={`${ids}-total`}
                   type="number" 
@@ -506,13 +524,13 @@ export default function MangaHeroCard({
                 />
               </div>
               <div>
-                <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-400 mb-1">Cover-Bild</label>
+                <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Cover-Bild')}</label>
                 <div className="flex gap-2 items-center">
                   <input 
                     id={`${ids}-cover`}
                     type="text" 
                     className="input-field flex-1" 
-                    placeholder="URL oder Datei hochladen"
+                    placeholder={tr('URL oder Datei hochladen')}
                     value={formData.cover_image} 
                     onChange={e => setFormData({ ...formData, cover_image: e.target.value })} 
                   />
@@ -520,17 +538,17 @@ export default function MangaHeroCard({
                     accept="image/*"
                     onChange={handleCoverInput}
                     disabled={uploadingCover}
-                    label="Cover-Bild hochladen"
+                    label={tr('Cover-Bild hochladen')}
                     className="btn-secondary text-xs flex items-center gap-1.5 cursor-pointer shrink-0 py-2.5 px-3"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    Bild
+                    {tr('Bild')}
                   </FilePickerButton>
                 </div>
                 {uploadingCover && (
                   <p aria-hidden="true" className="text-xs text-brand-400 mt-1 flex items-center gap-1.5">
                     <span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block"></span>
-                    {COVER_UPLOAD_TEXT}
+                    {tr(COVER_UPLOAD_TEXT)}
                   </p>
                 )}
               </div>
@@ -545,7 +563,7 @@ export default function MangaHeroCard({
             />
 
             <div>
-              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">Beschreibung</label>
+              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Beschreibung')}</label>
               <textarea 
                 id={`${ids}-description`}
                 rows="3" 
@@ -568,6 +586,7 @@ export default function MangaHeroCard({
                   {manga.alt_title && (
                     <p className="text-sm text-slate-400 mt-0.5 break-words" lang={langFor(manga.alt_title)}>{manga.alt_title}</p>
                   )}
+                  {inRouter && <EditionSwitcher manga={manga} canEdit={canEdit} isOffline={isOffline} onChanged={onEditionsChanged} />}
                 </div>
 
                 <div id="detail-hero-actions" className="flex flex-wrap items-center gap-2 xl:shrink-0">
@@ -578,9 +597,9 @@ export default function MangaHeroCard({
                           id="btn-anime-adaption"
                           to={`/?view=anime&add=${manga.id}`}
                           className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 text-fuchsia-200"
-                          title="Anime-Adaption dieser Reihe suchen und hinzufügen"
+                          title={tr('Anime-Adaption dieser Reihe suchen und hinzufügen')}
                         >
-                          <Tv className="w-3.5 h-3.5" aria-hidden="true" /> Anime-Adaption
+                          <Tv className="w-3.5 h-3.5" aria-hidden="true" /> {tr('Anime-Adaption')}
                         </Link>
                       )}
                       <button 
@@ -588,21 +607,21 @@ export default function MangaHeroCard({
                         onClick={beginEdit} 
                         className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
                       >
-                        <PenLine className="w-3.5 h-3.5" /> Bearbeiten
+                        <PenLine className="w-3.5 h-3.5" /> {tr('Bearbeiten')}
                       </button>
                       <button 
                         id="btn-delete-manga"
                         onClick={handleDeleteManga} 
                         className="btn-danger text-xs flex items-center gap-1.5 py-2 px-3"
-                        title="Reihe löschen"
-                        aria-label="Reihe löschen"
+                        title={tr('Reihe löschen')}
+                        aria-label={tr('Reihe löschen')}
                       >
                         <Trash className="w-3.5 h-3.5" />
                       </button>
                     </>
                   ) : (
                     <span className="text-xs bg-slate-800/80 text-slate-400 px-3 py-1.5 rounded-xl border border-slate-700/60 font-medium">
-                      {isOffline ? 'Nur Leseansicht (Offline)' : 'Nur Leseansicht (Gast)'}
+                      {isOffline ? tr('Nur Leseansicht (Offline)') : tr('Nur Leseansicht (Gast)')}
                     </span>
                   )}
                 </div>
@@ -611,26 +630,27 @@ export default function MangaHeroCard({
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 text-xs mb-6 min-w-0">
                 <span className="max-w-full break-words bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium">
-                  Autor:{' '}
-                  {inRouter && authors.length > 0 ? authors.map((name, i) => (
+                  {rich('Autor: {authors}', { authors: inRouter && authors.length > 0 ? authors.map((name, i) => (
                     <span key={`${i}-${name}`}>
                       {i > 0 && ', '}
                       <Link
                         to={authorShelfPath(name)}
                         className="font-bold text-white underline decoration-slate-500 underline-offset-2 hover:text-brand-300 hover:decoration-brand-400"
-                        title={`Alle Reihen von ${name} in der Sammlung`}
+                        title={tr('Alle Reihen von {name} in der Sammlung', { name })}
                       >
                         {name}
                       </Link>
                     </span>
-                  )) : <strong className="text-white">{manga.author || 'Unbekannt'}</strong>}
+                  )) : <strong className="text-white">{manga.author || tr('Unbekannt')}</strong> })}
                 </span>
                 <span className="max-w-full min-w-0 bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
                   <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-                  <span className="min-w-0 break-words">Verlag: <strong className="text-white">{manga.publisher || 'Unbekannt'}</strong></span>
+                  <span className="min-w-0 break-words">{rich('Verlag: {publisher}', { publisher: <strong className="text-white">{manga.publisher && manga.publisher !== 'Unbekannt' ? manga.publisher : tr('Unbekannt')}</strong> })}</span>
                 </span>
+                {/* the edition switcher under the title already names the language of a linked series */}
+                {editionsOf(manga).length === 0 && <LanguagePill language={editionLanguage(manga)} region={editionRegion(manga)} size="md" className="py-1 rounded-xl" />}
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">
-                  {manga.status || 'Laufend'}
+                  {mangaStatusLabel(manga.status || 'Laufend') /* i18n-ignore: stored default value */}
                 </span>
                 <CollectingControl manga={manga} canEdit={canEdit} isOffline={isOffline} onSaved={onCollectingSaved} />
                 {isWishedSeries(manga) && (
@@ -640,16 +660,16 @@ export default function MangaHeroCard({
                   </span>
                 )}
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
-                  Gesamt: {totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : 'Unbekannt'}
+                  {tr('Gesamt: {total}', { total: totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : tr('Unbekannt') })}
                 </span>
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                  Sammlungswert: <strong className="text-white font-mono">{formatEuro(totalOwnedValue)}</strong>
+                  {rich('Sammlungswert: {price}', { price: <strong className="text-white font-mono">{formatMoney(totalOwnedValue, currency)}</strong> })}
                 </span>
               </div>
 
               {seriesTags.length > 0 && (
-                <ul id="detail-tags" className="flex flex-wrap items-center gap-1.5 -mt-3 mb-6 text-xs" aria-label="Genres und Tags">
+                <ul id="detail-tags" className="flex flex-wrap items-center gap-1.5 -mt-3 mb-6 text-xs" aria-label={tr('Genres und Tags')}>
                   <li aria-hidden="true"><Tag className="w-3.5 h-3.5 text-fuchsia-400" /></li>
                   {seriesTags.map((tag) => (
                     <li key={tag.toLowerCase()}>
@@ -657,7 +677,7 @@ export default function MangaHeroCard({
                         <Link
                           to={tagShelfPath(tag)}
                           className="inline-block rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 px-2 py-0.5 text-fuchsia-200 hover:bg-fuchsia-500/25"
-                          title={`Alle Reihen mit „${tag}“`}
+                          title={tr('Alle Reihen mit „{tag}“', { tag })}
                         >
                           {tag}
                         </Link>
@@ -676,25 +696,25 @@ export default function MangaHeroCard({
                     onClick={handleFillTags}
                     disabled={fillingTags}
                     className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
-                    title="Genres aus der verknüpften Manga-Passion-Edition übernehmen"
+                    title={tr('Genres aus der verknüpften Manga-Passion-Edition übernehmen')}
                   >
                     <Tag className="w-3.5 h-3.5 text-fuchsia-400" aria-hidden="true" />
-                    {fillingTags ? 'Genres werden geladen…' : 'Genres nachladen'}
+                    {fillingTags ? tr('Genres werden geladen…') : tr('Genres nachladen')}
                   </button>
                 </div>
               )}
 
               {/* Description */}
               <div className="mb-6">
-                <h2 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Beschreibung</h2>
+                <h2 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">{tr('Beschreibung')}</h2>
                 <div className="max-w-2xl bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60">
                   <p
                     id={`${ids}-description-text`}
                     className={`text-sm text-slate-300 leading-relaxed whitespace-pre-line break-words ${longDescription && !descriptionOpen ? 'line-clamp-5 md:line-clamp-none' : ''}`}
                   >
                     {manga.description || (canEdit
-                      ? 'Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.'
-                      : 'Keine Beschreibung vorhanden.')}
+                      ? tr('Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.')
+                      : tr('Keine Beschreibung vorhanden.'))}
                   </p>
                   {longDescription && (
                     <button
@@ -705,7 +725,7 @@ export default function MangaHeroCard({
                       onClick={() => setDescriptionOpen((open) => !open)}
                       className="hit-44 md:hidden mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-300 hover:text-brand-200"
                     >
-                      {descriptionOpen ? 'Weniger anzeigen' : 'Mehr anzeigen'}
+                      {descriptionOpen ? tr('Weniger anzeigen') : tr('Mehr anzeigen')}
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${descriptionOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                     </button>
                   )}
@@ -718,20 +738,20 @@ export default function MangaHeroCard({
               <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs mb-2">
                 <span className="font-semibold text-slate-300 flex items-center gap-1.5">
                   <CircleCheck className="w-4 h-4 text-emerald-400" />
-                  Sammlungs-Fortschritt
+                  {tr('Sammlungs-Fortschritt')}
                 </span>
                 <span className="text-slate-400 font-mono">
-                  <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : 'im Besitz'}{extrasCount > 0 ? ` + ${extrasCount} Extras` : ''} 
+                  <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extras', '+ {n} Extras', extrasCount)}` : ''} 
                   {completionPct !== null && ` (${completionPct}%)`}
                 </span>
               </div>
               <div
                 role="progressbar"
-                aria-label="Sammlungs-Fortschritt"
+                aria-label={tr('Sammlungs-Fortschritt')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={completionPct ?? 0}
-                aria-valuetext={totalTarget > 0 ? `${ownedCount} von ${formatCount(totalTarget, 'Band', 'Bänden')}` : `${formatCount(ownedCount, 'Band', 'Bände')} im Besitz`}
+                aria-valuetext={totalTarget > 0 ? tr('{owned} von {total}', { owned: ownedCount, total: formatCount(totalTarget, 'Band', 'Bänden') }) : tr('{volumes} im Besitz', { volumes: formatCount(ownedCount, 'Band', 'Bände') })}
                 className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800"
               >
                 <div 

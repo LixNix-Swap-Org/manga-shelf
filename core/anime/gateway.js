@@ -1,7 +1,7 @@
 // Anime metadata gateway: AniList and MyAnimeList (official API with a client id,
 // Jikan without) behind one budget, one queue and one cache. Personal keys go first for their owner, then the shared
 // pool; a paused or broken source is replaced by the other one, then by the cache.
-const { HttpError } = require('../errors');
+const { HttpError, msg } = require('../errors');
 const { credentialsOf } = require('../sources/credentials');
 const { settings } = require('./settings');
 const { createBudget } = require('./budget');
@@ -757,7 +757,7 @@ async function manualRefresh(ctx, id) {
     const now = nowMs(ctx);
     if (now - last < MANUAL_REFRESH_MS) {
         const retry = Math.ceil((MANUAL_REFRESH_MS - (now - last)) / 1000);
-        throw new HttpError(429, `Dieser Eintrag wurde gerade aktualisiert. Bitte in ${retry} s erneut versuchen.`, 'REFRESH_TOO_SOON', { retry_after: retry });
+        throw new HttpError(429, msg('Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.', { seconds: retry }), 'REFRESH_TOO_SOON', { retry_after: retry });
     }
     const leave = enterInteractive(ctx);
     s.manualRefresh.set(id, now);

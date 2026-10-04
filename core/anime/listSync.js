@@ -88,7 +88,7 @@ async function setEnabled(ctx, userId, enabled) {
     } catch (err) {
         if (!(err instanceof SourceError)) throw err;
         if (err.kind === 'notoken') throw new HttpError(400, 'Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).', 'NO_TOKEN');
-        if (err.kind === 'auth') throw new HttpError(400, `${TEXT.rejected}.`, 'TOKEN_REJECTED');
+        if (err.kind === 'auth') throw new HttpError(400, 'AniList lehnt den Token ab – bitte im Konto neu eintragen.', 'TOKEN_REJECTED');
         throw new HttpError(503, 'AniList ist gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
     }
     writeSync(ctx, userId, { enabled: 1, external_user_id: String(viewer.id), last_error: null });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useSyncExternalStore, lazy, Suspense } from 'react';
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useSyncExternalStore, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { saveUser, loadUser, loadMeta, clearOfflineData, syncOfflineCopy } from './utils/offlineStore';
 import { SESSION_EXPIRED_EVENT, clearMangaListCache } from './hooks/useMangaList';
@@ -25,6 +25,10 @@ import {
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import { useRevealFocusedField } from './hooks/useKeyboardOpen';
 import useWatchSync from './app/watch/useWatchSync';
+import { useLanguage } from './i18n/react.jsx';
+import { clearPendingLanguage, setLanguageTarget, syncUserLanguage } from './i18n/preference.js';
+import { t } from './i18n/index.js';
+import { setDefaultLanguage } from './utils/editions';
 
 /** Starts loading a route chunk now; the lazy() factory reuses the request and retries once if it failed. */
 function preloadable(load, startNow) {
@@ -65,7 +69,7 @@ function LoadingScreen() {
     <div className="flex min-h-screen items-center justify-center bg-slate-950 text-brand-400">
       <div role="status" className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" aria-hidden="true" />
-        <span className="text-xs font-medium text-slate-400">Manga Shelf wird geladen...</span>
+        <span className="text-xs font-medium text-slate-400">{t('Manga Shelf wird geladen...')}</span>
       </div>
     </div>
   );
@@ -87,7 +91,9 @@ function LoginRoute({ user, onLogin, notice, onRetry, hasServer }) {
   if (user) return <Navigate to={safeRedirectTarget(location.state?.from)} replace />;
   // the standalone mode has no login: its device screen opens the collection
   if (!hasServer || isLocalMode()) return <Navigate to="/server" replace />;
-  return <Login onLogin={onLogin} notice={notice} onRetry={onRetry} />;
+  // the notice state keeps the German source text (compared in App); it is translated when shown
+  // i18n-dynamic: MESSAGES of appShell.js, OUTBOX_QUEUED and the LOCAL_FAILED text are marked or translated
+  return <Login onLogin={onLogin} notice={notice ? t(notice) : notice} onRetry={onRetry} />;
 }
 
 // app build: a manga-shelf://connect link opens the server screen, which takes the link from deepLink.js; a shared
@@ -132,6 +138,7 @@ function ScrollTopAfterSetup() {
 const OPEN_API_KEYS_EVENT = 'mangashelf:open-api-keys';
 // the mounted shelf opens the dialog in place, so the history entries of its open dialogs stay as they are
 const OPEN_ACCOUNT_EVENT = 'mangashelf:open-account';
+// i18n
 const KEYS_OFFLINE = 'Quellen & Schlüssel lassen sich nur mit Verbindung zum Server bearbeiten.';
 
 function ApiKeysMenuListener({ user }) {
@@ -144,7 +151,7 @@ function ApiKeysMenuListener({ user }) {
     const onKeys = (event) => {
       event.preventDefault();
       if (offline) {
-        notify.info(KEYS_OFFLINE);
+        notify.info(t(KEYS_OFFLINE));
         return;
       }
       const onShelf = pathname === '/';
@@ -160,26 +167,35 @@ function ApiKeysMenuListener({ user }) {
   return null;
 }
 
+// i18n
 const OUTBOX_QUEUED = 'Vorgemerkte Änderungen werden bei deiner nächsten Anmeldung auf diesem Gerät übertragen.';
 
 const sameUser = (a, b) => Boolean(a && b) && a.id === b.id && a.username === b.username
-  && a.role === b.role && Boolean(a.offline) === Boolean(b.offline) && Boolean(a.local) === Boolean(b.local);
+  && a.role === b.role && Boolean(a.offline) === Boolean(b.offline) && Boolean(a.local) === Boolean(b.local)
+  && (a.default_language ?? null) === (b.default_language ?? null);
 
+// i18n
 const LOCAL_FAILED = 'Die Sammlung auf diesem Gerät konnte nicht geöffnet werden';
 
 /** Standalone mode: the core on the device answers for the local profile (role admin, no login). */
 async function resolveLocal() {
   try {
     const rt = await getLocalRuntime();
-    return { status: 'local', user: { ...rt.getProfile(), local: true }, storeStatus: rt.status?.() ?? null };
+    // the device core's /auth/me adds the language settings of the profile row
+    const me = await rt.request('GET', '/api/auth/me').catch(() => null);
+    const user = me?.status === 200 && me.body?.user ? me.body.user : { ...rt.getProfile(), local: true };
+    return { status: 'local', user, storeStatus: rt.status?.() ?? null };
   } catch (e) {
-    return { status: 'localFailed', user: null, error: `${LOCAL_FAILED}: ${e?.message || e}` };
+    return { status: 'localFailed', user: null, error: `${t(LOCAL_FAILED)}: ${e?.message || e}` };
   }
 }
 
 const localModeNow = () => isLocalMode();
 
 const timed = (url) => apiFetch(url, { timeout: STARTUP_TIMEOUT_MS }).catch(() => null);
+
+// users.locale wins over the device; a user object without the field (older server, test fixtures) changes nothing
+const adoptLanguage = (user) => (user && 'locale' in user ? syncUserLanguage(user).catch(() => {}) : null);
 
 async function offlineFallback() {
   const cached = await loadUser();
@@ -259,11 +275,11 @@ function useLocalStoreNotices() {
         shown.current[slot] = null;
       }
     };
-    const reload = { label: 'Neu laden', onClick: reloadPage };
-    toggle('save', Boolean(status.saveError) && !status.conflict, () => notify.error(SAVE_FAILED_TEXT, { duration: 0 }));
+    const reload = { label: t('Neu laden'), onClick: reloadPage };
+    toggle('save', Boolean(status.saveError) && !status.conflict, () => notify.error(t(SAVE_FAILED_TEXT), { duration: 0 }));
     toggle('lock', Boolean(status.follower || status.conflict), () => (status.conflict
-      ? notify.error(CONFLICT_TEXT, { duration: 0, action: reload })
-      : notify.info(LOCKED_TEXT, { duration: 0, action: reload })));
+      ? notify.error(t(CONFLICT_TEXT), { duration: 0, action: reload })
+      : notify.info(t(LOCKED_TEXT), { duration: 0, action: reload })));
   }, []);
 }
 
@@ -282,9 +298,15 @@ function App() {
   const expiring = useRef(null);
   const replacing = useRef(null);
   const showStoreStatus = useLocalStoreNotices();
+  // a language switch remounts everything below (open dialogs close); session state and toasts stay
+  const language = useLanguage();
   useRevealFocusedField();
 
-  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    userRef.current = user;
+    setLanguageTarget(user);
+    setDefaultLanguage(user?.default_language);
+  }, [user]);
 
   // the pages of the previous session have unmounted by now (their cleanups ran in the commit): drop what they stored
   const signedIn = Boolean(user);
@@ -300,6 +322,8 @@ function App() {
   }, [signedIn]);
 
   const applyUser = useCallback((next) => {
+    // before the pages render, so the pills of the first render already know the account's default
+    setDefaultLanguage(next?.default_language);
     setUser((prev) => (sameUser(prev, next) ? prev : next));
   }, []);
 
@@ -320,9 +344,17 @@ function App() {
       if (outcome.status === 'unauthorized') {
         const wasSignedIn = Boolean(userRef.current);
         dropRejectedToken();
+        if (wasSignedIn) clearPendingLanguage();
         await clearSessionData();
         if (seq !== runSeq.current) return outcome;
         if (wasSignedIn) setNotice(MESSAGES.sessionExpired);
+      }
+
+      // the language switches before the user is set, so the signed-in pages mount once in it
+      const adopting = adoptLanguage(outcome.user);
+      if (adopting) {
+        await adopting;
+        if (seq !== runSeq.current) return outcome;
       }
 
       switch (outcome.status) {
@@ -382,6 +414,7 @@ function App() {
     expiring.current = (async () => {
       cancelAllDownloads();
       dropRejectedToken();
+      clearPendingLanguage();
       await clearSessionData();
       setNotice(MESSAGES.sessionExpired);
       setLastSync(null);
@@ -404,7 +437,7 @@ function App() {
   // standalone in the browser build: a source without CORS headers is named once instead of failing silently
   useEffect(() => {
     if (!isAppMode()) return undefined;
-    onSourceBlocked((host) => notify.info(`${host} lässt Anfragen aus dem Browser nicht zu (CORS) – diese Quelle funktioniert in der App oder mit einem Server.`));
+    onSourceBlocked((host) => notify.info(t('{host} lässt Anfragen aus dem Browser nicht zu (CORS) – diese Quelle funktioniert in der App oder mit einem Server.', { host })));
     return () => onSourceBlocked(null);
   }, []);
 
@@ -425,6 +458,7 @@ function App() {
       if (data?.user && userRef.current && !userRef.current.offline) {
         applyUser(data.user);
         saveUser(data.user);
+        adoptLanguage(data.user);
       }
       syncOfflineCopy();
     };
@@ -643,6 +677,7 @@ function App() {
       markLogoutPending();
       const done = isAppMode() ? await flushPendingLogout() : await postLogout();
       if (done) clearLogoutPending();
+      clearPendingLanguage();
       await clearSessionData();
       setNotice(!done ? MESSAGES.logoutPending : (queued > 0 ? OUTBOX_QUEUED : null));
       setLastSync(null);
@@ -680,7 +715,7 @@ function App() {
                 <Route
                   path="/server"
                   element={localMode
-                    ? <LocalScreen user={user} notice={notice} onOpen={handleOpenLocal} onReplaced={handleLocalReplaced} onTakeover={handleTakeover} onLeave={handleLeaveLocal} onSwitchProfile={handleSwitchProfile} />
+                    ? <LocalScreen user={user} notice={notice ? t(notice) : notice} onOpen={handleOpenLocal} onReplaced={handleLocalReplaced} onTakeover={handleTakeover} onLeave={handleLeaveLocal} onSwitchProfile={handleSwitchProfile} />
                     : <ServerScreen user={user} onSelect={handleServerSelected} onUseLocal={handleOpenLocal} onTakeover={handleTakeover} />}
                 />
               )}
@@ -697,7 +732,7 @@ function App() {
 
   return (
     <>
-      {content}
+      <Fragment key={language}>{content}</Fragment>
       <Toaster />
     </>
   );

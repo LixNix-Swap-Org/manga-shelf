@@ -42,7 +42,7 @@ const isGenerated = (rel) => GENERATED_PREFIXES.some(prefix => rel.startsWith(pr
 
 function section(title) {
     const start = AGENTS.indexOf(title);
-    assert.ok(start >= 0, `Abschnitt "${title}" fehlt in AGENTS.md`);
+    assert.ok(start >= 0, `section "${title}" missing in AGENTS.md`);
     const next = AGENTS.slice(start + title.length).search(/\n#{2,3} /);
     return next < 0 ? AGENTS.slice(start) : AGENTS.slice(start, start + title.length + next);
 }
@@ -73,16 +73,16 @@ function pathCandidates(text) {
 
 /** Paths of the file-map tree, assembled from the indentation of "├── "/"└── " lines. */
 function treePaths() {
-    const block = section('## 2. Verzeichnis');
+    const block = section('## 2. Directory');
     const fence = block.match(/```text\n([\s\S]*?)```/);
-    assert.ok(fence, 'Datei-Landkarte ohne ```text-Block');
+    assert.ok(fence, 'file map without a ```text block');
     const stack = [];
     const paths = [];
     for (const line of fence[1].split('\n')) {
         const marker = line.search(/[├└]── /);
         if (marker < 0) continue;
         const depth = marker / 4;
-        assert.ok(Number.isInteger(depth), `schiefe Einrückung: ${line}`);
+        assert.ok(Number.isInteger(depth), `uneven indentation: ${line}`);
         const name = line.slice(marker + 4).split(/\s+#|\s{2,}/)[0].trim();
         stack.length = depth;
         stack.push(name);
@@ -119,7 +119,7 @@ test.after(() => {
 
 test('every path of the file map exists', () => {
     const paths = treePaths();
-    assert.ok(paths.length > 100, `zu wenige Einträge in der Landkarte (${paths.length})`);
+    assert.ok(paths.length > 100, `too few entries in the file map (${paths.length})`);
     const missing = paths.filter(p => !isGenerated(p) && !exists(p));
     assert.deepEqual(missing, []);
 });
@@ -139,7 +139,7 @@ test('every file path mentioned in AGENTS.md exists', () => {
 });
 
 test('the path check catches a deleted file', () => {
-    assert.deepEqual(pathCandidates('Siehe `routes/mangas.js` und `core/lib/trash.js`, nicht `/api/mangas`.'), ['routes/mangas.js', 'core/lib/trash.js']);
+    assert.deepEqual(pathCandidates('See `routes/mangas.js` and `core/lib/trash.js`, not `/api/mangas`.'), ['routes/mangas.js', 'core/lib/trash.js']);
     assert.equal(BASES.some(base => exists(base + 'routes/mangas.js')), false);
 });
 
@@ -149,7 +149,7 @@ test('no removed file or replaced rule is mentioned', () => {
 
 test('the migration table matches core/schema.js migrationList()', () => {
     const { migrationList, LATEST_SCHEMA_VERSION } = require('../core/schema');
-    const block = section('### Migrationen');
+    const block = section('### Migrations');
     const documented = [...block.matchAll(/^\|\s*(\d+)\s*\|\s*`([a-z0-9_]+)`\s*\|/gm)].map(m => `${m[1]} ${m[2]}`);
     assert.deepEqual(documented, migrationList().map(m => `${m.version} ${m.name}`));
     assert.equal(Number(documented[documented.length - 1].split(' ')[0]), LATEST_SCHEMA_VERSION);
@@ -157,7 +157,7 @@ test('the migration table matches core/schema.js migrationList()', () => {
 
 test('the console table matches services/console.js COMMANDS', () => {
     const { COMMANDS } = require('../services/console');
-    const block = section('### 🔹 Fall S');
+    const block = section('### 🔹 Case S');
     const documented = [...block.matchAll(/^\|\s*`([^`]+)`\s*\|([^|]*)\|/gm)].map(m => {
         const aliases = [...m[2].matchAll(/`([^`]+)`/g)].map(a => a[1]);
         return [m[1], ...aliases].join(' ');
@@ -169,12 +169,12 @@ test('every endpoint is documented in §5 and every documented endpoint exists',
     const { routes } = require('../core/routes');
     const actual = new Set([...routes.map(r => `${r.method} /api${r.path}`), ...serverRoutes()]);
     const documented = documentedRoutes();
-    assert.deepEqual([...actual].filter(r => !documented.has(r)).sort(), [], 'Endpunkte ohne Zeile in §5');
-    assert.deepEqual([...documented].filter(r => !actual.has(r)).sort(), [], 'Zeilen in §5 ohne Endpunkt');
+    assert.deepEqual([...actual].filter(r => !documented.has(r)).sort(), [], 'endpoints without a row in §5');
+    assert.deepEqual([...documented].filter(r => !actual.has(r)).sort(), [], 'rows in §5 without an endpoint');
 });
 
 test('no file-map comment is cut off mid-sentence', () => {
-    const fence = section('## 2. Verzeichnis').match(/```text\n([\s\S]*?)```/)[1];
+    const fence = section('## 2. Directory').match(/```text\n([\s\S]*?)```/)[1];
     const count = (text, ch) => text.split(ch).length - 1;
     const broken = fence.split('\n').filter(line => /[├└│]/.test(line) && line.includes(' # ')).filter(line => {
         const comment = line.slice(line.indexOf(' # ') + 3);
@@ -187,38 +187,38 @@ test('no file-map comment is cut off mid-sentence', () => {
 test('Gotcha 22 states the size limit of core/anime/request.js', () => {
     const source = fs.readFileSync(path.join(ROOT, 'core/anime/request.js'), 'utf8');
     const mb = Number(/const MAX_BYTES = (\d+) \* 1024 \* 1024;/.exec(source)[1]);
-    const gotcha = AGENTS.slice(AGENTS.indexOf('22. **ISBN-'), AGENTS.indexOf('\n23. '));
-    assert.match(gotcha, new RegExp(`core/anime/request\\.js\`[^;]*\\b${mb}-MB-Grenze`));
-    assert.doesNotMatch(gotcha, /AniList über `fetch`/);
+    const gotcha = AGENTS.slice(AGENTS.indexOf('22. **ISBN'), AGENTS.indexOf('\n23. '));
+    assert.match(gotcha, new RegExp(`core/anime/request\\.js\`[^;]*\\b${mb} MB limit`));
+    assert.doesNotMatch(gotcha, /AniList via `fetch`/);
 });
 
 test('§7 names every place that loads a .env file', () => {
-    const block = section('### Umgebungsvariablen');
+    const block = section('### Environment variables');
     const loaders = ['index.js', 'scripts/admin.js', 'scripts/server-bin/main.js']
         .filter(rel => /dotenv|loadDotenv\(/.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
     assert.equal(loaders.length, 3);
-    for (const rel of loaders) assert.ok(block.includes(`\`${rel}\``), `${rel} fehlt in §7 Umgebungsvariablen`);
-    assert.doesNotMatch(block, /\.env` lädt nur `index\.js`/);
+    for (const rel of loaders) assert.ok(block.includes(`\`${rel}\``), `${rel} missing in §7 Environment variables`);
+    assert.doesNotMatch(block, /\.env` is read only by `index\.js`/);
 });
 
 test('§7 says the desktop installers build only on main and in pull requests', () => {
     const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
     assert.match(ci, /installers: \$\{\{ github\.ref == 'refs\/heads\/main' \|\| github\.event_name == 'pull_request' \}\}/);
-    const line = AGENTS.split('\n').find(l => l.startsWith('* **Bauen bei jedem Push:**'));
-    assert.match(line, /`desktop-<OS>`.*?nur auf `main` und in Pull Requests/);
+    const line = AGENTS.split('\n').find(l => l.startsWith('* **Build on every push:**'));
+    assert.match(line, /`desktop-<OS>`.*?only on `main` and in pull requests/);
 });
 
 test('Gotcha 31 lists the console passwort-reset among the feed revocations', () => {
     assert.match(fs.readFileSync(path.join(ROOT, 'services/console.js'), 'utf8'), /revokeFeedTokens\(db, user\.id\)/);
-    const gotcha = AGENTS.slice(AGENTS.indexOf('31. **Systemseite'), AGENTS.indexOf('\n32. '));
-    assert.match(gotcha, /Konsole `passwort-reset` ebenso \(`services\/console\.js`\)/);
-    assert.doesNotMatch(gotcha, /lässt die Abo-Adresse noch bestehen/);
+    const gotcha = AGENTS.slice(AGENTS.indexOf('31. **System page'), AGENTS.indexOf('\n32. '));
+    assert.match(gotcha, /console `passwort-reset` likewise \(`services\/console\.js`\)/);
+    assert.doesNotMatch(gotcha, /still leaves the feed address/);
 });
 
 test('the device sanitiser named in §4 is the one replaceDatabase runs', () => {
     const runtime = fs.readFileSync(path.join(ROOT, 'frontend/src/local/runtime.js'), 'utf8');
     assert.match(runtime, /sanitizeImportedDatabase\(/);
-    const block = section('### Frontend-Architektur & Betriebsarten');
+    const block = section('### Frontend architecture & operating modes');
     assert.match(block, /`sanitizeImportedDatabase\(conn\)` \(`local\/sanitize\.js`\)/);
     assert.doesNotMatch(AGENTS, /sanitizePulledDatabase/);
 });

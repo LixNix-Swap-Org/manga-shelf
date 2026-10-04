@@ -1,19 +1,27 @@
 // Gap check and gap import of a series against its linked Manga Passion edition.
 const { inferVolumeType, volumeNumberOf } = require('../lib/volumeType');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
+const { HttpError, msg, msgList, payloadMsg } = require('../errors');
 const { normalizeTags } = require('../lib/tags');
+const { isMpLanguage } = require('../lib/language');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 const {
   searchMangaPassionEditions, getEditionDetailsAndVolumes, linkRecommendedEdition, toEditionId, downloadRemoteImageToUploads
 } = require('./client');
 const {
-  classifyOfficialVolume, officialVolumeNumber, resolveOfficialGap, knownPublisher, MP_UNREACHABLE_MESSAGE, MP_EDITION_NOT_FOUND_MESSAGE
+  classifyOfficialVolume, officialVolumeNumber, resolveOfficialGap, knownPublisher
 } = require('./classify');
 
 // Statuses a gap import may write. 'Vorhanden' is excluded on purpose: it needs an owner (core/lib/owners.js).
 const GAP_IMPORT_STATUSES = ['Vorbestellt', 'Fehlt', 'Erscheint bald', 'Bestellt'];
 const MAX_VOLUME_NUMBER_LENGTH = 80;
+// Payload texts (also used by autofill.js); literal so the extractor collects them, the same text as classify.js MP_*_MESSAGE
+const MP_PAYLOAD = {
+  unreachable: msg('Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.'),
+  editionNotFound: msg('Manga-Passion Edition nicht gefunden oder nicht verfügbar.'),
+  noEdition: msg('Keine passende deutsche Edition auf Manga-Passion gefunden.')
+};
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -34,11 +42,15 @@ const userVolumeKey = (type, volumeNumber) => `${type}:${canonicalVolumeNumber(v
  * options: { edition_id, force_refresh, signal, persist }. persist: false (read-only roles) never stores an
  * automatically found edition link.
  */
+/** The volumes whose effective language (own, else the series') is the German edition's. */
+const germanVolumes = (manga, volumes) => volumes.filter(v => isMpLanguage(v.language || manga.language));
+
 async function reconcileMangaGaps(ctx, mangaId, options = {}) {
   const manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   if (!manga) throw httpError(404, 'Manga nicht gefunden');
 
-  const userVolumes = ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId);
+  // a volume with its own language does not cover a number of the German edition
+  const userVolumes = germanVolumes(manga, ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId));
 
   let editionId = options.edition_id || manga.manga_passion_id;
   let candidateEditions = [];
@@ -54,7 +66,7 @@ async function reconcileMangaGaps(ctx, mangaId, options = {}) {
       forceRefresh: Boolean(options.force_refresh)
     });
     if (searchRes.unavailable) {
-      return { success: false, matched: false, unavailable: true, message: MP_UNREACHABLE_MESSAGE, candidate_editions: [] };
+      return { success: false, matched: false, unavailable: true, ...payloadMsg('message', MP_PAYLOAD.unreachable), candidate_editions: [] };
     }
     candidateEditions = searchRes.candidates;
     const linked = linkRecommendedEdition(ctx, manga, searchRes, { persist: options.persist !== false });
@@ -66,7 +78,7 @@ async function reconcileMangaGaps(ctx, mangaId, options = {}) {
     return {
       success: false,
       matched: false,
-      message: 'Keine passende deutsche Edition auf Manga-Passion gefunden.',
+      ...payloadMsg('message', MP_PAYLOAD.noEdition),
       candidate_editions: candidateEditions
     };
   }
@@ -76,7 +88,7 @@ async function reconcileMangaGaps(ctx, mangaId, options = {}) {
     return {
       success: false,
       matched: false,
-      message: MP_EDITION_NOT_FOUND_MESSAGE,
+      ...payloadMsg('message', MP_PAYLOAD.editionNotFound),
       candidate_editions: candidateEditions
     };
   }
@@ -85,7 +97,7 @@ async function reconcileMangaGaps(ctx, mangaId, options = {}) {
       success: false,
       matched: false,
       unavailable: true,
-      message: MP_UNREACHABLE_MESSAGE,
+      ...payloadMsg('message', MP_PAYLOAD.unreachable),
       candidate_editions: candidateEditions
     };
   }
@@ -213,7 +225,9 @@ async function reconcileMangaGaps(ctx, mangaId, options = {}) {
       official_total: announcedTotal,
       edition_title: edition ? edition.title : manga.title,
       publisher: edition ? edition.publisher : manga.publisher,
-      message: `Deine Sammlung gibt ${manga.total_volumes} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst ${announcedTotal} Bände.`
+      ...payloadMsg('message', msg('Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.', {
+        db_total: manga.total_volumes, official_total: announcedTotal
+      }))
     };
   }
 
@@ -274,7 +288,7 @@ function planGapEntry(entry, officialVolumes) {
 
 async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'Fehlt', editionId = null) {
   if (!GAP_IMPORT_STATUSES.includes(targetStatus)) {
-    throw httpError(400, 'Ungültiger Zielstatus (erlaubt: ' + GAP_IMPORT_STATUSES.join(', ') + ')');
+    throw new HttpError(400, msg('Ungültiger Zielstatus (erlaubt: {allowed})', { allowed: msgList(GAP_IMPORT_STATUSES) }));
   }
   const manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   if (!manga) throw httpError(404, 'Manga nicht gefunden');
@@ -290,7 +304,7 @@ async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'F
 
   const readExisting = () => {
     const map = new Map();
-    ctx.db.prepare('SELECT id, volume_number, status, type, notes, cover_image FROM volumes WHERE manga_id = ?').all(mangaId).forEach(v => {
+    ctx.db.prepare('SELECT id, volume_number, status, type, notes, cover_image, language FROM volumes WHERE manga_id = ?').all(mangaId).forEach(v => {
       const k = userVolumeKey(inferVolumeType(v), v.volume_number);
       // an owned entry wins over a listed duplicate ("Band 2" owned next to a missing "2")
       if (!map.has(k) || v.status === 'Vorhanden') map.set(k, v);
@@ -361,6 +375,8 @@ async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'F
       const notes = targetType === 'volume' ? (matchedOfficial?.title || null) : (matchedOfficial?.title || cleanLabel);
 
       const existing = existingMap.get(key);
+      // never write German edition data into a volume of another language, nor add a second entry next to it
+      if (existing && !isMpLanguage(existing.language || manga.language)) continue;
       if (existing) {
         // never touch something the user already owns / has read; only complete the data of listed entries
         if (isOwnedEntry(existing)) {
@@ -443,7 +459,9 @@ async function syncMangaWithEdition(ctx, mangaId, editionId, options = {}) {
 }
 
 module.exports = {
+  germanVolumes,
   GAP_IMPORT_STATUSES,
+  MP_PAYLOAD,
   reconcileMangaGaps,
   batchImportGaps,
   syncMangaWithEdition

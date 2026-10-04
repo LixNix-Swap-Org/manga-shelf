@@ -4,6 +4,7 @@
 const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases, PUBLISHER_ALIAS_SEED } = require('./lib/publishers');
 const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
+const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -511,6 +512,42 @@ function migrationList(log = silentLog) {
                     );
                 `);
             }
+        },
+        {
+            version: 26,
+            name: 'add_users_locale',
+            up: (d) => {
+                // UI language per user (NULL = follow the device) and the default edition language of the collection
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('locale')) d.exec('ALTER TABLE users ADD COLUMN locale TEXT;');
+                if (!cols.has('default_language')) d.exec("ALTER TABLE users ADD COLUMN default_language TEXT NOT NULL DEFAULT 'de';");
+            }
+        },
+        {
+            version: 27,
+            name: 'add_editions',
+            up: (d) => {
+                // Editions of one work in different languages: language becomes an ISO 639-1 code, plus region, work key,
+                // the currency of the prices and a per-volume language (NULL = the series language)
+                const mangaCols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!mangaCols.has('region')) d.exec('ALTER TABLE mangas ADD COLUMN region TEXT;');
+                if (!mangaCols.has('work_key')) d.exec('ALTER TABLE mangas ADD COLUMN work_key TEXT;');
+                if (!mangaCols.has('currency')) d.exec("ALTER TABLE mangas ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR';");
+                const volumeCols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!volumeCols.has('language')) d.exec('ALTER TABLE volumes ADD COLUMN language TEXT;');
+                d.exec('CREATE INDEX IF NOT EXISTS idx_mangas_work_key ON mangas (work_key);');
+                // one UPDATE per distinct stored text; unknown text becomes 'de' (the pre-update backup keeps the original)
+                const update = d.prepare('UPDATE mangas SET language = ?, region = COALESCE(region, ?) WHERE language IS ?');
+                const unknown = [];
+                for (const { language, n } of d.prepare('SELECT language, count(*) AS n FROM mangas GROUP BY language').all()) {
+                    const parsed = parseLanguage(language);
+                    if (!parsed) unknown.push(`"${language}" (${n})`);
+                    const code = (parsed && parsed.language) || DEFAULT_LANGUAGE;
+                    const region = (parsed && parsed.region) || null;
+                    if (code !== language || region) update.run(code, region, language);
+                }
+                if (unknown.length) log.warn(`[Database Migration] v27: unknown series languages set to '${DEFAULT_LANGUAGE}': ${unknown.join(', ')}`);
+            }
         }
     ];
 }
@@ -607,6 +644,9 @@ function applySchema(conn, options = {}) {
             manga_passion_edition_data TEXT DEFAULT NULL,
             wish_priority INTEGER DEFAULT NULL,
             collecting TEXT NOT NULL DEFAULT 'aktiv',
+            region TEXT,
+            work_key TEXT,
+            currency TEXT NOT NULL DEFAULT 'EUR',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_by INTEGER,
@@ -633,6 +673,7 @@ function applySchema(conn, options = {}) {
             priority INTEGER DEFAULT 0,
             target_price REAL,
             manga_passion_volume_id INTEGER DEFAULT NULL,
+            language TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE
         );

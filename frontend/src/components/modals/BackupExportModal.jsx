@@ -6,6 +6,7 @@ import { notify } from '../../utils/notify';
 import { formatCount, formatDateTime, formatMegabytes } from '../../utils/format';
 import { getLocalRuntime } from '../../local/localTransport';
 import { buildBackupZip, readBackupZip } from '../../local/backupZip';
+import { t } from '../../i18n/index.js';
 
 const appVersion = () => (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '');
 
@@ -53,9 +54,9 @@ export default function BackupExportModal({ onClose, onReplaced }) {
       const rt = await getLocalRuntime();
       const bytes = await buildBackupZip(rt, { appVersion: appVersion() });
       saveFile(bytes, backupFileName());
-      notify.success(`Sicherung erstellt (${formatMegabytes(bytes.length)})`);
+      notify.success(t('Sicherung erstellt ({size})', { size: formatMegabytes(bytes.length) }));
     } catch (err) {
-      setError(err.message || 'Sicherung fehlgeschlagen');
+      setError(err.message || t('Sicherung fehlgeschlagen'));
     } finally {
       setBusy(false);
     }
@@ -86,11 +87,11 @@ export default function BackupExportModal({ onClose, onReplaced }) {
       const rt = await getLocalRuntime();
       const profile = await rt.replaceDatabase(staged.dbBytes, { uploads: staged.uploads, profileName: rt.getProfile().username });
       const { counts } = rt.facts();
-      notify.success(`Sicherung eingespielt: ${formatCount(counts.mangas, 'Reihe', 'Reihen')}, ${formatCount(staged.uploads.size, 'Bild', 'Bilder')} (Profil „${profile.username}“)`);
+      notify.success(t('Sicherung eingespielt: {series}, {images} (Profil „{username}“)', { series: formatCount(counts.mangas, 'Reihe', 'Reihen'), images: formatCount(staged.uploads.size, 'Bild', 'Bilder'), username: profile.username }));
       setStaged(null);
       onReplaced?.(profile);
     } catch (err) {
-      setError(err.message || 'Einspielen fehlgeschlagen');
+      setError(err.message || t('Einspielen fehlgeschlagen'));
     } finally {
       setBusy(false);
     }
@@ -98,38 +99,38 @@ export default function BackupExportModal({ onClose, onReplaced }) {
 
   const manifest = staged?.manifest;
   return (
-    <ToolDialog id="backup-export-modal" title="Sicherung" subtitle="Sammlung dieses Geräts als ZIP sichern oder aus einer Sicherung wiederherstellen" Icon={FileArchive} onClose={onClose} busy={busy}>
+    <ToolDialog id="backup-export-modal" title={t('Sicherung')} subtitle={t('Sammlung dieses Geräts als ZIP sichern oder aus einer Sicherung wiederherstellen')} Icon={FileArchive} onClose={onClose} busy={busy}>
       <div className="space-y-5">
         {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
         <section className="space-y-2" aria-labelledby={`${ids}-export`}>
-          <h3 id={`${ids}-export`} className="text-sm font-bold text-white">Sicherung exportieren</h3>
-          <p className="text-xs text-slate-400">Datenbank und alle Bilder in einer ZIP-Datei – dasselbe Format wie die Backups eines Servers. Ein Server übernimmt sie unter Backups → „ZIP-Datei hochladen“.</p>
-          <p className="text-xs text-slate-400">Auf diesem Gerät liegen keine Passwörter: Konten, die von einem Server stammen, brauchen nach der Wiederherstellung auf einem Server einen Passwort-Reset. In eine bestehende Server-Sammlung führt „Zusammenführen“ ohne Passwortverlust.</p>
+          <h3 id={`${ids}-export`} className="text-sm font-bold text-white">{t('Sicherung exportieren')}</h3>
+          <p className="text-xs text-slate-400">{t('Datenbank und alle Bilder in einer ZIP-Datei – dasselbe Format wie die Backups eines Servers. Ein Server übernimmt sie unter Backups → „ZIP-Datei hochladen“.')}</p>
+          <p className="text-xs text-slate-400">{t('Auf diesem Gerät liegen keine Passwörter: Konten, die von einem Server stammen, brauchen nach der Wiederherstellung auf einem Server einen Passwort-Reset. In eine bestehende Server-Sammlung führt „Zusammenführen“ ohne Passwortverlust.')}</p>
           <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5" onClick={exportZip} disabled={busy}>
-            <Download className="w-4 h-4" aria-hidden="true" /> Sicherung exportieren
+            <Download className="w-4 h-4" aria-hidden="true" /> {t('Sicherung exportieren')}
           </button>
         </section>
         <section className="space-y-2 border-t border-slate-800 pt-4" aria-labelledby={`${ids}-import`}>
-          <h3 id={`${ids}-import`} className="text-sm font-bold text-white">Sicherung importieren</h3>
-          <p className="text-xs text-slate-400">Eine Sicherung dieser App oder ein Backup-ZIP eines Servers. Die Sammlung auf diesem Gerät wird dabei ersetzt.</p>
+          <h3 id={`${ids}-import`} className="text-sm font-bold text-white">{t('Sicherung importieren')}</h3>
+          <p className="text-xs text-slate-400">{t('Eine Sicherung dieser App oder ein Backup-ZIP eines Servers. Die Sammlung auf diesem Gerät wird dabei ersetzt.')}</p>
           <FilePickerButton id={`${ids}-file`} accept=".zip,application/zip" onChange={pick} disabled={busy} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-            <Upload className="w-4 h-4" aria-hidden="true" /> ZIP-Datei auswählen
+            <Upload className="w-4 h-4" aria-hidden="true" /> {t('ZIP-Datei auswählen')}
           </FilePickerButton>
           {staged && (
-            <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3 space-y-2 text-sm" aria-label="Inhalt der Sicherung">
+            <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3 space-y-2 text-sm" aria-label={t('Inhalt der Sicherung')}>
               <p className="text-slate-200 font-semibold break-all">{staged.name} · {formatMegabytes(staged.size)}</p>
               <p className="text-slate-300">
                 {manifest?.counts ? `${formatCount(manifest.counts.mangas ?? 0, 'Reihe', 'Reihen')}, ${formatCount(manifest.counts.volumes ?? 0, 'Band', 'Bände')}, ` : ''}
                 {formatCount(staged.uploads.size, 'Bild', 'Bilder')}
-                {manifest?.created_at ? ` · erstellt ${formatDateTime(new Date(manifest.created_at))}` : ''}
+                {manifest?.created_at ? ` · ${t('erstellt {date}', { date: formatDateTime(new Date(manifest.created_at)) })}` : ''}
               </p>
-              <p className="flex gap-2 text-amber-200"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />Ersetzt alle Reihen, Bände und Bilder auf diesem Gerät.</p>
+              <p className="flex gap-2 text-amber-200"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />{t('Ersetzt alle Reihen, Bände und Bilder auf diesem Gerät.')}</p>
               <label className="flex items-center gap-2 text-slate-200">
-                <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> Sammlung auf diesem Gerät ersetzen
+                <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> {t('Sammlung auf diesem Gerät ersetzen')}
               </label>
               <div className="flex justify-end gap-2">
-                <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={() => setStaged(null)} disabled={busy}>Verwerfen</button>
-                <button type="button" className="btn-primary text-xs px-3 py-1.5" onClick={restore} disabled={busy || !confirmed} aria-busy={busy || undefined}>Einspielen</button>
+                <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={() => setStaged(null)} disabled={busy}>{t('Verwerfen')}</button>
+                <button type="button" className="btn-primary text-xs px-3 py-1.5" onClick={restore} disabled={busy || !confirmed} aria-busy={busy || undefined}>{t('Einspielen')}</button>
               </div>
             </div>
           )}

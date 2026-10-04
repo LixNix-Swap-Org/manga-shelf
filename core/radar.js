@@ -1,6 +1,7 @@
 // Shopping list and release radar: turns the rows of the two queries into the API responses.
 // Pure functions (no database, no clock of their own) so they can be unit-tested.
 const { normalizePublisher } = require('./lib/publishers');
+const { DEFAULT_CURRENCY } = require('./lib/language');
 
 const DEFAULT_TIME_ZONE = 'Europe/Berlin';
 
@@ -14,6 +15,24 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const isPreordered = (status) => ['Vorbestellt', 'Bestellt'].includes(status);
 
 const pad2 = (n) => String(n).padStart(2, '0');
+
+// money totals add euro prices only; prices of other editions are summed per currency apart (no conversion)
+const isEuro = (v) => !v.currency || v.currency === DEFAULT_CURRENCY;
+const euroPrice = (v) => (isEuro(v) ? (v.price || 0) : 0);
+
+/** { other_currencies: [{ currency, count, total }] } for priced rows not in euro, else {} (the key stays absent). */
+function otherCurrencies(rows) {
+    const byCurrency = new Map();
+    for (const v of rows) {
+        if (isEuro(v) || v.price === null || v.price === undefined) continue;
+        const entry = byCurrency.get(v.currency) || { currency: v.currency, count: 0, total: 0 };
+        entry.count++;
+        entry.total += v.price;
+        byCurrency.set(v.currency, entry);
+    }
+    const list = [...byCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency)).map(e => ({ ...e, total: round2(e.total) }));
+    return list.length ? { other_currencies: list } : {};
+}
 
 /**
  * Today's calendar date in the app's time zone (ctx.config.appTimeZone, default Europe/Berlin; null means the
@@ -122,7 +141,7 @@ function countdownFor(releaseDate, today = new Date()) {
  * wished-series query, sorted by priority and title) is appended as wished_series; publisher chips count them as wished_count.
  */
 function buildShoppingList(missingVols, wishedSeries = []) {
-    const totalCost = missingVols.reduce((sum, v) => sum + (v.price || 0), 0);
+    const totalCost = missingVols.reduce((sum, v) => sum + euroPrice(v), 0);
 
     // Group by publisher for the filter chips
     const publisherMap = new Map();
@@ -131,7 +150,7 @@ function buildShoppingList(missingVols, wishedSeries = []) {
         if (!publisherMap.has(pub)) publisherMap.set(pub, { publisher: pub, count: 0, total_price: 0 });
         const stat = publisherMap.get(pub);
         stat.count++;
-        stat.total_price += (v.price || 0);
+        stat.total_price += euroPrice(v);
     });
     const wished = wishedSeries.map(s => ({
         id: s.id,
@@ -142,7 +161,9 @@ function buildShoppingList(missingVols, wishedSeries = []) {
         total_volumes: s.total_volumes ?? null,
         manga_passion_id: s.manga_passion_id ?? null,
         known_missing_count: s.known_missing_count || 0,
-        known_missing_cost: round2(s.known_missing_cost || 0)
+        known_missing_cost: round2(s.known_missing_cost || 0),
+        language: s.language ?? null,
+        currency: s.currency || DEFAULT_CURRENCY
     }));
     const wishedCounts = new Map();
     for (const s of wished) wishedCounts.set(s.publisher, (wishedCounts.get(s.publisher) || 0) + 1);
@@ -158,7 +179,8 @@ function buildShoppingList(missingVols, wishedSeries = []) {
         total_wished_series: wished.length,
         publishers,
         items: missingVols,
-        wished_series: wished
+        wished_series: wished,
+        ...otherCurrencies(missingVols)
     };
 }
 
@@ -182,8 +204,8 @@ function monthGroupOf(item) {
 /** Response of GET /api/release-radar for the pre-ordered / upcoming volumes (already sorted by the query). */
 function buildReleaseRadar(radarVols, today = new Date()) {
     const preorderedVols = radarVols.filter(v => isPreordered(v.status));
-    const preorderedBudget = preorderedVols.reduce((sum, v) => sum + (v.price || 0), 0);
-    const totalBudget = radarVols.reduce((sum, v) => sum + (v.price || 0), 0);
+    const preorderedBudget = preorderedVols.reduce((sum, v) => sum + euroPrice(v), 0);
+    const totalBudget = radarVols.reduce((sum, v) => sum + euroPrice(v), 0);
 
     const items = radarVols.map(v => ({
         ...v,
@@ -200,7 +222,7 @@ function buildReleaseRadar(radarVols, today = new Date()) {
         }
         const grp = groupMap.get(sortKey);
         grp.count++;
-        grp.total_price += (item.price || 0);
+        grp.total_price += euroPrice(item);
         if (isPreordered(item.status)) grp.preordered_count++;
         grp.items.push(item);
     });
@@ -221,7 +243,8 @@ function buildReleaseRadar(radarVols, today = new Date()) {
         total_budget: round2(totalBudget),
         groups,
         items,
-        publishers: Array.from(publisherMap.values())
+        publishers: Array.from(publisherMap.values()),
+        ...otherCurrencies(radarVols)
     };
 }
 

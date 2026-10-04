@@ -1,4 +1,5 @@
 import { Globe, Package, ExternalLink } from 'lucide-react';
+import { t, tc } from '../../../i18n/index.js';
 
 const TAB_BASE = 'min-w-0 flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition-all';
 const TAB_ACTIVE = 'bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow-md shadow-sky-600/30';
@@ -42,14 +43,14 @@ export default function RadarTabs({
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-inner">
-      <div role="tablist" aria-label="Release-Radar" onKeyDown={onKeyDown} className="flex items-stretch gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800/80 w-full sm:w-auto">
+      <div role="tablist" aria-label={t('Release-Radar')} onKeyDown={onKeyDown} className="flex items-stretch gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800/80 w-full sm:w-auto">
         <button
           {...tabProps('passion')}
-          title="Deutsche Neuheiten (Manga Passion)"
+          title={t('Deutsche Neuheiten (Manga Passion)')}
         >
           <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-          <span className="lg:hidden whitespace-nowrap truncate">Neuheiten</span>
-          <span className="hidden lg:inline whitespace-nowrap">Deutsche Neuheiten (Manga Passion)</span>
+          <span className="lg:hidden whitespace-nowrap truncate">{tc('short', 'Neuheiten')}</span>
+          <span className="hidden lg:inline whitespace-nowrap">{t('Deutsche Neuheiten (Manga Passion)')}</span>
           {mpCount != null && (
             <span className="shrink-0 bg-sky-500/20 text-sky-200 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">
               {mpCount}
@@ -58,11 +59,11 @@ export default function RadarTabs({
         </button>
         <button
           {...tabProps('personal')}
-          title="Meine Vorbestellungen & Budget"
+          title={t('Meine Vorbestellungen & Budget')}
         >
           <Package className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-          <span className="lg:hidden whitespace-nowrap truncate">Meine</span>
-          <span className="hidden lg:inline whitespace-nowrap">Meine Vorbestellungen & Budget</span>
+          <span className="lg:hidden whitespace-nowrap truncate">{t('Meine')}</span>
+          <span className="hidden lg:inline whitespace-nowrap">{t('Meine Vorbestellungen & Budget')}</span>
           {radarData && radarData.total_releases > 0 && (
             <span className="shrink-0 bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">
               {radarData.total_releases}
@@ -73,7 +74,7 @@ export default function RadarTabs({
 
       {radarSubView === 'passion' && (
         <div className="flex items-center gap-2 px-2 text-xs text-slate-400">
-          <span className="hidden md:inline">Live-Daten via:</span>
+          <span className="hidden md:inline">{t('Live-Daten via:')}</span>
           <a
             href={`https://www.manga-passion.de/manga?year=${mpYear}&month=${mpMonth}`}
             target="_blank"
@@ -81,7 +82,7 @@ export default function RadarTabs({
             className="text-sky-400 hover:text-sky-300 flex items-center gap-1 hover:underline font-medium"
           >
             manga-passion.de <ExternalLink className="w-3 h-3" />
-            <span className="sr-only">(öffnet in neuem Tab)</span>
+            <span className="sr-only">{t('(öffnet in neuem Tab)')}</span>
           </a>
         </div>
       )}

@@ -189,10 +189,10 @@ describe('signing', () => {
   it('the release text names the extension only when the step passes its secret', () => {
     const ios = { IOS_CERT_P12_BASE64: 'a', IOS_CERT_PASSWORD: 'b', IOS_PROVISIONING_PROFILE_BASE64: 'c', APPLE_TEAM_ID: 'd' };
     const line = (env) => notes(detectSigning(env), env).split('\n').find((l) => l.includes('iPhone'));
-    assert.match(line(ios), /: signiert$/);
-    assert.match(line({ ...ios, [IOS_SHARE_SECRET]: '' }), /signiert, ohne Teilen-Ziel \(iOS\)/);
-    assert.match(line({ ...ios, [IOS_SHARE_SECRET]: 'p' }), /signiert, mit Teilen-Ziel \(iOS\)/);
-    assert.match(line({ [IOS_SHARE_SECRET]: 'p' }), /: unsigniert$/);
+    assert.match(line(ios), /: signed$/);
+    assert.match(line({ ...ios, [IOS_SHARE_SECRET]: '' }), /signed, without share extension \(iOS\)/);
+    assert.match(line({ ...ios, [IOS_SHARE_SECRET]: 'p' }), /signed, with share extension \(iOS\)/);
+    assert.match(line({ [IOS_SHARE_SECRET]: 'p' }), /: unsigned$/);
   });
 
   it('names artifacts and runs CocoaPods under UTF-8', () => {
@@ -418,7 +418,7 @@ describe('iOS share extension', () => {
     const uses = [...yml.matchAll(/IOS_SHARE_PROVISIONING_PROFILE_BASE64: \$\{\{ secrets\.IOS_SHARE_PROVISIONING_PROFILE_BASE64 \}\}/g)];
     assert.equal(uses.length, 1);
     const step = yml.slice(yml.lastIndexOf('- name:', uses[0].index), yml.indexOf('run:', uses[0].index));
-    assert.match(step, /name: Release-Build \(IPA\)/);
+    assert.match(step, /name: Release build \(IPA\)/);
     assert.doesNotMatch(yml, /:\s*write\b/, 'no write permissions');
   });
 });

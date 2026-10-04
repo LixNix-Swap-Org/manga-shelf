@@ -1,13 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { t } from '../../i18n/index.js';
 
 export const MAIN_ID = 'inhalt';
+// i18n-ignore: product name
 export const APP_TITLE = 'Manga Shelf';
+// i18n
 const DEFAULT_TITLE = 'Manga Shelf & Tracker';
 
 export function pageTitle(title) {
   const clean = typeof title === 'string' ? title.trim() : '';
-  return clean ? `${clean} – ${APP_TITLE}` : DEFAULT_TITLE;
+  return clean ? `${clean} – ${APP_TITLE}` : t(DEFAULT_TITLE);
 }
 
 /** `null`/`undefined` (still loading) keeps the current title, so a navigation never flashes the generic one. */
@@ -52,7 +55,7 @@ export function usePageHeading(ready = true) {
   return ref;
 }
 
-export function SkipLink({ target = MAIN_ID, children = 'Zum Inhalt springen' }) {
+export function SkipLink({ target = MAIN_ID, children = t('Zum Inhalt springen') }) {
   const onClick = (e) => {
     const el = document.getElementById(target);
     if (!el) return;

@@ -3,8 +3,11 @@
 export const LOCAL_DB_NAME = 'mangashelf-local';
 // window event of the runtime: detail { type: 'status' | 'replaced' | 'reloaded', status } (App shows the notices)
 export const LOCAL_STORE_EVENT = 'mangashelf:local-store';
+// i18n
 export const SAVE_FAILED_TEXT = 'Daten konnten nicht gespeichert werden';
+// i18n
 export const LOCKED_TEXT = 'Sammlung ist in einem anderen Fenster geöffnet';
+// i18n
 export const CONFLICT_TEXT = 'Die Sammlung wurde in einem anderen Fenster geändert – bitte neu laden.';
 const STORES = ['db', 'files', 'secrets'];
 

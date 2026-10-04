@@ -1,4 +1,5 @@
 // Genres/tags of a series (mangas.tags, comma-separated). Mirrors core/lib/tags.js; test/tags.test.js keeps the maps equal.
+// i18n-ignore: stored genre values; shown through genreLabel (utils/enumLabels.js GENRE_NAMES)
 export const GENRE_DE = {
   'action': 'Action',
   'adventure': 'Abenteuer',

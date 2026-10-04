@@ -59,7 +59,9 @@ function createMemoryCore(overrides = {}) {
             const text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
             return { status: res.status, body: typeof res.body === 'string' ? null : JSON.parse(text), text, headers: res.headers };
         } catch (err) {
-            const { status, body: errBody } = errorAnswer(err);
+            const { status, body } = errorAnswer(err);
+            // like the transports: nested msg() params arrive as plain { msg, params }
+            const errBody = roundTrip(body);
             return { status, body: errBody, text: JSON.stringify(errBody), headers: {} };
         }
     }

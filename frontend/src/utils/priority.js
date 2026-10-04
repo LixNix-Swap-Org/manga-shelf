@@ -1,6 +1,8 @@
 // Wish priority of volumes (volumes.priority) and series (mangas.wish_priority): 0 none, 1 low, 2 medium, 3 high.
 // No React imports: the node:test suites load this module directly.
+import { t } from '../i18n/index.js';
 
+// i18n
 export const PRIORITY_OPTIONS = [
   { value: 0, label: 'Keine' },
   { value: 1, label: 'Niedrig' },
@@ -9,9 +11,11 @@ export const PRIORITY_OPTIONS = [
 ];
 
 /** Badge text of a volume priority on the shopping list. */
+// i18n
 export const PRIORITY_LABELS = { 1: '★ niedrig', 2: '★★ mittel', 3: '★★★ hoch' };
 
 /** Lower-case word for running text: 'Wunschliste · hoch'. */
+// i18n
 export const PRIORITY_WORDS = { 0: 'ohne Priorität', 1: 'niedrig', 2: 'mittel', 3: 'hoch' };
 
 export const DEFAULT_WISH_PRIORITY = 2;
@@ -47,11 +51,12 @@ export const isWishedSeries = (m) => {
 export const wishLabel = (m) => {
   if (!isWishedSeries(m)) return '';
   const p = normalizeWishPriority(m.wish_priority);
-  return p === null || p === 0 ? 'Wunschliste' : `Wunschliste · ${PRIORITY_WORDS[p]}`;
+  return p === null || p === 0 ? t('Wunschliste') : t('Wunschliste · {priority}', { priority: t(PRIORITY_WORDS[p]) });
 };
 
 const publisherKey = (publisher, normalizePubName) => {
   const raw = String(publisher || '');
+  // i18n-ignore: stored publisher value of the server's chips, compared as data
   return ((normalizePubName ? normalizePubName(raw) : raw.trim()) || 'Unbekannt').toLowerCase();
 };
 
@@ -78,6 +83,7 @@ export const mergeWishedPublisherChips = (chips, wishedSeries, normalizePubName)
     const key = publisherKey(s.publisher, normalizePubName);
     let chip = result.find((c) => String(c.publisher || '').toLowerCase() === key);
     if (!chip) {
+      // i18n-ignore: stored publisher value (chip value and filter key), the display translates it
       chip = { publisher: normalizePubName ? normalizePubName(s.publisher || '') || 'Unbekannt' : (s.publisher || 'Unbekannt'), count: 0, total_price: 0, wished_count: 0 };
       result.push(chip);
     }

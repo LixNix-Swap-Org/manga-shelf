@@ -39,7 +39,7 @@ describe('.env.example', () => {
     test('every variable it names is read by the server or a script', () => {
         assert.ok(names.length > 20);
         const unknown = names.filter((name) => !CONFIG_NAMES.has(name) && !new RegExp(`\\b${name}\\b`).test(CODE));
-        assert.deepEqual(unknown, [], `.env.example nennt Variablen, die niemand liest: ${unknown.join(', ')}`);
+        assert.deepEqual(unknown, [], `.env.example names variables nobody reads: ${unknown.join(', ')}`);
     });
 
     test('the commented example values are accepted by utils/config.js', () => {
@@ -76,7 +76,7 @@ describe('README.md', () => {
         const section = readme.slice(readme.indexOf('## 12. Umgebungsvariablen'), readme.indexOf('## 13.'));
         assert.ok(section.length > 100, 'section 12 missing');
         const missing = DOCUMENTED.filter((name) => !section.includes(`\`${name}\``));
-        assert.deepEqual(missing, [], `README-Tabelle fehlt: ${missing.join(', ')}`);
+        assert.deepEqual(missing, [], `missing from the README table: ${missing.join(', ')}`);
         const rows = section.split('\n').filter((line) => line.startsWith('| `'));
         const named = rows.flatMap((line) => [...line.split('|')[1].matchAll(/`([A-Z][A-Z0-9_]+)`/g)].map((m) => m[1]));
         const unknown = named.filter((name) => !CONFIG_NAMES.has(name) && !new RegExp(`\\b${name}\\b`).test(CODE));
@@ -91,10 +91,10 @@ describe('README.md', () => {
     test('the manual ZIP names what package.js ships', () => {
         const { PACKAGE_FILES, FRONTEND_DIST } = require('../package');
         const manual = readme.slice(readme.indexOf('Falls `npm run package` fehlschlägt'), readme.indexOf('### Egg'));
-        for (const file of [...PACKAGE_FILES, FRONTEND_DIST]) assert.ok(manual.includes(`\`${file}`), `${file} fehlt in der ZIP-Anleitung`);
+        for (const file of [...PACKAGE_FILES, FRONTEND_DIST]) assert.ok(manual.includes(`\`${file}`), `${file} missing from the ZIP instructions`);
         assert.match(manual, /"files"/);
         const shipped = JSON.parse(read('package.json')).files;
-        for (const file of shipped) assert.ok(manual.includes(`\`${file}\``), `${file} aus package.json "files" fehlt in der ZIP-Anleitung`);
+        for (const file of shipped) assert.ok(manual.includes(`\`${file}\``), `${file} from package.json "files" missing from the ZIP instructions`);
     });
 
     test('gives the same Pterodactyl update instruction as the release text', () => {
@@ -117,7 +117,7 @@ describe('README.md', () => {
 
     test('the headless self-build installs the root dependencies before build-sea.js', () => {
         const line = readme.split('\n').find((l) => l.includes('node scripts/server-bin/build-sea.js') && l.startsWith('Selbst bauen'));
-        assert.ok(line, 'Selbst-bauen-Zeile des Headless-Servers fehlt');
+        assert.ok(line, 'self-build line of the headless server missing');
         const command = /`([^`]*build-sea\.js)`/.exec(line)[1];
         assert.match(command, /^npm ci && /);
     });
@@ -144,19 +144,19 @@ describe('CHANGELOG.md', () => {
 
     test('names the migrations up to LATEST_SCHEMA_VERSION and no fixed branch hash as its state', () => {
         const { LATEST_SCHEMA_VERSION } = require('../core/schema');
-        const range = /\*\*Datenbank-Migrationen 12–(\d+)\*\*/.exec(changelog);
-        assert.ok(range, 'Migrationszeile fehlt');
+        const range = /\*\*Database migrations 12–(\d+)\*\*/.exec(changelog);
+        assert.ok(range, 'migration line missing');
         assert.equal(Number(range[1]), LATEST_SCHEMA_VERSION);
-        const stand = changelog.split('\n').find((line) => line.startsWith('Stand:'));
-        assert.match(stand, /siehe `git log`/);
-        assert.deepEqual([...stand.matchAll(/`([0-9a-f]{7,40})`/g)].map((m) => m[1]), ['f0c2a64']);
+        const state = changelog.split('\n').find((line) => line.startsWith('State:'));
+        assert.match(state, /see `git log`/);
+        assert.deepEqual([...state.matchAll(/`([0-9a-f]{7,40})`/g)].map((m) => m[1]), ['f0c2a64']);
     });
 
     test('says the console passwort-reset ends the calendar feed, as services/console.js does', () => {
         assert.match(read('services/console.js'), /revokeFeedTokens\(db, user\.id\)/);
-        const line = changelog.split('\n').find((l) => l.startsWith('- **Kalender-Abo** endet'));
-        assert.match(line, /Konsolenbefehl `passwort-reset`/);
-        assert.doesNotMatch(line, /noch nicht/);
+        const line = changelog.split('\n').find((l) => l.startsWith('- **Calendar feed** ends'));
+        assert.match(line, /console command `passwort-reset`/);
+        assert.doesNotMatch(line, /not yet/);
     });
 });
 

@@ -1,6 +1,8 @@
 import { useId } from 'react';
 import { BookOpen } from 'lucide-react';
 import { localDateString } from '../../hooks/useVolumeActions';
+import { rich } from '../../i18n/react.jsx';
+import { t } from '../../i18n/index.js';
 
 /**
  * Reader switcher with read / unread progress of the selected reader. With setReadDate (and canToggle) a "Gelesen am"
@@ -21,11 +23,11 @@ export default function ReaderBar({
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4 text-emerald-400" />
-                Leser:
+                {t('Leser:')}
               </span>
               
               {/* Readers switcher */}
-              <div role="group" aria-label="Leser auswählen" className="flex flex-wrap items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+              <div role="group" aria-label={t('Leser auswählen')} className="flex flex-wrap items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
                 {readers.map(r => {
                   const isSelected = String(selectedReaderId) === String(r.user_id) || (selectedReaderId === 'ALL' && String(r.user_id) === String(user?.id));
                   return (
@@ -52,7 +54,7 @@ export default function ReaderBar({
 
             {canToggle && setReadDate && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <label htmlFor={dateId} className="font-semibold text-slate-300 whitespace-nowrap">Gelesen am</label>
+                <label htmlFor={dateId} className="font-semibold text-slate-300 whitespace-nowrap">{t('Gelesen am')}</label>
                 <input
                   id={dateId}
                   type="date"
@@ -61,10 +63,10 @@ export default function ReaderBar({
                   onChange={(e) => setReadDate(e.target.value)}
                   aria-describedby={readDate ? undefined : `${dateId}-hint`}
                   className="input-field text-base sm:text-xs py-1 px-2 !w-auto min-w-[9rem] min-h-[2rem]"
-                  title="Datum für die nächsten Häkchen „gelesen“ (leer = jetzt)"
+                  title={t('Datum für die nächsten Häkchen „gelesen“ (leer = jetzt)')}
                 />
                 {!readDate && (
-                  <span id={`${dateId}-hint`} className="text-slate-400 whitespace-nowrap">leer = jetzt</span>
+                  <span id={`${dateId}-hint`} className="text-slate-400 whitespace-nowrap">{t('leer = jetzt')}</span>
                 )}
               </div>
             )}
@@ -72,23 +74,23 @@ export default function ReaderBar({
             {/* Reading Progress Percentage Bar for current selected reader */}
             <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
               <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="whitespace-nowrap">Gelesen: <strong className="font-mono text-emerald-400">{readOfOwned}</strong> von <span className="font-mono">{ownedCount}</span></span>
+                <span className="whitespace-nowrap">{rich('Gelesen: {read} von {owned}', { read: <strong className="font-mono text-emerald-400">{readOfOwned}</strong>, owned: <span className="font-mono">{ownedCount}</span> })}</span>
                 <span className="text-slate-500" aria-hidden="true">|</span>
-                <span className="whitespace-nowrap">SuB: <strong className="font-mono text-amber-400">{unread}</strong></span>
+                <span className="whitespace-nowrap">{rich('SuB: {unread}', { unread: <strong className="font-mono text-amber-400">{unread}</strong> })}</span>
               </div>
               <div
                 role="progressbar"
-                aria-label="Lesefortschritt"
+                aria-label={t('Lesefortschritt')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={pct}
-                aria-valuetext={`${readOfOwned} von ${ownedCount} gelesen`}
+                aria-valuetext={t('{read} von {owned} gelesen', { read: readOfOwned, owned: ownedCount })}
                 className="w-24 sm:w-32 h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800"
               >
                 <div 
                   className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
                   style={{ width: `${pct}%` }}
-                  title={`${pct}% gelesen`}
+                  title={t('{pct}% gelesen', { pct })}
                 />
               </div>
               <span className="text-xs font-mono font-bold text-emerald-400">

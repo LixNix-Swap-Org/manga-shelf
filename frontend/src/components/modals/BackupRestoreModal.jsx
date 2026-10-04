@@ -14,19 +14,28 @@ import RestoreConfirm from './backup/RestoreConfirm';
 import CsvImportPanel from './backup/CsvImportPanel';
 import DownloadLink from './backup/DownloadLink';
 import { useDownloadRunning } from '../../app/useDownload';
+import { t as tr, tn } from '../../i18n/index.js';
+import { rich } from '../../i18n/react.jsx';
+import { payloadText } from '../../i18n/serverText.js';
 
 const RELOAD_DELAY_MS = 2000;
+// i18n
 const RESTORE_HTTP = {
   tooLarge: 'Backup zu groß für den Server oder Proxy (Upload-Limit, z. B. client_max_body_size, prüfen).',
   timeout: 'Der Server hat nicht rechtzeitig geantwortet. Die Wiederherstellung kann trotzdem durchlaufen: kurz warten, Seite neu laden und den Stand prüfen.'
 };
+// i18n
 const INSPECT_HTTP = {
   tooLarge: RESTORE_HTTP.tooLarge,
   timeout: 'Der Server hat nicht rechtzeitig geantwortet. Bitte die Prüfung später erneut starten.'
 };
+// i18n
 const RESTORE_NETWORK = 'Keine Antwort vom Server. Seite neu laden und prüfen, ob die Wiederherstellung durchgelaufen ist.';
+// i18n
 const UPLOAD_NETWORK = 'Keine Verbindung zum Server. Bei großen Backups kann auch das Upload-Limit eines Proxys die Ursache sein.';
+// i18n
 const SNAPSHOT_TIMEOUT = 'Der Server braucht länger als erwartet. Der Snapshot wird eventuell noch geschrieben – die Liste wurde neu geladen. Bitte nicht erneut erstellen, sondern die Liste in ein paar Minuten prüfen.';
+// i18n
 const TABS = [
   { key: 'snapshots', Icon: FileArchive },
   { key: 'upload', Icon: CloudUpload, label: 'ZIP-Datei hochladen' },
@@ -43,16 +52,19 @@ export function withPasswordWarnings(inspection) {
   if (!names.length) return inspection;
   const warnings = Array.isArray(inspection.warnings) ? [...inspection.warnings] : [];
   if (!warnings.some((w) => PASSWORD_RESET_LINE.test(w))) {
-    warnings.push(names.length === 1
-      ? `1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${names[0]}.`
-      : `${names.length} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${names.join(', ')}.`);
+    warnings.push(tn(
+      '{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.',
+      '{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.',
+      names.length,
+      { names: names.join(', ') }
+    ));
   }
   const me = inspection.current_user?.username;
   const users = Number(inspection.counts?.users);
   if (inspection.relogin && Number.isFinite(users) && names.length >= users) {
-    warnings.push('Danach kann sich niemand anmelden: ein neues Passwort setzt dann nur der Konsolenbefehl „passwort-reset <name>“ auf dem Server.');
+    warnings.push(tr('Danach kann sich niemand anmelden: ein neues Passwort setzt dann nur der Konsolenbefehl „passwort-reset <name>“ auf dem Server.'));
   } else if (!inspection.relogin && me && names.some((n) => sameName(n, me))) {
-    warnings.push(`Auch dein Konto „${me}“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.`);
+    warnings.push(tr('Auch dein Konto „{name}“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.', { name: me }));
   }
   return { ...inspection, warnings };
 }
@@ -110,10 +122,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         setServerBackups(list);
         setUndo(entry && list.some(b => b.filename === entry.filename) ? entry : null);
       } else {
-        setBackupsLoadError(httpErrorMessage(res.status, data, 'Snapshots konnten nicht geladen werden'));
+        setBackupsLoadError(httpErrorMessage(res.status, data, tr('Snapshots konnten nicht geladen werden')));
       }
     } catch (_) {
-      if (id === backupsRequestRef.current) setBackupsLoadError('Netzwerkfehler beim Laden der Snapshots.');
+      if (id === backupsRequestRef.current) setBackupsLoadError(tr('Netzwerkfehler beim Laden der Snapshots.'));
     } finally {
       if (id === backupsRequestRef.current) setLoadingBackups(false);
     }
@@ -174,18 +186,18 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       const res = await apiFetch('/api/backups/create', { method: 'POST', timeout: TIMEOUTS.long });
       const data = await readJson(res);
       if (res.ok) {
-        setRestoreSuccess('Neuer Server-Snapshot erfolgreich angelegt!');
-        if (typeof data.warning === 'string' && data.warning) setWarning(data.warning);
+        setRestoreSuccess(tr('Neuer Server-Snapshot erfolgreich angelegt!'));
+        if (typeof data.warning === 'string' && data.warning) setWarning(payloadText(data, 'warning'));
         await fetchServerBackups();
       } else {
-        setRestoreError(httpErrorMessage(res.status, data, 'Fehler beim Erstellen des Snapshots'));
+        setRestoreError(httpErrorMessage(res.status, data, tr('Fehler beim Erstellen des Snapshots')));
       }
     } catch (e) {
       if (e?.isTimeout) {
-        setRestoreError(SNAPSHOT_TIMEOUT);
+        setRestoreError(tr(SNAPSHOT_TIMEOUT));
         fetchServerBackups();
       } else {
-        setRestoreError('Netzwerkfehler beim Erstellen des Snapshots.');
+        setRestoreError(tr('Netzwerkfehler beim Erstellen des Snapshots.'));
       }
     } finally {
       setCreatingSnapshot(false);
@@ -198,10 +210,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const finishRestore = (data) => {
     const pre = typeof data.preRestoreSnapshot === 'string' ? data.preRestoreSnapshot : '';
     if (pre) saveRestoreUndo(pre);
-    const parts = [data.message || 'Backup erfolgreich eingespielt!'];
-    if (pre) parts.push(`Rückgängig: Snapshot „${pre}“ (Vor Wiederherstellung) – in den nächsten 30 Minuten über „Rückgängig machen“ in diesem Dialog.`);
-    if (data.relogin) parts.push('Du wirst abgemeldet.');
-    parts.push('Die Seite wird neu geladen …');
+    const parts = [payloadText(data, 'message') || tr('Backup erfolgreich eingespielt!')];
+    if (pre) parts.push(tr('Rückgängig: Snapshot „{snapshot}“ (Vor Wiederherstellung) – in den nächsten 30 Minuten über „Rückgängig machen“ in diesem Dialog.', { snapshot: pre }));
+    if (data.relogin) parts.push(tr('Du wirst abgemeldet.'));
+    parts.push(tr('Die Seite wird neu geladen …'));
     setRestoreSuccess(parts.join(' '));
     setReloadPending(true);
     clearTimeout(reloadTimerRef.current);
@@ -242,12 +254,12 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         setAllowNewer(false);
         setInspection(withPasswordWarnings(data));
       } else {
-        setRestoreError(httpErrorMessage(res.status, data, 'Backup konnte nicht geprüft werden', INSPECT_HTTP));
+        setRestoreError(httpErrorMessage(res.status, data, tr('Backup konnte nicht geprüft werden'), INSPECT_HTTP));
         if (res.status === 404 && source.filename) fetchServerBackups();
       }
     } catch (_) {
       if (id === restoreRequestRef.current) {
-        setRestoreError(source.file ? UPLOAD_NETWORK : 'Netzwerkfehler beim Prüfen des Snapshots.');
+        setRestoreError(source.file ? tr(UPLOAD_NETWORK) : tr('Netzwerkfehler beim Prüfen des Snapshots.'));
       }
     } finally {
       if (inspectAbortRef.current === controller) inspectAbortRef.current = null;
@@ -287,7 +299,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         finishRestore(data);
         return;
       }
-      const message = httpErrorMessage(res.status, data, 'Fehler beim Wiederherstellen des Backups', RESTORE_HTTP);
+      const message = httpErrorMessage(res.status, data, tr('Fehler beim Wiederherstellen des Backups'), RESTORE_HTTP);
       setRestoreError(message);
       if (data.code === 'SCHEMA_NEWER') {
         setInspection(prev => (prev ? { ...prev, schema_newer: true } : prev));
@@ -298,14 +310,14 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         if (fromSnapshot) fetchServerBackups();
       }
     } catch (_) {
-      setRestoreError(RESTORE_NETWORK);
+      setRestoreError(tr(RESTORE_NETWORK));
     } finally {
       setRestoring(false);
     }
   };
 
   const handleDeleteSnapshot = async (filename) => {
-    if (!confirm(`Snapshot "${filename}" wirklich dauerhaft vom Server löschen?`)) return;
+    if (!confirm(tr('Snapshot "{filename}" wirklich dauerhaft vom Server löschen?', { filename }))) return;
     clearMessages();
     try {
       const res = await apiFetch(`/api/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
@@ -314,17 +326,17 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         setServerBackups(prev => prev.filter(b => b.filename !== filename));
         if (undo?.filename === filename) setUndo(null);
       } else {
-        setRestoreError(httpErrorMessage(res.status, await readJson(res), 'Fehler beim Löschen des Snapshots'));
+        setRestoreError(httpErrorMessage(res.status, await readJson(res), tr('Fehler beim Löschen des Snapshots')));
       }
     } catch (_) {
-      setRestoreError('Netzwerkfehler beim Löschen des Snapshots.');
+      setRestoreError(tr('Netzwerkfehler beim Löschen des Snapshots.'));
     }
   };
 
   const handleUploadSubmit = (e) => {
     e.preventDefault();
     if (!restoreFile) {
-      setRestoreError('Bitte wähle eine Backup-ZIP-Datei (.zip) aus.');
+      setRestoreError(tr('Bitte wähle eine Backup-ZIP-Datei (.zip) aus.'));
       return;
     }
     inspect({ file: restoreFile });
@@ -361,7 +373,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Backup und Wiederherstellung"
+      aria-label={tr('Backup und Wiederherstellung')}
       data-busy={closeBlocked ? 'true' : undefined}
       tabIndex={-1}
       className="outline-none dialog-overlay bg-black/80 backdrop-blur-sm z-50 animate-fade-in"
@@ -371,7 +383,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
           id="btn-close-restore-modal-x"
           type="button"
           onClick={() => !busy && onClose()}
-          aria-label="Schließen"
+          aria-label={tr('Schließen')}
           className="absolute top-3 right-3 short:top-1.5 short:right-1.5 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
           disabled={busy}
         >
@@ -383,24 +395,24 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
             <CloudUpload className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Backups & Snapshots</h2>
-            <p className="text-xs text-slate-400 short:hidden">Automatische Tagessicherungen und Snapshot-Wiederherstellung</p>
+            <h2 className="text-xl font-bold text-white">{tr('Backups & Snapshots')}</h2>
+            <p className="text-xs text-slate-400 short:hidden">{tr('Automatische Tagessicherungen und Snapshot-Wiederherstellung')}</p>
           </div>
         </div>
 
         <div className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-3 rounded-xl text-xs flex items-center justify-between gap-3 mt-4 shrink-0">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
-            <span>Täglich automatischer Snapshot aktiv (die letzten 7 Tage und die letzten 10 manuellen Snapshots werden auf dem Server vorgehalten)</span>
+            <span>{tr('Täglich automatischer Snapshot aktiv (die letzten 7 Tage und die letzten 10 manuellen Snapshots werden auf dem Server vorgehalten)')}</span>
           </div>
           <DownloadLink
             path="/api/backup"
             download
             className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 shrink-0 bg-slate-900 border-sky-500/40 text-sky-300 hover:text-white"
-            title="Aktuelle Gesamtsicherung als ZIP herunterladen"
+            title={tr('Aktuelle Gesamtsicherung als ZIP herunterladen')}
           >
             <Download className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Direkt-ZIP</span>
+            <span>{tr('Direkt-ZIP')}</span>
           </DownloadLink>
         </div>
 
@@ -431,8 +443,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         {undo && !inspection && !reloadPending && (
           <div className="bg-amber-500/10 border border-amber-500/30 text-amber-100 p-3 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 shrink-0">
             <p>
-              <span className="font-semibold">Wiederherstellung rückgängig machen:</span> Der Stand davor liegt als Snapshot
-              {' '}<span className="font-mono break-all">„{undo.filename}“</span> vor (nur Datenbank, Cover bleiben).
+              {rich('{title} Der Stand davor liegt als Snapshot {snapshot} vor (nur Datenbank, Cover bleiben).', {
+                title: <span className="font-semibold">{tr('Wiederherstellung rückgängig machen:')}</span>,
+                snapshot: <span className="font-mono break-all">„{undo.filename}“</span>
+              })}
             </p>
             <div className="flex gap-2 shrink-0">
               <button
@@ -442,10 +456,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                 disabled={locked}
                 className="btn-secondary text-[11px] py-1 px-2.5 inline-flex items-center gap-1.5 border-amber-500/40 text-amber-200 hover:text-white"
               >
-                <Undo2 className="w-3.5 h-3.5" aria-hidden="true" /> Rückgängig machen
+                <Undo2 className="w-3.5 h-3.5" aria-hidden="true" /> {tr('Rückgängig machen')}
               </button>
               <button type="button" onClick={dismissUndo} className="text-[11px] text-slate-400 hover:text-white px-1">
-                Ausblenden
+                {tr('Ausblenden')}
               </button>
             </div>
           </div>
@@ -467,7 +481,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         <div hidden={Boolean(inspection)} className={inspection ? undefined : 'contents'}>
           <div
             role="tablist"
-            aria-label="Bereiche"
+            aria-label={tr('Bereiche')}
             onKeyDown={handleTabKeyDown}
             className="flex items-center gap-2 pt-4 pb-2 shrink-0 border-b border-slate-800"
           >
@@ -490,7 +504,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>{label || `Server-Snapshots (${snapshotCount})`}</span>
+                  <span>{label ? tr(label) : tr('Server-Snapshots ({snapshotCount})', { snapshotCount })}</span>
                 </button>
               );
             })}
@@ -506,7 +520,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-slate-400">
-                    Snapshots auf dem Server (<code className="text-slate-300 font-mono">data/backups/</code>)
+                    {rich('Snapshots auf dem Server ({path})', { path: <code className="text-slate-300 font-mono">data/backups/</code> })}
                   </p>
                   <button
                     type="button"
@@ -519,31 +533,31 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                     ) : (
                       <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                     )}
-                    <span>Neuen Snapshot erstellen</span>
+                    <span>{tr('Neuen Snapshot erstellen')}</span>
                   </button>
                 </div>
 
                 {inspecting && (
                   <p className="text-xs text-slate-400 flex items-center gap-2">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Snapshot wird geprüft...
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> {tr('Snapshot wird geprüft...')}
                   </p>
                 )}
 
                 {loadingBackups ? (
                   <div className="py-12 flex justify-center items-center text-slate-400 gap-2">
                     <RefreshCw className="w-5 h-5 animate-spin text-brand-400" aria-hidden="true" />
-                    <span className="text-xs">Lade Snapshots...</span>
+                    <span className="text-xs">{tr('Lade Snapshots...')}</span>
                   </div>
                 ) : backupsLoadError ? (
                   <div role="alert" className="p-6 text-center bg-rose-500/10 rounded-2xl border border-rose-500/30 text-rose-300 text-xs space-y-3">
-                    <p>Die Snapshot-Liste konnte nicht geladen werden: {backupsLoadError}</p>
+                    <p>{tr('Die Snapshot-Liste konnte nicht geladen werden: {backupsLoadError}', { backupsLoadError })}</p>
                     <button type="button" onClick={fetchServerBackups} className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> Erneut laden
+                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {tr('Erneut laden')}
                     </button>
                   </div>
                 ) : serverBackups.length === 0 ? (
                   <div className="p-8 text-center bg-slate-900/40 rounded-2xl border border-slate-800 text-slate-400 text-xs">
-                    Noch keine Server-Snapshots vorhanden. Klicke auf „Neuen Snapshot erstellen“.
+                    {tr('Noch keine Server-Snapshots vorhanden. Klicke auf „Neuen Snapshot erstellen“.')}
                   </div>
                 ) : (
                   <SnapshotList
@@ -561,8 +575,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                 <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 p-3 rounded-xl text-xs flex gap-2.5 leading-relaxed">
                   <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
                   <div>
-                    <span className="font-semibold text-amber-300">Achtung:</span> Das Einspielen überschreibt die aktuelle SQLite-Datenbank (<code className="bg-amber-500/20 px-1 py-0.5 rounded text-[11px]">manga.db</code>) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv.
-                    Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.
+                    {rich('{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.', {
+                      warning: <span className="font-semibold text-amber-300">{tr('Achtung:')}</span>,
+                      file: <code className="bg-amber-500/20 px-1 py-0.5 rounded text-[11px]">manga.db</code>
+                    })}
                   </div>
                 </div>
 
@@ -599,7 +615,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                         className="mt-3 text-xs text-rose-400 hover:underline"
                         disabled={locked}
                       >
-                        Andere Datei auswählen
+                        {tr('Andere Datei auswählen')}
                       </button>
                     </div>
                   ) : (
@@ -613,8 +629,8 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                       <span className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 mb-3 hover:text-emerald-400 transition-colors">
                         <CloudUpload className="w-6 h-6" aria-hidden="true" />
                       </span>
-                      <span className="text-sm font-semibold text-slate-200">Klicke hier, um dein Backup auszuwählen</span>
-                      <span className="text-xs text-slate-400 mt-1">Nur .zip-Dateien (z. B. manga-shelf-backup.zip)</span>
+                      <span className="text-sm font-semibold text-slate-200">{tr('Klicke hier, um dein Backup auszuwählen')}</span>
+                      <span className="text-xs text-slate-400 mt-1">{tr('Nur .zip-Dateien (z. B. manga-shelf-backup.zip)')}</span>
                     </button>
                   )}
                 </div>
@@ -628,11 +644,11 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                   >
                     {inspecting ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> Backup wird geprüft...
+                        <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> {tr('Backup wird geprüft...')}
                       </>
                     ) : (
                       <>
-                        <CloudUpload className="w-4 h-4" aria-hidden="true" /> Backup prüfen
+                        <CloudUpload className="w-4 h-4" aria-hidden="true" /> {tr('Backup prüfen')}
                       </>
                     )}
                   </button>
@@ -642,10 +658,10 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
 
             <div hidden={backupModalTab !== 'csv'} className="space-y-4">
               <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
-                <div className="text-sm font-semibold text-slate-200">Sammlung exportieren</div>
-                <p className="text-xs text-slate-400">Alle Bände als CSV (Semikolon, UTF-8). Öffnet sich direkt in Excel oder LibreOffice.</p>
+                <div className="text-sm font-semibold text-slate-200">{tr('Sammlung exportieren')}</div>
+                <p className="text-xs text-slate-400">{tr('Alle Bände als CSV (Semikolon, UTF-8). Öffnet sich direkt in Excel oder LibreOffice.')}</p>
                 <DownloadLink path="/api/export/csv" download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800">
-                  <Download className="w-4 h-4" aria-hidden="true" /> CSV herunterladen
+                  <Download className="w-4 h-4" aria-hidden="true" /> {tr('CSV herunterladen')}
                 </DownloadLink>
               </div>
               <CsvImportPanel disabled={restoring || reloadPending} onImported={onRestoreSuccess} onImportingChange={setCsvImporting} />
@@ -661,7 +677,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
             className="btn-secondary text-xs px-4 py-2"
             disabled={busy}
           >
-            Schließen
+            {tr('Schließen')}
           </button>
         </div>
       </div>

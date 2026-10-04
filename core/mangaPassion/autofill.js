@@ -7,9 +7,10 @@ const {
   searchMangaPassionEditions, getEditionDetailsAndVolumes, linkRecommendedEdition
 } = require('./client');
 const {
-  cleanOfficialDate, matchSchuberVolume, findOfficialVolume, classifyOfficialVolume, knownPublisher,
-  MP_UNREACHABLE_MESSAGE, MP_EDITION_NOT_FOUND_MESSAGE
+  cleanOfficialDate, matchSchuberVolume, findOfficialVolume, classifyOfficialVolume, knownPublisher
 } = require('./classify');
+const { msg, payloadMsg } = require('../errors');
+const { MP_PAYLOAD, germanVolumes } = require('./gaps');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 
@@ -191,7 +192,9 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
   return {
     success: false,
     matched: false,
-    message: `Keine Daten für "${(volumeNumber && String(volumeNumber).trim()) || options.isbn || options.url || 'diesen Band'}" auf Manga Passion gefunden.`
+    ...payloadMsg('message', msg('Keine Daten für "{query}" auf Manga Passion gefunden.', {
+      query: (volumeNumber && String(volumeNumber).trim()) || options.isbn || options.url || msg('diesen Band')
+    }))
   };
 }
 
@@ -226,7 +229,7 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
   if (!editionId) {
     const searchRes = await searchMangaPassionEditions(ctx, manga.title, manga.publisher, manga.total_volumes);
     if (searchRes.unavailable) {
-      return { success: false, unavailable: true, message: MP_UNREACHABLE_MESSAGE, updated_count: 0 };
+      return { success: false, unavailable: true, ...payloadMsg('message', MP_PAYLOAD.unreachable), updated_count: 0 };
     }
     const linked = linkRecommendedEdition(ctx, manga, searchRes);
     if (linked.editionId && !linked.confident) {
@@ -234,7 +237,9 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
       return {
         success: false,
         needs_confirmation: true,
-        message: 'Die passende Manga-Passion-Edition ist nicht eindeutig (Vorschlag: "' + searchRes.recommended.title + '"). Bitte zuerst mit „Edition bestätigen“ (Lücken-Hinweis oder Manga-Passion-Dialog) bestätigen oder eine andere Edition wählen.',
+        ...payloadMsg('message', msg('Die passende Manga-Passion-Edition ist nicht eindeutig (Vorschlag: "{title}"). Bitte zuerst mit „Edition bestätigen“ (Lücken-Hinweis oder Manga-Passion-Dialog) bestätigen oder eine andere Edition wählen.', {
+          title: searchRes.recommended.title
+        })),
         updated_count: 0
       };
     }
@@ -244,28 +249,29 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
   if (!editionId) {
     return {
       success: false,
-      message: 'Keine passende deutsche Edition auf Manga-Passion gefunden.',
+      ...payloadMsg('message', MP_PAYLOAD.noEdition),
       updated_count: 0
     };
   }
 
   const details = await getEditionDetailsAndVolumes(ctx, editionId, false);
   if (!details || details.notFound) {
-    return { success: false, message: MP_EDITION_NOT_FOUND_MESSAGE, updated_count: 0 };
+    return { success: false, ...payloadMsg('message', MP_PAYLOAD.editionNotFound), updated_count: 0 };
   }
   if (details.incomplete && !details.volumes?.length) {
-    return { success: false, unavailable: true, message: MP_UNREACHABLE_MESSAGE, updated_count: 0 };
+    return { success: false, unavailable: true, ...payloadMsg('message', MP_PAYLOAD.unreachable), updated_count: 0 };
   }
   if (!details.volumes || details.volumes.length === 0) {
     return {
       success: false,
-      message: 'Keine Bände für diese Edition gefunden.',
+      ...payloadMsg('message', msg('Keine Bände für diese Edition gefunden.')),
       updated_count: 0
     };
   }
 
   const officialVolumes = details.volumes;
-  const userVolumes = ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId);
+  // a volume with its own language never gets German edition data
+  const userVolumes = germanVolumes(manga, ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId));
 
   let updatedCount = 0;
   const overwrite = Boolean(options.overwrite);

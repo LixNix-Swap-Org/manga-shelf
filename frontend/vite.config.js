@@ -9,13 +9,31 @@ import { appCspPlugin } from './src/app/csp.js'
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf-8'))
 
-/** Every build file under dist/assets as a URL path (the .br/.gz variants are served for these, not fetched). */
+/** Language code -> URL of its catalog chunk (src/i18n/locales/<code>.json in dist/.vite/manifest.json). */
+export function catalogFiles(outDir) {
+  const manifestPath = path.join(outDir, '.vite', 'manifest.json')
+  if (!fs.existsSync(manifestPath)) return {}
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  const out = {}
+  for (const [key, chunk] of Object.entries(manifest)) {
+    const match = /^src\/i18n\/locales\/([A-Za-z-]+)\.json$/.exec(key)
+    if (match && chunk?.file) out[match[1]] = `/${chunk.file}`
+  }
+  return out
+}
+
+/**
+ * Every build file under dist/assets as a URL path (the .br/.gz variants are served for these, not fetched), without
+ * the translation catalogs: the worker caches those on first use and warms only the active language.
+ */
 export function precacheList(outDir) {
   const assetsDir = path.join(outDir, 'assets')
   if (!fs.existsSync(assetsDir)) return []
+  const catalogs = new Set(Object.values(catalogFiles(outDir)))
   return fs.readdirSync(assetsDir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && !/\.(br|gz)$/.test(entry.name))
     .map((entry) => `/${path.relative(outDir, path.join(entry.parentPath ?? entry.path, entry.name)).split(path.sep).join('/')}`)
+    .filter((file) => !catalogs.has(file))
     .sort()
 }
 
@@ -24,11 +42,12 @@ export function buildId(files, shell = '') {
   return createHash('sha256').update(files.join('\n')).update('\0').update(shell).digest('hex').slice(0, 12)
 }
 
-export function stampServiceWorker(source, { version, files, build = '' }) {
+export function stampServiceWorker(source, { version, files, build = '', catalogs = {} }) {
   return source
     .replaceAll('__APP_VERSION__', version)
     .replaceAll('__BUILD_ID__', build)
     .replace('/*__PRECACHE__*/', files.map((file) => JSON.stringify(file)).join(', '))
+    .replace('/*__CATALOGS__*/', Object.keys(catalogs).sort().map((code) => `${JSON.stringify(code)}: ${JSON.stringify(catalogs[code])}`).join(', '))
 }
 
 const LOCAL_BOOT_STUB = '\0local-boot-stub'
@@ -171,9 +190,12 @@ export default defineConfig(({ mode }) => {
           if (!fs.existsSync(swPath)) return
           const source = fs.readFileSync(swPath, 'utf-8')
           const files = precacheList(outDir)
+          const catalogs = catalogFiles(outDir)
           const shellPath = path.join(outDir, 'index.html')
           const shell = fs.existsSync(shellPath) ? fs.readFileSync(shellPath, 'utf-8') : ''
-          fs.writeFileSync(swPath, stampServiceWorker(source, { version: pkg.version, files, build: buildId(files, shell) }))
+          // the catalogs count for the build id: a changed translation is a new cache
+          const build = buildId([...files, ...Object.values(catalogs).sort()], shell)
+          fs.writeFileSync(swPath, stampServiceWorker(source, { version: pkg.version, files, build, catalogs }))
         }
       },
       {

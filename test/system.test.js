@@ -170,6 +170,19 @@ test('orphan cleanup waits only for jobs that touch uploads and names the runnin
         await snapshot;
         await new Promise((r) => setImmediate(r));
         assert.equal((await admin('POST', '/system/orphans/clean')).status, 200);
+
+        // a job without its own text: the German job name is a nested message, not a plain param
+        let finishOther;
+        const other = lifecycle.trackJob('Snapshot-Prüfung', new Promise((resolve) => { finishOther = resolve; }));
+        const named = await admin('POST', '/system/orphans/clean');
+        assert.deepEqual(named.body, {
+            error: 'Gerade läuft „Snapshot-Prüfung“ – bitte gleich noch einmal versuchen',
+            code: 'JOB_RUNNING',
+            msg: 'Gerade läuft „{job}“ – bitte gleich noch einmal versuchen',
+            params: { job: { msg: 'Snapshot-Prüfung', params: {} } }
+        });
+        finishOther();
+        await other;
     } finally {
         finishAnime();
     }

@@ -8,6 +8,8 @@ import { apiFetch, TIMEOUTS } from '../utils/api';
 import { prepareImagesForUpload } from '../utils/imageResize';
 import { UPLOAD_CANCELLED, notifyTrashed, volumeDeleteConfirmText } from './useVolumeActions';
 import { getVolumeDisplayTitle } from '../utils/volumeHelpers';
+import { t, tn } from '../i18n/index.js';
+import { payloadText, serverText } from '../i18n/serverText.js';
 
 /**
  * State and actions of the volume editor: form, photos, Manga-Passion autofill, save and delete. Mount it once per
@@ -72,7 +74,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     if (accepted.length === 0 || upload.signal.aborted) setUploadingVolImage(false);
     if (upload.signal.aborted) {
       lifetime?.removeEventListener('abort', onClose);
-      if (!lifetime?.aborted) setPhotoError({ text: UPLOAD_CANCELLED });
+      if (!lifetime?.aborted) setPhotoError({ text: t(UPLOAD_CANCELLED) });
       return;
     }
     if (accepted.length > 0) {
@@ -83,7 +85,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
           const res = await apiFetch('/api/upload/multiple', { method: 'POST', body: fd, signal: upload.signal });
           const data = await readJsonSafe(res);
           if (!res.ok) {
-            failure = data.error || `Fehler beim Hochladen der Bilder (HTTP ${res.status})`;
+            failure = serverText(data) || t('Fehler beim Hochladen der Bilder (HTTP {status})', { status: res.status });
             break;
           }
           const urls = data.urls || [];
@@ -92,9 +94,9 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
           setEditVolForm(prev => addImages(prev, urls));
         }
       } catch (e) {
-        if (!isAbortError(e) && !upload.signal.aborted) failure = 'Netzwerkfehler beim Bild-Upload';
+        if (!isAbortError(e) && !upload.signal.aborted) failure = t('Netzwerkfehler beim Bild-Upload');
         else if (lifetime?.aborted) return;
-        else failure = UPLOAD_CANCELLED;
+        else failure = t(UPLOAD_CANCELLED);
       } finally {
         lifetime?.removeEventListener('abort', onClose);
         if (uploadAbortRef.current === upload) uploadAbortRef.current = null;
@@ -103,8 +105,8 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     }
     if (failure || problems.length > 0) {
       const parts = [];
-      if (failure) parts.push(uploaded > 0 ? `${failure} (${uploaded} von ${accepted.length} Fotos hochgeladen)` : failure);
-      if (problems.length > 0) parts.push(`Nicht hochgeladen: ${problems.join(', ')}`);
+      if (failure) parts.push(uploaded > 0 ? tn('{failure} ({uploaded} von {n} Fotos hochgeladen)', '{failure} ({uploaded} von {n} Fotos hochgeladen)', accepted.length, { failure, uploaded }) : failure);
+      if (problems.length > 0) parts.push(t('Nicht hochgeladen: {files}', { files: problems.join(', ') }));
       setPhotoError({ text: parts.join('. ') });
     }
   };
@@ -130,7 +132,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     }
 
     if (!isAllowedImageUrl(url)) {
-      setPhotoError({ text: 'Bitte eine Bild-URL mit http:// oder https:// eingeben.' });
+      setPhotoError({ text: t('Bitte eine Bild-URL mit http:// oder https:// eingeben.') });
       return;
     }
     if (url.startsWith('/uploads/')) {
@@ -153,10 +155,10 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         setShowUrlInput(false);
         return;
       }
-      error = upData.error || `Bild konnte nicht geladen werden (HTTP ${upRes.status})`;
+      error = serverText(upData) || t('Bild konnte nicht geladen werden (HTTP {status})', { status: upRes.status });
     } catch (e) {
       if (isAbortError(e)) return;
-      error = 'Netzwerkfehler beim Laden des Bildes';
+      error = t('Netzwerkfehler beim Laden des Bildes');
     }
     // the server cannot reach every host the browser can (LAN, hotlink protection): linking stays an explicit choice
     setPhotoError({ text: error, externalUrl: url });
@@ -187,7 +189,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     const targetUrl = extraOpts.url || (manualImageUrl && manualImageUrl.includes('manga-passion.de') ? manualImageUrl.trim() : '');
     const mpVolId = extraOpts.mp_volume_id || '';
     if (!form.volume_number && !form.isbn && !targetUrl && !mpVolId) {
-      setAutofillMessage({ type: 'warning', text: 'Bitte gib zuerst eine Band-Nummer, ISBN oder Manga Passion URL ein.' });
+      setAutofillMessage({ type: 'warning', text: t('Bitte gib zuerst eine Band-Nummer, ISBN oder Manga Passion URL ein.') });
       return;
     }
     setAutofillingVolume(true);
@@ -212,24 +214,28 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         const { updatedFields } = applyLookupToForm(formRef.current, d, opts);
         // merged into the state at commit time: an upload or removal queued meanwhile must survive
         setEditVolForm(prev => applyLookupToForm(prev, d, opts).next);
-        const source = d.source || 'Manga Passion';
+        const source = d.source || t('Manga Passion');
         setAutofillMessage(updatedFields.length > 0
-          ? { type: 'success', text: `Erfolgreich von ${source} ausgefüllt: ${updatedFields.join(', ')}!` }
-          : { type: 'info', text: `Alle Daten von ${source} stimmen bereits mit deinen Eingaben überein.` });
+          ? { type: 'success', text: t('Erfolgreich von {source} ausgefüllt: {fields}!', {
+            source,
+            // applyLookupToForm translates the field labels where it builds them
+            fields: updatedFields.join(', ')
+          }) }
+          : { type: 'info', text: t('Alle Daten von {source} stimmen bereits mit deinen Eingaben überein.', { source }) });
       } else if (!res.ok) {
         setAutofillMessage({
           type: 'warning',
-          text: result.error || result.message || `Fehler beim Abrufen der Metadaten (HTTP ${res.status}).`
+          text: serverText(result) || payloadText(result, 'message') || t('Fehler beim Abrufen der Metadaten (HTTP {status}).', { status: res.status })
         });
       } else {
         setAutofillMessage({
           type: 'warning',
-          text: result.message || `Keine Daten für "${form.volume_number || targetUrl}" auf Manga Passion gefunden.`
+          text: payloadText(result, 'message') || t('Keine Daten für "{query}" auf Manga Passion gefunden.', { query: form.volume_number || targetUrl })
         });
       }
     } catch (err) {
       if (isAbortError(err)) return;
-      setAutofillMessage({ type: 'warning', text: 'Fehler beim Abrufen der Metadaten.' });
+      setAutofillMessage({ type: 'warning', text: t('Fehler beim Abrufen der Metadaten.') });
     } finally {
       setAutofillingVolume(false);
     }
@@ -261,7 +267,10 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     const invalid = Object.keys(errors);
     if (invalid.length > 0) {
       setShowErrors(true);
-      setFormError(`Bitte prüfen: ${invalid.map(k => FIELD_NAMES[k] || k).join(', ')}`);
+      setFormError(t('Bitte prüfen: {fields}', {
+        // i18n-dynamic: FIELD_NAMES is a marked label map
+        fields: invalid.map(k => (FIELD_NAMES[k] ? t(FIELD_NAMES[k]) : k)).join(', ')
+      }));
       return;
     }
     setFormError('');
@@ -278,10 +287,10 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         return;
       }
       const err = await readJsonSafe(res);
-      setFormError(err.error || `Fehler beim Speichern des Bands (HTTP ${res.status})`);
+      setFormError(serverText(err) || t('Fehler beim Speichern des Bands (HTTP {status})', { status: res.status }));
     } catch (err) {
       if (isAbortError(err)) return;
-      setFormError('Netzwerkfehler beim Speichern');
+      setFormError(t('Netzwerkfehler beim Speichern'));
     } finally {
       setSavingVol(false);
     }
@@ -301,7 +310,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     }
     onClose();
     if (onSuccess) await onSuccess();
-    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : 'Band', result.trash_id, onSuccess);
+    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, result.trash_id, onSuccess);
   };
 
   return {

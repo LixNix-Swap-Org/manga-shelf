@@ -6,6 +6,7 @@ import useProgressiveList from '../../hooks/useProgressiveList';
 import { formatCount, formatNumber, formatRelative } from '../../utils/format';
 import { isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
 import { viewSessionEnding } from '../../utils/viewState';
+import { t } from '../../i18n/index.js';
 
 export { seriesSummary } from './MangaCard';
 
@@ -23,7 +24,7 @@ function WishBadge({ manga }) {
   return (
     <span className="absolute top-9 right-2 z-10 pointer-events-none rounded-md bg-slate-950/90" title={wishLabel(manga)}>
       <span className={`block text-[10px] font-bold px-1.5 py-0.5 rounded-md border shadow-sm ${priorityBadgeClass(manga.wish_priority)}`}>
-        Wunsch<span className="sr-only">: {wishLabel(manga)}</span>
+        {t('Wunsch')}<span className="sr-only">: {wishLabel(manga)}</span>
       </span>
     </span>
   );
@@ -93,9 +94,9 @@ function SectionHeading({ id, label, count, as: Tag = 'h3' }) {
 function ListProgress({ shown, total, onMore, sentinelRef }) {
   return (
     <div ref={sentinelRef} className="mt-6 flex flex-col items-center gap-2 text-xs text-slate-400">
-      <p>Zeige {formatNumber(shown)} von {formatNumber(total)}</p>
+      <p>{t('Zeige {shown} von {total}', { shown: formatNumber(shown), total: formatNumber(total) })}</p>
       <button type="button" onClick={onMore} className="btn-secondary text-xs py-1.5 px-3">
-        Weitere anzeigen
+        {t('Weitere anzeigen')}
       </button>
     </div>
   );
@@ -103,8 +104,8 @@ function ListProgress({ shown, total, onMore, sentinelRef }) {
 
 function FreshnessNote({ refreshing, dataAt }) {
   let text = null;
-  if (refreshing) text = 'aktualisiere…';
-  else if (dataAt && Date.now() - dataAt > STALE_AFTER_MS) text = `Stand: ${formatRelative(dataAt)}`;
+  if (refreshing) text = t('aktualisiere…');
+  else if (dataAt && Date.now() - dataAt > STALE_AFTER_MS) text = t('Stand: {time}', { time: formatRelative(dataAt) });
   return (
     <p role="status" className="h-4 -mt-5 mb-1 text-right text-[11px] leading-4 text-slate-400">
       {text}
@@ -119,36 +120,36 @@ function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleO
   let action = null;
 
   if (filtersActive) {
-    heading = 'Keine Treffer gefunden';
-    text = 'Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.';
+    heading = t('Keine Treffer gefunden');
+    text = t('Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.');
     action = (
       <button type="button" onClick={resetFilters} className="btn-secondary text-sm inline-flex items-center gap-2">
-        <X className="w-4 h-4" /> Filter & Suche zurücksetzen
+        <X className="w-4 h-4" /> {t('Filter & Suche zurücksetzen')}
       </button>
     );
   } else if (error) {
     icon = <TriangleAlert className="w-8 h-8" />;
-    heading = 'Sammlung konnte nicht geladen werden';
+    heading = t('Sammlung konnte nicht geladen werden');
     text = error;
     action = onRetry && (
       <button type="button" onClick={onRetry} className="btn-secondary text-sm inline-flex items-center gap-2">
-        <RefreshCw className="w-4 h-4" /> Erneut versuchen
+        <RefreshCw className="w-4 h-4" /> {t('Erneut versuchen')}
       </button>
     );
   } else if (isOffline) {
-    heading = 'Keine Offline-Kopie vorhanden';
-    text = 'Verbinde dich mit dem Server, um deine Sammlung zu laden.';
+    heading = t('Keine Offline-Kopie vorhanden');
+    text = t('Verbinde dich mit dem Server, um deine Sammlung zu laden.');
   } else if (canEdit) {
-    heading = 'Deine Sammlung ist noch leer';
-    text = 'Füge deinen ersten Manga hinzu, um Bände und deinen Fortschritt zu verfolgen.';
+    heading = t('Deine Sammlung ist noch leer');
+    text = t('Füge deinen ersten Manga hinzu, um Bände und deinen Fortschritt zu verfolgen.');
     action = (
       <button type="button" onClick={handleOpenModal} className="btn-primary text-sm inline-flex items-center gap-2">
-        <Plus className="w-4 h-4" /> Ersten Manga anlegen
+        <Plus className="w-4 h-4" /> {t('Ersten Manga anlegen')}
       </button>
     );
   } else {
-    heading = 'Noch keine Reihen vorhanden';
-    text = 'Hier sind noch keine Reihen eingetragen. Ein Editor kann welche anlegen.';
+    heading = t('Noch keine Reihen vorhanden');
+    text = t('Hier sind noch keine Reihen eingetragen. Ein Editor kann welche anlegen.');
   }
 
   return (
@@ -193,6 +194,10 @@ function MangaCollectionGrid({
   setCollectFilter,
   authorFilter = '',
   setAuthorFilter,
+  tagFilter = [],
+  setTagFilter,
+  languageFilter = 'ALL',
+  setLanguageFilter,
   onAuthorClick
 }) {
   const isList = viewMode === 'list';
@@ -208,12 +213,13 @@ function MangaCollectionGrid({
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3" role="status">
         <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
-        <p className="text-sm">Lade Sammlung...</p>
+        <p className="text-sm">{t('Lade Sammlung...')}</p>
       </div>
     );
   }
 
-  const filtersActive = Boolean(search) || statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter);
+  const filtersActive = Boolean(search) || statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
+    || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL';
   const showErrorPanel = Boolean(error) && filtered.length === 0 && !filtersActive;
   const banner = error && !showErrorPanel ? (
     <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
@@ -223,7 +229,7 @@ function MangaCollectionGrid({
       </span>
       {onRetry && (
         <button type="button" onClick={onRetry} className="inline-flex items-center gap-1 font-semibold text-amber-300 hover:text-white">
-          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> Erneut versuchen
+          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {t('Erneut versuchen')}
         </button>
       )}
     </div>
@@ -246,6 +252,8 @@ function MangaCollectionGrid({
             setPublisherFilter('ALL');
             setCollectFilter?.('ALL');
             setAuthorFilter?.('');
+            setTagFilter?.([]);
+            setLanguageFilter?.('ALL');
           }}
         />
       </>
@@ -276,8 +284,8 @@ function MangaCollectionGrid({
           type="button"
           onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
           className={GRID_DELETE_BUTTON_CLASS}
-          title="Manga löschen"
-          aria-label={`${manga.title} löschen`}
+          title={t('Manga löschen')}
+          aria-label={t('{title} löschen', { title: manga.title })}
         >
           <Trash className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
@@ -295,13 +303,13 @@ function MangaCollectionGrid({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                  <th scope="col" className="py-3 px-4 w-16">Cover</th>
-                  <th scope="col" className="py-3 px-4">Titel & Autor</th>
-                  <th scope="col" className="py-3 px-4 hidden sm:table-cell">Verlag</th>
-                  <th scope="col" className="py-3 px-4">Status</th>
-                  <th scope="col" className="py-3 px-4 whitespace-nowrap">Bände / Fortschritt</th>
-                  <th scope="col" className="py-3 px-4 text-right hidden md:table-cell">Wert</th>
-                  <th scope="col" className="py-3 px-4 text-right w-24">Aktion</th>
+                  <th scope="col" className="py-3 px-4 w-16">{t('Cover')}</th>
+                  <th scope="col" className="py-3 px-4">{t('Titel & Autor')}</th>
+                  <th scope="col" className="py-3 px-4 hidden sm:table-cell">{t('Verlag')}</th>
+                  <th scope="col" className="py-3 px-4">{t('Status')}</th>
+                  <th scope="col" className="py-3 px-4 whitespace-nowrap">{t('Bände / Fortschritt')}</th>
+                  <th scope="col" className="py-3 px-4 text-right hidden md:table-cell">{t('Wert')}</th>
+                  <th scope="col" className="py-3 px-4 text-right w-24">{t('Aktion')}</th>
                 </tr>
               </thead>
               {sections.length === 0 ? (

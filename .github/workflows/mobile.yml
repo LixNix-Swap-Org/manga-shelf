@@ -38,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: smoke (Debug-Builds) oder build (Release-Artefakte)
+        description: smoke (debug builds) or build (release artifacts)
         type: choice
         options: [smoke, build]
         default: build
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: Mobile-Projekt vorhanden?
+      - name: Mobile project present?
         id: project
         run: |
           if [ -f mobile/package.json ] && node -e 'const s = require("./mobile/package.json").scripts || {}; process.exit(s["build:android"] && s["smoke:android"] ? 0 : 1)'; then
@@ -78,13 +78,13 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - name: Abhängigkeiten
+      - name: Dependencies
         if: steps.project.outputs.present == 'true'
         run: |
           npm ci --ignore-scripts
           (cd frontend && npm ci)
           (cd mobile && npm ci)
-      - name: Tests (node:test, Version der nativen Projekte)
+      - name: Tests (node:test, version of the native projects)
         if: steps.project.outputs.present == 'true'
         working-directory: mobile
         run: npm test
@@ -96,7 +96,7 @@ jobs:
           VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
         run: npm run smoke:android
       # build-android.js signs only when all four secrets are set; otherwise a debug-signed APK and an unsigned AAB
-      - name: Release-Build (APK + AAB)
+      - name: Release build (APK + AAB)
         if: steps.project.outputs.present == 'true' && env.MODE == 'build'
         working-directory: mobile
         env:
@@ -107,7 +107,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: npm run build:android
       # with the release key the APK must exist and carry that certificate, never the debug key
-      - name: Release-Signatur prüfen (apksigner)
+      - name: Check the release signature (apksigner)
         if: steps.project.outputs.present == 'true' && env.MODE == 'build'
         working-directory: mobile
         env:
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: Mobile-Projekt vorhanden?
+      - name: Mobile project present?
         id: project
         run: |
           if [ -f mobile/package.json ] && node -e 'const s = require("./mobile/package.json").scripts || {}; process.exit(s["build:ios"] && s["smoke:ios"] ? 0 : 1)'; then
@@ -156,13 +156,13 @@ jobs:
             echo "::notice::mobile/package.json hat keine Skripte build:ios/smoke:ios, iPhone übersprungen"
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Abhängigkeiten
+      - name: Dependencies
         if: steps.project.outputs.present == 'true'
         run: |
           npm ci --ignore-scripts
           (cd frontend && npm ci)
           (cd mobile && npm ci)
-      - name: Smoke (Simulator-Build ohne Signatur)
+      - name: Smoke (simulator build without signing)
         if: steps.project.outputs.present == 'true' && env.MODE == 'smoke'
         working-directory: mobile
         env:
@@ -170,7 +170,7 @@ jobs:
         run: npm run smoke:ios
       # build-ios.js signs only when all four secrets are set; otherwise an unsigned IPA zipped from the archive. The share
       # extension is signed only with IOS_SHARE_PROVISIONING_PROFILE_BASE64, else the signed IPA leaves it out
-      - name: Release-Build (IPA)
+      - name: Release build (IPA)
         if: steps.project.outputs.present == 'true' && env.MODE == 'build'
         working-directory: mobile
         env:

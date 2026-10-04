@@ -1,5 +1,6 @@
 import { compareVolumesByNumber } from '../../utils/volumeHelpers.js';
 import { formatNumber, formatEuro, formatCount, formatPercent, formatMonth, formatDateTime } from '../../utils/format.js';
+import { t } from '../../i18n/index.js';
 
 const toNumber = (n) => {
   const v = Number(n);
@@ -59,7 +60,7 @@ export function publisherSegments(list, topN = PUBLISHER_COLORS.length) {
   if (rest.length > 0) {
     const volumes = rest.reduce((sum, p) => sum + toNumber(p.volume_count), 0);
     const width = total > 0 ? share(volumes) : Math.max(0, 100 - segments.reduce((sum, s) => sum + s.width, 0));
-    segments.push({ key: '__other__', label: `Sonstige (${countLabel(rest.length, 'Verlag', 'Verlage')})`, volumes, width, color: OTHER_PUBLISHERS_COLOR });
+    segments.push({ key: '__other__', label: t('Sonstige ({count})', { count: countLabel(rest.length, 'Verlag', 'Verlage') }), volumes, width, color: OTHER_PUBLISHERS_COLOR });
   }
   return segments;
 }

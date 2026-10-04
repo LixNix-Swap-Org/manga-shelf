@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Which installers can be signed: a group counts only when every one of its secrets is set (GitHub passes a missing
 // secret as an empty string). Prints key=value lines and appends them to $GITHUB_OUTPUT in Actions; --notes prints
-// the German lines for the release text instead.
+// the signing lines for the release text instead.
 const fs = require('fs');
 
 const GROUPS = {
@@ -22,18 +22,18 @@ function detectSigning(env = process.env) {
 }
 
 function notes(state, env = process.env) {
-    const yes = (flag, text) => (flag ? text : 'unsigniert');
+    const yes = (flag, text) => (flag ? text : 'unsigned');
     // only a step that passes the variable (empty when the secret is missing) knows about the extension
     const shareKnown = typeof env[IOS_SHARE_SECRET] === 'string';
-    const iosSigned = !shareKnown ? 'signiert' : env[IOS_SHARE_SECRET].trim() ? 'signiert, mit Teilen-Ziel (iOS)' : 'signiert, ohne Teilen-Ziel (iOS)';
+    const iosSigned = !shareKnown ? 'signed' : env[IOS_SHARE_SECRET].trim() ? 'signed, with share extension (iOS)' : 'signed, without share extension (iOS)';
     return [
-        '### Signierung',
-        `- Windows (Installer, portable .exe, Server-.exe): ${yes(state.windows, 'signiert')}`,
-        `- macOS (.dmg/.zip, Server-Binärdatei): ${yes(state.macos, state.notarize ? 'signiert und notarisiert' : 'signiert, nicht notarisiert')}`,
-        `- Android (APK/AAB): ${yes(state.android, 'signiert')}${state.android ? '' : ' (APK mit Debug-Schlüssel)'}`,
+        '### Signing',
+        `- Windows (installer, portable .exe, server .exe): ${yes(state.windows, 'signed')}`,
+        `- macOS (.dmg/.zip, server binary): ${yes(state.macos, state.notarize ? 'signed and notarized' : 'signed, not notarized')}`,
+        `- Android (APK/AAB): ${yes(state.android, 'signed')}${state.android ? '' : ' (APK with the debug key)'}`,
         `- iPhone (IPA): ${yes(state.ios, iosSigned)}`,
-        '- Linux (AppImage, .deb, .rpm, Server-Binärdateien): unsigniert, Prüfsummen in SHA256SUMS.txt',
-        '- Docker-Image: keyless mit cosign signiert (sofern der Schritt gelang)'
+        '- Linux (AppImage, .deb, .rpm, server binaries): unsigned, checksums in SHA256SUMS.txt',
+        '- Docker image: signed keyless with cosign (if that step succeeded)'
     ].join('\n');
 }
 

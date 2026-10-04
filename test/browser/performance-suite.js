@@ -6,7 +6,7 @@ const { baseUrl: BASE_URL, user: E2E_USER, password: E2E_PASSWORD } = suiteEnv()
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
-const { findChrome } = require('./chrome');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 
 async function runPerformanceSuite() {
   const artifactDir = process.env.REPORT_DIR || path.join(__dirname, 'reports');
@@ -23,7 +23,7 @@ async function runPerformanceSuite() {
     executablePath,
     headless: 'new',
     defaultViewport: { width: 1440, height: 900 },
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: CHROME_ARGS
   });
 
   const page = await browser.newPage();

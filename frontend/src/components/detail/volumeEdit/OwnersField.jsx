@@ -2,6 +2,8 @@ import { useEffect, useId, useState } from 'react';
 import { Users } from 'lucide-react';
 import { ApiError, apiFetch, readJson } from '../../../utils/api';
 import { notify } from '../../../utils/notify';
+import { t } from '../../../i18n/index.js';
+import { serverText } from '../../../i18n/serverText.js';
 
 const hasKey = (obj, key) => Boolean(obj) && Object.hasOwn(obj, key);
 
@@ -43,7 +45,7 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
     try {
       const res = await apiFetch(`/api/volumes/${volumeId}/owners`, { method: 'POST', body });
       const data = (await readJson(res)) ?? {};
-      if (!res.ok) throw new ApiError(data.error || 'Fehler beim Speichern', { status: res.status, ref: data.ref ?? null });
+      if (!res.ok) throw new ApiError(serverText(data) || t('Fehler beim Speichern'), { status: res.status, ref: data.ref ?? null });
       setOwners(data.owners || []);
       return data;
     } finally {
@@ -58,7 +60,7 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
       const restored = hasKey(body, 'previous_purchase_date') ? { purchase_date: body.previous_purchase_date } : {};
       if (onChanged) onChanged({ ...data, ...restored });
     } catch (e) {
-      notify.error(e, { fallback: 'Rückgängig machen fehlgeschlagen' });
+      notify.error(e, { fallback: t('Rückgängig machen fehlgeschlagen') });
     }
   };
 
@@ -77,15 +79,15 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
     const undoBody = ownersUndoBody(data, owned, target);
     if (!undoBody) return;
     const name = u.display_name || u.username;
-    notify.success(owned ? `${name} besitzt den Band nicht mehr` : `${name} als Besitzer eingetragen`, {
-      action: { label: 'Rückgängig', onClick: () => undo(u, undoBody) }
+    notify.success(owned ? t('{name} besitzt den Band nicht mehr', { name }) : t('{name} als Besitzer eingetragen', { name }), {
+      action: { label: t('Rückgängig'), onClick: () => undo(u, undoBody) }
     });
   };
 
   return (
     <div>
       <span id={labelId} className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-        <Users className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> Besitzer
+        <Users className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Besitzer')}
       </span>
       <div role="group" aria-labelledby={labelId} className="flex flex-wrap gap-1.5">
         {users.map(u => {

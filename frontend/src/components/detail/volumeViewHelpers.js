@@ -1,5 +1,6 @@
 import { inferVolumeType, getEditionLabel, getSpecialEditionNumber, getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import { formatEuro, formatDate } from '../../utils/format';
+import { t } from '../../i18n/index.js';
 
 export { formatEuro };
 
@@ -7,23 +8,26 @@ const EDITION_NAME_WORDS = /collector'?s?\s*edition|limited\s*edition|limitierte
 
 /**
  * Badge for card, spine and list. `type` is always inferVolumeType(vol), so badges agree with chips and counts.
- * Returns { type, label, short, text }.
+ * Returns { type, label, short, text } plus, for a special edition, `number` (the volume number the spine shows).
  */
 export function getVolumeBadge(vol) {
   const type = inferVolumeType(vol);
   const raw = String(vol.volume_number ?? '').trim();
   if (type === 'schuber') {
-    return { type, label: 'Schuber', short: 'Schuber', text: raw.replace(/^schuber\s*/i, '') };
+    return { type, label: t('Schuber'), short: t('Schuber'), text: raw.replace(/^schuber\s*/i, '') };
   }
   if (type === 'special_edition') {
     const { label, short } = getEditionLabel(vol);
     const num = getSpecialEditionNumber(vol);
-    return { type, label, short, text: num ? `Band ${num}` : raw.replace(EDITION_NAME_WORDS, '').replace(/\s+/g, ' ').trim() };
+    const rest = raw.replace(EDITION_NAME_WORDS, '').replace(/\s+/g, ' ').trim();
+    // the number comes from the data, never from parsing the (translated) badge text
+    const number = num ? String(num) : rest.match(/^Band (.+)$/)?.[1] || '';
+    return { type, label, short, number, text: num ? t('Band {num}', { num }) : rest };
   }
   if (type === 'special') {
-    return { type, label: 'Special', short: 'EXTRA', text: raw.replace(/special\s*|extra\s*|sonderband\s*/gi, '').trim() };
+    return { type, label: t('Special'), short: 'EXTRA', text: raw.replace(/special\s*|extra\s*|sonderband\s*/gi, '').trim() };
   }
-  return { type: 'volume', label: 'Einzelband', short: '', text: getVolumeDisplayTitle(vol) };
+  return { type: 'volume', label: t('Einzelband'), short: '', text: getVolumeDisplayTitle(vol) };
 }
 
 /** 'owned' | 'preordered' | 'ordered' | 'upcoming' | 'missing' */
@@ -37,14 +41,15 @@ export function volumeStatusKind(status) {
   }
 }
 
+// i18n
 const STATUS_SPOKEN = { preordered: 'vorbestellt', ordered: 'bestellt', upcoming: 'erscheint bald', missing: 'fehlt' };
 
 /** Accessible name of a spine: title, then the status unless owned, then "gelesen" when the checkmark is drawn. */
 export function getSpineAriaLabel(vol, isRead) {
   const kind = volumeStatusKind(vol.status);
   const parts = [getVolumeDisplayTitle(vol)];
-  if (kind !== 'owned') parts.push(STATUS_SPOKEN[kind]);
-  else if (isRead) parts.push('gelesen');
+  if (kind !== 'owned') parts.push(t(STATUS_SPOKEN[kind]));
+  else if (isRead) parts.push(t('gelesen'));
   return parts.join(', ');
 }
 
@@ -58,17 +63,17 @@ const localIsoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 
 /** 'erschienen' or 'erscheint' for a (possibly month-only) release date; is_released from Manga Passion wins. */
 export function releaseVerb(dateStr, isReleased, today = new Date()) {
-  if (typeof isReleased === 'boolean') return isReleased ? 'erschienen' : 'erscheint';
+  if (typeof isReleased === 'boolean') return isReleased ? t('erschienen') : t('erscheint');
   const s = String(dateStr ?? '').trim();
   const ref = localIsoDate(today).slice(0, s.length);
-  return s && s < ref ? 'erschienen' : 'erscheint';
+  return s && s < ref ? t('erschienen') : t('erscheint');
 }
 
 /** Caption of a gap: official only for a confirmed Manga Passion edition, estimated for the local fallback. */
 export function gapLabel(gapsOfficial) {
-  if (gapsOfficial === true) return 'Offizielle Lücke in Reihe';
-  if (gapsOfficial === false) return 'Lücke (geschätzt)';
-  return 'Lücke in Reihe';
+  if (gapsOfficial === true) return t('Offizielle Lücke in Reihe');
+  if (gapsOfficial === false) return t('Lücke (geschätzt)');
+  return t('Lücke in Reihe');
 }
 
 /** Real volumes and ghost gaps among the shelf items (the header counts volumes, layout keeps counting both). */
@@ -80,8 +85,8 @@ export function countShelfItems(items) {
 /** Short state of the Manga Passion check for the pill: edition publisher, loading, error/outage or no edition. */
 export function mpPillText({ mpGapData, mpGapLoading, mpGapError }) {
   if (mpGapData?.edition) return mpGapData.edition.publisher;
-  if (mpGapLoading) return 'Prüfe...';
-  if (mpGapError || mpGapData?.unavailable) return 'Nicht erreichbar';
-  if (mpGapData?.matched === false) return 'Keine Edition';
-  return 'Abgleich';
+  if (mpGapLoading) return t('Prüfe...');
+  if (mpGapError || mpGapData?.unavailable) return t('Nicht erreichbar');
+  if (mpGapData?.matched === false) return t('Keine Edition');
+  return t('Abgleich');
 }

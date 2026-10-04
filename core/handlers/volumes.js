@@ -7,9 +7,10 @@ const {
 } = require('../lib/owners');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { resolveTargetUser } = require('../lib/access');
-const { HttpError, badRequest, forbidden, notFound, conflict } = require('../errors');
+const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
+const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseYear, parsePriority, isValidDate, parseDate,
     parseWholeNumber, parseIdList, parseBulkSet, parseFlag, isValidReadAt
@@ -17,8 +18,8 @@ const {
 
 const MAX_BATCH_VOLUMES = 300;
 
-const STATUS_ERROR = 'Ungültiger Status (erlaubt: ' + VOLUME_STATUSES.join(', ') + ')';
-const TYPE_ERROR = 'Ungültiger Typ (erlaubt: ' + VOLUME_TYPES.join(', ') + ')';
+const STATUS_ERROR = msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(VOLUME_STATUSES) });
+const TYPE_ERROR = msg('Ungültiger Typ (erlaubt: {allowed})', { allowed: VOLUME_TYPES.join(', ') });
 const DATE_ERROR = 'Ungültiges Datum (erwartet: JJJJ-MM-TT)';
 const FIELD_ERRORS = {
     price: 'Ungültiger Preis',
@@ -52,30 +53,37 @@ const parseVolumeNumber = (val, type) => {
     return { value: canonicalVolumeNumber(s, type) };
 };
 
-// Same wording as getVolumeDisplayTitle() in the frontend (without the edition name from the notes)
-const entryLabel = (type, num) => {
-    const s = String(num);
-    const lower = s.toLowerCase();
-    if (type === 'schuber') return lower.includes('schuber') ? s : `Schuber ${s}`;
-    if (type === 'special') return /^(special|extra|sonderband)/.test(lower) ? s : `Special ${s}`;
-    if (type === 'special_edition') return `Special Edition ${s}`;
-    return lower.startsWith('band') ? s : `Band ${s}`;
-};
-
 /** Another entry of the series with the same type and number (case, spaces and a "Band " prefix ignored). */
 function findDuplicate(ctx, mangaId, volumeNumber, type, excludeId = null) {
     const key = volumeKey(volumeNumber, type);
-    const rows = ctx.db.prepare("SELECT id, status, volume_number FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = ?").all(mangaId, type);
+    const rows = ctx.db.prepare("SELECT id, status, volume_number, language FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = ?").all(mangaId, type);
     return rows.find(r => r.id !== excludeId && volumeKey(r.volume_number, type) === key) || null;
 }
 
+// The entry is named like getVolumeDisplayTitle() in the frontend (without the edition name from the notes): one text
+// per wording, `plain` when the number already names the entry ("Band 3", "Schuber Box 1").
+const DUPLICATE_TEXTS = {
+    volume: 'Band {number} existiert bereits ({status}). Bitte den vorhandenen Eintrag bearbeiten.',
+    schuber: 'Schuber {number} existiert bereits ({status}). Bitte den vorhandenen Eintrag bearbeiten.',
+    special: 'Special {number} existiert bereits ({status}). Bitte den vorhandenen Eintrag bearbeiten.',
+    special_edition: 'Special Edition {number} existiert bereits ({status}). Bitte den vorhandenen Eintrag bearbeiten.',
+    plain: '{number} existiert bereits ({status}). Bitte den vorhandenen Eintrag bearbeiten.'
+};
+const entryLabelKind = (type, num) => {
+    const lower = String(num).toLowerCase();
+    if (type === 'schuber') return lower.includes('schuber') ? 'plain' : 'schuber';
+    if (type === 'special') return /^(special|extra|sonderband)/.test(lower) ? 'plain' : 'special';
+    if (type === 'special_edition') return 'special_edition';
+    return lower.startsWith('band') ? 'plain' : 'volume';
+};
+
 const duplicateError = (type, volumeNumber, duplicate) => conflict(
-    `${entryLabel(type, volumeNumber)} existiert bereits (${duplicate.status}). Bitte den vorhandenen Eintrag bearbeiten.`,
+    msg(DUPLICATE_TEXTS[entryLabelKind(type, volumeNumber)], { number: String(volumeNumber), status: msg(duplicate.status) }),
     'VOLUME_DUPLICATE',
     { existing_id: duplicate.id }
 );
 
-const NOTES_ERROR = `Notizen sind zu lang (maximal ${MAX_NOTES_LENGTH} Zeichen)`;
+const NOTES_ERROR = msg('Notizen sind zu lang (maximal {max} Zeichen)', { max: MAX_NOTES_LENGTH });
 const cleanNotes = (val) => {
     const text = val ? String(val).trim() : null;
     if (text && text.length > MAX_NOTES_LENGTH) throw badRequest(NOTES_ERROR, 'NOTES_TOO_LONG');
@@ -113,6 +121,14 @@ function parseNumericFields(source, parsers) {
     }
     return { values };
 }
+
+/** A volume's own language: a code or name; null/'' = the series language. { value } or { error }. */
+function parseVolumeLanguage(value) {
+    if (value === undefined || value === null || value === '') return { value: null };
+    const parsed = parseLanguage(value);
+    return parsed ? { value: parsed.language } : { error: true };
+}
+const VOLUME_LANGUAGE_ERROR = 'Unbekannte Sprache';
 
 function create(ctx, { body }) {
     const {
@@ -157,6 +173,8 @@ function create(ctx, { body }) {
     if (numeric.error) throw badRequest(numeric.error);
 
     const notesVal = cleanNotes(notes);
+    const language = parseVolumeLanguage(body.language);
+    if (language.error) throw badRequest(VOLUME_LANGUAGE_ERROR, 'LANGUAGE_INVALID');
     let imagesVal = null;
     if (images) {
         const parsedImages = parseImagesInput(images);
@@ -175,8 +193,8 @@ function create(ctx, { body }) {
     if (duplicate) throw duplicateError(volType, volNumStr, duplicate);
 
     const stmt = ctx.db.prepare(`
-        INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price, language)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const { price, target_price, pages, release_year } = numeric.values;
@@ -199,7 +217,8 @@ function create(ctx, { body }) {
             imagesVal,
             volType,
             prio,
-            target_price
+            target_price,
+            language.value
         );
         newVolumeId = Number(result.lastInsertRowid);
         syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
@@ -225,7 +244,7 @@ function createBatch(ctx, { body }) {
     const end = parseWholeNumber(to);
 
     if (!mId || start === null || end === null || start < 1 || start > end || end - start + 1 > MAX_BATCH_VOLUMES) {
-        throw badRequest(`Ungültiger Bereich (maximal ${MAX_BATCH_VOLUMES} Bände, positive Zahlen)`);
+        throw badRequest(msg('Ungültiger Bereich (maximal {max_volumes} Bände, positive Zahlen)', { max_volumes: MAX_BATCH_VOLUMES }));
     }
     const st = parseStatus(status, { allowEmpty: true });
     if (st.error) throw badRequest(STATUS_ERROR);
@@ -322,6 +341,8 @@ function update(ctx, { params, body }) {
 
     const priority = body.priority !== undefined ? parsePriority(body.priority) : (vol.priority || 0);
     if (priority === null) throw badRequest('Ungültige Priorität (0 bis 3)');
+    const language = body.language !== undefined ? parseVolumeLanguage(body.language) : { value: vol.language ?? null };
+    if (language.error) throw badRequest(VOLUME_LANGUAGE_ERROR, 'LANGUAGE_INVALID');
 
     let imagesVal = vol.images;
     if (body.images !== undefined) {
@@ -351,7 +372,7 @@ function update(ctx, { params, body }) {
         UPDATE volumes SET 
             volume_number = ?, isbn = ?, price = ?, release_date = ?, release_year = ?, 
             condition = ?, pages = ?, publisher = ?, purchase_date = ?, 
-            status = ?, notes = ?, cover_image = ?, images = ?, type = ?, priority = ?, target_price = ?
+            status = ?, notes = ?, cover_image = ?, images = ?, type = ?, priority = ?, target_price = ?, language = ?
         WHERE id = ?
     `);
 
@@ -363,7 +384,7 @@ function update(ctx, { params, body }) {
                 ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(next, vol.id, vol[column]);
             }
         }
-        stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, vol.id);
+        stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, vol.id);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
     });
@@ -532,9 +553,9 @@ function rememberUndo(ctx, previous) {
 function bulk(ctx, { body }) {
     if (body.revert !== undefined) return revertBulk(ctx, body.revert);
     const ids = parseIdList(body.ids, MAX_BULK_IDS);
-    if (ids.error) throw badRequest(`Ungültige Auswahl (1 bis ${MAX_BULK_IDS} Band-IDs)`, 'BULK_IDS');
+    if (ids.error) throw badRequest(msg('Ungültige Auswahl (1 bis {max_ids} Band-IDs)', { max_ids: MAX_BULK_IDS }), 'BULK_IDS');
     const set = parseBulkSet(body.set);
-    if (set.error) throw badRequest(Object.prototype.hasOwnProperty.call(BULK_FIELD_ERRORS, set.error) ? BULK_FIELD_ERRORS[set.error] : `Unbekanntes Feld: ${set.error}`, 'BULK_FIELD', { field: set.error });
+    if (set.error) throw badRequest(Object.prototype.hasOwnProperty.call(BULK_FIELD_ERRORS, set.error) ? BULK_FIELD_ERRORS[set.error] : msg('Unbekanntes Feld: {field}', { field: set.error }), 'BULK_FIELD', { field: set.error });
     const owners = parseOwnerOps(ctx, body.owners);
     const read = parseReadOp(ctx, body.read);
     const remove = body.delete === true || body.delete === 'true';
@@ -664,7 +685,7 @@ function revertBulk(ctx, token) {
             const duplicate = findDuplicate(ctx, row.manga_id, row.volume_number, type);
             if (duplicate) {
                 const err = duplicateError(type, row.volume_number, duplicate);
-                conflicts.push({ id: snap.id, status: 409, code: err.code, error: err.message, existing_id: duplicate.id });
+                conflicts.push({ id: snap.id, status: 409, code: err.code, error: err.message, msg: err.extra.msg, params: err.extra.params, existing_id: duplicate.id });
                 continue;
             }
             const columns = Object.keys(row).filter((k) => volumeColumns.has(k));
@@ -678,7 +699,7 @@ function revertBulk(ctx, token) {
     ctx.undo.delete(token);
 
     const answer = { success: restored.length > 0, restored, conflicts, not_found: missing };
-    if (restored.length === 0 && conflicts.length > 0) return { status: 409, body: { ...answer, error: conflicts[0].error, code: 'VOLUME_DUPLICATE' } };
+    if (restored.length === 0 && conflicts.length > 0) return { status: 409, body: { ...answer, error: conflicts[0].error, code: 'VOLUME_DUPLICATE', msg: conflicts[0].msg, params: conflicts[0].params } };
     return { body: answer };
 }
 

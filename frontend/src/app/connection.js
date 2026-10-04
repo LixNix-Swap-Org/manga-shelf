@@ -5,6 +5,7 @@ import {
   updateServer, loadServers, subscribeServers, isSecureEnough
 } from './serverStore.js';
 import { storedModeIsLocal, subscribeMode, getLocalProfile } from '../local/profile.js';
+import { t } from '../i18n/index.js';
 
 export { normalizeBase };
 
@@ -15,6 +16,7 @@ export const HEALTHY = new Set(['ok', 'degraded']);
 const appBuild = () => Boolean(import.meta.env) && import.meta.env.VITE_APP_MODE === 'app';
 
 const WEB_STATE = Object.freeze({ state: 'online', baseUrl: '', server: null, lastError: null, checkedAt: null });
+// i18n
 export const LOCAL_SERVER_NAME = 'Auf diesem Gerät';
 const localMode = () => appBuild() && storedModeIsLocal();
 // the standalone mode has no server: always "online", the pill names the device (and the profile)
@@ -61,7 +63,7 @@ export function getActiveBase() {
  */
 export function setActiveBase(url) {
   const base = normalizeBase(url);
-  if (!base && typeof url === 'string' && url.trim()) throw new TypeError(`Ungültige Serveradresse: ${url}`);
+  if (!base && typeof url === 'string' && url.trim()) throw new TypeError(t('Ungültige Serveradresse: {url}', { url }));
   if (!base) {
     setActiveServerId(null);
     session = { serverId: null, baseUrl: '' };
@@ -170,6 +172,11 @@ export async function probeServer(server, options = {}) {
   return { ok: false, url: null, error: results.at(-1)?.error || 'unreachable', results };
 }
 
+// connection states without a probe; stored German like PROBE_ERRORS and translated where shown (Login)
+// i18n
+const STATE_ERRORS = { noServer: 'Kein Server ausgewählt', network: 'Keine Netzwerkverbindung' };
+
+// i18n
 export const PROBE_ERRORS = {
   invalid: 'Ungültige Adresse',
   unreachable: 'nicht erreichbar',
@@ -190,7 +197,7 @@ export function checkConnection({ fetchImpl } = {}) {
     await loadServers();
     const server = getActiveServer();
     if (!server) {
-      setConn({ state: 'offline', lastError: 'Kein Server ausgewählt', checkedAt: Date.now() });
+      setConn({ state: 'offline', lastError: STATE_ERRORS.noServer, checkedAt: Date.now() });
       return conn;
     }
     setConn({ state: 'connecting' });
@@ -231,7 +238,7 @@ export function startConnectionManager({ win = globalThis.window, doc = globalTh
   let lastCheck = 0;
   const check = () => { lastCheck = now(); return checkConnection(); };
   const onOnline = () => { check(); };
-  const onOffline = () => { if (!localMode()) setConn({ state: 'offline', lastError: 'Keine Netzwerkverbindung', checkedAt: now() }); };
+  const onOffline = () => { if (!localMode()) setConn({ state: 'offline', lastError: STATE_ERRORS.network, checkedAt: now() }); };
   const onVisible = () => {
     if (doc?.visibilityState !== 'visible' || now() - lastCheck < RECHECK_INTERVAL_MS) return;
     check();

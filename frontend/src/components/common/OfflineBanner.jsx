@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { WifiOff } from 'lucide-react';
 import { formatAge } from '../../utils/offlineStore';
+import { t } from '../../i18n/index.js';
 
 const SAFE_AREA_BOTTOM = {
   paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
@@ -32,8 +33,8 @@ export default function OfflineBanner({ lastSync }) {
     <div role="status" style={SAFE_AREA_BOTTOM} className={`fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 pt-2 bg-amber-500/95 text-slate-950 text-xs font-semibold shadow-lg ${aboveNav ? ABOVE_BOTTOM_NAV : ''}`}>
       <WifiOff className="w-4 h-4 shrink-0" aria-hidden="true" />
       <span>
-        Offline – Stand der Sammlung: {withPeriod(lastSync ? formatAge(lastSync) : 'unbekannt')}
-        <span className="hidden sm:inline"> Nur Ansicht, Änderungen sind erst mit Verbindung möglich.</span>
+        {t('Offline – Stand der Sammlung: {age}', { age: withPeriod(lastSync ? formatAge(lastSync) : t('unbekannt')) })}
+        <span className="hidden sm:inline"> {t('Nur Ansicht, Änderungen sind erst mit Verbindung möglich.')}</span>
       </span>
     </div>
   );

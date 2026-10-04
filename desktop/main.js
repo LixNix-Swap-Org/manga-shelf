@@ -483,6 +483,9 @@ const trayActions = {
 };
 
 function registerIpc() {
+    ipcMain.on('desktop:locale', (event) => {
+        event.returnValue = fromOwnPage(event) ? app.getLocale() : null;
+    });
     ipcMain.on('desktop:store-all', (event) => {
         event.returnValue = fromApp(event) ? secureStore.all() : {};
     });

@@ -1,7 +1,7 @@
 // Anime tab: shared list, progress per user, search and refresh over the gateway
 // (core/anime/gateway.js), adaptations of a series, the CSV export, shared streaming links and the AniList list sync.
 const { qstr } = require('../lib/query');
-const { HttpError, badRequest, notFound, conflict } = require('../errors');
+const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../errors');
 const { resolveTargetUser } = require('../lib/access');
 const { escapeCell } = require('../csvExchange');
 const gateway = require('../anime/gateway');
@@ -19,17 +19,33 @@ const MAX_EPISODES = 100000;
 
 const nowMs = (ctx) => ctx.now().getTime();
 
-function parseId(raw, label = 'ID') {
+// texts of the id and text checks, one per field (no German label as a msg() parameter)
+const ID_ERRORS = {
+    id: 'Ungültige ID',
+    anilist_id: 'Ungültige AniList-ID',
+    mal_id: 'Ungültige MAL-ID',
+    manga_id: 'Ungültige Reihen-ID'
+};
+const TEXT_TYPE_ERRORS = {
+    title_de: 'Ungültiger Wert für Deutscher Titel',
+    notes: 'Ungültiger Wert für Notiz'
+};
+const TEXT_LENGTH_ERRORS = {
+    title_de: 'Deutscher Titel ist zu lang (höchstens {max} Zeichen)',
+    notes: 'Notiz ist zu lang (höchstens {max} Zeichen)'
+};
+
+function parseId(raw, field = 'id') {
     const text = String(raw ?? '').trim();
-    if (!/^\d+$/.test(text) || !Number.isSafeInteger(Number(text)) || Number(text) < 1) throw badRequest(`Ungültige ${label}`);
+    if (!/^\d+$/.test(text) || !Number.isSafeInteger(Number(text)) || Number(text) < 1) throw badRequest(ID_ERRORS[field]);
     return Number(text);
 }
 
 /** Optional positive integer id from a body (null/undefined -> null). */
-function optionalId(value, label) {
+function optionalId(value, field) {
     if (value === undefined || value === null || value === '') return null;
-    if (typeof value !== 'number' && typeof value !== 'string') throw badRequest(`Ungültige ${label}`);
-    return parseId(value, label);
+    if (typeof value !== 'number' && typeof value !== 'string') throw badRequest(ID_ERRORS[field]);
+    return parseId(value, field);
 }
 
 function cleanTitle(value, { required = false } = {}) {
@@ -41,12 +57,12 @@ function cleanTitle(value, { required = false } = {}) {
     return value.trim();
 }
 
-function cleanOptionalText(value, label, max) {
+function cleanOptionalText(value, field, max) {
     if (value === undefined) return undefined;
     if (value === null) return null;
-    if (typeof value !== 'string') throw badRequest(`Ungültiger Wert für ${label}`);
+    if (typeof value !== 'string') throw badRequest(TEXT_TYPE_ERRORS[field]);
     const text = value.trim();
-    if (text.length > max) throw badRequest(`${label} ist zu lang (höchstens ${max} Zeichen)`);
+    if (text.length > max) throw badRequest(msg(TEXT_LENGTH_ERRORS[field], { max }));
     return text || null;
 }
 
@@ -192,9 +208,9 @@ const ALREADY_THERE = 'Dieser Anime ist schon in der Liste';
 
 /** From a search hit (anilist_id and/or mal_id, fetched interactively) or a manual entry (title, episodes). */
 async function create(ctx, { body }) {
-    const anilistId = optionalId(body.anilist_id, 'AniList-ID');
-    const malId = optionalId(body.mal_id, 'MAL-ID');
-    const mangaId = optionalId(body.manga_id, 'Reihen-ID');
+    const anilistId = optionalId(body.anilist_id, 'anilist_id');
+    const malId = optionalId(body.mal_id, 'mal_id');
+    const mangaId = optionalId(body.manga_id, 'manga_id');
     if (mangaId !== null) mangaRef(ctx, mangaId);
     const existing = duplicateOf(ctx, anilistId, malId);
     if (existing) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: existing });
@@ -204,7 +220,7 @@ async function create(ctx, { body }) {
         const episodes = cleanEpisodes(body.episodes);
         const result = ctx.db.prepare(`
             INSERT INTO animes (title, episodes, manga_id, notes, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-        `).run(title, episodes ?? null, mangaId, cleanOptionalText(body.notes, 'Notiz', MAX_NOTES) ?? null, ctx.user.id, sqlNow(ctx));
+        `).run(title, episodes ?? null, mangaId, cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null, ctx.user.id, sqlNow(ctx));
         return { status: 201, body: detailOf(ctx, Number(result.lastInsertRowid)) };
     }
 
@@ -236,12 +252,12 @@ function update(ctx, { params, body }) {
     const columns = {};
     const title = cleanTitle(body.title);
     if (title !== undefined) columns.title = title;
-    const titleDe = cleanOptionalText(body.title_de, 'Deutscher Titel', MAX_TITLE);
+    const titleDe = cleanOptionalText(body.title_de, 'title_de', MAX_TITLE);
     if (titleDe !== undefined) columns.title_de = titleDe;
-    const notes = cleanOptionalText(body.notes, 'Notiz', MAX_NOTES);
+    const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     if (notes !== undefined) columns.notes = notes;
     if (body.manga_id !== undefined) {
-        const mangaId = optionalId(body.manga_id, 'Reihen-ID');
+        const mangaId = optionalId(body.manga_id, 'manga_id');
         mangaRef(ctx, mangaId);
         columns.manga_id = mangaId;
     }
@@ -272,7 +288,7 @@ function updateProgress(ctx, { params, body }) {
     const id = parseId(params.id);
     const userId = resolveTargetUser(ctx, body.user_id);
     if (body.status !== undefined && !PROGRESS_STATUSES.includes(body.status)) {
-        throw badRequest(`Ungültiger Status (erlaubt: ${PROGRESS_STATUSES.join(', ')})`);
+        throw badRequest(msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(PROGRESS_STATUSES) }));
     }
     let watched;
     if (body.episodes_watched !== undefined) {
@@ -281,7 +297,7 @@ function updateProgress(ctx, { params, body }) {
         if (!Number.isInteger(watched) || watched < 0 || watched > MAX_EPISODES) throw badRequest('Gesehene Folgen müssen eine ganze Zahl ab 0 sein');
     }
     const score = parseScore(body.score);
-    const notes = cleanOptionalText(body.notes, 'Notiz', MAX_NOTES);
+    const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const saved = ctx.db.transaction(() => {
         loadRow(ctx, id);
         return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes });
@@ -322,7 +338,10 @@ function rememberSeason(ctx, animeId, remember) {
 }
 
 const episodeAboveTotal = (episode, total) => badRequest(
-    `Folge ${episode} gibt es bei diesem Eintrag nicht (er hat nur ${total === 1 ? 'eine Folge' : `${total} Folgen`}).`, 'EPISODE_ABOVE_TOTAL', { episodes: total }
+    total === 1
+        ? msg('Folge {episode} gibt es bei diesem Eintrag nicht (er hat nur eine Folge).', { episode, total })
+        : msg('Folge {episode} gibt es bei diesem Eintrag nicht (er hat nur {total} Folgen).', { episode, total }),
+    'EPISODE_ABOVE_TOTAL', { episodes: total }
 );
 
 /**

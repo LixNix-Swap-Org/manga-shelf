@@ -1,5 +1,6 @@
 import { ChevronDown, Star, Search, X, BookOpen, BuildingComplex } from 'lucide-react';
 import { publisherOptions } from '../../../utils/radarHelpers';
+import { t } from '../../../i18n/index.js';
 
 /** Search, publisher and print / my-series filters of the Manga-Passion calendar. `mpCurrent`: mpData is the selected month. */
 export default function MpFilters({
@@ -27,14 +28,14 @@ export default function MpFilters({
         <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         <input
           type="text"
-          placeholder="Reihe, Band oder Verlag..."
-          aria-label="Neuerscheinungen durchsuchen"
+          placeholder={t('Reihe, Band oder Verlag...')}
+          aria-label={t('Neuerscheinungen durchsuchen')}
           className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-xs"
           value={mpSearch}
           onChange={e => setMpSearch(e.target.value)}
         />
         {mpSearch && (
-          <button type="button" onClick={() => setMpSearch('')} className="p-1.5 -m-1 rounded text-slate-400 hover:text-white" aria-label="Suche leeren">
+          <button type="button" onClick={() => setMpSearch('')} className="p-1.5 -m-1 rounded text-slate-400 hover:text-white" aria-label={t('Suche leeren')}>
             <X className="w-3 h-3" />
           </button>
         )}
@@ -52,7 +53,7 @@ export default function MpFilters({
           }`}
         >
           <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-          <span>Nur Print-Bände</span>
+          <span>{t('Nur Print-Bände')}</span>
         </button>
 
         <button
@@ -66,7 +67,7 @@ export default function MpFilters({
           }`}
         >
           <Star className="w-3.5 h-3.5 text-amber-400" />
-          <span>Nur meine Reihen ({mySeriesCount ?? '…'})</span>
+          <span>{t('Nur meine Reihen ({count})', { count: mySeriesCount ?? '…' })}</span>
         </button>
 
         {(options.length > 0 || mpPublisherFilter !== 'ALL') && (
@@ -76,11 +77,12 @@ export default function MpFilters({
               value={mpPublisherFilter}
               onChange={e => setMpPublisherFilter(e.target.value)}
               disabled={Boolean(mpData) && !mpCurrent}
-              aria-label="Verlag"
+              aria-label={t('Verlag')}
               className="seamless-select filter-chip-select font-medium text-slate-200 group-hover:text-white cursor-pointer"
             >
-              <option value="ALL" className="bg-slate-900 text-white">Alle Verlage</option>
+              <option value="ALL" className="bg-slate-900 text-white">{t('Alle Verlage')}</option>
               {options.map(o => (
+                // i18n-ignore: publisher name and count
                 <option key={o.value} value={o.value} className="bg-slate-900 text-white">
                   {o.label}
                 </option>
@@ -96,7 +98,7 @@ export default function MpFilters({
             onClick={onResetFilters}
             className="btn-secondary text-xs py-2 px-3 text-slate-400 hover:text-white"
           >
-            Filter zurücksetzen
+            {t('Filter zurücksetzen')}
           </button>
         )}
       </div>

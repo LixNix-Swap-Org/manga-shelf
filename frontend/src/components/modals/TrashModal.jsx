@@ -6,12 +6,13 @@ import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDate, formatDateTime } from '../../utils/format';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { t, tn } from '../../i18n/index.js';
 
 const sqlTime = (value) => new Date(String(value || '').replace(' ', 'T') + 'Z');
 
 /** "Reihe · 12 Bände" or "Band 3" for one trash entry. */
 export function trashEntryLabel(item) {
-  if (item.kind === 'manga') return `Reihe · ${formatCount(item.volume_count || 0, 'Eintrag', 'Einträge')}`;
+  if (item.kind === 'manga') return t('Reihe · {count}', { count: formatCount(item.volume_count || 0, 'Eintrag', 'Einträge') });
   return getVolumeDisplayTitle({ volume_number: item.volume_number, type: item.type });
 }
 
@@ -32,7 +33,7 @@ export default function TrashModal({ onClose, user, onChanged }) {
     try {
       setData(await api.get('/api/trash'));
     } catch (e) {
-      setError(e?.message || 'Papierkorb konnte nicht geladen werden.');
+      setError(e?.message || t('Papierkorb konnte nicht geladen werden.'));
     }
   }, []);
 
@@ -45,7 +46,7 @@ export default function TrashModal({ onClose, user, onChanged }) {
       onChanged?.();
       await load();
     } catch (e) {
-      notify.error(e, { fallback: 'Aktion fehlgeschlagen' });
+      notify.error(e, { fallback: t('Aktion fehlgeschlagen') });
     } finally {
       setBusyId(null);
       setConfirmId(null);
@@ -54,12 +55,14 @@ export default function TrashModal({ onClose, user, onChanged }) {
 
   const restore = (item) => run(item.id, async () => {
     await api.post(`/api/trash/${item.id}/restore`);
-    notify.success(item.kind === 'manga' ? `„${item.title}“ wiederhergestellt` : `${trashEntryLabel(item)} von „${item.title}“ wiederhergestellt`);
+    notify.success(item.kind === 'manga'
+      ? t('„{title}“ wiederhergestellt', { title: item.title })
+      : t('{entry} von „{title}“ wiederhergestellt', { entry: trashEntryLabel(item), title: item.title }));
   });
   const purge = (item) => run(item.id, () => api.del(`/api/trash/${item.id}`));
   const empty = () => run('all', async () => {
     const res = await api.del('/api/trash');
-    notify.success(`${formatCount(res?.removed || 0, 'Eintrag', 'Einträge')} endgültig gelöscht`);
+    notify.success(t('{count} endgültig gelöscht', { count: formatCount(res?.removed || 0, 'Eintrag', 'Einträge') }));
   });
 
   const items = data?.items || [];
@@ -68,19 +71,19 @@ export default function TrashModal({ onClose, user, onChanged }) {
   return (
     <ToolDialog
       id="trash-modal"
-      title="Papierkorb"
-      subtitle={`Gelöschte Reihen und Bände bleiben ${days} Tage wiederherstellbar, mit Besitz und Lesestand.`}
+      title={t('Papierkorb')}
+      subtitle={tn('Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.', 'Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.', days)}
       Icon={Trash2}
       onClose={onClose}
       busy={busyId !== null}
       footer={isAdmin && items.length > 0 && (
         confirmId === 'all' ? (
           <button type="button" onClick={empty} className="btn-danger text-xs px-4 py-2" disabled={busyId !== null}>
-            Wirklich alles endgültig löschen?
+            {t('Wirklich alles endgültig löschen?')}
           </button>
         ) : (
           <button type="button" onClick={() => setConfirmId('all')} className="btn-secondary text-xs px-4 py-2 text-rose-300">
-            Papierkorb leeren
+            {t('Papierkorb leeren')}
           </button>
         )
       )}
@@ -88,14 +91,14 @@ export default function TrashModal({ onClose, user, onChanged }) {
       {error ? (
         <div role="alert" className="py-10 text-center space-y-3">
           <p className="text-sm text-rose-300">{error}</p>
-          <button type="button" onClick={load} className="btn-secondary text-xs px-4 py-2">Erneut versuchen</button>
+          <button type="button" onClick={load} className="btn-secondary text-xs px-4 py-2">{t('Erneut versuchen')}</button>
         </div>
       ) : !data ? (
-        <p role="status" className="py-10 text-center text-sm text-slate-400">Papierkorb wird geladen…</p>
+        <p role="status" className="py-10 text-center text-sm text-slate-400">{t('Papierkorb wird geladen…')}</p>
       ) : items.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-400">Der Papierkorb ist leer.</p>
+        <p className="py-10 text-center text-sm text-slate-400">{t('Der Papierkorb ist leer.')}</p>
       ) : (
-        <ul className="space-y-2" aria-label="Gelöschte Einträge">
+        <ul className="space-y-2" aria-label={t('Gelöschte Einträge')}>
           {items.map((item) => (
             <li key={item.id} className="trash-entry flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
               <CoverImage
@@ -104,15 +107,17 @@ export default function TrashModal({ onClose, user, onChanged }) {
                 fallback={<div className="w-10 h-14 rounded bg-slate-800 flex items-center justify-center text-slate-400 shrink-0"><BookOpen className="w-4 h-4" aria-hidden="true" /></div>}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white truncate">{item.title || 'Ohne Titel'}</p>
+                <p className="text-sm font-semibold text-white truncate">{item.title || t('Ohne Titel')}</p>
                 <p className="text-xs text-slate-300">{trashEntryLabel(item)}</p>
                 <p className="text-[11px] text-slate-400">
-                  Gelöscht {formatDateTime(sqlTime(item.deleted_at))}{item.deleted_by_name ? ` von ${item.deleted_by_name}` : ''}
-                  {item.purge_at ? ` · endgültig weg am ${formatDate(item.purge_at)}` : ''}
+                  {item.deleted_by_name
+                    ? t('Gelöscht {date} von {name}', { date: formatDateTime(sqlTime(item.deleted_at)), name: item.deleted_by_name })
+                    : t('Gelöscht {date}', { date: formatDateTime(sqlTime(item.deleted_at)) })}
+                  {item.purge_at ? ` · ${t('endgültig weg am {date}', { date: formatDate(item.purge_at) })}` : ''}
                 </p>
                 {!item.restorable && (
                   <p className="text-[11px] text-amber-300">
-                    {item.series_in_trash ? 'Die Reihe liegt im Papierkorb – zuerst die Reihe wiederherstellen.' : 'Die Reihe gibt es nicht mehr.'}
+                    {item.series_in_trash ? t('Die Reihe liegt im Papierkorb – zuerst die Reihe wiederherstellen.') : t('Die Reihe gibt es nicht mehr.')}
                   </p>
                 )}
               </div>
@@ -123,13 +128,13 @@ export default function TrashModal({ onClose, user, onChanged }) {
                     onClick={() => restore(item)}
                     disabled={!item.restorable || busyId !== null}
                     className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
-                    aria-label={`„${item.title}“ ${trashEntryLabel(item)} wiederherstellen`}
+                    aria-label={t('„{title}“ {entry} wiederherstellen', { title: item.title, entry: trashEntryLabel(item) })}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> Wiederherstellen
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> {t('Wiederherstellen')}
                   </button>
                   {confirmId === item.id ? (
                     <button type="button" onClick={() => purge(item)} disabled={busyId !== null} className="btn-danger text-xs px-3 py-1.5">
-                      Wirklich löschen?
+                      {t('Wirklich löschen?')}
                     </button>
                   ) : (
                     <button
@@ -137,9 +142,9 @@ export default function TrashModal({ onClose, user, onChanged }) {
                       onClick={() => setConfirmId(item.id)}
                       disabled={busyId !== null}
                       className="btn-secondary text-xs px-3 py-1.5 text-rose-300"
-                      aria-label={`„${item.title}“ ${trashEntryLabel(item)} endgültig löschen`}
+                      aria-label={t('„{title}“ {entry} endgültig löschen', { title: item.title, entry: trashEntryLabel(item) })}
                     >
-                      Endgültig löschen
+                      {t('Endgültig löschen')}
                     </button>
                   )}
                 </div>

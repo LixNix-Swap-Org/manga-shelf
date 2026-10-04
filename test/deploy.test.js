@@ -100,9 +100,9 @@ describe('Pterodactyl egg', () => {
 
   test('the TRUST_PROXY text recommends the proxy address and warns about a directly reachable port', () => {
     const v = egg.variables.find(x => x.env_variable === 'TRUST_PROXY');
-    assert.match(v.description, /dessen Adresse eintragen/);
-    assert.match(v.description, /nie das ganze Subnetz/);
-    assert.match(v.description, /nur über den Proxy erreichbar/);
+    assert.match(v.description, /enter its address/);
+    assert.match(v.description, /never the whole subnet/);
+    assert.match(v.description, /reachable only through the proxy/);
   });
 
   test('TRUST_PROXY is configurable and defaults to loopback', () => {

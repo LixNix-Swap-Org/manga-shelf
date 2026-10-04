@@ -4,6 +4,7 @@ import { useApiKeys, listSyncProps } from '../components/modals/AccountModal';
 import ApiKeyCard from '../components/modals/ApiKeyCard';
 import { INSECURE_STORAGE_TEXT } from '../local/credentials';
 import { WATCH_BUILD, watchAvailable } from './watch/watchState';
+import { t } from '../i18n/index.js';
 
 const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('./watch/CrunchyrollCard')) : null;
 
@@ -11,7 +12,7 @@ const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('./watch/CrunchyrollCard
 export default function SourcesPanel({ headingLevel = 3 }) {
   const keys = useApiKeys({ admin: true, listSync: true });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
-  if (!keys.guides) return <p className="text-sm text-slate-400" role="status">Wird geladen…</p>;
+  if (!keys.guides) return <p className="text-sm text-slate-400" role="status">{t('Wird geladen…')}</p>;
   const insecure = [...keys.userKeys, ...keys.instanceKeys].some((k) => k.insecure_storage);
   const card = (scope, state) => {
     const guide = keys.guideOf(state.provider);
@@ -36,12 +37,12 @@ export default function SourcesPanel({ headingLevel = 3 }) {
   return (
     <div className="space-y-4" id="local-sources">
       <p className="text-xs text-slate-400">
-        Freiwillig: ohne eigene Schlüssel laufen Suche und Daten über die öffentlichen Zugänge (AniList ohne Token, Jikan statt MyAnimeList), nur mit deren Limit.
+        {t('Freiwillig: ohne eigene Schlüssel laufen Suche und Daten über die öffentlichen Zugänge (AniList ohne Token, Jikan statt MyAnimeList), nur mit deren Limit.')}
       </p>
       {insecure && (
         <p role="note" className="flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>{INSECURE_STORAGE_TEXT}</span>
+          <span>{t(INSECURE_STORAGE_TEXT)}</span>
         </p>
       )}
       {keys.userKeys.map((state) => card('user', state))}

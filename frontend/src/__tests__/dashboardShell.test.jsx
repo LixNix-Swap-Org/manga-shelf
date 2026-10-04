@@ -194,6 +194,11 @@ const renderHeader = (overrides) => {
 };
 
 describe('DashboardHeader', () => {
+  it('the menu entry of the account dialog names the language too (id unchanged)', () => {
+    renderHeader({ mobileMenuOpen: true });
+    expect(document.getElementById('btn-mobile-menu-password').textContent).toBe(' Konto & Sprache');
+  });
+
   it('offers CSV to editors and visitors on desktop and in the menu, backups stay admin-only', () => {
     const { rerender, props } = renderHeader({ canEdit: true, mobileMenuOpen: true });
     expect(document.getElementById('btn-open-csv')).toBeTruthy();

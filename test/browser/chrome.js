@@ -11,6 +11,9 @@ const MAC_APPS = [
     'Brave Browser.app/Contents/MacOS/Brave Browser'
 ];
 
+// every suite runs in German whatever the machine's language: the UI picks the device language on start
+const CHROME_ARGS = ['--no-sandbox', '--disable-setuid-sandbox', '--lang=de-DE', '--accept-lang=de-DE'];
+
 /** Browser paths in lookup order: CHROME_BIN / PUPPETEER_EXECUTABLE_PATH, then Linux, macOS (system and per user), Windows. */
 function chromeCandidates(env = process.env, home = os.homedir()) {
     return [
@@ -41,4 +44,4 @@ function findChrome({ env = process.env, home = os.homedir(), exists = fs.exists
     return found;
 }
 
-module.exports = { findChrome, chromeCandidates };
+module.exports = { findChrome, chromeCandidates, CHROME_ARGS };

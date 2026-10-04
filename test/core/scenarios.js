@@ -514,6 +514,102 @@ const scenarios = [
         }
     },
     {
+        name: 'editions: language codes, linked editions, work groups, Manga Passion only for German editions',
+        async run({ ed, vis }) {
+            const de = await newSeries(ed, 'Kern Ausgabe DE', { language: 'Deutsch', author: 'Oda', total_volumes: 5, tags: 'Abenteuer' });
+            const row = (await vis('GET', '/mangas')).body.find(m => m.id === de);
+            assert.deepEqual([row.language, row.region, row.work_key, row.currency], ['de', null, null, 'EUR']);
+            assert.deepEqual((await vis('GET', `/mangas/${de}`)).body.editions, []);
+            const unknown = await ed('POST', '/mangas', { title: 'Kern Ausgabe X', language: 'Klingonisch' });
+            assert.deepEqual([unknown.status, unknown.body.code, unknown.body.error], [400, 'LANGUAGE_INVALID', 'Unbekannte Sprache']);
+            assert.equal((await ed('POST', '/mangas', { title: 'Kern Ausgabe X', region: 'USA' })).body.error, 'Ungültige Region (zwei Buchstaben, z. B. US)');
+            assert.equal((await ed('POST', '/mangas', { title: 'Kern Ausgabe X', currency: '€' })).body.error, 'Ungültige Währung (drei Buchstaben, z. B. EUR)');
+            assert.equal((await ed('POST', '/mangas', { title: 'Kern Ausgabe X', work_key: 'kitsu:1' })).body.error, 'Ungültiger Werk-Schlüssel');
+            const manual = await ed('POST', '/mangas', { title: 'Kern Ausgabe X', work_key: `manual:${de}` });
+            assert.deepEqual([manual.status, manual.body.code], [400, 'WORK_KEY_INVALID'], 'manual groups only through /editions and /work');
+
+            const created = await ed('POST', `/mangas/${de}/editions`, { language: 'en-US', currency: 'usd', title: 'Kern Edition EN' });
+            assert.equal(created.status, 201);
+            assert.match(created.body.work_key, /^manual:[0-9a-f]{24}$/, 'a fresh key, not the series id');
+            const en = created.body.id;
+            const enDetail = (await vis('GET', `/mangas/${en}`)).body;
+            assert.deepEqual(
+                [enDetail.title, enDetail.language, enDetail.region, enDetail.currency, enDetail.author, enDetail.total_volumes, enDetail.tags, enDetail.status],
+                ['Kern Edition EN', 'en', 'US', 'USD', 'Oda', 5, 'Abenteuer', 'Laufend']
+            );
+            assert.deepEqual(enDetail.editions.map(e => [e.id, e.language]), [[de, 'de']]);
+            assert.deepEqual((await vis('GET', `/mangas/${de}`)).body.editions,
+                [{ id: en, title: 'Kern Edition EN', language: 'en', region: 'US', currency: 'USD', publisher: null, cover_image: null, owned_volumes: 0, volume_count: 0 }]);
+            assert.equal((await vis('POST', `/mangas/${de}/editions`, { language: 'en' })).status, 403);
+            assert.equal((await ed('POST', `/mangas/${de}/editions`, {})).body.code, 'LANGUAGE_INVALID');
+            assert.equal((await ed('POST', '/mangas/999999/editions', { language: 'en' })).status, 404);
+
+            const ja = await newSeries(ed, 'Kern Ausgabe JA', { language: 'ja', work_key: 'anilist:30013' });
+            const linked = await ed('PUT', `/mangas/${de}/work`, { link_to: ja });
+            assert.deepEqual([linked.status, linked.body.work_key, linked.body.editions.map(e => e.id)], [200, 'anilist:30013', [en, ja]], 'the AniList key wins, the groups merge');
+            const keys = (await vis('GET', '/mangas')).body.filter(m => [de, en, ja].includes(m.id)).map(m => m.work_key);
+            assert.deepEqual(keys, ['anilist:30013', 'anilist:30013', 'anilist:30013']);
+            assert.equal((await ed('PUT', `/mangas/${de}/work`, { link_to: de })).status, 400);
+            assert.equal((await ed('PUT', `/mangas/${de}/work`, { link_to: 999999 })).status, 404);
+            assert.equal((await ed('PUT', `/mangas/${de}/work`, {})).status, 400);
+            assert.equal((await vis('PUT', `/mangas/${de}/work`, { link_to: null })).status, 403);
+            const unlinked = await ed('PUT', `/mangas/${en}/work`, { link_to: null });
+            assert.deepEqual([unlinked.body.work_key, unlinked.body.editions], [null, []]);
+            assert.deepEqual((await vis('GET', `/mangas/${de}`)).body.editions.map(e => e.id), [ja]);
+
+            // an unlinked series never pulls its former partner back: unlink -> new edition -> new group of two
+            const solo = await newSeries(ed, 'Kern Solo DE');
+            const soloEn = (await ed('POST', `/mangas/${solo}/editions`, { language: 'en' })).body.id;
+            const left = await ed('PUT', `/mangas/${solo}/work`, { link_to: null });
+            assert.deepEqual([left.body.work_key, left.body.editions], [null, []]);
+            assert.deepEqual((await vis('GET', `/mangas/${soloEn}`)).body.editions, [], 'a group of one is dissolved');
+            assert.equal((await vis('GET', '/mangas')).body.find(m => m.id === soloEn).work_key, null);
+            const soloJa = (await ed('POST', `/mangas/${solo}/editions`, { language: 'ja' })).body.id;
+            assert.deepEqual((await vis('GET', `/mangas/${solo}`)).body.editions.map(e => e.id), [soloJa]);
+            const trio = await newSeries(ed, 'Kern Trio DE');
+            const trioEn = (await ed('POST', `/mangas/${trio}/editions`, { language: 'en' })).body.id;
+            const trioFr = (await ed('POST', `/mangas/${trio}/editions`, { language: 'fr' })).body.id;
+            await ed('PUT', `/mangas/${trio}/work`, { link_to: null });
+            const trioJa = (await ed('POST', `/mangas/${trio}/editions`, { language: 'ja' })).body.id;
+            assert.deepEqual((await vis('GET', `/mangas/${trio}`)).body.editions.map(e => e.id), [trioJa], 'the old partners stay apart');
+            assert.deepEqual((await vis('GET', `/mangas/${trioEn}`)).body.editions.map(e => e.id), [trioFr]);
+            const relinked = await ed('PUT', `/mangas/${soloEn}/work`, { link_to: ja });
+            assert.deepEqual(relinked.body.editions.map(e => e.id).sort((a, b) => a - b), [de, ja].sort((a, b) => a - b), 'only the picked group');
+
+            const vol = await newVolume(ed, de, '1', { language: 'English', price: 7 });
+            assert.equal((await vis('GET', `/mangas/${de}`)).body.volumes[0].language, 'en');
+            assert.equal((await ed('PUT', `/volumes/${vol}`, { language: '' })).status, 200);
+            assert.equal((await vis('GET', `/mangas/${de}`)).body.volumes[0].language, null);
+            assert.equal((await ed('PUT', `/volumes/${vol}`, { language: 'Klingonisch' })).body.code, 'LANGUAGE_INVALID');
+            assert.equal((await ed('PUT', `/mangas/${ja}`, { language: 'Japanisch', region: 'jp', currency: 'jpy' })).status, 200);
+            const jaRow = (await vis('GET', `/mangas/${ja}`)).body;
+            assert.deepEqual([jaRow.language, jaRow.region, jaRow.currency], ['ja', 'JP', 'JPY']);
+
+            for (const [method, url, body] of [
+                ['GET', `/mangas/${ja}/gaps`], ['POST', `/mangas/${ja}/sync-edition`, { edition_id: 5 }],
+                ['POST', `/mangas/${ja}/batch-import-gaps`, { volume_numbers: ['1'] }], ['POST', `/mangas/${ja}/autofill-volumes`, {}],
+                ['GET', `/volumes/lookup?manga_id=${ja}&volume_number=1`],
+                ['POST', '/manga-passion/import', { manga_id: ja, title: 'Kern Ausgabe JA', volume_number: '2' }]
+            ]) {
+                const res = await ed(method, url, body);
+                assert.deepEqual([res.status, res.body.code, res.body.error], [409, 'MP_LANGUAGE', 'Manga Passion kennt nur deutsche Ausgaben'], url);
+            }
+
+            await newVolume(ed, en, '1', { status: 'Fehlt', price: 12 });
+            const shopping = (await vis('GET', '/shopping-list')).body;
+            assert.deepEqual(shopping.other_currencies, [{ currency: 'USD', count: 1, total: 12 }]);
+            const item = shopping.items.find(i => i.manga_id === en);
+            assert.deepEqual([item.language, item.currency], ['en', 'USD']);
+            const snap = (await ed('GET', '/offline-snapshot')).body;
+            assert.deepEqual(snap.details[de].editions, (await ed('GET', `/mangas/${de}`)).body.editions);
+            assert.equal(snap.mangas.find(m => m.id === ja).currency, 'JPY');
+            const stats = (await vis('GET', '/stats')).body;
+            assert.ok(stats.languages.some(l => l.language === 'ja' && l.series >= 1));
+            assert.ok(stats.currencies.some(c => c.currency === 'USD' && c.missing_value === 12));
+            assert.equal(stats.currencies[0].currency, 'EUR');
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

@@ -2,7 +2,7 @@
 // Run it with `npm run test:anime` (test/browser/run.js starts an isolated server and sets the variables).
 const assert = require('node:assert/strict');
 const puppeteer = require('puppeteer-core');
-const { findChrome } = require('./chrome');
+const { findChrome, CHROME_ARGS } = require('./chrome');
 const {
     suiteEnv, watchPage, clickSelector, clickText, typeInto, waitForApi, waitForToast, waitUntil, apiOk, loginViaUi, assertNoHorizontalOverflow
 } = require('./helpers');
@@ -20,7 +20,7 @@ const cardSelector = async (page) => {
 
 (async () => {
     console.log('--- TESTING ANIME TAB ---');
-    const browser = await puppeteer.launch({ headless: 'new', executablePath: findChrome(), args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const browser = await puppeteer.launch({ headless: 'new', executablePath: findChrome(), args: CHROME_ARGS });
     const page = await browser.newPage();
     await page.setViewport({ width: 1400, height: 900 });
     const watcher = watchPage(page);

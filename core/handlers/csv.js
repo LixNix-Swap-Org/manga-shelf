@@ -1,17 +1,19 @@
 // CSV exchange: export of all series and volumes (GET /export/csv) and the import (POST /import/csv, dry run first).
 const { normalizePublisher } = require('../lib/publishers');
-const { csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, CsvFormatError, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE } = require('../csvExchange');
+const { csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, rowNote, CsvFormatError, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE } = require('../csvExchange');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { inferVolumeType } = require('../lib/volumeType');
 const { addOwner, syncOwnersWithStatus, markRead, OWNED_STATUS } = require('../lib/owners');
-const { HttpError, badRequest } = require('../errors');
+const { HttpError, badRequest, msg } = require('../errors');
+const { DEFAULT_CURRENCY, DEFAULT_LANGUAGE, isManualWorkKey, manualWorkKey } = require('../lib/language');
+const { readProfile } = require('../lib/locales');
 
 const DRY_RUN_ROLLBACK = Symbol('dry-run');
 const MAX_IMPORT_ROWS = 20000;
 // maxCellLength limits only the parser (DoS, an old data: cover still fits); cells longer than MAX_CELL_LENGTH are
 // an error of their row, except volume covers, images and series columns (mapCsvRows)
 const CSV_LIMITS = { maxRows: MAX_IMPORT_ROWS, maxCells: 100, maxCellLength: 2000000 };
-const OTHERS_ONLY_OWNERS = 'Besitz anderer Benutzer kann nur ein Admin importieren';
+const OTHERS_ONLY_OWNERS = msg('Besitz anderer Benutzer kann nur ein Admin importieren');
 // Unknown names in one cell: report this many individually, the rest summarised
 const MAX_NAME_WARNINGS = 5;
 
@@ -26,7 +28,8 @@ const exportOptions = { seriesPerBlock: 50 };
 
 const SERIES_DETAILS_SELECT = `
     SELECT id, status AS series_status, NULLIF(collecting, 'aktiv') AS series_collecting, total_volumes AS series_total,
-           alt_title AS series_alt_title, language AS series_language, tags AS series_tags, manga_passion_id AS series_mp_id,
+           alt_title AS series_alt_title, language AS series_language, region AS series_region, currency AS series_currency,
+           work_key AS series_work_key, tags AS series_tags, manga_passion_id AS series_mp_id,
            cover_image AS series_cover, banner_image AS series_banner, description AS series_description
     FROM mangas`;
 
@@ -36,7 +39,7 @@ const EXPORT_SELECT = `
            CASE WHEN v.id IS NULL THEN '${SERIES_ROW_TYPE}' ELSE COALESCE(v.type, 'volume') END AS type, v.volume_number, v.status, v.isbn,
            v.price, v.target_price, NULLIF(v.priority, 0) AS priority, v.release_date, v.release_year, v.purchase_date,
            v.condition, v.pages, v.notes, m.wish_priority AS series_wish,
-           v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id,
+           v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id, v.language AS volume_language,
            (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_reads vr JOIN users u ON u.id = vr.user_id WHERE vr.volume_id = v.id) AS readers,
            (SELECT GROUP_CONCAT(username, ', ') FROM (SELECT u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id ORDER BY vo.created_at, vo.rowid)) AS owners
     FROM mangas m LEFT JOIN volumes v ON v.manga_id = m.id`;
@@ -97,19 +100,21 @@ function importCsv(ctx, { body }) {
     try {
         rows = parseCsv(csv, CSV_LIMITS);
     } catch (err) {
-        if (err instanceof CsvFormatError) throw badRequest(err.message, 'CSV_FORMAT', { line: err.line });
+        if (err instanceof CsvFormatError) throw badRequest(err.detail || err.message, 'CSV_FORMAT', { line: err.line });
         throw err;
     }
     const { records, errors, warnings, columns } = mapCsvRows(rows);
     const dryRun = isDryRun(body.dry_run);
     const bySeriesPublisher = columns.includes('series_publisher');
+    // with a "Sprache" column, same-title editions in different languages stay apart
+    const byLanguage = columns.includes('series_language');
 
     // Load titles, volumes and users once and compare in JS: SQLite LOWER() folds only ASCII (Ä would stay Ä)
     const seriesByTitle = new Map();
-    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority FROM mangas ORDER BY id').all()) {
+    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas ORDER BY id').all()) {
         const key = matchKey(m.title);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
-        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority });
+        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE });
     }
     const volumeKey = (mangaId, type, number) => `${mangaId}|${type}|${matchKey(canonicalVolumeNumber(number, type))}`;
     const labelKey = (mangaId, type, label) => `${mangaId}|${type}|=${matchKey(label)}`;
@@ -134,10 +139,33 @@ function importCsv(ctx, { body }) {
     const findUser = (name) => usersExact.get(name) ?? usersFolded.get(matchKey(name));
     const isAdmin = ctx.user.role === 'admin';
 
-    // Without a "Reihenverlag" column only the title counts (lowest ID wins); with it title + publisher of the series
+    // The export names the language only on the first row of a series: later rows of the same title inherit it
+    // (rows before the first named one take that first one)
+    const rowLanguage = new Map();
+    if (byLanguage) {
+        const sources = [...records.map(r => [r, r]), ...errors.filter(e => e.series_source).map(e => [e.series_source, e.record])]
+            .sort((a, b) => a[0].line - b[0].line);
+        const named = (source) => (source.series_meta && source.series_meta.language) || null;
+        const first = new Map();
+        for (const [source] of sources) if (named(source) && !first.has(matchKey(source.series))) first.set(matchKey(source.series), named(source));
+        const current = new Map();
+        for (const [source, record] of sources) {
+            const title = matchKey(source.series);
+            if (named(source)) current.set(title, named(source));
+            const language = current.get(title) || first.get(title) || null;
+            rowLanguage.set(source, language);
+            if (record && record !== source) rowLanguage.set(record, language);
+        }
+    }
+    const languageOf = (r) => rowLanguage.get(r) || null;
+
+    // Without a "Reihenverlag" column only the title counts (lowest ID wins); with it title + publisher of the series.
+    // A row without a known language matches any edition, as before.
     const findSeries = (r) => {
-        const list = seriesByTitle.get(matchKey(r.series));
-        if (!list) return null;
+        const titled = seriesByTitle.get(matchKey(r.series));
+        const language = languageOf(r);
+        const list = titled && language ? titled.filter(c => c.language === language) : titled;
+        if (!list || !list.length) return null;
         if (!bySeriesPublisher) return list[0];
         const want = publisherKey(r.series_publisher);
         return list.find(c => c.pubKey === want) || (want ? list.find(c => !c.pubKey) : list[0]) || null;
@@ -174,21 +202,22 @@ function importCsv(ctx, { body }) {
         return { ids, unknown };
     };
     // Only admins may enter other users as owner or reader (like /volumes/:id/owners and /read)
-    const resolveUsers = (raw, r, unknownText) => {
+    const resolveUsers = (raw, r, unknownMsg) => {
         const { ids, unknown } = resolveNames(raw);
         const allowed = isAdmin ? ids : ids.filter(id => id === ctx.user.id);
-        const messages = unknown.map(name => `${unknownText} „${name}“ (ignoriert)`);
-        if (allowed.length < ids.length) messages.push('Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)');
+        const messages = unknown.map(unknownMsg);
+        if (allowed.length < ids.length) messages.push(msg('Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)'));
         const shown = messages.length > MAX_NAME_WARNINGS + 1 ? messages.slice(0, MAX_NAME_WARNINGS) : messages;
-        for (const message of shown) result.warnings.push({ line: r.line, message });
+        for (const message of shown) result.warnings.push(rowNote(r.line, message));
         if (shown.length < messages.length) {
-            result.warnings.push({ line: r.line, message: `… und ${messages.length - shown.length} weitere Hinweise zu dieser Zeile` });
+            result.warnings.push(rowNote(r.line, msg('… und {count} weitere Hinweise zu dieser Zeile', { count: messages.length - shown.length })));
         }
         return allowed;
     };
 
     // Series fields of a new series: per field the first filled value from all rows of this series, also discarded ones
-    const seriesMetaKey = (r) => matchKey(r.series) + (bySeriesPublisher ? '|' + publisherKey(r.series_publisher) : '');
+    const seriesMetaKey = (r) => matchKey(r.series) + (bySeriesPublisher ? '|' + publisherKey(r.series_publisher) : '')
+        + (byLanguage ? '|' + (languageOf(r) || '') : '');
     const seriesMeta = new Map();
     const metaSources = [...records, ...errors.map(e => e.series_source).filter(Boolean)].sort((a, b) => a.line - b.line);
     for (const r of metaSources) {
@@ -200,14 +229,15 @@ function importCsv(ctx, { body }) {
 
     const insertManga = ctx.db.prepare(`
         INSERT INTO mangas (title, author, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
-                            banner_image, manga_passion_id, wish_priority, collecting, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
         INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher,
-                             purchase_date, status, notes, type, priority, target_price, cover_image, images, manga_passion_volume_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             purchase_date, status, notes, type, priority, target_price, cover_image, images, manga_passion_volume_id, language)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // v2.19.1 kept "Band 3" next to "3" in one series; when a file carries both, each row stays a volume of its own
@@ -227,17 +257,26 @@ function importCsv(ctx, { body }) {
     const result = { created_series: 0, updated_series: 0, created_volumes: 0, skipped_existing: 0, errors: [], warnings: [...warnings] };
     const rowErrors = [];
     let placeholderId = 0;
+    // a manual key only means something in the database that made it: each one of the file gets a fresh key here
+    const manualKeys = new Map();
+    const importedWorkKey = (key) => {
+        if (!isManualWorkKey(key)) return key ?? null;
+        if (!manualKeys.has(key)) manualKeys.set(key, manualWorkKey(ctx.randomId()));
+        return manualKeys.get(key);
+    };
     const createSeries = (r) => {
         const publisher = normalizePublisher(bySeriesPublisher ? r.series_publisher : r.publisher);
         const meta = seriesMeta.get(seriesMetaKey(r)) || {};
+        const language = meta.language || languageOf(r) || defaultLanguage;
         const id = dryRun
             ? --placeholderId
             : Number(insertManga.run(
-                r.series, r.author, publisher, meta.language || 'Deutsch', meta.status || 'Laufend', meta.alt_title ?? null,
+                r.series, r.author, publisher, language, meta.status || 'Laufend', meta.alt_title ?? null,
                 meta.tags ?? null, meta.total_volumes ?? null, meta.description ?? null, meta.cover_image ?? null,
-                meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id
+                meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id,
+                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key)
             ).lastInsertRowid);
-        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null };
+        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
         const key = matchKey(r.series);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push(entry);
@@ -275,7 +314,7 @@ function importCsv(ctx, { body }) {
             if (!isAdmin && r.status === OWNED_STATUS) {
                 const named = resolveNames(r.owners_raw).ids;
                 if (named.length > 0 && !named.includes(ctx.user.id)) {
-                    rowErrors.push({ line: r.line, message: OTHERS_ONLY_OWNERS });
+                    rowErrors.push(rowNote(r.line, OTHERS_ONLY_OWNERS));
                     continue;
                 }
             }
@@ -283,20 +322,20 @@ function importCsv(ctx, { body }) {
             knownVolumes.add(volumeKey(series.id, r.type, r.volume_number));
             knownLabels.add(labelKey(series.id, r.type, r.label));
             if (ownLabel) {
-                result.warnings.push({ line: r.line, message: `„${r.label}“ und „${r.volume_number}“ stehen beide in der Datei: beide übernommen, „${r.label}“ unter dieser Bezeichnung` });
+                result.warnings.push(rowNote(r.line, msg('„{label}“ und „{number}“ stehen beide in der Datei: beide übernommen, „{label}“ unter dieser Bezeichnung', { label: r.label, number: r.volume_number })));
                 r = { ...r, volume_number: r.label };
             }
             result.created_volumes++;
 
-            const ownerIds = r.status === OWNED_STATUS ? resolveUsers(r.owners_raw, r, 'Unbekannter Besitzer') : [];
-            const readerIds = resolveUsers(r.readers_raw, r, 'Unbekannter Leser');
+            const ownerIds = r.status === OWNED_STATUS ? resolveUsers(r.owners_raw, r, (name) => msg('Unbekannter Besitzer „{name}“ (ignoriert)', { name })) : [];
+            const readerIds = resolveUsers(r.readers_raw, r, (name) => msg('Unbekannter Leser „{name}“ (ignoriert)', { name }));
             if (r.mark_read) readerIds.push(...(ownerIds.length ? ownerIds : [ctx.user.id]));
             if (dryRun || series.id < 0) continue;
 
             const volumePublisher = normalizePublisher(r.publisher);
             const ins = insertVolume.run(series.id, r.volume_number, r.isbn, r.price, r.release_date, r.release_year, r.condition,
                 r.pages, volumePublisher && publisherKey(volumePublisher) !== series.pubKey ? volumePublisher : null,
-                r.purchase_date, r.status, r.notes, r.type, r.priority, r.target_price, r.cover_image, r.images, r.manga_passion_volume_id);
+                r.purchase_date, r.status, r.notes, r.type, r.priority, r.target_price, r.cover_image, r.images, r.manga_passion_volume_id, r.language);
             const newVolumeId = Number(ins.lastInsertRowid);
             for (const userId of ownerIds) {
                 addOwner(ctx.db, newVolumeId, userId, { price: r.price, purchase_date: r.purchase_date, condition: r.condition });
@@ -325,7 +364,9 @@ function importCsv(ctx, { body }) {
     result.errors.push(...rowErrors);
     result.errors.sort((a, b) => a.line - b.line);
     result.warnings.sort((a, b) => a.line - b.line);
-    return { body: { success: true, dry_run: dryRun, ...result } };
+    // parallel to errors/warnings (their { line, message } entries keep their shape), for the client's catalog
+    const msgsOf = (list) => list.map(e => e.message_msg ?? null);
+    return { body: { success: true, dry_run: dryRun, ...result, errors_msg: msgsOf(result.errors), warnings_msg: msgsOf(result.warnings) } };
 }
 
 module.exports = { exportCsv, importCsv, exportOptions, MAX_IMPORT_ROWS };
