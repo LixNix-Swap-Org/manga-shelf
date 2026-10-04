@@ -11,11 +11,9 @@ export const CHIP_LABEL = 'basis-[calc(50%-0.25rem)] grow sm:grow-0 lg:basis-[ca
 const CHIP_SELECT = 'font-medium text-slate-200 group-hover:text-white truncate min-w-0 w-full xl:w-auto';
 const VIEW_TOGGLE = 'hit-44 p-1.5 rounded-lg transition-all [@media(pointer:coarse)]:p-2.5 [@media(pointer:coarse)]:px-[15px]';
 
-/**
- * Status tabs, filter/sort/grouping selects, author and genre chips, view-mode toggle; presentational, state via props.
- * The genre filter (AND over tags) shows when `setTagFilter` is given; `availableTags` is [{ tag, count }]. The edition
- * language chip shows when the collection holds more than one language (`availableLanguages` [{ code, count }]).
- */
+// Status tabs, filter/sort/grouping selects, author and genre chips, view-mode toggle; presentational, state via props. The genre
+// filter (AND over tags) shows when `setTagFilter` is given (`availableTags` [{ tag, count }]); the edition language chip when
+// `availableLanguages` [{ code, count }] holds more than one language.
 export default function CollectionToolbar({
   availablePublishers,
   filterCounts,

@@ -1,6 +1,6 @@
 # Pterodactyl/Docker dahinter: TRUST_PROXY=loopback, 172.18.0.1 (nur die Gateway-Adresse des Docker-Netzes, Docker:
 # `docker network inspect <netz>` -> Gateway; nie das ganze Subnetz) und den Port der App an 127.0.0.1 binden, siehe
-# README Abschnitt 6.
+# README, Abschnitt „HTTPS and reverse proxy“.
 # Caddyfile Konfiguration für Manga Shelf
 # Datei z.B. /etc/caddy/Caddyfile
 # Caddy holt und erneuert Let's Encrypt Zertifikate vollkommen automatisch!

@@ -5,11 +5,8 @@ const SERVER_ONLY_SETTINGS = "substr(key, 1, 14) = 'calendar_feed:' OR key IN ('
 
 const tableExists = (conn, name) => Boolean(conn.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
 
-/**
- * Strips server-only data from an imported database: password hashes become the local marker, API keys, the AniList
- * list sync state (it belongs to those keys), calendar feed tokens, revoked sessions and the signing secret go.
- * `conn` needs prepare(). Returns the changed row count.
- */
+// Strips server-only data from an imported database: password hashes become the local marker; API keys, the AniList list sync
+// state, calendar feed tokens, revoked sessions and the signing secret go. `conn` needs prepare(). Returns the changed row count.
 export function sanitizeImportedDatabase(conn) {
   const before = Number(Object.values(conn.prepare('PRAGMA secure_delete').get() || {})[0]) || 0;
   // freed and overwritten cells are zeroed, so the old values do not linger in the saved file

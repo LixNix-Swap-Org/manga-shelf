@@ -9,12 +9,9 @@ import {
 } from '../utils/shareIntake';
 import { t } from '../i18n/index.js';
 
-/**
- * A streaming link shared to the app (share target, Android share sheet, "Link einfügen"): asks the server what it
- * points to, lets the user confirm "Frieren, Folge 7 gesehen?" and saves it with an undo toast. `state` drives
- * ShareLinkDialog: { phase: 'paste' | 'reading' | 'error' | 'confirm' | 'saving', … } or null. Shares that arrive
- * while the dialog is open wait in order until it closes.
- */
+// A streaming link shared to the app (share target, Android share sheet, "Link einfügen"): asks the server what it points to,
+// lets the user confirm "Frieren, Folge 7 gesehen?" and saves it with an undo toast. `state` drives ShareLinkDialog:
+// { phase: 'paste' | 'reading' | 'error' | 'confirm' | 'saving', … } or null. Shares arriving while it is open wait in order.
 export default function useShareIntake({ anime, user, canEdit, showAnime, openAddAnime }) {
   const [state, setState] = useState(null);
   const stateRef = useRef(null);

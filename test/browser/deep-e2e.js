@@ -238,11 +238,9 @@ async function languageSwitch(page, snap = async () => {}) {
     await page.waitForFunction(() => !document.querySelector('[role="dialog"]'), { timeout: 5000 });
 }
 
-/**
- * Editions (wave I18N-D): "+ Ausgabe" on Frieren creates an English (US) edition and opens it; the switcher links both,
- * the hero and the shelf card carry the EN pill, the shelf's 'Sprache' filter shows only it (URL ?lang=en). The edition
- * goes to the trash afterwards, so the later steps see the two seeded series again.
- */
+// Editions: "+ Ausgabe" on Frieren creates an English (US) edition and opens it; the switcher links both, hero and shelf card
+// carry the EN pill, the shelf's 'Sprache' filter shows only it (URL ?lang=en). The edition goes to the trash afterwards, so
+// the later steps see the two seeded series again.
 async function editionTour(page, frierenId, snap = async () => {}) {
     await page.goto(`${BASE_URL}/manga/${frierenId}`, { waitUntil: 'networkidle0' });
     await clickSelector(page, '#btn-add-edition');

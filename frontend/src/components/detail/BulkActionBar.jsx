@@ -31,11 +31,8 @@ function useScrollPaddingAbove(ref) {
 
 export const bulkDeleteConfirmText = (count) => t('{count} wirklich löschen? Der Lesestatus aller Benutzer für diese Bände wird ebenfalls gelöscht. Direkt danach lässt sich das noch rückgängig machen.', { count: formatCount(count, 'Band', 'Bände') });
 
-/**
- * Sticky bar of the selection mode: the request a button stands for goes to onApply(change, doneText).
- * doneText is translated here, where it is produced; handleBulkEdit shows it as given.
- * `readerId` is the reader whose state "Gelesen" changes (the selected reader when the user may change it).
- */
+// Sticky bar of the selection mode: a button's request goes to onApply(change, doneText); doneText is translated here and
+// handleBulkEdit shows it as given. `readerId` is the reader whose "Gelesen" state changes (the selected reader when allowed).
 export default function BulkActionBar({
   count, visibleCount, allVisibleSelected, onSelectAllVisible, onClear, onClose, onApply, busy = false, userId, readerId, currency = 'EUR',
   confirmDelete = (text) => window.confirm(text)

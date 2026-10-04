@@ -3,8 +3,7 @@
 // in the environment); GitHub appends the generated change list.
 const { detectSigning, notes } = require('./signing');
 
-// README §2 repeats this sentence word for word (test/docs.test.js); it stays German until README is rewritten in English
-const PTERODACTYL_UPDATE = 'neue `pterodactyl-manga-shelf.zip` im File Manager hochladen, entpacken und vorhandene Dateien überschreiben (vorher nichts löschen; `data/`, `.env` und `ssl/` bleiben), dann den Server neu starten.';
+const PTERODACTYL_UPDATE = 'upload the new `pterodactyl-manga-shelf.zip` in the File Manager, unpack it and overwrite the existing files (delete nothing beforehand; `data/`, `.env` and `ssl/` stay), then restart the server.';
 
 function releaseNotes(tag, env = process.env, repository = env.GITHUB_REPOSITORY || 'LixNix-Swap-Org/manga-shelf') {
     const image = `ghcr.io/${repository.toLowerCase()}`;

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // node scripts/release/bump-version.js <patch|minor|major|none|X.Y.Z> [--write] [--root <dir>]
-// Prints the target version; --write sets it in package.json/package-lock.json of the server, frontend/, desktop/ and
-// mobile/ (plus the native mobile projects via mobile/scripts/sync-version.js). In GitHub Actions the result also goes to $GITHUB_OUTPUT (version, tag).
+// Prints the target version; --write sets it in package.json/package-lock.json of the server, frontend/, desktop/ and mobile/
+// (plus the native mobile projects via mobile/scripts/sync-version.js). In GitHub Actions the result also goes to $GITHUB_OUTPUT.
 const fs = require('fs');
 const path = require('path');
 const { resolveTargetVersion, readVersion, writeVersion, syncMobileVersion, tagFor } = require('./version');

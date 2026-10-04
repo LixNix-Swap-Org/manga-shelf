@@ -1,388 +1,410 @@
 # Manga Shelf
 
-Selbst gehostete Manga-Sammlung für den Haushalt: Reihen und Bände mit Covern, wer was besitzt und gelesen hat, Lücken und Neuerscheinungen über Manga Passion, eine Einkaufsliste mit Barcode-Scanner, eine Anime-Liste und Statistiken. Der Server läuft auf Pterodactyl, in Docker, als einzelnes Programm oder in der Desktop-App; die Apps für Android und iPhone verbinden sich mit ihm oder funktionieren ganz ohne Server.
+Self-hosted manga collection for a household. Series and volumes with covers, who owns and has read what, gaps and new releases from Manga Passion, a shopping list with barcode scanner, a release radar, an anime list and statistics. It runs as a server (Docker, Pterodactyl, a single binary, or from source) that browsers and the apps connect to, or as a standalone app on a desktop or phone without any server.
 
-Repository: **[LixNix-Swap-Org/manga-shelf](https://github.com/LixNix-Swap-Org/manga-shelf)** · Downloads: **[Releases](https://github.com/LixNix-Swap-Org/manga-shelf/releases)**. Das Projekt begann als MoltresHD/manga-shelf.
+Repository: **[LixNix-Swap-Org/manga-shelf](https://github.com/LixNix-Swap-Org/manga-shelf)** · Downloads: **[Releases](https://github.com/LixNix-Swap-Org/manga-shelf/releases)** · Changes: [`CHANGELOG.md`](CHANGELOG.md) · Maintainer reference: [`AGENTS.md`](AGENTS.md). The project started as MoltresHD/manga-shelf (v2.19.1).
 
-## Inhalt
+## Contents
 
-1. [Funktionen](#1-funktionen)
-2. [Installation auf Pterodactyl](#2-installation-auf-pterodactyl)
-3. [Ersteinrichtung und Verwaltung](#3-ersteinrichtung-und-verwaltung)
-4. [API-Schlüssel (freiwillig)](#4-api-schlüssel-freiwillig)
-5. [Backups & Wiederherstellung](#5-backups--wiederherstellung)
-6. [HTTPS & eigene Domain](#6-https--eigene-domain-reverse-proxy-mit-nginx-oder-caddy)
-7. [Docker](#7-docker)
-8. [Headless-Server](#8-headless-server-ohne-oberfläche-ohne-docker)
-9. [Desktop-App](#9-desktop-app-windows-macos-linux)
-10. [Android und iPhone, auch ohne Server](#10-android-und-iphone)
-11. [Release (für Maintainer)](#11-release-für-maintainer)
-12. [Umgebungsvariablen](#12-umgebungsvariablen)
-13. [Entwicklung](#13-entwicklung)
+1. [What it is](#1-what-it-is)
+2. [Ways to run it](#2-ways-to-run-it)
+3. [Web app features](#3-web-app-features)
+4. [Desktop and phone apps](#4-desktop-and-phone-apps)
+5. [Configuration](#5-configuration)
+6. [Data, backups and security](#6-data-backups-and-security)
+7. [Development](#7-development)
+8. [Languages](#8-languages)
+9. [Credits and data sources](#9-credits-and-data-sources)
 
-**Welche Installation?**
+## 1. What it is
 
-| Du möchtest … | Nimm |
+* **One collection per household.** Every account sees the same series; ownership and reading state are tracked per person ("owned by Kim and Alex"). Roles: Admin, Editor, Guest (read only).
+* **German-first.** It is built around the German market: Manga Passion (German editions, prices, release calendar), the German National Library (DNB) for ISBNs, German publisher spellings. Editions in other languages can be tracked as well ([section 8](#8-languages)).
+* **Interface in 13 languages.** German is the source text; English and eleven more follow the device language or a per-account choice.
+* **Offline-capable.** The installed web app and the phone apps keep a readable offline copy and queue ownership, reading and purchase changes until the server is reachable again.
+* **Server or standalone.** The same domain core (`core/`) runs on the server and inside the apps, so a phone or desktop app can hold the collection on its own and move it to a server later.
+
+| You want … | Use |
 |---|---|
-| einen Server bei einem Pterodactyl-Hoster oder im eigenen Panel | [Pterodactyl](#2-installation-auf-pterodactyl) |
-| einen Server auf NAS, Raspberry Pi oder VPS mit Docker | [Docker](#7-docker) |
-| einen Server ohne Docker (Linux-Dienst, `.deb`/`.rpm`, Windows, macOS) | [Headless-Server](#8-headless-server-ohne-oberfläche-ohne-docker) |
-| ein Fenster am PC, allein oder als Server fürs Heimnetz | [Desktop-App](#9-desktop-app-windows-macos-linux) |
-| die Sammlung auf dem Handy, mit oder ohne Server | [Android und iPhone](#10-android-und-iphone) |
+| a server on a NAS, Raspberry Pi or VPS with Docker | [Docker](#docker) |
+| a server at a Pterodactyl host or in your own panel | [Pterodactyl](#pterodactyl) |
+| a server without Docker (Linux service, `.deb`/`.rpm`, Windows, macOS) | [Headless server](#headless-server-binary) |
+| a window on your PC, alone or as the server for your home network | [Desktop app](#desktop-app) |
+| the collection on your phone, with or without a server | [Android and iPhone](#android-and-iphone) |
 
-## 1. Funktionen
+## 2. Ways to run it
 
-**Sammlung**
-* Reihen und Bände mit Cover, Verlag, Preis, Erscheinungsdatum, ISBN und Notizen; Sonderausgaben und Schuber; Status je Band (Vorhanden, Fehlt, Vorbestellt, Bestellt, Erscheint bald).
-* Mehrere Benutzer: Besitz und Lesestand gelten je Person („gehört Kim und Alex“), Rollen Admin, Editor und Gast (nur lesen).
-* Sammelstatus je Reihe (aktiv, pausiert, abgebrochen), Wunschliste mit Priorität und Zielpreis, Tags, Filter, Gruppierung und Sortierung (in der Adresse gespeichert, also teilbar). Die Suche findet auch ISBNs und Notizen.
-* **Mehrfachauswahl:** in einer Reihe „Bände auswählen“, dann Status, Besitzer oder Lesestand für alle auf einmal setzen oder löschen, mit „Rückgängig“.
-* **Papierkorb:** gelöschte Reihen und Bände lassen sich 30 Tage lang wiederherstellen (Statistik-Dialog → Papierkorb).
-* **Aufräumen:** „Verlage zusammenführen“ fasst Schreibweisen zusammen („Carlsen Verlag GmbH“ = „Carlsen Manga“), „Sammlung aufräumen“ zeigt unvollständige oder widersprüchliche Einträge.
-* **CSV:** Export und Import der ganzen Sammlung mit Probelauf (Besitzer, Lesestand, Wunsch, Priorität, Zielpreis und Sammelstatus inklusive).
+Every release ships the Pterodactyl ZIP, the Docker image, the headless server binaries and packages, the desktop installers and the phone apps, plus `SHA256SUMS.txt`. Whatever you pick, the first start works the same way ([First start](#first-start)).
 
-**Nachschlagen und Neuerscheinungen**
-* Manga Passion: Reihe per Link oder Suche übernehmen, fehlende Bände erkennen, Daten und Cover automatisch ergänzen.
-* ISBN-Suche über DNB, K10plus und Google Books, Cover über Open Library.
-* **Release-Radar:** Neuerscheinungen je Monat, die eigenen Vorbestellungen und geänderte Erscheinungstermine („Termin übernehmen“).
-* **Kalender abonnieren:** Radar → „Meine Vorbestellungen“ → „Kalender abonnieren“ → „Abo-Adresse erzeugen“. Jeder Band mit genauem Erscheinungstag wird ein ganztägiger Termin.
-  * iPhone/iPad: Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen.
-  * Android: calendar.google.com → Weitere Kalender → + → Per URL, danach die Synchronisierung in der Kalender-App einschalten (Google holt das Abo von seinen Servern, der Server muss also aus dem Internet erreichbar sein; ohne Google: ICSx⁵).
-  * Thunderbird: Kalender → Neuer Kalender → Im Netzwerk.
-  * Die Adresse enthält einen eigenen Schlüssel; „Neue Adresse“ macht die alte ungültig, ebenso „Alle Sitzungen beenden“, ein neues Passwort und ein Passwort-Reset (auch über die Konsole).
+### Docker
 
-**Einkaufen und Scannen**
-* Einkaufsliste aller fehlenden und vorbestellten Bände, nach Verlag gruppiert; teilen, kopieren oder drucken. Ein Kauf („Gekauft“) klappt auch offline und wird nachgereicht.
-* Barcode-Scanner: im Buchladen Bände nacheinander scannen; die Liste zeigt sofort, ob ein Band zu kaufen ist, schon da ist (auch bei wem) oder noch fehlt. Die Live-Kamera braucht HTTPS (oder localhost); die Handy-Apps nutzen den eingebauten Scanner des Systems.
-
-**Anime**
-* Eigener Reiter „Anime“: eine gemeinsame Liste (Staffeln und Filme einzeln), Fortschritt je Person (Folgen, Status, Bewertung, Notiz), Suche über AniList und MyAnimeList, Countdown zur nächsten Folge, Verknüpfung mit der passenden Reihe, CSV-Export.
-* Daten und Cover stammen von AniList und MyAnimeList (über Jikan oder die offizielle API) und gehören den Quellen; die Nutzung ist nur nicht-kommerziell erlaubt. Manga Shelf speichert IDs und einen schlanken Auszug und verlinkt auf beide Seiten.
-
-**Statistiken und Verwaltung**
-* Statistiken: Ausgaben, Besitz je Person, Leseverlauf über 24 Monate mit Stapel („vorhanden, nicht gelesen“) und „Weiterlesen“.
-* **System** (Admins): Version und Update-Hinweis, Speicher, Datenbank, Backups, verwaiste Bilder aufräumen, alle Sitzungen beenden, Auslastung der Quellen.
-* Als App installierbar (PWA) mit lesbarer Offline-Kopie; Backups täglich und auf Knopfdruck.
-
-## 2. Installation auf Pterodactyl
-
-Voraussetzung: Node.js 22.13 oder neuer (die App nutzt die eingebaute SQLite-Datenbank `node:sqlite`).
-
-### ZIP holen
-
-**Fertig (empfohlen):** Unter **[Releases](https://github.com/LixNix-Swap-Org/manga-shelf/releases)** liegt für jede Version die `pterodactyl-manga-shelf.zip` mit gebautem Frontend (dazu Docker-Image, Server-Programme, Desktop-App und Handy-Apps, siehe Abschnitte 7 bis 10).
-
-**Selbst bauen** (Node.js 22.13+ auf deinem PC):
-
-```bash
-npm install
-npm run package
-```
-
-`npm run package` baut das Frontend (`frontend/dist/`) und schreibt mit `package.js` die `pterodactyl-manga-shelf.zip` nach `dist_pack/` (und eine Kopie in den Projektordner).
-
-**Falls `npm run package` fehlschlägt**, von Hand:
-1. `cd frontend && npm install && npm run build`
-2. Ins ZIP gehören mit ihrer Ordnerstruktur: `package.json`, `package-lock.json`, `.env.example`, alles, was in `package.json` unter `"files"` steht (heute `index.js`, `db.js`, `mangaPassion.js`, `healthcheck.js`, `scripts/admin.js` und die Ordner `core/`, `middleware/`, `routes/`, `services/`, `utils/` samt Unterordnern) und `frontend/dist/`. Diese Liste ist die Quelle, `package.js` packt genau sie.
-3. **Nicht** ins ZIP: `node_modules/` und `data/` (ein mitgepacktes `data/` würde beim Entpacken die Datenbank auf dem Server überschreiben).
-
-### Egg
-
-Das **Generic Node.js Egg** funktioniert; das mitgelieferte Egg ist bequemer (Node-22-Image, Startbefehl, Variable `TRUST_PROXY`):
-1. Admin-Panel → **Nests** → **Import Egg**.
-2. `egg-manga-shelf.json` hochladen, Ziel-Nest wählen (z. B. Generic), „Import“.
-
-### Server anlegen
-
-1. Neuen Server mit dem Egg „Manga Shelf App“ (oder „Generic Node.js“) anlegen.
-2. **Docker Image** „Node.js 22“ (oder neuer). Mit Node 20 oder 21 startet die App nicht. Bietet ein früher importiertes Egg nur Node 20/21 an: Egg neu importieren oder unter **Startup → Docker Image** `ghcr.io/parkervcp/yolks:nodejs_22` eintragen.
-3. Port zuweisen (Allocation); die Variable `SERVER_PORT` muss ihm entsprechen (Pterodactyl setzt sie selbst). Soll später ein Reverse Proxy davor (Abschnitt 6), die Allocation an `127.0.0.1` binden.
-4. **File Manager:** Standarddateien löschen, die ZIP hochladen, Rechtsklick → **Unarchive**.
-5. **Start.** Beim Start installiert das Egg die Abhängigkeiten (`npm install --omit=dev --ignore-scripts`), legt die Datenbank `data/manga.db` an und schreibt den **Einrichtungscode** in die Konsole (Abschnitt 3).
-
-**Update:** neue `pterodactyl-manga-shelf.zip` im File Manager hochladen, entpacken und vorhandene Dateien überschreiben (vorher nichts löschen; `data/`, `.env` und `ssl/` bleiben), dann den Server neu starten. Vor jeder Datenbank-Migration legt der Server selbst `data/backups/vor-update-*.zip` an; gelingt das nicht (z. B. Platte voll), startet er nicht und nennt den Grund (Abschnitt 12, `MIGRATE_WITHOUT_SNAPSHOT`). Zurück zur alten Version: Abschnitt 5.
-
-## 3. Ersteinrichtung und Verwaltung
-
-1. Die Adresse des Servers öffnen (z. B. `http://deine-ip:port`); ohne Admin-Konto erscheint die Einrichtung.
-2. Den **Einrichtungscode** eintragen. Er steht beim Start in der Konsole bzw. im Log („Ersteinrichtung: Einrichtungscode für das erste Admin-Konto: …“; Docker: `docker logs manga-shelf`, Dienst: `journalctl -u manga-shelf`). Mit `SETUP_TOKEN` lässt er sich fest vorgeben (mindestens 12 Zeichen; Leerzeichen und Bindestriche zählen nicht). Die Desktop-App setzt und zeigt ihn selbst.
-3. Admin-Konto anlegen.
-4. Optional „Quellen verbinden (später möglich)“: API-Schlüssel für alle hinterlegen (Abschnitt 4), oder überspringen.
-
-**Benutzer:** Admins legen unter „Benutzer“ weitere Konten an: **Editor** (darf alles an der Sammlung ändern), **Gast** (nur lesen und exportieren), **Admin** (zusätzlich Benutzer, Backups, System).
-
-**Konsolenbefehle** (Pterodactyl-Konsole, Terminal des Headless-Servers; sonst `node scripts/admin.js <befehl>` bzw. als Unterbefehl des Server-Programms; Docker: `docker exec -it -u node manga-shelf node scripts/admin.js <befehl>`, siehe Abschnitt 7):
-
-| Befehl | Wirkung |
-|---|---|
-| `hilfe` | alle Befehle |
-| `status` | Version, Datenordner, Datenbank, Speicherplatz, letztes Backup |
-| `backup` | jetzt einen Snapshot erstellen |
-| `benutzer` | alle Benutzer mit Rolle |
-| `passwort-reset <name>` | zufälliges neues Passwort (im Terminal angezeigt, sonst als Datei im Datenordner); beendet die Sitzungen und die Kalender-Abo-Adresse des Benutzers |
-| `admin <name>` | macht `<name>` zum Admin, nur wenn es keinen gibt |
-| `rollback-aufraeumen [bestaetigen]` | prüft `manga.db` und löscht eine liegengebliebene `manga.db.bak` |
-| `quellen …` | API-Schlüssel: Zustand, Anleitung, setzen, entfernen (Abschnitt 4) |
-
-`ADMIN_CONSOLE=false` schaltet die Konsole auf stdin ab.
-
-## 4. API-Schlüssel (freiwillig)
-
-Ohne Schlüssel läuft alles über den gemeinsamen Zugang des Servers (AniList ohne Token, Jikan statt der offiziellen MyAnimeList-API, Google Books anonym), nur mit dessen Limit. Ein eigener Schlüssel bringt ein eigenes Limit.
-
-| Anbieter | Für wen | Schlüssel | Woher |
-|---|---|---|---|
-| AniList | je Benutzer | Zugriffstoken (gilt ein Jahr) | [anilist.co/settings/developer](https://anilist.co/settings/developer) → „Create New Client“, Redirect URL `https://anilist.co/api/v2/oauth/pin`; aus der Client-ID baut die Anleitung den Anmeldelink, der den Token anzeigt |
-| MyAnimeList | je Benutzer und für alle (Instanz) | Client-ID (32 Zeichen) | [myanimelist.net/apiconfig](https://myanimelist.net/apiconfig) → „Create ID“, App Type **other**, Redirect URL `http://localhost/`, non-commercial, hobbyist; die Client-ID steht danach unter „Edit“ |
-| Google Books | für alle (Instanz, nur Admins) | API-Schlüssel (`AIza…`) | [Google Cloud Console](https://console.cloud.google.com/) → Projekt → „Books API“ aktivieren → Anmeldedaten → API-Schlüssel, auf die Books API einschränken |
-
-**Eintragen** – überall dieselbe Schritt-für-Schritt-Anleitung mit Links und Prüfung beim Anbieter:
-* **Browser / App mit Server:** Konto-Symbol oben rechts → Reiter „API-Schlüssel“. Admins sehen dort zusätzlich „Für alle (Instanz)“. Auch im Einrichtungsassistenten („Quellen verbinden“).
-* **App ohne Server:** bei der Einrichtung „Quellen verbinden (optional)“, später unter „Quellen & Schlüssel“. Die Schlüssel liegen im sicheren Speicher des Geräts.
-* **Desktop-App:** Menü „Quellen & Schlüssel…“.
-* **Terminal** (Pterodactyl-Konsole, Docker, Headless-Server):
-  * `quellen` – Zustand je Anbieter
-  * `quellen anleitung <anilist|mal|google_books>` – die Schritte mit Links (bei AniList fragt sie die Client-ID ab und druckt den Anmeldelink)
-  * `quellen setzen <anbieter> [--benutzer Name] [--aus-datei pfad]` – fragt den Schlüssel verdeckt ab, prüft ihn und speichert ihn verschlüsselt. AniList-Token gehören immer zu einem Benutzer (`--benutzer`).
-  * `quellen entfernen <anbieter> [--benutzer Name]`
-  * Den Schlüssel nie direkt in die Befehlszeile schreiben. In der Pterodactyl-Konsole ist die Eingabe sichtbar; verdeckt geht es mit `node scripts/admin.js quellen setzen …` im Terminal.
-
-Instanz-Schlüssel lassen sich auch per Umgebung setzen (`MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY`); sie haben Vorrang und erscheinen als „aus der Umgebung gesetzt“. Gespeicherte Schlüssel sind mit dem Server-Secret (`JWT_SECRET` bzw. `data/secret.key`) verschlüsselt: Wer das Secret wechselt oder ein Backup auf einem anderen Server einspielt, muss sie neu eintragen.
-
-## 5. Backups & Wiederherstellung
-
-Als Admin unter **Backups**:
-* **Automatisch:** jeden Tag um `BACKUP_HOUR` Uhr (Standard 3, Zeitzone `BACKUP_TIMEZONE`) ein geprüfter Snapshot in `data/backups/`. Aufbewahrt werden je Art die neuesten: 7 tägliche, 10 manuelle, 3 vor einer Wiederherstellung, 3 vor einem Update (`BACKUP_KEEP_*`).
-* **Neuen Snapshot erstellen** (oder `backup` in der Konsole) und **Direkt-ZIP** zum Herunterladen: Datenbank `manga.db` plus alle Bilder aus `uploads/`.
-* **Wiederherstellen** aus einem Snapshot oder einer hochgeladenen ZIP (bis 500 MB): Der Server prüft das Archiv zuerst und zeigt seinen Inhalt; erst nach der Bestätigung wird getauscht. Vorher entsteht ein Snapshot `vor-wiederherstellung-*`, mit dem sich die Wiederherstellung rückgängig machen lässt. Danach sind alle anderen Sitzungen beendet.
-* Das Secret (`data/secret.key`) steckt bewusst in keinem Backup. Zieht eine Sammlung per Backup auf einen anderen Server um, müssen gespeicherte API-Schlüssel dort neu eingetragen werden (sie sind mit dem Secret verschlüsselt); wer stattdessen den ganzen `data/`-Ordner kopiert, nimmt das Secret mit.
-* **Sicherung aus der App** (Abschnitt 10): eine Server-Sammlung, die in die App geholt oder dort aus einer Server-ZIP importiert wurde, enthält danach keine Passwörter mehr. Spielt man die ZIP der App wieder auf einem Server ein, nennt die Prüfung die Konten ohne Passwort; sie brauchen danach einen Passwort-Reset in der Benutzerverwaltung. Steht das eigene Konto darunter, vor dem Abmelden ein neues Passwort setzen; ist niemand mehr angemeldet, hilft nur der Konsolenbefehl `passwort-reset <name>`. In einen Server mit eigener Sammlung führt „Zusammenführen“ (CSV), nicht die Wiederherstellung.
-* Gelöschtes vor dem nächsten Backup: erst im Papierkorb nachsehen (30 Tage).
-* **Zurück zur alten Version nach einem Update:** es gibt keinen automatischen Rückweg. Server stoppen, die alte Version einspielen (alte ZIP bzw. altes Image-Tag), starten und sofort als Admin unter Backups die Sicherung `vor-update-v<alt>-auf-v<neu>-….zip` wiederherstellen (hochladen, falls sie nicht in der Liste steht); bis dahin nichts ändern. Die alte Version nie dauerhaft mit der neuen Datenbank betreiben: was sie dann schreibt (z. B. den alten Status „Gelesen“), stellt ein späteres Update nicht mehr um. Die Bilder in `uploads/` bleiben in beiden Richtungen erhalten.
-
-## 6. HTTPS & Eigene Domain (Reverse Proxy mit Nginx oder Caddy)
-
-Für eine Adresse wie `https://manga.deinedomain.de` (ohne Port) richtest du auf dem Host einen Reverse Proxy ein. Browser verlangen HTTPS auch für die Live-Kamera und für die Installation als App mit Offline-Betrieb (Service Worker).
-
-**DNS:** beim Domain-Anbieter einen **A-Record** anlegen: Name z. B. `manga` (oder `@`), Wert die öffentliche IP des Servers.
-
-### Option A: Caddy (empfohlen, holt und erneuert Zertifikate selbst)
-
-1. Caddy installieren:
-   ```bash
-   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-   sudo apt update && sudo apt install caddy
-   ```
-2. In `/etc/caddy/Caddyfile` (Vorlage: `Caddyfile.example`; Port anpassen: Pterodactyl-Allocation, sonst 3000):
-   ```caddy
-   manga.deinedomain.de {
-       reverse_proxy 127.0.0.1:25502
-   }
-   ```
-3. `sudo systemctl reload caddy` – fertig, die Seite ist unter `https://manga.deinedomain.de` erreichbar.
-
-### Option B: Nginx und Certbot
-
-1. Installieren:
-   ```bash
-   sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
-   ```
-2. `nginx.conf.example` nach `/etc/nginx/sites-available/manga-shelf` kopieren, `server_name` und den Port in `proxy_pass` anpassen. Die Vorlage ist ein reiner HTTP-Block (ohne Zertifikat startet nginx sonst nicht) und erlaubt Uploads bis 512 MB (Backups bis 500 MB).
-3. Aktivieren und prüfen:
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/manga-shelf /etc/nginx/sites-enabled/
-   sudo nginx -t && sudo systemctl reload nginx
-   ```
-4. Zertifikat holen; Certbot ergänzt HTTPS im selben Block, leitet HTTP auf HTTPS um und richtet die Erneuerung ein:
-   ```bash
-   sudo certbot --nginx -d manga.deinedomain.de --redirect
-   ```
-
-### Dem Proxy vertrauen (`TRUST_PROXY`)
-
-Login-Limit und Sperren hängen an der Adresse des Besuchers. Hinter einem Proxy sieht die App zuerst nur den Proxy; `TRUST_PROXY` sagt ihr, wessen `X-Forwarded-For` sie glauben darf. Standard ist `loopback` (nur ein Proxy auf demselben Rechner).
-
-| Aufbau | `TRUST_PROXY` |
-|---|---|
-| Kein Proxy | Standard lassen (oder `false`) |
-| Proxy auf demselben Rechner wie der Headless-Server / `npm start` | Standard `loopback` |
-| Proxy auf dem Host vor Pterodactyl oder Docker (die App sieht die Gateway-Adresse des Docker-Netzes) | `loopback, 172.18.0.1` – nur die Gateway-Adresse (Pterodactyl-Netz `pterodactyl_nw`: `172.18.0.1`; Docker: `docker network inspect <netz>` → `Gateway`) |
-| Proxy als Container in einem eigenen Docker-Netz, in dem nur Proxy und App hängen | Adresse des Proxy-Containers oder das Subnetz dieses Netzes |
-| Proxy auf einem anderen Rechner | dessen Adresse, z. B. `loopback, 192.168.1.10` |
-
-Kein ganzes Subnetz eines Netzes freigeben, in dem noch andere Container hängen (auf einem Pterodactyl-Node z. B. fremde Server): die erreichen den Port der App direkt und könnten sich jede Adresse aussuchen. Ohne passenden Eintrag teilen sich alle Besucher ein Login-Limit. Wichtig: Der Port der App darf dann **nur über den Proxy** erreichbar sein (Pterodactyl-Allocation an `127.0.0.1`, Docker `"127.0.0.1:3000:3000"`; veröffentlichte Docker-Ports umgehen ufw/firewalld), sonst kann jeder eine fremde Adresse vortäuschen und deren Login sperren. Eine Hop-Zahl (`TRUST_PROXY=1`) vertraut jedem, der sich verbindet, und ist deshalb nur hinter einer Firewall sinnvoll. Pterodactyl: Variable „Trust Proxy“ im Startup-Reiter; Docker: `environment` in `docker-compose.yml`; sonst `.env`.
-
-Das Secure-Cookie setzt die App automatisch, sobald der Proxy `X-Forwarded-Proto: https` schickt (beide Vorlagen tun das). Natives HTTPS ohne Proxy: Zertifikat nach `ssl/privkey.pem` und `ssl/fullchain.pem` neben `index.js` legen (oder `SSL_KEY_PATH`/`SSL_CERT_PATH`), siehe Abschnitt 12. Beim Headless-Server liegt `ssl/` im Datenordner (Abschnitt 8).
-
-## 7. Docker
-
-Fertiges Image (Linux amd64 und arm64, z. B. Raspberry Pi 4/5): `ghcr.io/lixnix-swap-org/manga-shelf` mit den Tags `latest`, `X.Y.Z`, `vX.Y.Z` und `X.Y`.
+Image for Linux amd64 and arm64: `ghcr.io/lixnix-swap-org/manga-shelf` with the tags `latest`, `X.Y`, `X.Y.Z` and `vX.Y.Z`.
 
 ```bash
 docker run -d --name manga-shelf -p 3000:3000 -v ./data:/app/data --restart unless-stopped ghcr.io/lixnix-swap-org/manga-shelf:latest
 ```
 
-Oder mit Compose: `docker-compose.yml` aus dem Repository nehmen (`JWT_SECRET`, `TRUST_PROXY` usw. sind dort als Beispiele auskommentiert) und `docker compose up -d`. Selbst bauen statt laden: in der Compose-Datei `image:` durch `build: .` ersetzen.
+With Compose: take `docker-compose.yml` from the repository (`JWT_SECRET`, `TRUST_PROXY`, `SETUP_TOKEN` are commented examples there) and run `docker compose up -d`. To build instead of pulling, replace the `image:` line with `build: .`.
 
-* **Daten:** Datenbank, Bilder und Backups liegen in `./data` auf dem Host. Das Image startet kurz als root, übernimmt den Besitz des Ordners (uid 1000) und lässt die App dann als Benutzer `node` laufen.
-* **Einrichtungscode** für das erste Admin-Konto: `docker logs manga-shelf` (bzw. `docker compose logs manga-shelf`).
-* **Update:** `docker compose pull && docker compose up -d` (ohne Compose: `docker pull …`, Container entfernen, mit demselben `docker run` neu starten). Vor jeder Migration legt der Server selbst eine Sicherung `backups/vor-update-*.zip` an und startet nicht, wenn das misslingt.
-* **Gesundheit:** das Image hat einen `HEALTHCHECK` auf `/api/health` (`docker ps` zeigt `healthy`).
-* **Reverse Proxy:** Port nur lokal veröffentlichen (`"127.0.0.1:3000:3000"`) und `TRUST_PROXY` auf die Adresse des Proxys setzen (Proxy auf dem Host: nur die Gateway-Adresse des Docker-Netzes, z. B. `loopback, 172.18.0.1`), siehe Abschnitt 6 und die Kommentare in `docker-compose.yml`. Weitere Variablen: Abschnitt 12.
-* **Konsolenbefehle:** `docker exec -it -u node manga-shelf node scripts/admin.js status` (auch `backup`, `benutzer`, `passwort-reset <name>`, `quellen`). Immer mit `-u node`: das Image startet als root, ohne `-u node` gehören neu angelegte Backups und Reset-Dateien root.
-* **Konsole per `docker attach`:** nur, wenn der Container mit offener Standardeingabe läuft: in `docker-compose.yml` die auskommentierten Zeilen `stdin_open: true` und `tty: true` aktivieren (bzw. `docker run -it -d …`) und den Container neu erstellen. Verlassen mit Strg+P, Strg+Q; Strg+C beendet den Server.
-* **Signatur prüfen** (optional): `cosign verify ghcr.io/lixnix-swap-org/manga-shelf:latest --certificate-identity-regexp 'https://github.com/LixNix-Swap-Org/manga-shelf/.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com`
+* **Data:** database, images and backups live in `./data` on the host. The container starts as root, takes over the folder for uid 1000 and then runs the app as the user `node`.
+* **Setup code:** `docker logs manga-shelf` (or `docker compose logs manga-shelf`).
+* **Update:** `docker compose pull && docker compose up -d`. Without Compose: `docker pull`, remove the container, run the same `docker run` again.
+* **Health:** the image has a `HEALTHCHECK` on `/api/health`; `docker ps` shows `healthy`.
+* **Console commands:** `docker exec -it -u node manga-shelf node scripts/admin.js status` (likewise `backup`, `benutzer`, `passwort-reset <name>`, `quellen`). Always pass `-u node`; without it new backups and reset files belong to root.
+* **Console via `docker attach`:** only when the container runs with an open stdin: enable the commented lines `stdin_open: true` and `tty: true` in `docker-compose.yml` (or `docker run -it -d …`) and recreate the container. Leave with Ctrl+P, Ctrl+Q; Ctrl+C stops the server.
+* **Behind a reverse proxy:** publish the port only locally (`"127.0.0.1:3000:3000"`) and set `TRUST_PROXY`, see [HTTPS and reverse proxy](#https-and-reverse-proxy).
+* **Verify the signature** (optional): `cosign verify ghcr.io/lixnix-swap-org/manga-shelf:latest --certificate-identity-regexp 'https://github.com/LixNix-Swap-Org/manga-shelf/.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com`
 
-## 8. Headless-Server (ohne Oberfläche, ohne Docker)
+### Pterodactyl
 
-Für Ubuntu-Server, NAS, Mini-PC oder einen Windows-Rechner als reinen Host gibt es den Server als einzelnes Programm (Node.js ist eingebaut, nichts muss installiert werden). Download im Release:
+Requires Node.js 22.13 or newer (the app uses the built-in `node:sqlite`).
 
-| System | Datei |
+1. **ZIP:** download `pterodactyl-manga-shelf.zip` from the [releases](https://github.com/LixNix-Swap-Org/manga-shelf/releases), or build it with `npm install && npm run package` (builds `frontend/dist/` and writes the ZIP to `dist_pack/` and the project folder).
+2. **Egg:** Admin panel → **Nests** → **Import Egg** → `egg-manga-shelf.json`. It brings the Node 22 image (`ghcr.io/parkervcp/yolks:nodejs_22`), the start command and the variable `TRUST_PROXY`. The generic Node.js egg also works.
+3. **Server:** create it with the egg "Manga Shelf App", Docker image "Node.js 22" or newer (Node 20/21 do not start). Assign an allocation; Pterodactyl sets `SERVER_PORT` to it. If a reverse proxy goes in front later, bind the allocation to `127.0.0.1`.
+4. **Files:** File Manager → delete the default files, upload the ZIP, right click → **Unarchive**.
+5. **Start.** The egg installs the dependencies at every start (`npm install --omit=dev --ignore-scripts`), creates `data/manga.db` and prints the setup code to the console.
+
+**Update:** upload the new `pterodactyl-manga-shelf.zip` in the File Manager, unpack it and overwrite the existing files (delete nothing beforehand; `data/`, `.env` and `ssl/` stay), then restart the server.
+
+If `npm run package` fails, build the ZIP by hand: run `cd frontend && npm install && npm run build`, then zip with their folder structure `package.json`, `package-lock.json`, `.env.example`, `frontend/dist/` and everything listed under `"files"` in `package.json` (today `index.js`, `db.js`, `core/`, `mangaPassion.js`, `healthcheck.js`, `middleware/`, `routes/`, `scripts/admin.js`, `services/`, `utils/`). Never include `node_modules/` or `data/` (a packed `data/` would overwrite the database on the server when unpacked).
+
+### Headless server binary
+
+A single program with Node.js built in, for a server, NAS, mini PC or a Windows machine as a host:
+
+| System | File |
 |---|---|
 | Linux x64 / arm64 | `manga-shelf-server-linux-x64` / `manga-shelf-server-linux-arm64` |
-| Debian/Ubuntu, Fedora/RHEL | `manga-shelf-server_X.Y.Z-1_amd64.deb` / `manga-shelf-server-X.Y.Z-1.x86_64.rpm` (auch arm64/aarch64) |
+| Debian/Ubuntu, Fedora/RHEL (amd64, arm64) | `manga-shelf-server_X.Y.Z-1_amd64.deb` / `manga-shelf-server-X.Y.Z-1.x86_64.rpm` and the arm64/aarch64 builds |
 | Windows | `manga-shelf-server-windows-x64.exe` |
-| macOS (Apple Silicon und Intel) | `manga-shelf-server-macos-universal` |
-
-**Starten:**
+| macOS (Apple Silicon and Intel) | `manga-shelf-server-macos-universal` |
 
 ```bash
 chmod +x manga-shelf-server-linux-x64
-./manga-shelf-server-linux-x64 --port 3000 --data-dir ./manga-daten
+./manga-shelf-server-linux-x64 --port 3000 --data-dir ./manga-data
 ```
 
-Optionen: `--port`, `--host` (Standard `0.0.0.0`), `--data-dir`, `--log-file` (zusätzlich `<datenordner>/logs/manga-shelf.log`, rotiert), `--no-console`, `--version`, `--help`. Ohne `--data-dir` liegen die Daten unter Linux in `~/.local/share/manga-shelf`, unter macOS in `~/Library/Application Support/manga-shelf`, unter Windows in `%LOCALAPPDATA%\manga-shelf\data`. Eine `.env` im Datenordner wird gelesen (`PORT`, `TRUST_PROXY`, `JWT_SECRET` … wie in `.env.example`); Umgebungsvariablen und Kommandozeile haben Vorrang. Ist diese `.env` eine Verknüpfung, gehört sie einem anderen Benutzer oder dürfen andere sie ändern, starten Server und Konsolenbefehle nicht und nennen den Befehl, der das behebt: unter Linux/macOS `chmod 600 <datenordner>/.env` (Besitzer ist der Benutzer des Servers oder root; ein Datenordner, den andere ändern dürfen, muss diesem Benutzer oder root gehören), unter Windows `icacls <datenordner>\.env /inheritance:r /grant:r *S-1-5-32-544:F *<SID des Kontos>:F` (ändern dürfen nur das Konto des Servers, die Administratoren und SYSTEM). Lassen sich die Rechte nicht prüfen (z. B. PowerShell gesperrt), startet er ebenfalls nicht. Natives HTTPS: Zertifikate nach `<datenordner>/ssl/privkey.pem` und `fullchain.pem` legen (beim Linux-Dienst `/var/lib/manga-shelf/ssl/`, Besitzer `manga-shelf`) oder `SSL_KEY_PATH`/`SSL_CERT_PATH` mit absoluten Pfaden in `<datenordner>/.env` setzen. Das Web-Portal wird beim ersten Start in den Cache-Ordner entpackt (`~/.cache/manga-shelf`, `~/Library/Caches/manga-shelf`, `%LOCALAPPDATA%\manga-shelf\cache`; anderer Ort über `MANGA_SHELF_CACHE_DIR`).
+Options: `--port`, `--host` (default `0.0.0.0`), `--data-dir`, `--log-file` (also writes `<data folder>/logs/manga-shelf.log`, rotated), `--no-console`, `--version`, `--help`. Without `--data-dir` the data lives in `~/.local/share/manga-shelf` (Linux), `~/Library/Application Support/manga-shelf` (macOS) or `%LOCALAPPDATA%\manga-shelf\data` (Windows). A `.env` in the data folder is read; the environment and the command line win. The server refuses to start when that `.env` is a link, belongs to another user or can be changed by others, and names the fix (`chmod 600 <data folder>/.env`, on Windows an `icacls` line). The web portal is unpacked into a cache folder (`MANGA_SHELF_CACHE_DIR` moves it). Console commands run as subcommands: `manga-shelf-server-linux-x64 passwort-reset Kim --data-dir ./manga-data`.
 
-**Konsolenbefehle** als Unterbefehle (gleiche Befehle wie in der Pterodactyl-Konsole): `status`, `backup`, `benutzer`, `passwort-reset <name>`, `rollback-aufraeumen`, `quellen …`, z. B. `manga-shelf-server-linux-x64 passwort-reset Kim --data-dir ./manga-daten`. `quellen setzen mal` fragt den Schlüssel verdeckt ab oder liest ihn aus der Standardeingabe.
+**As a service** (`uninstall-service` removes it; the data stays):
 
-**Als Dienst einrichten** (startet mit dem Rechner, ohne Anmeldung):
+* **Linux (systemd):** `sudo ./manga-shelf-server-linux-x64 install-service` copies the program to `/usr/local/bin/manga-shelf-server`, creates the user `manga-shelf`, uses `/var/lib/manga-shelf` (0750) and starts `manga-shelf.service`. Logs and setup code: `journalctl -u manga-shelf -n 50`. Without root: `install-service --user` (plus `loginctl enable-linger $USER` to run without a login).
+* **Debian/Ubuntu/Fedora:** `sudo apt install ./manga-shelf-server_*_amd64.deb` or `sudo dnf install ./manga-shelf-server-*.rpm` sets up the same service; install a newer package to update. Removing the package keeps `/var/lib/manga-shelf`.
+* **macOS (launchd):** `./manga-shelf-server-macos-universal install-service` creates the LaunchAgent `de.manga-shelf.server` (starts at login, restarts after a crash). Logs: `~/Library/Application Support/manga-shelf/logs/manga-shelf.log`.
+* **Windows:** in a command prompt **as Administrator** `manga-shelf-server-windows-x64.exe install-service`. The program goes to `C:\Program Files\Manga Shelf Server\` and runs as the scheduled task "Manga Shelf Server" at system start as **LOCAL SERVICE** (`--account NetworkService`, `DOMAIN\name`, `.\name` or a SID for another account), data in `C:\ProgramData\manga-shelf\data` with permissions only for that account, SYSTEM and the Administrators. Installs made with an older version (ran as SYSTEM) run `install-service` once more. Open the port in the Windows Firewall for other devices.
 
-* **Linux (systemd):** `sudo ./manga-shelf-server-linux-x64 install-service` kopiert das Programm nach `/usr/local/bin/manga-shelf-server`, legt den Benutzer `manga-shelf` an, nutzt `/var/lib/manga-shelf` als Datenordner und startet `manga-shelf.service`. Logs und Einrichtungscode: `journalctl -u manga-shelf -n 50`. Ohne root: `install-service --user` (Benutzer-Dienst; damit er ohne Anmeldung läuft: `loginctl enable-linger $USER`). Der Datenordner ist 0750 (mit `--user` 0700), neue Dateien sind für andere Benutzer nicht lesbar (`UMask=0027`). Ein eigener Datenordner unter `/home` (`--data-dir`) geht auch für den System-Dienst: er sieht dann nur diesen Ordner der Home-Verzeichnisse; einfacher ist dort `--user`.
-* **Debian/Ubuntu/Fedora:** einfacher über das Paket: `sudo apt install ./manga-shelf-server_*_amd64.deb` bzw. `sudo dnf install ./manga-shelf-server-*.rpm`. Das Paket richtet denselben Dienst ein; Updates einfach neueres Paket installieren. Beim Entfernen bleiben die Daten in `/var/lib/manga-shelf`.
-* **macOS (launchd):** `./manga-shelf-server-macos-universal install-service` legt `~/Library/LaunchAgents/de.manga-shelf.server.plist` an (startet bei der Anmeldung, wird bei Absturz neu gestartet; Datenordner 0700). Logs: `~/Library/Application Support/manga-shelf/logs/manga-shelf.log`. Ist das Programm nicht signiert, vorher `xattr -d com.apple.quarantine manga-shelf-server-macos-universal` (macht `install-service` selbst).
-* **Windows:** Eingabeaufforderung **als Administrator**, dann `manga-shelf-server-windows-x64.exe install-service`. Das Programm wird nach `C:\Program Files\Manga Shelf Server\` kopiert und als geplante Aufgabe „Manga Shelf Server“ beim Systemstart als **LOCAL SERVICE** gestartet (ohne Zeitlimit, Neustart bei Absturz; anderes Konto mit `--account NetworkService`, `--account DOMÄNE\name`, `.\name` oder einer SID). Daten in `C:\ProgramData\manga-shelf\data` mit frischen Rechten nur für dieses Konto, SYSTEM und die Administratoren; hat ein anderer Benutzer `C:\ProgramData\manga-shelf` vorher angelegt oder liegt dort eine Verknüpfung, bricht die Einrichtung ab; Log (mit dem Einrichtungscode) in `…\data\logs\manga-shelf.log` als Administrator öffnen. Konsolenbefehle für den Dienst als Administrator: `"C:\Program Files\Manga Shelf Server\manga-shelf-server.exe" passwort-reset <name> --data-dir C:\ProgramData\manga-shelf\data`. Wer `install-service` schon mit einer älteren Version eingerichtet hat (lief als SYSTEM), führt es einmal neu aus; das stellt Konto und Rechte um. Ein Node-Prozess ist ohne Hilfsprogramm kein echter Windows-Dienst; wer einen Dienst in der Dienste-Verwaltung möchte, nimmt [WinSW](https://github.com/winsw/winsw) oder [NSSM](https://nssm.cc/) mit `manga-shelf-server-windows-x64.exe --no-console --log-file --data-dir C:\ProgramData\manga-shelf\data`. Für andere Geräte im Netz den Port in der Windows-Firewall freigeben.
-* **Entfernen:** `uninstall-service` (Linux mit `sudo` bzw. `--user`); Daten bleiben erhalten.
+Build it yourself (in the project folder): `npm ci && (cd frontend && npm ci && npm run build) && node scripts/server-bin/build-sea.js` (current system; `--target linux-x64,linux-arm64,windows-x64,macos-universal` for others, `macos-universal` only on a Mac, downloading the official Node per target and checking its checksum; needs Node 25.5 or newer). `node scripts/server-bin/smoke.js <file>` checks a result.
 
-Selbst bauen (im Projektordner): `npm ci && (cd frontend && npm ci && npm run build) && node scripts/server-bin/build-sea.js` (aktuelles System; `--target linux-x64,linux-arm64,windows-x64,macos-universal` für andere, lädt dafür das passende offizielle Node von nodejs.org und prüft dessen Prüfsumme). Braucht Node 25.5 oder neuer; ein Node aus Homebrew oder einer Distribution ohne SEA-Unterstützung lädt automatisch das offizielle Node als Werkzeug. `--bundle-only` erzeugt nur `dist/server/server.cjs` (läuft mit `node dist/server/server.cjs`), `node scripts/server-bin/smoke.js <datei>` prüft ein Ergebnis.
-
-## 9. Desktop-App (Windows, macOS, Linux)
-
-Installer je System am Release bzw. als Build-Artefakt: Windows `manga-shelf-<version>-windows-x64-setup.exe` (Installationsordner wählbar) oder `-portable.exe`, macOS `manga-shelf-<version>-mac-universal.dmg` (Intel und Apple Silicon), Linux `.AppImage`, `.deb`, `.rpm` (Flatpak als Versuch).
-
-Beim ersten Start wählst du die Betriebsart, später im Menü „Betriebsart“:
-* **Nur auf diesem Gerät:** Sammlung im Benutzerordner, das Fenster zeigt den eigenen Server.
-* **Mit Server verbinden:** Docker/Pterodactyl/Headless-Server zu Hause; Adressen und Anmeldung im sicheren Speicher des Systems.
-* **Dieses Gerät ist Server:** Port 3000 im Heimnetz, „Adresse für andere Geräte“ zeigt Adresse und QR-Code für die Handy-Apps, Tray-Symbol, „Beim Anmelden starten“.
-
-Den Einrichtungscode für das erste Admin-Konto setzt die App selbst und zeigt ihn an (Datei → „Einrichtungscode anzeigen…“). Umzug von „Nur auf diesem Gerät“ auf einen Server: unter Backups die Direkt-ZIP herunterladen und auf dem Server einspielen (Abschnitt 5). Kommandozeile: `--server-only`, `--port <n>`, `--host <adresse>`, `--data-dir <ordner>`, `--connect <url>`.
-
-**Unsignierte Builds** (der Release-Text sagt, ob signiert wurde): macOS meldet „App kann nicht geöffnet werden“ → Rechtsklick → Öffnen (oder `xattr -dr com.apple.quarantine "/Applications/Manga Shelf.app"`); Windows SmartScreen → „Weitere Informationen“ → „Trotzdem ausführen“; Linux AppImage vorher `chmod +x`.
-
-Automatische Updates gibt es noch nicht; Administratoren sehen neue Versionen im System-Fenster (Update-Prüfung über die GitHub-Releases).
-
-Selbst bauen: `npm ci && (cd frontend && npm ci) && cd desktop && npm ci && npm run build:desktop` (Ergebnisse in `desktop/dist/installers/`). Ohne Signatur-Variablen (`CSC_LINK`, `APPLE_ID` …) baut das Skript unsigniert, auch wenn im macOS-Schlüsselbund eine Signier-Identität liegt.
-
-## 10. Android und iPhone
-
-Die Apps liegen als Artefakte jedes Builds bzw. am Release:
-
-* **Android:** `manga-shelf-<version>-android.apk` auf dem Handy öffnen und die Installation aus unbekannten Quellen erlauben. Ohne Signierschlüssel im Release ist sie mit dem Debug-Schlüssel signiert und nicht Play-Store-tauglich; ein späteres Update mit dem echten Schlüssel verlangt einmal Deinstallieren (vorher in der App eine Sicherung exportieren). Die `.aab` ist für den Play Store.
-* **iPhone/iPad:** `manga-shelf-<version>-ios-unsigned.ipa` mit AltStore, Sideloadly oder Xcode und der eigenen Apple-ID signieren (mit kostenlosem Konto 7 Tage gültig, danach neu signieren). Mit Zertifikat im Release gibt es stattdessen die signierte `manga-shelf-<version>-ios.ipa` (TestFlight/App Store bzw. die eingetragenen Geräte).
-* **Erster Start:** „Ohne Server nutzen“ (Sammlung nur auf dem Gerät) oder Server eintragen bzw. den QR-Code „Mit App verbinden“ aus der Fußzeile scannen (Docker, Pterodactyl, Headless-Server oder Desktop-App im Server-Modus).
-* **Selbst bauen:** `cd frontend && npm ci`, dann `cd mobile && npm ci && npm run build:android` (JDK 21, Android SDK 35) bzw. `npm run build:ios` (macOS, Xcode 16+, CocoaPods). Ergebnisse in `mobile/build/out/`.
-* **Mindestversionen:** Android 6, iOS 15.5.
-* **Gerätesicherung:** Android nimmt Sammlung und Bilder der App nicht in die automatische Cloud-Sicherung auf. Auf dem iPhone/iPad liegen sie im Dokumente-Ordner der App, den iCloud- und Gerätesicherungen noch mit sichern. Der verlässliche Weg ist auf beiden Systemen die ZIP-Sicherung der App (unten).
-
-### Ohne Server nutzen und später umziehen
-
-„Ohne Server nutzen“ legt die Sammlung nur auf dem Handy an: ein lokales Profil (Name, kein Passwort; weitere Profile für Besitz und Lesestand je Person), dieselbe Datenbank wie auf dem Server, Online-Suche direkt vom Gerät (Manga Passion, DNB/K10plus/Google Books, AniList/MyAnimeList) und eigene API-Schlüssel im sicheren Speicher. Es fehlen nur die Server-Dinge: Benutzerverwaltung, Server-Backups, System-Seite, Konsole. „Abmelden“ schließt dort nur die Sammlung; nichts wird gelöscht.
-
-Die Sammlung liegt nur auf diesem Gerät. Regelmäßig „Sicherung exportieren“ und die ZIP an einem anderen Ort ablegen: Android sichert Datenbank und Bilder der App nicht automatisch, auf iPhone/iPad stecken sie zwar in iCloud- und Gerätesicherungen, aber nur als Teil der ganzen Gerätesicherung.
-
-Unter **Server** (Verbindungsanzeige oben) gibt es „Sicherung exportieren/importieren“ (ZIP im Backup-Format des Servers) und drei Übernahmewege:
-
-| Weg | Wann | Was passiert |
-|---|---|---|
-| **Auf Server übertragen** | neuer, frisch eingerichteter Server | Anmeldung als Admin; die App packt ihre Sammlung samt Covern als Backup und spielt es dort ein (der Server zeigt vorher seine Zahlen und warnt, wenn schon Daten da sind). Das lokale Profil wird zu diesem Admin-Konto, danach ist die App mit dem Server verbunden. |
-| **Zusammenführen** | Server mit eigener Sammlung | Reihen und Bände kommen per CSV dazu (erst ein Probelauf mit Vorschau); Besitz und Lesestand landen beim angemeldeten Benutzer, vorhandene Einträge bleiben. Cover werden nicht übertragen (das Autofill lädt sie nach). |
-| **Vom Server holen** | Sammlung eines Servers aufs Handy | Als Admin das komplette Backup mit Covern, sonst die Offline-Kopie (Reihen, Bände, eigener Besitz und Lesestand; Cover werden nachgeladen). Ersetzt die Sammlung auf dem Gerät. Passwörter, API-Schlüssel und Kalender-Abos der Server-Konten bleiben nicht auf dem Gerät (ebenso beim Import einer Server-ZIP). Auch auf dem Server-Bildschirm als „Sammlung auf dieses Gerät holen“. |
-
-Danach kann die App ohne Server weiterlaufen oder verbunden bleiben; „Modus wechseln“ führt zurück zum Server-Bildschirm (die lokale Sammlung bleibt erhalten). Einen fortlaufenden Abgleich zwischen einer Sammlung ohne Server und einem Server gibt es nicht; wer beides nutzen will, verbindet die App mit dem Server (Offline-Kopie und nachgereichte Änderungen inklusive).
-
-Server-Adressen in den Apps: `https://…` oder `http://…` nur im Heimnetz (private Adressen, Tailscale `100.64.0.0/10`, Namen auf `.local`, `.lan`, `.fritz.box`, `.home.arpa`, `.internal`).
-
-### Von unterwegs
-
-Ohne öffentliche Adresse ist der Server zu Hause von unterwegs nicht erreichbar. Die App (und der installierte Browser über HTTPS) zeigt dann die Offline-Kopie der Sammlung: lesen und suchen geht, Editoren und Admins können Besitz und Lesestand umschalten und Käufe aus der Einkaufsliste abhaken. Diese Änderungen werden vorgemerkt und gesendet, sobald der Server wieder erreichbar ist. Anlegen, Bearbeiten und Löschen, Release-Radar, Statistik und die Online-Suche gibt es erst wieder mit Verbindung.
-
-Für echten Zugriff von unterwegs gibt es zwei Wege:
-* **Öffentliche HTTPS-Adresse** (eigene Domain mit Reverse Proxy, Abschnitt 6) und diese in der App unter „Server“ als weitere Adresse desselben Servers eintragen; einmal über diese Adresse anmelden, danach nimmt die App jeweils die erste erreichbare.
-* **VPN** wie Tailscale oder WireGuard (z. B. auf der FRITZ!Box): die Heimnetz-Adresse ist dann überall erreichbar, ohne den Server ins Internet zu stellen. Tailscale-Adressen (`100.64.0.0/10`) gelten in der App als Heimnetz und dürfen deshalb auch `http://` sein.
-
-## 11. Release (für Maintainer)
-
-* **Bei jedem Push** baut GitHub Actions (`ci.yml` → `build.yml`) alles als Workflow-Artefakte (14 Tage): Pterodactyl-ZIP, Server-Programme und Server-Pakete, Docker-Image (nur gebaut, nicht hochgeladen); Desktop-Installer und Handy-Smoke-Builds nur auf `main` und in Pull Requests. Nichts wird veröffentlicht.
-* **Veröffentlichen:** Actions → **Release** → **Run workflow**, Branch wählen, `action`:
-  * `build`: nur Artefakte bauen (für jeden Branch, mit Signierung, falls Secrets da sind),
-  * `release`: Version erhöhen (`bump` = `patch`/`minor`/`major`; `none` nimmt die Version aus `package.json`, der Tag darf noch nicht existieren), Commit und Tag `vX.Y.Z` auf dem Branch, alles bauen (auch die Handy-Apps), Docker-Image nach GHCR mit den festen Tags `vX.Y.Z` und `X.Y.Z` (keyless mit cosign signiert), GitHub-Release mit allen Dateien, `SHA256SUMS.txt` und generierten Notizen; erst danach zeigen `X.Y` und `latest` auf dieses Image. Schlägt ein Schritt fehl, bleibt `latest` beim letzten Release. Ein Tag-Push allein veröffentlicht nichts.
-* **Lokal:** `node release.js minor --dry-run` zeigt die nächste Version; `node release.js minor` setzt sie in allen `package.json`/`package-lock.json` (Server, `frontend/`, `desktop/`, `mobile/`), ohne Commit, Tag oder Push. Danach committen, pushen und den Workflow mit `bump = none` starten.
-* **Einmalig einrichten:**
-  * Ist der Branch geschützt, braucht der Workflow einen Fine-grained-PAT mit `Contents: Read and write` als Secret `RELEASE_TOKEN` (sonst genügt `GITHUB_TOKEN`).
-  * Das GHCR-Paket `manga-shelf` nach dem ersten Release unter Packages → Package settings auf **Public** stellen (bei privatem Repository ist es sonst privat).
-* **Signierung (optional, Repository-Secrets; fehlen sie, wird unsigniert gebaut):**
-
-| Secret | Inhalt | Herkunft |
-|---|---|---|
-| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Code-Signing-Zertifikat (`.pfx`, base64) und Passwort | Zertifizierungsstelle (OV/EV-Code-Signing) |
-| `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | „Developer ID Application“-Zertifikat (`.p12`, base64) und Passwort | Apple Developer Program → Certificates |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarisierung | appleid.apple.com → App-spezifische Passwörter; Team-ID im Developer-Konto |
-| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Upload-/Release-Keystore (base64) | `keytool -genkeypair …` (gut aufheben, ein verlorener Schlüssel bedeutet neue App-ID im Store) |
-| `IOS_CERT_P12_BASE64`, `IOS_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64` (+ `APPLE_TEAM_ID`) | Distribution-Zertifikat und Provisioning-Profil | Apple Developer Program |
-
-  base64 einer Datei: `base64 -i datei.p12 | pbcopy` (macOS) bzw. `base64 -w0 datei.p12` (Linux). Der Release-Text nennt, welche Teile signiert sind.
-* **Update-Hinweis:** Der Server prüft einmal täglich `releases/latest` von `LixNix-Swap-Org/manga-shelf` (Tag `vX.Y.Z`, kein Pre-Release) und zeigt Administratoren neue Versionen im System-Fenster; `UPDATE_CHECK=false` schaltet das ab.
-
-## 12. Umgebungsvariablen
-
-Alle Variablen sind optional. Sie kommen aus der Umgebung (Pterodactyl: Startup-Reiter bzw. Egg-Variablen; Docker: `environment`), aus einer `.env` im Arbeitsverzeichnis (Headless-Server: im Datenordner) oder beim Headless-Server aus der Kommandozeile. Ausführlich kommentiert in `.env.example`. Ein unbrauchbarer Wert erzeugt beim Start eine Warnung und der Standard gilt; nur ein ungültiger Port, ein ungültiges `TRUST_PROXY`, eine Sicherung vor dem Update, die sich nicht schreiben lässt (`MIGRATE_WITHOUT_SNAPSHOT`), und beim Headless-Server eine `.env`, die andere Benutzer ändern dürfen (Abschnitt 8), verhindern den Start.
-
-| Variable | Standard | Wirkung |
-|---|---|---|
-| `PORT` | `3000` | Port des Servers. `SERVER_PORT` (setzt Pterodactyl) hat Vorrang. |
-| `DATA_DIR` | `data/` im App-Ordner (Docker `/app/data`) | Datenbank, Bilder, Backups, `secret.key`. In Docker passend zum Volume ändern. |
-| `TRUST_PROXY` | `loopback` | Wessen `X-Forwarded-For` gilt: `false`, `loopback`, Adressen/Subnetze wie `loopback, 172.18.0.1`, eine Hop-Zahl oder `true`. Hinter einem Proxy vor Docker/Pterodactyl nur die Gateway-Adresse eintragen, siehe Abschnitt 6. |
-| `JWT_SECRET` | zufällig in `<DATA_DIR>/secret.key` | Signatur der Sitzungen und Schlüssel für gespeicherte API-Schlüssel; mindestens 32 Zeichen. Wechsel = alle neu anmelden, API-Schlüssel neu eintragen. |
-| `SETUP_TOKEN` | beim Start erzeugt | Fester Einrichtungscode für das erste Admin-Konto, mindestens 12 Zeichen (ohne Leerzeichen und Bindestriche); kürzere Werte werden ignoriert. |
-| `COOKIE_SECURE` | `false` | Secure-Cookie und HSTS erzwingen (nur hinter einem TLS-Proxy ohne `X-Forwarded-Proto`; über reines HTTP klappt die Anmeldung dann nicht). |
-| `SSL_KEY_PATH`, `SSL_CERT_PATH` | `ssl/privkey.pem`, `ssl/fullchain.pem` (sonst `ssl/cert.pem`) im App-Ordner; Headless-Server im Datenordner | Natives HTTPS auf demselben Port, sobald beide Dateien da sind. |
-| `CORS_ORIGIN` | leer | Zusätzliche Web-Ursprünge mit Cookie-Zugriff (kommagetrennt); das mitgelieferte Frontend braucht das nicht. |
-| `APP_ORIGINS` | `capacitor://localhost`, `https://localhost`, `ionic://localhost`, `app://manga-shelf` | Ursprünge der Handy- und Desktop-Apps (Bearer-Token, kein Cookie); `none` schaltet sie ab. |
-| `FRONTEND_DIR` | `frontend/dist`, sonst `dist/` | Ordner des gebauten Frontends. |
-| `APP_TIMEZONE` | `Europe/Berlin` | Was „heute“ im Release-Radar ist. |
-| `BACKUP_HOUR`, `BACKUP_TIMEZONE` | `3`, `Europe/Berlin` | Zeitpunkt des täglichen Snapshots. |
-| `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_MANUAL`, `BACKUP_KEEP_PRE_RESTORE`, `BACKUP_KEEP_PRE_UPDATE` | `7`, `10`, `3`, `3` | Wie viele Snapshots je Art bleiben (1 bis 1000). |
-| `MIGRATE_WITHOUT_SNAPSHOT` | `false` | Lässt sich die Sicherung vor dem Update (`backups/vor-update-….zip`) nicht schreiben, bricht der Start vor den Migrationen ab; `1` migriert trotzdem ohne diese Sicherung (nur einmalig setzen). |
-| `RESTORE_MAX_DB_BYTES`, `RESTORE_MAX_UPLOADS_BYTES`, `RESTORE_MAX_ENTRIES` | 2 GiB, 4 GiB, `100000` | Grenzen beim Entpacken eines Backups. |
-| `ADMIN_CONSOLE` | `true` | Konsolenbefehle auf stdin (Abschnitt 3). |
-| `UPDATE_CHECK` | `true` | Die System-Seite fragt höchstens einmal am Tag bei GitHub nach einer neuen Version (nur solange ein Admin sie offen hat). |
-| `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | `debug`/`info`/`warn`/`error`/`silent`; `json` für Log-Werkzeuge. |
-| `ANIME_ANILIST_RPM`, `ANIME_JIKAN_RPM` | `30`, `60` | Anfragen pro Minute des gemeinsamen Zugangs zu AniList bzw. Jikan (1 bis 600). |
-| `ANIME_SOURCES` | `anilist,jikan` | Aktive Anime-Quellen (`jikan` bzw. `mal` steht für MyAnimeList); unbekannte Namen werden mit Warnung ignoriert. |
-| `MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY` | leer | Instanz-Schlüssel (Abschnitt 4); haben Vorrang vor den in der Oberfläche hinterlegten. |
-| `MANGA_SHELF_CACHE_DIR` | System-Cache | Nur Headless-Server: wohin das Web-Portal entpackt wird. |
-
-Die Skripte `scripts/check-remote.js`, `seed-remote.js` und `verify-remote.js` lesen `REMOTE_URL`, `REMOTE_HOST`, `REMOTE_PORT`, `REMOTE_USER`, `REMOTE_PASS` (der Server selbst nie), die Browser-Tests `CHROME_BIN`.
-
-## 13. Entwicklung
+### From source
 
 ```bash
-npm install && (cd frontend && npm install)
-npm run dev          # Backend mit node --watch und Vite in einem Terminal; Demo-Daten in data-dev/, Logins in data-dev/seed-users.json
-npm test             # Backend (node:test)
-npm run test:frontend   # Vitest
-npm run lint
+npm install && (cd frontend && npm install && npm run build)
+npm start
 ```
 
-Die Browser-Suites (`npm run test:e2e`, `test:radar`, `test:anime`, `test:deep`, `test:perf`) brauchen Chrome oder Chromium (`CHROME_BIN`). Aufbau, Regeln und Datei-Landkarte für Mitwirkende stehen in `AGENTS.md`.
+Node.js 22.13 or newer. `.env` in the working directory is read ([section 5](#5-configuration)); the data goes to `data/`.
+
+### First start
+
+1. Open the server address (e.g. `http://your-ip:3000`). Without an admin account the setup page appears.
+2. Enter the **setup code**. The server prints it at startup in the console or log (the line starts with "Ersteinrichtung: Einrichtungscode für das erste Admin-Konto"; Docker `docker logs manga-shelf`, service `journalctl -u manga-shelf`). `SETUP_TOKEN` fixes it in advance: at least 12 characters; spaces, hyphens and upper or lower case do not count. The desktop app sets and shows it by itself.
+3. Create the admin account.
+4. Optionally "Connect sources (possible later)": add API keys for everyone ([API keys](#api-keys)).
+
+Admins add further accounts under Users: **Editor** (changes the collection), **Guest** (reads and exports), **Admin** (also users, backups, system page).
+
+**Console commands** (Pterodactyl console, the terminal of the headless server, `node scripts/admin.js <command>`, Docker as above; `ADMIN_CONSOLE=false` turns off the stdin console). The command names are German; English aliases work too (`help`, `users`, `reset-password`, `promote`, `rollback-cleanup`, `sources`):
+
+| Command | Effect |
+|---|---|
+| `hilfe` | list all commands |
+| `status` | version, data folder, database, disk space, last backup |
+| `backup` | create a snapshot now |
+| `benutzer` | list users with their role |
+| `passwort-reset <name>` | random new password (shown in the terminal, otherwise written to a file in the data folder); ends the user's sessions and calendar feed address |
+| `admin <name>` | make `<name>` an admin, only when there is none |
+| `rollback-aufraeumen [bestaetigen]` | check `manga.db` and delete a leftover `manga.db.bak` |
+| `quellen …` | API keys: state, guide, set, remove ([API keys](#api-keys)) |
+
+### Upgrading from v2.19.1
+
+Read the admin notes at the top of [`CHANGELOG.md`](CHANGELOG.md) first. In short:
+
+* **Database migrations 12–27** run at the first start. Before any pending migration the server writes `data/backups/vor-update-v<old>-auf-v<new>-….zip`; if that fails (disk full, read-only folder) it does not start and changes nothing. `MIGRATE_WITHOUT_SNAPSHOT=1` migrates without it, once and deliberately.
+* **Data changes:** migration 22 unifies known publisher spellings (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga"); migration 27 turns series languages into ISO codes ("Deutsch" → `de`), sets the currency `EUR` on every series and sets an unrecognised language to `de`, named in the start log, so check those series afterwards.
+* **Everyone signs in again once:** the session key moves to `data/secret.key`.
+* **Setup code and `TRUST_PROXY`** are new: a server without an admin needs the code, and behind a proxy `TRUST_PROXY` has to name it ([HTTPS and reverse proxy](#https-and-reverse-proxy)).
+* **Pterodactyl:** import the egg again. **Windows service:** run `install-service` again.
+* **Scripts against the API:** `GET /api/stats` moved its key figures under `summary`, series languages are ISO codes, money totals add euro only. Details in the changelog.
+
+**No downgrade.** There is no automatic way back. To return to the old version: stop the server, install the old version (old ZIP or image tag), start it and at once restore the `vor-update-…zip` backup as an admin (upload it if it is not listed); change nothing before. Never run the old version permanently on the migrated database: what it writes (e.g. the old volume status "Gelesen") is not converted by a later update. Images in `uploads/` survive both directions.
+
+### HTTPS and reverse proxy
+
+Browsers require HTTPS (or `localhost`) for the live camera scanner and for installing the web app with offline support. For an address like `https://manga.example.com` create an A record for the host and put a reverse proxy in front of the app.
+
+**Caddy** (gets and renews certificates itself), `/etc/caddy/Caddyfile` (template `Caddyfile.example`; port: Pterodactyl allocation, otherwise 3000), then `sudo systemctl reload caddy`:
+
+```caddy
+manga.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+**nginx + Certbot:** copy `nginx.conf.example` to `/etc/nginx/sites-available/manga-shelf`, adjust `server_name` and the port in `proxy_pass`, link it into `sites-enabled/`, run `sudo nginx -t && sudo systemctl reload nginx`, then `sudo certbot --nginx -d manga.example.com --redirect`. The template is a plain HTTP block (nginx would not start with an SSL listener before the certificate exists) and allows uploads up to 512 MB (backups up to 500 MB).
+
+**`TRUST_PROXY`.** Login limits and locks depend on the client address. Behind a proxy the app first sees the proxy; `TRUST_PROXY` says whose `X-Forwarded-For` to believe. The default `loopback` trusts only a proxy on the same machine.
+
+| Setup | `TRUST_PROXY` |
+|---|---|
+| no proxy | default (or `false`) |
+| proxy on the same machine as the headless server or `npm start` | default `loopback` |
+| proxy on the host in front of Pterodactyl or Docker | `loopback, 172.18.0.1`: only the gateway address of the Docker network (Pterodactyl `pterodactyl_nw` is `172.18.0.1`; Docker: `docker network inspect <network>` → `Gateway`) |
+| proxy container in a Docker network of its own with only the proxy and the app | address of the proxy container or the subnet of that network |
+| proxy on another machine | its address, e.g. `loopback, 192.168.1.10` |
+
+Never trust the whole subnet of a network that other containers share (on a Pterodactyl node, other people's servers): they reach the app port directly and could claim any address. The app port must then be reachable **only through the proxy** (Pterodactyl allocation on `127.0.0.1`, Docker `"127.0.0.1:3000:3000"`; published Docker ports bypass ufw/firewalld). A hop count (`TRUST_PROXY=1`) trusts anyone who connects and only makes sense behind a firewall. An invalid value stops the start.
+
+The secure cookie is set automatically when the proxy sends `X-Forwarded-Proto: https` (both templates do). Native HTTPS without a proxy: put `ssl/privkey.pem` and `ssl/fullchain.pem` next to `index.js` (headless server: into `<data folder>/ssl/`), or set `SSL_KEY_PATH`/`SSL_CERT_PATH`.
+
+## 3. Web app features
+
+The interface switches between shelf, shopping list, release radar and anime tab; below 640 px a bottom navigation takes over.
+
+* **Collection:** series and volumes with cover, publisher, price, release date, ISBN and notes; box sets, special editions and specials; a status per volume (Owned, Missing, Pre-ordered, Ordered, Coming soon); a collecting state per series (active, paused, dropped) apart from the publication status.
+* **Shelf:** series as a grid or a compact list; filters by status, publisher, collecting state (also gaps, pre-orders, complete), author, genres/tags and language, grouping by publisher, author or status, and sorting, kept in the URL. The search also finds ISBNs and notes. A "Continue reading" bar and selectable read dates. On the series page the volumes can also stand as spines on shelves.
+* **Several volumes at once:** select volumes and set status, owners or reading state together, with undo.
+* **Manga Passion:** take over a series by link or search, detect missing volumes, fill in data and covers, load genres, track release date changes. German editions only.
+* **ISBN lookup** via DNB, K10plus and Google Books, covers via Open Library.
+* **Shopping list and shop mode:** every missing and pre-ordered volume grouped by publisher; share, copy or print it. In the shop the barcode scanner checks volume after volume: to buy, already owned (and by whom), or missing. "Bought" works offline and is sent later. The live camera needs HTTPS; the apps use the native scanner.
+* **Release radar:** new releases per month from the Manga Passion calendar, your pre-orders and changed release dates.
+* **Calendar feed (iCal):** release radar → "Subscribe to calendar" → "Create subscription address". Every volume with an exact release day becomes an all-day event. The address carries its own key; a new address, "End all sessions", a password change or a password reset end the old one. Google Calendar fetches the feed from its own servers, so the server has to be reachable from the internet for that.
+* **Wishlist:** series with priority and target price, their own section in the shopping list, a badge in the calendar, a shelf filter.
+* **Anime tab:** one shared list (seasons and films separately), progress per person (episodes, status, rating, note), search via AniList and MyAnimeList, countdown to the next episode, link to the matching manga series, CSV export.
+  * **Share links:** share a Crunchyroll episode to Manga Shelf (share sheet of the installed web app, the Android share dialog, the iOS share extension in the apps, or "Paste link"). After "Yes, watched" your progress rises, never backwards, with undo.
+  * **"Continue on Crunchyroll"** opens the next episode (in the apps the Crunchyroll app when installed).
+  * **AniList list sync** (optional, account → sources, needs your own AniList key): the higher episode count wins.
+  * **Crunchyroll history** (apps only, experimental): see [Crunchyroll history](#crunchyroll-history-experimental).
+* **Statistics:** spending by purchase date, ownership per person, most valuable series, publishers, reading history over 24 months, series and volumes per language, anime figures. Totals add euro prices only and list other currencies beside them.
+* **CSV:** export and import of the whole collection with a dry run (owners, reading state, wishlist, editions included). The import accepts German or English headers.
+* **Backups and restore** (admins): see [section 6](#backups-and-restore).
+* **Trash:** deleted series and volumes can be restored for 30 days (statistics dialog → Trash).
+* **Tidy up:** "Merge publishers" unifies spellings, editable tags, "Tidy up collection" lists incomplete or contradictory entries with one-click fixes.
+* **Users and roles:** Admin, Editor, Guest; "End all sessions"; "Connect with app" shows a QR code for the phone apps.
+* **System page** (admins): version and update notice, storage, database, backups, orphaned images, load of the external sources.
+* **Installable web app (PWA)** with a readable offline copy and an offline outbox.
+
+### API keys
+
+Without keys everything runs through the shared access of the server (AniList without a token, Jikan instead of the official MyAnimeList API, Google Books anonymously) with its rate limit. Your own key brings your own limit.
+
+| Provider | For | Key | Where |
+|---|---|---|---|
+| AniList | per user | access token (valid for a year) | [anilist.co/settings/developer](https://anilist.co/settings/developer) → "Create New Client", redirect URL `https://anilist.co/api/v2/oauth/pin` |
+| MyAnimeList | per user and instance | client ID (32 characters) | [myanimelist.net/apiconfig](https://myanimelist.net/apiconfig) → "Create ID", App Type **other**, redirect URL `http://localhost/` |
+| Google Books | instance (admins) | API key (`AIza…`) | [Google Cloud Console](https://console.cloud.google.com/) → enable "Books API" → Credentials → API key |
+
+The same step-by-step guide with a check against the provider is in the account dialog (tab for API keys; admins also see "For everyone (instance)"), in the setup assistant, in the apps without a server under "Sources & keys", in the desktop menu and in the console: `quellen`, `quellen anleitung <anilist|mal|google_books>`, `quellen setzen <provider> [--benutzer name] [--aus-datei path]` (asks for the key: hidden with `node scripts/admin.js` or a subcommand in a terminal, but visible in the Pterodactyl console and the server's own stdin console, so use `--aus-datei` there), `quellen entfernen <provider> [--benutzer name]`. Never type the key on the command line. `MAL_CLIENT_ID` and `GOOGLE_BOOKS_KEY` in the environment win over stored instance keys. Stored keys are encrypted with the server secret: a new secret, or a backup restored on another server, means entering them again.
+
+## 4. Desktop and phone apps
+
+Installers and apps are attached to every release. CI runs on `main` and in pull requests keep the desktop installers as build artifacts for 14 days; the phone apps are only smoke-built there. Actions → **Release** with `action` = `build` gives every artifact, apps included, for any branch. Without signing secrets they are built unsigned; the release text says which parts are signed.
+
+### Desktop app
+
+Windows `manga-shelf-<version>-windows-x64-setup.exe` or `-portable.exe`, macOS `manga-shelf-<version>-mac-universal.dmg` or `.zip` (Intel and Apple Silicon), Linux AppImage, `.deb` and `.rpm` (a Flatpak build is an attempt). At the first start you pick the mode; the native menus are German:
+
+* **"Nur auf diesem Gerät"** (only this device): the collection lives in the user folder; a local server on `127.0.0.1:37210` serves the window.
+* **"Mit Server verbinden"** (connect to a server): a client of your Docker, Pterodactyl or headless server; addresses and sign-in in the system keychain.
+* **"Dieses Gerät ist Server"** (this device is the server): port 3000 in the home network, "Adresse für andere Geräte" shows the address and a QR code for the phone apps, tray icon, optional start at login.
+
+The app sets and shows the setup code (File → "Einrichtungscode anzeigen…"). To move from "only this device" to a server, download the backup ZIP and restore it on the server. Command line: `--server-only`, `--port <n>`, `--host <address>`, `--data-dir <folder>`, `--connect <url>`, `--hidden`, `--user-data-dir <folder>`. There are no automatic updates; admins see new versions on the system page.
+
+Unsigned builds: macOS "cannot be opened" → right click → Open (or `xattr -dr com.apple.quarantine "/Applications/Manga Shelf.app"`); Windows SmartScreen → "More info" → "Run anyway"; Linux AppImage needs `chmod +x`.
+
+### Android and iPhone
+
+* **Android:** open `manga-shelf-<version>-android.apk` on the phone and allow installing from unknown sources. Without a release keystore the APK carries the debug key (sideloading only); a later update with the real key needs one uninstall, so export a backup in the app first. The `.aab` is for the Play Store (`-android-unsigned.aab` without the keystore).
+* **iPhone/iPad:** sign `manga-shelf-<version>-ios-unsigned.ipa` yourself with AltStore, Sideloadly or Xcode and your Apple ID (seven days with a free account, then sign again). With certificates in the release there is a signed `manga-shelf-<version>-ios.ipa` instead. Re-signed builds may lose the share extension's App Group; then "Paste link" is the way to share episodes.
+* **First start:** "Use without a server" (collection only on the device), enter a server address, or scan the "Connect with app" QR code (footer of the web app, or the desktop app in server mode).
+* **Server addresses:** `https://…` anywhere, `http://…` only in the home network (private ranges, Tailscale `100.64.0.0/10`, names ending in `.local`, `.lan`, `.fritz.box`, `.home.arpa`, `.internal`).
+* **Minimum versions:** Android 6, iOS 15.5.
+* **Device backups:** Android keeps the app's collection and images out of cloud backup and device transfer. On iPhone/iPad they live in the app's data folder, which iCloud and device backups still include. On both, the ZIP backup of the app is the reliable way.
+
+### Use without a server
+
+"Use without a server" keeps the collection on the phone: a local profile (name, no password; more profiles for ownership and reading per person), the same database schema as the server, online lookups straight from the device (Manga Passion, DNB/K10plus/Google Books, AniList/MyAnimeList) and your own API keys in the device's secure storage. Server-only parts are missing: user management, server backups, system page, console.
+
+The collection exists only on that device. Export a backup ZIP regularly and keep it elsewhere: Android does not back up the app data, and on iPhone/iPad iCloud includes it only as part of the whole device backup.
+
+Under **Server** you find "Export backup"/import (ZIP in the server's backup format) and three takeover paths:
+
+| Path | When | What happens |
+|---|---|---|
+| **Transfer to server** | a new, freshly set up server | sign in as admin; the app sends its collection with covers as a backup, the server shows its figures first and warns when it already holds data; the local profile becomes that admin account |
+| **Merge** | a server with its own collection | series and volumes are added via CSV (dry run with preview first); ownership and reading go to the signed-in user; covers are not transferred |
+| **Fetch from server** | a server collection onto the phone | as admin the full backup with covers, otherwise the offline copy; replaces the collection on the device; passwords, API keys and calendar keys of server accounts never stay on the device |
+
+There is no continuous sync between a standalone collection and a server; whoever wants both connects the app to the server (offline copy and queued changes included).
+
+### Away from home
+
+Without a public address the server at home is not reachable on the road. The app (and the web app installed over HTTPS) then shows the offline copy: reading and searching work, editors and admins can toggle ownership and reading state and tick off purchases; these changes are sent once the server is reachable again. Creating, editing, the radar, statistics and online lookups need the connection. For real access on the road:
+
+* a **public HTTPS address** ([HTTPS and reverse proxy](#https-and-reverse-proxy)), added in the app under "Server" as another address of the same server; the app then uses the first one that answers;
+* a **VPN** such as Tailscale or WireGuard: the home address is reachable everywhere without exposing the server; Tailscale addresses count as home network and may use `http://`.
+
+### Crunchyroll history (experimental)
+
+Apps only, off by default, editors and admins. The card "Crunchyroll history (experimental)" (account → keys, without a server under "Sources & keys") signs in to Crunchyroll in an embedded login after a warning. The Crunchyroll session (refresh cookie, client, device and account ID) stays only in the secure storage of the device (no iCloud, no device transfer); the password is typed into Crunchyroll's own page. The app reads the history in the foreground at most every 15 minutes and sends the server only the matched items (series ID and title, season, episode, watched state and time, next-episode link), never cookies, tokens or the raw history. It uses an unofficial interface whose terms forbid automated access, which is why store builds can switch it off: the repository variable `WATCH_CRUNCHYROLL` = `off`, or locally `VITE_WATCH_CRUNCHYROLL=off npm run build:android`. Details: [`AGENTS.md`](AGENTS.md).
+
+## 5. Configuration
+
+Every variable is optional. Sources in order of priority: the command line of the headless server (`--port`, `--host`, `--data-dir`), the environment (Pterodactyl startup tab, Docker `environment`), a `.env` in the working directory (headless server: in the data folder; `scripts/admin.js`: next to `index.js`). `.env.example` comments every value. An unusable value logs a warning at startup and the default applies; only an invalid port, an invalid `TRUST_PROXY`, an unreadable `secret.key`, a pre-update backup that cannot be written and, for the headless server, a `.env` others may change stop the start.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `3000` | Port of the server. `SERVER_PORT` (set by Pterodactyl) wins. |
+| `DATA_DIR` | `data/` in the app folder (Docker `/app/data`) | Database, images, backups, `secret.key`. |
+| `TRUST_PROXY` | `loopback` | Whose `X-Forwarded-For` counts: `false`, `loopback`, addresses or subnets such as `loopback, 172.18.0.1`, a hop count or `true` ([HTTPS and reverse proxy](#https-and-reverse-proxy)). |
+| `JWT_SECRET` | random in `<DATA_DIR>/secret.key` | Signs sessions and encrypts stored API keys; at least 32 characters (shorter values and placeholders such as `changeme` are ignored with a warning). Changing it signs everyone out and voids stored keys. |
+| `SETUP_TOKEN` | generated at startup | Fixed setup code for the first admin, at least 12 characters (spaces, hyphens and case do not count); shorter values are ignored. |
+| `COOKIE_SECURE` | `false` | Force the secure cookie and HSTS (only behind a TLS proxy without `X-Forwarded-Proto`; plain HTTP sign-in then fails). |
+| `SSL_KEY_PATH`, `SSL_CERT_PATH` | `ssl/privkey.pem`, `ssl/fullchain.pem` (else `ssl/cert.pem`) in the app folder; headless server in the data folder | Native HTTPS on the same port once both files exist. |
+| `CORS_ORIGIN` | empty | Extra web origins with cookie access (comma-separated); the bundled frontend does not need it. |
+| `APP_ORIGINS` | `capacitor://localhost`, `https://localhost`, `ionic://localhost`, `app://manga-shelf` | Origins of the phone and desktop apps (bearer token, no cookie); `none` turns them off. |
+| `FRONTEND_DIR` | `frontend/dist`, then `dist/` | Folder of the built frontend. |
+| `APP_TIMEZONE` | `Europe/Berlin` | What "today" is for the radar, calendar and anime dates. |
+| `BACKUP_HOUR`, `BACKUP_TIMEZONE` | `3`, `Europe/Berlin` | Time of the daily snapshot. |
+| `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_MANUAL`, `BACKUP_KEEP_PRE_RESTORE`, `BACKUP_KEEP_PRE_UPDATE` | `7`, `10`, `3`, `3` | Snapshots kept per kind (1 to 1000). |
+| `MIGRATE_WITHOUT_SNAPSHOT` | `false` | `1` migrates even when the pre-update backup cannot be written (set once, deliberately). |
+| `RESTORE_MAX_DB_BYTES`, `RESTORE_MAX_UPLOADS_BYTES`, `RESTORE_MAX_ENTRIES` | 2 GiB, 4 GiB, `100000` | Limits when unpacking a backup. |
+| `ADMIN_CONSOLE` | `true` | Console commands on stdin. |
+| `UPDATE_CHECK` | `true` | The system page asks GitHub for a new version at most once a day, only while an admin has it open. |
+| `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | `debug`/`info`/`warn`/`error`/`silent`; `json` for log tools. |
+| `ANIME_ANILIST_RPM`, `ANIME_JIKAN_RPM` | `30`, `60` | Requests per minute of the shared AniList and Jikan access (1 to 600). |
+| `ANIME_SOURCES` | `anilist,jikan` | Active anime sources (`jikan` or `mal` stands for MyAnimeList); unknown names are ignored with a warning. |
+| `MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY` | empty | Instance API keys; win over keys stored in the interface. |
+| `MANGA_SHELF_CACHE_DIR` | system cache | Headless server only: where the web portal is unpacked. |
+
+Not read by the server: `REMOTE_URL`, `REMOTE_HOST`, `REMOTE_PORT`, `REMOTE_USER`, `REMOTE_PASS`, `REMOTE_ALLOW_HTTP` for `scripts/check-remote.js`, `seed-remote.js` and `verify-remote.js`; `CHROME_BIN` or `PUPPETEER_EXECUTABLE_PATH` for the browser tests.
+
+**Ports**
+
+| Port | Used by |
+|---|---|
+| `3000` | the server (`PORT`), the Docker image, the headless binary, the desktop app in server mode |
+| Pterodactyl allocation | the server via `SERVER_PORT`, which wins over `PORT` |
+| `37210` | the desktop app in "only this device" mode, bound to `127.0.0.1` |
+| `5173` | the Vite dev server of `npm run dev` (proxies `/api` and `/uploads` to 3000) |
+
+## 6. Data, backups and security
+
+### Data folder
+
+`DATA_DIR` holds `manga.db` (SQLite, WAL), `uploads/` (images), `backups/` (snapshots), `secret.key` and, for the headless server, `.env`, `ssl/` and `logs/`. Copying the whole folder while the server is stopped moves everything, the secret included.
+
+### Backups and restore
+
+As an admin under **Backups**:
+
+* **Automatic:** every day at `BACKUP_HOUR` (default 3, time zone `BACKUP_TIMEZONE`) a verified snapshot in `data/backups/`. Kept per kind: 7 daily, 10 manual, 3 before a restore, 3 before an update (`BACKUP_KEEP_*`).
+* **Create a snapshot** (or `backup` in the console) and **download a ZIP** directly: `manga.db` plus every image from `uploads/`.
+* **Restore** from a snapshot or an uploaded ZIP (up to 500 MB). The server checks the archive first and shows its content; it swaps only after confirmation. A `vor-wiederherstellung-*` snapshot is taken before, so the restore can be undone. Every other session ends.
+* **Secret:** `secret.key` is in no backup. Stored API keys are encrypted with it, so after restoring on another server they have to be entered again.
+* **Backup from the app:** a server collection fetched into the app, or imported there from a server ZIP, holds no passwords any more. When that app ZIP is restored on a server, the check names the accounts without a password; they need a password reset in the user management. If your own account is among them, set a new password before signing out; with nobody signed in only the console command `passwort-reset <name>` helps. Into a server with a collection of its own, use "Merge" (CSV) instead of a restore.
+* Deleted something after the last backup? Look in the trash first (30 days).
+* Going back to an older version: see [Upgrading from v2.19.1](#upgrading-from-v2191).
+
+### Security model
+
+* **Sessions:** a JWT in the `httpOnly` cookie `token` (browser) or as a bearer token (apps), valid 7 days, checked against the database on every request. Logout blocks the token; a password change, a password reset, "End all sessions" and a restore end sessions. The signing key is `JWT_SECRET` or `<DATA_DIR>/secret.key` (0600).
+* **First setup** only with the setup code; afterwards it has no effect.
+* **Origin check:** writing API requests a browser sends from another origin are rejected; CORS only for `CORS_ORIGIN` and the app origins. Security headers include a CSP, Permissions-Policy, COOP and HSTS over HTTPS.
+* **Rate limits** per address and per account (brute-force protection without locking out the admin) and per-account limits for external lookups. They depend on correct client addresses, hence `TRUST_PROXY`.
+* **Uploads:** images up to 15 MB, checked by magic bytes, EXIF/GPS stripped, random file names, a CSP of their own under `/uploads`; image downloads from URLs are SSRF-safe.
+* **Headless server:** refuses a `.env` others can change; Linux data folder 0750 and `UMask=0027`, Windows service as LOCAL SERVICE with a protected ACL.
+* **Apps:** tokens and API keys in the system keychain or keystore; plain `http://` only to home-network addresses.
+
+## 7. Development
+
+`AGENTS.md` is the maintainer reference: file map, schema and migrations, every endpoint, task-to-file guide, conventions and pitfalls. Read it before changing code.
+
+```bash
+npm ci && (cd frontend && npm ci)
+npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data in data-dev/, logins in data-dev/seed-users.json
+```
+
+### npm scripts
+
+| Script | Does |
+|---|---|
+| `npm run dev` | backend and Vite together, demo collection in `data-dev/` |
+| `npm run dev:api` | backend only |
+| `npm start` | production server (`node index.js`) |
+| `npm test` | backend tests (`node:test`: `test/`, `test/core/`, `test/anime/`) |
+| `npm run test:frontend` | Vitest component tests in `frontend/` |
+| `npm run lint` | ESLint 9 |
+| `npm run build:frontend` | `npm ci` and the Vite build of `frontend/` |
+| `npm run check:bundle` | bundle budget (`frontend/bundle-budget.json`; `-- --update` after intended growth) |
+| `npm run package` | Pterodactyl ZIP |
+| `npm run build:server` | headless server binary (`scripts/server-bin/build-sea.js`) |
+| `npm run seed` | fill an empty database deterministically (`-- --series 1500 --volumes 45000 --seed 42`) |
+| `npm run bench` | endpoint benchmark against a seeded database |
+| `npm run release` | local version helper (`release.js`) |
+| `npm run test:e2e` | browser suite: login, search, users, backup and restore, volumes, wishlist, bulk edit |
+| `npm run test:radar` | browser suite: release radar |
+| `npm run test:anime` | browser suite: anime tab without external APIs |
+| `npm run test:deep` | browser walkthrough with screenshots (phone, landscape, tablet) |
+| `npm run test:perf` | page load, API latency, bundle sizes |
+
+**Gates before a PR:** `npm run lint`, `npm test`, `npm run test:frontend`, the frontend build with `npm run check:bundle`, then the browser suites. `test/docs.test.js` and `test/agentsMd.test.js` keep this README, `.env.example` and `AGENTS.md` in line with the code and run in `npm test`.
+
+**Browser suites** need a built frontend (`npm run build:frontend`) and Chrome, Chromium, Edge or Brave (`CHROME_BIN` or `PUPPETEER_EXECUTABLE_PATH` picks one). Each suite starts its own server on a temporary database with a throwaway admin; never point them at a real instance. They run with `--lang=de-DE`.
+
+**Desktop:** `cd desktop && npm ci && npm run build:desktop` (installers in `desktop/dist/installers/`; unsigned unless signing variables such as `CSC_LINK` or `APPLE_ID` are set), `npm start` for development, `npm test`.
+
+**Android/iPhone:** `cd frontend && npm ci`, then `cd mobile && npm ci && npm run build:android` (JDK 21, Android SDK 35) or `npm run build:ios` (macOS, Xcode 16+, CocoaPods). Output in `mobile/build/out/`. After changing the version by hand run `npm run version:sync` (`release.js` and the Release workflow do it themselves).
+
+### Release workflow
+
+* **Every push** runs `ci.yml` (lint, tests on Node 22.13.0/22/24, frontend build and budget, ZIP install check, Docker build, browser suites) and `build.yml`: artifacts for 14 days (Pterodactyl ZIP with SBOM, server binaries and packages; desktop installers and the phone smoke builds of `mobile.yml` only on `main` and in pull requests). Nothing is published. `codeql.yml` runs on `main`, in pull requests and weekly.
+* **Publishing only by button:** Actions → **Release** → **Run workflow**, pick the branch and `action`:
+  * `build`: build everything (signed when the secrets exist), publish nothing;
+  * `release`: bump the version (`bump` = `patch`/`minor`/`major`; `none` takes the version from `package.json`, its tag must not exist), commit and tag `vX.Y.Z`, build everything including the apps, push the image to GHCR with `X.Y.Z` and `vX.Y.Z` (signed keyless with cosign), create the GitHub release with all files, `SHA256SUMS.txt` and generated notes; only then do `X.Y` and `latest` move to that image. A failed run never moves `latest`; a pushed tag alone publishes nothing.
+* **Locally:** `node release.js minor --dry-run` shows the next version, `node release.js minor` (or `patch`, `major`, `X.Y.Z`) needs a clean tree and a free tag and sets it in every `package.json`/`package-lock.json` and the native Android/iOS projects, without commit, tag or push; then commit, push and run the workflow with `bump = none`.
+* **Once:** with a protected branch, a fine-grained PAT with `Contents: Read and write` as the secret `RELEASE_TOKEN` (otherwise `GITHUB_TOKEN` is enough). Set the GHCR package `manga-shelf` to public after the first release.
+* **Update notice:** the server checks `releases/latest` of `LixNix-Swap-Org/manga-shelf`; never publish releases as pre-releases.
+
+**Signing** (repository secrets; missing groups are built unsigned):
+
+| Secret | Content |
+|---|---|
+| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows code signing certificate (`.pfx`, base64) and password |
+| `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | "Developer ID Application" certificate (`.p12`, base64) and password |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | macOS notarisation |
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Android release keystore (keep it safe: a lost key means a new app ID in the store) |
+| `IOS_CERT_P12_BASE64`, `IOS_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64` | iOS distribution certificate and provisioning profile (with `APPLE_TEAM_ID`) |
+| `IOS_SHARE_PROVISIONING_PROFILE_BASE64` | optional: profile of the share extension `de.mangashelf.app.ShareToMangaShelf` (App Group `group.de.mangashelf.app` on both App IDs); without it the signed IPA has no share extension |
+
+base64 of a file: `base64 -i file.p12 | pbcopy` (macOS) or `base64 -w0 file.p12` (Linux). The repository variable `WATCH_CRUNCHYROLL` = `off` removes the Crunchyroll history from the app builds.
+
+### Language of tooling output
+
+The interface, the docs, the release text and the workflow names are English or multilingual. Maintainer tooling is still German: console command names and their output (`scripts/admin.js`, the headless binary's subcommands and help), server log and startup messages (such as the setup code line and "TRUST_PROXY ungültig"), the desktop app's menus and dialogs, the comments in `docker-compose.yml`, `Caddyfile.example` and `nginx.conf.example`, and error messages inside the workflow steps. Code comments and `AGENTS.md` are English.
+
+## 8. Languages
+
+* **Interface:** 13 languages: German (`de`) as the source text, English (`en`), French (`fr`), Spanish (`es`), Italian (`it`), Portuguese (Brazil) (`pt-BR`), Dutch (`nl`), Polish (`pl`), Japanese (`ja`), Korean (`ko`), Simplified Chinese (`zh-Hans`), Russian (`ru`) and Turkish (`tr`). The interface follows the device language (browser, apps, desktop); an unsupported language falls back by its primary language (pt-PT → pt-BR, zh-TW → zh-Hans), otherwise to German. Each account can pick a language under account → "Language" (also on the login and setup screens), which applies on all its devices. Offline, a language whose catalog was never loaded cannot be chosen.
+* **Not translated:** the desktop app's native menus and dialogs, the console and server logs, stored values such as volume statuses and CSV values (CSV headers may be German or English), and the German publisher and Manga Passion data.
+* **Editions:** a series is one edition in one language with a region and a currency tag (ISO 639-1 language code, two-letter region, currency, default `EUR`); editions of the same work are linked ("+ Ausgabe" on the series page creates or links one), and a volume can override the language. Your default edition language is set in the account's language tab. Prices are shown in the currency of their series and never converted.
+* **Manga Passion is German-market only:** gap check, autofill, release calendar and lookups skip editions in other languages; lookups for those ask AniList and MyAnimeList only. Regions and currencies are tags, there is no release source outside Germany.
+* **Adding an interface language:** the steps are in `AGENTS.md`, Gotcha 38 (catalog in `frontend/src/i18n/locales/`, `LANGUAGES` in `frontend/src/i18n/index.js`, `UI_LOCALES` in `core/lib/locales.js`, a manifest, tests and the bundle budget).
+
+## 9. Credits and data sources
+
+* **Manga Passion** for German editions, prices and the release calendar.
+* **Deutsche Nationalbibliothek**, **K10plus** and **Google Books** for ISBN lookups, **Open Library** for covers.
+* **[AniList](https://anilist.co/)** and **[MyAnimeList](https://myanimelist.net/)** (directly or via Jikan) for anime and manga metadata. Their data and covers belong to them and may be used non-commercially only; Manga Shelf stores IDs and a slim excerpt and links back to both.
+* Started by MoltresHD as manga-shelf; maintained by Felix and Max at [LixNix-Swap-Org/manga-shelf](https://github.com/LixNix-Swap-Org/manga-shelf).

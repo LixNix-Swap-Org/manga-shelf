@@ -108,11 +108,9 @@ export async function migrateLocalStorage(adapter, storage = globalThis.localSto
 
 const keyFieldNear = (el) => el?.closest?.('[data-provider]')?.querySelector?.('input[type="password"]') || null;
 
-/**
- * Links leave through @capacitor/browser (in-app Safari / Custom Tab); `{ preferApp: true }` uses AppLauncher so app links
- * reach an installed app (in-app browser as fallback). From an API key card the key field gets the focus back when the
- * browser closes. The shell never reads the clipboard; only the 'Link einfügen' button does, on tap.
- */
+// Links open via @capacitor/browser (in-app Safari / Custom Tab); `{ preferApp: true }` uses AppLauncher so app links reach an
+// installed app. From an API key card the key field regains focus when the browser closes. The shell never reads the clipboard;
+// only the 'Link einfügen' button does, on tap.
 export function installExternalLinks(bridge, { doc = globalThis.document } = {}) {
   const { Browser, App, AppLauncher } = bridge.plugins;
   let lastTarget = null;

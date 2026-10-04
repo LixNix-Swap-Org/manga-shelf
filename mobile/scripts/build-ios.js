@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// Release build for iPhone/iPad into build/out/ (macOS, Xcode, CocoaPods). With IOS_CERT_* , IOS_PROVISIONING_PROFILE_BASE64
-// and APPLE_TEAM_ID it makes a signed IPA (IOS_EXPORT_METHOD); `--testflight` uploads it with the APP_STORE_CONNECT_API_KEY_*
-// variables. The share extension is signed with IOS_SHARE_PROVISIONING_PROFILE_BASE64; without that profile the signed IPA
-// is built without the extension. Without the signing secrets it makes an unsigned IPA (CODE_SIGNING_ALLOWED=NO, extension
-// included) for AltStore, Sideloadly or Xcode.
+// Release build for iPhone/iPad into build/out/ (macOS, Xcode, CocoaPods). IOS_CERT_*, IOS_PROVISIONING_PROFILE_BASE64 and
+// APPLE_TEAM_ID give a signed IPA (IOS_EXPORT_METHOD; extension via IOS_SHARE_PROVISIONING_PROFILE_BASE64), else an unsigned
+// one (CODE_SIGNING_ALLOWED=NO); `--testflight` uploads with APP_STORE_CONNECT_API_KEY_*.
 //   node scripts/build-ios.js [--skip-web | --from <app build dir>] [--testflight]
 const fs = require('fs');
 const os = require('os');

@@ -6,11 +6,9 @@ import { t } from '../../i18n/index.js';
 
 const LABEL = 'block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5';
 
-/**
- * Language, region and currency of an edition (stored as ISO codes). `value` is { language, region, currency };
- * `onChange(patch)` gets the changed fields. Picking a language or region moves the untouched dependants along
- * (region from the UI locale for its own language, currency from the region) unless `follow` is false.
- */
+// Language, region and currency of an edition (ISO codes). `value` is { language, region, currency }; `onChange(patch)` gets the
+// changed fields. Picking a language or region moves untouched dependants along (region from the UI locale for its own
+// language, currency from the region) unless `follow` is false.
 export default function EditionFields({ value, onChange, follow = true, labelClassName = LABEL, idPrefix, disabled = false }) {
   const autoId = useId();
   const id = idPrefix || autoId;

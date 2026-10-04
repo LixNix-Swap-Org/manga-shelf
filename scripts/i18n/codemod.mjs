@@ -1,12 +1,8 @@
 #!/usr/bin/env node
-// i18n codemod: wraps German UI text in t() / tn() / rich() by splicing the original source at node positions (no
-// reprinting, every untouched byte stays). Each edit is self-checked: the German text it renders (t() returns the
-// source in German) must equal the original's; failing or ambiguous cases go to the MANUAL list with a reason.
-// Usage: node scripts/i18n/codemod.mjs [--files <path|dir>[,…]] [--report out.json] [--write]
-//   without --files: all of frontend/src (no tests); without --write: dry run (report only)
-// Rules (reports/i18n-understand.md, frontend lens): R1 JSX text, R2 sentence runs (+ rich() for inline elements),
-// R3 display attributes and text props, R4 templates, R5 message positions, R6 `// i18n` markers on module-level
-// declarations (never t() at module scope), R7 `n === 1 ? 'A' : 'B'` -> tn(), R8 stored values -> MANUAL (enumLabels).
+// i18n codemod: wraps German UI text in t() / tn() / rich() by splicing the source at node positions (untouched bytes stay).
+// Each edit is self-checked (the rendered German must equal the original); failing or ambiguous cases go to the MANUAL list.
+// Usage: node scripts/i18n/codemod.mjs [--files <path|dir>[,…]] [--report out.json] [--write]  (default: frontend/src, dry run)
+// Rules: JSX text, sentence runs, display attributes, templates, messages, `// i18n` markers, n === 1 plurals, stored values.
 import fs from 'node:fs';
 import path from 'node:path';
 import {

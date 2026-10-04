@@ -38,11 +38,7 @@ function schuberKindsConflict(officialText, userText) {
 
 const userVolumeKey = (type, volumeNumber) => `${type}:${canonicalVolumeNumber(volumeNumber, type).toLowerCase()}`;
 
-/**
- * options: { edition_id, force_refresh, signal, persist }. persist: false (read-only roles) never stores an
- * automatically found edition link.
- */
-/** The volumes whose effective language (own, else the series') is the German edition's. */
+/** options: { edition_id, force_refresh, signal, persist }; persist false (read-only roles) never stores a found edition link. */
 const germanVolumes = (manga, volumes) => volumes.filter(v => isMpLanguage(v.language || manga.language));
 
 async function reconcileMangaGaps(ctx, mangaId, options = {}) {

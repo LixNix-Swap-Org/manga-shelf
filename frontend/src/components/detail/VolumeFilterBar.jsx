@@ -8,7 +8,7 @@ import { rich } from '../../i18n/react.jsx';
 import { conditionLabel } from '../../utils/enumLabels';
 
 
-/** View-mode switcher, gap/Manga-Passion pills, status/type filters, search and sort. Purely presentational; all state and handlers come in via props. */
+/** View-mode switcher, gap/Manga-Passion pills, status/type filters, search and sort. Purely presentational: state via props. */
 export default function VolumeFilterBar({
   availablePublishers,
   baseVolumesForType,

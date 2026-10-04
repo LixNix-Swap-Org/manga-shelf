@@ -38,7 +38,8 @@ const subscribe = (channel, callback) => {
     return () => ipcRenderer.removeListener(channel, listener);
 };
 
-// "Quellen & Schlüssel…" from the menu: App.jsx opens the AccountModal keys tab (in-page event on "/", else navigates) and calls preventDefault()
+// "Quellen & Schlüssel…" from the menu: App.jsx opens the AccountModal keys tab (in-page event on "/", else navigates)
+// and calls preventDefault()
 ipcRenderer.on('desktop:open-api-keys', () => {
     const event = new CustomEvent(OPEN_API_KEYS_EVENT, { cancelable: true });
     const unhandled = window.dispatchEvent(event);

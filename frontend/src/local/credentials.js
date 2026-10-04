@@ -1,7 +1,6 @@
-// API keys of the standalone mode, outside manga.db. The browser build keeps them in
-// IndexedDB, readable by anyone with access to this browser profile: flagged as "nicht sicher, nur für Tests". The apps
-// replace the store with the device's secure storage (Capacitor Secure Storage, Electron safeStorage).
-// provider() is the core/sources/credentials.js interface; reads are synchronous from memory after load().
+// API keys of the standalone mode, outside manga.db. The browser build keeps them in IndexedDB, readable by anyone with access to
+// this browser profile ("nicht sicher, nur für Tests"); the apps use the device's secure storage (Capacitor Secure Storage,
+// Electron safeStorage). provider() is the core/sources/credentials.js interface; reads are synchronous from memory after load().
 // i18n
 export const INSECURE_STORAGE_TEXT = 'Im Browser liegen Schlüssel unverschlüsselt in diesem Browserprofil – nicht sicher, nur für Tests. Die App speichert sie im sicheren Speicher des Geräts.';
 

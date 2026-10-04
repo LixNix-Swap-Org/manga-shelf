@@ -110,7 +110,7 @@ function useBlurSearchOnScroll(searchInputRef, headerRef, typedRef) {
   }, [searchInputRef, headerRef, typedRef]);
 }
 
-/** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational; all state and handlers come in via props. */
+/** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational: state and handlers via props. */
 export default function DashboardHeader({
   activeMainView,
   canEdit,

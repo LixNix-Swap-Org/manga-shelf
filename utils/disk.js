@@ -24,11 +24,8 @@ const SPACE_TEXTS = {
     other: 'Nicht genug Speicherplatz auf dem Server für diesen Vorgang (frei: {free}, benötigt: {needed}). Bitte Platz freigeben (z. B. alte Snapshots löschen) und erneut versuchen.'
 };
 
-/**
- * Throws a 507 error when `dir` has less than `neededBytes` free: German `message`, `extra` = { msg, params } for the
- * error body (sendError(res, 507, err.message, err.code, err.extra)). `purpose` picks the sentence (SPACE_TEXTS).
- * An unknown free space (statfs unsupported) never blocks.
- */
+// Throws a 507 error when `dir` has less than `neededBytes` free: German `message`, `extra` = { msg, params } for the error body
+// (sendError(res, 507, err.message, err.code, err.extra)). `purpose` picks the sentence (SPACE_TEXTS). Unknown free space never blocks.
 function ensureFreeSpace(dir, neededBytes, purpose = 'other') {
     const free = module.exports.freeBytes(dir);
     if (free === null || free >= neededBytes) return free;

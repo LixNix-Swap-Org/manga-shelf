@@ -100,11 +100,9 @@ function ListSync({ sync, busy, onToggle, onRun, ids }) {
   );
 }
 
-/**
- * One provider: guide, key field with format check, "Prüfen & speichern" and "Entfernen". `onSave(secret,
- * { allowBackground })` resolves true when stored. `headingLevel`: 3 below a dialog's h2, 4 below an h3. `listSync`
- * (personal AniList card of an editor) adds the list sync switch.
- */
+// One provider: guide, key field with format check, "Prüfen & speichern" and "Entfernen". `onSave(secret, { allowBackground })`
+// resolves true when stored. `headingLevel`: 3 below a dialog's h2, 4 below an h3. `listSync` (personal AniList card of an
+// editor) adds the list sync switch.
 export default function ApiKeyCard({
   guide, state, scope = 'user', headingLevel, onSave, onRemove, onToggleBackground, busy, listSync, listSyncBusy, onToggleListSync, onRunListSync
 }) {

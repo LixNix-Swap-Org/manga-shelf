@@ -3,11 +3,9 @@ import { hasSecret } from './crunchyrollSecret';
 import { connectCrunchyroll, disconnectCrunchyroll, syncNow, isSyncRunning, subscribeRunning } from './crunchyrollSync';
 import { readState, patchState, subscribeState, watchBridge, readSkipped, clearSkipped } from './watchState';
 
-/**
- * The settings card's view of the sync: { loading, enabled, connected, state, skipped } (the secret itself never enters
- * React state) and its actions. `busy` names the running action ('toggle', 'connect', 'sync', 'disconnect', 'unskip');
- * `running` is true while any sync runs, also the automatic one.
- */
+// The settings card's view of the sync: { loading, enabled, connected, state, skipped } (the secret never enters React state)
+// and its actions. `busy` names the running action ('toggle', 'connect', 'sync', 'disconnect', 'unskip'); `running` is true
+// while any sync runs, also the automatic one.
 export default function useCrunchyroll({ bridge = watchBridge() } = {}) {
   const [view, setView] = useState({ loading: true, enabled: false, connected: false, state: {}, skipped: 0 });
   const [busy, setBusy] = useState(null);

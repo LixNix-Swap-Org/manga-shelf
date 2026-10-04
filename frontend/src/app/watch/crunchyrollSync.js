@@ -118,12 +118,9 @@ export function subscribeRunning(fn) {
   return () => runningListeners.delete(fn);
 }
 
-/**
- * One sync, single flight (a second call for the same collection joins the running one, another collection waits for
- * it). Skips without a request when the feature is off, the user is no editor, the last attempt is younger than 15 minutes
- * (unless `force`), the device is offline or not connected. Never throws: failures end up in the Preferences state and
- * console.warn.
- */
+// One sync, single flight (a second call for the same collection joins the running one, another collection waits). Skips without
+// a request when the feature is off, the user is no editor, the last attempt is under 15 minutes old (unless `force`), or the
+// device is offline or not connected. Never throws: failures land in the Preferences state and console.warn.
 export function runWatchSync(options = {}) {
   const user = 'user' in options ? options.user : session?.user;
   const scope = scopeOf(user);
@@ -208,11 +205,9 @@ async function syncOnce({ bridge = watchBridge(), user, force = false, now = Dat
   }
 }
 
-/**
- * Starts the foreground triggers for a signed-in user (or an opened device collection): once now, then on every return
- * to the foreground (App appStateChange isActive). Returns stop(). No background task: whenUnlocked keychain items and
- * App Review both want foreground only.
- */
+// Starts the foreground triggers for a signed-in user (or an opened device collection): once now, then on every return to the
+// foreground (App appStateChange isActive). Returns stop(). No background task: whenUnlocked keychain items and App Review
+// both want foreground only.
 export function startWatchSync({ user, bridge = watchBridge(), now = Date.now } = {}) {
   if (!bridge || !canSync(user)) return () => {};
   const mine = { user };

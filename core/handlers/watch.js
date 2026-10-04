@@ -74,11 +74,9 @@ function pickAmong(found, item) {
     return { pick, candidates: pick ? [pick, ...list.filter((c) => c !== pick)] : list };
 }
 
-/**
- * The entry for one season of a series: its season link, else the entries linked to the series whose titles name that
- * season, else the entries listing the series on AniList that do, else a clear title hit for that season.
- * `{ anime_id, learn }` or `{ reason, candidates }` (candidates: every entry tried, minus those naming another season).
- */
+// The entry for one season of a series: its season link, else entries linked to the series whose titles name that season, else
+// entries listing the series on AniList that do, else a clear title hit. Returns { anime_id, learn } or { reason, candidates }
+// (candidates: every entry tried, minus those naming another season).
 function matchItem(item, { service, prepared, byId, index }) {
     const key = crunchyroll.seasonLinkOf(service.id, item.external_id, item.season).external_id;
     const seasonLinked = (index.bySeason.get(key) || []).map((id) => byId.get(id)).filter(Boolean);
@@ -144,12 +142,9 @@ function throttled(ctx, userId) {
     return false;
 }
 
-/**
- * Applies the caller's history items: matched entries move forward only (monotonic, "Gesehen" at the known total, the
- * resume link shows the next episode to watch); the rest comes back as unmatched with candidates for the app's dialog.
- * Always the caller's own progress; with the AniList list sync on, applied entries are pushed like a +1. Matching runs
- * before the transaction (the handler is synchronous, nothing else writes in between); only the writes run inside.
- */
+// Applies the caller's history items: matched entries only move forward (monotonic, "Gesehen" at the known total, resume link =
+// next episode); the rest returns as unmatched with candidates. Always the caller's own progress; with AniList list sync on,
+// applied entries are pushed like +1. Matching runs before the transaction (synchronous handler); only the writes run inside.
 function sync(ctx, { body }) {
     const { service, items } = readBody(body);
     const userId = ctx.user.id;

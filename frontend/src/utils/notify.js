@@ -48,7 +48,7 @@ export function update(id, input) {
   for (const listener of [...listeners]) listener({ type: 'update', id, message: text.message, ref: text.ref });
 }
 
-/** Called with { type: 'show', toast }, { type: 'update', id, message, ref } and { type: 'dismiss', id }; returns the unsubscribe function. */
+/** Called with { type: 'show', toast }, { type: 'update', id, message, ref } or { type: 'dismiss', id }; returns the unsubscribe. */
 export function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);

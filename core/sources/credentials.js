@@ -1,7 +1,7 @@
-// Where the core gets API keys from: the host plugs in a provider (server: encrypted in the database; apps: secure storage).
-// ctx.credentials wins over the registered provider; with neither, requests use the shared pool without a key.
-// provider = { get(userId, p) -> {secret, allowBackground}|null, instance(p) -> {secret, fromEnv}|null,
-//   background(p) -> [{userId, secret}], failed(userId, p, message), used(userId, p, ok), status(userId, p) -> {configured, last_error}|null }
+// API key source: the host plugs in a provider (server: encrypted in the database; apps: secure storage); ctx.credentials wins.
+// With neither, requests use the shared pool without a key. provider = { get(userId, p) -> {secret, allowBackground}|null,
+//   instance(p) -> {secret, fromEnv}|null, background(p) -> [{userId, secret}], failed(userId, p, message),
+//   used(userId, p, ok), status(userId, p) -> {configured, last_error}|null }
 const NONE = {
     get: () => null,
     instance: () => null,

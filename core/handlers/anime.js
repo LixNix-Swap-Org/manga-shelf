@@ -344,12 +344,9 @@ const episodeAboveTotal = (episode, total) => badRequest(
     'EPISODE_ABOVE_TOTAL', { episodes: total }
 );
 
-/**
- * "Folge N gesehen" from a shared link, always for the caller: the counter never goes down, the canonical episode link
- * becomes the resume link, `remember` stores the series link of the entry in the same transaction. An episode above a
- * known total needs `complete: true` (later seasons are often numbered on from the first one). Answers the progress
- * before the write as `previous` (null without a row), so the undo never depends on the client's copy of the list.
- */
+// "Folge N gesehen" from a shared link, always for the caller: the counter never goes down, the episode link becomes the resume
+// link, `remember` stores the series link in the same transaction. An episode above a known total needs `complete: true`.
+// Answers the progress before the write as `previous` (null without a row), so the undo never depends on the client's list copy.
 function markWatched(ctx, { params, body }) {
     const id = parseId(params.id);
     const episode = cleanEpisode(body.episode);
@@ -465,11 +462,9 @@ function matchAnime(ctx, { service, seriesId, seriesSlug, seriesTitle, episode }
     return { anime_id: null, match: null, candidates };
 }
 
-/**
- * What a shared streaming link points at: service, series, episode and the caller's entry. Read-only. The page is only
- * fetched (host allowlist, no redirects) when the link and the share text leave the episode or the series open; every
- * page failure means "unknown" (page_checked false).
- */
+// What a shared streaming link points at: service, series, episode and the caller's entry. Read-only. The page is only fetched
+// (host allowlist, no redirects) when link and share text leave episode or series open; any page failure means "unknown"
+// (page_checked false).
 async function resolveLink(ctx, { body }) {
     const link = typeof body.url === 'string' ? links.detectLink(body.url.trim()) : null;
     if (!link) throw unsupportedLink();

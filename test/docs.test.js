@@ -53,8 +53,19 @@ describe('.env.example', () => {
     });
 });
 
+// Text from the first line that starts with `heading` up to the next heading of the same or a higher level.
+function section(readme, heading) {
+    const level = /^#+/.exec(heading)[0].length;
+    const start = readme.split('\n').findIndex((line) => line.startsWith(heading));
+    assert.ok(start >= 0, `README heading "${heading}" missing`);
+    const lines = readme.split('\n').slice(start);
+    const next = lines.findIndex((line, i) => i > 0 && new RegExp(`^#{1,${level}} `).test(line));
+    return (next < 0 ? lines : lines.slice(0, next)).join('\n');
+}
+
 describe('README.md', () => {
     const readme = read('README.md');
+    const anchors = new Set([...readme.matchAll(/^#{1,4} (.+)$/gm)].map((m) => slug(m[1])));
 
     test('links only to the current repository', () => {
         assert.doesNotMatch(readme, /github\.com\/MoltresHD/i);
@@ -62,22 +73,23 @@ describe('README.md', () => {
     });
 
     test('every in-page link points at a heading', () => {
-        const anchors = new Set([...readme.matchAll(/^#{1,4} (.+)$/gm)].map((m) => slug(m[1])));
         const broken = [...readme.matchAll(/\]\(#([^)]+)\)/g)].map((m) => m[1]).filter((a) => !anchors.has(a));
         assert.deepEqual(broken, []);
     });
 
-    test('the HTTPS section keeps the anchor the dashboard footer links to', () => {
-        const anchors = [...readme.matchAll(/^## (.+)$/gm)].map((m) => slug(m[1]));
-        assert.ok(anchors.includes('6-https--eigene-domain-reverse-proxy-mit-nginx-oder-caddy'));
+    test('has the HTTPS section the dashboard footer links to', () => {
+        const footer = read('frontend/src/components/dashboard/DashboardFooter.jsx');
+        const url = /HTTPS_GUIDE_URL = '([^']+)'/.exec(footer)[1];
+        assert.ok(url.startsWith('https://github.com/LixNix-Swap-Org/manga-shelf#'), url);
+        assert.ok(anchors.has(url.split('#')[1]), `README has no heading for ${url}`);
+        assert.match(section(readme, '### HTTPS and reverse proxy'), /TRUST_PROXY/);
     });
 
     test('the variable table lists every variable of utils/config.js and only real ones', () => {
-        const section = readme.slice(readme.indexOf('## 12. Umgebungsvariablen'), readme.indexOf('## 13.'));
-        assert.ok(section.length > 100, 'section 12 missing');
-        const missing = DOCUMENTED.filter((name) => !section.includes(`\`${name}\``));
+        const config = section(readme, '## 5. Configuration');
+        const missing = DOCUMENTED.filter((name) => !config.includes(`\`${name}\``));
         assert.deepEqual(missing, [], `missing from the README table: ${missing.join(', ')}`);
-        const rows = section.split('\n').filter((line) => line.startsWith('| `'));
+        const rows = config.split('\n').filter((line) => /^\| `[A-Z]/.test(line));
         const named = rows.flatMap((line) => [...line.split('|')[1].matchAll(/`([A-Z][A-Z0-9_]+)`/g)].map((m) => m[1]));
         const unknown = named.filter((name) => !CONFIG_NAMES.has(name) && !new RegExp(`\\b${name}\\b`).test(CODE));
         assert.deepEqual(unknown, []);
@@ -85,12 +97,15 @@ describe('README.md', () => {
 
     test('states the TRUST_PROXY default and the SETUP_TOKEN minimum of the code', () => {
         assert.match(readme, new RegExp(`\\| \`TRUST_PROXY\` \\| \`${DEFAULT_TRUST_PROXY}\` \\|`));
-        assert.match(readme, new RegExp(`mindestens ${MIN_SETUP_TOKEN_LENGTH} Zeichen`));
+        assert.match(readme, new RegExp(`at least ${MIN_SETUP_TOKEN_LENGTH} characters`));
+        assert.doesNotMatch(readme, new RegExp(`at least (?!${MIN_SETUP_TOKEN_LENGTH}\\b|32\\b)\\d+ characters`));
     });
 
     test('the manual ZIP names what package.js ships', () => {
         const { PACKAGE_FILES, FRONTEND_DIST } = require('../package');
-        const manual = readme.slice(readme.indexOf('Falls `npm run package` fehlschlägt'), readme.indexOf('### Egg'));
+        const pterodactyl = section(readme, '### Pterodactyl');
+        const manual = pterodactyl.slice(pterodactyl.indexOf('If `npm run package` fails'));
+        assert.ok(manual.length > 100, 'manual ZIP instructions missing');
         for (const file of [...PACKAGE_FILES, FRONTEND_DIST]) assert.ok(manual.includes(`\`${file}`), `${file} missing from the ZIP instructions`);
         assert.match(manual, /"files"/);
         const shipped = JSON.parse(read('package.json')).files;
@@ -99,14 +114,14 @@ describe('README.md', () => {
 
     test('gives the same Pterodactyl update instruction as the release text', () => {
         const { PTERODACTYL_UPDATE, releaseNotes } = require('../scripts/release/notes');
-        assert.ok(readme.includes(`**Update:** ${PTERODACTYL_UPDATE}`));
+        assert.ok(section(readme, '### Pterodactyl').includes(`**Update:** ${PTERODACTYL_UPDATE}`));
         assert.ok(releaseNotes('v1.2.3', {}).includes(PTERODACTYL_UPDATE));
-        assert.doesNotMatch(readme + PTERODACTYL_UPDATE, /alte Dateien außer `data\/` löschen/);
+        assert.doesNotMatch(readme + PTERODACTYL_UPDATE, /delete (the )?old files except `data\/`/i);
     });
 
     test('runs console commands in Docker as node and explains docker attach', () => {
         const execs = [...readme.matchAll(/docker exec [^`]*scripts\/admin\.js/g)].map((m) => m[0]);
-        assert.ok(execs.length >= 2);
+        assert.ok(execs.length >= 1);
         assert.deepEqual(execs.filter((cmd) => !/ -u node /.test(cmd)), []);
         assert.match(readme, /`docker attach`[^\n]*`stdin_open: true`[^\n]*`tty: true`/);
         const compose = read('docker-compose.yml');
@@ -115,20 +130,83 @@ describe('README.md', () => {
         assert.doesNotMatch(read('.env.example'), /\(Pterodactyl, docker attach\)/);
     });
 
+    test('the console command table lists every command of services/console.js', () => {
+        const { COMMANDS } = require('../services/console');
+        const table = section(readme, '### First start');
+        const missing = COMMANDS.map((c) => c.usage.split(' ')[0]).filter((name) => !table.includes(`| \`${name}`));
+        assert.deepEqual(missing, []);
+    });
+
     test('the headless self-build installs the root dependencies before build-sea.js', () => {
-        const line = readme.split('\n').find((l) => l.includes('node scripts/server-bin/build-sea.js') && l.startsWith('Selbst bauen'));
+        const line = readme.split('\n').find((l) => l.includes('node scripts/server-bin/build-sea.js') && l.startsWith('Build it yourself'));
         assert.ok(line, 'self-build line of the headless server missing');
         const command = /`([^`]*build-sea\.js)`/.exec(line)[1];
         assert.match(command, /^npm ci && /);
     });
 
+    test('names the headless defaults of scripts/server-bin/cli.js', () => {
+        const { defaultDataDir } = require('../scripts/server-bin/cli');
+        const headless = section(readme, '### Headless server binary');
+        assert.ok(headless.includes(`\`${defaultDataDir('linux', {}, '~')}\``));
+        assert.ok(headless.includes(`\`${defaultDataDir('darwin', {}, '~')}\``));
+        assert.ok(headless.includes('`%LOCALAPPDATA%\\manga-shelf\\data`'));
+    });
+
+    test('the desktop command line names exactly the flags of desktop/modes.js', () => {
+        const source = read('desktop/modes.js');
+        const parser = source.slice(source.indexOf('function parseArgs('), source.indexOf('const isLoopback'));
+        const handled = new Set([...parser.matchAll(/name === '([a-z-]+)'/g)].map((m) => m[1]));
+        assert.ok(handled.size >= 7);
+        const line = section(readme, '### Desktop app').split('\n').find((l) => l.includes('Command line: `--'));
+        assert.ok(line, 'desktop command line missing');
+        const named = new Set([...line.matchAll(/`--([a-z-]+)/g)].map((m) => m[1]));
+        assert.deepEqual([...named].sort(), [...handled].sort());
+    });
+
+    test('puts the headless command line above the environment', () => {
+        assert.match(section(readme, '## 5. Configuration'), /order of priority: the command line of the headless server[^\n]*, the environment/);
+    });
+
     test('has the section for use away from home', () => {
-        const start = readme.indexOf('### Von unterwegs');
-        assert.ok(start > readme.indexOf('## 10.') && start < readme.indexOf('## 11.'));
-        const section = readme.slice(start, readme.indexOf('## 11.'));
-        assert.match(section, /Offline-Kopie/);
-        assert.match(section, /Tailscale/);
-        assert.match(section, /Abschnitt 6/);
+        const away = section(readme, '### Away from home');
+        const apps = section(readme, '## 4. Desktop and phone apps');
+        assert.ok(apps.includes(away));
+        assert.match(away, /offline copy/);
+        assert.match(away, /Tailscale/);
+        assert.match(away, /\]\(#https-and-reverse-proxy\)/);
+    });
+
+    test('the npm script table names only scripts of package.json', () => {
+        const scripts = JSON.parse(read('package.json')).scripts;
+        const rows = section(readme, '### npm scripts').split('\n').filter((line) => line.startsWith('| `npm '));
+        assert.ok(rows.length >= 10);
+        const names = rows.map((line) => /^\| `npm (?:run )?([\w:-]+)`/.exec(line)[1]);
+        assert.deepEqual(names.filter((name) => !scripts[name]), []);
+        for (const name of ['dev', 'test', 'test:frontend', 'lint', 'package', 'build:server', 'test:e2e']) assert.ok(names.includes(name), name);
+    });
+
+    test('the signing table names exactly the secrets the release workflow passes on', () => {
+        const workflow = read('.github/workflows/release.yml');
+        const passed = new Set([...workflow.matchAll(/secrets\.([A-Z][A-Z0-9_]+)/g)].map((m) => m[1]));
+        passed.delete('RELEASE_TOKEN');
+        const release = section(readme, '### Release workflow');
+        const rows = release.split('\n').filter((line) => /^\| `[A-Z]/.test(line));
+        const named = new Set(rows.flatMap((line) => [...line.split('|')[1].matchAll(/`([A-Z][A-Z0-9_]+)`/g)].map((m) => m[1])));
+        assert.deepEqual([...named].sort(), [...passed].sort());
+        assert.match(release, /`RELEASE_TOKEN`/);
+    });
+
+    test('the workflows it names exist and the release workflow is called Release', () => {
+        assert.match(read('.github/workflows/release.yml'), /^name: Release$/m);
+        assert.match(readme, /Actions → \*\*Release\*\* → \*\*Run workflow\*\*/);
+    });
+
+    test('the languages section lists every UI language of core/lib/locales.js', () => {
+        const { UI_LOCALES } = require('../core/lib/locales');
+        const languages = section(readme, '## 8. Languages');
+        assert.match(languages, new RegExp(`\\b${UI_LOCALES.length} languages\\b`));
+        assert.deepEqual(UI_LOCALES.filter((code) => !languages.includes(`(\`${code}\`)`)), []);
+        assert.match(languages, /Gotcha 38/);
     });
 
     test('the example files it names exist', () => {
@@ -163,10 +241,10 @@ describe('CHANGELOG.md', () => {
 describe('README.md device backups', () => {
     const readme = read('README.md');
 
-    test('section 10 and the standalone section say iOS backs up the app data and Android does not', () => {
-        const apps = readme.slice(readme.indexOf('## 10.'), readme.indexOf('### Ohne Server nutzen'));
-        const standalone = readme.slice(readme.indexOf('### Ohne Server nutzen'), readme.indexOf('### Von unterwegs'));
-        for (const part of [apps, standalone]) {
+    test('the apps section and the standalone section say iOS backs up the app data and Android does not', () => {
+        const phones = section(readme, '### Android and iPhone');
+        const standalone = section(readme, '### Use without a server');
+        for (const part of [phones, standalone]) {
             assert.match(part, /iCloud/);
             assert.match(part, /Android/);
             assert.match(part, /ZIP/);
@@ -175,10 +253,10 @@ describe('README.md device backups', () => {
         assert.match(rules, /manga\.db/);
     });
 
-    test('section 5 explains that accounts from an app backup need a password reset', () => {
-        const backups = readme.slice(readme.indexOf('## 5.'), readme.indexOf('## 6.'));
-        assert.match(backups, /Sicherung aus der App/);
-        assert.match(backups, /Passwort-Reset/);
+    test('the backup section explains that accounts from an app backup need a password reset', () => {
+        const backups = section(readme, '### Backups and restore');
+        assert.match(backups, /Backup from the app/);
+        assert.match(backups, /password reset/);
         assert.match(backups, /`passwort-reset <name>`/);
     });
 });

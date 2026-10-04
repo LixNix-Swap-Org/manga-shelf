@@ -92,7 +92,7 @@ const cleanNotes = (val) => {
 
 const sameAsStored = (input, stored) => (isBlank(input) ? '' : String(input).trim()) === (isBlank(stored) ? '' : String(stored).trim());
 
-// PUT: only values that change are validated. The app sends the whole row back (status toggle, cover pick), and older rows may hold odd values
+// PUT: only changed values are validated; the app sends the whole row back (status toggle, cover pick) and old rows may hold odd values
 function updatedField(body, key, stored, parse) {
     if (body[key] === undefined) return { value: stored };
     const parsed = parse(body[key]);

@@ -1,15 +1,8 @@
 #!/usr/bin/env node
-// i18n key extractor. Collects every source text the UI translates:
-//   - literal first arguments of t / tc (key `context::text`) / rich / msg, tn pairs and formatCount/countLabel pairs
-//   - German strings in declarations marked with a `// i18n` line comment (label maps, exported constants)
-//   - the API-key guides (core/sources/guides.js), the takeover texts (frontend/src/app/takeoverTexts.js)
-//   - server error texts (literal messages, notFound subjects, msg() templates), which the client looks up by text
+// i18n key extractor: collects every UI source text (t/tc/rich/msg/tn/formatCount calls, `// i18n` marked declarations, API-key
+// guides, takeover texts, server error texts). --write adds missing keys to the catalogs, --prune drops unused ones, --merge takes
+// fragment files, --context writes { key: [{ file, line, component }] }, --check exits 1 on invalid calls (--strict: missing texts).
 // Usage: node scripts/i18n/extract.mjs [--write] [--prune] [--merge a.json,b.json] [--context out.json] [--check]
-//   --write    adds missing keys to every catalog in frontend/src/i18n/locales ('' = still missing)
-//   --prune    drops catalog keys no source uses any more
-//   --merge    takes translations from fragment files (wave B: reports/i18n/en.<package>.json) into en.json
-//   --context  writes { key: [{ file, line, component }] } for translators
-//   --check    exit code 1 for invalid calls (computed keys) and, with --strict, for missing translations
 import fs from 'node:fs';
 import path from 'node:path';
 import {

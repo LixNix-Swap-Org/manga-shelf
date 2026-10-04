@@ -38,12 +38,10 @@ export function serverText(body) {
   return t(error);
 }
 
-/**
- * UI text of a text inside a 2xx payload: `body[field]`, or with `index` the entry `body[field][index]` (a string or
- * { message }); '' when there is none. German: the server's text unchanged. Other languages: the template in
- * `<field>_msg` (for lists an array parallel to the field), else the catalog entry of the exact German text, else the
- * text itself. List entries beyond a sent `<field>_msg` array were added by the client in the UI language already.
- */
+// UI text inside a 2xx payload: `body[field]`, or with `index` the entry `body[field][index]` (a string or { message }); '' if none.
+// German: the server's text unchanged. Other languages: the `<field>_msg` template (lists: an array parallel to the field), else
+// the catalog entry of the exact German text, else the text itself. List entries beyond a sent `<field>_msg` array were
+// already added by the client in the UI language.
 export function payloadText(body, field, index) {
   const value = body?.[field];
   const entry = index === undefined ? value : Array.isArray(value) ? value[index] : undefined;

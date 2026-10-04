@@ -1,5 +1,5 @@
 # Desktop installers (spec-distribution D3). Signing only when the CI provides certificates (CSC_LINK /
-# CSC_KEY_PASSWORD per platform, see README "Release"); without them CSC_IDENTITY_AUTO_DISCOVERY=false builds unsigned.
+# CSC_KEY_PASSWORD per platform, see README "Release workflow"); without them CSC_IDENTITY_AUTO_DISCOVERY=false builds unsigned.
 appId: de.mangashelf.desktop
 productName: Manga Shelf
 copyright: Manga Shelf

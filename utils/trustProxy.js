@@ -8,7 +8,7 @@ const express = require('express');
 const DEFAULT_TRUST_PROXY = 'loopback';
 
 const ALLOWED = 'erlaubt: false, loopback oder Adressen wie "loopback, 172.18.0.1" (nur die Gateway-Adresse des Docker-Netzes, '
-    + 'siehe README Abschnitt 6); true und Hop-Zahlen nur, wenn der Port ausschließlich über den Proxy erreichbar ist';
+    + 'siehe README, „HTTPS and reverse proxy“); true und Hop-Zahlen nur, wenn der Port ausschließlich über den Proxy erreichbar ist';
 
 /** Value for Express' `trust proxy` setting from the TRUST_PROXY environment variable. Throws on values Express cannot use. */
 function parseTrustProxy(raw) {

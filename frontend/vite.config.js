@@ -109,11 +109,9 @@ function esmSpecifier(spec, file) {
   return spec
 }
 
-/**
- * A CommonJS core module as ESM: `require('./x')` becomes an import, `export default` is module.exports, and the keys
- * of a literal `module.exports = { … }` become named exports. Every module hands out its `module` object through a
- * hoisted function, so a require cycle sees the partly filled exports as in Node. Lines stay where they were.
- */
+// A CommonJS core module as ESM: `require('./x')` becomes an import, `export default` is module.exports, keys of a literal
+// `module.exports = { … }` become named exports. Each module hands out its `module` object through a hoisted function so a
+// require cycle sees partly filled exports as in Node. Lines stay where they were.
 export function cjsToEsm(code, file = null) {
   const ast = parseAst(code)
   const requires = []

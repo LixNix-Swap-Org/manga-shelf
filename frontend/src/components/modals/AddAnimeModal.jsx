@@ -22,11 +22,9 @@ export function sourcesNote(result) {
   return null;
 }
 
-/**
- * Add an anime: search AniList/MyAnimeList over the server (on the button, not while typing) and take a hit, or a
- * manual entry with title and episodes. Optional link to a series of the collection (prefilled from ?add=<id>).
- * `initialQuery` (the series title of a shared link) fills the search and runs it once.
- */
+// Add an anime: search AniList/MyAnimeList via the server (on the button, not while typing) or enter title and episodes manually.
+// Optional link to a series of the collection (prefilled from ?add=<id>). `initialQuery` (series title of a shared link)
+// fills the search and runs it once.
 export default function AddAnimeModal({
   isOpen, onClose, search, loadAdaptations, onAdd, onOpenExisting, mangas = [], initialMangaId = null, initialQuery = '', returnFocusRef
 }) {

@@ -5,7 +5,7 @@ import { createSearch, prepareQuery } from './search.js';
 import { t } from '../i18n/index.js';
 import { statusLabel } from './enumLabels.js';
 
-/** Series name of a catalogue hit: the catalogue's series if it knows one, else the book title (the DNB title is often only the volume title). */
+/** Series name of a catalogue hit: the catalogue's series if known, else the book title (the DNB title is often just the volume title). */
 export const scanSeriesTitle = (book) => String(book?.series || book?.title || '').trim();
 
 /**

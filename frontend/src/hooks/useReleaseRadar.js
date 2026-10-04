@@ -231,7 +231,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
     })) {
       fetchMangaPassionReleases(mpYear, mpMonth);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchMangaPassionReleases is new on every render; the triggers are view, month and loading state
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchMangaPassionReleases changes every render; triggers: view, month, loading
   }, [activeMainView, offline, mpData, loadingMp, mpYear, mpMonth]);
 
   return {

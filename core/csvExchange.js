@@ -299,10 +299,7 @@ function parseId(v) {
     return { value: Number(s) };
 }
 
-/**
- * Series fields of a row; only filled cells appear. Invalid values are ignored with a warning, so a typo in a
- * series column never discards the volume row.
- */
+/** Series fields of a row; invalid values only warn, so a typo in a series column never discards the volume row. */
 /** A row error or warning: { line, message } as before; the msg() rides along non-enumerable for `errors_msg`/`warnings_msg`. */
 function rowNote(line, message) {
     const note = { line, message: String(message) };

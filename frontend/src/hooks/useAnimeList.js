@@ -152,11 +152,9 @@ export default function useAnimeList({ user }) {
     }
   }, [refreshWatch, store, user]);
 
-  /**
-   * "Ja, gesehen" of a shared link: POST /anime/:id/watched (never lowers the counter, remembers the page for "Weiter",
-   * `remember` links the streaming series to the entry, `complete` allows an episode above the total). Resolves with
-   * the answer ({ progress, previous, … }), null after an error toast; EPISODE_ABOVE_TOTAL is thrown to the dialog.
-   */
+  // "Ja, gesehen" of a shared link: POST /anime/:id/watched (never lowers the counter, remembers the page for "Weiter", `remember`
+  // links the streaming series to the entry, `complete` allows an episode above the total). Resolves with the answer
+  // ({ progress, previous, … }), null after an error toast; EPISODE_ABOVE_TOTAL is thrown to the dialog.
   const markWatched = useCallback(async (id, { episode, url, remember, complete = false } = {}) => {
     const before = listRef.current.find((a) => a.id === id);
     // above the total without `complete` the server refuses: no optimistic "Gesehen"

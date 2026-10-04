@@ -18,7 +18,7 @@ export function readerInitials(name) {
   return word.charAt(0).toUpperCase() + word.charAt(1).toLowerCase();
 }
 
-/** Owners of a volume as coloured badges with the initials of the reader avatars; from two owners also "2×". Nothing when there is only one person. */
+/** Owners of a volume as coloured badges with the readers' initials; from two owners also "2×". Nothing with only one person. */
 export default function OwnerBadges({ vol, multiUser }) {
   const owners = vol?.owners || [];
   if (!multiUser || owners.length === 0) return null;

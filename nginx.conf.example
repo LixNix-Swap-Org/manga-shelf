@@ -5,7 +5,7 @@
 # und die Zertifikate und legt die Weiterleitung von HTTP auf HTTPS an. Ohne Zertifikat startet nginx mit dieser
 # Datei bereits (reines HTTP), deshalb hier kein eigener 443-Block.
 #
-# Manga Shelf muss dem Proxy vertrauen, sonst teilen sich alle Besucher ein Login-Limit (README, Abschnitt 6):
+# Manga Shelf muss dem Proxy vertrauen, sonst teilen sich alle Besucher ein Login-Limit (README, „HTTPS and reverse proxy“):
 #   nginx auf demselben Host wie ein Node-Prozess (Headless-Server): TRUST_PROXY=loopback (Standard)
 #   Pterodactyl/Docker (die App sieht das Docker-Gateway): TRUST_PROXY=loopback, 172.18.0.1 (nur die Gateway-Adresse;
 #   172.18.0.1 ist das Gateway von Pterodactyl, `docker network inspect <netz>` zeigt das eigene unter "Gateway"; nie das

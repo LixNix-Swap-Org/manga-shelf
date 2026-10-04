@@ -1,4 +1,4 @@
-// Where the JWT secret comes from (env, key file, legacy database row) and how session versions and the logout list survive restarts and restores.
+// Where the JWT secret comes from (env, key file, legacy database row) and how session versions and the logout list survive restarts.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

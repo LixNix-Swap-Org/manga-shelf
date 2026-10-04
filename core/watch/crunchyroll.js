@@ -322,11 +322,9 @@ function parseHistoryResponse(response) {
 
 const syncBody = (items) => ({ service: 'crunchyroll', items: mergeItems(items).slice(0, MAX_ITEMS) });
 
-/**
- * What one entry gets from its items: never backwards, at most the known total (more → above_total, nothing written),
- * the resume link only when it shows the next episode to watch. `existing`: { episodes, episodes_watched, resume_url }
- * of the caller (episodes_watched 0 without a row). Returns { change } | { above_total: true } | null (nothing to do).
- */
+// What one entry gets from its items: never backwards, at most the known total (more -> above_total, nothing written), resume
+// link only when it shows the next episode. `existing`: { episodes, episodes_watched, resume_url } of the caller (0 without a row).
+// Returns { change } | { above_total: true } | null (nothing to do).
 function planProgress(items, existing) {
     const current = existing || {};
     const total = current.episodes > 0 ? current.episodes : null;

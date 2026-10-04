@@ -63,8 +63,8 @@ const rateHeaders = (headers) => ({
 });
 
 /**
- * fetch + JSON. Resolves { status, headers, rate, json }; rejects with a SourceError. `label` names the source in
- * messages. A 404 is 'notfound', 401/403 and a GraphQL "Invalid token" 'auth', 429 'rate', 5xx 'server', a dropped or timed out request 'network'.
+// fetch + JSON. Resolves { status, headers, rate, json }; rejects with a SourceError. `label` names the source in messages.
+// A 404 is 'notfound', 401/403 and a GraphQL "Invalid token" 'auth', 429 'rate', 5xx 'server', a dropped or timed out request 'network'.
  */
 async function requestJson(ctx, url, init = {}, { label, timeoutMs = DEFAULT_TIMEOUT_MS, signal } = {}) {
     let res;

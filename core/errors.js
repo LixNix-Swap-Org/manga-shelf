@@ -55,11 +55,8 @@ function messageParts(message, extra) {
     return { text: message.text, extra: { msg: message.template, params: message.params, ...(extra || {}) } };
 }
 
-/**
- * Errors a handler throws (or rejects with). On the server the final error handler in index.js is the only place that
- * builds the JSON body: { error, code?, ...extra }. `expose` marks the message as safe for the client. `message` is
- * text or a Msg (then extra carries msg/params).
- */
+// Errors a handler throws. The final error handler in index.js is the only place that builds the JSON body
+// { error, code?, ...extra }. `expose` marks the message as safe for the client; `message` is text or a Msg (extra carries msg/params).
 class HttpError extends Error {
     constructor(status, message, code = undefined, extra = undefined) {
         const parts = messageParts(message, extra);

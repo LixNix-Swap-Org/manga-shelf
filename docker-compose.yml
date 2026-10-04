@@ -16,7 +16,7 @@ services:
       # Mit einem Reverse Proxy auf demselben Host stattdessen nur lokal veröffentlichen (siehe TRUST_PROXY):
       # - "127.0.0.1:3000:3000"
     environment:
-      # Alle Variablen mit Standardwerten: README Abschnitt 12 und .env.example
+      # Alle Variablen mit Standardwerten: README „5. Configuration“ und .env.example
       - NODE_ENV=production
       - PORT=3000
       # Optional: eigenes Secret (mind. 32 Zeichen). Ohne Angabe wird beim ersten Start ein zufälliger

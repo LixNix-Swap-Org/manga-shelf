@@ -11,7 +11,7 @@ import { useOutboxPending } from '../../app/useOutbox';
 import ConnectQr from '../common/ConnectQr';
 import { t as tr } from '../../i18n/index.js';
 
-export const HTTPS_GUIDE_URL = 'https://github.com/LixNix-Swap-Org/manga-shelf#6-https--eigene-domain-reverse-proxy-mit-nginx-oder-caddy';
+export const HTTPS_GUIDE_URL = 'https://github.com/LixNix-Swap-Org/manga-shelf#https-and-reverse-proxy';
 
 /** "41 MB" for the storage this origin uses (offline copy, covers, app files); '' when unknown. */
 export function formatStorageUsage(bytes) {

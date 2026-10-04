@@ -13,11 +13,9 @@ function today(ctx) {
 
 const readProgress = (ctx, animeId, userId) => ctx.db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(animeId, userId);
 
-/**
- * Writes one user's progress inside the caller's transaction; the stored row, or null without the entry. Clamped to the
- * episode count (reaching it means "Gesehen", above 0 "Geplant" becomes "Schaue"); `monotonic` never lowers it and a rise
- * moves "Pausiert"/"Abgebrochen" to "Schaue". A counter change without a new resume_url drops the resume link.
- */
+// Writes one user's progress in the caller's transaction; returns the stored row, or null without the entry. Clamped to the
+// episode count (reaching it means "Gesehen", above 0 "Geplant" becomes "Schaue"); `monotonic` never lowers it, a rise moves
+// "Pausiert"/"Abgebrochen" to "Schaue". A counter change without a new resume_url drops the resume link.
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
     const anime = ctx.db.prepare('SELECT id, episodes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;

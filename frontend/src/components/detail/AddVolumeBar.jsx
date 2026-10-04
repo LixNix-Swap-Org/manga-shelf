@@ -12,7 +12,7 @@ const LABEL = 'block text-xs font-semibold text-slate-400 mb-1 truncate';
 /** Stable id of the number field: the scan prefill focuses it. */
 export const ADD_VOLUME_NUMBER_ID = 'add-volume-number';
 
-/** Inline form to add a single volume, special edition, schuber or special. Purely presentational; all state and handlers come in via props. */
+/** Inline form to add a single volume, special edition, schuber or special. Purely presentational: state and handlers via props. */
 export default function AddVolumeBar({
   canEdit,
   handleAddSingleVolume,

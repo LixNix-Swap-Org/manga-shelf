@@ -123,11 +123,9 @@ const idleResult = (row, extra = {}) => ({
     last_synced_at: row ? row.last_synced_at : null, last_error: row ? row.last_error : null, ...extra
 });
 
-/**
- * One sync of a user's list: { ran, pulled, pushed, not_in_list, changed, last_synced_at, last_error }. Throttled to
- * once per minute per user; `auto` (anime tab) also skips a sync younger than 15 min; `background` (scheduler) runs only
- * with allowBackground and stays silent without a token.
- */
+// One sync of a user's list: { ran, pulled, pushed, not_in_list, changed, last_synced_at, last_error }. Throttled to once per
+// minute per user; `auto` (anime tab) also skips a sync younger than 15 min; `background` (scheduler) runs only with
+// allowBackground and stays silent without a token.
 async function run(ctx, userId, { priority = 'interactive', auto = false, background = false } = {}) {
     const row = syncRow(ctx, userId);
     if (!row || !row.enabled) return idleResult(row);

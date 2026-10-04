@@ -141,11 +141,9 @@ const refusedLike = (err) => err.kind === 'bad' && [400, 401, 403].includes(err.
 
 const unavailable = (provider, reason = 'unavailable') => new SourceError(reason, `${SOURCE_LABELS[provider] || provider} ist gerade nicht verfügbar`);
 
-/**
- * One source request through budget and accesses. exec(credential) does the request and resolves with an object that
- * may carry `rate` (headers). Resolves with { ...result, credential_used }; rejects with a SourceError. ownOnly: only
- * the caller's own key (kind 'notoken' without one), no pool to fall back to and so no suspect strikes.
- */
+// One source request through budget and accesses. exec(credential) does the request and may resolve with `rate` (headers).
+// Resolves { ...result, credential_used }; rejects with a SourceError.
+// ownOnly: only the caller's own key (kind 'notoken' without one), no pool fallback and so no suspect strikes.
 async function call(ctx, provider, { priority = 'interactive', userId = null, signal, probe = false, ownOnly = false } = {}, exec) {
     const s = remember(ctx);
     const creds = credentialsOf(ctx);

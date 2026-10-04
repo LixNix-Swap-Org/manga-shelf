@@ -11,11 +11,9 @@ export const KEYBOARD_COMMIT_MS = 400;
 // i18n-ignore: key names
 const STEP_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
 
-/**
- * UI language: native select with every language in its own name plus "follow the device". `beforeChange(code)` runs
- * only when the choice really switches the language (the account dialog marks itself for reopening; the switch
- * remounts the page). Focus returns to the select after that remount.
- */
+// UI language: native select with every language in its own name plus "follow the device". `beforeChange(code)` runs only when
+// the choice really switches the language (the account dialog marks itself for reopening; the switch remounts the page).
+// Focus returns to the select after that remount.
 export default function LanguageSelect({ className = '', beforeChange, showLabel = true }) {
   useLanguage();
   const id = useId();
