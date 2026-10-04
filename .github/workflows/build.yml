@@ -64,7 +64,7 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-dist
           path: frontend/dist
@@ -94,7 +94,7 @@ jobs:
       - run: node package.js
       - name: SBOM of the runtime dependencies (CycloneDX)
         run: npm sbom --omit=dev --sbom-format cyclonedx > dist_pack/manga-shelf-sbom.cdx.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pterodactyl-zip
           path: |
@@ -236,7 +236,7 @@ jobs:
         if: runner.os == 'macOS'
         continue-on-error: true
         run: arch -x86_64 "dist/server/${{ matrix.smoke }}" --version
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: dist/server/manga-shelf-server-*
@@ -290,7 +290,7 @@ jobs:
           case "$(sudo stat -c %a /var/lib/manga-shelf/manga.db)" in *0) ;; *) echo "::error::manga.db ist für alle lesbar"; exit 1 ;; esac
           sudo apt-get remove -y manga-shelf-server
           sudo test -f /var/lib/manga-shelf/manga.db
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-packages
           path: dist/packages/*
@@ -414,7 +414,7 @@ jobs:
           npx electron-builder --linux dir --publish never
           flatpak-builder --user --install-deps-from=flathub --force-clean --repo=dist/flatpak-repo dist/flatpak-build flatpak/de.mangashelf.desktop.yml
           flatpak build-bundle dist/flatpak-repo "dist/installers/manga-shelf-$(node -p 'require("./package.json").version')-linux-x86_64.flatpak" de.mangashelf.desktop
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.project.outputs.present == 'true'
         with:
           name: desktop-${{ runner.os }}
