@@ -21,7 +21,11 @@ export default function VolumeGridView({
   setFillingGapNumber,
   user,
   canToggleOthers,
-  gapsOfficial
+  gapsOfficial,
+  canToggle = canEdit,
+  selectionMode = false,
+  isSelected = () => false,
+  onSelectVolume
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
@@ -150,16 +154,21 @@ export default function VolumeGridView({
             const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
         const effectivePublisher = (vol.publisher && vol.publisher.trim()) || (manga.publisher && manga.publisher.trim());
         const hasCover = Boolean(vol.cover_image);
+        const selected = selectionMode && isSelected(vol.id);
 
         return (
           <div 
             key={vol.id}
-            onClick={() => canEdit && handleOpenEditVolume(vol)}
+            data-volume-id={vol.id}
+            onClick={(e) => {
+              if (selectionMode) onSelectVolume?.(vol, e);
+              else if (canEdit) handleOpenEditVolume(vol);
+            }}
             className={`group relative flex flex-col justify-between p-3 rounded-2xl border text-sm select-none shadow-sm transition-all duration-200 overflow-hidden ${
-              canEdit 
+              canEdit || selectionMode
                 ? 'cursor-pointer' 
                 : 'cursor-default'
-            } ${
+            } ${selected ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950' : ''} ${
               isOwned 
                 ? 'bg-slate-900/90 border-emerald-500/40 text-slate-100 shadow-emerald-950/20' + (canEdit ? ' hover:border-emerald-400 hover:bg-slate-850' : '') 
                 : statusKind === 'preordered'
@@ -174,27 +183,37 @@ export default function VolumeGridView({
             {/* Top Row: Checkmark / Status + Volume Number + Actions (Full width across card) */}
             <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-slate-800/70 w-full shrink-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
+                {selectionMode && (
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
+                    aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                    className="w-5 h-5 shrink-0 accent-brand-500 cursor-pointer"
+                  />
+                )}
                 <button
                   type="button"
-                  disabled={!canEdit}
+                  disabled={!canToggle}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (canEdit) handleToggleVolume(vol);
+                    if (canToggle) handleToggleVolume(vol);
                   }}
-                  className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
-                    !canEdit ? 'cursor-default' : 'cursor-pointer'
+                  className={`relative before:absolute before:-inset-2.5 before:content-[''] w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                    !canToggle ? 'cursor-default' : 'cursor-pointer'
                   } ${
                     isOwned 
-                      ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canEdit ? ' hover:bg-emerald-500/30' : '') 
+                      ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canToggle ? ' hover:bg-emerald-500/30' : '') 
                       : statusKind === 'preordered'
-                        ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canEdit ? ' hover:bg-sky-500/30' : '')
+                        ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canToggle ? ' hover:bg-sky-500/30' : '')
                         : statusKind === 'ordered'
-                          ? 'bg-orange-500/20 border border-orange-500/60 text-orange-400' + (canEdit ? ' hover:bg-orange-500/30' : '')
+                          ? 'bg-orange-500/20 border border-orange-500/60 text-orange-400' + (canToggle ? ' hover:bg-orange-500/30' : '')
                         : statusKind === 'upcoming'
-                          ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canEdit ? ' hover:bg-purple-500/30' : '')
-                          : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canEdit ? ' hover:border-slate-500 hover:text-slate-300' : '')
+                          ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canToggle ? ' hover:bg-purple-500/30' : '')
+                          : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canToggle ? ' hover:border-slate-500 hover:text-slate-300' : '')
                   }`}
-                  title={!canEdit ? `Status: ${vol.status || 'Fehlt'}` : `Status: ${vol.status || 'Fehlt'} (Klicken zum Umschalten)`}
+                  title={!canToggle ? `Status: ${vol.status || 'Fehlt'}` : `Status: ${vol.status || 'Fehlt'} (Klicken zum Umschalten)`}
                   aria-label={`Status: ${vol.status || 'Fehlt'} – ${getVolumeDisplayTitle(vol)}`}
                 >
                   {isOwned ? (
@@ -241,7 +260,7 @@ export default function VolumeGridView({
                 </div>
               </div>
 
-              {canEdit && (
+              {canEdit && !selectionMode && (
                 <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
                   {!hasCover && (
                     <button
@@ -397,7 +416,7 @@ export default function VolumeGridView({
               <div className="w-full mt-auto pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5 shrink-0">
                 {(() => {
                   const isRead = hasUserRead(vol, effUserId, user?.id);
-                  const canToggleStatus = canEdit && (mayToggleOthers || String(effUserId) === String(user?.id));
+                  const canToggleStatus = canToggle && (mayToggleOthers || String(effUserId) === String(user?.id));
 
                   return (
                     <button
@@ -415,7 +434,7 @@ export default function VolumeGridView({
                       }`}
                       title={canToggleStatus
                         ? 'Lesestatus umschalten (Gelesen / Ungelesen)'
-                        : canEdit ? READ_OTHERS_ADMIN_ONLY : `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)`}
+                        : canToggle ? READ_OTHERS_ADMIN_ONLY : `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)`}
                     >
                       <BookCheck className={`w-3.5 h-3.5 ${isRead ? 'text-emerald-400' : 'text-slate-400'}`} aria-hidden="true" />
                       <span>{isRead ? 'Gelesen' : 'Ungelesen'}</span>
@@ -429,7 +448,7 @@ export default function VolumeGridView({
                       const isReaderDone = hasUserRead(vol, r.user_id, user?.id);
                       const name = r.display_name || r.username || 'Unbekannt';
                       const initial = name.charAt(0).toUpperCase();
-                      const canToggleReader = canEdit && (mayToggleOthers || String(r.user_id) === String(user?.id));
+                      const canToggleReader = canToggle && (mayToggleOthers || String(r.user_id) === String(user?.id));
                       const stateText = isReaderDone ? 'gelesen' : 'ungelesen';
                       const look = `relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
                         isReaderDone

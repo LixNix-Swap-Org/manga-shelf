@@ -22,7 +22,7 @@ export const buildEditorForm = (vol) => {
   return form;
 };
 
-/** Normalises a price the way routes/volumes.js parsePrice reads it; null for empty, NaN for invalid. */
+/** Normalises a price the way core/lib/validate.js parsePrice reads it; null for empty, NaN for invalid. */
 export const parsePriceInput = (val) => {
   if (val === null || val === undefined) return null;
   let s = String(val).replace(/€|eur/gi, '').replace(/\s/g, '');
@@ -68,11 +68,40 @@ export const validateVolumeForm = (form, initial = null) => {
 
 export const FIELD_NAMES = { volume_number: 'Bandnummer', price: 'Kaufpreis', target_price: 'Zielpreis' };
 
-/** PUT body: trimmed number, and the status only when the user changed it since the last server state. */
-export const buildSaveBody = (form, serverStatus) => {
-  const body = { ...form, volume_number: String(form.volume_number ?? '').trim() };
-  if (body.status === serverStatus) delete body.status;
+const sameField = (a, b) => (Array.isArray(a) || Array.isArray(b)
+  ? JSON.stringify(a ?? []) === JSON.stringify(b ?? [])
+  : String(a ?? '') === String(b ?? ''));
+
+const trimmedNumber = (form) => String(form?.volume_number ?? '').trim();
+
+/**
+ * PUT body: only the fields that differ from `base`, the form as the server last stored it. A field the user left
+ * alone is never sent, so a value another user or device stored meanwhile is not overwritten with an older copy.
+ */
+export const buildSaveBody = (form, base) => {
+  const body = {};
+  for (const [key, value] of Object.entries(form)) {
+    if (key === 'volume_number') {
+      if (trimmedNumber(form) !== trimmedNumber(base)) body.volume_number = trimmedNumber(form);
+    } else if (!sameField(value, base?.[key])) {
+      body[key] = value;
+    }
+  }
   return body;
+};
+
+/**
+ * Moves an open form onto a fresher server state: fields the user has not touched (still equal to the old base) take
+ * the new value, touched fields stay. Returns the same object when nothing changes.
+ */
+export const rebaseForm = (form, oldBase, newBase) => {
+  let next = form;
+  for (const [key, value] of Object.entries(newBase)) {
+    if (sameField(value, oldBase[key]) || !sameField(form[key], oldBase[key])) continue;
+    if (next === form) next = { ...form };
+    next[key] = value;
+  }
+  return next;
 };
 
 export const isAllowedImageUrl = (url) => /^(https?:\/\/|\/uploads\/)/i.test(String(url || '').trim());

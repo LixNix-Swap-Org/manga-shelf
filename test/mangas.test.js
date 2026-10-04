@@ -476,3 +476,83 @@ test('GET /mangas: volume_search holds ISBNs, notes and named volumes, never pla
     await addVolume(empty, '3');
     assert.equal((await listRow(empty)).volume_search, null, 'only numeric volumes: nothing to search');
 });
+
+test('GET /mangas: volume_search cuts each note to 200 characters and the whole field to 4000', async () => {
+    const id = await createManga({ title: 'Suchfeld lang' });
+    const long = 'Lange Notiz ' + 'x'.repeat(500);
+    for (let n = 1; n <= 30; n++) {
+        const res = await editor('POST', '/volumes', { manga_id: id, volume_number: String(n), notes: `${n} ${long}` });
+        assert.equal(res.status, 200, JSON.stringify(res.body));
+    }
+    const search = (await listRow(id)).volume_search;
+    assert.equal(search.length, 4000);
+    const lines = search.split('\n');
+    assert.ok(lines.length > 15, 'many notes still fit');
+    assert.ok(lines.slice(0, -1).every(line => line.length === 200), 'every complete note is cut to 200 characters');
+    assert.ok(lines[0].startsWith('1 Lange Notiz'));
+});
+
+test('wish_priority: POST and PUT take null or 0-3, other values are a 400; wished needs no owned volume', async () => {
+    for (const bad of [4, -1, 'hoch', 1.5, true]) {
+        const res = await editor('POST', '/mangas', { title: 'Wunsch kaputt', wish_priority: bad });
+        assert.equal(res.status, 400, JSON.stringify(bad));
+        assert.match(res.body.error, /Wunsch-Priorität/);
+    }
+    const id = await createManga({ title: 'Wunsch Reihe', wish_priority: 2, status: 'Laufend' });
+    let row = await listRow(id);
+    assert.deepEqual([row.wish_priority, row.wished], [2, 1]);
+    assert.deepEqual([(await detail(id)).wish_priority, (await detail(id)).wished], [2, 1]);
+
+    assert.equal((await editor('PUT', `/mangas/${id}`, { description: 'egal' })).status, 200);
+    assert.equal((await listRow(id)).wish_priority, 2, 'a PUT without the field keeps the wish');
+    assert.equal((await editor('PUT', `/mangas/${id}`, { wish_priority: 9 })).status, 400);
+    assert.equal((await editor('PUT', `/mangas/${id}`, { wish_priority: '3' })).status, 200);
+    assert.equal((await listRow(id)).wish_priority, 3);
+
+    await addVolume(id, '1', 'Fehlt');
+    assert.equal((await listRow(id)).wished, 1, 'a missing volume does not end the wish');
+    const owned = await addVolume(id, '2', 'Vorhanden');
+    row = await listRow(id);
+    assert.deepEqual([row.wish_priority, row.wished], [3, 0], 'the field stays, but an owned volume ends the wish');
+    assert.equal((await detail(id)).wished, 0);
+    await editor('DELETE', `/volumes/${owned}`);
+    assert.equal((await listRow(id)).wished, 1);
+
+    assert.equal((await editor('PUT', `/mangas/${id}`, { wish_priority: null })).status, 200);
+    row = await listRow(id);
+    assert.deepEqual([row.wish_priority, row.wished], [null, 0]);
+    assert.equal((await listRow(await createManga({ title: 'Ohne Wunsch' }))).wished, 0);
+});
+
+test('collecting: POST and PUT take aktiv, pausiert or abgebrochen; other values are a 400; the detail returns it', async () => {
+    const id = await createManga({ title: 'Sammelstatus Reihe' });
+    assert.equal((await detail(id)).collecting, 'aktiv');
+    assert.equal((await editor('PUT', `/mangas/${id}`, { collecting: 'Pausiert' })).status, 200);
+    assert.equal((await detail(id)).collecting, 'pausiert');
+    const bad = await editor('PUT', `/mangas/${id}`, { collecting: 'vielleicht' });
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error, /Sammelstatus/);
+    assert.equal((await editor('PUT', `/mangas/${id}`, { collecting: 3 })).status, 400);
+    // a PUT without the field keeps the stored value
+    assert.equal((await editor('PUT', `/mangas/${id}`, { title: 'Sammelstatus Reihe 2' })).status, 200);
+    assert.equal((await detail(id)).collecting, 'pausiert');
+    const dropped = await createManga({ title: 'Abgebrochen von Anfang an', collecting: 'abgebrochen' });
+    assert.equal((await detail(dropped)).collecting, 'abgebrochen');
+    assert.equal((await editor('POST', '/mangas', { title: 'X', collecting: 'nie' })).status, 400);
+});
+
+test('GET /mangas: collecting, missing_count and preorder_count per series', async () => {
+    const id = await createManga({ title: 'Zähler Reihe', collecting: 'pausiert' });
+    await addVolume(id, '1');
+    await addVolume(id, '2', 'Fehlt');
+    await addVolume(id, '3', 'Fehlt');
+    await addVolume(id, '4', 'Vorbestellt');
+    await addVolume(id, '5', 'Bestellt');
+    await addVolume(id, '6', 'Erscheint bald');
+    const row = await listRow(id);
+    assert.equal(row.collecting, 'pausiert');
+    assert.equal(row.missing_count, 2);
+    assert.equal(row.preorder_count, 2);
+    const empty = await listRow(await createManga({ title: 'Zähler leer' }));
+    assert.deepEqual([empty.collecting, empty.missing_count, empty.preorder_count], ['aktiv', 0, 0]);
+});

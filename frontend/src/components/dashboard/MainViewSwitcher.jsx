@@ -1,4 +1,4 @@
-import { Library, ShoppingCart, Calendar } from 'lucide-react';
+import { Library, ShoppingCart, Calendar, Tv } from 'lucide-react';
 
 const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
   active
@@ -6,11 +6,19 @@ const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 
     : 'text-slate-400 hover:text-white'
 }`;
 
+/** Full label from sm on, a short one below (four tabs have to fit 375 px). */
+const Label = ({ full, short }) => (
+  <>
+    <span className="hidden sm:inline">{full}</span>
+    <span className="sm:hidden">{short}</span>
+  </>
+);
+
 /**
- * Tabs Sammlung / Einkaufsliste / Release-Radar plus the mode hint next to them. `onSelectView` is Dashboard's
+ * Tabs Sammlung / Einkaufsliste / Release-Radar / Anime plus the mode hint next to them. `onSelectView` is Dashboard's
  * setView (state, ?view= and the view's data in one place).
  */
-export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, shoppingData, radarData }) {
+export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, animeCount = 0, shoppingData, radarData }) {
   return (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <nav aria-label="Hauptansicht" className="flex items-center max-w-full overflow-x-auto bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
@@ -32,7 +40,7 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
             className={tabClass(activeMainView === 'shopping')}
           >
             <ShoppingCart className="w-4 h-4 text-emerald-400 hidden sm:block" aria-hidden="true" />
-            <span>Einkaufsliste</span>
+            <Label full="Einkaufsliste" short="Einkauf" />
             {shoppingData && shoppingData.total_missing > 0 && (
               <span className="bg-emerald-500/30 text-emerald-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
                 {shoppingData.total_missing}
@@ -47,10 +55,25 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
             className={tabClass(activeMainView === 'radar')}
           >
             <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" aria-hidden="true" />
-            <span>Release-Radar</span>
+            <Label full="Release-Radar" short="Radar" />
             {radarData && radarData.total_releases > 0 && (
               <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
                 {radarData.total_releases}
+              </span>
+            )}
+          </button>
+          <button
+            id="btn-nav-anime"
+            type="button"
+            aria-current={activeMainView === 'anime' ? 'page' : undefined}
+            onClick={() => onSelectView('anime')}
+            className={tabClass(activeMainView === 'anime')}
+          >
+            <Tv className="w-4 h-4 text-fuchsia-400 hidden sm:block" aria-hidden="true" />
+            <span>Anime</span>
+            {animeCount > 0 && (
+              <span className="bg-fuchsia-500/30 text-fuchsia-200 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold">
+                {animeCount}
               </span>
             )}
           </button>
@@ -60,6 +83,13 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
           <div className="text-xs text-slate-400 flex items-center gap-2">
             <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>Laden-Modus: Fehlende Bände abhaken & direkt einbuchen</span>
+          </div>
+        )}
+
+        {activeMainView === 'anime' && (
+          <div className="text-xs text-slate-400 flex items-center gap-2">
+            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-fuchsia-400 animate-pulse"></span>
+            <span>Anime-Modus: Folgen zählen, Daten von AniList & MyAnimeList</span>
           </div>
         )}
 

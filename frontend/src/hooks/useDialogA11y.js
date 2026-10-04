@@ -11,12 +11,20 @@ export const HISTORY_STATE_KEY = 'mangashelfDialogs';
 const KEPT_OPEN_CHECK_MS = 120;
 const OWN_BACK_TIMEOUT_MS = 1000;
 const openDialogs = [];
+// history.state survives a reload: tokens carry a per-load id, so an entry left by the previous page never matches
+const PAGE_ID = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 let nextToken = 1;
 let ownBacks = 0;
 let ownBackTimer = null;
 let listening = false;
 
 const dialogTokens = (state) => (Array.isArray(state?.[HISTORY_STATE_KEY]) ? state[HISTORY_STATE_KEY] : []);
+
+/**
+ * True while the current history entry belongs to a dialog. A navigation right after closing a dialog (open the chosen
+ * series) then replaces that entry, else it would stay below the new page as a dead same-URL entry.
+ */
+export const dialogEntryOnTop = () => typeof window !== 'undefined' && dialogTokens(window.history?.state).length > 0;
 
 function pushDialogEntry(token) {
   const state = window.history.state && typeof window.history.state === 'object' ? window.history.state : {};
@@ -114,7 +122,7 @@ export default function useDialogA11y(open, { returnFocusRef, onClose, history =
       window.addEventListener('popstate', onPopState);
       listening = true;
     }
-    const dialog = { token: nextToken++, popped: false };
+    const dialog = { token: `${PAGE_ID}:${nextToken++}`, popped: false };
     dialog.onBack = () => {
       dialog.popped = true;
       if (onCloseRef.current) onCloseRef.current();

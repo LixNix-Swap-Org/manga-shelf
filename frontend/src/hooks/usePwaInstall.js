@@ -73,15 +73,18 @@ export function watchServiceWorkerUpdates({
     });
   };
 
+  const track = (worker) => {
+    if (!worker) return;
+    if (worker.state === 'installed') offer(worker);
+    else worker.addEventListener('statechange', () => { if (worker.state === 'installed') offer(worker); });
+  };
+
   watcher = container.getRegistration().then((reg) => {
     if (!reg) return null;
     if (reg.waiting) offer(reg.waiting);
-    reg.addEventListener('updatefound', () => {
-      const worker = reg.installing;
-      worker?.addEventListener('statechange', () => {
-        if (worker.state === 'installed') offer(worker);
-      });
-    });
+    // the update check of register() often runs already when the watcher attaches
+    track(reg.installing);
+    reg.addEventListener('updatefound', () => track(reg.installing));
     let lastCheck = now();
     doc?.addEventListener?.('visibilitychange', () => {
       if (doc.visibilityState !== 'visible' || now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return;

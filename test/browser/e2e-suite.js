@@ -285,6 +285,37 @@ async function runTestSuite() {
     volumes = await getVolumes(page, mangaId);
     assert.deepEqual(volumes.find(v => v.id === band1.id).read_by || [], [], 'the undo left Band 1 marked as read');
 
+    // TEST 6b: Bulk edit (selection mode, one request, undo from the toast, bulk delete)
+    console.log('\n--- TEST 6b: Bulk Edit ---');
+    const byNumber = (list, n) => list.find(v => String(v.volume_number) === n);
+    await clickSelector(page, '#btn-volume-select-mode');
+    await page.waitForSelector('#bulk-action-bar', { visible: true, timeout: 5000 });
+    await clickSelector(page, 'input[type="checkbox"][aria-label="Band 2 auswählen"]');
+    await clickSelector(page, 'input[type="checkbox"][aria-label="Band 3 auswählen"]');
+    await page.waitForFunction(() => document.querySelector('#bulk-action-bar')?.innerText.includes('2 Bände ausgewählt'), { timeout: 5000 });
+    const bulkOwned = waitForApi(page, 'POST', '/api/volumes/bulk');
+    await clickSelector(page, '#btn-bulk-owned');
+    assert.ok((await bulkOwned).ok(), 'bulk "Als vorhanden (mir)" failed');
+    volumes = await getVolumes(page, mangaId);
+    assert.deepEqual(['2', '3', '4'].map(n => byNumber(volumes, n).status), ['Vorhanden', 'Vorhanden', 'Fehlt'], 'bulk owned changed the wrong volumes');
+    await snap('test6b_bulk_owned');
+    const bulkToast = await waitForToast(page, '2 Bände als vorhanden (mir) markiert', { kind: 'success' });
+    const bulkUndo = waitForApi(page, 'POST', '/api/volumes/bulk');
+    await clickText(page, 'Rückgängig', { within: bulkToast });
+    assert.ok((await bulkUndo).ok(), 'undoing the bulk edit failed');
+    volumes = await getVolumes(page, mangaId);
+    assert.deepEqual(['2', '3'].map(n => byNumber(volumes, n).status), ['Fehlt', 'Fehlt'], 'the undo did not restore "Fehlt"');
+    assert.deepEqual(['2', '3'].map(n => (byNumber(volumes, n).owners || []).length), [0, 0], 'the undo left owners behind');
+
+    const bulkDelete = waitForApi(page, 'POST', '/api/volumes/bulk');
+    await clickSelector(page, '#btn-bulk-delete');
+    assert.ok((await bulkDelete).ok(), 'bulk delete failed');
+    volumes = await getVolumes(page, mangaId);
+    assert.equal(byNumber(volumes, '2'), undefined, 'Band 2 survived the bulk delete');
+    assert.equal(byNumber(volumes, '3'), undefined, 'Band 3 survived the bulk delete');
+    await clickSelector(page, '#btn-volume-select-mode');
+    await page.waitForFunction(() => !document.querySelector('#bulk-action-bar'), { timeout: 5000 });
+
     // TEST 7: Delete the series
     console.log('\n--- TEST 7: Delete Created Manga ---');
     const removed = waitForApi(page, 'DELETE', `/api/mangas/${mangaId}`);
@@ -295,6 +326,44 @@ async function runTestSuite() {
     await watcher.expectApiError(`GET /api/mangas/${mangaId} -> 404`);
     await waitUntil(async () => !(await visibleSeriesIds(page)).includes(mangaId), { message: 'the deleted series is still listed' });
     await snap('test7_after_delete_manga');
+
+    // TEST 7b: Series wishlist (chip, shopping list section, ends with the first owned volume)
+    console.log('\n--- TEST 7b: Series Wishlist ---');
+    const wishTitle = '__TEST_WISH_SERIES__';
+    await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
+    await clickSelector(page, '#btn-open-add-manga');
+    await typeInto(page, 'input[placeholder*="z.B. One Piece"]', wishTitle);
+    await clickText(page, 'Auf die Wunschliste', { selector: 'label' });
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('label')).some(l => l.innerText.includes('Priorität') && l.querySelector('select')),
+      { timeout: 10000 });
+    const createdWish = waitForApi(page, 'POST', '/api/mangas');
+    await clickText(page, 'Manga anlegen', { selector: 'button[type="submit"]' });
+    const wishRes = await createdWish;
+    assert.ok(wishRes.ok(), 'creating the wished series failed');
+    const wishId = (await wishRes.json()).id;
+    assert.equal((await apiOk(page, 'GET', `/api/mangas/${wishId}`)).wish_priority, 2, 'the default wish priority is "mittel"');
+    const wishChipCount = () => page.evaluate(() => {
+      const chip = Array.from(document.querySelectorAll('[aria-label="Status-Filter"] button')).find(b => b.innerText.includes('Wunschliste'));
+      return chip ? chip.innerText.replace(/\D+/g, '') : null;
+    });
+    await waitUntil(async () => (await wishChipCount()) === '1', { message: 'the "Wunschliste" chip does not count the wished series' });
+    await snap('test7b_wish_chip');
+
+    await page.goto(`${BASE_URL}/?view=shopping`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#shop-wished-series', { timeout: 10000 })
+      .catch(() => { throw new Error('the shopping list shows no "Gewünschte Reihen" section'); });
+    const wishedTitles = await page.$$eval('#shop-wished-series li', items => items.map(li => li.innerText));
+    assert.equal(wishedTitles.length, 1, 'exactly one wished series is expected');
+    assert.ok(wishedTitles[0].includes(wishTitle), 'the wished series is not in the section');
+    await snap('test7b_wish_section');
+
+    await apiOk(page, 'POST', '/api/volumes', { manga_id: wishId, volume_number: '1', status: 'Vorhanden' });
+    await page.goto(`${BASE_URL}/?view=shopping`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#btn-shop-priority-sort', { timeout: 10000 });
+    assert.equal(await page.$('#shop-wished-series'), null, 'an owned volume must end the wish (section still shown)');
+    await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
+    await waitUntil(async () => (await wishChipCount()) === null, { message: 'the "Wunschliste" chip is still shown' });
+    await apiOk(page, 'DELETE', `/api/mangas/${wishId}`);
 
     // TEST 8: No horizontal scrolling on a phone
     console.log('\n--- TEST 8: Mobile viewport 390 x 844 ---');

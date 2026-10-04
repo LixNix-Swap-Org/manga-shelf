@@ -262,10 +262,86 @@ describe('StatsModal', () => {
     expect(screen.getByRole('heading', { name: 'Wertvollste Reihen' })).toBeTruthy();
     expect(screen.queryByText(/meisten Bänden/)).toBeNull();
     const first = screen.getByText('Teuer').closest('a');
-    expect(within(first).getByText('#1')).toBeTruthy();
+    // rank once as a phone ranking label and once over the cover from sm on
+    expect(within(first).getAllByText('#1')).toHaveLength(2);
+    expect(within(first).getByText('Platz 1:')).toBeTruthy();
     expect(within(first).getByText('80,00 €')).toBeTruthy();
     expect(within(first).getByText('3 Bände')).toBeTruthy();
     expect(first.querySelector('img').getAttribute('loading')).toBe('lazy');
+  });
+
+  it('top series show the owned value and what completing them still costs', async () => {
+    fetchMock.mockResolvedValue(response(statsBody({
+      top_series: [
+        { id: 1, title: 'Teuer', cover_image: null, owned_volumes: 3, owned_value: 80, total_value: 80, missing_value: 14, avg_price: 26.67, unpriced: 0 },
+        { id: 2, title: 'Komplett', cover_image: null, owned_volumes: 2, owned_value: 20, total_value: 20, missing_value: 0, avg_price: 10, unpriced: 0 }
+      ]
+    })));
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    const card = document.getElementById('stats-top-series');
+    expect(within(card).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(screen.getByText('Teuer').closest('a')).getByText('noch 14,00 € bis komplett')).toBeTruthy();
+    expect(within(screen.getByText('Komplett').closest('a')).queryByText(/bis komplett/)).toBeNull();
+  });
+
+  it('shows the wishlist KPI only when there are wished series', async () => {
+    fetchMock.mockResolvedValueOnce(response(statsBody()));
+    const { rerender } = render(ui());
+    await screen.findByText('1.234,50 €');
+    expect(document.getElementById('stats-wishlist')).toBeNull();
+
+    rerender(ui({ isOpen: false }));
+    fetchMock.mockResolvedValueOnce(response(statsBody({ summary: { wished_series: 2, wished_known_cost: 21 } })));
+    rerender(ui());
+    await screen.findByText('1.234,50 €');
+    const kpi = document.getElementById('stats-wishlist');
+    expect(kpi.textContent).toMatch(/Wunschliste/);
+    expect(kpi.textContent).toMatch(/2 Reihen · 21,00\s€ bekannt/);
+  });
+
+  it('keeps one live region mounted for the loading text and scrolls the tab bar instead of wrapping', async () => {
+    const slow = deferred();
+    fetchMock.mockReturnValueOnce(slow.promise);
+    render(ui());
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('Berechne Statistiken & Finanzdaten...');
+    expect(screen.getByRole('group', { name: 'Bereiche' }).className).toMatch(/overflow-x-auto no-scrollbar/);
+    await act(async () => { slow.resolve(response(statsBody())); });
+    await screen.findByText('1.234,50 €');
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('');
+  });
+
+  it('publisher tab: volumes, series, value, average and missing per publisher; sorts by value or average', async () => {
+    const publishers = [
+      { publisher: 'Carlsen', series_count: 2, volume_count: 11, total_value: 80, percentage: 55, value_percentage: 40, priced_count: 10, avg_price: 8, missing_count: 2, missing_value: 14 },
+      { publisher: 'EMA', series_count: 1, volume_count: 9, total_value: 120, percentage: 45, value_percentage: 60, priced_count: 9, avg_price: 13.33, missing_count: 0, missing_value: 0 },
+      { publisher: 'Ohne Preis', series_count: 1, volume_count: 1, total_value: 0, percentage: 5, value_percentage: 0, priced_count: 0, avg_price: null, missing_count: 0, missing_value: 0 }
+    ];
+    fetchMock.mockResolvedValue(response(statsBody({ publishers })));
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    fireEvent.click(screen.getByRole('button', { name: /Verlagsdiagramm/ }));
+    const card = document.getElementById('stats-publishers');
+    const names = () => [...card.querySelectorAll('span.font-bold.text-sm:not(.font-mono)')].map(n => n.textContent);
+    expect(names()).toEqual(['Carlsen', 'EMA', 'Ohne Preis']);
+    const carlsen = screen.getByText('Carlsen').closest('div.p-3');
+    expect(within(carlsen).getByText('14,00 €')).toBeTruthy();
+    expect(within(carlsen).getByText('fehlt (2)')).toBeTruthy();
+    expect(within(carlsen).getByText('8,00 €')).toBeTruthy();
+    expect(within(screen.getByText('Ohne Preis').closest('div.p-3')).getAllByText('–')).toHaveLength(2);
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Wert' }));
+    expect(names()).toEqual(['EMA', 'Carlsen', 'Ohne Preis']);
+    expect(within(card).getByRole('button', { name: 'Wert' }).getAttribute('aria-pressed')).toBe('true');
+    const bar = card.querySelector('div[aria-hidden="true"].flex');
+    expect(bar.children[0].style.width).toBe('60%');
+    expect(bar.children[0].getAttribute('title')).toBe(`EMA: 60% (${fmtEuro(120)})`);
+    expect(within(screen.getByText('EMA').closest('div.p-3')).getByText('Wertanteil:')).toBeTruthy();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Durchschnittspreis' }));
+    expect(names()).toEqual(['EMA', 'Carlsen', 'Ohne Preis']);
   });
 
   it('draws publisher bars at their real share, groups the rest as "Sonstige" and greys rows after 8', async () => {
@@ -354,6 +430,28 @@ describe('SpendingCard', () => {
 });
 
 describe('OwnerStatsCard', () => {
+  it('opens the publisher list per owner and explains shared volumes', () => {
+    render(<OwnerStatsCard
+      ownerStats={[
+        { user_id: 1, username: 'anna', volume_count: 2, series_count: 1, total_value: 15, shared_count: 1 },
+        { user_id: 2, username: 'ben', volume_count: 1, series_count: 1, total_value: 7, shared_count: 1 }
+      ]}
+      ownerPublishers={[
+        { user_id: 1, username: 'anna', publisher: 'Carlsen Manga', volume_count: 1, total_value: 8 },
+        { user_id: 1, username: 'anna', publisher: 'TOKYOPOP', volume_count: 1, total_value: 7 },
+        { user_id: 2, username: 'ben', publisher: 'TOKYOPOP', volume_count: 1, total_value: 7 }
+      ]}
+    />);
+    expect(screen.getByText(/Geteilte Bände zählen bei jedem Besitzer voll/)).toBeTruthy();
+    const toggle = screen.getByRole('button', { name: 'Verlage von anna' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Carlsen Manga')).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(toggle.getAttribute('aria-controls')).textContent).toMatch(/Carlsen Manga1 Band · 8,00\s€/);
+    expect(screen.getAllByText('TOKYOPOP')).toHaveLength(1);
+  });
+
   it('formats owner values in German', () => {
     render(<OwnerStatsCard ownerStats={[
       { user_id: 1, username: 'anna', volume_count: 1, series_count: 1, total_value: 1234.5, shared_count: 0 },
@@ -370,5 +468,77 @@ describe('StatsModal closed', () => {
     render(ui({ isOpen: false }));
     await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+const readingBody = () => {
+  const months = Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(2024, 10 + i, 15);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  return {
+    user: { id: 1, username: 'anna' },
+    months: 24,
+    by_month: months.map((month, i) => ({ month, volumes: i === 23 ? 4 : 0, pages: i === 23 ? 800 : 0, series: i === 23 ? 2 : 0 })),
+    backlog_by_month: months.map((month) => ({ month, owned: 20, read: 5, backlog: 15 })),
+    this_year: { year: 2026, volumes: 4, pages: 800 },
+    last_year: { year: 2025, volumes: 1, pages: 200 },
+    streak: { longest: 3, longest_end: '2026-01', current: 1 },
+    unknown_date: 2,
+    continue_reading: [{ manga_id: 7, title: 'Frieren', cover_image: null, last_read_at: '2026-10-01 10:00:00', next_volume: { id: 70, volume_number: '5', cover_image: null }, unread_after: 3 }]
+  };
+};
+
+describe('StatsModal: Leseverlauf and the collection tools', () => {
+  const route = (handlers) => fetchMock.mockImplementation(async (url, init = {}) => {
+    const path = String(url).replace(/^.*\/api/, '/api');
+    for (const [pattern, answer] of handlers) if (pattern.test(path)) return response(typeof answer === 'function' ? answer(path, init) : answer);
+    return response({ error: 'unbekannt' }, { status: 404 });
+  });
+
+  it('the Leseverlauf tab loads the reader timeline with streaks, backlog and the Weiterlesen list', async () => {
+    route([[/^\/api\/stats$/, statsBody()], [/^\/api\/stats\/reading/, readingBody()]]);
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    fireEvent.click(screen.getByRole('button', { name: /Leseverlauf/ }));
+    const next = await screen.findByRole('link', { name: /Frieren/ });
+    expect(next.getAttribute('href')).toBe('/manga/7');
+    expect(next.textContent).toMatch(/Weiter mit Band 5/);
+    expect(next.textContent).toMatch(/3 Bände ungelesen im Regal/);
+    expect(screen.getByText('Rekord: 3 Monate')).toBeTruthy();
+    expect(screen.getByText(/2 Bände ohne Lesedatum zählen als gelesen/)).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /4 Bände, 800 Seiten/ })).toHaveLength(1);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/api/stats/reading?user_id=1'))).toBe(true);
+  });
+
+  it('opens the trash above the statistics; a restore reloads the figures and tells the caller', async () => {
+    let statsCalls = 0;
+    route([
+      [/^\/api\/stats$/, () => { statsCalls++; return statsBody(); }],
+      [/^\/api\/trash$/, { items: [{ id: 1, kind: 'manga', ref_id: 3, manga_id: 3, title: 'Weg', deleted_at: '2026-10-03 10:00:00', purge_at: '2026-11-02', volume_count: 1, restorable: true }], retention_days: 30 }],
+      [/restore$/, { success: true }]
+    ]);
+    const onDataChanged = vi.fn();
+    render(ui({ onDataChanged }));
+    await screen.findByText('1.234,50 €');
+    fireEvent.click(screen.getByRole('button', { name: 'Papierkorb' }));
+    fireEvent.click(await screen.findByRole('button', { name: /„Weg“ .* wiederherstellen/ }));
+    await waitFor(() => expect(onDataChanged).toHaveBeenCalledTimes(1));
+    const trashDialog = screen.getByRole('dialog', { name: 'Papierkorb' });
+    fireEvent.click(within(trashDialog).getAllByRole('button', { name: 'Schließen' })[0]);
+    await waitFor(() => expect(statsCalls).toBe(2));
+    expect(screen.queryByRole('dialog', { name: 'Papierkorb' })).toBeNull();
+  });
+
+  it('offers the publisher merge to admins only', async () => {
+    route([[/^\/api\/stats$/, statsBody()]]);
+    const { unmount } = render(ui());
+    await screen.findByText('1.234,50 €');
+    expect(screen.getByRole('button', { name: 'Verlage zusammenführen' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sammlung aufräumen' })).toBeTruthy();
+    unmount();
+    render(ui({ user: { id: 2, role: 'editor' } }));
+    await screen.findByText('1.234,50 €');
+    expect(screen.queryByRole('button', { name: 'Verlage zusammenführen' })).toBeNull();
   });
 });

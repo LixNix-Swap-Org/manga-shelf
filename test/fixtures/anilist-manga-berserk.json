@@ -1,0 +1,183 @@
+{
+ "data": {
+  "Page": {
+   "media": [
+    {
+     "id": 30002,
+     "idMal": 2,
+     "title": {
+      "romaji": "Berserk",
+      "english": "Berserk",
+      "native": "ベルセルク"
+     },
+     "description": "His name is Guts, the Black Swordsman, a feared warrior spoken of only in whispers. Bearer of a gigantic sword, an iron hand, and the scars of countless battles and tortures, his flesh is also indelibly marked with The Brand, an unholy symbol that draws the forces of darkness to him and dooms him as their sacrifice. But Guts won't take his fate lying down; he'll cut a crimson swath of carnage through the ranks of the damned—and anyone else foolish enough to oppose him! Accompanied by Puck the Elf, more an annoyance than a companion, Guts relentlessly follows a dark, bloodstained path that leads only to death...or vengeance.<br>\n<br>\n(Source: Dark Horse)<br>\n<br>\n<i>Notes:<br>\n- Volumes 1-5 contain the 16 prequel chapters 0A - 0P.<br>\n- <a href=\"https://anilist.co/manga/95821/\">Chapter 83</a> was omitted from Volume 13 due to the author’s request.<br>\n- Volume 14 includes “<a href=\"https://anilist.co/manga/36408/\">Berserk: The Prototype</a>”.<br>\n- Due to the author's passing, starting from Chapter 365, the manga is illustrated by Studio Gaga (Miura's assistants) and supervised by Kouji Mori (a close friend of Miura's).</i>",
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30002-Cul4OeN7bYtn.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx30002-Cul4OeN7bYtn.jpg",
+      "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx30002-Cul4OeN7bYtn.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30002-3TuoSMl20fUX.jpg",
+     "status": "RELEASING",
+     "volumes": null,
+     "genres": [
+      "Action",
+      "Adventure",
+      "Drama",
+      "Fantasy",
+      "Horror",
+      "Psychological"
+     ],
+     "staff": {
+      "edges": [
+       {
+        "role": "Story & Art (vols 1-41)",
+        "node": {
+         "name": {
+          "full": "Kentarou Miura"
+         }
+        }
+       },
+       {
+        "role": "Supervisor (vols 41- )",
+        "node": {
+         "name": {
+          "full": "Kouji Mori"
+         }
+        }
+       },
+       {
+        "role": "Story & Art (vols 41- )",
+        "node": {
+         "name": {
+          "full": "Studio Gaga"
+         }
+        }
+       },
+       {
+        "role": "Translator (Spanish)",
+        "node": {
+         "name": {
+          "full": "Marc Bernabé"
+         }
+        }
+       },
+       {
+        "role": "Translator (Polish)",
+        "node": {
+         "name": {
+          "full": "Paweł Dybała"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 101625,
+     "idMal": 113958,
+     "title": {
+      "romaji": "Boushoku no Berserk: Ore Dake Level to Iu Gainen wo Toppa Suru THE COMIC",
+      "english": "Berserk of Gluttony",
+      "native": "暴食のベルセルク～俺だけレベルという概念を突破する～ THE COMIC"
+     },
+     "description": "Fate Graphite has never tasted true power. Born into a world with two kinds of people—those with superior skills and those without—he’s been shunned his entire life. Fate’s skill is Gluttony, a curse that leaves him constantly hungry… until he awakens its terrible potential. When he kills someone, he can devour their skills and feed his insatiable appetite. How many lives will it take for Fate’s Gluttony to finally be satisfied?\n<br><br>\n(Source: Seven Seas Entertainment)",
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/nx101625-kmxzdK6xnkUU.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/nx101625-kmxzdK6xnkUU.jpg",
+      "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/nx101625-kmxzdK6xnkUU.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/101625-QOIKheXcUQHW.jpg",
+     "status": "RELEASING",
+     "volumes": null,
+     "genres": [
+      "Action",
+      "Adventure",
+      "Drama",
+      "Fantasy",
+      "Romance"
+     ],
+     "staff": {
+      "edges": [
+       {
+        "role": "Story & Art",
+        "node": {
+         "name": {
+          "full": "Daisuke Takino"
+         }
+        }
+       },
+       {
+        "role": "Original Story",
+        "node": {
+         "name": {
+          "full": "Ichika Isshiki"
+         }
+        }
+       },
+       {
+        "role": "Character Design",
+        "node": {
+         "name": {
+          "full": "Fame"
+         }
+        }
+       },
+       {
+        "role": "Translator (English, vols 1-8)",
+        "node": {
+         "name": {
+          "full": "Amanda Haley"
+         }
+        }
+       },
+       {
+        "role": "Touch-up Art & Lettering (English)",
+        "node": {
+         "name": {
+          "full": "Arbash Mughal"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 36408,
+     "idMal": null,
+     "title": {
+      "romaji": "BERSERK THE PROTOTYPE",
+      "english": "Berserk: The Prototype",
+      "native": "BERSERK THE PROTOTYPE"
+     },
+     "description": "The prototype chapter for <i>Berserk</i>, written by Kentarou Miura when he was a student. It was later collected in volume 14 of the main series.",
+     "coverImage": {
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx36408-RXe0JkIEUDv8.jpg",
+      "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx36408-RXe0JkIEUDv8.jpg",
+      "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx36408-RXe0JkIEUDv8.jpg"
+     },
+     "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/36408-1VLN9PMFEqy7.jpg",
+     "status": "FINISHED",
+     "volumes": null,
+     "genres": [
+      "Action",
+      "Adventure",
+      "Fantasy",
+      "Horror"
+     ],
+     "staff": {
+      "edges": [
+       {
+        "role": "Story & Art",
+        "node": {
+         "name": {
+          "full": "Kentarou Miura"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

@@ -1,14 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadMangaDetail, updateCachedManga, syncOfflineCopy } from '../utils/offlineStore';
 import { prefillTotalVolumes } from '../utils/scanHelpers';
-import { readApiError } from './useVolumeActions';
-import { apiFetch, errorFromResponse, readJson, TIMEOUTS } from '../utils/api';
+import { readApiError, UPLOAD_CANCELLED } from './useVolumeActions';
+import { apiFetch, errorFromResponse, isAbortError, readJson, TIMEOUTS } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import {
   readCache, writeCache, touchCache, dropCache, revalidateHeaders, cacheOwner, detailKey, LIST_KEY
 } from '../utils/dataCache';
 import useLatestRequest from './useLatestRequest';
+import { prepareImageForUpload } from '../utils/imageResize';
+import { DEFAULT_WISH_PRIORITY, normalizeWishPriority } from '../utils/priority';
 
 export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
 
@@ -29,8 +31,19 @@ export function buildFormData(data) {
     total_volumes: data.total_volumes || '',
     description: data.description || '',
     cover_image: data.cover_image || '',
-    manga_passion_id: data.manga_passion_id || null
+    manga_passion_id: data.manga_passion_id || null,
+    wish: normalizeWishPriority(data.wish_priority) !== null,
+    wish_priority: String(normalizeWishPriority(data.wish_priority) ?? DEFAULT_WISH_PRIORITY)
   };
+}
+
+/** PUT body of the edit form: the wishlist toggle and its priority become wish_priority (null = not wished). */
+export function updateBody(changed, form) {
+  const { wish, wish_priority: _priority, ...body } = changed;
+  if (wish !== undefined || _priority !== undefined) {
+    body.wish_priority = form.wish ? Number(form.wish_priority) : null;
+  }
+  return body;
 }
 
 /** Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released volumes). */
@@ -102,6 +115,8 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const formBaseRef = useRef(null); // the values the form was opened with
   if (formBaseRef.current === null && initial) formBaseRef.current = buildFormData(initial.data);
   const [uploadingCover, setUploadingCover] = useState(false);
+  // the upload itself can still be cancelled; once its answer is in, the cover is stored and the button goes away
+  const [coverCancellable, setCoverCancellable] = useState(false);
   const [failedCover, setFailedCover] = useState(false);
 
   const [editLookingUp, setEditLookingUp] = useState(false);
@@ -305,7 +320,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!canEdit) return;
-    const body = changedFormFields(formBaseRef.current, formData);
+    const body = updateBody(changedFormFields(formBaseRef.current, formData), formData);
     const closeForm = () => {
       editSessionRef.current++;
       editingRef.current = false;
@@ -363,6 +378,16 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     }
   };
 
+  const coverAbortRef = useRef(null);
+  useEffect(() => () => {
+    const running = coverAbortRef.current;
+    coverAbortRef.current = null;
+    running?.abort();
+  }, []);
+
+  /** Cancels a running cover upload ("Upload abbrechen"); returned only while the upload request runs. */
+  const cancelCoverUpload = () => coverAbortRef.current?.abort();
+
   /** While the form is open the new cover only goes into the form ('Speichern' stores it, 'Abbrechen' drops it). */
   const handleCoverUpload = async (e) => {
     if (!canEdit) return;
@@ -370,18 +395,25 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     if (!file) return;
     const deferred = editingRef.current;
     const session = editSessionRef.current;
+    coverAbortRef.current?.abort();
+    const controller = new AbortController();
+    coverAbortRef.current = controller;
 
     setUploadingCover(true);
+    setCoverCancellable(true);
     try {
       const fd = new FormData();
-      fd.append('image', file);
-      const res = await apiFetch('/api/upload', { method: 'POST', body: fd });
+      fd.append('image', await prepareImageForUpload(file));
+      if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
+      const res = await apiFetch('/api/upload', { method: 'POST', body: fd, signal: controller.signal });
       if (!res.ok) {
         if (res.status === 401) handleUnauthorized();
         else await notifyResponseError(res, 'Fehler beim Hochladen des Covers');
         return;
       }
       const data = await readJson(res);
+      if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
+      if (coverAbortRef.current === controller) setCoverCancellable(false);
       if (!data?.url) throw new Error('Antwort ohne Bild-URL');
       if (deferred) {
         if (session === editSessionRef.current && editingRef.current) {
@@ -389,7 +421,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         }
         return;
       }
-      const saveRes = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body: { cover_image: data.url } });
+      const saveRes = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body: { cover_image: data.url }, signal: controller.signal });
       if (!saveRes.ok) {
         if (saveRes.status === 401) handleUnauthorized();
         else await notifyResponseError(saveRes, 'Das Cover konnte nicht gespeichert werden');
@@ -397,9 +429,14 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
       }
       await fetchManga();
     } catch (err) {
-      notify.error(err, { fallback: 'Fehler beim Hochladen des Covers' });
+      if (!isAbortError(err) && !controller.signal.aborted) notify.error(err, { fallback: 'Fehler beim Hochladen des Covers' });
+      else if (coverAbortRef.current === controller) notify.info(UPLOAD_CANCELLED);
     } finally {
-      setUploadingCover(false);
+      if (coverAbortRef.current === controller) {
+        coverAbortRef.current = null;
+        setUploadingCover(false);
+        setCoverCancellable(false);
+      }
     }
   };
 
@@ -409,6 +446,8 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     uploadingCover, failedCover, setFailedCover,
     editLookingUp, editLookupResults, setEditLookupResults, editLookupError,
     applyEditLookupResult, handleEditLookup,
-    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload
+    patchManga: (fn) => setManga((prev) => (prev ? fn(prev) : prev)),
+    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload,
+    cancelCoverUpload: coverCancellable ? cancelCoverUpload : undefined
   };
 }

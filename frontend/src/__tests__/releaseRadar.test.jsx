@@ -5,7 +5,7 @@ import { StrictMode } from 'react';
 import useReleaseRadar from '../hooks/useReleaseRadar';
 import ReleaseRadarView from '../components/dashboard/ReleaseRadarView';
 import MpMonthNav from '../components/dashboard/radar/MpMonthNav';
-import MpTimeline from '../components/dashboard/radar/MpTimeline';
+import MpTimeline, { isDroppedSeries } from '../components/dashboard/radar/MpTimeline';
 import RadarTabs from '../components/dashboard/radar/RadarTabs';
 import PersonalTimeline from '../components/dashboard/radar/PersonalTimeline';
 import PersonalSummary from '../components/dashboard/radar/PersonalSummary';
@@ -284,7 +284,7 @@ const renderTimeline = (props) => render(
   <MemoryRouter>
     <MpTimeline
       loadingMp={false} mpError={null} onRetry={vi.fn()} mpYear={2026} mpMonth={10} canEdit onImport={vi.fn()}
-      failedImages={{}} setFailedImages={vi.fn()} GERMAN_MONTHS={GERMAN_MONTHS} filtersActive={false} onResetFilters={vi.fn()}
+      GERMAN_MONTHS={GERMAN_MONTHS} filtersActive={false} onResetFilters={vi.fn()}
       {...props}
       mpDateGroups={props.mpDateGroups ?? groupMpItemsByDate(props.mpData?.items || [])}
     />
@@ -332,6 +332,29 @@ describe('MpTimeline', () => {
   });
 });
 
+describe('MpTimeline: collecting status of the series', () => {
+  it('a dropped series is greyed with "Nicht mehr gesammelt"; owned and ordered volumes keep their badge', () => {
+    renderTimeline({ mpData: { items: [
+      card({ id: 1, user_manga_collecting: 'abgebrochen' }),
+      card({ id: 2, volume_number: '43', user_manga_collecting: 'abgebrochen', user_volume_status: 'Fehlt' }),
+      card({ id: 3, volume_number: '41', user_manga_collecting: 'abgebrochen', user_volume_status: 'Vorbestellt' })
+    ] } });
+    const badges = screen.getAllByText('Nicht mehr gesammelt');
+    expect(badges).toHaveLength(2);
+    expect(screen.queryByText('Einkaufsliste')).toBeNull();
+    expect(screen.getByText('Vorbestellt')).toBeTruthy();
+    expect(badges[0].closest('.glass-card').className).toContain('opacity-60');
+    expect(screen.getByText('Vorbestellt').closest('.glass-card').className).not.toContain('opacity-60');
+    expect(isDroppedSeries(card({ match_kind: 'prefix', user_manga_collecting: null }))).toBe(false);
+  });
+
+  it('a missing volume of a paused series is not announced as on the shopping list', () => {
+    renderTimeline({ mpData: { items: [card({ id: 1, user_manga_collecting: 'pausiert', user_volume_status: 'Fehlt' })] } });
+    expect(screen.getByText('Pausiert')).toBeTruthy();
+    expect(screen.queryByText('Einkaufsliste')).toBeNull();
+  });
+});
+
 const radarItem = (over) => ({
   id: 1, manga_id: 4, manga_title: 'Berserk', volume_number: '42', effective_publisher: 'Panini', status: 'Vorbestellt',
   price: 8.5, release_date: '2026-11', countdown_label: 'Nächsten Monat', days_until: null, ...over
@@ -341,7 +364,7 @@ const renderPersonal = (props) => render(
     <PersonalTimeline
       setRadarSubView={vi.fn()} loadingRadar={false} radarError={null} onRetry={vi.fn()} radarPublisherFilter="ALL"
       radarStatusFilter="ALL" radarSearch="" onResetFilters={vi.fn()} canEdit onMarkDelivered={vi.fn()}
-      failedImages={{}} setFailedImages={vi.fn()} {...props}
+      {...props}
     />
   </MemoryRouter>
 );
@@ -353,7 +376,7 @@ describe('PersonalTimeline', () => {
 
   it('spinner on the first load, error panel when the first load fails', () => {
     const { unmount } = renderPersonal({ radarData: null, loadingRadar: true });
-    expect(screen.getByText('Lade deine Vorbestellungen...')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Lade deine Vorbestellungen...');
     expect(screen.queryByText(/Keine anstehenden/)).toBe(null);
     unmount();
     renderPersonal({ radarData: null, radarError: 'Server weg' });
@@ -377,25 +400,32 @@ describe('PersonalTimeline', () => {
     expect(screen.getByText('Gekauft').closest('button').disabled).toBe(false);
   });
 
-  it('a broken volume cover falls back to the series cover', () => {
-    const setFailedImages = vi.fn();
+  it('a broken volume cover falls back to the series cover, without a shared failure map', () => {
     const item = radarItem({ vol_cover: '/uploads/dead.jpg', manga_cover: '/uploads/series.jpg' });
-    const { rerender } = renderPersonal({ radarData: { total_releases: 1, groups: [{ key: 'k', label: 'L', items: [item] }] }, setFailedImages });
+    renderPersonal({ radarData: { total_releases: 1, groups: [{ key: 'k', label: 'L', items: [item] }] } });
     const img = screen.getByAltText('Berserk');
     expect(img.getAttribute('loading')).toBe('lazy');
     fireEvent.error(img);
-    expect(setFailedImages.mock.calls[0][0]({})).toEqual({ 'personal-/uploads/dead.jpg': true });
-    rerender(
-      <MemoryRouter>
-        <PersonalTimeline
-          setRadarSubView={vi.fn()} loadingRadar={false} radarError={null} onRetry={vi.fn()} radarPublisherFilter="ALL"
-          radarStatusFilter="ALL" radarSearch="" onResetFilters={vi.fn()} canEdit onMarkDelivered={vi.fn()}
-          radarData={{ total_releases: 1, groups: [{ key: 'k', label: 'L', items: [item] }] }}
-          failedImages={{ 'personal-/uploads/dead.jpg': true }} setFailedImages={setFailedImages}
-        />
-      </MemoryRouter>
-    );
     expect(screen.getByAltText('Berserk').getAttribute('src')).toBe('/uploads/series.jpg');
+    fireEvent.error(screen.getByAltText('Berserk'));
+    expect(screen.queryByAltText('Berserk')).toBe(null);
+  });
+
+  it('one live region stays mounted from idle through loading to the list, empty until a load starts', () => {
+    const base = {
+      setRadarSubView: vi.fn(), radarError: null, onRetry: vi.fn(), radarPublisherFilter: 'ALL', radarStatusFilter: 'ALL',
+      radarSearch: '', onResetFilters: vi.fn(), canEdit: true, onMarkDelivered: vi.fn()
+    };
+    const view = (props) => <MemoryRouter><PersonalTimeline {...base} {...props} /></MemoryRouter>;
+    const { rerender } = render(view({ radarData: null, loadingRadar: false }));
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+    rerender(view({ radarData: null, loadingRadar: true }));
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region.textContent).toBe('Lade deine Vorbestellungen...');
+    rerender(view({ radarData: data, loadingRadar: false }));
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region.textContent).toBe('');
   });
 });
 
@@ -427,7 +457,7 @@ const viewProps = (over = {}) => ({
   handlePrevMonth: vi.fn(), handleNextMonth: vi.fn(), handleCurrentMonth: vi.fn(), mpPrintOnly: true, setMpPrintOnly: vi.fn(),
   mpMySeriesOnly: false, setMpMySeriesOnly: vi.fn(), mpPublisherFilter: 'ALL', setMpPublisherFilter: vi.fn(), mpSearch: '',
   setMpSearch: vi.fn(), canEdit: true, handleImportMangaPassion: vi.fn(), handleMarkDelivered: vi.fn(async () => true),
-  failedImages: {}, setFailedImages: vi.fn(), GERMAN_MONTHS, ...over
+  GERMAN_MONTHS, ...over
 });
 
 describe('ReleaseRadarView', () => {
@@ -435,6 +465,22 @@ describe('ReleaseRadarView', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ changes: [
       { volume_id: 9, manga_title: 'Berserk', volume_number: '5', type: 'special_edition', notes: 'Collectors Edition', stored_date: '2026-11-01', new_date: '2026-12' }
     ] })));
+  });
+
+  it('the import notice is announced through a status region that is always mounted', async () => {
+    const handleImportMangaPassion = vi.fn(async () => ({ skipped_owned: true }));
+    const props = viewProps({
+      radarSubView: 'passion', handleImportMangaPassion,
+      mpData: { year: 2026, month: 10, items: [card({ id: 1, user_volume_status: 'Erscheint bald' })], publishers: [] }
+    });
+    const { container } = render(<MemoryRouter><ReleaseRadarView {...props} /></MemoryRouter>);
+    const region = container.querySelector('p.sr-only[role="status"]');
+    expect(region.textContent).toBe('');
+    fireEvent.click(screen.getByText('Vorbestellen'));
+    await waitFor(() => expect(region.textContent).toMatch(/bereits im Regal/));
+    expect(container.querySelector('p.sr-only[role="status"]')).toBe(region);
+    fireEvent.click(screen.getByRole('button', { name: 'Hinweis schließen' }));
+    expect(region.textContent).toBe('');
   });
 
   it('offline: a notice instead of empty lists, nothing fetched', () => {

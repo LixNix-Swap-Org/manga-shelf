@@ -39,7 +39,14 @@ export function dismiss(id) {
   for (const listener of [...listeners]) listener({ type: 'dismiss', id });
 }
 
-/** Called with { type: 'show', toast } and { type: 'dismiss', id }; returns the unsubscribe function. */
+/** Changes the text of a shown toast in place: no new announcement, and a toast the user closed stays closed. */
+export function update(id, input) {
+  const text = toastText(input);
+  if (!text || id === null || id === undefined) return;
+  for (const listener of [...listeners]) listener({ type: 'update', id, message: text.message, ref: text.ref });
+}
+
+/** Called with { type: 'show', toast }, { type: 'update', id, message, ref } and { type: 'dismiss', id }; returns the unsubscribe function. */
 export function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -53,6 +60,7 @@ export const notify = {
   error: (input, options) => emit('error', input, options),
   success: (input, options) => emit('success', input, options),
   info: (input, options) => emit('info', input, options),
+  update,
   dismiss,
   subscribe
 };

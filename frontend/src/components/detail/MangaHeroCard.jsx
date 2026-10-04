@@ -1,10 +1,15 @@
-import { useId, useState } from 'react';
-import { BookOpen, BuildingComplex, CircleAlert, CircleCheck, Coins, PenLine, RefreshCw, Save, Sparkles, Trash, Upload } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
+import { BookOpen, BuildingComplex, CircleAlert, CircleCheck, Coins, Heart, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
-import { assetImgProps } from '../../utils/api';
+import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatEuro } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { langFor } from '../common/lang';
+import { PRIORITY_OPTIONS, isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
+import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
+import CollectingControl from './CollectingControl';
+import { joinTags, splitTags, tagKey } from '../../utils/tags';
 
 const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
 
@@ -16,6 +21,115 @@ export function heroCoverUrl({ manga, formData, editing }) {
   const draft = String(formData?.cover_image || '').trim();
   if (editing && draft.startsWith('/uploads/')) return draft;
   return manga?.cover_image || '';
+}
+
+export { authorShelfPath };
+
+/** Shelf filtered by one genre/tag (the dashboard reads ?tags=). */
+export const tagShelfPath = (tag) => `/?${new URLSearchParams({ tags: String(tag || '').trim() })}`;
+
+const SOURCE_LABELS = { anilist: '🌐 AniList', mal: '🌐 MyAnimeList' };
+
+/**
+ * Badges of a non-Manga-Passion lookup hit (same rule as AddMangaModal): the label the server sends, else the label of a
+ * known source (AniList only for AniList hits), then the sources merged into it (also_on).
+ */
+export function lookupBadgeLabels(item) {
+  const own = item?.source_label || SOURCE_LABELS[item?.source];
+  const merged = (Array.isArray(item?.also_on) ? item.also_on : []).map((source) => SOURCE_LABELS[source]).filter(Boolean);
+  return [...new Set([own, ...merged].filter(Boolean))];
+}
+
+const SUGGESTION_LIMIT = 8;
+
+/**
+ * Tag chips plus an input: Enter, comma or leaving the field adds the typed tag; suggestions come from `suggestions`
+ * ([{ tag, count }]) or, on first focus, from GET /api/tags. The form keeps the comma-separated text.
+ */
+export function TagEditor({ id, value, onChange, suggestions = null, offline = false }) {
+  const [draft, setDraft] = useState('');
+  const [loaded, setLoaded] = useState(null);
+  const requested = useRef(false);
+  const tags = splitTags(value);
+  const known = suggestions || loaded || [];
+  const draftKey = tagKey(draft);
+  const own = new Set(tags.map((t) => t.toLowerCase()));
+  const offers = known
+    .filter((s) => !own.has(s.tag.toLowerCase()) && (!draftKey || s.tag.toLowerCase().includes(draftKey)))
+    .slice(0, SUGGESTION_LIMIT);
+
+  const commit = (text) => {
+    const added = splitTags(text);
+    if (added.length) onChange(joinTags([...tags, ...added]));
+    setDraft('');
+  };
+  const loadSuggestions = () => {
+    if (suggestions || offline || requested.current) return;
+    requested.current = true;
+    get('/api/tags').then((data) => setLoaded(Array.isArray(data?.tags) ? data.tags : [])).catch(() => setLoaded([]));
+  };
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-semibold text-slate-400 mb-1">Genres / Tags</label>
+      {tags.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 mb-2" aria-label="Gesetzte Tags">
+          {tags.map((tag) => (
+            <li key={tag.toLowerCase()} className="flex items-center gap-1 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-0.5 text-xs text-fuchsia-200">
+              {tag}
+              <button
+                type="button"
+                onClick={() => onChange(joinTags(tags.filter((t) => t !== tag)))}
+                className="text-fuchsia-300 hover:text-white"
+                aria-label={`Tag „${tag}“ entfernen`}
+              >
+                <X className="w-3 h-3" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        id={id}
+        type="text"
+        className="input-field"
+        placeholder="z. B. Abenteuer, Fantasy – Enter fügt hinzu"
+        value={draft}
+        maxLength={200}
+        onFocus={loadSuggestions}
+        onChange={(e) => {
+          const text = e.target.value;
+          if (/[,;]/.test(text)) commit(text);
+          else setDraft(text);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === 'Backspace' && !draft && tags.length) {
+            onChange(joinTags(tags.slice(0, -1)));
+          }
+        }}
+        onBlur={() => { if (draft.trim()) commit(draft); }}
+      />
+      {offers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2" role="group" aria-label="Vorschläge">
+          {offers.map((s) => (
+            <button
+              key={s.tag}
+              type="button"
+              // mousedown keeps the focus, so the blur does not add the half-typed text first
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(s.tag)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-300 hover:border-fuchsia-500/50 hover:text-white"
+            >
+              + {s.tag}{s.count ? <span className="text-slate-400"> ({s.count})</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** A broken URL is remembered per URL: a new cover (upload, other URL) gets a fresh attempt without a reload. */
@@ -48,11 +162,17 @@ export default function MangaHeroCard({
   setFormData,
   totalOwnedValue,
   totalTarget,
-  uploadingCover
+  uploadingCover,
+  onCancelCoverUpload,
+  onCollectingSaved,
+  tagSuggestions = null
 }) {
   const [failedCoverUrl, setFailedCoverUrl] = useState(null);
+  const inRouter = useInRouterContext();
   const ids = useId();
   const coverUrl = heroCoverUrl({ manga, formData, editing });
+  const authors = splitAuthors(manga.author);
+  const seriesTags = splitTags(manga.tags);
   const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
   const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
   // the hook reads the file synchronously; clearing the input lets the same file be picked again
@@ -83,7 +203,7 @@ export default function MangaHeroCard({
             />
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-              <BookOpen className="w-12 h-12 stroke-[1.5] text-slate-500" />
+              <BookOpen className="w-12 h-12 stroke-[1.5] text-slate-400" />
               <span className="text-xs font-medium text-slate-400">Kein Cover vorhanden</span>
             </div>
           )}
@@ -104,8 +224,18 @@ export default function MangaHeroCard({
           )}
 
           {uploadingCover && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-3">
               <span aria-hidden="true" className="block w-6 h-6 rounded-full animate-spin border-2 border-brand-500 border-t-transparent" />
+              {onCancelCoverUpload && (
+                <button
+                  type="button"
+                  onClick={onCancelCoverUpload}
+                  className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 text-red-300 hover:text-red-200"
+                  title="Cover-Upload abbrechen"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -250,13 +380,13 @@ export default function MangaHeroCard({
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {item.source === 'manga_passion' ? (
                             <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                              🇩🇪 Manga Passion
+                              {item.source_label || '🇩🇪 Manga Passion'}
                             </span>
-                          ) : (
-                            <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                              🌐 AniList
+                          ) : lookupBadgeLabels(item).map((label) => (
+                            <span key={label} className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
+                              {label}
                             </span>
-                          )}
+                          ))}
                         </div>
                         <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
                           {item.title}
@@ -322,6 +452,33 @@ export default function MangaHeroCard({
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+                <input
+                  id={`${ids}-wish`}
+                  type="checkbox"
+                  className="w-4 h-4 accent-rose-500"
+                  checked={Boolean(formData.wish)}
+                  onChange={e => setFormData({ ...formData, wish: e.target.checked })}
+                />
+                Wunschliste
+              </label>
+              {formData.wish && (
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  Priorität
+                  <select
+                    id={`${ids}-wish-priority`}
+                    className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
+                    value={formData.wish_priority}
+                    onChange={e => setFormData({ ...formData, wish_priority: e.target.value })}
+                  >
+                    {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+                  </select>
+                </label>
+              )}
+              <span className="text-[11px] text-slate-400 basis-full">Zählt als Wunschreihe, solange noch kein Band vorhanden ist.</span>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-400 mb-1">Geplante Gesamtbände</label>
@@ -367,6 +524,14 @@ export default function MangaHeroCard({
               </div>
             </div>
 
+            <TagEditor
+              id={`${ids}-tags`}
+              value={formData.tags}
+              onChange={(tags) => setFormData({ ...formData, tags })}
+              suggestions={tagSuggestions}
+              offline={isOffline}
+            />
+
             <div>
               <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">Beschreibung</label>
               <textarea 
@@ -396,6 +561,16 @@ export default function MangaHeroCard({
                 <div className="flex items-center gap-2">
                   {canEdit ? (
                     <>
+                      {inRouter && manga.id && (
+                        <Link
+                          id="btn-anime-adaption"
+                          to={`/?view=anime&add=${manga.id}`}
+                          className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 text-fuchsia-200"
+                          title="Anime-Adaption dieser Reihe suchen und hinzufügen"
+                        >
+                          <Tv className="w-3.5 h-3.5" aria-hidden="true" /> Anime-Adaption
+                        </Link>
+                      )}
                       <button 
                         onClick={beginEdit} 
                         className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
@@ -422,7 +597,19 @@ export default function MangaHeroCard({
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 text-xs mb-6">
                 <span className="bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium">
-                  Autor: <strong className="text-white">{manga.author || 'Unbekannt'}</strong>
+                  Autor:{' '}
+                  {inRouter && authors.length > 0 ? authors.map((name, i) => (
+                    <span key={`${i}-${name}`}>
+                      {i > 0 && ', '}
+                      <Link
+                        to={authorShelfPath(name)}
+                        className="font-bold text-white underline decoration-slate-500 underline-offset-2 hover:text-brand-300 hover:decoration-brand-400"
+                        title={`Alle Reihen von ${name} in der Sammlung`}
+                      >
+                        {name}
+                      </Link>
+                    </span>
+                  )) : <strong className="text-white">{manga.author || 'Unbekannt'}</strong>}
                 </span>
                 <span className="bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
                   <BuildingComplex className="w-3.5 h-3.5 text-brand-400" />
@@ -431,6 +618,13 @@ export default function MangaHeroCard({
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">
                   {manga.status || 'Laufend'}
                 </span>
+                <CollectingControl manga={manga} canEdit={canEdit} isOffline={isOffline} onSaved={onCollectingSaved} />
+                {isWishedSeries(manga) && (
+                  <span id="detail-wish-pill" className={`px-3 py-1 rounded-xl border font-semibold flex items-center gap-1.5 ${priorityBadgeClass(manga.wish_priority)}`}>
+                    <Heart className="w-3.5 h-3.5" aria-hidden="true" />
+                    {wishLabel(manga)}
+                  </span>
+                )}
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
                   Gesamt: {totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : 'Unbekannt'}
                 </span>
@@ -439,6 +633,27 @@ export default function MangaHeroCard({
                   Sammlungswert: <strong className="text-white font-mono">{formatEuro(totalOwnedValue)}</strong>
                 </span>
               </div>
+
+              {seriesTags.length > 0 && (
+                <ul id="detail-tags" className="flex flex-wrap items-center gap-1.5 -mt-3 mb-6 text-xs" aria-label="Genres und Tags">
+                  <li aria-hidden="true"><Tag className="w-3.5 h-3.5 text-fuchsia-400" /></li>
+                  {seriesTags.map((tag) => (
+                    <li key={tag.toLowerCase()}>
+                      {inRouter ? (
+                        <Link
+                          to={tagShelfPath(tag)}
+                          className="inline-block rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 px-2 py-0.5 text-fuchsia-200 hover:bg-fuchsia-500/25"
+                          title={`Alle Reihen mit „${tag}“`}
+                        >
+                          {tag}
+                        </Link>
+                      ) : (
+                        <span className="inline-block rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 px-2 py-0.5 text-fuchsia-200">{tag}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               {/* Description */}
               <div className="mb-6">

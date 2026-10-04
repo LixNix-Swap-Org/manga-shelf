@@ -1,6 +1,9 @@
 import { normalizePubName, getSeriesProgress } from './volumeHelpers.js';
 import { formatDate, monthNames } from './format.js';
 import { createSearch, prepareQuery, naturalCollator } from './search.js';
+import { isWishedSeries } from './priority.js';
+import { COLLECTING_OPTIONS, collectingOf, splitAuthors, authorShelfPath } from './seriesMeta.js';
+import { collectTags, hasAllTags, splitTags } from './tags.js';
 
 export const GERMAN_MONTHS = monthNames('long');
 
@@ -67,15 +70,16 @@ export const sanitizePublisherFilter = (value, availablePublishers) => {
 
 const SERIES_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Geplant', 'Abgebrochen'];
 
-/** Series counts per status filter chip. */
+/** Series counts per status filter chip (WISHLIST = wished series, see isWishedSeries). */
 export const getFilterCounts = (mangas) => {
-  const counts = { ALL: mangas.length, UNREAD: 0, READ_ALL: 0 };
+  const counts = { ALL: mangas.length, UNREAD: 0, READ_ALL: 0, WISHLIST: 0 };
   for (const s of SERIES_STATUSES) counts[s] = 0;
   for (const m of mangas) {
     if (SERIES_STATUSES.includes(m.status)) counts[m.status]++;
     const { complete, hasUnread } = getReadState(m);
     if (hasUnread) counts.UNREAD++;
     if (complete) counts.READ_ALL++;
+    if (isWishedSeries(m)) counts.WISHLIST++;
   }
   return counts;
 };
@@ -86,6 +90,7 @@ export const STATUS_TABS = [
   { id: 'Abgeschlossen', label: 'Abgeschlossen' },
   { id: 'UNREAD', label: 'Ungelesen' },
   { id: 'READ_ALL', label: 'Gelesen' },
+  { id: 'WISHLIST', label: 'Wunschliste' },
   { id: 'Pausiert', label: 'Pausiert' },
   { id: 'Geplant', label: 'Geplant' },
   { id: 'Abgebrochen', label: 'Abgebrochen' }
@@ -159,15 +164,75 @@ const volumeTerms = (value) => (Array.isArray(value) ? value : typeof value === 
 
 export const seriesSearch = createSearch(m => ({
   primary: [m.title, m.alt_title],
-  secondary: [m.author, m.publisher, m.publisher ? normalizePubName(m.publisher) : null, m.tags, ...volumeTerms(m.volume_search)]
+  secondary: [m.author, m.publisher, m.publisher ? normalizePubName(m.publisher) : null, m.tags, ...splitTags(m.tags), ...volumeTerms(m.volume_search)]
 }));
 
+export { COLLECTING_OPTIONS, collectingOf, splitAuthors, authorShelfPath };
+
+/** Collection filter of the toolbar ("Sammelstand"); counts come from getCollectCounts. */
+export const COLLECT_FILTERS = [
+  { id: 'ALL', label: 'Alle Reihen' },
+  { id: 'gaps', label: 'Mit Lücken' },
+  { id: 'preorder', label: 'Mit Vorbestellungen' },
+  { id: 'complete', label: 'Komplett' },
+  { id: 'pausiert', label: 'Pausiert' },
+  { id: 'abgebrochen', label: 'Nicht mehr gesammelt' }
+];
+export const isCollectFilter = (value) => COLLECT_FILTERS.some(f => f.id === value);
+
 /**
- * Search, status/publisher filter and sort of the series list. With a search, title-prefix hits come first, then
- * title hits, then hits in other fields, then typo hits; the chosen sort orders each of these groups.
+ * Still something to buy: a missing volume, or a known total that is not reached yet. A dropped series has no gaps;
+ * a complete one (spec A2) neither, even when a stale missing entry is left over.
  */
-export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy }) => {
+export const hasCollectionGaps = (m) => {
+  if (collectingOf(m) === 'abgebrochen' || isSeriesComplete(m)) return false;
+  if ((Number(m?.missing_count) || 0) > 0) return true;
+  const total = Number(m?.total_volumes) || 0;
+  return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) < total;
+};
+
+export const matchesCollectFilter = (m, filter) => {
+  switch (filter) {
+    case 'gaps': return hasCollectionGaps(m);
+    case 'preorder': return (Number(m?.preorder_count) || 0) > 0;
+    case 'complete': return isSeriesComplete(m);
+    case 'pausiert':
+    case 'abgebrochen': return collectingOf(m) === filter;
+    default: return true;
+  }
+};
+
+export const getCollectCounts = (mangas) => {
+  const counts = {};
+  for (const f of COLLECT_FILTERS) counts[f.id] = 0;
+  for (const m of mangas) {
+    for (const f of COLLECT_FILTERS) if (matchesCollectFilter(m, f.id)) counts[f.id]++;
+  }
+  return counts;
+};
+
+const authorKey = (name) => String(name || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+export const matchesAuthor = (m, author) => {
+  const key = authorKey(author);
+  return !key || splitAuthors(m?.author).some(a => authorKey(a) === key);
+};
+
+/** Genres/tags of the collection with series counts for the toolbar: [{ tag, count }], most used first. */
+export const getAvailableTags = (mangas) => collectTags(mangas);
+
+/** The tag filter as kept in the URL ("Abenteuer,Fantasy") and in state (['Abenteuer', 'Fantasy']). */
+export const parseTagFilter = (value) => (Array.isArray(value) ? splitTags(value) : splitTags(String(value || '').split(',')));
+export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
+
+/**
+ * Search, status/publisher/collect/author/tag filter and sort of the series list (tags: every chosen tag, AND). With a
+ * search, title-prefix hits come first, then title hits, then hits in other fields, then typo hits; the chosen sort
+ * orders each of these groups.
+ */
+export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [] }) => {
   const query = prepareQuery(search);
+  const tags = parseTagFilter(tagFilter);
   const publisherKey = publisherFilter && publisherFilter !== 'ALL' ? normalizePubName(publisherFilter).toLowerCase() : null;
   const ranks = new Map();
   const compare = compareBy(sortBy);
@@ -183,16 +248,110 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
         if (!getReadState(m).hasUnread) return false;
       } else if (statusFilter === 'READ_ALL') {
         if (!getReadState(m).complete) return false;
+      } else if (statusFilter === 'WISHLIST') {
+        if (!isWishedSeries(m)) return false;
       } else if (statusFilter && statusFilter !== 'ALL' && m.status !== statusFilter) {
         return false;
       }
 
       if (publisherKey !== null && normalizePubName(m.publisher).toLowerCase() !== publisherKey) return false;
+      if (!matchesCollectFilter(m, collectFilter)) return false;
+      if (authorFilter && !matchesAuthor(m, authorFilter)) return false;
+      if (tags.length && !hasAllTags(m, tags)) return false;
       return true;
     })
     .sort(query ? (a, b) => ranks.get(a) - ranks.get(b) || compare(a, b) : compare);
 };
 
+/**
+ * A completely collected series, the rule of the statistics (completed_series, spec A2): the total number of volumes is
+ * known and at least that many regular volumes are owned. The publication status does not count.
+ */
+export function isSeriesComplete(m) {
+  const total = Number(m?.total_volumes) || 0;
+  return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) >= total;
+}
+
+export const GROUP_OPTIONS = [
+  { value: 'none', label: 'Keine Gruppierung' },
+  { value: 'publisher', label: 'Verlag' },
+  { value: 'author', label: 'Autor' },
+  { value: 'status', label: 'Erscheinungsstatus' }
+];
+export const isGroupOption = (value) => GROUP_OPTIONS.some(o => o.value === value);
+
+const GROUP_FALLBACK = { publisher: 'Ohne Verlag', author: 'Ohne Autor', status: 'Ohne Status' };
+
+const groupLabelOf = (m, groupBy) => {
+  if (groupBy === 'publisher') return m.publisher ? normalizePubName(m.publisher) : '';
+  if (groupBy === 'author') return splitAuthors(m.author).join(', ');
+  if (groupBy === 'status') return m.status ? String(m.status) : '';
+  return '';
+};
+
+/**
+ * Sections of an already filtered and sorted list: [{ key, label, items }]. The order inside a section is the list's;
+ * sections are alphabetical (status in the order of the status chips), the one without a value last.
+ * 'none' gives one section with an empty label.
+ */
+export const groupMangas = (list, groupBy) => {
+  if (!isGroupOption(groupBy) || groupBy === 'none') return [{ key: 'all', label: '', items: list }];
+  const sections = new Map();
+  for (const m of list) {
+    const label = groupLabelOf(m, groupBy);
+    const key = label ? label.toLowerCase() : '';
+    if (!sections.has(key)) sections.set(key, { key: key || '~', label: label || GROUP_FALLBACK[groupBy], items: [], empty: !label });
+    sections.get(key).items.push(m);
+  }
+  const rank = (s) => (groupBy === 'status' && SERIES_STATUSES.includes(s.label) ? SERIES_STATUSES.indexOf(s.label) : SERIES_STATUSES.length);
+  return Array.from(sections.values())
+    .sort((a, b) => (a.empty - b.empty) || (rank(a) - rank(b)) || naturalCollator.compare(a.label, b.label))
+    .map(({ empty: _empty, ...section }) => section);
+};
+
+/** Filter state kept in the URL next to localStorage, so Back and shared links keep it ('q' stays in sessionStorage). */
+export const FILTER_DEFAULTS = { status: 'ALL', publisher: 'ALL', collect: 'ALL', author: '', tags: '', sort: 'title_asc', group: 'none' };
+const FILTER_VALID = {
+  status: isStatusFilter,
+  publisher: (v) => v.length <= 300,
+  collect: isCollectFilter,
+  author: (v) => v.length <= 300,
+  tags: (v) => v.length <= 500,
+  sort: isSortOption,
+  group: isGroupOption
+};
+
+const parseParams = (search) => {
+  try {
+    return new URLSearchParams(search || '');
+  } catch (_) {
+    return new URLSearchParams();
+  }
+};
+
+/** The valid filter values of a query string; absent or invalid keys are left out. */
+export const readFilterParams = (search) => {
+  const params = parseParams(search);
+  const out = {};
+  for (const key of Object.keys(FILTER_DEFAULTS)) {
+    const value = params.get(key);
+    if (value !== null && value.trim() !== '' && FILTER_VALID[key](value)) out[key] = value;
+  }
+  return out;
+};
+
+/** Query string with the filter values set (defaults removed); other parameters such as view stay. */
+export const writeFilterParams = (search, filters) => {
+  const params = parseParams(search);
+  for (const key of Object.keys(FILTER_DEFAULTS)) {
+    const value = filters[key];
+    if (value === undefined) continue;
+    if (value === null || value === '' || value === FILTER_DEFAULTS[key]) params.delete(key);
+    else params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
 /** Totals for the quick-stats bar. */
 export const getCollectionTotals = (mangas) => {
   let owned = 0;
@@ -202,7 +361,7 @@ export const getCollectionTotals = (mangas) => {
     const m = mangas[i];
     owned += (m.owned_volumes || 0);
     val += (m.total_value || 0);
-    if (m.status === 'Abgeschlossen') completed++;
+    if (isSeriesComplete(m)) completed++;
   }
   return {
     totalOwnedVolumes: owned,

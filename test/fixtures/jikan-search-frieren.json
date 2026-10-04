@@ -1,0 +1,71 @@
+{
+ "_note": "Built from the documented Jikan v4 shape (api.jikan.moe was unreachable from the recording machine on 2026-10-04).",
+ "pagination": { "last_visible_page": 1, "has_next_page": false, "current_page": 1, "items": { "count": 2, "total": 2, "per_page": 8 } },
+ "data": [
+  {
+   "mal_id": 52991,
+   "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren",
+   "images": {
+    "jpg": { "image_url": "https://cdn.myanimelist.net/images/anime/1015/138006.jpg", "small_image_url": "https://cdn.myanimelist.net/images/anime/1015/138006t.jpg", "large_image_url": "https://cdn.myanimelist.net/images/anime/1015/138006l.jpg" },
+    "webp": { "image_url": "https://cdn.myanimelist.net/images/anime/1015/138006.webp", "small_image_url": "https://cdn.myanimelist.net/images/anime/1015/138006t.webp", "large_image_url": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp" }
+   },
+   "approved": true,
+   "titles": [
+    { "type": "Default", "title": "Sousou no Frieren" },
+    { "type": "Synonym", "title": "Frieren at the Funeral" },
+    { "type": "Japanese", "title": "葬送のフリーレン" },
+    { "type": "English", "title": "Frieren: Beyond Journey's End" },
+    { "type": "German", "title": "Frieren – Nach dem Ende der Reise" }
+   ],
+   "title": "Sousou no Frieren",
+   "title_english": "Frieren: Beyond Journey's End",
+   "title_japanese": "葬送のフリーレン",
+   "title_synonyms": ["Frieren at the Funeral"],
+   "type": "TV",
+   "source": "Manga",
+   "episodes": 28,
+   "status": "Finished Airing",
+   "airing": false,
+   "aired": { "from": "2023-09-29T00:00:00+00:00", "to": "2024-03-22T00:00:00+00:00", "string": "Sep 29, 2023 to Mar 22, 2024" },
+   "duration": "24 min per ep",
+   "rating": "PG-13 - Teens 13 or older",
+   "score": 9.3,
+   "scored_by": 712000,
+   "rank": 1,
+   "popularity": 140,
+   "synopsis": "During their decade-long quest to defeat the Demon King, the members of the hero's party—Himmel himself, the priest Heiter, the dwarf warrior Eisen, and the elven mage Frieren—forge bonds through adventures and battles.\n\n[Written by MAL Rewrite]",
+   "season": "fall",
+   "year": 2023,
+   "broadcast": { "day": "Fridays", "time": "23:00", "timezone": "Asia/Tokyo", "string": "Fridays at 23:00 (JST)" },
+   "studios": [{ "mal_id": 11, "type": "anime", "name": "Madhouse", "url": "https://myanimelist.net/anime/producer/11/Madhouse" }],
+   "genres": [
+    { "mal_id": 2, "type": "anime", "name": "Adventure", "url": "https://myanimelist.net/anime/genre/2/Adventure" },
+    { "mal_id": 8, "type": "anime", "name": "Drama", "url": "https://myanimelist.net/anime/genre/8/Drama" },
+    { "mal_id": 10, "type": "anime", "name": "Fantasy", "url": "https://myanimelist.net/anime/genre/10/Fantasy" }
+   ]
+  },
+  {
+   "mal_id": 59978,
+   "url": "https://myanimelist.net/anime/59978/Sousou_no_Frieren_2nd_Season",
+   "images": { "jpg": { "image_url": "https://cdn.myanimelist.net/images/anime/1921/154528.jpg", "large_image_url": "https://cdn.myanimelist.net/images/anime/1921/154528l.jpg" } },
+   "titles": [{ "type": "Default", "title": "Sousou no Frieren 2nd Season" }, { "type": "English", "title": "Frieren: Beyond Journey's End Season 2" }],
+   "title": "Sousou no Frieren 2nd Season",
+   "title_english": "Frieren: Beyond Journey's End Season 2",
+   "title_japanese": "葬送のフリーレン 第2期",
+   "title_synonyms": [],
+   "type": "TV",
+   "episodes": null,
+   "status": "Not yet aired",
+   "airing": false,
+   "aired": { "from": "2026-01-16T00:00:00+00:00", "to": null },
+   "duration": "Unknown",
+   "score": null,
+   "synopsis": "Second season of Sousou no Frieren.",
+   "season": "winter",
+   "year": 2026,
+   "broadcast": { "day": "Fridays", "time": "23:00", "timezone": "Asia/Tokyo", "string": "Fridays at 23:00 (JST)" },
+   "studios": [{ "mal_id": 11, "type": "anime", "name": "Madhouse" }],
+   "genres": [{ "mal_id": 2, "type": "anime", "name": "Adventure" }]
+  }
+ ]
+}

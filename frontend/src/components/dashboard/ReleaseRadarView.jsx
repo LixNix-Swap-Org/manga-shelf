@@ -51,8 +51,6 @@ export default function ReleaseRadarView({
   importingMpIds,
   handleMarkDelivered,
   markingDeliveredIds,
-  failedImages,
-  setFailedImages,
   GERMAN_MONTHS
 }) {
   const [notice, setNotice] = useState(null);
@@ -152,8 +150,8 @@ export default function ReleaseRadarView({
             onResetFilters={resetMpFilters}
           />
           {notice && (
-            <div role="status" className="p-3 rounded-xl border border-sky-500/40 bg-sky-500/10 text-xs text-sky-200 flex items-start justify-between gap-2">
-              <span className="flex items-center gap-2"><Info className="w-4 h-4 shrink-0" />{notice}</span>
+            <div className="p-3 rounded-xl border border-sky-500/40 bg-sky-500/10 text-xs text-sky-200 flex items-start justify-between gap-2">
+              <span aria-hidden="true" className="flex items-center gap-2"><Info className="w-4 h-4 shrink-0" />{notice}</span>
               <button type="button" onClick={() => setNotice(null)} className="p-1 -m-1 rounded text-sky-300 hover:text-white" aria-label="Hinweis schließen">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -169,8 +167,6 @@ export default function ReleaseRadarView({
             canEdit={canEdit}
             onImport={onImport}
             importingMpIds={importingMpIds}
-            failedImages={failedImages}
-            setFailedImages={setFailedImages}
             GERMAN_MONTHS={GERMAN_MONTHS}
             mpDateGroups={mpDateGroups}
             filtersActive={mpFiltersActive}
@@ -216,11 +212,11 @@ export default function ReleaseRadarView({
             canEdit={canEdit}
             onMarkDelivered={onMarkDelivered}
             markingDeliveredIds={markingDeliveredIds}
-            failedImages={failedImages}
-            setFailedImages={setFailedImages}
           />
         </div>
       )}
+
+      <p role="status" className="sr-only">{notice || ''}</p>
     </div>
   );
 }

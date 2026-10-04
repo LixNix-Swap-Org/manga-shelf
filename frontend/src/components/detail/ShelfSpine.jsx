@@ -6,7 +6,8 @@ import { assetImgProps } from '../../utils/api';
 /** One book spine (or a ghost spine for a gap) on the shelf. Layout depends on the shelf mode and scale. */
 export default function ShelfSpine({
   item, currentMode, isFitMultiRow, totalCount, shelfScale, mpGapMap, canEdit, setFillingGapNumber,
-  selectedReaderId, user, manga, focusedVolumeId, setFocusedVolumeId, handleOpenEditVolume, gapsOfficial
+  selectedReaderId, user, manga, focusedVolumeId, setFocusedVolumeId, handleOpenEditVolume, gapsOfficial,
+  selectionMode = false, selected = false, onSelect
 }) {
   const isFitSingleRow = currentMode === 'fit' && !isFitMultiRow;
   const isScrollFixed = currentMode === 'scroll';
@@ -148,23 +149,36 @@ export default function ShelfSpine({
   return (
     <div
       data-volume-id={vol.id}
-      {...(canEdit
+      {...(selectionMode
         ? {
-          role: 'button',
+          role: 'checkbox',
+          'aria-checked': selected,
           tabIndex: 0,
           onKeyDown: (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleOpenEditVolume(vol);
+              onSelect?.(vol, e);
             }
           }
         }
-        : { role: 'img', tabIndex: -1 })}
+        : canEdit
+          ? {
+            role: 'button',
+            tabIndex: 0,
+            onKeyDown: (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleOpenEditVolume(vol);
+              }
+            }
+          }
+          : { role: 'img', tabIndex: -1 })}
       aria-label={getSpineAriaLabel(vol, isOwned && isRead)}
       onFocus={() => setFocusedVolumeId(vol.id)}
-      onClick={() => {
+      onClick={(e) => {
         setFocusedVolumeId(vol.id);
-        if (canEdit) handleOpenEditVolume(vol);
+        if (selectionMode) onSelect?.(vol, e);
+        else if (canEdit) handleOpenEditVolume(vol);
       }}
       style={{ 
         height: spineHeightPx, 
@@ -174,7 +188,7 @@ export default function ShelfSpine({
       }}
       className={`manga-spine ${isSpecialEd ? 'manga-spine-special' : ''} ${isSchuber ? 'manga-spine-box' : ''} ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
         isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
-      } ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${!isOwned ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
+      } ${selected ? 'outline outline-2 outline-offset-2 outline-emerald-400 -translate-y-2' : ''} ${canEdit || selectionMode ? 'cursor-pointer' : 'cursor-default'} ${!isOwned && !selected ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
       title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatEuro(vol.price) ? ` • ${formatEuro(vol.price)}` : ''}${isOwned && isRead ? ' • Gelesen ✓' : ''}`}
     >
       {/* Spine Top: Publisher Logo / Accent */}

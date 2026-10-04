@@ -6,6 +6,8 @@ import { getSeriesProgress } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
 import { formatCount, formatEuro } from '../../utils/format';
 import { langFor } from '../common/lang';
+import { splitAuthors } from '../../utils/seriesMeta';
+import { AuthorButtons } from './MangaCard';
 
 const COVER_FALLBACK = (
   <div className="w-full h-full flex items-center justify-center text-slate-700">
@@ -13,10 +15,11 @@ const COVER_FALLBACK = (
   </div>
 );
 
-/** One row of the list view; `onDelete(event, id, title)` must be stable for the memo to hold. */
-function MangaRow({ manga, canEdit, getStatusBadge, onDelete, className }) {
+/** One row of the list view; `onDelete(event, id, title)` and `onAuthorClick(name)` must be stable for the memo to hold. */
+function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, className }) {
   const { owned, total, extras, pct } = getSeriesProgress(manga);
   const readState = getReadState(manga);
+  const authors = onAuthorClick ? splitAuthors(manga.author) : [];
 
   return (
     <tr className={className}>
@@ -34,7 +37,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, className }) {
           {manga.title}
         </Link>
         <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">
-          {manga.author || 'Kein Autor'}
+          {authors.length ? <AuthorButtons names={authors} onAuthorClick={onAuthorClick} /> : (manga.author || 'Kein Autor')}
           {manga.alt_title && <span className="text-slate-400 ml-1.5">(<span lang={langFor(manga.alt_title)}>{manga.alt_title}</span>)</span>}
         </div>
       </td>

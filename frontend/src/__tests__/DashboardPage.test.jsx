@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
 const state = vi.hoisted(() => ({
   offline: false,
@@ -9,7 +9,13 @@ const state = vi.hoisted(() => ({
   shopping: null,
   radar: null,
   shoppingCalls: [],
-  radarCalls: []
+  radarCalls: [],
+  localHits: new Map()
+}));
+
+vi.mock('../utils/offlineStore', async (importOriginal) => ({
+  ...(await importOriginal()),
+  lookupLocalIsbn: vi.fn(async (isbn) => state.localHits.get(isbn) ?? null)
 }));
 
 vi.mock('../hooks/useMangaList', () => ({ default: () => state.mangaList }));
@@ -77,6 +83,7 @@ const currentUrl = () => screen.getByTestId('location').textContent;
 
 beforeEach(() => {
   state.offline = false;
+  state.localHits.clear();
   state.shoppingCalls = [];
   state.radarCalls = [];
   try { sessionStorage.clear(); localStorage.clear(); } catch (_) {}
@@ -150,6 +157,34 @@ describe('Dashboard', () => {
     expect(document.getElementById('main-search-input').value).toBe('');
     fireEvent.click(screen.getByText('Naruto Shippuden'));
     expect(currentUrl()).toBe('/manga/2');
+  });
+
+  it('choosing a series in the scan dialog replaces the dialog\'s history entry: one Back returns to the shelf', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, {
+      found: true, isbn: state.scanCode, book: { title: 'Die Prophezeiung', series: 'Naruto' }, matched_manga: null,
+      matched_candidates: [{ id: 1, title: 'Naruto Gaiden' }, { id: 2, title: 'Naruto Shippuden' }]
+    })));
+    window.history.replaceState(null, '', '/');
+    const back = vi.spyOn(window.history, 'back');
+    const length = window.history.length;
+    render(
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Dashboard user={{ id: 1, username: 'anna', role: 'editor' }} onLogout={vi.fn()} />} />
+          <Route path="/manga/:id" element={<div>Detailseite</div>} />
+        </Routes>
+      </BrowserRouter>
+    );
+    fireEvent.click(screen.getByText('Scan-Test'));
+    await screen.findByText('Mehrere Reihen passen – bitte auswählen');
+    expect(window.history.length).toBe(length + 1);
+    fireEvent.click(screen.getByText('Naruto Shippuden'));
+    expect(await screen.findByText('Detailseite')).toBeTruthy();
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(window.location.pathname).toBe('/manga/2');
+    expect(window.history.length).toBe(length + 1);
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
   });
 
   it('an unknown ISBN shows the server message, keeps the digits out of the search and offers to add', async () => {
@@ -252,6 +287,74 @@ describe('Dashboard', () => {
   });
 });
 
+describe('Dashboard: local scan and share target', () => {
+  const localHit = { manga: { id: 4, title: 'Berserk' }, volume: { id: 9, status: 'Vorhanden' }, syncedAt: 1 };
+
+  it('a volume of the offline copy opens its series without asking the server, also offline', async () => {
+    state.localHits.set(state.scanCode, localHit);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { unmount } = renderDashboard('/');
+    fireEvent.click(screen.getByText('Scan-Test'));
+    await waitFor(() => expect(currentUrl()).toBe('/manga/4'));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/lookup/isbn'))).toBe(false);
+    unmount();
+
+    state.offline = true;
+    renderDashboard('/', { id: 1, username: 'anna', role: 'visitor', realRole: 'editor', offline: true });
+    fireEvent.click(screen.getByText('Scan-Test'));
+    await waitFor(() => expect(currentUrl()).toBe('/manga/4'));
+    expect(screen.queryByText(/braucht eine Verbindung/)).toBeNull();
+  });
+
+  it('a shared text with an ISBN is looked up like a scan and the share parameters leave the URL', async () => {
+    state.localHits.set('9783551000002', localHit);
+    vi.stubGlobal('fetch', vi.fn());
+    renderDashboard('/?share_text=' + encodeURIComponent('Schau mal: ISBN 978-3-551-00000-2'));
+    await waitFor(() => expect(currentUrl()).toBe('/manga/4'));
+  });
+
+  it('a shared text without an ISBN says so and the URL is cleaned; a Manga Passion link offers to add the series', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const { unmount } = renderDashboard('/?view=shopping&share_text=hallo');
+    expect(await screen.findByText('Im geteilten Text wurde keine ISBN gefunden.')).toBeTruthy();
+    expect(currentUrl()).toBe('/?view=shopping');
+    unmount();
+
+    renderDashboard('/?share_url=' + encodeURIComponent('https://www.manga-passion.de/editions/123/berserk'));
+    expect(await screen.findByText(/Manga-Passion-Link erkannt/)).toBeTruthy();
+    expect(currentUrl()).toBe('/');
+    fireEvent.click(screen.getByRole('button', { name: 'Reihe anlegen' }));
+    expect(await screen.findByText('Anlegen-Dialog leer')).toBeTruthy();
+  });
+});
+
+describe('Dashboard: foreground refresh', () => {
+  it('reloads the shelf when the app returns after more than a minute in the background, not after a short switch', () => {
+    let t = 1_000_000;
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => t);
+    const setVisibility = (value) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    try {
+      renderDashboard('/');
+      state.mangaList.fetchMangas.mockClear();
+      setVisibility('hidden');
+      t += 5_000;
+      setVisibility('visible');
+      expect(state.mangaList.fetchMangas).not.toHaveBeenCalled();
+      setVisibility('hidden');
+      t += 61_000;
+      setVisibility('visible');
+      expect(state.mangaList.fetchMangas).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+      delete document.visibilityState;
+    }
+  });
+});
+
 describe('Dashboard page structure', () => {
   it('starts with a skip link to the main region and names the tab after the view', async () => {
     renderDashboard('/');
@@ -270,5 +373,50 @@ describe('Dashboard page structure', () => {
     expect(screen.getByRole('banner').className).toMatch(/pt-\[max\(0\.75rem,env\(safe-area-inset-top\)\)\]/);
     expect(screen.getByRole('heading', { level: 1 }).tabIndex).toBe(-1);
     expect(screen.getByRole('heading', { level: 2, name: 'Sammlung' })).toBeTruthy();
+  });
+});
+
+describe('Dashboard: shelf filters in the URL', () => {
+  const shelf = [
+    { id: 1, title: 'Naruto', author: 'Masashi Kishimoto', publisher: 'Carlsen Manga', status: 'Laufend', owned_volumes: 1, regular_owned: 1, total_volumes: 72, missing_count: 2 },
+    { id: 2, title: 'Death Note', author: 'Tsugumi Ohba, Takeshi Obata', publisher: 'Tokyopop', status: 'Abgeschlossen', owned_volumes: 12, regular_owned: 12, total_volumes: 12 },
+    { id: 3, title: 'Bakuman', author: 'Tsugumi Ohba / Takeshi Obata', publisher: 'Tokyopop', status: 'Abgeschlossen', owned_volumes: 3, regular_owned: 3, total_volumes: 20, collecting: 'abgebrochen' }
+  ];
+  const titlesShown = () => ['Naruto', 'Death Note', 'Bakuman'].filter(t => screen.queryAllByText(t).length > 0);
+
+  beforeEach(() => { state.mangaList = { ...state.mangaList, mangas: shelf }; });
+
+  it('?author= and ?collect= of a link filter the shelf; the author chip clears its filter and the URL', async () => {
+    renderDashboard('/?author=Tsugumi%20Ohba&collect=complete');
+    expect(titlesShown()).toEqual(['Death Note']);
+    expect(screen.getByLabelText('Sammelstand filtern').value).toBe('complete');
+    fireEvent.click(screen.getByRole('button', { name: 'Autor-Filter „Tsugumi Ohba“ entfernen' }));
+    await waitFor(() => expect(currentUrl()).toBe('/?collect=complete'));
+    expect(titlesShown()).toEqual(['Death Note']);
+  });
+
+  it('a filter change replaces the history entry and keeps ?view=; localStorage stays the default without URL values', async () => {
+    localStorage.setItem('mangashelf_collect_filter', 'gaps');
+    renderDashboard('/');
+    expect(titlesShown()).toEqual(['Naruto']);
+    expect(currentUrl()).toBe('/');
+    fireEvent.change(screen.getByLabelText('Sammelstand filtern'), { target: { value: 'abgebrochen' } });
+    await waitFor(() => expect(currentUrl()).toBe('/?collect=abgebrochen'));
+    expect(titlesShown()).toEqual(['Bakuman']);
+    fireEvent.click(document.getElementById('btn-mobile-shopping'));
+    expect(currentUrl()).toBe('/?collect=abgebrochen&view=shopping');
+    act(() => navigateTo(-1));
+    expect(currentUrl()).toBe('/?collect=abgebrochen');
+    expect(localStorage.getItem('mangashelf_collect_filter')).toBe('abgebrochen');
+  });
+
+  it('grouping by publisher shows a section heading per publisher with its count', async () => {
+    renderDashboard('/?group=publisher');
+    const sections = () => [...document.querySelectorAll('section[aria-labelledby^="shelf-group-"]')];
+    expect(sections().map(s => s.querySelector('h3').textContent)).toEqual(['Carlsen Manga1 Reihe', 'TOKYOPOP2 Reihen']);
+    expect(sections()[1].textContent).toContain('Death Note');
+    fireEvent.change(screen.getByLabelText('Gruppieren'), { target: { value: 'none' } });
+    await waitFor(() => expect(currentUrl()).toBe('/'));
+    expect(sections()).toHaveLength(0);
   });
 });

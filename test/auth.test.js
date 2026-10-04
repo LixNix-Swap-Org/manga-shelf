@@ -265,6 +265,11 @@ function protectedRoutes() {
             found.push({ method: m[1].toUpperCase(), path: m[2].replace(/:[A-Za-z_]+/g, '1'), guard: m[3] });
         }
     }
+    // the endpoints of core/routes.js, mounted with the same guards by routes/core.js
+    const guards = { editor: 'requireEditor', admin: 'requireAdmin' };
+    for (const row of require('../core/routes').routes.filter(r => guards[r.role])) {
+        found.push({ method: row.method, path: row.path.replace(/:[A-Za-z_]+/g, '1'), guard: guards[row.role] });
+    }
     return found;
 }
 
@@ -279,6 +284,29 @@ test('role matrix: visitors and guests get 403 on every write route, editors on 
             assert.equal(res.status, 403, `${name} ${method} ${url}`);
         }
     }
+});
+
+test('connect-info: editors get the address, name, instance id and the app link; visitors and guests do not', async () => {
+    const ed = await loggedIn('ed');
+    const res = await ed('GET', '/auth/connect-info', undefined, { 'X-Forwarded-Proto': 'https' });
+    assert.equal(res.status, 200);
+    const host = new URL(ctx.base).host;
+    const health = await (await fetch(ctx.base + '/health')).json();
+    assert.equal(res.body.url, `https://${host}`);
+    assert.equal(res.body.name, 'Manga Shelf');
+    assert.equal(res.body.instance_id, health.instance_id);
+    const link = new URL(res.body.link);
+    assert.equal(link.protocol, 'manga-shelf:');
+    assert.equal(link.searchParams.get('url'), `https://${host}`);
+    assert.equal(link.searchParams.get('name'), 'Manga Shelf');
+    assert.equal(link.searchParams.get('id'), health.instance_id);
+    const raw = await fetch(ctx.base + '/auth/connect-info', { headers: { Cookie: ed.cookie } });
+    assert.equal(raw.headers.get('cache-control'), 'no-store');
+
+    assert.equal((await ctx.client()('GET', '/auth/connect-info')).status, 401);
+    assert.equal((await (await loggedIn('vis'))('GET', '/auth/connect-info')).status, 403);
+    assert.equal((await (await loggedIn('gast'))('GET', '/auth/connect-info')).status, 403);
+    assert.equal((await admin('GET', '/auth/connect-info')).status, 200);
 });
 
 const jsonPost = (url, body, headers = {}) => fetch(ctx.base + url, {

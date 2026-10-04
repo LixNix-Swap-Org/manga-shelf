@@ -24,11 +24,14 @@ export default function GapNotices({
   duplicateEntries = [], canEdit, isOffline = false, showGaps, detectedGaps = [], detectedGapEntries = [],
   volumeFilter, volumeSearch = '', gapsAllowedByFilters, volumeViewMode,
   mpGapData, mpGapLoading, mpGapNotice, fillingGapLoading, canSyncVolumeCount, gapEditionUnconfirmed,
-  handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal
+  handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal, collecting = 'aktiv'
 }) {
   const searching = Boolean(String(volumeSearch ?? '').trim());
   const gapsVisible = gapsAllowedByFilters ?? ((volumeFilter === 'ALL' || volumeFilter === 'Fehlt') && !searching);
-  const showGapBanner = showGaps && detectedGaps.length > 0 && gapsVisible;
+  const gapsFound = showGaps && detectedGaps.length > 0 && gapsVisible;
+  // a series the household no longer collects offers no gap imports
+  const dropped = collecting === 'abgebrochen';
+  const showGapBanner = gapsFound && !dropped;
   const unconfirmed = gapEditionUnconfirmed ?? Boolean(mpGapData?.matched && mpGapData.link_confirmed === false);
   // a guessed edition shows only the confirm banner: confirming already takes over its volume count
   const showDiscrepancy = Boolean(canEdit && !isOffline && canSyncVolumeCount && mpGapData?.discrepancy && !searching);
@@ -148,6 +151,13 @@ export default function GapNotices({
             )}
           </div>
         </div>
+      )}
+
+      {gapsFound && dropped && (
+        <p id="gap-notice-dropped" className="mb-4 text-[11px] text-slate-400 flex items-center gap-1.5">
+          <CircleAlert className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span>Nicht mehr gesammelt: {formatCount(detectedGaps.length, 'Lücke wird', 'Lücken werden')} nicht angezeigt.</span>
+        </p>
       )}
 
       {mpGapNotice && !isOffline && (

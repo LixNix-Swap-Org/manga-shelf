@@ -1,8 +1,14 @@
-import { ArrowUpDown, BuildingComplex, ChevronDown, LayoutGrid, List, X } from 'lucide-react';
-import { SORT_OPTIONS, getStatusTabs } from '../../utils/collectionHelpers';
+import { ArrowUpDown, BuildingComplex, ChevronDown, Layers, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
+import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
 
-/** Status tabs, publisher/sort filters and view-mode toggle. Purely presentational; all state and handlers come in via props. */
+const CHIP_LABEL = 'flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group';
+
+/**
+ * Status tabs, publisher / collect / genre / sort / grouping selects, the author and genre chips and the view-mode
+ * toggle. Purely presentational; all state and handlers come in via props. The genre filter (AND over the chosen tags)
+ * shows when `setTagFilter` is given; `availableTags` is getAvailableTags() ([{ tag, count }]).
+ */
 export default function CollectionToolbar({
   availablePublishers,
   filterCounts,
@@ -17,9 +23,24 @@ export default function CollectionToolbar({
   sortBy,
   statusFilter,
   statusTabs,
-  viewMode
+  viewMode,
+  collectFilter = 'ALL',
+  setCollectFilter,
+  collectCounts = null,
+  authorFilter = '',
+  setAuthorFilter,
+  groupBy = 'none',
+  setGroupBy,
+  availableTags = [],
+  tagFilter = [],
+  setTagFilter
 }) {
   const tabs = statusTabs || getStatusTabs(filterCounts || {}, statusFilter);
+  const chosenTags = Array.isArray(tagFilter) ? tagFilter : [];
+  const chosenKeys = new Set(chosenTags.map(t => t.toLowerCase()));
+  const tagOptions = availableTags.filter(t => !chosenKeys.has(t.tag.toLowerCase()));
+  const filtersActive = statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter) || Boolean(search)
+    || chosenTags.length > 0;
   return (
     <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
       {/* Status Tabs with Count Badges */}
@@ -66,6 +87,58 @@ export default function CollectionToolbar({
           <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
         </label>
 
+        {setCollectFilter && (
+          <label className={CHIP_LABEL}>
+            <ListFilter className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
+            <select
+              id="filter-collect-select"
+              aria-label="Sammelstand filtern"
+              value={collectFilter}
+              onChange={e => setCollectFilter(e.target.value)}
+              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+            >
+              {COLLECT_FILTERS.map(f => (
+                <option key={f.id} value={f.id}>
+                  {f.label}{collectCounts && f.id !== 'ALL' ? ` (${collectCounts[f.id] || 0})` : ''}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
+          </label>
+        )}
+
+        {setTagFilter && (availableTags.length > 0 || chosenTags.length > 0) && (
+          <label className={CHIP_LABEL}>
+            <Tag className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
+            <select
+              id="filter-tag-select"
+              aria-label="Genre filtern"
+              value=""
+              onChange={e => { if (e.target.value) setTagFilter([...chosenTags, e.target.value]); }}
+              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+            >
+              <option value="">{chosenTags.length ? 'Weiteres Genre…' : 'Alle Genres'}</option>
+              {tagOptions.map(t => <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>)}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
+          </label>
+        )}
+
+        {setTagFilter && chosenTags.map(tag => (
+          <button
+            key={tag}
+            type="button"
+            onClick={() => setTagFilter(chosenTags.filter(t => t !== tag))}
+            className="tag-filter-chip flex items-center gap-1.5 min-w-0 max-w-full rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/15 px-2.5 py-1.5 text-fuchsia-200 hover:bg-fuchsia-500/25 shrink-0"
+            title="Genre-Filter entfernen"
+            aria-label={`Genre-Filter „${tag}“ entfernen`}
+          >
+            <Tag className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate max-w-[140px]">{tag}</span>
+            <X className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          </button>
+        ))}
+
         {/* Sort Control */}
         <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
           <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
@@ -80,13 +153,49 @@ export default function CollectionToolbar({
           <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" />
         </label>
 
+        {setGroupBy && (
+          <label className={CHIP_LABEL}>
+            <Layers className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
+            <select
+              id="group-by-select"
+              aria-label="Gruppieren"
+              value={groupBy}
+              onChange={e => setGroupBy(e.target.value)}
+              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+            >
+              {GROUP_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.value === 'none' ? o.label : `Gruppieren: ${o.label}`}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
+          </label>
+        )}
+
+        {authorFilter && setAuthorFilter && (
+          <button
+            type="button"
+            id="author-filter-chip"
+            onClick={() => setAuthorFilter('')}
+            className="flex items-center gap-1.5 min-w-0 max-w-full rounded-xl border border-brand-500/40 bg-brand-500/15 px-2.5 py-1.5 text-brand-200 hover:bg-brand-500/25 shrink-0"
+            title="Autor-Filter entfernen"
+            aria-label={`Autor-Filter „${authorFilter}“ entfernen`}
+          >
+            <UserPen className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate max-w-[160px]">{authorFilter}</span>
+            <X className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          </button>
+        )}
+
         {/* Reset Filter Button (visible when filter active) */}
-        {(statusFilter !== 'ALL' || publisherFilter !== 'ALL' || search) && (
+        {filtersActive && (
           <button
             type="button"
             onClick={() => {
               setStatusFilter('ALL');
               setPublisherFilter('ALL');
+              setCollectFilter?.('ALL');
+              setAuthorFilter?.('');
+              setTagFilter?.([]);
               setSearch('');
             }}
             className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"

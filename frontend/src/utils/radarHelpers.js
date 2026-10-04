@@ -1,7 +1,7 @@
 import { formatGermanDate, GERMAN_MONTHS } from './collectionHelpers.js';
 import { createSearch, prepareQuery } from './search.js';
 
-// Same groups as the backend (routes/radar.js import guard, services/radar.js isPreordered)
+// Same groups as the backend (core/handlers/mangaPassion.js import guard, core/radar.js isPreordered)
 export const OWNED_STATUSES = ['Vorhanden', 'Gelesen'];
 export const ORDERED_STATUSES = ['Vorbestellt', 'Bestellt'];
 export const UPCOMING_STATUS = 'Erscheint bald';

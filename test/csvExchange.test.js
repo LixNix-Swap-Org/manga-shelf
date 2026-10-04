@@ -4,6 +4,7 @@ const {
     toCsv, parseCsv, mapCsvRows, normalizeDate, parseAmount, CsvFormatError, guardFormulas, unescapeCell, COLUMNS,
     MAX_NOTES_LENGTH, MAX_CELL_LENGTH
 } = require('../services/csvExchange');
+const { SERIES_DETAIL_KEYS, COLLECTING_STATUSES } = require('../core/csvExchange');
 const { startTestServer } = require('./helpers');
 
 const roundTrip = (rows) => mapCsvRows(parseCsv(toCsv(rows)));
@@ -201,6 +202,49 @@ test('Notizen bis 10000 Zeichen überstehen den Rundlauf auch mit Formelschutz; 
     assert.match(long.errors[1].message, /Zelle ist zu lang/);
 });
 
+test('Band-Cover, Bilder und Reihenspalten: zu lange Werte werden mit Hinweis ignoriert, die Zeile bleibt', () => {
+    const dataCover = 'data:image/png;base64,' + 'A'.repeat(30000);
+    const longUrl = 'https://img.example.org/' + 'x'.repeat(2100);
+    const description = 'd'.repeat(25000);
+    const header = 'Reihe;Bandnummer;Gesamtbände;Beschreibung;Band-Cover;Bilder;Notizen';
+    const csv = `${header}\nA;1;7;${description};"${dataCover}";"${dataCover} | /uploads/b.jpg";kurz\nA;2;;;${longUrl};;\n`;
+    const { records, errors, warnings } = mapCsvRows(parseCsv(csv, { maxCellLength: 200000 }));
+    assert.deepEqual(errors, []);
+    assert.deepEqual(records.map(r => [r.volume_number, r.cover_image, r.images, r.notes]), [
+        ['1', null, JSON.stringify(['/uploads/b.jpg']), 'kurz'],
+        ['2', null, null, null]
+    ]);
+    assert.deepEqual(records[0].series_meta, { total_volumes: 7 });
+    assert.deepEqual(warnings.map(w => w.line), [2, 2, 2, 3]);
+    assert.match(warnings[0].message, /„Beschreibung“ \(maximal 10000 Zeichen\) wird ignoriert/);
+    assert.match(warnings[1].message, /^Ungültiger Wert „data:image\/png;base6…“ in „Band-Cover“ \(maximal 2048 Zeichen\) wird ignoriert$/);
+    assert.match(warnings[2].message, /„Bilder“ \(maximal 2048 Zeichen je Bild\)/);
+    assert.match(warnings[3].message, /„Band-Cover“/);
+
+    const many = Array.from({ length: 51 }, (_, i) => `/uploads/${i}.jpg`).join(' | ');
+    const tooMany = mapCsvRows(parseCsv(`Reihe;Bandnummer;Bilder\nB;1;${many}`));
+    assert.deepEqual([tooMany.errors, tooMany.records[0].images], [[], null]);
+    assert.match(tooMany.warnings[0].message, /„51 Bilder“ in „Bilder“ \(maximal 50\)/);
+
+    const junk = mapCsvRows(parseCsv(`Reihe;Bandnummer;Extra\nC;1;${'z'.repeat(MAX_CELL_LENGTH + 1)}`));
+    assert.match(junk.errors[0].message, /Zelle ist zu lang/, 'other columns keep the whole-row limit');
+});
+
+test('Verworfene Zeilen tragen ihre Reihenfelder in series_source', () => {
+    const csv = 'Reihe;Reihenverlag;Bandnummer;Preis;Typ;Reihenstatus;Gesamtbände;Manga-Passion-ID\n'
+        + 'A;Carlsen;1;teuer;;Abgeschlossen;7;42\nA;Carlsen;2;;;;;\nB;;1;;Unsinn;Pausiert;;\nC;;;5;;Laufend;3;\n';
+    const { records, errors } = mapCsvRows(parseCsv(csv));
+    assert.deepEqual(records.map(r => [r.series, r.volume_number]), [['A', '2']]);
+    assert.deepEqual(errors.map(e => e.line), [2, 4, 5]);
+    assert.deepEqual(errors[0].series_source, {
+        line: 2, series: 'A', series_publisher: 'Carlsen', series_meta: { status: 'Abgeschlossen', total_volumes: 7, manga_passion_id: 42 }
+    });
+    assert.equal(errors[0].record.volume_number, '1');
+    assert.deepEqual([errors[1].series_source.series_meta, errors[1].record], [{ status: 'Pausiert' }, undefined]);
+    assert.deepEqual(errors[2].series_source.series_meta, { status: 'Laufend', total_volumes: 3 });
+    assert.deepEqual(Object.keys(errors[0]), ['line', 'message'], 'the response shape of an error stays { line, message }');
+});
+
 test('Bandnummer "Band 5" wird beim Import wie bei POST /volumes zu "5"', () => {
     const { records } = mapCsvRows(parseCsv('Reihe;Bandnummer;Typ\nA;Band 5;\nA;Bd. 6;\nA;Band 7;Schuber\nA;Bandit;'));
     assert.deepEqual(records.map(r => [r.volume_number, r.type]), [['5', 'volume'], ['6', 'volume'], ['Band 7', 'schuber'], ['Bandit', 'volume']]);
@@ -214,6 +258,18 @@ test('Besitzer- und Leser-Zellen sind begrenzt; "Gelesen von" wird gelesen und e
     assert.match(errors[1].message, /Gelesen von/);
     assert.equal(records[0].readers_raw, 'bob, ann');
     assert.deepEqual(COLUMNS.slice(-2).map(c => c[1]), ['Gelesen von', 'Besitzer']);
+    assert.ok(COLUMNS.some(c => c[1] === 'Reihen-Wunsch'));
+});
+
+test('Sammelstatus: nach Reihenstatus, nur auf der ersten Zeile; Import ohne Rücksicht auf Groß-/Kleinschreibung, sonst Hinweis', () => {
+    const keys = COLUMNS.map(c => c[0]);
+    assert.equal(keys.indexOf('series_collecting'), keys.indexOf('series_status') + 1);
+    assert.ok(SERIES_DETAIL_KEYS.includes('series_collecting'));
+    assert.deepEqual(COLLECTING_STATUSES, require('../core/handlers/mangas').COLLECTING_STATUSES);
+    const { records, warnings, errors } = mapCsvRows(parseCsv('Reihe;Bandnummer;Sammelstatus\nA;1;Pausiert\nB;1;ABGEBROCHEN\nC;1;vielleicht\nD;1;\n'));
+    assert.deepEqual(errors, []);
+    assert.deepEqual(records.map(r => r.series_meta.collecting), ['pausiert', 'abgebrochen', undefined, undefined]);
+    assert.deepEqual(warnings, [{ line: 4, message: 'Ungültiger Wert „vielleicht“ in „Sammelstatus“ (aktiv, pausiert, abgebrochen) wird ignoriert' }]);
 });
 
 test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t) => {
@@ -585,6 +641,121 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             const res = (await admin('POST', '/import/csv', { csv: lines.join('\n'), dry_run: true })).body;
             assert.equal(res.skipped_existing, 5000);
             assert.ok(Date.now() - started < 1500, `Import dauerte ${Date.now() - started} ms`);
+        });
+
+        await t.test('Verlustfreier Rundlauf: Reihenfelder, Wunschreihe, Bandpriorität, Zielpreis, Cover, Bilder, MP-IDs', async () => {
+            wipe();
+            await addSeries('Wunschreihe', {
+                publisher: 'Carlsen Manga', wish_priority: 3, status: 'Geplant', total_volumes: 12, alt_title: 'Wish',
+                tags: 'Action, Drama', description: 'Zeile 1\nZeile 2; mit Semikolon', cover_image: '/uploads/w.jpg',
+                manga_passion_id: 4711, language: 'Englisch', collecting: 'pausiert'
+            });
+            const full = await addSeries('Vollreihe', { publisher: 'Egmont Manga', wish_priority: 1, total_volumes: 3 });
+            await addVolume(full, { volume_number: '1', status: 'Fehlt', priority: 2, target_price: '4,50', price: 7 });
+            await addVolume(full, { volume_number: '2', status: 'Vorhanden', cover_image: '/uploads/c2.jpg', images: ['/uploads/c2.jpg', '/uploads/b.jpg'] });
+            db.prepare('UPDATE volumes SET manga_passion_volume_id = 99 WHERE manga_id = ? AND volume_number = ?').run(full, '1');
+            await addSeries('Ohne Wunsch');
+
+            const snapshot = () => ({
+                series: db.prepare(`SELECT title, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
+                    banner_image, manga_passion_id, wish_priority, collecting FROM mangas ORDER BY title`).all(),
+                volumes: db.prepare(`SELECT m.title, v.volume_number, v.type, v.status, v.price, v.priority, v.target_price, v.cover_image,
+                    v.images, v.manga_passion_volume_id FROM volumes v JOIN mangas m ON m.id = v.manga_id ORDER BY m.title, v.volume_number`).all()
+            });
+            const before = snapshot();
+            const csv = await exportCsv();
+            const lines = csv.split('\r\n');
+            assert.ok(lines[0].includes(';Reihen-Wunsch;Reihenstatus;Sammelstatus;Gesamtbände;'));
+            assert.ok(lines[0].endsWith(';Gelesen von;Besitzer'));
+            const header = parseCsv(lines[0])[0];
+            const rows = parseCsv(csv).slice(1);
+            const col = (name) => header.indexOf(name);
+            const wishRow = rows.find(r => r[0] === 'Wunschreihe');
+            assert.deepEqual([wishRow[col('Typ')], wishRow[col('Bandnummer')], wishRow[col('Status')], wishRow[col('Reihen-Wunsch')]], ['Reihe', '', '', '3']);
+            const fullRows = rows.filter(r => r[0] === 'Vollreihe');
+            assert.deepEqual(fullRows.map(r => r[col('Reihen-Wunsch')]), ['1', '1'], 'the wish is repeated on every row of the series');
+            assert.deepEqual(fullRows.map(r => r[col('Gesamtbände')]), ['3', ''], 'other series fields only on the first row');
+            assert.equal(wishRow[col('Sammelstatus')], 'pausiert');
+            assert.deepEqual(fullRows.map(r => r[col('Sammelstatus')]), ['', ''], 'aktiv is exported empty');
+            assert.equal(fullRows[1][col('Bilder')], '/uploads/c2.jpg | /uploads/b.jpg');
+
+            wipe();
+            const res = (await admin('POST', '/import/csv', { csv })).body;
+            assert.deepEqual(res.errors, []);
+            assert.deepEqual(res.warnings, []);
+            assert.deepEqual([res.created_series, res.created_volumes], [3, 2]);
+            assert.deepEqual(snapshot(), before);
+            const list = (await admin('GET', '/mangas')).body;
+            // Vollreihe keeps its wish_priority but owns a volume, so it is no wished series any more
+            assert.deepEqual(list.filter(m => m.wished).map(m => m.title), ['Wunschreihe']);
+        });
+
+        await t.test('Reihen-Zeile setzt den Wunsch einer vorhandenen Reihe; alte CSVs ohne neue Spalten bleiben gültig', async () => {
+            wipe();
+            const id = await addSeries('Vorhanden', { status: 'Laufend' });
+            const dry = (await admin('POST', '/import/csv', { csv: 'Reihe;Typ;Bandnummer;Reihen-Wunsch;Reihenstatus\nVorhanden;Reihe;;2;Abgeschlossen\n', dry_run: true })).body;
+            assert.deepEqual([dry.updated_series, dry.created_series], [1, 0]);
+            assert.equal(db.prepare('SELECT wish_priority FROM mangas WHERE id = ?').get(id).wish_priority, null);
+            const real = (await admin('POST', '/import/csv', { csv: 'Reihe;Typ;Bandnummer;Reihen-Wunsch;Reihenstatus\nVorhanden;Reihe;;2;Abgeschlossen\n' })).body;
+            assert.equal(real.updated_series, 1);
+            const row = db.prepare('SELECT wish_priority, status FROM mangas WHERE id = ?').get(id);
+            assert.deepEqual([row.wish_priority, row.status], [2, 'Laufend'], 'only the wish of an existing series changes');
+            const same = (await admin('POST', '/import/csv', { csv: 'Reihe;Typ;Bandnummer;Reihen-Wunsch\nVorhanden;Reihe;7;2\n' })).body;
+            assert.deepEqual([same.updated_series, same.skipped_existing, same.created_volumes], [0, 1, 0]);
+            assert.deepEqual(same.warnings.map(w => w.line), [2], 'a volume number in a series row is ignored with a hint');
+
+            const old = (await admin('POST', '/import/csv', { csv: 'Reihe;Bandnummer;Status;Priorität;Zielpreis\nAlt;1;Fehlt;3;5\n' })).body;
+            assert.deepEqual([old.created_series, old.created_volumes, old.errors], [1, 1, []]);
+            const alt = db.prepare("SELECT m.wish_priority, v.priority, v.target_price FROM mangas m JOIN volumes v ON v.manga_id = m.id WHERE m.title = 'Alt'").get();
+            assert.deepEqual([alt.wish_priority, alt.priority, alt.target_price], [null, 3, 5]);
+
+            const bad = (await admin('POST', '/import/csv', { csv: 'Reihe;Bandnummer;Reihen-Wunsch;Reihenstatus;Gesamtbände\nFalsch;1;9;Irgendwas;x\n' })).body;
+            assert.deepEqual([bad.created_volumes, bad.errors], [1, []]);
+            assert.equal(bad.warnings.length, 3);
+            const falsch = db.prepare("SELECT wish_priority, status, total_volumes FROM mangas WHERE title = 'Falsch'").get();
+            assert.deepEqual([falsch.wish_priority, falsch.status, falsch.total_volumes], [null, 'Laufend', null]);
+        });
+
+        await t.test('Rundlauf mit langem data:-Cover, langer Cover-URL und 20-kB-Beschreibung: Bände und Reihenfelder bleiben', async () => {
+            wipe();
+            const a = await addSeries('Lange Felder', { total_volumes: 7, status: 'Abgeschlossen', manga_passion_id: 42, tags: 'Drama' });
+            db.prepare('UPDATE mangas SET description = ?, cover_image = ? WHERE id = ?')
+                .run('Beschreibung '.repeat(1600), 'data:image/jpeg;base64,' + 'B'.repeat(40000), a);
+            const dataCover = 'data:image/png;base64,' + 'A'.repeat(30000);
+            await addVolume(a, { volume_number: '1', status: 'Vorhanden', cover_image: dataCover });
+            await addVolume(a, { volume_number: '2', status: 'Fehlt' });
+            const b = await addSeries('Lange URL', { total_volumes: 3, status: 'Abgeschlossen', manga_passion_id: 43 });
+            await addVolume(b, { volume_number: '1', status: 'Vorhanden', cover_image: 'https://img.example.org/' + 'x'.repeat(2100) });
+            await addVolume(b, { volume_number: '2', status: 'Vorhanden', cover_image: '/uploads/b2.jpg' });
+            assert.ok(db.prepare('SELECT length(description) AS n FROM mangas WHERE id = ?').get(a).n > 20000);
+
+            const csv = await exportCsv();
+            wipe();
+            const res = (await admin('POST', '/import/csv', { csv })).body;
+            assert.deepEqual(res.errors, []);
+            assert.deepEqual([res.created_series, res.created_volumes], [2, 4]);
+            const series = db.prepare('SELECT title, status, total_volumes, manga_passion_id, tags, description, cover_image FROM mangas ORDER BY title').all();
+            assert.deepEqual(series.map(m => ({ ...m })), [
+                { title: 'Lange Felder', status: 'Abgeschlossen', total_volumes: 7, manga_passion_id: 42, tags: 'Drama', description: null, cover_image: null },
+                { title: 'Lange URL', status: 'Abgeschlossen', total_volumes: 3, manga_passion_id: 43, tags: null, description: null, cover_image: null }
+            ]);
+            const volumes = db.prepare('SELECT m.title, v.volume_number, v.cover_image, v.images FROM volumes v JOIN mangas m ON m.id = v.manga_id ORDER BY m.title, v.volume_number').all();
+            assert.deepEqual(volumes.map(v => [v.title, v.volume_number, v.cover_image, v.images]), [
+                ['Lange Felder', '1', null, null], ['Lange Felder', '2', null, null],
+                ['Lange URL', '1', null, null], ['Lange URL', '2', '/uploads/b2.jpg', JSON.stringify(['/uploads/b2.jpg'])]
+            ]);
+            const ignored = res.warnings.map(w => w.message.match(/in „([^“]+)“/)[1]);
+            assert.deepEqual(ignored.sort(), ['Band-Cover', 'Band-Cover', 'Beschreibung', 'Bilder', 'Bilder', 'Reihen-Cover']);
+        });
+
+        await t.test('Reihenfelder einer verworfenen ersten Zeile gehen nicht verloren', async () => {
+            wipe();
+            const csv = 'Reihe;Bandnummer;Preis;Reihenstatus;Gesamtbände;Manga-Passion-ID\nErste kaputt;1;viel;Abgeschlossen;5;77\nErste kaputt;2;;;;\n';
+            const res = (await admin('POST', '/import/csv', { csv })).body;
+            assert.deepEqual(res.errors.map(e => e.line), [2]);
+            assert.equal(res.created_volumes, 1);
+            const m = db.prepare("SELECT status, total_volumes, manga_passion_id FROM mangas WHERE title = 'Erste kaputt'").get();
+            assert.deepEqual({ ...m }, { status: 'Abgeschlossen', total_volumes: 5, manga_passion_id: 77 });
         });
     } finally {
         await ctx.close();

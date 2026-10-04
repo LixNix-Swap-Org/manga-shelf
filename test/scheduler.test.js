@@ -200,11 +200,12 @@ test('a retention above the cap keeps the cap, not the smaller default', () => {
     assert.deepEqual(zipFiles(), daily);
 });
 
-test('a malformed retention (30d, -1) prunes nothing, not even failed snapshots', async () => {
+test('a malformed retention (30d, -1) keeps every good snapshot, failed ones only while newest', async () => {
     clearBackups();
     const daily = [];
     for (let d = 1; d <= 9; d++) daily.push(fakeSnapshot('daily-auto', d));
-    fs.writeFileSync(path.join(backupsDir, daily[3].replace(/\.zip$/, '.json')), JSON.stringify({ verified: false, error: 'x' }));
+    const failedOld = daily.splice(3, 1)[0];
+    fs.writeFileSync(path.join(backupsDir, failedOld.replace(/\.zip$/, '.json')), JSON.stringify({ verified: false, error: 'x' }));
     const manual = [];
     for (let d = 1; d <= 12; d++) manual.push(fakeSnapshot('manual', d));
     process.env.BACKUP_KEEP_DAILY = '30d';
@@ -219,7 +220,25 @@ test('a malformed retention (30d, -1) prunes nothing, not even failed snapshots'
     }
     const files = zipFiles();
     for (const name of [...daily, ...manual]) assert.ok(files.includes(name), name);
+    assert.ok(!files.includes(failedOld), 'a failed snapshot older than a good one is pruned');
     assert.equal(files.filter(f => f.startsWith('manual-')).length, 13);
+});
+
+test('BACKUP_KEEP_DAILY=7d: failed daily retries are cut down to the newest one, good ones all stay', () => {
+    clearBackups();
+    const good = [1, 2, 3, 4, 5, 6, 7, 8].map(d => fakeSnapshot('daily-auto', d));
+    const failed = [9, 10, 11].map(d => fakeSnapshot('daily-auto', d));
+    for (const name of failed) fs.writeFileSync(path.join(backupsDir, name.replace(/\.zip$/, '.json')), JSON.stringify({ verified: false, error: 'x' }));
+    process.env.BACKUP_KEEP_DAILY = '7d';
+    try {
+        scheduler.pruneBackups('daily-auto');
+    } finally {
+        delete process.env.BACKUP_KEEP_DAILY;
+    }
+    const files = zipFiles();
+    for (const name of good) assert.ok(files.includes(name), name);
+    assert.deepEqual(failed.filter(n => files.includes(n)), [failed[2]]);
+    assert.ok(!fs.existsSync(path.join(backupsDir, failed[0].replace(/\.zip$/, '.json'))), 'the sidecar goes with it');
 });
 
 test('creating manual snapshots does not delete the daily snapshot', async () => {

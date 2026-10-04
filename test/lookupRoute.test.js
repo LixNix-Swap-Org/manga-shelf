@@ -56,9 +56,10 @@ test.after(async () => {
 
 /** AniList requests go to the local server in `mode`; the test client's own requests pass through. */
 function stubSources(t, mode, mpResult = async () => [MP_RESULT]) {
-    const mangaPassion = require('../mangaPassion');
+    // the handler calls the core client (core/handlers/lookup.js), with the ctx first
+    const mangaPassion = require('../core/mangaPassion/client');
     const original = mangaPassion.searchMangaPassionForLookup;
-    mangaPassion.searchMangaPassionForLookup = mpResult;
+    mangaPassion.searchMangaPassionForLookup = (ctx, term) => mpResult(term);
     global.fetch = (url, opts) => {
         if (String(url).startsWith('https://graphql.anilist.co')) return realFetch(anilistUrl(mode), opts);
         if (String(url).startsWith(ctx.base)) return realFetch(url, opts);
@@ -107,8 +108,17 @@ test('lookup/manga: a stuck Manga Passion search does not block the AniList resu
     assert.equal(res.body[0].description, 'The spy <Twilight> & co.\n\nNext ’line’ x');
 });
 
+test('lookup/manga: the term is capped at 100 characters, like /anime/search', async (t) => {
+    const terms = [];
+    stubSources(t, 'ok', async (term) => { terms.push(term); return []; });
+    const long = 'Berserk ' + 'x'.repeat(300);
+    const res = await admin('GET', `/lookup/manga?q=${encodeURIComponent(long)}`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(terms, [long.slice(0, 100)]);
+});
+
 test('cleanAniListDescription: tags removed before entities are decoded, breaks kept, one decoding pass', () => {
-    const clean = lookup.cleanAniListDescription;
+    const clean = require('../core/anilist').cleanAniListDescription;
     assert.equal(clean('&lt;Twilight&gt; &amp; co.<br><br>Next'), '<Twilight> & co.\n\nNext');
     assert.equal(clean('a &#8212; b'), 'a — b');
     assert.equal(clean('<i>x</i>'), 'x');

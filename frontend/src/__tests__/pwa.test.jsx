@@ -44,7 +44,14 @@ function fakeCaches(fetchImpl) {
       return store.get(name);
     },
     async keys() { return [...store.keys()]; },
-    async delete(name) { return store.delete(name); }
+    async delete(name) { return store.delete(name); },
+    async match(req) {
+      for (const cache of store.values()) {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+      }
+      return undefined;
+    }
   };
 }
 
@@ -175,11 +182,12 @@ describe('service worker', () => {
     await sw.install();
     net.mockResolvedValueOnce(response('<script src="/assets/index-NEW.js"></script>'));
     await sw.fetchOnce('/manga/9', { mode: 'navigate' });
-    net.mockResolvedValueOnce(response('<script src="/assets/index-A.js"></script>'));
+    const cache = await caches.open('mangashelf-app-1');
+    expect(await (await cache.match('/')).text()).not.toContain('index-NEW.js');
+    net.mockResolvedValueOnce(response('<script src="/assets/index-A.js"></script><!-- neu -->'));
     await sw.fetchOnce('/manga/5', { mode: 'navigate' });
-    const keys = [...(await caches.open('mangashelf-app-1')).entries.keys()];
-    expect(keys).not.toContain(abs('/manga/9'));
-    expect(keys).toContain(abs('/manga/5'));
+    expect(await (await cache.match('/')).text()).toContain('<!-- neu -->');
+    expect([...cache.entries.keys()]).not.toContain(abs('/manga/5'));
   });
 
   it('leaves cross-origin requests alone', async () => {
@@ -257,6 +265,19 @@ describe('service worker updates in the page', () => {
     fresh.listeners.controllerchange();
     expect(toasts).toHaveLength(0);
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('offers a worker that was already installing when the watcher attached', async () => {
+    const reg = fakeRegistration();
+    const worker = fakeWorker();
+    reg.installing = worker;
+    await watchServiceWorkerUpdates({ container: fakeContainer({ registration: reg }), win: window, doc: document, reload: vi.fn() });
+    expect(toasts).toHaveLength(0);
+    worker.state = 'installed';
+    worker.listeners.statechange();
+    expect(toasts.map((t) => t.message)).toEqual([UPDATE_TEXT]);
+    toasts[0].action.onClick();
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
   });
 
   it('checks for an update when the app returns to the foreground, at most hourly', async () => {

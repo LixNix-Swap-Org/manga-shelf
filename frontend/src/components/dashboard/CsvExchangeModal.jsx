@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Download, FileSpreadsheet, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { apiUrl } from '../../utils/api';
 import CsvImportPanel from '../modals/backup/CsvImportPanel';
+import DownloadLink from '../modals/backup/DownloadLink';
+import { useDownloadRunning } from '../../app/useDownload';
 
 /**
  * CSV export for every logged-in user and import for editors (POST /api/import/csv: dry run first, then the
@@ -11,10 +12,16 @@ import CsvImportPanel from '../modals/backup/CsvImportPanel';
 export default function CsvExchangeModal({ isOpen, onClose, canEdit, onImported }) {
   const dialogRef = useDialogA11y(isOpen);
   const [importing, setImporting] = useState(false);
+  const downloading = useDownloadRunning();
+  // Escape, Back and the backdrop wait for a running download; the close buttons let it go on in the background
+  const busy = importing || downloading;
 
   if (!isOpen) return null;
 
   const requestClose = () => {
+    if (!busy) onClose();
+  };
+  const closeButton = () => {
     if (!importing) onClose();
   };
 
@@ -24,7 +31,7 @@ export default function CsvExchangeModal({ isOpen, onClose, canEdit, onImported 
       role="dialog"
       aria-modal="true"
       aria-labelledby="csv-exchange-title"
-      data-busy={importing ? 'true' : undefined}
+      data-busy={busy ? 'true' : undefined}
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
       onKeyDown={(e) => {
@@ -44,7 +51,7 @@ export default function CsvExchangeModal({ isOpen, onClose, canEdit, onImported 
           </div>
           <button
             type="button"
-            onClick={requestClose}
+            onClick={closeButton}
             disabled={importing}
             aria-label="Schließen"
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
@@ -56,15 +63,15 @@ export default function CsvExchangeModal({ isOpen, onClose, canEdit, onImported 
         <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
           <div className="text-sm font-semibold text-slate-200">Sammlung exportieren</div>
           <p className="text-xs text-slate-400">Alle Bände als CSV (Semikolon, UTF-8). Öffnet sich direkt in Excel oder LibreOffice.</p>
-          <a id="btn-export-csv" href={apiUrl('/api/export/csv')} download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800">
+          <DownloadLink id="btn-export-csv" path="/api/export/csv" download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800">
             <Download className="w-4 h-4" aria-hidden="true" /> CSV herunterladen
-          </a>
+          </DownloadLink>
         </div>
 
         {canEdit && <CsvImportPanel onImported={onImported} onImportingChange={setImporting} />}
 
         <div className="pt-3 border-t border-slate-800 flex justify-end">
-          <button type="button" onClick={requestClose} disabled={importing} className="btn-secondary text-sm disabled:opacity-50">
+          <button type="button" onClick={closeButton} disabled={importing} className="btn-secondary text-sm disabled:opacity-50">
             Schließen
           </button>
         </div>

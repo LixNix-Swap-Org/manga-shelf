@@ -875,6 +875,35 @@ test('at most three backups stay staged; the oldest is dropped first', async () 
     assert.equal(scheduler.isSnapshotHeld(snapshot), false, 'dropping a staging releases the snapshot');
 });
 
+test('an inspect whose client went away stages nothing and releases the snapshot', async (t) => {
+    const http = require('http');
+    const scheduler = require('../services/scheduler');
+    const snapshot = await createSnapshot();
+    const parse = scheduler.parseSnapshotName;
+    // holds the request inside the handler long enough for the abort to arrive before the inspect finishes
+    t.mock.method(scheduler, 'parseSnapshotName', (name) => {
+        const until = Date.now() + 200;
+        while (Date.now() < until) { /* busy */ }
+        return parse(name);
+    });
+    const body = JSON.stringify({ filename: snapshot });
+    await new Promise((resolve) => {
+        const req = http.request(ctx.base + '/backup/inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), Cookie: admin.cookie }
+        });
+        req.on('error', () => resolve());
+        req.end(body, () => setTimeout(() => { req.destroy(); resolve(); }, 50));
+    });
+    for (let i = 0; i < 100 && scheduler.isSnapshotHeld(snapshot); i++) await new Promise(r => setTimeout(r, 50));
+    assert.equal(scheduler.isSnapshotHeld(snapshot), false, 'no staging keeps the snapshot');
+    assert.deepEqual(stagedFiles(), []);
+    t.mock.restoreAll();
+    const res = await admin('POST', '/backup/inspect', { filename: snapshot });
+    assert.equal(res.status, 200, 'a later inspect still works');
+    assert.equal((await admin('DELETE', `/backup/restore/${res.body.staging_id}`)).status, 200);
+});
+
 test('too little free space answers 507 before a snapshot, an upload or a restore starts', async (t) => {
     const snapshot = await createSnapshot();
     const before = mangaCount();

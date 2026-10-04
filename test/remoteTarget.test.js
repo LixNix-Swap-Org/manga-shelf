@@ -79,6 +79,23 @@ test('redactUrl hides a user part, but an "@" in the query after a host and path
     assert.equal(redactUrl('https://admin:2024#geheim@shelf.example.com'), 'https://***@shelf.example.com');
     assert.equal(redactUrl('https://admin:2024?geheim@shelf.example.com'), 'https://***@shelf.example.com');
     assert.equal(redactUrl('https://shelf.example.com/x?mail=a@b.de'), 'https://shelf.example.com/x?mail=a@b.de');
-    assert.equal(redactUrl('https://shelf.example.com:8443/x#a@b'), 'https://shelf.example.com:8443/x#a@b');
+    // a port before the path looks like user:password, so the cautious form wins
+    assert.equal(redactUrl('https://shelf.example.com:8443/x#a@b'), 'https://***@b');
     assert.equal(redactUrl('admin:geheim@nas'), '***@nas');
+});
+
+test('a user:digits part with "/" and "?" or "#" in the password never shows up in a message', () => {
+    assert.equal(redactUrl('admin:2024/s3cret?x@nas'), '***@nas');
+    assert.equal(redactUrl('ftp://admin:2024/secret#x@nas.local'), 'ftp://***@nas.local');
+    for (const [argv, env] of [
+        [['ftp://admin:2024/secret#x@nas.local'], {}],
+        [['admin:2024/s3cret?x@nas'], {}],
+        [[], { REMOTE_HOST: 'admin:2024/s3cret?x@nas' }]
+    ]) {
+        assert.throws(() => resolveTarget(argv, env), (err) => {
+            assert.match(err.message, /^Ungültiger Host/);
+            assert.doesNotMatch(err.message, /secret|s3cret|2024/);
+            return true;
+        });
+    }
 });

@@ -1,6 +1,9 @@
 // Session, logout and update helpers for App.jsx / main.jsx.
-import { TIMEOUTS, apiFetch, readJson } from './utils/api';
-import { setToken } from './app/connection';
+import { TIMEOUTS, apiFetch, readJson, isAppMode } from './utils/api';
+import { setToken, probeUrl } from './app/connection';
+import {
+  getActiveServerId, getPendingLogouts, getAllPendingLogouts, beginLogout, settlePendingLogout
+} from './app/serverStore';
 
 export { readJson };
 
@@ -9,7 +12,6 @@ export const UPLOADS_CACHE = 'mangashelf-uploads-v2';
 const UPLOADS_CACHE_PREFIX = 'mangashelf-uploads-';
 export const LOGOUT_PENDING_KEY = 'mangashelf_logout_pending';
 export const SEARCH_STORAGE_KEY = 'mangashelf_search';
-export const UPDATE_AVAILABLE_EVENT = 'mangashelf:update-available';
 const CHUNK_RELOAD_KEY = 'mangashelf_chunk_reload_at';
 const CHUNK_RELOAD_GUARD_MS = 30000;
 export const STARTUP_TIMEOUT_MS = TIMEOUTS.auth;
@@ -20,7 +22,6 @@ const BEFORE_LOGOUT_TIMEOUT_MS = 10000;
 export const MESSAGES = {
   sessionExpired: 'Deine Sitzung ist abgelaufen – bitte melde dich neu an.',
   logoutPending: 'Abmelden wird beim nächsten Verbindungsaufbau abgeschlossen. Bis dahin bleibt die Sitzung auf dem Server gültig.',
-  purchasesQueued: 'Vorgemerkte Käufe werden bei deiner nächsten Anmeldung auf diesem Gerät übertragen.',
   cookieRejected: 'Anmeldung erfolgreich, aber das Sitzungs-Cookie wurde nicht gespeichert – HTTPS/Proxy-Einstellungen (COOKIE_SECURE, X-Forwarded-Proto) prüfen.',
   loginUnconfirmed: 'Anmeldung erfolgreich, aber der Server antwortet gerade nicht. Bitte erneut versuchen.',
   adminExists: 'Ein Administrator wurde bereits angelegt – bitte melde dich an.'
@@ -30,15 +31,31 @@ const storageOf = (name) => {
   try { return globalThis[name] ?? null; } catch (_) { return null; }
 };
 
-export function isLogoutPending(storage = storageOf('localStorage')) {
+// Browser build: one flag, the cookie is the session. App build: one record per server with the token that the logout
+// has to revoke (serverStore.beginLogout); it is only ever sent to that server's own addresses.
+
+/** A logout that has not reached the server yet; in the app build the one of `serverId` (default: the active server). */
+export function isLogoutPending(storage = storageOf('localStorage'), { serverId } = {}) {
+  if (isAppMode()) {
+    const id = serverId ?? getActiveServerId();
+    return Boolean(id) && getPendingLogouts(id).length > 0;
+  }
   try { return storage?.getItem(LOGOUT_PENDING_KEY) === '1'; } catch (_) { return false; }
 }
 
+/** Before the logout request. App build: the active server's token leaves its entry now and waits for the request. */
 export function markLogoutPending(storage = storageOf('localStorage')) {
+  if (isAppMode()) {
+    const id = getActiveServerId();
+    if (id) beginLogout(id);
+    return;
+  }
   try { storage?.setItem(LOGOUT_PENDING_KEY, '1'); } catch (_) { /* storage unavailable */ }
 }
 
+/** Browser build: a new login replaced the cookie. App build: nothing, the old token is still revoked when possible. */
 export function clearLogoutPending(storage = storageOf('localStorage')) {
+  if (isAppMode()) return;
   try { storage?.removeItem(LOGOUT_PENDING_KEY); } catch (_) { /* storage unavailable */ }
 }
 
@@ -53,10 +70,43 @@ export async function postLogout({ timeoutMs = STARTUP_TIMEOUT_MS } = {}) {
   }
 }
 
-/** Sends a logout that could not reach the server earlier. Resolves true when nothing is pending any more. */
-export async function flushPendingLogout(options) {
+/** Sends one pending app logout with its own token to the first of its addresses that is the same server again. */
+async function sendServerLogout(record, timeoutMs) {
+  for (const url of record.urls) {
+    const probe = await probeUrl(url, { instanceId: record.instanceId ?? null, timeoutMs: Math.min(timeoutMs, 3000) });
+    if (!probe.ok) continue;
+    try {
+      const res = await apiFetch(`${url}/api/auth/logout`, {
+        method: 'POST', timeout: timeoutMs, headers: { Authorization: `Bearer ${record.token}` }
+      });
+      // 401: the session is gone already
+      if (res.ok || res.status === 401) return true;
+    } catch (_) { /* next address */ }
+  }
+  return false;
+}
+
+async function flushServerLogouts(records, timeoutMs) {
+  let done = true;
+  for (const record of records) {
+    if (await sendServerLogout(record, timeoutMs)) settlePendingLogout(record);
+    else done = false;
+  }
+  return done;
+}
+
+/**
+ * Sends a logout that could not reach the server earlier. Resolves true when nothing is pending any more. App build:
+ * the logouts of `serverId` (default: the active server), or of every saved server with `all`.
+ */
+export async function flushPendingLogout({ timeoutMs = STARTUP_TIMEOUT_MS, serverId, all = false } = {}) {
+  if (isAppMode()) {
+    const id = serverId ?? getActiveServerId();
+    const records = all ? getAllPendingLogouts() : (id ? getPendingLogouts(id) : []);
+    return records.length ? flushServerLogouts(records, timeoutMs) : true;
+  }
   if (!isLogoutPending()) return true;
-  const ok = await postLogout(options);
+  const ok = await postLogout({ timeoutMs });
   if (ok) clearLogoutPending();
   return ok;
 }

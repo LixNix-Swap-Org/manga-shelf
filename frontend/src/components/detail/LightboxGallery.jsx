@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, Star, ExternalLink, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, assetUrl, assetImgProps } from '../../utils/api';
+
+const SWIPE_MIN_PX = 50;
 
 export default function LightboxGallery({
   lightboxData,
@@ -12,6 +14,13 @@ export default function LightboxGallery({
   onSuccess,
   onSetCover
 }) {
+  const step = useCallback((delta) => {
+    setLightboxData(prev => {
+      if (!prev || prev.images.length <= 1) return prev;
+      return { ...prev, currentIndex: (prev.currentIndex + delta + prev.images.length) % prev.images.length };
+    });
+  }, [setLightboxData]);
+
   useEffect(() => {
     if (!lightboxData) return;
     const handleKeyDown = (e) => {
@@ -20,26 +29,31 @@ export default function LightboxGallery({
         e.stopPropagation();
         onClose();
       } else if (e.key === 'ArrowLeft') {
-        setLightboxData(prev => {
-          if (!prev || prev.images.length <= 1) return prev;
-          return {
-            ...prev,
-            currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
-          };
-        });
+        step(-1);
       } else if (e.key === 'ArrowRight') {
-        setLightboxData(prev => {
-          if (!prev || prev.images.length <= 1) return prev;
-          return {
-            ...prev,
-            currentIndex: (prev.currentIndex + 1) % prev.images.length
-          };
-        });
+        step(1);
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [lightboxData, onClose, setLightboxData]);
+  }, [lightboxData, onClose, step]);
+
+  // horizontal swipe on touch and pen; a mostly vertical drag or one under 50 px does nothing
+  const swipeRef = useRef(null);
+  const swipeHandlers = {
+    onPointerDown: (e) => {
+      swipeRef.current = e.pointerType === 'mouse' ? null : { x: e.clientX, y: e.clientY };
+    },
+    onPointerUp: (e) => {
+      const start = swipeRef.current;
+      swipeRef.current = null;
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(e.clientY - start.y)) return;
+      step(dx < 0 ? 1 : -1);
+    },
+    onPointerCancel: () => { swipeRef.current = null; }
+  };
 
   const dialogRef = useDialogA11y(Boolean(lightboxData));
   if (!lightboxData) return null;
@@ -160,10 +174,7 @@ export default function LightboxGallery({
         {lightboxData.images.length > 1 ? (
           <button
             type="button"
-            onClick={() => setLightboxData(prev => ({
-              ...prev,
-              currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
-            }))}
+            onClick={() => step(-1)}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
             title="Vorheriges Bild (Pfeiltaste links)"
             aria-label="Vorheriges Bild"
@@ -173,7 +184,10 @@ export default function LightboxGallery({
         ) : <div className="w-10 sm:w-12 shrink-0" />}
 
         {/* Main Image */}
-        <div className="flex-1 flex flex-col items-center justify-center h-full max-h-[75vh] relative overflow-hidden">
+        <div
+          {...swipeHandlers}
+          className="flex-1 flex flex-col items-center justify-center h-full max-h-[75vh] relative overflow-hidden touch-pan-y touch-pinch-zoom"
+        >
           <img 
             key={lightboxData.images[lightboxData.currentIndex]}
             {...assetImgProps(lightboxData.images[lightboxData.currentIndex])} 
@@ -186,10 +200,7 @@ export default function LightboxGallery({
         {lightboxData.images.length > 1 ? (
           <button
             type="button"
-            onClick={() => setLightboxData(prev => ({
-              ...prev,
-              currentIndex: (prev.currentIndex + 1) % prev.images.length
-            }))}
+            onClick={() => step(1)}
             className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-all shadow-xl z-10"
             title="Nächstes Bild (Pfeiltaste rechts)"
             aria-label="Nächstes Bild"

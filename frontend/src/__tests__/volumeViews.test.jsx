@@ -328,6 +328,18 @@ describe('VolumeGridView', () => {
     expect(p.handleDeleteVolume).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 9 }));
   });
 
+  it('canToggle without canEdit (offline editor): status and own read toggles work, editing stays hidden', () => {
+    const p = viewProps({ canEdit: false, canToggle: true, canToggleOthers: false, displayVolumeItems: [{ isGap: false, volume: vol({ id: 4 }) }] });
+    render(<VolumeGridView {...p} />);
+    const status = screen.getByRole('button', { name: /^Status: Vorhanden/ });
+    expect(status.disabled).toBe(false);
+    fireEvent.click(status);
+    expect(p.handleToggleVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 4 }));
+    fireEvent.click(screen.getByRole('button', { name: /Ungelesen/ }));
+    expect(p.handleToggleVolumeRead).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+  });
+
   it('gives "Bestellt" its own label', () => {
     render(<VolumeGridView {...viewProps({ displayVolumeItems: [{ isGap: false, volume: vol({ status: 'Bestellt' }) }] })} />);
     expect(screen.getByText('Bestellt')).toBeTruthy();
@@ -365,6 +377,16 @@ describe('VolumeListView', () => {
     expect(screen.getByText('Offizielle Lücke in Reihe')).toBeTruthy();
   });
 
+  it('canToggle without canEdit: the status and read buttons work, edit and delete are not offered', () => {
+    const p = viewProps({ canEdit: false, canToggle: true, canToggleOthers: false, displayVolumeItems: [{ isGap: false, volume: vol({ id: 4 }) }] });
+    render(<VolumeListView {...p} />);
+    fireEvent.click(screen.getByRole('button', { name: /Im Besitz/ }));
+    expect(p.handleToggleVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 4 }));
+    fireEvent.click(screen.getByRole('button', { name: /Ungelesen/ }));
+    expect(p.handleToggleVolumeRead).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /löschen/ })).toBeNull();
+  });
+
   it('gap row looks and acts inert for visitors', () => {
     const p = viewProps({ canEdit: false, displayVolumeItems: [{ isGap: true, gapNumber: 3 }] });
     const { container } = render(<VolumeListView {...p} />);
@@ -399,5 +421,74 @@ describe('OwnerBadges', () => {
   it('names all owners in one label', () => {
     render(<OwnerBadges multiUser vol={{ owners: [{ user_id: 1, username: 'alex' }, { user_id: 2, username: 'mia' }] }} />);
     expect(screen.getByRole('img', { name: 'Besitzer: alex, mia' })).toBeTruthy();
+  });
+});
+
+describe('selection mode of the volume views', () => {
+  const items = [vol({ id: 1 }), vol({ id: 2, volume_number: '6', status: 'Fehlt' })].map((volume) => ({ isGap: false, volume }));
+  const selectionProps = (selected = [], over = {}) => ({
+    selectionMode: true, isSelected: (id) => selected.includes(id), onSelectVolume: vi.fn(), ...over
+  });
+
+  it('grid: a card click selects instead of opening the editor; checkboxes are named and edit buttons hidden', () => {
+    const p = viewProps({ displayVolumeItems: items, ...selectionProps([2]) });
+    const { container } = render(<VolumeGridView {...p} />);
+    fireEvent.click(container.querySelector('[data-volume-id="1"]'), { shiftKey: true });
+    expect(p.onSelectVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ shiftKey: true }));
+    expect(p.handleOpenEditVolume).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Band 6 auswählen' }).checked).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Band 5 auswählen' }));
+    expect(p.onSelectVolume).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+  });
+
+  it('grid without selection mode keeps the editor click and has no checkboxes', () => {
+    const p = viewProps({ displayVolumeItems: items });
+    const { container } = render(<VolumeGridView {...p} />);
+    fireEvent.click(container.querySelector('[data-volume-id="1"]'));
+    expect(p.handleOpenEditVolume).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('list: a checkbox column; a row click selects, the status button still toggles', () => {
+    const p = viewProps({ displayVolumeItems: items, ...selectionProps([1]) });
+    const { container } = render(<VolumeListView {...p} />);
+    expect(screen.getByRole('checkbox', { name: 'Band 5 auswählen' }).checked).toBe(true);
+    fireEvent.click(container.querySelector('tr[data-volume-id="2"] td:nth-child(3)'));
+    expect(p.onSelectVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }), expect.anything());
+    fireEvent.click(within(container.querySelector('tr[data-volume-id="2"]')).getByText('✕ Fehlt'));
+    expect(p.handleToggleVolume).toHaveBeenCalledTimes(1);
+    expect(p.onSelectVolume).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Band 5 löschen' })).toBeNull();
+  });
+
+  it('spine: a checkbox in selection mode; Enter and Space select, the editor stays closed', () => {
+    const onSelect = vi.fn();
+    const p = spineProps({ selectionMode: true, selected: true, onSelect });
+    render(<ShelfSpine {...p} item={{ isGap: false, volume: vol({ id: 7 }) }} />);
+    const spine = screen.getByRole('checkbox', { name: /^Band 5/ });
+    expect(spine.getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(spine, { key: ' ' });
+    fireEvent.click(spine);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(p.handleOpenEditVolume).not.toHaveBeenCalled();
+  });
+
+  it('the filter bar offers "Auswählen" only with canSelect and shows its state', () => {
+    const base = {
+      availablePublishers: [], baseVolumesForType: [], conditionsList: [], detectedGaps: [], handleResetFilters: vi.fn(),
+      handleSetVolumeViewMode: vi.fn(), handleToggleShowGaps: vi.fn(), setShowMpEditionModal: vi.fn(), setVolumeConditionFilter: vi.fn(),
+      setVolumeFilter: vi.fn(), setVolumePublisherFilter: vi.fn(), setVolumeSearch: vi.fn(), setVolumeSort: vi.fn(), setVolumeTypeFilter: vi.fn(),
+      volumeConditionFilter: 'ALL', volumeFilter: 'ALL', volumePublisherFilter: 'ALL', volumeSearch: '', volumeSort: 'number_asc',
+      volumeTypeFilter: 'ALL', volumeViewMode: 'grid', volumes: [], isOffline: true
+    };
+    const { rerender } = render(<VolumeFilterBar {...base} />);
+    expect(screen.queryByRole('button', { name: 'Auswählen' })).toBeNull();
+    const onToggle = vi.fn();
+    rerender(<VolumeFilterBar {...base} canSelect selectionMode onToggleSelectionMode={onToggle} />);
+    const button = screen.getByRole('button', { name: 'Auswählen' });
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(button);
+    expect(onToggle).toHaveBeenCalledTimes(1);
   });
 });

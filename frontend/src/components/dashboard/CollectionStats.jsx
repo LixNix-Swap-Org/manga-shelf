@@ -55,7 +55,7 @@ export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalC
         <CircleCheck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Abgeschlossen</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-medium">Komplett</p>
         <p className="text-lg sm:text-2xl font-extrabold text-white">{completedSeries}</p>
       </div>
     </div>

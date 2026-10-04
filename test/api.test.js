@@ -595,6 +595,147 @@ test('volumes: unread answers previous_read_at and an undo restores the read wit
     assert.equal('previous_read_at' in batchRead.body, false);
 });
 
+const ownerIdsOf = (vid) => rawDb().prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => r.user_id);
+const volumeRow = (vid) => ({ ...rawDb().prepare('SELECT status, price, purchase_date, condition, priority FROM volumes WHERE id = ?').get(vid) });
+
+test('bulk: validation, roles and limits', async () => {
+    const id = await newSeries('Bulk Prüfung');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    const bulk = (body, as = editor) => as('POST', '/volumes/bulk', body);
+
+    assert.equal((await bulk({ ids, set: { price: 5 } }, visitor)).status, 403);
+    assert.equal((await bulk({ ids: [], set: { price: 5 } })).status, 400);
+    assert.equal((await bulk({ ids: Array.from({ length: 501 }, (_, i) => i + 1), set: { price: 5 } })).body.code, 'BULK_IDS');
+    assert.equal((await bulk({ ids: ['1x'], set: { price: 5 } })).status, 400);
+    assert.equal((await bulk({ ids })).body.error, 'Keine Änderung angegeben');
+    for (const set of [{ status: 'Gekauft' }, { price: 'x' }, { purchase_date: '2024-02-30' }, { priority: 4 }, { condition: 'x'.repeat(201) }, { notes: 'x' }]) {
+        const res = await bulk({ ids, set });
+        assert.equal(res.status, 400, JSON.stringify(set));
+        assert.equal(res.body.field, Object.keys(set)[0]);
+    }
+    assert.equal((await bulk({ ids, delete: true, set: { price: 1 } })).status, 400);
+    const userList = await userIds();
+    assert.equal((await bulk({ ids, set: { status: 'Vorhanden' }, owners: { add: [userList.ed] } })).status, 400);
+    assert.equal((await bulk({ ids, owners: { add: [userList.admin] } })).status, 403, 'editors only change their own ownership');
+    assert.equal((await bulk({ ids, read: { read: true, user_id: userList.admin } })).status, 403);
+    assert.equal((await bulk({ ids, read: { read: true, read_at: 'gestern' } })).status, 400);
+    assert.equal((await bulk({ ids: [999999], set: { price: 1 } })).status, 404);
+    assert.deepEqual(ids.map(v => volumeRow(v).price), [null, null], 'nothing was written by the rejected requests');
+});
+
+test('bulk: set fields in one transaction, owners follow the status, unknown ids are reported', async () => {
+    const userList = await userIds();
+    const id = await newSeries('Bulk Setzen');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+
+    let res = await editor('POST', '/volumes/bulk', { ids: [...ids, ids[0], 999999], set: { status: 'Vorhanden', price: '7,50', purchase_date: '2024-06-01', condition: 'Neu' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.updated, 3);
+    assert.deepEqual(res.body.not_found, [999999]);
+    assert.deepEqual(res.body.previous.map(p => [p.id, p.volume.status, p.owners.length]), ids.map(v => [v, 'Fehlt', 0]));
+    for (const vid of ids) {
+        assert.deepEqual(volumeRow(vid), { status: 'Vorhanden', price: 7.5, purchase_date: '2024-06-01', condition: 'Neu', priority: 0 });
+        assert.deepEqual(ownerIdsOf(vid), [userList.ed], 'the editing user became the owner');
+    }
+    const owner = rawDb().prepare('SELECT price, purchase_date, condition FROM volume_owners WHERE volume_id = ?').get(ids[0]);
+    assert.deepEqual({ ...owner }, { price: 7.5, purchase_date: '2024-06-01', condition: 'Neu' });
+    assert.equal((await detailOf(id)).owned_volumes, 3);
+
+    res = await editor('POST', '/volumes/bulk', { ids, set: { status: 'Fehlt' } });
+    assert.equal(res.status, 200);
+    for (const vid of ids) assert.deepEqual(ownerIdsOf(vid), [], 'a status other than Vorhanden drops all owners');
+    assert.equal((await detailOf(id)).owned_volumes, 0);
+});
+
+test('bulk: owners add/remove keep status and purchase date in sync; read only marks owned volumes', async () => {
+    const userList = await userIds();
+    const id = await newSeries('Bulk Besitz');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    await admin('POST', `/volumes/${ids[1]}/owners`, { owned: true, purchase_date: '2023-01-01' });
+
+    let res = await editor('POST', '/volumes/bulk', { ids, owners: { add: [userList.ed] }, set: { purchase_date: '2024-07-07' } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(ownerIdsOf(ids[0]), [userList.ed]);
+    assert.deepEqual(ownerIdsOf(ids[1]), [userList.admin, userList.ed].sort((a, b) => a - b));
+    assert.equal(volumeRow(ids[0]).status, 'Vorhanden');
+    assert.equal(volumeRow(ids[0]).purchase_date, '2024-07-07', 'the first purchase fills the volume date');
+    assert.equal(volumeRow(ids[1]).purchase_date, '2023-01-01', 'a co-owner purchase keeps the volume date');
+    const ownerDate = (vid, uid) => rawDb().prepare('SELECT purchase_date FROM volume_owners WHERE volume_id = ? AND user_id = ?').get(vid, uid).purchase_date;
+    assert.equal(ownerDate(ids[1], userList.ed), '2024-07-07');
+    assert.equal(ownerDate(ids[1], userList.admin), '2023-01-01');
+    await editor('POST', '/volumes/bulk', { ids, owners: { add: [userList.ed] }, set: { purchase_date: '2025-01-01' } });
+    assert.equal(ownerDate(ids[1], userList.ed), '2024-07-07', 'adding an existing owner again keeps the date');
+
+    res = await admin('POST', '/volumes/bulk', { ids, owners: { remove: [userList.ed] } });
+    assert.equal(res.status, 200);
+    assert.equal(volumeRow(ids[0]).status, 'Fehlt', 'the last owner left');
+    assert.equal(volumeRow(ids[0]).purchase_date, null);
+    assert.equal(volumeRow(ids[1]).status, 'Vorhanden', 'the admin still owns the second one');
+    assert.equal(volumeRow(ids[1]).purchase_date, '2023-01-01', 'the remaining owner keeps the date');
+
+    res = await editor('POST', '/volumes/bulk', { ids, read: { read: true } });
+    assert.deepEqual(res.body.read_skipped, [ids[0]]);
+    const reads = (vid) => rawDb().prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vid).map(r => r.user_id);
+    assert.deepEqual(reads(ids[0]), []);
+    assert.deepEqual(reads(ids[1]), [userList.ed]);
+    assert.deepEqual(res.body.previous.find(p => p.id === ids[1]).reads, []);
+    assert.equal(res.body.previous.find(p => p.id === ids[1]).read_user, userList.ed);
+});
+
+test('bulk: revert restores fields, owners and reads; a deleted volume comes back with its id unless taken (409)', async () => {
+    const userList = await userIds();
+    const id = await newSeries('Bulk Rückgängig');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    await admin('POST', `/volumes/${ids[0]}/owners`, { owned: true, price: 6, purchase_date: '2022-02-02' });
+    await editor('POST', `/volumes/${ids[0]}/owners`, { owned: true });
+    await editor('POST', `/volumes/${ids[0]}/read`, { read: true, read_at: '2022-03-03 10:00:00' });
+    const before = volumeRow(ids[0]);
+    const ownersBefore = rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(ids[0]);
+
+    let res = await editor('POST', '/volumes/bulk', { ids, set: { status: 'Fehlt', price: 9, priority: 2 } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(ownerIdsOf(ids[0]), []);
+    res = await editor('POST', '/volumes/bulk', { revert: res.body.previous });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.restored, ids);
+    assert.deepEqual(volumeRow(ids[0]), before);
+    assert.deepEqual(rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(ids[0]).map(r => ({ ...r })), ownersBefore.map(r => ({ ...r })));
+    assert.equal(volumeRow(ids[1]).status, 'Fehlt');
+
+    res = await editor('POST', '/volumes/bulk', { ids: [ids[0]], read: { read: false } });
+    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_reads WHERE volume_id = ?').get(ids[0]).c, 0);
+    await editor('POST', '/volumes/bulk', { revert: res.body.previous });
+    assert.equal(rawDb().prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').get(ids[0], userList.ed).read_at, '2022-03-03 10:00:00');
+
+    res = await editor('POST', '/volumes/bulk', { ids, delete: true });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.deleted, true);
+    assert.equal((await detailOf(id)).volumes.length, 0);
+    const previous = res.body.previous;
+    const retaken = (await editor('POST', '/volumes', { manga_id: id, volume_number: '2', status: 'Fehlt' })).body.id;
+
+    res = await editor('POST', '/volumes/bulk', { revert: previous });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.restored, [ids[0], ids[2]]);
+    assert.deepEqual(res.body.conflicts.map(c => [c.id, c.status, c.code, c.existing_id]), [[ids[1], 409, 'VOLUME_DUPLICATE', retaken]]);
+    assert.deepEqual(volumeRow(ids[0]), before);
+    assert.deepEqual(ownerIdsOf(ids[0]), [userList.admin, userList.ed].sort((a, b) => a - b));
+    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_reads WHERE volume_id = ?').get(ids[0]).c, 1);
+    const detail = await detailOf(id);
+    assert.equal(detail.owned_volumes, 1);
+    assert.deepEqual(detail.volumes.map(v => v.volume_number).sort(), ['1', '2', '3']);
+
+    res = await editor('POST', '/volumes/bulk', { revert: [previous[1]] });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, 'VOLUME_DUPLICATE');
+    assert.equal((await editor('POST', '/volumes/bulk', { revert: [{ id: 5, volume: { manga_id: id, volume_number: '', status: 'Fehlt' } }] })).status, 400);
+    assert.equal((await editor('POST', '/volumes/bulk', { revert: 'x' })).body.code, 'BULK_REVERT');
+});
+
 test('volume lookup is editor-only; lookup, sync-edition and autofill work from cached Manga Passion data', async () => {
     const editionId = 77001;
     rawDb().prepare('INSERT OR REPLACE INTO manga_passion_cache (cache_key, json_data, created_at) VALUES (?, ?, ?)').run(

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { clearOfflineData } from '../../utils/offlineStore';
-import { apiFetch, apiUrl, TIMEOUTS } from '../../utils/api';
+import { apiFetch, TIMEOUTS } from '../../utils/api';
 import { formatMegabytes } from '../../utils/format';
 import {
   clearRestoreUndo, httpErrorMessage, readJson, readRestoreUndo, saveRestoreUndo
@@ -12,6 +12,8 @@ import {
 import SnapshotList from './backup/SnapshotList';
 import RestoreConfirm from './backup/RestoreConfirm';
 import CsvImportPanel from './backup/CsvImportPanel';
+import DownloadLink from './backup/DownloadLink';
+import { useDownloadRunning } from '../../app/useDownload';
 
 const RELOAD_DELAY_MS = 2000;
 const RESTORE_HTTP = {
@@ -60,10 +62,14 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const pickerButtonRef = useRef(null);
   const focusPickerRef = useRef(false);
   const reloadTimerRef = useRef(null);
+  const inspectAbortRef = useRef(null);
   const dialogRef = useDialogA11y(isOpen);
+  const downloading = useDownloadRunning();
 
   const busy = restoring || reloadPending || csvImporting;
   const locked = busy || inspecting;
+  // Escape, Back and the backdrop wait for a running download; the close buttons let it go on in the background
+  const closeBlocked = busy || downloading;
 
   const fetchServerBackups = async () => {
     if (user?.role !== 'admin') return;
@@ -116,7 +122,13 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Öffnen
   }, [isOpen]);
 
-  useEffect(() => () => dropStaging(), []);
+  // The dialog is mounted only while open, so unmounting is the close: a late inspect answer must be discarded.
+  useEffect(() => () => {
+    backupsRequestRef.current++;
+    restoreRequestRef.current++;
+    inspectAbortRef.current?.abort();
+    dropStaging();
+  }, []);
 
   useEffect(() => {
     if (!restoreFile && focusPickerRef.current) {
@@ -184,14 +196,17 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
     setInspection(null);
     setInspecting(true);
     clearMessages();
+    const controller = new AbortController();
+    inspectAbortRef.current = controller;
+    const { signal } = controller;
     try {
       let res;
       if (source.file) {
         const formData = new FormData();
         formData.append('backup', source.file);
-        res = await apiFetch('/api/backup/inspect', { method: 'POST', body: formData, timeout: TIMEOUTS.upload });
+        res = await apiFetch('/api/backup/inspect', { method: 'POST', body: formData, timeout: TIMEOUTS.upload, signal });
       } else {
-        res = await apiFetch('/api/backup/inspect', { method: 'POST', body: { filename: source.filename }, timeout: TIMEOUTS.long });
+        res = await apiFetch('/api/backup/inspect', { method: 'POST', body: { filename: source.filename }, timeout: TIMEOUTS.long, signal });
       }
       const data = await readJson(res);
       if (id !== restoreRequestRef.current) {
@@ -211,6 +226,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         setRestoreError(source.file ? UPLOAD_NETWORK : 'Netzwerkfehler beim Prüfen des Snapshots.');
       }
     } finally {
+      if (inspectAbortRef.current === controller) inspectAbortRef.current = null;
       if (id === restoreRequestRef.current) setInspecting(false);
     }
   };
@@ -317,12 +333,12 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
 
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !closeBlocked) onClose(); }}
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Backup und Wiederherstellung"
-      data-busy={busy ? 'true' : undefined}
+      data-busy={closeBlocked ? 'true' : undefined}
       tabIndex={-1}
       className="outline-none fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto"
     >
@@ -353,15 +369,15 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
             <Shield className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
             <span>Täglich automatischer Snapshot aktiv (die letzten 7 Tage und die letzten 10 manuellen Snapshots werden auf dem Server vorgehalten)</span>
           </div>
-          <a
-            href={apiUrl('/api/backup')}
+          <DownloadLink
+            path="/api/backup"
             download
             className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 shrink-0 bg-slate-900 border-sky-500/40 text-sky-300 hover:text-white"
             title="Aktuelle Gesamtsicherung als ZIP herunterladen"
           >
             <Download className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Direkt-ZIP</span>
-          </a>
+          </DownloadLink>
         </div>
 
         {restoreError && (
@@ -604,9 +620,9 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
               <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
                 <div className="text-sm font-semibold text-slate-200">Sammlung exportieren</div>
                 <p className="text-xs text-slate-400">Alle Bände als CSV (Semikolon, UTF-8). Öffnet sich direkt in Excel oder LibreOffice.</p>
-                <a href={apiUrl('/api/export/csv')} download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800">
+                <DownloadLink path="/api/export/csv" download className="btn-primary inline-flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800">
                   <Download className="w-4 h-4" aria-hidden="true" /> CSV herunterladen
-                </a>
+                </DownloadLink>
               </div>
               <CsvImportPanel disabled={restoring || reloadPending} onImported={onRestoreSuccess} onImportingChange={setCsvImporting} />
             </div>

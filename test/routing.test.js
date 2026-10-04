@@ -361,7 +361,7 @@ test('every response has a request id; a server error names it as reference', as
     }
     assert.equal(ids.size, 3);
 
-    const snapshot = require('../services/snapshot');
+    const snapshot = require('../core/snapshot');
     t.mock.method(snapshot, 'listMangas', () => { throw new Error('kaputt: /secret/path'); });
     const res = await fetch(ctx.base + '/mangas', { headers: { Cookie: editor.cookie } });
     assert.equal(res.status, 500);

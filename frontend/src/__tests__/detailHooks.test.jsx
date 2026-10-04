@@ -6,25 +6,35 @@ import { MemoryRouter } from 'react-router-dom';
 vi.mock('../utils/offlineStore', () => ({
   loadMangaDetail: vi.fn(async () => null),
   updateCachedManga: vi.fn(async () => {}),
-  syncOfflineCopy: vi.fn(async () => true)
+  syncOfflineCopy: vi.fn(async () => true),
+  patchCachedManga: vi.fn(async () => false),
+  loadOutboxEntries: vi.fn(async () => { throw new Error('no IndexedDB'); }),
+  putOutboxEntries: vi.fn(async () => {}),
+  deleteOutboxEntries: vi.fn(async () => {})
 }));
 
 import * as offlineStore from '../utils/offlineStore';
 import { clearDataCache, writeCache, readCache, LIST_KEY, detailKey } from '../utils/dataCache';
 import useDetailKeyboard, { resolveVolumeShortcut } from '../hooks/useDetailKeyboard';
-import useVolumeActions, { readApiError, localDateString, volumeDeleteConfirmText, READ_OTHERS_ADMIN_ONLY } from '../hooks/useVolumeActions';
+import useVolumeActions, {
+  readApiError, localDateString, volumeDeleteConfirmText, READ_OTHERS_ADMIN_ONLY, UNAUTHORIZED_TEXT, QUEUED_TEXT, UPLOAD_CANCELLED,
+  ownedToggleChange
+} from '../hooks/useVolumeActions';
 import useMangaData, { mergeEditLookup, normalizeLookupStatus, isFormDirty, buildFormData, changedFormFields } from '../hooks/useMangaData';
 import useVolumeGallery from '../hooks/useVolumeGallery';
 import useShelfLayout from '../hooks/useShelfLayout';
 import useVolumeEditForm from '../hooks/useVolumeEditForm';
 import useVolumeFilters from '../hooks/useVolumeFilters';
 import { fakeResponse } from './fakeResponse';
+import { resetOutbox, getOutbox, outboxScope } from '../utils/outbox';
 import { recordToasts } from './toastLog';
 
 let toasts;
 beforeEach(() => {
   toasts = recordToasts();
   clearDataCache();
+  localStorage.clear();
+  resetOutbox();
 });
 afterEach(() => { toasts.stop(); });
 
@@ -174,6 +184,19 @@ describe('useDetailKeyboard: shelf shortcuts', () => {
     expect(open).toHaveBeenCalledWith(VOLS[1]);
   });
 
+  it('canToggle gates Space, canEdit gates E: an editor in offline mode toggles by keyboard but does not edit', () => {
+    const toggle = vi.fn();
+    const open = vi.fn();
+    const { rerender } = renderKeyboard({ volumeViewMode: 'spine', initialFocus: 1, handleToggleVolumeRead: toggle, handleOpenEditVolume: open, canEdit: false, canToggle: true });
+    key(document.body, ' ');
+    key(document.body, 'e');
+    expect(toggle).toHaveBeenCalledWith(VOLS[0]);
+    expect(open).not.toHaveBeenCalled();
+    rerender({ volumeViewMode: 'spine', handleToggleVolumeRead: toggle, handleOpenEditVolume: open, canEdit: false, canToggle: false });
+    key(document.body, ' ');
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
   it('resolveVolumeShortcut: typing in a field is never a shortcut', () => {
     const input = document.createElement('input');
     expect(resolveVolumeShortcut({ key: 'j', target: input }, { shelfActive: true, modalOpen: false })).toBe(null);
@@ -294,11 +317,13 @@ describe('useVolumeActions', () => {
     const { result, fetchManga } = renderActions();
     const vol = { id: 5, status: 'Vorhanden', owners: [{ user_id: 1 }], owned_by_me: false };
     let first;
+    let second;
     act(() => {
       first = result.current.handleToggleVolume(vol);
-      result.current.handleToggleVolume(vol);
+      second = result.current.handleToggleVolume(vol);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await second;
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({ owned: true });
     gate.resolve(res(200, {}));
     await act(() => first);
@@ -354,19 +379,46 @@ describe('useVolumeActions', () => {
     expect(result.current.uploadingNewCover).toBe(false);
   });
 
-  it('of two uploads only the newer one sets the cover', async () => {
+  it('a second upload cancels the first; only the newer one sets the cover', async () => {
     const first = deferred();
     const second = deferred();
-    const queue = [first, second];
-    vi.stubGlobal('fetch', vi.fn(() => queue.shift().promise));
+    const signals = [];
+    const fetchMock = vi.fn((url, init) => {
+      signals.push(init.signal);
+      return (signals.length === 1 ? first : second).promise;
+    });
+    vi.stubGlobal('fetch', fetchMock);
     const { result } = renderActions();
     let a;
     let b;
     act(() => { a = result.current.handleUploadNewSingleCover(new Blob(['1'])); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     act(() => { b = result.current.handleUploadNewSingleCover(new Blob(['2'])); });
+    expect(signals[0].aborted).toBe(true);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     await act(async () => { second.resolve(res(200, { url: '/uploads/new.jpg' })); await b; });
     await act(async () => { first.resolve(res(200, { url: '/uploads/old.jpg' })); await a; });
     expect(result.current.newVolumeCover).toBe('/uploads/new.jpg');
+    expect(result.current.uploadingNewCover).toBe(false);
+    expect(toasts.messages()).toEqual([]);
+  });
+
+  it('a running cover upload can be cancelled: the form is usable again at once', async () => {
+    const fetchMock = vi.fn((url, init) => new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderActions();
+    let uploading;
+    act(() => { uploading = result.current.handleUploadNewSingleCover(new Blob(['x'])); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(result.current.uploadingNewCover).toBe(true);
+    expect(result.current.handleUploadNewSingleCover.cancel).toBeTypeOf('function');
+    await act(async () => { result.current.cancelNewCoverUpload(); await uploading; });
+    expect(result.current.uploadingNewCover).toBe(false);
+    expect(result.current.newVolumeCover).toBe('');
+    expect(toasts.messages('info')).toEqual([UPLOAD_CANCELLED]);
+    expect(toasts.messages('error')).toEqual([]);
   });
 
   it('shows the server error on a failed toggle and refetches when the volume is gone', async () => {
@@ -377,13 +429,23 @@ describe('useVolumeActions', () => {
     expect(fetchManga).toHaveBeenCalledTimes(1);
   });
 
-  it('hands a 401 to onUnauthorized instead of alerting', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => res(401, { error: 'Sitzung ungültig' })));
+  it('hands an announced session end (401 with the app code) to onUnauthorized instead of alerting', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => res(401, { error: 'Sitzung ungültig', code: 'SESSION_INVALID' })));
     const onUnauthorized = vi.fn();
     const { result } = renderActions({ onUnauthorized });
     await act(() => result.current.handleToggleVolume({ id: 9, status: 'Fehlt' }));
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(toasts.messages('error')).toEqual([]);
+  });
+
+  it('a 401 without the app code (auth proxy) shows a German message and keeps the session', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => res(401, { error: 'proxy' })));
+    const onUnauthorized = vi.fn();
+    const { result } = renderActions({ onUnauthorized });
+    await act(() => result.current.handleToggleVolumeRead({ id: 4, read_users: [] }));
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(toasts.messages('error')).toEqual([UNAUTHORIZED_TEXT]);
+    await act(() => result.current.handleAddSingleVolume({ preventDefault() {} }));
   });
 
   it('a non-admin never changes another reader (no request, explains why)', async () => {
@@ -409,11 +471,101 @@ describe('useVolumeActions', () => {
     expect(bodyOf(fetchMock.mock.calls[0])).toMatchObject({ user_id: 2, read: false });
   });
 
-  it('read toggle reports a proxy HTML error without calling it a network error', async () => {
+  it('a read toggle the proxy answers with 502 stays in the outbox for a later replay', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => res(502, null, { raw: '<html>502</html>' })));
     const { result } = renderActions();
     await act(() => result.current.handleToggleVolumeRead({ id: 4, read_users: [] }));
-    expect(toasts.messages('error')).toContainEqual('Fehler beim Aktualisieren des Lesestatus (HTTP 502)');
+    expect(toasts.messages('error')).toEqual([]);
+    expect(toasts.messages('info')).toEqual([QUEUED_TEXT]);
+    expect(getOutbox().list(outboxScope(editor.id))).toMatchObject([{ kind: 'read', volumeId: 4, value: true, attempts: 1 }]);
+  });
+
+  it('a refused toggle (4xx) shows the server text, leaves the outbox and reloads the series', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => res(400, { error: 'Ungültiger Status' })));
+    const { result, fetchManga } = renderActions();
+    await act(() => result.current.handleToggleVolume({ id: 9, status: 'Vorhanden', owners: [] }));
+    expect(toasts.messages('error')).toEqual(['Ungültiger Status']);
+    expect(fetchManga).toHaveBeenCalledTimes(1);
+    expect(getOutbox().list(outboxScope(editor.id))).toEqual([]);
+  });
+
+  it('offline: the toggle is applied to the page at once, queued without a request and reloaded from the offline copy', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    let detail = { id: '7', volumes: [{ id: 4, status: 'Vorhanden', price: 7, owners: [{ user_id: 2 }], read_users: [], read_by: [] }], reader_stats: [{ user_id: 2, username: 'ed' }] };
+    const patchManga = vi.fn((fn) => { detail = fn(detail); });
+    const { result, fetchManga } = renderActions({ user: { ...editor, offline: true, username: 'ed' }, patchManga });
+    await act(() => result.current.handleToggleVolumeRead({ id: 4, read_users: [] }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(detail.volumes[0].read_by).toEqual([2]);
+    expect(detail.reader_stats[0]).toMatchObject({ read_count: 1, total_owned: 1, percentage: 100 });
+    expect(fetchManga).toHaveBeenCalledTimes(1);
+    expect(toasts.messages('info')).toEqual([QUEUED_TEXT]);
+    expect(getOutbox().list(outboxScope(editor.id))).toMatchObject([{ kind: 'read', volumeId: 4, targetUserId: 2, value: true, deferred: true }]);
+  });
+
+  it('offline: the page reloads from the offline copy only after the toggle was written into it', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const written = deferred();
+    offlineStore.patchCachedManga.mockImplementationOnce(() => written.promise);
+    const { result, fetchManga } = renderActions({ user: { ...editor, offline: true, username: 'ed' } });
+    let pending;
+    act(() => { pending = result.current.handleToggleVolume({ id: 4, status: 'Fehlt', owners: [] }); });
+    await waitFor(() => expect(getOutbox().list(outboxScope(editor.id))).toHaveLength(1));
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(fetchManga).not.toHaveBeenCalled();
+    written.resolve(true);
+    await act(() => pending);
+    expect(fetchManga).toHaveBeenCalledTimes(1);
+  });
+
+  it('canToggle (offline editor) allows only the toggles; adding, editing and deleting stay with canEdit', async () => {
+    const fetchMock = vi.fn(async () => res(200, {}));
+    vi.stubGlobal('fetch', fetchMock);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { result } = renderActions({ canEdit: false, canToggle: true });
+    await act(() => result.current.handleToggleVolume({ id: 5, status: 'Fehlt', owners: [] }));
+    await act(() => result.current.handleToggleVolumeRead({ id: 6, status: 'Vorhanden', read_users: [] }));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/volumes/5/owners', '/api/volumes/6/read']);
+    act(() => { result.current.setNewVolumeNum('3'); });
+    await act(() => result.current.handleAddSingleVolume({ preventDefault() {} }));
+    act(() => { result.current.handleOpenEditVolume({ id: 6 }); });
+    await act(() => result.current.handleDeleteVolume(null, { id: 6 }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.activeVolume).toBeNull();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+
+    const visitor = renderActions({ canEdit: false, canToggle: false });
+    expect(visitor.result.current.handleToggleVolume({ id: 5, status: 'Fehlt', owners: [] })).toBeUndefined();
+    expect(visitor.result.current.handleToggleVolumeRead({ id: 6, status: 'Vorhanden', read_users: [] })).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('un-owning offers "Rückgängig", which restores the owner row with its date, price and the volume date', async () => {
+    const fetchMock = vi.fn(async () => res(200, {
+      status: 'Fehlt', owners: [], owned_by_me: false, previous_purchase_date: '2024-03-01',
+      removed_owner: { user_id: 2, price: 6.5, purchase_date: '2024-03-01', condition: null }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, fetchManga } = renderActions();
+    const vol = { id: 5, volume_number: '5', type: 'volume', status: 'Vorhanden', owners: [{ user_id: 2 }], owned_by_me: true };
+    await act(() => result.current.handleToggleVolume(vol));
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({ owned: false });
+    const toast = toasts.last();
+    expect(toast).toMatchObject({ kind: 'success', action: { label: 'Rückgängig' } });
+    fetchMock.mockImplementation(async () => res(200, { status: 'Vorhanden' }));
+    await act(async () => { await toast.action.onClick(); });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/volumes/5/owners');
+    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({ owned: true, purchase_date: '2024-03-01', price: 6.5, previous_purchase_date: '2024-03-01' });
+    expect(fetchManga).toHaveBeenCalledTimes(2);
+  });
+
+  it('ownedToggleChange: own ownership with owners, a purchase for missing volumes, a status write for ownerless ones', () => {
+    expect(ownedToggleChange({ status: 'Vorhanden', owners: [{ user_id: 2 }] }, editor)).toEqual({ kind: 'owned', value: false });
+    expect(ownedToggleChange({ status: 'Vorhanden', owners: [{ user_id: 1 }], owned_by_me: false }, editor)).toEqual({ kind: 'owned', value: true });
+    expect(ownedToggleChange({ status: 'Fehlt' }, editor, '2026-10-03')).toEqual({ kind: 'owned', value: true, purchase_date: '2026-10-03' });
+    expect(ownedToggleChange({ status: 'Vorhanden', owners: [] }, editor)).toEqual({ kind: 'status', value: 'Fehlt' });
   });
 
   it('delete names the volume in the dialog and alerts the server error', async () => {
@@ -784,6 +936,56 @@ describe('useMangaData: edit form', () => {
     expect(result.current.formData.cover_image).toBe('/uploads/new.jpg');
   });
 
+  it('a cover upload can be cancelled: no PUT, "Upload abgebrochen", the cover button is free again', async () => {
+    const { result, fetchMock } = await loaded();
+    fetchMock.mockClear();
+    fetchMock.mockImplementation((url, opts) => new Promise((_, reject) => {
+      opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    }));
+    let pending;
+    act(() => { pending = result.current.handleCoverUpload({ target: { files: [new Blob(['x'])] } }); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(result.current.uploadingCover).toBe(true);
+    await act(async () => { result.current.cancelCoverUpload(); await pending; });
+    expect(result.current.uploadingCover).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(toasts.messages('info')).toEqual([UPLOAD_CANCELLED]);
+    expect(toasts.messages('error')).toEqual([]);
+  });
+
+  it('a cancel while the upload answer is read stores nothing; once it is in the cancel goes away', async () => {
+    const { result, fetchMock } = await loaded();
+    fetchMock.mockClear();
+    const body = deferred();
+    const uploadAnswer = { ...res(200, {}), json: () => body.promise };
+    fetchMock.mockImplementation(async (url) => (url === '/api/upload' ? uploadAnswer : res(200, { success: true })));
+    let pending;
+    act(() => { pending = result.current.handleCoverUpload({ target: { files: [new Blob(['x'])] } }); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    act(() => result.current.cancelCoverUpload());
+    await act(async () => { body.resolve({ url: '/uploads/new.jpg' }); await pending; });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(toasts.messages('info')).toEqual([UPLOAD_CANCELLED]);
+    expect(result.current.manga.cover_image).toBe('/uploads/a.jpg');
+
+    const save = deferred();
+    fetchMock.mockClear();
+    fetchMock.mockImplementation((url, opts) => {
+      if (url === '/api/upload') return Promise.resolve(res(200, { url: '/uploads/new.jpg' }));
+      if (opts?.method === 'PUT') return save.promise;
+      return Promise.resolve(res(200, { ...SERVER, cover_image: '/uploads/new.jpg' }));
+    });
+    act(() => { pending = result.current.handleCoverUpload({ target: { files: [new Blob(['x'])] } }); });
+    expect(typeof result.current.cancelCoverUpload).toBe('function');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(result.current.uploadingCover).toBe(true);
+    expect(result.current.cancelCoverUpload).toBeUndefined();
+    expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+    await act(async () => { save.resolve(res(200, { success: true })); await pending; });
+    expect(result.current.manga.cover_image).toBe('/uploads/new.jpg');
+    expect(result.current.uploadingCover).toBe(false);
+  });
+
   it('save leaves an unchanged manga_passion_id out, reloads and resets the form', async () => {
     const { result, fetchMock } = await loaded();
     act(() => result.current.startEditing());
@@ -898,15 +1100,52 @@ describe('useVolumeEditForm: client timeouts', () => {
     expect(result.current.autofillingVolume).toBe(true);
   });
 
-  it('a photo upload has no client timeout (its transfer time grows with the size)', async () => {
+  it('a photo upload can be cancelled; the editor shows "Upload abgebrochen"', async () => {
+    const fetchMock = vi.fn((url, opts) => new Promise((_, reject) => {
+      opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderForm();
+    let pending;
+    act(() => { pending = result.current.handleUploadVolumeImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(result.current.uploadingVolImage).toBe(true);
+    await act(async () => { result.current.cancelVolumeImageUpload(); await pending; });
+    expect(result.current.uploadingVolImage).toBe(false);
+    expect(result.current.photoError).toEqual({ text: UPLOAD_CANCELLED });
+  });
+
+  it('after a rebase an untouched server value outside the client rules does not block saving', async () => {
+    const fetchMock = vi.fn(async () => res(200, { success: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onClose = vi.fn();
+    const opened = { id: 5, volume_number: '3', status: 'Fehlt', price: null, images: [] };
+    const { result, rerender } = renderHook((p) => useVolumeEditForm(p), {
+      initialProps: { activeVolume: opened, mangaId: 1, canEdit: true, onClose, onSuccess: vi.fn() }
+    });
+    rerender({ activeVolume: { ...opened, price: 7.999 }, mangaId: 1, canEdit: true, onClose, onSuccess: vi.fn() });
+    expect(result.current.fieldErrors).toEqual({});
+    act(() => result.current.setEditVolForm(prev => ({ ...prev, notes: 'neu' })));
+    await act(() => result.current.handleSaveVolume({ preventDefault() {} }));
+    expect(result.current.formError).toBe('');
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({ notes: 'neu' });
+    expect(onClose).toHaveBeenCalled();
+
+    act(() => result.current.setEditVolForm(prev => ({ ...prev, price: '1,234' })));
+    expect(result.current.fieldErrors.price).toBeTruthy();
+  });
+
+  it('a photo upload gets the size-aware upload timeout (at least 120 s), so a hung one ends', async () => {
     vi.useFakeTimers();
     const fetchMock = hanging();
     vi.stubGlobal('fetch', fetchMock);
     const { result } = renderForm();
     act(() => { result.current.handleUploadVolumeImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60 * 1000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(119000); });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/upload/multiple');
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
     expect(result.current.uploadingVolImage).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
   });
 });

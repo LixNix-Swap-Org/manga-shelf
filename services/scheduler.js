@@ -159,14 +159,16 @@ function selectForPruning(entries, keep) {
 function pruneBackups(prefix, maxSnapshots = retentionFor(prefix)) {
     const cat = prefix && categoryForPrefix(prefix);
     if (!cat || !maxSnapshots) return;
-    if (maxSnapshots === KEEP_ALL) {
+    const keepAll = maxSnapshots === KEEP_ALL;
+    if (keepAll) {
         const variable = ENTRIES.find(e => e.key === cat.keep)?.name;
-        log.warn(`[Backup] ${variable} ist ungültig: Snapshots der Art "${cat.category}" werden nicht gelöscht, bis der Wert korrigiert ist`);
-        return;
+        log.warn(`[Backup] ${variable} ist ungültig: gute Snapshots der Art "${cat.category}" werden nicht gelöscht, bis der Wert korrigiert ist`);
     }
     try {
         const entries = listSnapshots().filter(s => s.category === cat.category);
-        for (const name of selectForPruning(entries, maxSnapshots)) {
+        const failed = new Set(entries.filter(s => s.verified === false).map(s => s.filename));
+        // an invalid retention keeps every good snapshot, failed ones are still cut down to the newest
+        for (const name of selectForPruning(entries, maxSnapshots).filter(n => !keepAll || failed.has(n))) {
             if (isSnapshotHeld(name)) {
                 log.info('Keeping old snapshot while it is being restored:', name);
                 continue;
@@ -446,6 +448,45 @@ async function stripExistingUploadsOnce({ shouldStop = () => false } = {}) {
     return { done: true, files: files.length, stripped };
 }
 
+/** Deletes trash entries older than 30 days for good; returns the number of entries removed. */
+function purgeTrashIfDue(now = new Date()) {
+    const { purgeTrash } = require('../core/handlers/trash');
+    const { TRASH_RETENTION_DAYS } = require('../core/lib/trash');
+    const { createCtx } = require('../db');
+    const removed = purgeTrash(createCtx({ now: () => now }), { days: TRASH_RETENTION_DAYS });
+    if (removed) log.info(`[Papierkorb] ${removed} Einträge älter als ${TRASH_RETENTION_DAYS} Tage endgültig gelöscht`);
+    return removed;
+}
+
+const ANIME_REFRESH_DAY_KEY = 'anime_refresh_day';
+// spreads the daily sweep's groups of 50 over the hour after the backup
+const ANIME_GROUP_PAUSE_MS = 60 * 1000;
+let animeRun = null;
+
+/**
+ * Anime metadata (core/anime/gateway.js refreshDue): every hour the entries whose next episode has aired, once a day
+ * (one hour after the backup hour) all due entries. Resolves with the gateway's report, or null when nothing ran.
+ */
+function runAnimeRefreshIfDue(now = new Date(), schedule = backupSchedule(), { shouldStop = () => false, pauseMs = ANIME_GROUP_PAUSE_MS } = {}) {
+    if (animeRun) return animeRun;
+    animeRun = (async () => {
+        const gateway = require('../core/anime/gateway');
+        const { createCtx } = require('../db');
+        const local = localParts(now, schedule.timeZone);
+        const done = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(ANIME_REFRESH_DAY_KEY);
+        const daily = local.hour >= Math.min(23, schedule.hour + 1) && (!done || done.value !== local.date);
+        const stop = () => shouldStop() || lifecycle.isShuttingDown();
+        // a shutdown waits for the running group (up to 8 s); the next group is not started
+        const report = await lifecycle.trackJob(daily ? 'Anime-Tageslauf' : 'Anime-Aktualisierung',
+            gateway.refreshDue(createCtx(), { onlyAiring: !daily, pauseMs: daily ? pauseMs : 0, shouldStop: stop }));
+        if (lifecycle.isShuttingDown()) return report;
+        if (daily && !report.stopped) db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(ANIME_REFRESH_DAY_KEY, local.date);
+        if (report.updated || report.missing) log.info(`[Anime] ${report.updated} Einträge aktualisiert${report.missing ? `, ${report.missing} nicht gefunden` : ''}${daily ? ' (täglicher Lauf)' : ''}`);
+        return report;
+    })().finally(() => { animeRun = null; });
+    return animeRun;
+}
+
 /**
  * Starts the daily backup: a check 10 s after boot and then every hour creates a daily-auto snapshot once the
  * local time has reached BACKUP_HOUR and there is no verified one for the local day, so restarts cannot skip a
@@ -461,6 +502,16 @@ function initScheduler() {
             await runDailyBackupIfDue();
         } catch (e) {
             log.error('[Auto-Backup] Daily backup failed:', e);
+        }
+        try {
+            purgeTrashIfDue();
+        } catch (e) {
+            log.warn('[Papierkorb] Aufräumen fehlgeschlagen:', e);
+        }
+        try {
+            await runAnimeRefreshIfDue(new Date(), backupSchedule(), { shouldStop: () => stopped });
+        } catch (e) {
+            log.warn('[Anime] Aktualisierung fehlgeschlagen:', e);
         }
     };
     const first = setTimeout(check, 10000);
@@ -494,6 +545,8 @@ module.exports = {
     localParts,
     needsDailyBackup,
     runDailyBackupIfDue,
+    runAnimeRefreshIfDue,
+    purgeTrashIfDue,
     sweepTempArtefacts,
     stripExistingUploadsOnce,
     initScheduler

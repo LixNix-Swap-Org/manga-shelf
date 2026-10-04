@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import CsvExchangeModal from '../components/dashboard/CsvExchangeModal';
 import { decodeCsvBytes } from '../components/modals/backup/CsvImportPanel';
 import { fakeResponse, htmlResponse } from './fakeResponse';
+import { setServer } from '../utils/api';
 
 const json = (status, body) => fakeResponse(status, body);
 const preview = (n) => ({ created_volumes: n, created_series: 1, skipped_existing: 0, errors: [], warnings: [] });
@@ -19,6 +20,27 @@ describe('CsvExchangeModal', () => {
     expect(document.getElementById('btn-export-csv').getAttribute('href')).toBe('/api/export/csv');
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('app build: the export downloads with the token and shows the progress', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    setServer({ base: 'https://shelf.example.org', token: 'tok' });
+    let release;
+    const fetchMock = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      render(<CsvExchangeModal isOpen onClose={vi.fn()} canEdit={false} />);
+      const link = document.getElementById('btn-export-csv');
+      expect(fireEvent.click(link)).toBe(false);
+      expect(await screen.findByText('Lädt… 0 MB')).toBeTruthy();
+      expect(fetchMock.mock.calls[0][0]).toBe('https://shelf.example.org/api/export/csv');
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+      await act(async () => { release(new Response('', { status: 500 })); });
+      await waitFor(() => expect(screen.queryByText(/Lädt/)).toBeNull());
+    } finally {
+      vi.unstubAllEnvs();
+      setServer({ base: '', token: '' });
+    }
   });
 
   it('editors preview first and import exactly the previewed file', async () => {

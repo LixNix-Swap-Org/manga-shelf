@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const dns = require('dns');
 const net = require('net');
+const { detectImageExt } = require('../core/lib/imageCheck');
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
@@ -88,30 +89,6 @@ function makeSafeLookup(isBlocked) {
             callback(null, list[0].address, list[0].family);
         });
     };
-}
-
-const AVIF_BRANDS = new Set(['avif', 'avis']);
-
-/** AVIF writers may use a generic major brand ('mif1', 'miaf') and list avif only among the compatible brands. */
-function isAvifFtyp(buf) {
-    if (buf.slice(4, 8).toString('ascii') !== 'ftyp') return false;
-    const boxEnd = Math.min(buf.readUInt32BE(0), buf.length);
-    if (AVIF_BRANDS.has(buf.slice(8, 12).toString('ascii'))) return true;
-    for (let i = 16; i + 4 <= boxEnd; i += 4) {
-        if (AVIF_BRANDS.has(buf.slice(i, i + 4).toString('ascii'))) return true;
-    }
-    return false;
-}
-
-/** Image extension from the first bytes (at least 12; pass 64 or more so AVIF compatible brands are seen). */
-function detectImageExt(buf) {
-    if (!buf || buf.length < 12) return null;
-    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
-    if (buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return '.png';
-    if (buf.slice(0, 4).toString('ascii') === 'GIF8') return '.gif';
-    if (buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP') return '.webp';
-    if (isAvifFtyp(buf)) return '.avif';
-    return null;
 }
 
 function requestOnce(url, depthLeft, ctx) {

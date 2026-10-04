@@ -179,14 +179,18 @@ export const findVolumeByIsbn = (index, isbn) => {
 };
 
 /**
- * Scan result for a volume of the offline copy ({ manga, volume }), without the server. Anything but a `buy` carries
- * the note in its label and `offline: true` (a later server check may replace it); `source` says where it came from.
+ * Scan result for a volume of the offline copy ({ manga, volume }), without the server. Every result, a `buy` too, is
+ * provisional: the note in its label and `offline: true`, so the server's answer replaces it and it cannot be booked
+ * before that answer (isBookable); `source` says where it came from.
  */
 export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note = 'offline geprüft', source = 'offline' } = {}) => {
   const clean = isbnDigits(isbn);
   const result = classifyShopScan(clean, { found: true, matched_manga: hit.manga, matched_volume: hit.volume, book: {} }, shoppingItems);
-  return result.kind === 'buy' ? result : { ...result, label: `${result.label} (${note})`, offline: true, source };
+  return { ...result, label: `${result.label} (${note})`, offline: true, source };
 };
+
+/** A `buy` entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
+export const isBookable = (entry) => entry.kind === 'buy' && !entry.done && !entry.booking && !entry.offline;
 
 /** Label note of a scan answered from the offline copy before asking the server. */
 export const localSourceNote = (age) => `Stand Offline-Kopie${age ? ` ${age}` : ''}`;
@@ -377,6 +381,11 @@ export const formatShoppingStand = (timestamp, now = new Date()) => {
   if (d.toDateString() === today.toDateString()) return `heute, ${time} Uhr`;
   return `${formatDayMonth(d, today)}, ${time} Uhr`;
 };
+
+/** Live camera scanning needs a secure context (HTTPS, localhost, the app shells) with getUserMedia. */
+export const liveScanSupported = (win = typeof window === 'undefined' ? null : window) => Boolean(
+  win?.isSecureContext && typeof win.navigator?.mediaDevices?.getUserMedia === 'function'
+);
 
 const ISBN_BARCODE = /^97[89]\d{10}$/;
 export const isIsbnBarcode = (value) => ISBN_BARCODE.test(String(value || ''));

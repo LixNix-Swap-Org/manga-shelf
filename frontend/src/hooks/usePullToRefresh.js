@@ -7,9 +7,21 @@ const isStandalone = (win) => Boolean(
   win?.matchMedia?.('(display-mode: standalone)').matches || win?.navigator?.standalone === true
 );
 
+/** A touch inside a dialog or inside content that is scrolled down scrolls that content, it does not pull the page. */
+export function touchScrollsContent(target) {
+  let el = target && typeof target.closest === 'function' ? target : target?.parentElement ?? null;
+  if (!el) return false;
+  if (el.closest('[role="dialog"], [aria-modal="true"]')) return true;
+  for (; el && el !== el.ownerDocument?.documentElement && el !== el.ownerDocument?.body; el = el.parentElement) {
+    if (el.scrollTop > 0) return true;
+  }
+  return false;
+}
+
 /**
  * Pull-to-refresh for the installed app (a browser tab has its own): a downward drag of at least `threshold` px that
- * starts at the very top of the page calls `onRefresh`. Returns { pullDistance, refreshing } for the indicator.
+ * starts at the very top of the page, outside dialogs and scrolled content, calls `onRefresh`. Returns
+ * { pullDistance, refreshing } for the indicator.
  */
 export default function usePullToRefresh(onRefresh, { threshold = PULL_THRESHOLD_PX, enabled = true, win = globalThis.window } = {}) {
   const [pullDistance, setPullDistance] = useState(0);
@@ -28,7 +40,7 @@ export default function usePullToRefresh(onRefresh, { threshold = PULL_THRESHOLD
       setPullDistance(0);
     };
     const onStart = (e) => {
-      if (busyRef.current || win.scrollY > 0 || e.touches?.length !== 1) return;
+      if (busyRef.current || win.scrollY > 0 || e.touches?.length !== 1 || touchScrollsContent(e.target)) return;
       startY = e.touches[0].clientY;
       distance = 0;
     };

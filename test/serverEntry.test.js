@@ -71,7 +71,7 @@ async function probe(appDir, env, requests) {
 
 test('index.html in the app root: neither the database nor the source is served', async () => {
     const appDir = tmp('manga-shelf-rootlayout-');
-    for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'routes', 'middleware', 'services', 'utils']) {
+    for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'core', 'routes', 'middleware', 'services', 'utils']) {
         fs.cpSync(path.join(ROOT, entry), path.join(appDir, entry), { recursive: true });
     }
     fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(appDir, 'node_modules'), 'junction');
@@ -192,7 +192,7 @@ test('SIGTERM shuts a running server down with exit code 0', { skip: process.pla
 
 function copyApp(prefix) {
     const appDir = tmp(prefix);
-    for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'routes', 'middleware', 'services', 'utils']) {
+    for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'core', 'routes', 'middleware', 'services', 'utils']) {
         fs.cpSync(path.join(ROOT, entry), path.join(appDir, entry), { recursive: true });
     }
     fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(appDir, 'node_modules'), 'junction');

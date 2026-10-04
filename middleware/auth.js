@@ -6,6 +6,7 @@ const { db, dataDir } = require('../db');
 const { config } = require('../utils/config');
 const log = require('../utils/logger').child('auth');
 const { bearerToken } = require('./originCheck');
+const { AUTH_TEXTS } = require('../core/errors');
 
 // An explicit JWT_SECRET is only accepted if it is long enough and not a well-known placeholder from the repo;
 // otherwise a random secret is kept in <DATA_DIR>/secret.key. Never in the database: backups would carry it.
@@ -217,10 +218,8 @@ const clearAuthCookie = (res) => {
 };
 
 const AUTH_ERRORS = {
-    AUTH_REQUIRED: 'Nicht angemeldet',
+    ...AUTH_TEXTS,
     SESSION_INVALID: 'Sitzung abgelaufen oder ungültig – bitte neu anmelden',
-    FORBIDDEN: 'Keine Berechtigung (nur Administratoren)',
-    READ_ONLY: 'Nur Lesezugriff für Besucher/Gäste gestattet',
     ADMIN_EXISTS: 'Es gibt bereits einen Administrator – bitte anmelden'
 };
 const authError = (res, status, code) => res.status(status).json({ error: AUTH_ERRORS[code], code });

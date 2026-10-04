@@ -1,0 +1,10 @@
+{
+ "_note": "Built from the documented Jikan v4 /manga/{id}/relations shape (unreachable from the recording machine on 2026-10-04).",
+ "data": [
+  { "relation": "Adaptation", "entry": [
+   { "mal_id": 33, "type": "anime", "name": "Kenpuu Denki Berserk", "url": "https://myanimelist.net/anime/33/Kenpuu_Denki_Berserk" },
+   { "mal_id": 32379, "type": "anime", "name": "Berserk (2016)", "url": "https://myanimelist.net/anime/32379/Berserk_2016" }
+  ] },
+  { "relation": "Side Story", "entry": [{ "mal_id": 92299, "type": "manga", "name": "Berserk: Shinen no Kami 2", "url": "https://myanimelist.net/manga/92299" }] }
+ ]
+}

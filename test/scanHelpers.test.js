@@ -116,7 +116,7 @@ test('offline classifier uses the offline copy: owned, hyphenated and ISBN-10 st
   assert.deepStrictEqual([listed.kind, listed.itemId], ['buy', 7]);
 });
 
-test('classifyLocalHit: a hit of the offline-copy index carries its source and note; list entries stay buys', () => {
+test('classifyLocalHit: a hit of the offline-copy index carries its source and note; a buy is provisional too', () => {
   const hit = { manga: { id: 3, title: 'Naruto' }, volume: { id: 31, status: 'Vorhanden', owned_by_me: true, display_title: 'Band 1 (Collectors Edition)' } };
   const owned = helpers.classifyLocalHit('9783551762931', hit, [], { note: helpers.localSourceNote('vor 3 Min.'), source: 'local' });
   assert.deepStrictEqual(
@@ -128,7 +128,13 @@ test('classifyLocalHit: a hit of the offline-copy index carries its source and n
   assert.match(partner.label, /bei ed vorhanden \(offline geprüft\)$/);
   const missing = { ...hit, volume: { id: 7, status: 'Fehlt', display_title: 'Band 3' } };
   const buy = helpers.classifyLocalHit('9783551000031', missing, [shopRow()], { source: 'local' });
-  assert.deepStrictEqual([buy.kind, buy.offline, buy.source], ['buy', undefined, undefined]);
+  assert.deepStrictEqual([buy.kind, buy.offline, buy.source, buy.itemId], ['buy', true, 'local', 7]);
+  assert.match(buy.label, /\(offline geprüft\)$/);
+  assert.strictEqual(helpers.isBookable(buy), false, 'a provisional buy waits for the server');
+  const confirmed = helpers.mergeScanEntry([buy], helpers.classifyShopScan('9783551000031', { found: false }, [shopRow()]));
+  assert.deepStrictEqual([confirmed[0].kind, confirmed[0].offline], ['buy', undefined], 'the server answer replaces it');
+  assert.strictEqual(helpers.isBookable(confirmed[0]), true);
+  assert.strictEqual(helpers.isBookable({ ...confirmed[0], done: true }), false);
   assert.strictEqual(helpers.localSourceNote(''), 'Stand Offline-Kopie');
   assert.strictEqual(helpers.classifyShopScanOffline('9783551762931', hit, []).label, 'Naruto Band 1 (Collectors Edition) (offline geprüft)');
 });

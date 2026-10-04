@@ -154,15 +154,18 @@ export default function CsvImportPanel({ disabled = false, onImported, onImporti
     <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-3">
       <div className="text-sm font-semibold text-slate-200">Aus CSV importieren</div>
       <p className="text-xs text-slate-400">
-        Spalten: Reihe und Bandnummer (Pflicht) sowie Reihenverlag, Verlag (nur wenn der Band abweicht), Autor, Typ, Status
-        (Vorhanden, Fehlt, Vorbestellt, Erscheint bald, Bestellt; „Gelesen“ = Vorhanden + gelesen), ISBN, Preis, Zielpreis,
-        Priorität (0–3), Erscheinungsdatum, Erscheinungsjahr, Kaufdatum, Zustand, Seiten, Notizen, Gelesen von und Besitzer
+        Spalten: Reihe und Bandnummer (Pflicht) sowie Reihenverlag, Verlag (nur wenn der Band abweicht), Autor, Typ („Reihe“ =
+        Zeile nur für die Reihe), Status (Vorhanden, Fehlt, Vorbestellt, Erscheint bald, Bestellt; „Gelesen“ = Vorhanden + gelesen),
+        ISBN, Preis, Zielpreis, Priorität (0–3), Erscheinungsdatum, Erscheinungsjahr, Kaufdatum, Zustand, Seiten, Notizen,
+        Reihen-Wunsch (0–3), Reihenstatus, Sammelstatus (aktiv, pausiert, abgebrochen; leer = aktiv), Gesamtbände, Alternativtitel, Sprache, Tags, Manga-Passion-ID, Reihen-Cover,
+        Reihen-Banner, Beschreibung, Band-Cover, Bilder (durch | getrennt), MP-Band-ID, Gelesen von und Besitzer
         (Benutzernamen, durch Komma oder | getrennt; Besitzer nur bei Status Vorhanden; unbekannte Namen werden ignoriert, ohne
         Treffer wirst du Besitzer). Nur Admins können andere Personen als Besitzer oder Leser eintragen; alle anderen nur sich selbst.
-        Eine Zeile ohne Bandnummer legt nur die Reihe an.
-        Bereits vorhandene Einträge (Reihe + Typ + Nummer) werden nie verändert. Am einfachsten: erst exportieren und die Datei als Vorlage nutzen.
+        Eine Zeile ohne Bandnummer oder mit Typ „Reihe“ legt nur die Reihe an bzw. setzt deren Wunsch.
+        Bereits vorhandene Bände (Reihe + Typ + Nummer) werden nie verändert. Am einfachsten: erst exportieren und die Datei als Vorlage nutzen.
         In Excel die Spalten ISBN und Bandnummer als Text formatieren. Höchstens 20.000 Zeilen und 10 MB pro Datei.
-        Die CSV ist kein vollständiges Backup (keine Cover, Reihen-Details wie Beschreibung/Tags/Gesamtzahl, keine Preise pro Besitzer) – dafür das ZIP-Backup nutzen.
+        Bilddateien und Preise je Besitzer sind nicht in der CSV – dafür das ZIP-Backup nutzen.
+        Zu lange Cover- oder Reihenwerte (z. B. alte data:-Cover) werden mit Hinweis übersprungen, der Band wird trotzdem angelegt.
       </p>
       <input
         ref={fileInputRef}

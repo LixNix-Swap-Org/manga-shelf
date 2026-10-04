@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, CircleCheck, Info, X } from 'lucide-react';
-import { subscribe } from '../../utils/notify';
+import { dismiss, subscribe } from '../../utils/notify';
 
 const MAX_TOASTS = 4;
+const MAX_UNDO_TOASTS = 3;
 // time left after the pointer or focus leaves a toast whose timer had nearly run out
 const MIN_RESUME_MS = 1500;
 
@@ -14,12 +15,18 @@ const KIND_STYLE = {
 
 const isTimed = (duration) => Number.isFinite(duration) && duration > 0;
 
-/** Caps the toasts without an action (oldest go first); a toast with an action (an undo) is never evicted. */
-export function trimToasts(list, max = MAX_TOASTS) {
-  const plain = list.filter((t) => !t.action);
-  if (plain.length <= max) return list;
-  const evicted = new Set(plain.slice(0, plain.length - max).map((t) => t.id));
-  return list.filter((t) => !evicted.has(t.id));
+const oldest = (items, max) => items.slice(0, Math.max(0, items.length - max));
+
+/**
+ * Caps the toasts without an action and the timed ones with an action (undo toasts), oldest first. An evicted undo is
+ * committed: its change stays. A toast whose action waits for the user (duration 0, e.g. 'Neu laden') is never evicted.
+ */
+export function trimToasts(list, max = MAX_TOASTS, maxUndo = MAX_UNDO_TOASTS) {
+  const evicted = new Set([
+    ...oldest(list.filter((t) => !t.action), max),
+    ...oldest(list.filter((t) => t.action && isTimed(t.duration)), maxUndo)
+  ].map((t) => t.id));
+  return evicted.size ? list.filter((t) => !evicted.has(t.id)) : list;
 }
 
 function Toast({ toast, onClose }) {
@@ -61,7 +68,7 @@ function Toast({ toast, onClose }) {
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${icon}`} aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <p className="break-words">{toast.message}</p>
+        <p className="break-words" aria-live={toast.updated ? 'off' : undefined}>{toast.message}</p>
         {toast.ref && <p className="mt-0.5 text-[11px] opacity-75">Fehler-ID: <span className="font-mono">{toast.ref}</span></p>}
       </div>
       {toast.action && (
@@ -82,23 +89,41 @@ function Toast({ toast, onClose }) {
   );
 }
 
-/** Toasts of utils/notify.js; mounted once in App. Info and success go to a polite live region, errors are role=alert. */
+/**
+ * Toasts of utils/notify.js; mounted once in App. Info and success go to a polite live region, errors are role=alert.
+ * A toast evicted by the caps is announced with notify's dismiss event, so a caller that defers its change until the
+ * undo window ends can commit it at once.
+ */
 export default function Toaster() {
   const [toasts, setToasts] = useState([]);
+  const listRef = useRef([]);
 
-  const close = useCallback((id) => setToasts((list) => list.filter((t) => t.id !== id)), []);
+  const apply = useCallback((next) => {
+    listRef.current = next;
+    setToasts(next);
+  }, []);
+
+  const close = useCallback((id) => {
+    if (listRef.current.some((t) => t.id === id)) apply(listRef.current.filter((t) => t.id !== id));
+  }, [apply]);
 
   useEffect(() => subscribe((event) => {
     if (event.type === 'dismiss') {
       close(event.id);
       return;
     }
+    if (event.type === 'update') {
+      if (listRef.current.some((t) => t.id === event.id)) {
+        apply(listRef.current.map((t) => (t.id === event.id ? { ...t, message: event.message, ref: event.ref, updated: true } : t)));
+      }
+      return;
+    }
     const { toast } = event;
-    setToasts((list) => trimToasts([
-      ...list.filter((t) => !(t.kind === toast.kind && t.message === toast.message && !t.action && !toast.action)),
-      toast
-    ]));
-  }), [close]);
+    const kept = listRef.current.filter((t) => !(t.kind === toast.kind && t.message === toast.message && !t.action && !toast.action));
+    const next = trimToasts([...kept, toast]);
+    apply(next);
+    for (const t of kept) if (!next.includes(t)) dismiss(t.id);
+  }), [apply, close]);
 
   const polite = toasts.filter((t) => t.kind !== 'error');
   const errors = toasts.filter((t) => t.kind === 'error');
@@ -111,7 +136,7 @@ export default function Toaster() {
       <div className="flex w-full max-w-md flex-col gap-2 sm:w-96">
         {errors.map((t) => <Toast key={t.id} toast={t} onClose={close} />)}
       </div>
-      <div role="status" aria-live="polite" className="flex w-full max-w-md flex-col gap-2 sm:w-96">
+      <div role="status" aria-live="polite" className="flex max-h-[40vh] w-full max-w-md flex-col justify-end gap-2 overflow-y-clip sm:w-96">
         {polite.map((t) => <Toast key={t.id} toast={t} onClose={close} />)}
       </div>
     </div>

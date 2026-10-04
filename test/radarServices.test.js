@@ -97,9 +97,41 @@ test('buildShoppingList: totals and publisher chips (canonical names)', () => {
     assert.equal(list.total_missing, 3);
     assert.equal(list.total_cost, 15.6);
     assert.deepEqual(list.publishers, [
-        { publisher: 'Carlsen Manga', count: 2, total_price: 15.6 },
-        { publisher: 'Panini Verlags GmbH', count: 1, total_price: 0 }
+        { publisher: 'Carlsen Manga', count: 2, total_price: 15.6, wished_count: 0 },
+        { publisher: 'Panini Verlags GmbH', count: 1, total_price: 0, wished_count: 0 }
     ]);
+    assert.deepEqual([list.total_wished_series, list.wished_series], [0, []]);
+});
+
+test('buildShoppingList: wished series are appended unchanged in order, counted, and add publisher chips', () => {
+    const list = buildShoppingList([{ id: 1, price: 7, effective_publisher: 'Carlsen Manga' }], [
+        { id: 5, title: 'Hoch', cover_image: null, publisher: 'carlsen manga', wish_priority: 3, total_volumes: 10, manga_passion_id: 9, known_missing_count: 2, known_missing_cost: 13.999 },
+        { id: 6, title: 'Neu', cover_image: '/uploads/n.jpg', publisher: null, wish_priority: 0, total_volumes: null, manga_passion_id: null, known_missing_count: 0, known_missing_cost: 0 }
+    ]);
+    assert.equal(list.total_wished_series, 2);
+    assert.deepEqual(list.wished_series.map(s => [s.id, s.publisher, s.wish_priority, s.known_missing_count, s.known_missing_cost]), [
+        [5, 'Carlsen Manga', 3, 2, 14], [6, 'Unbekannt', 0, 0, 0]
+    ]);
+    assert.deepEqual(list.publishers, [
+        { publisher: 'Carlsen Manga', count: 1, total_price: 7, wished_count: 1 },
+        { publisher: 'Unbekannt', count: 0, total_price: 0, wished_count: 1 }
+    ]);
+    assert.equal(list.total_missing, 1, 'wished series are no missing volumes');
+});
+
+test('enrichReleases: user_manga_wished only for a wished series without an owned volume, never for a spin-off', () => {
+    const mangas = [
+        { id: 1, title: 'Wunsch', wish_priority: 2, owned_count: 0 },
+        { id: 2, title: 'Besitz', wish_priority: 3, owned_count: 1 },
+        { id: 3, title: 'Normal', wish_priority: null, owned_count: 0 }
+    ];
+    const items = enrichReleases([
+        { id: 11, title: 'Wunsch', volume_number: '1' },
+        { id: 12, title: 'Besitz', volume_number: '1' },
+        { id: 13, title: 'Normal', volume_number: '1' },
+        { id: 14, title: 'Wunsch – Episode Zwei', volume_number: '1' }
+    ], mangas, []);
+    assert.deepEqual(items.map(i => [i.in_collection, i.user_manga_wished]), [[true, true], [true, false], [true, false], [true, false]]);
 });
 
 test('buildReleaseRadar: month groups in order, budgets, countdown per item', () => {
@@ -322,4 +354,66 @@ test('mapRelease + detectDateChanges: a month-only calendar date is compared by 
     assert.deepEqual(detectDateChanges(pending, [{ user_volume_id: 1, date: '2027-01', is_digital: false }]).map(c => c.new_date), ['2027-01']);
     const monthStored = [{ ...pending[0], release_date: '2026-1' }];
     assert.deepEqual(detectDateChanges(monthStored, [{ user_volume_id: 1, date: '2026-01-20', is_digital: false }]), []);
+});
+
+test('enrichReleases: two editions with the same title each find their own series; by title the unlinked one wins', () => {
+    const mangas = [
+        { id: 1, title: 'Vagabond', manga_passion_id: 10 },
+        { id: 2, title: 'Vagabond', manga_passion_id: 20 },
+        { id: 3, title: 'Vagabond' }
+    ];
+    const volumes = [
+        { id: 11, manga_id: 1, volume_number: '3', status: 'Vorhanden' },
+        { id: 21, manga_id: 2, volume_number: '3', status: 'Vorbestellt' },
+        { id: 31, manga_id: 3, volume_number: '3', status: 'Fehlt' }
+    ];
+    const items = enrichReleases([
+        { id: 1, edition_id: 20, title: 'Vagabond', volume_number: '3' },
+        { id: 2, edition_id: 10, title: 'Vagabond', volume_number: '3' },
+        { id: 3, edition_id: 30, title: 'Vagabond', volume_number: '3' }
+    ], mangas, volumes);
+    assert.deepEqual(fields(items), [[true, 2, 'Vorbestellt', 21], [true, 1, 'Vorhanden', 11], [true, 3, 'Fehlt', 31]]);
+    assert.deepEqual(items.map(i => i.match_kind), ['edition', 'edition', 'exact']);
+    // only linked series of other editions: the title still marks the series, never a volume
+    const other = enrichReleases([{ id: 4, edition_id: 30, title: 'Vagabond', volume_number: '3' }], mangas.slice(0, 2), volumes);
+    assert.deepEqual([other[0].match_kind, other[0].user_volume_id], ['other_edition', null]);
+});
+
+test('enrichReleases: "Band 14" in the collection is the calendar\'s "14"; a Collectors Edition 14 stays apart', () => {
+    const mangas = [{ id: 1, title: 'Kingdom', manga_passion_id: 5 }];
+    const volumes = [
+        { id: 50, manga_id: 1, volume_number: 'Collectors Edition 14', status: 'Vorhanden', type: 'special_edition' },
+        { id: 51, manga_id: 1, volume_number: 'Band 14', status: 'Vorbestellt', type: 'volume' },
+        { id: 52, manga_id: 1, volume_number: 'Schuber 2', status: 'Fehlt', type: 'schuber' }
+    ];
+    const items = enrichReleases([
+        { id: 1, edition_id: 5, title: 'Kingdom', volume_number: '14' },
+        { id: 2, edition_id: 6, title: 'Kingdom – Collectors Edition', raw_title: 'Kingdom – Collectors Edition', volume_number: '14' },
+        { id: 3, edition_id: 5, title: 'Kingdom', volume_number: '2', type: 'schuber' },
+        { id: 4, edition_id: 5, title: 'Kingdom', volume_number: '2' }
+    ], mangas, volumes);
+    assert.deepEqual(items.map(i => [i.type, i.user_volume_id]), [['volume', 51], ['special_edition', 50], ['schuber', 52], ['volume', null]]);
+});
+
+test('enrichReleases: user_manga_collecting tells a dropped series apart; prefix matches carry none', () => {
+    const mangas = [{ id: 1, title: 'Eden', collecting: 'abgebrochen' }, { id: 2, title: 'Blame' }];
+    const items = enrichReleases([
+        { title: 'Eden', volume_number: '1' },
+        { title: 'Blame', volume_number: '1' },
+        { title: 'Eden – It\'s an Endless World Novel', volume_number: '1' }
+    ], mangas, []);
+    assert.deepEqual(items.map(i => i.user_manga_collecting), ['abgebrochen', 'aktiv', null]);
+});
+
+test('findSeriesForImport: the linked edition first, then an unlinked series before one of another edition', () => {
+    const mangas = [
+        { id: 1, title: 'Monster', manga_passion_id: 7 },
+        { id: 2, title: 'Monster' },
+        { id: 3, title: 'Monster Perfect Edition', manga_passion_id: 8 }
+    ];
+    assert.equal(findSeriesForImport(mangas, 'Monster Neuauflage', 8).id, 3);
+    assert.equal(findSeriesForImport(mangas, 'Monster', 9).id, 2);
+    assert.equal(findSeriesForImport(mangas, 'Monster', 7).id, 1);
+    // without an edition the old order stays
+    assert.equal(findSeriesForImport(mangas, 'Monster').id, 1);
 });

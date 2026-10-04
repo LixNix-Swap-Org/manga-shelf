@@ -1,9 +1,10 @@
 import { useId } from 'react';
 import { X, Calendar, Coins, Bookmark, Check, Truck, ShoppingCart } from 'lucide-react';
+import { PRIORITY_OPTIONS } from '../../../utils/priority';
 
 const PILL_IDLE = 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent';
 
-// every status VOLUME_STATUSES (routes/volumes.js) can store; 'Gelesen' is a read entry, not a status
+// every status VOLUME_STATUSES (core/lib/validate.js) can store; 'Gelesen' is a read entry, not a status
 const STATUS_OPTIONS = [
   { value: 'Vorhanden', label: 'Im Besitz', Icon: Check, iconClass: 'text-emerald-400', active: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/30' },
   { value: 'Bestellt', label: 'Bestellt', Icon: ShoppingCart, iconClass: 'text-amber-400', active: 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-950/40 ring-1 ring-amber-500/30' },
@@ -80,10 +81,7 @@ export default function StatusPriceFields({
               value={editVolForm.priority ?? '0'}
               onChange={setField('priority')}
             >
-              <option value="0">Keine</option>
-              <option value="1">Niedrig</option>
-              <option value="2">Mittel</option>
-              <option value="3">Hoch</option>
+              {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
             </select>
           </div>
           <div className="sm:col-span-5">

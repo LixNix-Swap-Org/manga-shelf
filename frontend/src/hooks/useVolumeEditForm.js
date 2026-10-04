@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { applyLookupToForm } from '../utils/volumeFormHelpers';
 import {
-  buildEditorForm, readJsonSafe, isAbortError, validateVolumeForm, buildSaveBody, priceForQuery, isAllowedImageUrl,
+  buildEditorForm, readJsonSafe, isAbortError, validateVolumeForm, buildSaveBody, rebaseForm, priceForQuery, isAllowedImageUrl,
   filterUploadFiles, chunk, addImages, removeImage, moveImage, deleteVolumeRequest, MAX_UPLOAD_FILES, FIELD_NAMES
 } from '../components/detail/volumeEdit/editorUtils';
 import { apiFetch, TIMEOUTS } from '../utils/api';
 import { prepareImagesForUpload } from '../utils/imageResize';
+import { UPLOAD_CANCELLED } from './useVolumeActions';
 
 /**
  * State and actions of the volume editor: form, photo upload / URL / ordering, Manga-Passion autofill, save and delete.
@@ -23,14 +24,23 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
   const [photoError, setPhotoError] = useState(null);
   const [formError, setFormError] = useState('');
   const [showErrors, setShowErrors] = useState(false);
-  const [initialForm] = useState(editVolForm);
-  // status as the server last stored it: the PUT only sends a status the user picked himself
-  const serverStatusRef = useRef(editVolForm.status);
-  // same for the purchase date, which an owner toggle can clear on the server while the editor is open
-  const serverPurchaseDateRef = useRef(editVolForm.purchase_date ?? '');
+  // the form as the server last stored it: the PUT only sends fields that differ from it, and a value still equal to
+  // it is not validated (legacy rows and server-written values stay saveable)
+  const baseRef = useRef(editVolForm);
   // latest committed form, for messages computed outside a state updater
   const formRef = useRef(editVolForm);
   formRef.current = editVolForm;
+
+  // a refreshed series copy (the cached one was stale, or another view changed the volume): untouched fields follow it
+  const openedVolumeRef = useRef(activeVolume);
+  useEffect(() => {
+    if (!activeVolume || activeVolume === openedVolumeRef.current) return;
+    openedVolumeRef.current = activeVolume;
+    const oldBase = baseRef.current;
+    const nextBase = buildEditorForm(activeVolume);
+    baseRef.current = nextBase;
+    setEditVolForm(prev => rebaseForm(prev, oldBase, nextBase));
+  }, [activeVolume]);
 
   const abortRef = useRef(null);
   useEffect(() => {
@@ -40,23 +50,37 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
   }, []);
   const signal = () => abortRef.current?.signal;
 
-  const fieldErrors = validateVolumeForm(editVolForm, initialForm);
+  const fieldErrors = validateVolumeForm(editVolForm, baseRef.current);
+
+  // the running photo upload: "Upload abbrechen" aborts it, closing the editor aborts it through the editor's signal
+  const uploadAbortRef = useRef(null);
+  const cancelVolumeImageUpload = () => uploadAbortRef.current?.abort();
 
   const handleUploadVolumeImages = async (files) => {
     if (!canEdit || !files || files.length === 0) return;
     setPhotoError(null);
     setUploadingVolImage(true);
+    const upload = new AbortController();
+    uploadAbortRef.current = upload;
+    const lifetime = signal();
+    const onClose = () => upload.abort();
+    lifetime?.addEventListener('abort', onClose, { once: true });
     const { accepted, rejected } = filterUploadFiles(await prepareImagesForUpload(files));
     const problems = rejected.map(r => `${r.name} (${r.reason})`);
     let uploaded = 0;
     let failure = null;
-    if (accepted.length === 0) setUploadingVolImage(false);
+    if (accepted.length === 0 || upload.signal.aborted) setUploadingVolImage(false);
+    if (upload.signal.aborted) {
+      lifetime?.removeEventListener('abort', onClose);
+      if (!lifetime?.aborted) setPhotoError({ text: UPLOAD_CANCELLED });
+      return;
+    }
     if (accepted.length > 0) {
       try {
         for (const part of chunk(accepted, MAX_UPLOAD_FILES)) {
           const fd = new FormData();
           part.forEach(f => fd.append('images', f));
-          const res = await apiFetch('/api/upload/multiple', { method: 'POST', body: fd, signal: signal() });
+          const res = await apiFetch('/api/upload/multiple', { method: 'POST', body: fd, signal: upload.signal });
           const data = await readJsonSafe(res);
           if (!res.ok) {
             failure = data.error || `Fehler beim Hochladen der Bilder (HTTP ${res.status})`;
@@ -68,10 +92,13 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
           setEditVolForm(prev => addImages(prev, urls));
         }
       } catch (e) {
-        if (isAbortError(e)) return;
-        failure = 'Netzwerkfehler beim Bild-Upload';
+        if (!isAbortError(e) && !upload.signal.aborted) failure = 'Netzwerkfehler beim Bild-Upload';
+        else if (lifetime?.aborted) return;
+        else failure = UPLOAD_CANCELLED;
       } finally {
-        setUploadingVolImage(false);
+        lifetime?.removeEventListener('abort', onClose);
+        if (uploadAbortRef.current === upload) uploadAbortRef.current = null;
+        if (!lifetime?.aborted) setUploadingVolImage(false);
       }
     }
     if (failure || problems.length > 0) {
@@ -211,33 +238,26 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
   /** Result of an immediate owner toggle (POST /owners): the server derived a new status from the owners. */
   const handleOwnersChanged = (data) => {
     if (data?.status) {
-      serverStatusRef.current = data.status;
+      baseRef.current = { ...baseRef.current, status: data.status };
       // the server already stored this status, so it also replaces a status the user had picked before the toggle
       setEditVolForm(prev => ({ ...prev, status: data.status }));
     }
-    // without owners the server dropped the purchase date; a date the user typed meanwhile stays his
+    // the server moves or drops the purchase date with the owners; a date the user typed meanwhile stays his
     const serverDate = typeof data?.purchase_date === 'string' || data?.purchase_date === null
       ? (data.purchase_date ?? '')
       : (Array.isArray(data?.owners) && data.owners.length === 0 ? '' : null);
     if (serverDate !== null) {
-      const before = serverPurchaseDateRef.current;
-      serverPurchaseDateRef.current = serverDate;
+      const before = baseRef.current.purchase_date ?? '';
+      baseRef.current = { ...baseRef.current, purchase_date: serverDate };
       setEditVolForm(prev => ((prev.purchase_date ?? '') === before ? { ...prev, purchase_date: serverDate } : prev));
     }
     if (onSuccess) onSuccess();
   };
 
-  /** PUT body: status and purchase date only when the user changed them, so a value the server set meanwhile stays. */
-  const saveBody = () => {
-    const body = buildSaveBody(editVolForm, serverStatusRef.current);
-    if ((body.purchase_date ?? '') === serverPurchaseDateRef.current) delete body.purchase_date;
-    return body;
-  };
-
   const handleSaveVolume = async (e) => {
     e.preventDefault();
     if (!canEdit || !activeVolume || savingVol) return;
-    const errors = validateVolumeForm(editVolForm, initialForm);
+    const errors = validateVolumeForm(editVolForm, baseRef.current);
     const invalid = Object.keys(errors);
     if (invalid.length > 0) {
       setShowErrors(true);
@@ -249,7 +269,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     try {
       const res = await apiFetch(`/api/volumes/${activeVolume.id}`, {
         method: 'PUT',
-        body: saveBody(),
+        body: buildSaveBody(editVolForm, baseRef.current),
         signal: signal()
       });
       if (res.ok) {
@@ -301,6 +321,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     showErrors,
     addExternalImageUrl,
     handleUploadVolumeImages,
+    cancelVolumeImageUpload,
     handleAddImageUrl,
     handleMoveVolumeImage,
     handleRemoveVolumeImage,

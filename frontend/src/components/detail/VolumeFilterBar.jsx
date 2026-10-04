@@ -1,4 +1,4 @@
-import { ArrowUpDown, BookOpen, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, X } from 'lucide-react';
+import { ArrowUpDown, BookOpen, ListChecks, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, X } from 'lucide-react';
 import { CONDITION_NONE } from '../../utils/volumeHelpers';
 import { mpPillText } from './volumeViewHelpers';
 import { formatCount } from '../../utils/format';
@@ -44,7 +44,10 @@ export default function VolumeFilterBar({
   volumeSort,
   volumeTypeFilter,
   volumeViewMode,
-  volumes
+  volumes,
+  canSelect = false,
+  selectionMode = false,
+  onToggleSelectionMode
 }) {
   const showTypeChip = (type, count) => count > 0 || volumeTypeFilter === type;
   const showTypeRow = specialEditionCount > 0 || schuberCount > 0 || specialCount > 0 || volumeTypeFilter !== 'ALL';
@@ -53,7 +56,7 @@ export default function VolumeFilterBar({
     <div className="flex flex-col gap-3 mb-6 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80 shadow-lg">
       {/* Top Bar: View Mode Switcher + Gap Indicator */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
             <Library className="w-3.5 h-3.5 text-brand-400" />
             Ansicht:
@@ -102,6 +105,23 @@ export default function VolumeFilterBar({
               <span>Liste</span>
             </button>
           </div>
+          {canSelect && (
+            <button
+              type="button"
+              id="btn-volume-select-mode"
+              aria-pressed={selectionMode}
+              onClick={onToggleSelectionMode}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                selectionMode
+                  ? 'bg-brand-600/30 text-white border-brand-400/70 shadow-sm'
+                  : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
+              }`}
+              title="Mehrere Bände auswählen und gemeinsam ändern"
+            >
+              <ListChecks className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Auswählen</span>
+            </button>
+          )}
         </div>
 
         {/* Lücken-Erkennung Toggle & Manga Passion Pill */}

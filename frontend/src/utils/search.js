@@ -1,30 +1,44 @@
 /**
  * Shared text search of all search fields: folding (case, accents, ß, apostrophes, punctuation), every query token must
- * occur in the item, tokens of 5+ letters tolerate one typo. Indexes are cached per item object, so a list builds its
- * index once and every further keystroke only scans it.
+ * occur in the item, tokens of 5+ letters tolerate one typo. A number token ('2', '1.5') matches only a whole number
+ * ('Band 2', never 'Band 12' or a digit inside an ISBN). Codes (ISBNs) are not words: they match only a query of 4+
+ * digits typed as one run. Indexes are cached per item object, so a list builds its index once and every further
+ * keystroke only scans it.
  */
 
 const LIGATURES = { æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', þ: 'th' };
 const UMLAUTS = { ä: 'ae', ö: 'oe', ü: 'ue' };
 const FIELD_SEP = '|';
 const FUZZY_MIN = 5;
+const FUZZY_MAX_TOKEN = 24;
+const FUZZY_MAX_WORD = 32;
+const MAX_QUERY_CHARS = 200;
+const MAX_TOKENS = 12;
 const LETTERS_ONLY = /^\p{L}+$/u;
+const NUMBER = /^\d+(?:\.\d+)*$/;
+const CODE_QUERY = /^\d{3,}[\dx]$/;
+const ISBN_SHAPE = /^(?:\d{9}[\dx]|\d{13})$/;
 
 export const naturalCollator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
 /** German natural order ('Band 2' before 'Band 10', case and accents ignored); empty values compare as ''. */
 export const compareNatural = (a, b) => naturalCollator.compare(String(a ?? ''), String(b ?? ''));
 
-/** Lower case without accents, ß → ss, apostrophes and dots dropped, any other punctuation → one space. */
+/**
+ * Lower case without accents, ß → ss, apostrophes dropped, a dot dropped unless it sits between digits ('Dr. Stone' →
+ * 'dr stone', '1.5' stays), a decimal comma becomes a dot, any other punctuation → one space.
+ */
 export const foldText = (value) => String(value ?? '')
   .toLowerCase()
   .replace(/ß/g, 'ss')
   .replace(/×/g, ' x ')
-  .replace(/['’‘`´.]/g, '')
+  .replace(/['’‘`´]/g, '')
   .normalize('NFKD')
   .replace(/\p{M}/gu, '')
   .replace(/[æœøłđþ]/g, ch => LIGATURES[ch])
-  .replace(/[^\p{L}\p{N}]+/gu, ' ')
+  .replace(/(\d),(?=\d)/g, '$1.')
+  .replace(/(?<!\d)\.|\.(?!\d)/g, '')
+  .replace(/[^\p{L}\p{N}.]+/gu, ' ')
   .trim();
 
 // 'Tagebücher' is also found as 'tagebuecher'
@@ -35,50 +49,89 @@ const umlautVariant = (value) => {
 
 const toList = (value) => (Array.isArray(value) ? value : [value]).filter(v => v !== null && v !== undefined && v !== '');
 
+// '007' and '7' are the same number
+const numberKey = (word) => word.replace(/^0+(?=\d)/, '');
+
+const codeOf = (value) => String(value ?? '').toLowerCase().replace(/[^0-9x]/g, '');
+const isIsbnLike = (value) => /^[\d\s-]+x?$/i.test(String(value).trim()) && ISBN_SHAPE.test(codeOf(value));
+
+const addTerms = (set, folded) => {
+  for (const w of folded.split(' ')) {
+    set.add(w);
+    if (NUMBER.test(w)) set.add(numberKey(w));
+  }
+};
+
 /**
- * Index of one item. fields = { primary: title-like values (ranked first), secondary: everything else }; each entry may
- * be a value or an array of values.
+ * Index of one item. fields = { primary: title-like values (ranked first), secondary: everything else, codes: ISBNs and
+ * other identifiers }; each entry may be a value or an array of values. A secondary value shaped like an ISBN counts as
+ * a code.
  */
-export const buildSearchIndex = ({ primary = [], secondary = [] } = {}) => {
+export const buildSearchIndex = ({ primary = [], secondary = [], codes = [] } = {}) => {
   const folded = [];
-  const primaryFolded = [];
+  const primaryEntries = [];
+  const codeList = [];
+  const terms = new Set();
   const add = (value, isPrimary) => {
+    if (!isPrimary && isIsbnLike(value)) {
+      codeList.push(codeOf(value));
+      return;
+    }
     const f = foldText(value);
     if (!f) return;
-    folded.push(f);
-    if (isPrimary) primaryFolded.push(f);
+    const forms = [f];
     const variant = umlautVariant(value);
-    if (variant && variant !== f) {
-      folded.push(variant);
-      if (isPrimary) primaryFolded.push(variant);
+    if (variant && variant !== f) forms.push(variant);
+    for (const form of forms) {
+      folded.push(form);
+      addTerms(terms, form);
+      if (isPrimary) {
+        const own = new Set();
+        addTerms(own, form);
+        primaryEntries.push({ text: form, compact: form.replace(/ /g, ''), terms: own });
+      }
     }
   };
   for (const v of toList(primary).flat()) add(v, true);
   for (const v of toList(secondary).flat()) add(v, false);
-  const words = new Set();
-  for (const f of folded) {
-    for (const w of f.split(' ')) if (w.length >= FUZZY_MIN - 1 && LETTERS_ONLY.test(w)) words.add(w);
+  for (const v of toList(codes).flat()) {
+    const code = codeOf(v);
+    if (code) codeList.push(code);
+  }
+  const words = [];
+  for (const w of terms) {
+    if (w.length >= FUZZY_MIN - 1 && w.length <= FUZZY_MAX_WORD && LETTERS_ONLY.test(w)) words.push(w);
   }
   return {
     text: folded.join(FIELD_SEP),
     compact: folded.map(f => f.replace(/ /g, '')).join(FIELD_SEP),
-    primary: primaryFolded,
-    words: [...words]
+    primary: primaryEntries,
+    terms,
+    words,
+    codes: codeList
   };
 };
 
-/** Folded query tokens, or null for an empty query (which matches everything). */
+/** Folded query tokens, or null for an empty query (which matches everything). Long input is cut to 200 characters. */
 export const prepareQuery = (query) => {
-  const folded = foldText(query);
+  const folded = foldText(String(query ?? '').slice(0, MAX_QUERY_CHARS * 10)).slice(0, MAX_QUERY_CHARS).trim();
   if (!folded) return null;
-  const tokens = folded.split(' ');
-  const compact = tokens.join('');
+  const all = folded.split(' ');
+  const compact = all.join('');
+  const tokens = [...new Set(all)].slice(0, MAX_TOKENS);
   return {
     folded,
     compact,
     tokens,
+    terms: tokens.map(token => ({
+      token,
+      number: NUMBER.test(token) ? numberKey(token) : null,
+      fuzzy: token.length >= FUZZY_MIN && token.length <= FUZZY_MAX_TOKEN && LETTERS_ONLY.test(token)
+    })),
     // '978-3-551' must stay one run of digits, not three loose numbers
-    digitRun: tokens.length > 1 && /^\d{4,}$/.test(compact)
+    digitRun: all.length > 1 && /^\d{4,}$/.test(compact),
+    code: CODE_QUERY.test(compact) ? compact : null,
+    numberTail: NUMBER.test(all[all.length - 1])
   };
 };
 
@@ -109,33 +162,50 @@ const withinOneEdit = (token, word) => {
   return false;
 };
 
-const tokenMatch = (index, token) => {
-  if (index.text.includes(token) || index.compact.includes(token)) return 'exact';
-  if (token.length >= FUZZY_MIN && LETTERS_ONLY.test(token) && index.words.some(w => withinOneEdit(token, w))) return 'fuzzy';
+const termMatch = (index, term) => {
+  if (term.number !== null) return index.terms.has(term.number) ? 'exact' : null;
+  if (index.text.includes(term.token) || index.compact.includes(term.token)) return 'exact';
+  if (term.fuzzy && index.words.some(w => withinOneEdit(term.token, w))) return 'fuzzy';
   return null;
+};
+
+const inPrimary = (entry, term) => (term.number !== null
+  ? entry.terms.has(term.number)
+  : entry.text.includes(term.token) || entry.compact.includes(term.token));
+
+// 'band 2' is a prefix of 'band 2 (...)' but not of 'band 20'
+const prefixHit = (entry, query) => {
+  if (entry.text.startsWith(query.folded)) {
+    if (!query.numberTail) return true;
+    const next = entry.text[query.folded.length];
+    return next === undefined || next === ' ';
+  }
+  return !query.numberTail && entry.compact.startsWith(query.compact);
 };
 
 /** Match strength: 0 title prefix, 1 all tokens in the title, 2 other fields, 3 only with a typo; null = no match. */
 export const rankMatch = (index, query) => {
   if (!query) return 2;
+  if (query.code && index.codes.some(c => c.includes(query.code))) return 2;
   if (query.digitRun && !index.compact.includes(query.compact)) return null;
+  const { terms } = query;
   let fuzzy = false;
-  for (const token of query.tokens) {
-    const kind = tokenMatch(index, token);
+  for (const term of terms) {
+    const kind = termMatch(index, term);
     if (!kind) return null;
     if (kind === 'fuzzy') fuzzy = true;
   }
   if (fuzzy) return 3;
-  if (index.primary.some(p => p.startsWith(query.folded) || p.replace(/ /g, '').startsWith(query.compact))) return 0;
-  if (index.primary.some(p => query.tokens.every(t => p.includes(t) || p.replace(/ /g, '').includes(t)))) return 1;
+  if (index.primary.some(p => prefixHit(p, query))) return 0;
+  if (index.primary.some(p => terms.every(t => inPrimary(p, t)))) return 1;
   return 2;
 };
 
 export const matchesQuery = (index, query) => rankMatch(index, query) !== null;
 
 /**
- * Search over items whose fields come from fieldsOf(item) → { primary, secondary }. Indexes are cached per item object
- * (a new list from the server builds new ones); create one searcher per field set, not per render.
+ * Search over items whose fields come from fieldsOf(item) → { primary, secondary, codes }. Indexes are cached per item
+ * object (a new list from the server builds new ones); create one searcher per field set, not per render.
  */
 export const createSearch = (fieldsOf) => {
   const cache = new WeakMap();
@@ -148,16 +218,17 @@ export const createSearch = (fieldsOf) => {
     }
     return index;
   };
+  const toQuery = (query) => (typeof query === 'string' || query === undefined || query === null ? prepareQuery(query) : query);
   /** Items matching the query, in list order (all items for an empty query). */
   const filter = (items, query) => {
-    const q = typeof query === 'string' || query === undefined || query === null ? prepareQuery(query) : query;
+    const q = toQuery(query);
     const list = items || [];
     return q ? list.filter(item => matchesQuery(indexOf(item), q)) : list.slice();
   };
   return {
     indexOf,
     filter,
-    matches: (item, query) => matchesQuery(indexOf(item), typeof query === 'string' ? prepareQuery(query) : query),
-    rank: (item, query) => rankMatch(indexOf(item), typeof query === 'string' ? prepareQuery(query) : query)
+    matches: (item, query) => matchesQuery(indexOf(item), toQuery(query)),
+    rank: (item, query) => rankMatch(indexOf(item), toQuery(query))
   };
 };

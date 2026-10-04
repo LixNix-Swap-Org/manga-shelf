@@ -6,13 +6,17 @@ import {
 import { createSearch, prepareQuery, compareNatural } from '../utils/search';
 import { isCollectibleVolume } from '../components/detail/volumeViewHelpers';
 
-/** Volume search over what the cards show (display title, edition label), number, ISBN, notes and publisher. */
+/**
+ * Volume search over what the cards show (display title, edition label), number, notes and publisher; the ISBN only
+ * for a query of 4+ digits.
+ */
 export const createVolumeSearch = (mangaPublisher) => createSearch(v => {
   const rawPub = (v.publisher && String(v.publisher).trim()) || (mangaPublisher && String(mangaPublisher).trim()) || '';
   return {
     primary: [getVolumeDisplayTitle(v), v.volume_number],
     // every volume would otherwise carry the fallback label "Special Edition"
-    secondary: [v.isbn, v.notes, rawPub, normalizePubName(rawPub), inferVolumeType(v) === 'special_edition' ? getEditionLabel(v).label : null]
+    secondary: [v.notes, rawPub, normalizePubName(rawPub), inferVolumeType(v) === 'special_edition' ? getEditionLabel(v).label : null],
+    codes: [v.isbn]
   };
 });
 
@@ -62,9 +66,10 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
   }, [volumes]);
 
   // Base volumes matching all filters EXCEPT the type filter (for computing accurate type badge counts)
-  const baseVolumesForType = useMemo(() => {
+  const { baseVolumesForType, searchRanks } = useMemo(() => {
     const query = prepareQuery(volumeSearch);
-    return volumes.filter(v => {
+    const ranks = new Map();
+    const list = volumes.filter(v => {
       const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
       const isReadByTarget = hasUserRead(v, effUserId, user?.id);
 
@@ -92,10 +97,15 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
       }
 
       if (!matchesConditionFilter(v, volumeConditionFilter)) return false;
-      if (query && !volumeSearchIndex.matches(v, query)) return false;
+      if (query) {
+        const rank = volumeSearchIndex.rank(v, query);
+        if (rank === null) return false;
+        ranks.set(v, rank);
+      }
 
       return true;
     });
+    return { baseVolumesForType: list, searchRanks: ranks };
   }, [volumes, selectedReaderId, user?.id, volumeFilter, volumeOwnerFilter, volumeOwnerMissing, volumePublisherFilter, volumeConditionFilter, volumeSearch, volumeSearchIndex, manga?.publisher]);
 
   // One rule for chips, counts and filter: the entry's type (inferVolumeType falls back to the name only without a stored type)
@@ -112,46 +122,44 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
   const specialCount = typeCounts.special || 0;
   const regularVolumeCount = typeCounts.volume || 0;
 
-  // Filter & sort volumes
+  // Filter & sort volumes; with a search, number and title hits come first and the chosen sort orders each group
   const filteredVolumes = useMemo(() => {
-    return baseVolumesForType
-      .filter(v => {
-        if (volumeTypeFilter !== 'ALL' && inferVolumeType(v) !== volumeTypeFilter) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const infoA = getVolumeSortInfo(a);
-        const infoB = getVolumeSortInfo(b);
-        const priceA = a.price !== null && a.price !== undefined ? a.price : -1;
-        const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
-        const pubA = (a.publisher && a.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
-        const pubB = (b.publisher && b.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
-        const yearA = a.release_year || 0;
-        const yearB = b.release_year || 0;
+    const bySort = (a, b) => {
+      const infoA = getVolumeSortInfo(a);
+      const infoB = getVolumeSortInfo(b);
+      const priceA = a.price !== null && a.price !== undefined ? a.price : -1;
+      const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
+      const pubA = (a.publisher && a.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
+      const pubB = (b.publisher && b.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
+      const yearA = a.release_year || 0;
+      const yearB = b.release_year || 0;
 
-        switch (volumeSort) {
-          case 'number_desc':
-            return compareVolumesByNumber(a, b, true);
-          case 'publisher_asc':
-            return compareNatural(pubA, pubB) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
-          case 'publisher_desc':
-            return compareNatural(pubB, pubA) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
-          case 'price_desc':
-            return priceB - priceA;
-          case 'price_asc':
-            return (priceA === -1 ? 999999 : priceA) - (priceB === -1 ? 999999 : priceB);
-          case 'year_desc':
-            return yearB - yearA;
-          case 'year_asc':
-            return (yearA || 9999) - (yearB || 9999);
-          case 'condition':
-            return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
-          case 'number_asc':
-          default:
-            return compareVolumesByNumber(a, b);
-        }
-      });
-  }, [baseVolumesForType, volumeTypeFilter, volumeSort, manga?.publisher]);
+      switch (volumeSort) {
+        case 'number_desc':
+          return compareVolumesByNumber(a, b, true);
+        case 'publisher_asc':
+          return compareNatural(pubA, pubB) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
+        case 'publisher_desc':
+          return compareNatural(pubB, pubA) || (infoA.rank - infoB.rank) || (infoA.num - infoB.num);
+        case 'price_desc':
+          return priceB - priceA;
+        case 'price_asc':
+          return (priceA === -1 ? 999999 : priceA) - (priceB === -1 ? 999999 : priceB);
+        case 'year_desc':
+          return yearB - yearA;
+        case 'year_asc':
+          return (yearA || 9999) - (yearB || 9999);
+        case 'condition':
+          return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
+        case 'number_asc':
+        default:
+          return compareVolumesByNumber(a, b);
+      }
+    };
+    return baseVolumesForType
+      .filter(v => volumeTypeFilter === 'ALL' || inferVolumeType(v) === volumeTypeFilter)
+      .sort((a, b) => (searchRanks.size ? searchRanks.get(a) - searchRanks.get(b) : 0) || bySort(a, b));
+  }, [baseVolumesForType, searchRanks, volumeTypeFilter, volumeSort, manga?.publisher]);
 
   const gapsAllowedByFilters = filtersAllowGaps({
     volumeTypeFilter, volumeFilter, volumeSearch, volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { useRef, useState } from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import useDialogA11y from '../hooks/useDialogA11y';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import useDialogA11y, { HISTORY_STATE_KEY, dialogEntryOnTop } from '../hooks/useDialogA11y';
 
 function Dialog({ open, onClose, autoFocusField = false, dataAutofocus = false, returnFocusRef }) {
   const ref = useDialogA11y(open, { returnFocusRef });
@@ -128,5 +128,43 @@ describe('useDialogA11y', () => {
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(last);
+  });
+});
+
+function BackDialogPage() {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const ref = useDialogA11y(open, { onClose: close });
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Öffnen</button>
+      {open && <div ref={ref} role="dialog" aria-modal="true" aria-label="Statistik" tabIndex={-1}>Inhalt</div>}
+    </>
+  );
+}
+
+describe('useDialogA11y: history across a reload', () => {
+  it('a dialog entry left by the previous page load does not swallow the first Back', async () => {
+    window.history.replaceState(null, '', '/');
+    window.history.pushState({ [HISTORY_STATE_KEY]: ['vorher:1'] }, '', '/');
+    render(<BackDialogPage />);
+    fireEvent.click(screen.getByText('Öffnen'));
+    const tokens = window.history.state[HISTORY_STATE_KEY];
+    expect(tokens).toHaveLength(2);
+    expect(tokens[1]).not.toBe('vorher:1');
+    expect(tokens[1]).toMatch(/^[a-z0-9]+:\d+$/);
+    act(() => { window.history.back(); });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('dialogEntryOnTop tells whether the current entry belongs to a dialog', async () => {
+    window.history.replaceState(null, '', '/');
+    expect(dialogEntryOnTop()).toBe(false);
+    render(<BackDialogPage />);
+    fireEvent.click(screen.getByText('Öffnen'));
+    expect(dialogEntryOnTop()).toBe(true);
+    act(() => { window.history.back(); });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(dialogEntryOnTop()).toBe(false);
   });
 });

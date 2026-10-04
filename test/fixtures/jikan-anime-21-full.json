@@ -1,0 +1,30 @@
+{
+ "_note": "Built from the documented Jikan v4 /anime/{id}/full shape (api.jikan.moe was unreachable from the recording machine on 2026-10-04).",
+ "data": {
+  "mal_id": 21,
+  "url": "https://myanimelist.net/anime/21/One_Piece",
+  "images": { "jpg": { "image_url": "https://cdn.myanimelist.net/images/anime/1244/138851.jpg", "large_image_url": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg" } },
+  "titles": [{ "type": "Default", "title": "One Piece" }, { "type": "Japanese", "title": "ONE PIECE" }, { "type": "English", "title": "One Piece" }],
+  "title": "One Piece",
+  "title_english": "One Piece",
+  "title_japanese": "ONE PIECE",
+  "title_synonyms": ["OP"],
+  "type": "TV",
+  "episodes": null,
+  "status": "Currently Airing",
+  "airing": true,
+  "aired": { "from": "1999-10-20T00:00:00+00:00", "to": null },
+  "duration": "24 min",
+  "score": 8.73,
+  "synopsis": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+  "season": "fall",
+  "year": 1999,
+  "broadcast": { "day": "Sundays", "time": "23:15", "timezone": "Asia/Tokyo", "string": "Sundays at 23:15 (JST)" },
+  "studios": [{ "mal_id": 18, "type": "anime", "name": "Toei Animation" }],
+  "genres": [{ "mal_id": 1, "type": "anime", "name": "Action" }, { "mal_id": 2, "type": "anime", "name": "Adventure" }, { "mal_id": 10, "type": "anime", "name": "Fantasy" }],
+  "relations": [
+   { "relation": "Adaptation", "entry": [{ "mal_id": 13, "type": "manga", "name": "One Piece", "url": "https://myanimelist.net/manga/13/One_Piece" }] },
+   { "relation": "Side Story", "entry": [{ "mal_id": 459, "type": "anime", "name": "One Piece Movie 01", "url": "https://myanimelist.net/anime/459/One_Piece_Movie_01" }] }
+  ]
+ }
+}

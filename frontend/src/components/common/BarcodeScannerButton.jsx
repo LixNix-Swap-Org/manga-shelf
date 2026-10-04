@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, LoaderCircle } from 'lucide-react';
-import { pickIsbnBarcode, isIsbnBarcode, computeScaledSize } from '../../utils/scanHelpers';
+import { pickIsbnBarcode, isIsbnBarcode, computeScaledSize, liveScanSupported } from '../../utils/scanHelpers';
 import { notify } from '../../utils/notify';
 import { haptic } from '../../utils/haptics';
 
@@ -8,6 +9,7 @@ import { haptic } from '../../utils/haptics';
 const MAX_DIM = 1600;
 const RETRY_DIM = 2400;
 const NATIVE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'];
+const LiveScanner = lazy(() => import('./LiveScanner'));
 
 /** createImageBitmap, or an <img> for formats it rejects (e.g. HEIC outside Safari). */
 async function loadImage(file) {
@@ -87,12 +89,19 @@ async function decodeWithZxing(image, firstCanvas) {
 
 /**
  * BarcodeScannerButton
- * Barcode scan from a photo (file input with capture="environment", works over plain HTTP without camera access):
- * native BarcodeDetector first, ZXing (lazy chunk) as the fallback, both on a downscaled canvas.
+ * In a secure context (HTTPS, localhost, the apps) the live camera scanner (LiveScanner); `continuous` keeps it open
+ * for scan after scan, `scannerChildren` is shown inside it. Otherwise, and as its fallback, a scan from a photo (file
+ * input with capture="environment", works over plain HTTP): native BarcodeDetector first, ZXing (lazy chunk) with EAN
+ * hints, both on a downscaled canvas.
  */
-export default function BarcodeScannerButton({ onDetected, className = '', buttonText = 'Barcode scannen', compact = false }) {
+export default function BarcodeScannerButton({
+  onDetected, className = '', buttonText = 'Barcode scannen', compact = false, continuous = false, live = true,
+  scannerTitle, scannerChildren = null, id, children
+}) {
   const fileInputRef = useRef(null);
   const [scanning, setScanning] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const openPhoto = () => fileInputRef.current?.click();
 
   const handleCapture = async (e) => {
     const file = e.target.files?.[0];
@@ -149,18 +158,20 @@ export default function BarcodeScannerButton({ onDetected, className = '', butto
       />
       <button
         type="button"
+        id={id}
         disabled={scanning}
         aria-busy={scanning || undefined}
         aria-label={compact ? (scanning ? 'Scanne...' : buttonText) : undefined}
         onClick={(e) => {
           // the header search box focuses its input on any click inside it, which would pop up the keyboard
           e.stopPropagation();
-          fileInputRef.current?.click();
+          if (live && liveScanSupported()) setLiveOpen(true);
+          else openPhoto();
         }}
         title="ISBN / EAN-Barcode per Kamera scannen (funktioniert auch ohne HTTPS)"
         className={className || `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white transition shadow-sm active:scale-95 disabled:opacity-50`}
       >
-        {scanning ? (
+        {children || (scanning ? (
           <>
             <LoaderCircle className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
             {!compact && <span>Scanne...</span>}
@@ -170,8 +181,22 @@ export default function BarcodeScannerButton({ onDetected, className = '', butto
             <Camera className="w-3.5 h-3.5" aria-hidden="true" />
             {!compact && <span>{buttonText}</span>}
           </>
-        )}
+        ))}
       </button>
+      {liveOpen && createPortal(
+        <Suspense fallback={null}>
+          <LiveScanner
+            onDetected={onDetected}
+            onClose={() => setLiveOpen(false)}
+            onPhotoFallback={openPhoto}
+            continuous={continuous}
+            title={scannerTitle || buttonText}
+          >
+            {scannerChildren}
+          </LiveScanner>
+        </Suspense>,
+        document.body
+      )}
     </div>
   );
 }

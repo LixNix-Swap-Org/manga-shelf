@@ -1,11 +1,33 @@
 import { useEffect, useId, useState } from 'react';
 import { Users } from 'lucide-react';
-import { apiFetch, readJson } from '../../../utils/api';
+import { ApiError, apiFetch, readJson } from '../../../utils/api';
+import { notify } from '../../../utils/notify';
+
+const hasKey = (obj, key) => Boolean(obj) && Object.hasOwn(obj, key);
+
+/**
+ * Body that reverses one owners answer: an un-own comes back with the removed row's price and date, a buy goes again;
+ * both put the volume's purchase date back (previous_purchase_date). null when the answer cannot be reversed.
+ */
+export function ownersUndoBody(data, wasOwned, target = {}) {
+  const restoreDate = hasKey(data, 'previous_purchase_date') ? { previous_purchase_date: data.previous_purchase_date ?? null } : {};
+  if (!wasOwned) return { owned: false, ...target, ...restoreDate };
+  const removed = data?.removed_owner;
+  if (!removed) return null;
+  return {
+    owned: true,
+    ...target,
+    ...(removed.price !== null && removed.price !== undefined ? { price: removed.price } : {}),
+    ...(removed.purchase_date ? { purchase_date: removed.purchase_date } : {}),
+    ...restoreDate
+  };
+}
 
 /**
  * Besitzer eines Bandes (Mehrbenutzer). Jeder schaltet seinen eigenen Besitz um, Admins auch den der anderen.
  * Änderungen gehen sofort an POST /api/volumes/:id/owners, unabhängig vom Speichern-Knopf des Formulars.
  * onChanged bekommt die Antwort ({ status, owners }): der Server leitet daraus den Status des Bandes ab.
+ * Jede Änderung bietet im Toast 'Rückgängig' an.
  */
 export default function OwnersField({ volumeId, owners: initialOwners, users, currentUser, onChanged }) {
   const [owners, setOwners] = useState(initialOwners || []);
@@ -18,24 +40,48 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
   if (!volumeId || !users || users.length < 2) return null;
   const isAdmin = currentUser?.role === 'admin';
 
-  const toggle = async (u) => {
-    const owned = owners.some(o => o.user_id === u.user_id);
+  const send = async (u, body) => {
     setBusyId(u.user_id);
-    setError('');
     try {
-      const res = await apiFetch(`/api/volumes/${volumeId}/owners`, {
-        method: 'POST',
-        body: { owned: !owned, ...(u.user_id !== currentUser?.id ? { user_id: u.user_id } : {}) }
-      });
+      const res = await apiFetch(`/api/volumes/${volumeId}/owners`, { method: 'POST', body });
       const data = (await readJson(res)) ?? {};
-      if (!res.ok) throw new Error(data.error || 'Fehler beim Speichern');
+      if (!res.ok) throw new ApiError(data.error || 'Fehler beim Speichern', { status: res.status, ref: data.ref ?? null });
       setOwners(data.owners || []);
-      if (onChanged) onChanged(data);
-    } catch (e) {
-      setError(e.message);
+      return data;
     } finally {
       setBusyId(null);
     }
+  };
+
+  const undo = async (u, body) => {
+    try {
+      const data = await send(u, body);
+      // the answer has no purchase_date: the restored one is what this request set
+      const restored = hasKey(body, 'previous_purchase_date') ? { purchase_date: body.previous_purchase_date } : {};
+      if (onChanged) onChanged({ ...data, ...restored });
+    } catch (e) {
+      notify.error(e, { fallback: 'Rückgängig machen fehlgeschlagen' });
+    }
+  };
+
+  const toggle = async (u) => {
+    const owned = owners.some(o => o.user_id === u.user_id);
+    const target = u.user_id !== currentUser?.id ? { user_id: u.user_id } : {};
+    setError('');
+    let data;
+    try {
+      data = await send(u, { owned: !owned, ...target });
+    } catch (e) {
+      setError(e.message);
+      return;
+    }
+    if (onChanged) onChanged(data);
+    const undoBody = ownersUndoBody(data, owned, target);
+    if (!undoBody) return;
+    const name = u.display_name || u.username;
+    notify.success(owned ? `${name} besitzt den Band nicht mehr` : `${name} als Besitzer eingetragen`, {
+      action: { label: 'Rückgängig', onClick: () => undo(u, undoBody) }
+    });
   };
 
   return (

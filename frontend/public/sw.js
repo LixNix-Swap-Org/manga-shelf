@@ -73,22 +73,23 @@ const contentType = (response) => response.headers.get('content-type') || '';
 const isOwnOk = (response) => Boolean(response) && response.ok && response.type === 'basic';
 const isHtml = (response) => contentType(response).includes('text/html');
 
-// A page of a newer release (deployed, but its worker not installed yet) names chunks this cache does not hold;
-// storing it would turn the next offline start into a blank page.
-async function storeNavigation(cache, request, response) {
+// A page of a newer release (deployed, but its worker not installed yet) names chunks no cache holds; storing it would
+// turn the next offline start into a blank page. The server sends the same shell for every route, so it is kept under
+// '/' only (no browsing history or shared text as cache keys). caches.match also finds a waiting worker's precache.
+async function storeNavigation(cache, response) {
   for (const ref of assetRefs(await response.clone().text())) {
-    if (!(await cache.match(ref))) return;
+    if (!(await caches.match(ref))) return;
   }
-  await cache.put(request, response);
+  await cache.put('/', response);
 }
 
 async function navigationResponse(event) {
   const { request } = event;
   const cache = await caches.open(CACHE_NAME);
-  const cached = async () => (await cache.match(request)) || cache.match('/');
+  const cached = async () => (await cache.match('/')) || caches.match('/');
   const network = fetch(request).then((response) => {
     if (isOwnOk(response) && isHtml(response)) {
-      event.waitUntil(storeNavigation(cache, request, response.clone()).catch(() => {}));
+      event.waitUntil(storeNavigation(cache, response.clone()).catch(() => {}));
     }
     return response;
   });
@@ -110,14 +111,14 @@ async function navigationResponse(event) {
   }
 }
 
-// Build files carry a content hash in their name: a cached copy is always the right one.
+// Build files carry a content hash in their name: a cached copy is always the right one, also from another release's
+// cache (a waiting update has precached all chunks of the page the network already serves).
 async function cacheFirst(event) {
-  const cache = await caches.open(CACHE_NAME);
-  const cachedResponse = await cache.match(event.request);
+  const cachedResponse = await caches.match(event.request);
   if (cachedResponse) return cachedResponse;
   const response = await fetch(event.request);
   if (isOwnOk(response) && !isHtml(response)) {
-    event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
+    event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone())).catch(() => {}));
   }
   return response;
 }

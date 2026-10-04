@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Link as LinkIcon, Plus, Star, Trash, Upload } from 'lucide-react';
+import { Camera, Link as LinkIcon, Plus, Star, Trash, Upload, X } from 'lucide-react';
 import LightboxGallery from './LightboxGallery';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import { assetImgProps } from '../../utils/api';
@@ -34,7 +34,8 @@ export default function VolumePhotoManager({
   setManualImageUrl,
   setShowUrlInput,
   showUrlInput,
-  uploadingVolImage
+  uploadingVolImage,
+  onCancelUpload
 }) {
   const [previewIndex, setPreviewIndex] = useState(null);
   const galleryImages = editorGalleryImages(editVolForm);
@@ -96,6 +97,16 @@ export default function VolumePhotoManager({
             <Upload className="w-3.5 h-3.5" />
             <span>{uploadingVolImage ? 'Lädt...' : 'Fotos hochladen'}</span>
           </FilePickerButton>
+          {uploadingVolImage && onCancelUpload && (
+            <button
+              type="button"
+              onClick={onCancelUpload}
+              className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0 text-red-300 hover:text-red-200"
+              title="Foto-Upload abbrechen"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+            </button>
+          )}
         </div>
       </div>
 

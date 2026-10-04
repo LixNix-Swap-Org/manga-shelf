@@ -9,7 +9,7 @@ const dashboard = path.resolve(import.meta.dirname, '../components/dashboard');
 
 describe('dashboard shell classes', () => {
   it('generates the hover-media and focus variants of the grid delete button and the badge sizes', async () => {
-    const content = ['MangaCollectionGrid.jsx', 'DashboardHeader.jsx', 'CollectionStats.jsx'].map((f) => path.join(dashboard, f));
+    const content = ['MangaCollectionGrid.jsx', 'MangaCard.jsx', 'MangaRow.jsx', 'DashboardHeader.jsx', 'CollectionStats.jsx'].map((f) => path.join(dashboard, f));
     const { css } = await postcss([tailwindcss({ ...config, content, corePlugins: { preflight: false } })])
       .process('@tailwind utilities;', { from: undefined });
     const media = css.slice(css.indexOf('@media(hover:hover)'));

@@ -1,15 +1,24 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { WifiOff, RotateCw } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { WifiOff } from 'lucide-react';
 import { saveUser, loadUser, loadMeta, clearOfflineData, syncOfflineCopy, formatAge } from './utils/offlineStore';
-import { flushPurchaseQueue, pendingCount } from './utils/shoppingQueue';
 import { SESSION_EXPIRED_EVENT, clearMangaListCache } from './hooks/useMangaList';
-import { apiFetch } from './utils/api';
-import { setToken } from './app/connection';
+import { apiFetch, isAppMode, isLocalMode } from './utils/api';
+import {
+  dropRejectedToken, checkConnection, activateServer, startConnectionManager, subscribeConnection, getConnection
+} from './app/connection';
+import { loadServers, getActiveServer, getActiveServerId } from './app/serverStore';
+import { DEEP_LINK_EVENT, takePendingDeepLink } from './app/deepLink';
+import { useActiveServer } from './app/useConnection';
+import { cancelAllDownloads } from './app/downloadManager';
+import { getLocalRuntime, resetLocalRuntime, onSourceBlocked } from './local/localTransport';
+import { enterLocalMode, leaveLocalMode, subscribeMode, getLocalProfile } from './local/profile';
+import { notify } from './utils/notify';
 import AppErrorBoundary from './AppErrorBoundary';
+import { clearViewState, endViewSession, startViewSession } from './utils/viewState';
 import Toaster from './components/common/Toaster';
 import {
-  MESSAGES, STARTUP_TIMEOUT_MS, UPDATE_AVAILABLE_EVENT, readJson, isLogoutPending, markLogoutPending,
+  MESSAGES, STARTUP_TIMEOUT_MS, readJson, isLogoutPending, markLogoutPending,
   clearLogoutPending, postLogout, flushPendingLogout, clearUploadsCache, clearSearchState, safeRedirectTarget, runBeforeLogout
 } from './appShell';
 
@@ -30,6 +39,11 @@ const Login = lazy(() => import('./Login'));
 const Dashboard = lazy(preloadable(() => import('./Dashboard'), START_PATH === '/'));
 const MangaDetail = lazy(preloadable(() => import('./MangaDetail'), START_PATH.startsWith('/manga/')));
 const Setup = lazy(() => import('./Setup'));
+const ServerScreen = lazy(() => import('./app/ServerScreen'));
+const LocalScreen = lazy(() => import('./app/LocalScreen'));
+const LocalSetup = lazy(() => import('./app/LocalSetup'));
+// the outbox (and its patch helpers) stays out of the start chunk
+const loadOutbox = () => import('./utils/outbox');
 
 // the snapshot download (several MB) waits until the first page has had its own requests
 const SYNC_DELAY_MS = 3000;
@@ -59,27 +73,19 @@ const SAFE_AREA_BOTTOM = {
   paddingRight: 'calc(1rem + env(safe-area-inset-right, 0px))'
 };
 
+// phones: the bottom navigation of the dashboard and the context bar of a series page (3.5rem + inset) sit below it
+const ABOVE_BOTTOM_NAV = 'max-sm:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-sm:!pb-2';
+
 function OfflineBanner({ lastSync }) {
+  const { pathname } = useLocation();
+  const aboveNav = pathname === '/' || pathname.startsWith('/manga/');
   return (
-    <div role="status" style={SAFE_AREA_BOTTOM} className="fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 pt-2 bg-amber-500/95 text-slate-950 text-xs font-semibold shadow-lg">
+    <div role="status" style={SAFE_AREA_BOTTOM} className={`fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 pt-2 bg-amber-500/95 text-slate-950 text-xs font-semibold shadow-lg ${aboveNav ? ABOVE_BOTTOM_NAV : ''}`}>
       <WifiOff className="w-4 h-4 shrink-0" aria-hidden="true" />
       <span>
         Offline – Stand der Sammlung: {lastSync ? formatAge(lastSync) : 'unbekannt'}.
         <span className="hidden sm:inline"> Nur Ansicht, Änderungen sind erst mit Verbindung möglich.</span>
       </span>
-    </div>
-  );
-}
-
-function UpdateBanner() {
-  return (
-    <div role="status" className="fixed top-[max(0.75rem,env(safe-area-inset-top))] inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-brand-500/40 bg-slate-900/95 px-4 py-2 text-xs font-semibold text-slate-100 shadow-xl">
-        Neue Version verfügbar
-        <button type="button" onClick={() => window.location.reload()} className="flex items-center gap-1 rounded-full bg-brand-700 px-3 py-1 text-white hover:bg-brand-800">
-          <RotateCw className="w-3.5 h-3.5" aria-hidden="true" /> Neu laden
-        </button>
-      </div>
     </div>
   );
 }
@@ -95,14 +101,45 @@ function RequireAuth({ user, children }) {
   return children;
 }
 
-function LoginRoute({ user, onLogin, notice }) {
+function LoginRoute({ user, onLogin, notice, onRetry, hasServer }) {
   const location = useLocation();
   if (user) return <Navigate to={safeRedirectTarget(location.state?.from)} replace />;
-  return <Login onLogin={onLogin} notice={notice} />;
+  // the standalone mode has no login: its device screen opens the collection
+  if (!hasServer || isLocalMode()) return <Navigate to="/server" replace />;
+  return <Login onLogin={onLogin} notice={notice} onRetry={onRetry} />;
 }
 
+// app build: a manga-shelf://connect link opens the server screen, which takes the link from deepLink.js
+function DeepLinkListener() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const open = () => navigate('/server', { state: { deepLink: Date.now() } });
+    const pending = takePendingDeepLink();
+    if (pending) navigate('/server', { state: { link: pending } });
+    window.addEventListener(DEEP_LINK_EVENT, open);
+    return () => window.removeEventListener(DEEP_LINK_EVENT, open);
+  }, [navigate]);
+  return null;
+}
+
+const OUTBOX_QUEUED = 'Vorgemerkte Änderungen werden bei deiner nächsten Anmeldung auf diesem Gerät übertragen.';
+
 const sameUser = (a, b) => Boolean(a && b) && a.id === b.id && a.username === b.username
-  && a.role === b.role && Boolean(a.offline) === Boolean(b.offline);
+  && a.role === b.role && Boolean(a.offline) === Boolean(b.offline) && Boolean(a.local) === Boolean(b.local);
+
+const LOCAL_FAILED = 'Die Sammlung auf diesem Gerät konnte nicht geöffnet werden';
+
+/** Standalone mode: the core on the device answers for the local profile (role admin, no login). */
+async function resolveLocal() {
+  try {
+    const rt = await getLocalRuntime();
+    return { status: 'local', user: { ...rt.getProfile(), local: true } };
+  } catch (e) {
+    return { status: 'localFailed', user: null, error: `${LOCAL_FAILED}: ${e?.message || e}` };
+  }
+}
+
+const localModeNow = () => isLocalMode();
 
 const timed = (url) => apiFetch(url, { timeout: STARTUP_TIMEOUT_MS }).catch(() => null);
 
@@ -123,22 +160,32 @@ async function offlineFallback() {
  * Network errors, timeouts and non-JSON answers (captive portal, proxy page) count as "server unreachable".
  */
 async function resolveStatus() {
+  if (isLocalMode()) return resolveLocal();
+  if (isAppMode()) {
+    await loadServers();
+    if (!getActiveServer()) return { status: 'noServer', user: null };
+    // none of the server's addresses answers: straight to the offline copy instead of three timeouts
+    if ((await checkConnection()).state !== 'online') return offlineFallback();
+  }
   const logoutPending = isLogoutPending();
+  // browser build: the cookie of the logged-out session is still there. App build: the pending logout holds the old
+  // token itself, so a new login's session can be checked right away.
+  const blockSession = logoutPending && !isAppMode();
   const [setupRes, authRes, logoutDone] = await Promise.all([
     timed('/api/setup/status'),
-    logoutPending ? null : timed('/api/auth/me'),
+    blockSession ? null : timed('/api/auth/me'),
     logoutPending ? flushPendingLogout({ timeoutMs: STARTUP_TIMEOUT_MS }) : true
   ]);
 
   if (setupRes?.ok && (await readJson(setupRes))?.needsSetup) return { status: 'setup', user: null };
   // Never use the old session while its logout is still outstanding
-  if (logoutPending) return { status: logoutDone ? 'loggedOut' : 'logoutPending', user: null };
+  if (blockSession) return { status: logoutDone ? 'loggedOut' : 'logoutPending', user: null };
 
   if (authRes?.ok) {
     const data = await readJson(authRes);
     if (data?.user) return { status: 'online', user: data.user };
   } else if (authRes?.status === 401 && await readJson(authRes)) {
-    return { status: 'unauthorized', user: null };
+    return logoutPending ? { status: logoutDone ? 'loggedOut' : 'logoutPending', user: null } : { status: 'unauthorized', user: null };
   }
   return offlineFallback();
 }
@@ -153,19 +200,11 @@ function clearScanList() {
   }
 }
 
-// shelf page count and scroll positions (MangaCollectionGrid, MangaDetail): the next user starts at the top
-const VIEW_STATE_KEYS = ['mangashelf_shelf_count', 'mangashelf_shelf_scroll', 'mangashelf_detail_scroll'];
-function clearViewState() {
-  try {
-    for (const key of VIEW_STATE_KEYS) window.sessionStorage.removeItem(key);
-  } catch (_) { /* storage unavailable */ }
-}
-
 async function clearSessionData() {
   clearMangaListCache();
   clearSearchState();
   clearScanList();
-  clearViewState();
+  endViewSession();
   await Promise.all([clearOfflineData(), clearUploadsCache()]);
 }
 
@@ -175,7 +214,8 @@ function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [updateReady, setUpdateReady] = useState(false);
+  const activeServer = useActiveServer();
+  const localMode = useSyncExternalStore(subscribeMode, localModeNow, localModeNow);
   const userRef = useRef(null);
   const runSeq = useRef(0);
   const checking = useRef(0);
@@ -183,6 +223,19 @@ function App() {
   const expiring = useRef(null);
 
   useEffect(() => { userRef.current = user; }, [user]);
+
+  // the pages of the previous session have unmounted by now (their cleanups ran in the commit): drop what they stored
+  const signedIn = Boolean(user);
+  const hadUser = useRef(false);
+  useEffect(() => {
+    if (signedIn) {
+      hadUser.current = true;
+      startViewSession();
+    } else if (hadUser.current) {
+      hadUser.current = false;
+      clearViewState();
+    }
+  }, [signedIn]);
 
   const applyUser = useCallback((next) => {
     setUser((prev) => (sameUser(prev, next) ? prev : next));
@@ -204,7 +257,7 @@ function App() {
 
       if (outcome.status === 'unauthorized') {
         const wasSignedIn = Boolean(userRef.current);
-        setToken(null);
+        dropRejectedToken();
         await clearSessionData();
         if (seq !== runSeq.current) return outcome;
         if (wasSignedIn) setNotice(MESSAGES.sessionExpired);
@@ -226,6 +279,20 @@ function App() {
           break;
         case 'logoutPending':
           setNotice(MESSAGES.logoutPending);
+          setUser(null);
+          break;
+        case 'noServer':
+          setNeedsSetup(false);
+          setUser(null);
+          break;
+        case 'local':
+          setNeedsSetup(false);
+          setLastSync(null);
+          applyUser(outcome.user);
+          break;
+        case 'localFailed':
+          setNeedsSetup(false);
+          setNotice(outcome.error);
           setUser(null);
           break;
         default:
@@ -250,7 +317,8 @@ function App() {
     runSeq.current++;
     userRef.current = null;
     expiring.current = (async () => {
-      setToken(null);
+      cancelAllDownloads();
+      dropRejectedToken();
       await clearSessionData();
       setNotice(MESSAGES.sessionExpired);
       setLastSync(null);
@@ -265,15 +333,18 @@ function App() {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, [handleUnauthorized]);
 
+  useEffect(() => (isAppMode() ? startConnectionManager() : undefined), []);
+
+  // standalone in the browser build: a source without CORS headers is named once instead of failing silently
   useEffect(() => {
-    const onUpdate = () => setUpdateReady(true);
-    window.addEventListener(UPDATE_AVAILABLE_EVENT, onUpdate);
-    return () => window.removeEventListener(UPDATE_AVAILABLE_EVENT, onUpdate);
+    if (!isAppMode()) return undefined;
+    onSourceBlocked((host) => notify.info(`${host} lässt Anfragen aus dem Browser nicht zu (CORS) – diese Quelle funktioniert in der App oder mit einem Server.`));
+    return () => onSourceBlocked(null);
   }, []);
 
   // Back in the foreground: check the session first (the throttled snapshot sync often sends no request at all),
   // then refresh the offline copy.
-  const onlineSession = Boolean(user && !user.offline);
+  const onlineSession = Boolean(user && !user.offline && !user.local);
   useEffect(() => {
     if (!onlineSession) return undefined;
     const onVisible = async () => {
@@ -295,17 +366,54 @@ function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [onlineSession, handleUnauthorized, applyUser]);
 
-  // While the server is unreachable: retry in the background and as soon as the browser reports a connection
+  // While the server is unreachable: retry in the background and as soon as the browser (or, in the app build, the
+  // connection manager) reports a connection
   useEffect(() => {
     if (!user?.offline) return undefined;
     const retry = () => { if (checking.current === 0) checkStatus(); };
     const timer = setInterval(retry, 30000);
     window.addEventListener('online', retry);
+    let last = getConnection().state;
+    const unsubscribe = isAppMode()
+      ? subscribeConnection(() => {
+        const next = getConnection().state;
+        if (next === 'online' && last !== 'online') retry();
+        last = next;
+      })
+      : null;
     return () => {
       clearInterval(timer);
       window.removeEventListener('online', retry);
+      unsubscribe?.();
     };
   }, [user?.offline, checkStatus]);
+
+  // Outbox: queued changes go out after the login, on reconnect and on return to the foreground
+  const sessionUserId = user && !user.offline ? user.id : null;
+  useEffect(() => {
+    if (sessionUserId === null || sessionUserId === undefined) return undefined;
+    let stop = null;
+    let cancelled = false;
+    loadOutbox().then(({ startOutboxSync }) => {
+      if (cancelled) return;
+      let last = getConnection().state;
+      stop = startOutboxSync({
+        userId: sessionUserId,
+        isOnline: () => getConnection().state !== 'offline',
+        subscribe: isAppMode()
+          ? (onReconnect) => subscribeConnection(() => {
+            const next = getConnection().state;
+            if (next === 'online' && last !== 'online') onReconnect();
+            last = next;
+          })
+          : undefined
+      });
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [sessionUserId]);
 
   // A logout that could not reach the server is sent as soon as the connection is back
   useEffect(() => {
@@ -319,9 +427,47 @@ function App() {
     return () => window.removeEventListener('online', onOnline);
   }, [user, loading]);
 
+  // app build: logouts of the other saved servers go out (each to its own addresses) when the network is back
+  useEffect(() => {
+    if (!isAppMode()) return undefined;
+    const flushAll = () => { flushPendingLogout({ all: true }).catch(() => {}); };
+    let last = getConnection().state;
+    const unsubscribe = subscribeConnection(() => {
+      const next = getConnection().state;
+      if (next === 'online' && last !== 'online') flushAll();
+      last = next;
+    });
+    window.addEventListener('online', flushAll);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', flushAll);
+    };
+  }, []);
+
   const handleLogin = useCallback(async () => {
     // The new session replaces the old cookie: an outstanding logout must not end it on the next start
     clearLogoutPending();
+    setNotice(null);
+    return checkStatus();
+  }, [checkStatus]);
+
+  // app build: another saved server (or the same one again) was chosen on the server screen
+  const handleServerSelected = useCallback(async (serverId) => {
+    if (serverId !== getActiveServerId() || isLocalMode()) {
+      cancelAllDownloads();
+      if (isLocalMode()) {
+        leaveLocalMode();
+        await resetLocalRuntime();
+      }
+      runSeq.current++;
+      userRef.current = null;
+      setUser(null);
+      setLastSync(null);
+      setNeedsSetup(false);
+      // the offline copy, caches and search belong to the previous server; its outbox entries stay with it
+      await clearSessionData();
+    }
+    activateServer(serverId);
     setNotice(null);
     return checkStatus();
   }, [checkStatus]);
@@ -335,36 +481,98 @@ function App() {
     return outcome;
   }, [checkStatus]);
 
+  // Standalone: leaves the collection open on the device screen; nothing to sign out from, nothing is deleted
+  const closeLocal = useCallback(async () => {
+    runSeq.current++;
+    cancelAllDownloads();
+    await getLocalRuntime().then((rt) => rt.flush()).catch(() => {});
+    userRef.current = null;
+    setUser(null);
+  }, []);
+
+  /** Switches to the standalone mode (new or existing local collection) and opens it. */
+  const openLocal = useCallback(async (profile) => {
+    const wasLocal = isLocalMode();
+    runSeq.current++;
+    cancelAllDownloads();
+    userRef.current = null;
+    setUser(null);
+    setLastSync(null);
+    setNotice(null);
+    enterLocalMode(profile);
+    if (profile) await resetLocalRuntime();
+    // caches, offline copy and search belong to the previous server (or profile)
+    if (!wasLocal || profile) await clearSessionData();
+    return checkStatus();
+  }, [checkStatus]);
+
+  const handleStartLocal = useCallback(({ name }) => openLocal({ id: null, name }), [openLocal]);
+  const handleOpenLocal = useCallback(() => openLocal(), [openLocal]);
+  const handleSwitchProfile = useCallback((profile) => openLocal(profile), [openLocal]);
+
+  // a restore replaced the local collection: drop the list caches, read the profile again
+  const handleLocalReplaced = useCallback(async () => {
+    await clearSessionData();
+    return checkStatus();
+  }, [checkStatus]);
+
+  const handleLeaveLocal = useCallback(async () => {
+    runSeq.current++;
+    cancelAllDownloads();
+    await getLocalRuntime().then((rt) => rt.flush()).catch(() => {});
+    leaveLocalMode();
+    await resetLocalRuntime();
+    userRef.current = null;
+    setUser(null);
+    await clearSessionData();
+    return checkStatus();
+  }, [checkStatus]);
+
+  const handleTakeover = useCallback(async (action) => {
+    if (action?.mode === 'server') return handleServerSelected(action.serverId);
+    const profile = action?.profile ? { id: action.profile.id, name: action.profile.username } : getLocalProfile();
+    return openLocal(profile);
+  }, [handleServerSelected, openLocal]);
+
   const handleLogout = useCallback(async () => {
+    if (isLocalMode()) return closeLocal();
     const current = userRef.current;
     loggingOut.current = true;
     runSeq.current++;
+    // a backup download of this session must not complete after the logout
+    cancelAllDownloads();
     try {
       // quick buys still in their undo window are sent (or queued) while the session is valid
       if (current) await runBeforeLogout();
       const online = typeof navigator === 'undefined' || navigator.onLine !== false;
-      if (current && !current.offline && online) {
-        try { await flushPurchaseQueue({ userId: current.id }); } catch (_) { /* stays queued */ }
+      let queued = 0;
+      if (current) {
+        try {
+          const { getOutbox, outboxScope } = await loadOutbox();
+          const outbox = getOutbox();
+          if (!current.offline && online) await outbox.flush(outboxScope(current.id), { force: true });
+          queued = outbox.count(outboxScope(current.id));
+        } catch (_) { /* stays queued */ }
       }
-      const queued = current ? pendingCount(current.id) : 0;
-      // Set before the request: if it never arrives, the next start sends it again instead of reusing the cookie
+      // Set before the request: if it never arrives, the next start sends it again instead of reusing the session
       markLogoutPending();
-      const done = await postLogout();
+      const done = isAppMode() ? await flushPendingLogout() : await postLogout();
       if (done) clearLogoutPending();
       await clearSessionData();
-      setNotice(!done ? MESSAGES.logoutPending : (queued > 0 ? MESSAGES.purchasesQueued : null));
+      setNotice(!done ? MESSAGES.logoutPending : (queued > 0 ? OUTBOX_QUEUED : null));
       setLastSync(null);
       userRef.current = null;
       setUser(null);
     } finally {
       loggingOut.current = false;
     }
-  }, []);
+  }, [closeLocal]);
 
+  const app = isAppMode();
   let content;
   if (loading) {
     content = <LoadingScreen />;
-  } else if (needsSetup) {
+  } else if (needsSetup && !localMode && !(isAppMode() && !activeServer)) {
     content = (
       <AppErrorBoundary>
         <Suspense fallback={<LoadingScreen />}>
@@ -375,15 +583,24 @@ function App() {
   } else {
     content = (
       <Router>
-        {updateReady && <UpdateBanner />}
+        {app && <DeepLinkListener />}
         {user?.offline && <OfflineBanner lastSync={lastSync} />}
         <RouteBoundary>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
-              <Route path="/login" element={<LoginRoute user={user} onLogin={handleLogin} notice={notice} />} />
-              <Route path="/" element={<RequireAuth user={user}><Dashboard user={user} onLogout={handleLogout} /></RequireAuth>} />
+              <Route path="/login" element={<LoginRoute user={user} onLogin={handleLogin} notice={notice} onRetry={app ? checkStatus : undefined} hasServer={!app || Boolean(activeServer)} />} />
+              {app && (
+                <Route
+                  path="/server"
+                  element={localMode
+                    ? <LocalScreen user={user} notice={notice} onOpen={handleOpenLocal} onReplaced={handleLocalReplaced} onTakeover={handleTakeover} onLeave={handleLeaveLocal} onSwitchProfile={handleSwitchProfile} />
+                    : <ServerScreen user={user} onSelect={handleServerSelected} onUseLocal={handleOpenLocal} onTakeover={handleTakeover} />}
+                />
+              )}
+              {app && <Route path="/lokal" element={<LocalSetup user={localMode ? user : null} onStart={handleStartLocal} />} />}
+              <Route path="/" element={<RequireAuth user={user}><div className={user?.offline ? 'max-sm:pb-[calc(env(safe-area-inset-bottom)+3rem)]' : 'max-sm:pb-[calc(env(safe-area-inset-bottom)+0.5rem)]'}><Dashboard user={user} onLogout={handleLogout} /></div></RequireAuth>} />
               <Route path="/manga/:id" element={<RequireAuth user={user}><MangaDetail user={user} onUnauthorized={handleUnauthorized} /></RequireAuth>} />
-              <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
+              <Route path="*" element={<Navigate to={user ? '/' : (app && (localMode || !activeServer) ? '/server' : '/login')} replace />} />
             </Routes>
           </Suspense>
         </RouteBoundary>

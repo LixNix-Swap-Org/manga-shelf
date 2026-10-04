@@ -696,3 +696,197 @@ test('radar: GET /release-radar sends the volumes only inside groups', async () 
     assert.ok(Array.isArray(res.body.groups));
     assert.equal(res.body.items, undefined);
 });
+
+test('shopping-list: wished_series lists wished series without an owned volume, by priority then title', async () => {
+    const low = (await editor('POST', '/mangas', { title: 'Wunsch Beta', publisher: 'carlsen manga', wish_priority: 1, total_volumes: 8 })).body.id;
+    const high = (await editor('POST', '/mangas', { title: 'Wunsch Alpha', wish_priority: 3 })).body.id;
+    const same = (await editor('POST', '/mangas', { title: 'wunsch aaa', wish_priority: 1 })).body.id;
+    const owned = (await editor('POST', '/mangas', { title: 'Wunsch Besitz', wish_priority: 3 })).body.id;
+    await editor('POST', '/volumes', { manga_id: low, volume_number: '1', status: 'Fehlt', price: 7.5 });
+    await editor('POST', '/volumes', { manga_id: low, volume_number: '2', status: 'Fehlt', price: 7.5 });
+    await editor('POST', '/volumes', { manga_id: low, volume_number: '3', status: 'Vorbestellt', price: 9 });
+    await editor('POST', '/volumes', { manga_id: owned, volume_number: '1', status: 'Vorhanden' });
+
+    for (const query of ['', '?include_others=1']) {
+        const body = (await editor('GET', `/shopping-list${query}`)).body;
+        const wished = body.wished_series.filter(s => [low, high, same, owned].includes(s.id));
+        assert.deepEqual(wished.map(s => s.id), [high, same, low]);
+        const beta = wished.find(s => s.id === low);
+        assert.deepEqual(
+            [beta.publisher, beta.wish_priority, beta.total_volumes, beta.known_missing_count, beta.known_missing_cost],
+            ['Carlsen Manga', 1, 8, 2, 15]
+        );
+        assert.equal(body.total_wished_series, body.wished_series.length);
+        assert.ok(body.publishers.find(p => p.publisher === 'Carlsen Manga').wished_count >= 1);
+    }
+    await editor('PUT', `/mangas/${high}`, { wish_priority: null });
+    assert.ok(!(await editor('GET', '/shopping-list')).body.wished_series.some(s => s.id === high));
+});
+
+test('releases: a calendar entry of a wished series carries user_manga_wished', async () => {
+    const { writeCache } = require('../services/mangaPassion/client');
+    const wished = (await editor('POST', '/mangas', { title: 'Kalender Wunsch', wish_priority: 2 })).body.id;
+    const shelf = (await editor('POST', '/mangas', { title: 'Kalender Regal', wish_priority: 2 })).body.id;
+    await editor('POST', '/volumes', { manga_id: shelf, volume_number: '1', status: 'Vorhanden' });
+    const entry = (id, title) => ({ id, edition_id: 900 + id, title, raw_title: title, volume_number: '2', publisher: 'Carlsen Manga', date: '2035-03-10', is_digital: false });
+    writeCache('mp_releases_2035_3', [entry(1, 'Kalender Wunsch'), entry(2, 'Kalender Regal'), entry(3, 'Fremd')]);
+    const items = (await editor('GET', '/manga-passion/releases?year=2035&month=3')).body.items;
+    assert.deepEqual(items.map(i => [i.user_manga_id, i.user_manga_wished]), [[wished, true], [shelf, false], [null, false]]);
+});
+
+test('collecting: paused and dropped series leave the shopping list; a dropped one keeps only ordered radar volumes', async () => {
+    const make = async (title, collecting) => (await editor('POST', '/mangas', { title, collecting })).body.id;
+    const vol = async (manga_id, volume_number, status, extra = {}) =>
+        (await editor('POST', '/volumes', { manga_id, volume_number, status, price: 10, ...extra })).body.id;
+    const active = await make('Sammeln Aktiv', 'aktiv');
+    const paused = await make('Sammeln Pause', 'pausiert');
+    const dropped = await make('Sammeln Ende', 'abgebrochen');
+    const ids = {};
+    for (const [key, id] of Object.entries({ active, paused, dropped })) {
+        ids[`${key}Missing`] = await vol(id, '1', 'Fehlt');
+        ids[`${key}Ordered`] = await vol(id, '2', 'Vorbestellt', { release_date: '2040-05-01' });
+        ids[`${key}Soon`] = await vol(id, '3', 'Erscheint bald', { release_date: '2040-06-01' });
+        ids[`${key}Future`] = await vol(id, '4', 'Fehlt', { release_date: '2040-07-01' });
+    }
+
+    const shop = (await editor('GET', '/shopping-list')).body;
+    const shopIds = shop.items.map(i => i.id);
+    assert.ok(shopIds.includes(ids.activeMissing) && shopIds.includes(ids.activeFuture));
+    for (const id of [ids.pausedMissing, ids.pausedFuture, ids.droppedMissing, ids.droppedFuture]) assert.ok(!shopIds.includes(id), String(id));
+    const summary = (await editor('GET', '/dashboard-summary')).body;
+    assert.equal(summary.total_missing, shop.total_missing);
+
+    const radar = (await editor('GET', '/release-radar')).body;
+    const radarIds = radar.groups.flatMap(g => g.items.map(i => i.id));
+    for (const id of [ids.activeOrdered, ids.activeSoon, ids.activeFuture, ids.pausedOrdered, ids.pausedSoon, ids.pausedFuture, ids.droppedOrdered]) {
+        assert.ok(radarIds.includes(id), String(id));
+    }
+    assert.ok(!radarIds.includes(ids.droppedSoon) && !radarIds.includes(ids.droppedFuture));
+    assert.equal(summary.total_releases, radar.total_releases);
+    assert.equal(summary.preordered_count, radar.preordered_count);
+});
+
+test('releases: a calendar entry of a dropped series carries user_manga_collecting', async () => {
+    const { writeCache } = require('../services/mangaPassion/client');
+    const dropped = (await editor('POST', '/mangas', { title: 'Kalender Abgebrochen', collecting: 'abgebrochen' })).body.id;
+    const active = (await editor('POST', '/mangas', { title: 'Kalender Aktiv' })).body.id;
+    const entry = (id, title) => ({ id, edition_id: 950 + id, title, raw_title: title, volume_number: '3', publisher: 'Carlsen Manga', date: '2036-04-10', is_digital: false });
+    writeCache('mp_releases_2036_4', [entry(1, 'Kalender Abgebrochen'), entry(2, 'Kalender Aktiv'), entry(3, 'Fremd Reihe')]);
+    const items = (await editor('GET', '/manga-passion/releases?year=2036&month=4')).body.items;
+    assert.deepEqual(items.map(i => [i.user_manga_id, i.user_manga_collecting]), [[dropped, 'abgebrochen'], [active, 'aktiv'], [null, null]]);
+});
+
+test('import: a new series takes author and tags of the cached edition; the edition link finds the series first', async () => {
+    const { writeCache } = require('../services/mangaPassion/client');
+    const db = require('../db').db;
+    writeCache('mp_edition_info_4711', { edition: { id: 4711, title: 'Autor Reihe', author: 'Tatsuya Endo', tags: 'Action, Comedy' } });
+    const res = await editor('POST', '/manga-passion/import', importBody({ title: 'Autor Reihe', edition_id: 4711 }));
+    assert.equal(res.status, 200);
+    const row = db.prepare('SELECT author, tags, manga_passion_id FROM mangas WHERE id = ?').get(res.body.manga_id);
+    assert.deepEqual({ ...row }, { author: 'Tatsuya Endo', tags: 'Action, Comedy', manga_passion_id: 4711 });
+
+    // the calendar title differs from the stored one: the edition link still finds the series
+    const renamed = await editor('POST', '/manga-passion/import', importBody({ title: 'Autor Reihe (Neuauflage)', volume_number: '2', edition_id: 4711 }));
+    assert.equal(renamed.body.manga_id, res.body.manga_id);
+    assert.equal(renamed.body.series_created, false);
+
+    // no cached edition: nothing is guessed
+    const plain = await editor('POST', '/manga-passion/import', importBody({ title: 'Ohne Cache Reihe', edition_id: 4712 }));
+    assert.deepEqual({ ...db.prepare('SELECT author, tags FROM mangas WHERE id = ?').get(plain.body.manga_id) }, { author: null, tags: null });
+});
+
+test('import: by title an unlinked series comes before one linked to another edition', async () => {
+    const linked = (await editor('POST', '/mangas', { title: 'Gleicher Titel', manga_passion_id: 5001 })).body.id;
+    const unlinked = (await editor('POST', '/mangas', { title: 'Gleicher Titel' })).body.id;
+    const res = await editor('POST', '/manga-passion/import', importBody({ title: 'Gleicher Titel', edition_id: 5002 }));
+    assert.equal(res.body.manga_id, unlinked);
+    const own = await editor('POST', '/manga-passion/import', importBody({ title: 'Gleicher Titel', volume_number: '3', edition_id: 5001 }));
+    assert.equal(own.body.manga_id, linked);
+});
+
+// ----- calendar feed (GET /radar/feed.ics with the per-user token from /radar/feed-token) -----
+
+const isoIn = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+const fetchFeed = (query) => fetch(`${ctx.base}/radar/feed.ics${query}`);
+
+test('feed token: none at first, created on demand, the feed lists dated pre-orders and announced volumes', async () => {
+    const reader = ctx.client();
+    await reader('POST', '/auth/login', { username: 'vis', password: 'password123' });
+    const none = await reader('GET', '/radar/feed-token');
+    assert.equal(none.status, 200);
+    assert.equal(none.body.active, false);
+    assert.equal((await ctx.client()('GET', '/radar/feed-token')).status, 401);
+
+    const mangaId = (await editor('POST', '/mangas', { title: 'Kalender; Reihe, mit Komma', publisher: 'Carlsen Manga' })).body.id;
+    const add = (o) => editor('POST', '/volumes', { manga_id: mangaId, ...o });
+    await add({ volume_number: '1', status: 'Vorbestellt', release_date: isoIn(10), price: 7.5, isbn: '9783551000011' });
+    await add({ volume_number: '2', status: 'Fehlt', release_date: isoIn(40) });
+    await add({ volume_number: '3', status: 'Vorbestellt', release_date: isoIn(70).slice(0, 7) });
+    await add({ volume_number: '4', status: 'Vorhanden', release_date: isoIn(5) });
+    await add({ volume_number: '5', status: 'Bestellt', release_date: isoIn(-60) });
+
+    const made = await reader('POST', '/radar/feed-token');
+    assert.equal(made.status, 200);
+    assert.equal(made.body.active, true);
+    assert.match(made.body.path, /^\/api\/radar\/feed\.ics\?token=[A-Za-z0-9_-]{43}$/);
+    assert.ok(made.body.url.endsWith(made.body.path));
+    const token = new URL(made.body.url).searchParams.get('token');
+    assert.ok(!reader.cookie.includes(token), 'not the session token');
+    assert.equal((await reader('GET', '/radar/feed-token')).body.path, made.body.path, 'the address can be shown again');
+
+    const stored = require('../db').db.prepare("SELECT key, value FROM app_settings WHERE key LIKE 'calendar_feed:%'").all();
+    assert.equal(stored.length, 1);
+    assert.ok(!stored[0].value.includes(token) && !stored[0].key.includes(token), 'only the hash and a sealed copy are stored');
+
+    const res = await fetchFeed(`?token=${token}`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^text\/calendar/);
+    const text = await res.text();
+    assert.ok(text.startsWith('BEGIN:VCALENDAR\r\n'));
+    assert.match(text, /SUMMARY:Kalender\\; Reihe\\, mit Komma – Band 1\r\n/);
+    assert.match(text, new RegExp(`DTSTART;VALUE=DATE:${isoIn(10).replace(/-/g, '')}`));
+    assert.match(text, /Preis: 7\\,50 €/);
+    assert.match(text, /SUMMARY:Kalender\\; Reihe\\, mit Komma – Band 2\r\n/);
+    assert.ok(!/Komma – Band [345]\r\n/.test(text), 'month-only, owned and long-past volumes stay out');
+    assert.match(text, /UID:volume-\d+@[\w-]+\.manga-shelf/);
+    assert.ok(require('../db').db.prepare("SELECT value FROM app_settings WHERE key LIKE 'calendar_feed:%'").get().value.includes('"last_used_at":1'));
+});
+
+test('feed token: wrong, missing or session tokens get 404; a new token revokes the old one; DELETE ends it', async () => {
+    const own = ctx.client();
+    await own('POST', '/auth/login', { username: 'ed', password: 'password123' });
+    const first = new URL((await own('POST', '/radar/feed-token')).body.url).searchParams.get('token');
+    assert.equal((await fetchFeed(`?token=${first}`)).status, 200);
+
+    assert.equal((await fetchFeed('')).status, 404);
+    assert.equal((await fetchFeed('?token=kurz')).status, 404);
+    assert.equal((await fetchFeed(`?token=${'A'.repeat(43)}`)).status, 404);
+    const session = decodeURIComponent(own.cookie.split('=')[1]);
+    assert.equal((await fetchFeed(`?token=${encodeURIComponent(session)}`)).status, 404);
+    assert.equal((await fetchFeed(`?token=${first}&token=${first}`)).status, 200, 'a repeated key reads the first value');
+
+    const second = new URL((await own('POST', '/radar/feed-token')).body.url).searchParams.get('token');
+    assert.notEqual(second, first);
+    assert.equal((await fetchFeed(`?token=${first}`)).status, 404);
+    assert.equal((await fetchFeed(`?token=${second}`)).status, 200);
+
+    const removed = await own('DELETE', '/radar/feed-token');
+    assert.deepEqual(removed.body, { success: true, removed: 1 });
+    assert.equal((await fetchFeed(`?token=${second}`)).status, 404);
+    assert.equal((await own('GET', '/radar/feed-token')).body.active, false);
+});
+
+test('feed token: a deleted user\'s feed stops working', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'kalender', password: 'password123', role: 'editor' })).status, 200);
+    const gone = ctx.client();
+    await gone('POST', '/auth/login', { username: 'kalender', password: 'password123' });
+    const token = new URL((await gone('POST', '/radar/feed-token')).body.url).searchParams.get('token');
+    assert.equal((await fetchFeed(`?token=${token}`)).status, 200);
+    const id = (await admin('GET', '/users')).body.find(u => u.username === 'kalender').id;
+    assert.equal((await admin('DELETE', `/users/${id}`)).status, 200);
+    assert.equal((await fetchFeed(`?token=${token}`)).status, 404);
+});

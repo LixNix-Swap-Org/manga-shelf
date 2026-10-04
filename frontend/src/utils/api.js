@@ -1,4 +1,6 @@
 import { getActiveBase, setActiveBase, getToken, setToken } from '../app/connection.js';
+import { storedModeIsLocal } from '../local/profile.js';
+import { localTransport, localUploadUrl } from '../local/localTransport.js';
 
 /** Dispatched on window when the server says the session is gone; App clears the offline copy and logs out. */
 export const SESSION_EXPIRED_EVENT = 'mangashelf:session-expired';
@@ -8,7 +10,7 @@ export const SESSION_EXPIRED_EVENT = 'mangashelf:session-expired';
  * auth: startup and logout checks. read: plain GETs (default). write: plain writes (default).
  * lookup / remote: requests the server answers from Manga Passion, ISBN sources or a remote download (its worst case
  * chains several 6-20 s upstream calls). long: jobs that run on the server (autofill, batch and gap import, gap check,
- * CSV import, snapshots). upload: FormData bodies (default) and restores, whose transfer time grows with the size.
+ * CSV import, snapshots). upload: restores (explicit, none); other FormData bodies get uploadTimeout(bytes).
  */
 export const TIMEOUTS = {
   auth: 4000,
@@ -19,6 +21,25 @@ export const TIMEOUTS = {
   long: 600000,
   upload: 0
 };
+
+const UPLOAD_MIN_MS = 120000;
+const UPLOAD_BYTES_PER_MS = 50; // 50 kB/s
+
+/** FormData bodies: max(120 s, size at 50 kB/s), at most TIMEOUTS.long; a hung upload never stays pending for good. */
+export function uploadTimeout(bytes) {
+  const size = Number(bytes) > 0 ? Number(bytes) : 0;
+  return Math.min(TIMEOUTS.long, Math.max(UPLOAD_MIN_MS, Math.ceil(size / UPLOAD_BYTES_PER_MS)));
+}
+
+function formDataBytes(form) {
+  let bytes = 0;
+  try {
+    for (const [, value] of form.entries()) {
+      bytes += typeof value === 'string' ? value.length : (Number(value?.size) || 0);
+    }
+  } catch (_) { /* entries() unsupported */ }
+  return bytes;
+}
 
 // 401s from these endpoints do not mean "the session ended": wrong credentials, the logout itself, the startup
 // check (App handles /auth/me itself), the password change and the setup routes.
@@ -61,9 +82,12 @@ export const isAbortError = (e) => e?.name === 'AbortError';
 // written out in full so Vite can replace it at build time; import.meta.env is missing when Node loads this module
 export const isAppMode = () => Boolean(import.meta.env) && import.meta.env.VITE_APP_MODE === 'app';
 
-/** '' in the browser build (same origin); the active server in the app build. */
+/** App build without a server (spec-standalone §2): requests below /api go to the core on the device. */
+export const isLocalMode = () => isAppMode() && storedModeIsLocal();
+
+/** '' in the browser build (same origin) and in the local mode; the active server in the app build. */
 export function getApiBase() {
-  return isAppMode() ? getActiveBase() : '';
+  return isAppMode() && !storedModeIsLocal() ? getActiveBase() : '';
 }
 
 /** Switches the server (a different origin drops the token); the token is only kept in the app build. */
@@ -88,6 +112,7 @@ const isServerPath = (path) => typeof path === 'string' && path.startsWith('/') 
 /** Server paths (/uploads/...) for <img src> and links; absolute, data: and blob: URLs stay as they are. */
 export function assetUrl(path) {
   if (!isAppMode() || !isServerPath(path)) return path;
+  if (storedModeIsLocal()) return localUploadUrl(path) || path;
   return `${getApiBase()}${path}`;
 }
 
@@ -97,7 +122,7 @@ export function assetUrl(path) {
  */
 export function assetImgProps(path) {
   const src = assetUrl(path);
-  return isAppMode() && isServerPath(path) ? { src, crossOrigin: 'anonymous' } : { src };
+  return isAppMode() && !storedModeIsLocal() && isServerPath(path) ? { src, crossOrigin: 'anonymous' } : { src };
 }
 
 /** JSON body of a response, or null for a missing, non-JSON (captive portal, proxy page) or unreadable one. */
@@ -166,7 +191,7 @@ const isRawBody = (body) => typeof body === 'string'
   || body instanceof ArrayBuffer;
 
 function defaultTimeout(method, body) {
-  if (typeof FormData !== 'undefined' && body instanceof FormData) return TIMEOUTS.upload;
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return uploadTimeout(formDataBytes(body));
   return method === 'GET' || method === 'HEAD' ? TIMEOUTS.read : TIMEOUTS.write;
 }
 
@@ -181,14 +206,32 @@ function linkSignal(signal, timeout) {
     if (signal.aborted) controller.abort();
     else signal.addEventListener('abort', onAbort, { once: true });
   }
+  const stopTimer = () => clearTimeout(timer);
   return {
     signal: controller.signal,
     timedOut: () => timedOut,
+    stopTimer,
     clear: () => {
-      clearTimeout(timer);
+      stopTimer();
       signal?.removeEventListener?.('abort', onAbort);
     }
   };
+}
+
+const originOf = (url, base) => {
+  try { return new URL(url, base).origin; } catch (_) { return null; }
+};
+
+/**
+ * The bearer token only goes to the origin of the active server, never to another host or its http:// variant, and only
+ * when the user signed in at that origin (connection.getToken).
+ */
+function tokenFor(url) {
+  const token = getToken();
+  const base = getActiveBase();
+  if (!token || !base) return '';
+  const target = originOf(url, base);
+  return target && target === originOf(base) ? token : '';
 }
 
 function failure(error, link, signal) {
@@ -197,15 +240,27 @@ function failure(error, link, signal) {
   return new ApiError(MESSAGES.network, { code: 'NETWORK', cause: error });
 }
 
+const NO_LINK = { timedOut: () => false, stopTimer() {}, clear() {} };
+
 async function send(path, { body, headers, timeout, signal, ...init } = {}) {
   const method = String(init.method || 'GET').toUpperCase();
+  if (isLocalMode() && isServerPath(path)) {
+    try {
+      return { res: await localTransport(method, path, body, { signal }), link: NO_LINK };
+    } catch (e) {
+      if (signal?.aborted || isAbortError(e)) throw e;
+      throw new ApiError(e?.message || MESSAGES.network, { code: 'LOCAL', cause: e });
+    }
+  }
   const jsonBody = body !== undefined && body !== null && !isRawBody(body);
   const merged = { ...(jsonBody ? { 'Content-Type': 'application/json' } : {}), ...headers };
   const app = isAppMode();
+  const url = apiUrl(path);
   if (app) {
-    const token = getToken();
+    const token = tokenFor(url);
     merged['X-Client'] = 'app';
-    if (token) merged.Authorization = `Bearer ${token}`;
+    // an explicit Authorization (the pending logout of another session) is kept as given
+    if (token && !merged.Authorization) merged.Authorization = `Bearer ${token}`;
   }
   const options = { ...init };
   if (Object.keys(merged).length) options.headers = merged;
@@ -216,7 +271,7 @@ async function send(path, { body, headers, timeout, signal, ...init } = {}) {
   options.signal = link.signal;
   let res;
   try {
-    res = await globalThis.fetch(apiUrl(path), options);
+    res = await globalThis.fetch(url, options);
   } catch (e) {
     link.clear();
     throw failure(e, link, signal);
@@ -228,11 +283,12 @@ async function send(path, { body, headers, timeout, signal, ...init } = {}) {
 /**
  * fetch through the client (server base, bearer token in the app build, timeout, session-expiry check). Resolves to the
  * Response for every HTTP status; rejects with ApiError NETWORK/TIMEOUT, or the AbortError of the caller's signal.
- * Plain objects as `body` are sent as JSON. Timeout and caller signal cover the request until the headers arrive.
+ * Plain objects as `body` are sent as JSON. The timeout covers the request until the headers arrive; the caller's
+ * signal also aborts the body read afterwards.
  */
 export async function apiFetch(path, options) {
   const { res, link } = await send(path, options);
-  link.clear();
+  link.stopTimer();
   return res;
 }
 
@@ -263,6 +319,76 @@ export async function request(method, path, body, { fallback, ...options } = {})
   } finally {
     link.clear();
   }
+}
+
+/** File name of a Content-Disposition header (filename* first), else the fallback. */
+export function downloadName(res, fallback = 'download') {
+  const header = res?.headers?.get?.('content-disposition') || '';
+  const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()); } catch (_) { /* malformed: try the plain name */ }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : fallback;
+}
+
+function saveBlob(blob, name, doc) {
+  const url = URL.createObjectURL(blob);
+  const link = doc.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.rel = 'noopener';
+  doc.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/**
+ * Downloads a server file (backup ZIP, snapshot, CSV). Browser build: a plain link, the cookie authenticates and the
+ * browser shows its progress; resolves to null. App build: a link carries no bearer token, so the file is fetched
+ * with it into a blob and saved from there; onProgress(loaded, total) reports the transfer (total 0 when unknown).
+ * Resolves to { filename, bytes }; rejects with ApiError, or the AbortError of `signal`.
+ */
+export async function downloadFile(path, { filename, onProgress, signal, doc = globalThis.document } = {}) {
+  if (!isAppMode()) {
+    const link = doc.createElement('a');
+    link.href = apiUrl(path);
+    if (filename) link.download = filename;
+    doc.body.appendChild(link);
+    link.click();
+    link.remove();
+    return null;
+  }
+  const res = await apiFetch(path, { signal, timeout: TIMEOUTS.long });
+  if (!res.ok) throw await errorFromResponse(res, 'Download fehlgeschlagen');
+  const total = Number(res.headers?.get?.('content-length')) || 0;
+  const type = res.headers?.get?.('content-type') || 'application/octet-stream';
+  let blob;
+  try {
+    if (onProgress && typeof res.body?.getReader === 'function') {
+      const reader = res.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      onProgress(0, total);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress(loaded, total);
+      }
+      blob = new Blob(chunks, { type });
+    } else {
+      blob = await res.blob();
+    }
+  } catch (e) {
+    if (signal?.aborted || isAbortError(e)) throw e;
+    throw new ApiError(MESSAGES.network, { code: 'NETWORK', cause: e });
+  }
+  const name = downloadName(res, filename || 'download');
+  saveBlob(blob, name, doc);
+  return { filename: name, bytes: blob.size };
 }
 
 export const get = (path, options) => request('GET', path, undefined, options);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { lazy, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, MemoryRouter } from 'react-router-dom';
 
 vi.mock('../utils/offlineStore', () => ({
   saveUser: vi.fn(async () => {}),
@@ -13,16 +13,21 @@ vi.mock('../utils/offlineStore', () => ({
   formatAge: vi.fn(() => 'vor 5 Min.')
 }));
 
-vi.mock('../Dashboard', () => ({
-  default: function DashboardStub({ user, onLogout }) {
-    return (
-      <div>
-        <p>Dashboard von {user.username}{user.offline ? ' (offline)' : ''}</p>
-        <button type="button" onClick={onLogout}>Abmelden</button>
-      </div>
-    );
-  }
-}));
+// the real shelf scroll hook: it stores the position when the shelf unmounts
+vi.mock('../Dashboard', async () => {
+  const { useShelfScroll } = await vi.importActual('../components/dashboard/MangaCollectionGrid');
+  return {
+    default: function DashboardStub({ user, onLogout }) {
+      useShelfScroll(true);
+      return (
+        <div>
+          <p>Dashboard von {user.username}{user.offline ? ' (offline)' : ''}</p>
+          <button type="button" onClick={onLogout}>Abmelden</button>
+        </div>
+      );
+    }
+  };
+});
 
 vi.mock('../MangaDetail', () => ({
   default: function MangaDetailStub({ onUnauthorized }) {
@@ -40,12 +45,17 @@ import { SCAN_LIST_KEY } from '../utils/scanHelpers';
 import { SHELF_SCROLL_KEY, SHELF_COUNT_KEY } from '../components/dashboard/MangaCollectionGrid';
 import { loadUser, loadMeta, clearOfflineData, syncOfflineCopy } from '../utils/offlineStore';
 import {
-  MESSAGES, LOGOUT_PENDING_KEY, UPDATE_AVAILABLE_EVENT,
+  MESSAGES, LOGOUT_PENDING_KEY,
   safeRedirectTarget, isChunkLoadError, reloadForStaleChunk, clearUploadsCache, shouldRegisterServiceWorker, readJson,
   BEFORE_LOGOUT_EVENT, runBeforeLogout, STARTUP_TIMEOUT_MS
 } from '../appShell';
-import { getToken, setToken } from '../app/connection';
+import { getToken, setToken, setActiveBase, resetConnection, activateServer } from '../app/connection';
+import { resetServers, saveServer, setStorageAdapter, getActiveServer, getServer, getPendingLogouts } from '../app/serverStore';
+import { receiveDeepLink } from '../app/deepLink';
+import { getOutbox, outboxScope, resetOutbox, WEB_SERVER_ID } from '../utils/outbox';
 import { notify } from '../utils/notify';
+import { startDownload, downloadsRunning } from '../app/downloadManager';
+import { INSECURE_URL_TEXT } from '../app/serverStore';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const html = (status = 200) => new Response('<!doctype html><title>Portal</title>', { status, headers: { 'Content-Type': 'text/html' } });
@@ -140,12 +150,32 @@ describe('App shell', () => {
     sessionStorage.setItem(SHELF_SCROLL_KEY, '900');
     sessionStorage.setItem(SHELF_COUNT_KEY, JSON.stringify({ key: '[]', count: 120 }));
     sessionStorage.setItem(DETAIL_SCROLL_KEY, JSON.stringify({ abc: 300 }));
+    window.scrollY = 900;
+    fireEvent.scroll(window);
     fireEvent.click(screen.getByRole('button', { name: 'Abmelden' }));
     await screen.findByLabelText('Passwort');
     expect(sessionStorage.getItem(SCAN_LIST_KEY)).toBeNull();
     expect(localStorage.getItem(SCAN_LIST_KEY)).toBeNull();
     expect(sessionStorage.getItem('mangashelf_search')).toBeNull();
     for (const key of [SHELF_SCROLL_KEY, SHELF_COUNT_KEY, DETAIL_SCROLL_KEY]) expect(sessionStorage.getItem(key), key).toBeNull();
+    window.scrollY = 0;
+  });
+
+  it('a runtime 401 does not let the unmounting shelf store its scroll position', async () => {
+    vi.stubGlobal('fetch', routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    await screen.findByText('Dashboard von admin');
+    window.scrollY = 700;
+    fireEvent.scroll(window);
+    act(() => {
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { url: '/api/mangas', status: 401 } }));
+    });
+    await screen.findByText(MESSAGES.sessionExpired);
+    expect(sessionStorage.getItem(SHELF_SCROLL_KEY)).toBeNull();
+    window.scrollY = 0;
   });
 
   it('a logout first lets open views send pending purchases, then ends the session', async () => {
@@ -358,6 +388,16 @@ describe('App shell', () => {
     expect(clearOfflineData).not.toHaveBeenCalled();
   });
 
+  it('on phones the offline banner sits above the bottom bars of the shelf and of a series page', async () => {
+    loadUser.mockResolvedValue(admin);
+    vi.stubGlobal('fetch', routes({ 'GET /api/setup/status': html(), 'GET /api/auth/me': html() }));
+    go('/manga/5');
+    render(<App />);
+    expect(await screen.findByText(/Reihe 5/)).toBeTruthy();
+    const banner = screen.getByText(/Offline – Stand der Sammlung/).closest('[role="status"]');
+    expect(banner.className).toContain('max-sm:bottom-[calc(3.5rem+env(safe-area-inset-bottom))]');
+  });
+
   it('a non-JSON 401 (basic-auth proxy) does not wipe the offline copy', async () => {
     loadUser.mockResolvedValue(admin);
     vi.stubGlobal('fetch', routes({
@@ -378,17 +418,6 @@ describe('App shell', () => {
     render(<App />);
     await screen.findByLabelText('Passwort');
     expect(clearOfflineData).toHaveBeenCalled();
-  });
-
-  it('shows a reload hint when a new service worker version is ready', async () => {
-    vi.stubGlobal('fetch', routes({
-      'GET /api/setup/status': json(200, { needsSetup: false }),
-      'GET /api/auth/me': json(200, { user: admin })
-    }));
-    render(<App />);
-    await screen.findByText('Dashboard von admin');
-    act(() => { window.dispatchEvent(new CustomEvent(UPDATE_AVAILABLE_EVENT)); });
-    expect(await screen.findByText('Neue Version verfügbar')).toBeTruthy();
   });
 
   it('setup: ADMIN_EXISTS moves on to the login with a German hint', async () => {
@@ -436,7 +465,7 @@ describe('Login', () => {
     vi.stubGlobal('fetch', fetchMock);
     const submit = async () => {
       const onLogin = vi.fn(async () => ({ status: 'online', user: admin }));
-      const view = render(<Login onLogin={onLogin} />);
+      const view = render(<MemoryRouter><Login onLogin={onLogin} /></MemoryRouter>);
       fireEvent.change(screen.getByLabelText('Benutzername'), { target: { value: 'a' } });
       fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'b' } });
       fireEvent.click(screen.getByRole('button', { name: /Anmelden/ }));
@@ -447,7 +476,7 @@ describe('Login', () => {
     expect(getToken()).toBe('');
 
     vi.stubEnv('VITE_APP_MODE', 'app');
-    localStorage.setItem('mangashelf_server_base', 'https://shelf.example.org');
+    setActiveBase('https://shelf.example.org');
     try {
       await submit();
       expect(getToken()).toBe('jwt-app');
@@ -599,5 +628,302 @@ describe('appShell helpers', () => {
     expect(shouldRegisterServiceWorker({ prod: true, secure: false, supported: true })).toBe(false);
     expect(shouldRegisterServiceWorker({ prod: false, secure: true, supported: true })).toBe(false);
     expect(shouldRegisterServiceWorker({ prod: true, secure: true, supported: false })).toBe(false);
+  });
+});
+
+describe('App: outbox on logout', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    go('/');
+    resetOutbox();
+    loadUser.mockReset().mockResolvedValue(null);
+    loadMeta.mockReset().mockResolvedValue(null);
+  });
+
+  it('changes that could not be sent before the logout stay queued and the login says so', async () => {
+    const fetchMock = routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin }),
+      'POST /api/volumes/3/read': html(503),
+      'POST /api/auth/logout': json(200, { success: true })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await getOutbox().add({ kind: 'read', volumeId: 3, userId: 1, serverId: WEB_SERVER_ID, value: true, deferred: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Abmelden' }));
+    expect(await screen.findByText(/Vorgemerkte Änderungen werden bei deiner nächsten Anmeldung/)).toBeTruthy();
+    expect(fetchMock.calls).toContain('POST /api/volumes/3/read');
+    expect(getOutbox().list(outboxScope(1))).toHaveLength(1);
+  });
+
+  it('after the login the queued changes are sent and announced', async () => {
+    const fetchMock = routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin }),
+      'POST /api/volumes/3/read': json(200, { success: true })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const shown = [];
+    const stop = (await import('../utils/notify')).subscribe((e) => { if (e.type === 'show') shown.push(e.toast.message); });
+    await getOutbox().add({ kind: 'read', volumeId: 3, userId: 1, serverId: WEB_SERVER_ID, value: true, deferred: true });
+    try {
+      render(<App />);
+      await screen.findByText('Dashboard von admin');
+      await waitFor(() => expect(getOutbox().list(outboxScope(1))).toEqual([]));
+      expect(shown).toContain('1 Änderung übertragen');
+    } finally {
+      stop();
+    }
+  });
+});
+
+describe('App in the app build', () => {
+  const healthy = () => json(200, { name: 'Manga Shelf', status: 'ok', instance_id: 'inst-1', version: '2.20.0' });
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    go('/');
+    setStorageAdapter(null);
+    resetServers();
+    resetConnection();
+    resetOutbox();
+    loadUser.mockReset().mockResolvedValue(null);
+    loadMeta.mockReset().mockResolvedValue(null);
+    clearOfflineData.mockClear();
+    vi.stubEnv('VITE_APP_MODE', 'app');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('without a saved server it opens the server screen; a saved reachable server leads to its login', async () => {
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' })
+    }));
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Server hinzufügen' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/server');
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Zuhause' } });
+    fireEvent.change(screen.getByLabelText('Adressen (eine pro Zeile)'), { target: { value: 'https://shelf.example' } });
+    fireEvent.click(screen.getByRole('button', { name: /Speichern und verbinden/ }));
+    expect(await screen.findByLabelText('Passwort')).toBeTruthy();
+    expect(window.location.pathname).toBe('/login');
+    expect(screen.getByText('Zuhause')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Server wechseln' })).toBeTruthy();
+    expect(getActiveServer()).toMatchObject({ name: 'Zuhause', instanceId: 'inst-1', lastOkUrl: 'https://shelf.example' });
+  });
+
+  it('with a token of the server the collection opens at once and requests carry the bearer token', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    const fetchMock = routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    const me = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/auth/me'));
+    expect(me[0]).toBe('https://shelf.example/api/auth/me');
+    expect(me[1].headers.Authorization).toBe('Bearer tok-1');
+    const probe = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/health'));
+    expect(probe[1].headers).toBeUndefined();
+  });
+
+  it('a server that does not answer: the login says so and "Erneut verbinden" retries', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    let up = false;
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': () => (up ? healthy() : Promise.reject(new TypeError('Failed to fetch'))),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    expect(await screen.findByText('Nicht erreichbar')).toBeTruthy();
+    up = true;
+    fireEvent.click(screen.getByRole('button', { name: /Erneut verbinden/ }));
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+  });
+
+  it('a session expiry returns to the login of the same server and keeps the server entry', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    await screen.findByText('Dashboard von admin');
+    act(() => { window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { url: '/api/mangas', status: 401 } })); });
+    expect(await screen.findByText(MESSAGES.sessionExpired)).toBeTruthy();
+    expect(getActiveServer()).toMatchObject({ id: s.id, name: 'Zuhause' });
+    expect(getActiveServer().token).toBeUndefined();
+    expect(screen.getByText('Zuhause')).toBeTruthy();
+  });
+
+  it('a logout that failed on server A is never sent to server B; A gets it when it is reachable again', async () => {
+    const a = saveServer({ name: 'Server A', urls: ['https://a.example'], token: 'tok-a' });
+    const b = saveServer({ name: 'Server B', urls: ['https://b.example'], token: 'tok-b' });
+    activateServer(a.id);
+    const logouts = [];
+    let aUp = false;
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': (url, init) => (init.headers?.Authorization ? json(200, { user: admin }) : json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' })),
+      'POST /api/auth/logout': (url, init) => {
+        logouts.push([new URL(url).host, init.headers?.Authorization]);
+        if (url.startsWith('https://a.example') && !aUp) return Promise.reject(new TypeError('Failed to fetch'));
+        return json(200, { success: true });
+      }
+    }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Abmelden' }));
+    expect(await screen.findByText(MESSAGES.logoutPending)).toBeTruthy();
+    expect(getServer(a.id).token).toBeUndefined();
+    expect(getPendingLogouts(a.id)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Server wechseln' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verbinden' }));
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    // tried again on the reconnect, but only ever at A with A's token
+    expect(logouts.length).toBeGreaterThan(0);
+    expect(logouts.every(([host, auth]) => host === 'a.example' && auth === 'Bearer tok-a')).toBe(true);
+    expect(getServer(b.id).token).toBe('tok-b');
+    expect(getPendingLogouts(a.id)).toHaveLength(1);
+
+    aUp = true;
+    act(() => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(getPendingLogouts(a.id)).toEqual([]));
+    expect(logouts.every(([host, auth]) => host === 'a.example' && auth === 'Bearer tok-a')).toBe(true);
+    expect(getServer(a.id).token).toBeUndefined();
+  });
+
+  it('a new login while the old logout is still pending is accepted; the old token waits for its own logout', async () => {
+    const a = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-old' });
+    activateServer(a.id);
+    const authorizations = [];
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': (url, init) => (init.headers?.Authorization === 'Bearer tok-new'
+        ? json(200, { user: admin })
+        : json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' })),
+      'POST /api/auth/logout': (url, init) => {
+        authorizations.push(init.headers?.Authorization);
+        return Promise.reject(new TypeError('Failed to fetch'));
+      },
+      'POST /api/auth/login': json(200, { user: admin, token: 'tok-new' })
+    }));
+    // the logout of tok-old did not arrive
+    (await import('../app/serverStore')).beginLogout(a.id);
+    render(<App />);
+    expect(await screen.findByText(MESSAGES.logoutPending)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Benutzername'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /Anmelden/ }));
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    expect(getToken()).toBe('tok-new');
+    expect(getPendingLogouts(a.id)).toMatchObject([{ token: 'tok-old' }]);
+    expect(authorizations.every((h) => h === 'Bearer tok-old')).toBe(true);
+  });
+
+  it('another address of the server needs a new login there: the login says so and the old session is kept', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://pub.example', 'http://10.0.0.2:3000'], token: 'tok-pub', tokenOrigins: ['https://pub.example'] });
+    activateServer(s.id);
+    const meAuth = [];
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': (url) => (url.startsWith('https://pub') ? Promise.reject(new TypeError('x')) : healthy()),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': (url, init) => {
+        meAuth.push(init.headers?.Authorization);
+        return init.headers?.Authorization ? json(200, { user: admin }) : json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' });
+      },
+      'POST /api/auth/login': json(200, { user: admin, token: 'tok-lan' })
+    }));
+    render(<App />);
+    expect(await screen.findByText('Neue Adresse – bitte erneut anmelden')).toBeTruthy();
+    expect(meAuth).toEqual([undefined]);
+    expect(getServer(s.id).token).toBe('tok-pub');
+    fireEvent.change(screen.getByLabelText('Benutzername'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /Anmelden/ }));
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    // the new session is trusted only at the address it was signed in at
+    expect(getServer(s.id)).toMatchObject({ token: 'tok-lan', tokenOrigins: ['http://10.0.0.2:3000'] });
+  });
+
+  it('a connect link opens the server screen with the new address filled in', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    await screen.findByText('Dashboard von admin');
+    act(() => { receiveDeepLink('manga-shelf://connect?url=https%3A%2F%2Fladen.example&name=Laden&id=other'); });
+    expect(await screen.findByRole('heading', { name: 'Server hinzufügen' })).toBeTruthy();
+    expect(screen.getByLabelText('Adressen (eine pro Zeile)').value).toBe('https://laden.example');
+    expect(screen.getByLabelText('Name').value).toBe('Laden');
+    expect(screen.getByRole('link', { name: 'Zurück zur Sammlung' })).toBeTruthy();
+  });
+  it('a logout cancels a running backup download, so it never completes for the signed-out user', async () => {
+    const s = saveServer({ name: 'Zuhause', urls: ['https://shelf.example'], token: 'tok-1' });
+    activateServer(s.id);
+    let aborted = false;
+    vi.stubGlobal('fetch', routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin }),
+      'POST /api/auth/logout': json(200, { success: true }),
+      'GET /api/backup': (url, init) => new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          aborted = true;
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+      })
+    }));
+    render(<App />);
+    await screen.findByText('Dashboard von admin');
+    const download = startDownload('/api/backup', { filename: 'backup.zip' });
+    expect(downloadsRunning()).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Abmelden' }));
+    expect(await download).toBe(false);
+    expect(aborted).toBe(true);
+    expect(downloadsRunning()).toBe(false);
+    await screen.findByLabelText('Passwort');
+  });
+
+  it('a saved server with a plain http address outside the home network: the login names it and asks for no token', async () => {
+    const s = saveServer({ name: 'Alt', urls: ['http://manga.example.org'] });
+    activateServer(s.id);
+    const fetchMock = routes({
+      'GET /api/health': healthy(),
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    expect(await screen.findByText((text) => text.startsWith(INSECURE_URL_TEXT))).toBeTruthy();
+    expect(screen.queryByText('Neue Adresse – bitte erneut anmelden')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Benutzername'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /Anmelden/ }));
+    expect(await screen.findByText(INSECURE_URL_TEXT)).toBeTruthy();
+    expect(fetchMock.calls).not.toContain('POST /api/auth/login');
+    expect(getServer(s.id).token).toBeUndefined();
+    fireEvent.click(screen.getByRole('link', { name: 'Server bearbeiten' }));
+    expect(await screen.findByRole('heading', { name: 'Server bearbeiten' })).toBeTruthy();
+    expect(screen.getByLabelText('Adressen (eine pro Zeile)').value).toBe('http://manga.example.org');
   });
 });

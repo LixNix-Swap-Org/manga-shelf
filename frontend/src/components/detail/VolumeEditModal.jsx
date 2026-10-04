@@ -45,6 +45,7 @@ function VolumeEditDialog({
     showErrors,
     addExternalImageUrl,
     handleUploadVolumeImages,
+    cancelVolumeImageUpload,
     handleAddImageUrl,
     handleMoveVolumeImage,
     handleRemoveVolumeImage,
@@ -121,6 +122,7 @@ function VolumeEditDialog({
                   setShowUrlInput={setShowUrlInput}
                   showUrlInput={showUrlInput}
                   uploadingVolImage={uploadingVolImage}
+                  onCancelUpload={cancelVolumeImageUpload}
                 />
                 {photoError && (
                   <div role="alert" className="p-2.5 rounded-xl text-xs bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-start justify-between gap-2">

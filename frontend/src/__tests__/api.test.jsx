@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, render, screen } from '@testing-library/react';
+import { renderHook, render, screen, act } from '@testing-library/react';
 import api, {
   apiFetch, request, get, post, put, del, upload, ApiError, TIMEOUTS, SESSION_EXPIRED_EVENT, MESSAGES,
   getApiBase, setServer, apiUrl, assetUrl, assetImgProps, rememberToken, readJson, errorFromResponse, isAbortError, isAppMode,
-  sessionEndAnnounced
+  sessionEndAnnounced, uploadTimeout, downloadFile, downloadName
 } from '../utils/api';
+import useDownload from '../app/useDownload';
 import { APP_CSP, appCspPlugin } from '../app/csp.js';
-import { getActiveBase, getToken, setToken, setActiveBase } from '../app/connection';
+import { getActiveBase, getToken, setToken, setActiveBase, resetConnection } from '../app/connection';
+import { resetServers, saveServer, setStorageAdapter } from '../app/serverStore';
 import { postLogout } from '../appShell';
 import useLatestRequest from '../hooks/useLatestRequest';
 import ScanCandidatesDialog from '../components/dashboard/ScanCandidatesDialog';
@@ -31,6 +33,9 @@ const appMode = (base = 'https://shelf.example.org', token = 'tok-123') => {
 describe('utils/api', () => {
   beforeEach(() => {
     localStorage.clear();
+    setStorageAdapter(null);
+    resetServers();
+    resetConnection();
   });
 
   afterEach(() => {
@@ -111,11 +116,23 @@ describe('utils/api', () => {
       setServer({ base: 'https://a.example/', token: 't1' });
       expect(getActiveBase()).toBe('https://a.example');
       expect(getToken()).toBe('t1');
-      setServer({ base: 'https://a.example/manga' });
+      setServer({ base: 'https://a.example' });
       expect(getToken()).toBe('t1');
       setServer({ token: null });
       expect(getToken()).toBe('');
-      expect(getActiveBase()).toBe('https://a.example/manga');
+      expect(getActiveBase()).toBe('https://a.example');
+    });
+
+    it('another address of the same saved server needs its own sign-in before the token goes there', () => {
+      vi.stubEnv('VITE_APP_MODE', 'app');
+      saveServer({ name: 'Home', urls: ['https://home.example', 'http://192.168.1.10:3000'] });
+      setServer({ base: 'https://home.example', token: 'home' });
+      setServer({ base: 'http://192.168.1.10:3000' });
+      expect(getToken()).toBe('');
+      setServer({ token: 'home-lan' });
+      expect(getToken()).toBe('home-lan');
+      setServer({ base: 'https://home.example' });
+      expect(getToken()).toBe('');
     });
 
     it('a base switch never carries the old token to another server', async () => {
@@ -128,17 +145,23 @@ describe('utils/api', () => {
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe('http://192.168.1.10:3000/api/health');
       expect(init.headers.Authorization).toBeUndefined();
+      // back on the saved home server its own token applies again
       setServer({ base: 'https://home.example' });
-      expect(getToken()).toBe('');
+      expect(getToken()).toBe('TOKEN-FOR-HOME');
     });
 
-    it('a token issued by another origin is not sent, even when it is still stored', async () => {
-      appMode('https://home.example', 'TOKEN-FOR-HOME');
-      localStorage.setItem('mangashelf_server_base', 'https://other.example');
+    it('the token only goes to the origin of the active server: never to another host or its http:// variant', async () => {
+      appMode('https://shelf.example.org', 'tok-123');
       const fetchMock = vi.fn(async () => json(200, {}));
       vi.stubGlobal('fetch', fetchMock);
+      await apiFetch('https://evil.example/x');
+      await apiFetch('http://shelf.example.org/api/x');
+      await apiFetch('//shelf.example.org.evil.example/api/x');
+      await apiFetch('https://shelf.example.org/api/stats');
       await apiFetch('/api/stats');
-      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
+      const auth = fetchMock.mock.calls.map(([, init]) => init.headers.Authorization);
+      expect(auth).toEqual([undefined, undefined, undefined, 'Bearer tok-123', 'Bearer tok-123']);
+      expect(fetchMock.mock.calls.every(([, init]) => init.headers['X-Client'] === 'app')).toBe(true);
     });
 
     it('setServer keeps no token in the browser build', () => {
@@ -262,9 +285,13 @@ describe('utils/api', () => {
       expect(err.isTimeout).toBe(true);
     });
 
-    it('timeout classes: reads 15 s, lookups 90 s, long jobs 10 min, uploads none', () => {
+    it('timeout classes: reads 15 s, lookups 90 s, long jobs 10 min, restores none; uploads by size', () => {
       expect(TIMEOUTS).toMatchObject({ read: 15000, lookup: 90000, remote: 90000, long: 600000, upload: 0 });
       expect(TIMEOUTS.lookup).toBeGreaterThan(18000);
+      expect(uploadTimeout(0)).toBe(120000);
+      expect(uploadTimeout(1024 * 1024)).toBe(120000);
+      expect(uploadTimeout(10 * 1000 * 1000)).toBe(200000);
+      expect(uploadTimeout(500 * 1000 * 1000)).toBe(TIMEOUTS.long);
     });
 
     it('timeouts: 15 s for reads, none for uploads, a custom one, 0 for none', async () => {
@@ -274,15 +301,16 @@ describe('utils/api', () => {
       await vi.advanceTimersByTimeAsync(TIMEOUTS.read);
       expect((await read).code).toBe('TIMEOUT');
 
+      // an upload that hangs ends after max(120 s, size at 50 kB/s): the form never stays disabled for good
       const uploadFetch = hangingFetch();
       vi.stubGlobal('fetch', uploadFetch);
       const fd = new FormData();
+      fd.append('image', new Blob([new Uint8Array(10 * 1000 * 1000)]), 'big.jpg');
       const up = upload('/api/upload/multiple', fd).catch((e) => e);
-      let settled = false;
-      up.then(() => { settled = true; });
-      await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
-      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(199999);
       expect(uploadFetch.mock.calls[0][1].signal.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await up).code).toBe('TIMEOUT');
       vi.stubGlobal('fetch', hangingFetch());
 
       const startup = apiFetch('/api/auth/me', { timeout: TIMEOUTS.auth }).catch((e) => e);
@@ -296,18 +324,37 @@ describe('utils/api', () => {
       expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
     });
 
-    it('a settled request removes its listener from a long-lived caller signal', async () => {
+    it('request() and failed calls remove their listener; apiFetch keeps it for the body read', async () => {
       const controller = new AbortController();
       const add = vi.spyOn(controller.signal, 'addEventListener');
       const remove = vi.spyOn(controller.signal, 'removeEventListener');
       vi.stubGlobal('fetch', vi.fn(async () => json(200, { ok: 1 })));
-      for (let i = 0; i < 5; i++) await apiFetch('/api/x', { signal: controller.signal });
+      await apiFetch('/api/x', { signal: controller.signal });
       await get('/api/y', { signal: controller.signal });
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
       await apiFetch('/api/z', { signal: controller.signal }).catch(() => {});
-      expect(add).toHaveBeenCalledTimes(7);
-      expect(remove).toHaveBeenCalledTimes(7);
-      for (let i = 0; i < 7; i++) expect(remove.mock.calls[i][1]).toBe(add.mock.calls[i][1]);
+      expect(add).toHaveBeenCalledTimes(3);
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(remove.mock.calls.map((c) => c[1])).toEqual([add.mock.calls[1][1], add.mock.calls[2][1]]);
+    });
+
+    it("the caller's abort after the headers still aborts the body download of apiFetch", async () => {
+      let fetchSignal;
+      vi.stubGlobal('fetch', vi.fn(async (url, init) => { fetchSignal = init.signal; return new Response('{}'); }));
+      const controller = new AbortController();
+      await apiFetch('/api/mangas', { signal: controller.signal });
+      expect(fetchSignal.aborted).toBe(false);
+      controller.abort();
+      expect(fetchSignal.aborted).toBe(true);
+    });
+
+    it('the timeout of apiFetch ends when the headers arrived', async () => {
+      vi.useFakeTimers();
+      let fetchSignal;
+      vi.stubGlobal('fetch', vi.fn(async (url, init) => { fetchSignal = init.signal; return new Response('{}'); }));
+      await apiFetch('/api/mangas');
+      await vi.advanceTimersByTimeAsync(TIMEOUTS.read * 2);
+      expect(fetchSignal.aborted).toBe(false);
     });
 
     it("the caller's abort rejects with its AbortError, not ApiError", async () => {
@@ -450,11 +497,86 @@ describe('app build CSP', () => {
     const directives = Object.fromEntries(APP_CSP.split('; ').map((d) => [d.split(' ')[0], d.split(' ').slice(1).join(' ')]));
     expect(directives).toMatchObject({
       'default-src': "'self'",
-      'script-src': "'self'",
-      'connect-src': 'http: https:',
+      'script-src': "'self' 'wasm-unsafe-eval'",
+      'connect-src': "'self' http: https:",
       'object-src': "'none'",
       'base-uri': "'self'",
       'form-action': "'none'"
     });
+  });
+});
+
+describe('downloads (backup ZIP, snapshot, CSV)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setStorageAdapter(null);
+    resetServers();
+    resetConnection();
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  const clicks = () => {
+    const seen = [];
+    const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () { seen.push({ href: this.getAttribute('href'), download: this.getAttribute('download') }); });
+    return { seen, spy };
+  };
+
+  it('the browser build follows a plain link (the cookie authenticates)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { seen } = clicks();
+    expect(await downloadFile('/api/export/csv', { filename: 'sammlung.csv' })).toBeNull();
+    expect(seen).toEqual([{ href: '/api/export/csv', download: 'sammlung.csv' }]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('the app build fetches with the bearer token, reports progress and saves under the server\'s file name', async () => {
+    appMode();
+    const body = { text: 'PK-zip-data', size: 11 };
+    const fetchMock = vi.fn(async () => new Response(body.text, {
+      status: 200,
+      headers: { 'Content-Type': 'application/zip', 'Content-Length': String(body.size), 'Content-Disposition': "attachment; filename*=UTF-8''manga-shelf-backup-2026.zip" }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { seen } = clicks();
+    const progress = [];
+    const saved = await downloadFile('/api/backup', { onProgress: (loaded, total) => progress.push([loaded, total]) });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://shelf.example.org/api/backup');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok-123');
+    expect(saved.filename).toBe('manga-shelf-backup-2026.zip');
+    expect(saved.bytes).toBeGreaterThan(0);
+    expect(seen).toEqual([{ href: 'blob:x', download: 'manga-shelf-backup-2026.zip' }]);
+    expect(progress[0]).toEqual([0, body.size]);
+    expect(progress.at(-1)).toEqual([body.size, body.size]);
+  });
+
+  it('a failed download rejects with the server text; downloadName reads both header forms', async () => {
+    appMode();
+    vi.stubGlobal('fetch', vi.fn(async () => json(403, { error: 'Nur für Admins' })));
+    await expect(downloadFile('/api/backup')).rejects.toMatchObject({ status: 403, message: 'Nur für Admins' });
+    const named = (value) => downloadName({ headers: new Headers(value ? { 'Content-Disposition': value } : {}) }, 'x.bin');
+    expect(named('attachment; filename="export.csv"')).toBe('export.csv');
+    expect(named("attachment; filename*=UTF-8''B%C3%BCcher.csv; filename=\"x.csv\"")).toBe('Bücher.csv');
+    expect(named(null)).toBe('x.bin');
+  });
+
+  it('useDownload shows the progress while it runs and reports errors as a toast', async () => {
+    appMode();
+    let release;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { release = () => resolve(new Response('a,b', { status: 200 })); })));
+    clicks();
+    const { result } = renderHook(() => useDownload());
+    expect(result.current.needed).toBe(true);
+    let pending;
+    act(() => { pending = result.current.start('/api/export/csv', { filename: 'sammlung.csv' }); });
+    expect(result.current.busy).toBe(true);
+    await act(async () => { release(); expect(await pending).toBe(true); });
+    expect(result.current.progress).toBeNull();
   });
 });

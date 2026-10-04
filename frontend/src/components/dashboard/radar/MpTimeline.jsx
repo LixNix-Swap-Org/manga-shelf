@@ -1,16 +1,42 @@
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { formatReleaseDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
-import { Package, Calendar, Star, RefreshCw, BookOpen, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert } from 'lucide-react';
-import { assetImgProps } from '../../../utils/api';
+import { Package, Calendar, Star, RefreshCw, BookOpen, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
 import { formatCount, formatEuro } from '../../../utils/format';
+import CoverImage from '../../common/CoverImage';
 
 const EMPTY_SET = new Set();
+const LOADING_TEXT = 'Lade Neuerscheinungen von Manga Passion...';
+const COVER_FALLBACK = (
+  <div aria-hidden="true" className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500">
+    <BookOpen className="w-6 h-6" />
+  </div>
+);
 const BADGE = 'text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border';
+
+/** The series of the entry is no longer collected (mangas.collecting 'abgebrochen'): greyed, never "Einkaufsliste". */
+export const isDroppedSeries = (item) => Boolean(item?.in_collection) && item.user_manga_collecting === 'abgebrochen';
+
+const DROPPED_BADGE = (
+  <span className={`${BADGE} bg-slate-800 text-slate-400 border-slate-700`} title="Diese Reihe sammelst du nicht mehr">
+    <CircleOff className="w-2.5 h-2.5 text-slate-400" />
+    <span>Nicht mehr gesammelt</span>
+  </span>
+);
 
 function StatusBadge({ item }) {
   const status = item.user_volume_status;
-  switch (volumeStatusGroup(status)) {
+  const group = volumeStatusGroup(status);
+  if (isDroppedSeries(item) && group !== 'owned' && group !== 'ordered') return DROPPED_BADGE;
+  if (group === 'missing' && item.user_manga_collecting === 'pausiert') {
+    return (
+      <span className={`${BADGE} bg-amber-500/10 text-amber-200 border-amber-500/30`} title="Die Reihe ist pausiert und steht nicht auf der Einkaufsliste">
+        <CirclePause className="w-2.5 h-2.5 text-amber-300" />
+        <span>Pausiert</span>
+      </span>
+    );
+  }
+  switch (group) {
     case 'owned':
       return (
         <span className={`${BADGE} bg-emerald-500/20 text-emerald-300 border-emerald-500/40`}>
@@ -51,6 +77,14 @@ function StatusBadge({ item }) {
           </span>
         );
       }
+      if (item.in_collection && item.user_manga_wished) {
+        return (
+          <span className={`${BADGE} bg-rose-500/20 text-rose-300 border-rose-500/40`} title="Diese Reihe steht auf deiner Wunschliste">
+            <Heart className="w-2.5 h-2.5 text-rose-400" />
+            <span>Auf Wunschliste</span>
+          </span>
+        );
+      }
       if (item.in_collection) {
         return (
           <span className={`${BADGE} bg-brand-500/20 text-brand-300 border-brand-500/40`} title="Diese Reihe steht bereits in deiner Sammlung">
@@ -64,7 +98,9 @@ function StatusBadge({ item }) {
 }
 
 const cardTone = (item) => {
-  switch (volumeStatusGroup(item.user_volume_status)) {
+  const group = volumeStatusGroup(item.user_volume_status);
+  if (isDroppedSeries(item) && group !== 'owned' && group !== 'ordered') return 'border-slate-800/80 bg-slate-900/40 opacity-60 hover:opacity-100';
+  switch (group) {
     case 'owned': return 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-emerald-950/20';
     case 'ordered': return 'border-sky-500/40 bg-gradient-to-b from-sky-950/20 via-slate-900/60 to-slate-900/80 shadow-sky-950/20';
     case 'upcoming': return 'border-purple-500/40 bg-gradient-to-b from-purple-950/20 via-slate-900/60 to-slate-900/80 shadow-purple-950/20';
@@ -86,8 +122,6 @@ export default function MpTimeline({
   canEdit,
   onImport,
   importingMpIds = EMPTY_SET,
-  failedImages = {},
-  setFailedImages,
   GERMAN_MONTHS,
   mpDateGroups,
   filtersActive,
@@ -96,30 +130,39 @@ export default function MpTimeline({
   const view = radarViewState({ loading: loadingMp, error: mpError, hasData: Boolean(mpData), count: mpDateGroups.length });
   const monthLabel = `${GERMAN_MONTHS[mpMonth - 1]} ${mpYear}`;
 
-  if (view === 'idle') return null;
+  // one live region that stays mounted whatever the view, so the loading text is announced
+  const status = <div role="status" className="sr-only">{view === 'loading' ? LOADING_TEXT : ''}</div>;
+
+  if (view === 'idle') return <>{status}</>;
 
   if (view === 'loading') {
     return (
-      <div role="status" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
-        <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
-        <p className="text-sm font-semibold text-white">Lade Neuerscheinungen von Manga Passion...</p>
-        <p className="text-xs text-slate-400 mt-1">Erscheinungstermine, Bände und Preise werden abgeglichen</p>
-      </div>
+      <>
+        {status}
+        <div aria-hidden="true" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
+          <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-semibold text-white">{LOADING_TEXT}</p>
+          <p className="text-xs text-slate-400 mt-1">Erscheinungstermine, Bände und Preise werden abgeglichen</p>
+        </div>
+      </>
     );
   }
 
   if (view === 'error') {
     return (
-      <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
-          <CircleAlert className="w-8 h-8" />
+      <>
+        {status}
+        <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
+            <CircleAlert className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1">Neuerscheinungen für {monthLabel} nicht verfügbar</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{mpError}</p>
+          <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
+            Erneut versuchen
+          </button>
         </div>
-        <h3 className="text-base font-bold text-white mb-1">Neuerscheinungen für {monthLabel} nicht verfügbar</h3>
-        <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{mpError}</p>
-        <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
-          Erneut versuchen
-        </button>
-      </div>
+      </>
     );
   }
 
@@ -127,6 +170,7 @@ export default function MpTimeline({
 
   return (
     <>
+      {status}
       {mpData.stale && (
         <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
           Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.
@@ -182,7 +226,6 @@ export default function MpTimeline({
                   const isOwned = volumeStatusGroup(item.user_volume_status) === 'owned';
                   const actions = mpCardActions(item.user_volume_status);
                   const busy = importingMpIds.has(item.id);
-                  const imageKey = `radar-${item.id || item.manga_passion_id || item.title}`;
 
                   return (
                     <div
@@ -201,19 +244,11 @@ export default function MpTimeline({
 
                         <div className="flex gap-3">
                           <div className="shrink-0 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
-                            {item.cover_image && !failedImages[imageKey] ? (
-                              <img
-                                {...assetImgProps(item.cover_image)}
-                                alt=""
-                                loading="lazy"
-                                onError={() => setFailedImages?.(prev => ({ ...prev, [imageKey]: true }))}
-                                className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div aria-hidden="true" className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500">
-                                <BookOpen className="w-6 h-6" />
-                              </div>
-                            )}
+                            <CoverImage
+                              src={item.cover_image}
+                              className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
+                              fallback={COVER_FALLBACK}
+                            />
                           </div>
 
                           <div className="flex-1 min-w-0">

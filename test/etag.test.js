@@ -46,7 +46,7 @@ test('every data endpoint sends a weak ETag and answers 304 with an empty body w
 });
 
 test('a 304 skips the handler: the list and snapshot builders are not called', async (t) => {
-    const snapshot = require('../services/snapshot');
+    const snapshot = require('../core/snapshot');
     const list = t.mock.method(snapshot, 'listMangas');
     const offline = t.mock.method(snapshot, 'buildOfflineSnapshot');
     const detail = t.mock.method(snapshot, 'loadMangaDetail');
@@ -110,7 +110,7 @@ test('dashboard-summary: the badge numbers equal those of the shopping list and 
 });
 
 test('offline snapshot: a restore during the build still answers 503 with its German message', async (t) => {
-    const snapshot = require('../services/snapshot');
+    const snapshot = require('../core/snapshot');
     t.mock.method(snapshot, 'buildOfflineSnapshot', async () => {
         const err = new Error('Die Datenbank wurde während der Offline-Kopie neu geöffnet. Bitte erneut versuchen.');
         err.status = 503;
@@ -125,7 +125,7 @@ test('offline snapshot: a restore during the build still answers 503 with its Ge
 });
 
 test('error answers of the data endpoints carry no ETag and are not stored', async (t) => {
-    const snapshot = require('../services/snapshot');
+    const snapshot = require('../core/snapshot');
     const ok = await get(admin, '/mangas');
     await ok.arrayBuffer();
     const goodTag = ok.headers.get('etag');

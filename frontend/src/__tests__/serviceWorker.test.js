@@ -181,7 +181,47 @@ describe('service worker', () => {
     await sw.request('/manga/5', { mode: 'navigate' });
     await sw.request('/assets/y.js');
     const app = await caches.open('mangashelf-app-2');
-    expect([...app.entries.keys()].sort()).toEqual([abs('/assets/x.js'), abs('/manga/5')]);
+    expect([...app.entries.keys()].sort()).toEqual([abs('/'), abs('/assets/x.js')]);
+  });
+
+  it('navigations are stored under / only: no series ids or shared text as cache keys', async () => {
+    const net = server('A');
+    const caches = fakeCaches(net);
+    const sw = loadWorker({ version: '1', fetchImpl: net, caches });
+    await sw.install();
+    await sw.request('/manga/5', { mode: 'navigate' });
+    await sw.request('/?share_text=geheim', { mode: 'navigate' });
+    const keys = [...(await caches.open('mangashelf-app-1')).entries.keys()];
+    expect(keys.filter((k) => !k.includes('/assets/'))).toEqual(
+      ['/', '/manifest.json', '/favicon.svg', '/icon-192.png', '/icon-512.png'].map(abs)
+    );
+
+    net.mockImplementation(async () => { throw new TypeError('offline'); });
+    expect(await (await sw.request('/manga/77', { mode: 'navigate' })).text()).toContain('index-A.js');
+  });
+
+  it('while an update waits, the active worker serves the new release from the waiting precache', async () => {
+    const netA = server('A');
+    const netB = server('B');
+    let net = netA;
+    const caches = fakeCaches((r) => net(r));
+    const v1 = loadWorker({ version: '1.0.0', fetchImpl: (r) => net(r), caches });
+    await v1.install();
+    await v1.activate();
+    net = netB;
+    const v2 = loadWorker({ version: '1.1.0', fetchImpl: (r) => net(r), caches });
+    await v2.install();
+
+    netB.mockClear();
+    expect(await (await v1.request('/assets/Dashboard-B.js')).text()).toBe('export default 1');
+    expect(netB).not.toHaveBeenCalled();
+
+    await v1.request('/', { mode: 'navigate' });
+    expect(await (await (await caches.open('mangashelf-app-1.0.0')).match('/')).text()).toContain('index-B.js');
+    net = vi.fn(async () => { throw new TypeError('offline'); });
+    const page = await v1.request('/manga/5', { mode: 'navigate' });
+    expect(await page.text()).toContain('index-B.js');
+    expect(await (await v1.request('/assets/Login-B.js')).text()).toBe('export default 2');
   });
 
   it('leaves API calls and non-GET requests to the network', async () => {

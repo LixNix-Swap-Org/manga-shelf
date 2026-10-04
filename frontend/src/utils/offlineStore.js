@@ -4,17 +4,24 @@
 // GET /api/offline-snapshot. It is wiped on logout and when the server says the session is invalid,
 // so data does not stay readable on a shared device. Nothing here ever writes back to the server.
 // The shopping-list cache (localStorage) is kept here too, so its keys sit next to clearOfflineData.
+// The same database holds the outbox store (utils/outbox.js): changes made offline, per user and server. A logout
+// keeps them; they are only ever sent with the session of the user who made them.
 
 import { LEGACY_QUEUE_KEY } from './shoppingQueue.js';
 import { apiFetch, assetUrl, TIMEOUTS } from './api.js';
 import { formatRelative } from './format.js';
+import { clearDataCache } from './dataCache.js';
+import { ANIME_CACHE_KEY, ANIME_META_KEY } from './storageKeys.js';
 
 // The scan helpers stay out of the start chunk: the index is built during the background sync and read by the scanners
 const isbnTools = () => import('./scanHelpers.js');
 
 const DB_NAME = 'mangashelf-offline';
 const STORE = 'kv';
-const DB_VERSION = 1;
+const OUTBOX_STORE = 'outbox';
+const DB_VERSION = 2;
+// another tab still runs the release with version 1 and holds the database open: give up instead of waiting forever
+const BLOCKED_TIMEOUT_MS = 3000;
 const SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
 const WARM_MAX_COVERS = 300;
 const WARM_MAX_BYTES = 50 * 1024 * 1024;
@@ -24,6 +31,8 @@ export const SHOPPING_CACHE_KEY = 'mangashelf_shopping_cache';
 export const SHOPPING_META_KEY = 'mangashelf_shopping_meta';
 export const SHOP_SESSION_KEY = 'mangashelf_shop_session';
 const ISBN_INDEX_KEY = 'isbn-index';
+// appShell's PURCHASE_RECORDED_EVENT; not imported, the Node tests load this file without the bundler
+export const PURCHASE_EVENT_NAME = 'mangashelf:purchase-recorded';
 
 let dbPromise = null;
 
@@ -35,9 +44,30 @@ function openDb() {
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    let blockedTimer = null;
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      for (const name of [STORE, OUTBOX_STORE]) {
+        if (!db.objectStoreNames?.contains?.(name)) db.createObjectStore(name);
+      }
+    };
+    req.onblocked = () => {
+      blockedTimer = setTimeout(() => reject(new Error('Offline-Datenbank wird von einem anderen Tab blockiert')), BLOCKED_TIMEOUT_MS);
+    };
+    req.onsuccess = () => {
+      clearTimeout(blockedTimer);
+      const db = req.result;
+      // a newer release in another tab wants to upgrade: let it (this tab reopens on its next access)
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    req.onerror = () => {
+      clearTimeout(blockedTimer);
+      reject(req.error);
+    };
   }).catch((err) => {
     dbPromise = null;
     throw err;
@@ -45,11 +75,11 @@ function openDb() {
   return dbPromise;
 }
 
-async function run(mode, fn) {
+async function run(mode, fn, storeName = STORE) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, mode);
-    const result = fn(tx.objectStore(STORE));
+    const tx = db.transaction(storeName, mode);
+    const result = fn(tx.objectStore(storeName));
     tx.oncomplete = () => resolve(result && 'result' in result ? result.result : undefined);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
@@ -71,6 +101,8 @@ export const loadMangaDetail = (id) => safe(async () => (await get(`manga:${id}`
 export const loadMeta = () => safe(async () => (await get('meta')) ?? null);
 
 let localIndex = null;
+// volumes bought in this session (quick buy): the stored copy only learns them with the next full sync
+let ownedOverlay = new Set();
 
 async function isbnIndexEntries(details) {
   try {
@@ -99,6 +131,7 @@ export function saveSnapshot(snapshot, { generation } = {}) {
     // clear stale series (deleted on the server) in the same pass
     await run('readwrite', (s) => { s.clear(); for (const [k, v] of entries) s.put(v, k); });
     localIndex = null;
+    ownedOverlay = new Set();
     return syncedAt;
   });
 }
@@ -107,11 +140,13 @@ export function saveSnapshot(snapshot, { generation } = {}) {
 export function loadLocalIsbnIndex() {
   if (!localIndex) {
     const pending = (async () => {
+      const generation = clearGeneration;
       let record = await get(ISBN_INDEX_KEY);
       if (!record) {
         const list = (await get('mangas')) ?? [];
         const details = (await Promise.all(list.map((m) => get(`manga:${m.id}`)))).filter(Boolean);
         record = (await isbnTools()).buildIsbnIndexRecord(details);
+        if (generation === clearGeneration && localIndex === pending) await put([[ISBN_INDEX_KEY, record]]);
       }
       const meta = await get('meta');
       return { map: new Map(record.entries.map((e) => [e[0], e])), titles: record.titles || {}, syncedAt: meta?.synced_at ?? null };
@@ -136,15 +171,114 @@ export async function lookupLocalIsbn(isbn) {
   const entry = index?.map.get(key);
   if (!entry) return null;
   const [, mangaId, volumeId, displayTitle, status, mine, owners] = entry;
+  const bought = ownedOverlay.has(String(volumeId));
   return {
     manga: { id: mangaId, title: index.titles[mangaId] ?? '' },
-    volume: { id: volumeId, display_title: displayTitle, status, owners, ...(mine === null ? {} : { owned_by_me: Boolean(mine) }) },
+    volume: bought
+      ? { id: volumeId, display_title: displayTitle, status: 'Vorhanden', owners, owned_by_me: true }
+      : { id: volumeId, display_title: displayTitle, status, owners, ...(mine === null ? {} : { owned_by_me: Boolean(mine) }) },
     syncedAt: index.syncedAt
   };
 }
 
+/** A purchase recorded in this session: local scans report the volume as owned until the next full sync. */
+export function markLocalOwned(volumeId) {
+  if (volumeId === undefined || volumeId === null) return;
+  ownedOverlay.add(String(volumeId));
+}
+
+/**
+ * The stored ISBN index no longer matches the stored details (a detail was updated or patched): it is rebuilt from
+ * the details on the next scan. Purchases marked for the volumes of `detail` are now part of it.
+ */
+export function invalidateIsbnIndex(detail = null) {
+  localIndex = null;
+  for (const v of Array.isArray(detail?.volumes) ? detail.volumes : []) ownedOverlay.delete(String(v?.id));
+  return safe(async () => {
+    await run('readwrite', (s) => { s.delete(ISBN_INDEX_KEY); });
+    localIndex = null;
+  });
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener(PURCHASE_EVENT_NAME, (event) => markLocalOwned(event.detail?.volumeId));
+}
+
 /** Keeps a freshly viewed series detail in the offline copy without a full re-sync. */
-export const updateCachedManga = (detail) => safe(() => put([[`manga:${detail.id}`, detail]]));
+export const updateCachedManga = (detail) => safe(async () => {
+  await put([[`manga:${detail.id}`, detail]]);
+  await invalidateIsbnIndex(detail);
+});
+
+/**
+ * get + put in one readwrite transaction: `fn(values, store)` gets the stored values of `keys` and may put or delete in
+ * the same transaction, so two concurrent read-modify-writes (or a snapshot write) cannot overwrite each other.
+ */
+async function readModifyWrite(storeName, keys, fn) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const values = new Array(keys.length);
+    let pending = keys.length;
+    let result;
+    const finish = () => {
+      try {
+        result = fn(values, store);
+      } catch (err) {
+        tx.abort?.();
+        reject(err);
+      }
+    };
+    keys.forEach((key, i) => {
+      const req = store.get(key);
+      req.onsuccess = () => {
+        values[i] = req.result;
+        if (--pending === 0) finish();
+      };
+    });
+    if (!keys.length) finish();
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+/**
+ * Optimistic outbox changes: `change(detail, list)` gets the stored detail of the series (or null) and the stored list
+ * and returns { detail, list } with the new values (a missing key leaves that record as it is).
+ */
+export const patchCachedManga = (mangaId, change) => safe(async () => {
+  const written = await readModifyWrite(STORE, [`manga:${mangaId}`, 'mangas'], ([detail, list], store) => {
+    if (!detail && !Array.isArray(list)) return null;
+    const next = change(detail ?? null, Array.isArray(list) ? list : null) || {};
+    let count = 0;
+    if (detail && next.detail) {
+      store.put(next.detail, `manga:${mangaId}`);
+      store.delete(ISBN_INDEX_KEY);
+      count++;
+    }
+    if (Array.isArray(list) && next.list) {
+      store.put(next.list, 'mangas');
+      count++;
+    }
+    return { count, detail: detail && next.detail ? next.detail : null };
+  });
+  if (written?.detail) await invalidateIsbnIndex(written.detail);
+  return Boolean(written?.count);
+}, false);
+
+// Outbox records, keyed by entry.key. These reject on failure: the outbox then keeps its entries in localStorage.
+export const loadOutboxEntries = () => run('readonly', (s) => s.getAll(), OUTBOX_STORE).then((rows) => rows ?? []);
+export const putOutboxEntries = (entries) => run('readwrite', (s) => { for (const e of entries) s.put(e, e.key); }, OUTBOX_STORE);
+export const deleteOutboxEntries = (keys) => run('readwrite', (s) => { for (const k of keys) s.delete(k); }, OUTBOX_STORE);
+// only where the stored row still is this entry (same id): another tab may have stored a newer change under the key
+export const updateOutboxEntriesById = (entries) => readModifyWrite(OUTBOX_STORE, entries.map((e) => e.key), (rows, s) => {
+  rows.forEach((row, i) => { if (row && row.id === entries[i].id) s.put(entries[i], entries[i].key); });
+});
+export const deleteOutboxEntriesById = (entries) => readModifyWrite(OUTBOX_STORE, entries.map((e) => e.key), (rows, s) => {
+  rows.forEach((row, i) => { if (row && row.id === entries[i].id) s.delete(entries[i].key); });
+});
 
 let clearGeneration = 0; // bumped on logout/401: a download that started before it must not be stored afterwards
 let syncInFlight = null;
@@ -158,20 +292,25 @@ function notifySynced(syncedAt) {
 }
 
 /**
- * Called on logout / invalid session. Also drops the shopping-list cache (same privacy rule) and the old
- * queue format without a user. The per-user purchase queues stay: they are only ever sent by their own user.
+ * Called on logout / invalid session and after a restore. Also drops the in-memory data cache, the shopping-list and
+ * anime-list caches (same privacy rule) and the old queue format without a user. The outbox stays: its entries are only ever sent
+ * by their own user.
  */
 export async function clearOfflineData() {
   clearGeneration++;
   syncInFlight = null;
   followUp = null;
   localIndex = null;
+  ownedOverlay = new Set();
+  clearDataCache();
   await safe(() => run('readwrite', (s) => { s.clear(); }));
   try {
     localStorage.removeItem(SHOPPING_CACHE_KEY);
     localStorage.removeItem(SHOPPING_META_KEY);
     localStorage.removeItem(LEGACY_QUEUE_KEY);
     localStorage.removeItem(SHOP_SESSION_KEY);
+    localStorage.removeItem(ANIME_CACHE_KEY);
+    localStorage.removeItem(ANIME_META_KEY);
   } catch (_) { /* storage unavailable */ }
   notifySynced(null);
 }

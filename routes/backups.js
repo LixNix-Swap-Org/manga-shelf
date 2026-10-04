@@ -587,6 +587,8 @@ router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup
     let stagedPath = null;
     let release = null;
     let kept = false;
+    let clientGone = false;
+    res.on('close', () => { if (!res.writableFinished) clientGone = true; });
     try {
         assertNoRollbackCopy();
         let source;
@@ -605,6 +607,8 @@ router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup
 
         const parsed = source.type === 'snapshot' ? scheduler.parseSnapshotName(source.filename) : null;
         const summary = await inspectArchive(source.path, { username: req.user.username, snapshotTimeMs: parsed ? parsed.time : null });
+        // the dialog was closed meanwhile: nobody receives the staging id, so nothing is staged (finally cleans up)
+        if (clientGone) return;
         const expiresAt = addStaging({ id, ...source, userId: req.user.id, release });
         kept = true;
         res.json({

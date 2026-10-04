@@ -15,20 +15,12 @@ const OLD_LIST_AGGREGATES = `
            MAX(CASE WHEN v.status = 'Vorhanden' AND ${OLD_IS_REGULAR} THEN CAST(${OLD_VOLUME_NO} AS INTEGER) END) as max_regular_number,
            COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND NOT ${OLD_IS_REGULAR} THEN v.id END) as extras_owned
     FROM mangas m LEFT JOIN volumes v ON m.id = v.manga_id GROUP BY m.id`;
-const OLD_COMPLETED = `
-    WITH owned AS (
-        SELECT DISTINCT v.manga_id, CAST(${OLD_VOLUME_NO} AS INTEGER) AS n
-        FROM volumes v
-        WHERE v.status = 'Vorhanden' AND COALESCE(v.type, 'volume') = 'volume'
-          AND ${OLD_VOLUME_NO} GLOB '[0-9]*' AND ${OLD_VOLUME_NO} NOT GLOB '*[^0-9]*'
-    ),
-    per_series AS (
-        SELECT m.id,
-               MAX(COALESCE(m.total_volumes, 0), COALESCE((SELECT MAX(n) FROM owned o WHERE o.manga_id = m.id), 0)) AS target,
-               (SELECT count(*) FROM owned o WHERE o.manga_id = m.id AND o.n >= 1) AS have
-        FROM mangas m
-    )
-    SELECT count(*) AS count FROM per_series WHERE target > 0 AND have >= target`;
+// spec A2 (review11-backend): complete = a stored total and at least that many distinct regular numbers owned
+const SPEC_A2_COMPLETED = `
+    SELECT count(*) AS count FROM mangas m
+    WHERE COALESCE(m.total_volumes, 0) > 0
+      AND (SELECT COUNT(DISTINCT CAST(${OLD_VOLUME_NO} AS INTEGER)) FROM volumes v
+           WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${OLD_IS_REGULAR}) >= m.total_volumes`;
 const OLD_VOLUME_ORDER = `
     CASE
         WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1
@@ -128,6 +120,11 @@ test('GET /mangas, /stats and the detail order are unchanged against the old exp
     for (const n of ['1', 'band 2', 'Starter 1']) insertVolume(b, n);
     const c = createManga('Fixture C');
     insertVolume(c, '0');
+    // the old max-target rule disagrees on both: no stored total, and a stale total below the highest number
+    const noTotal = createManga('Fixture D');
+    for (const n of ['1', '2', '3']) insertVolume(noTotal, n);
+    const staleTotal = createManga('Fixture E', { total_volumes: 3 });
+    for (const n of ['1', '2', '5']) insertVolume(staleTotal, n);
 
     const old = new Map(db.prepare(OLD_LIST_AGGREGATES).all().map(r => [r.id, r]));
     const list = (await editor('GET', '/mangas')).body;
@@ -141,8 +138,8 @@ test('GET /mangas, /stats and the detail order are unchanged against the old exp
     assert.deepEqual([rowA.regular_owned, rowA.max_regular_number, rowA.extras_owned], [14, 14, 6]);
 
     const stats = (await editor('GET', '/stats')).body.summary;
-    assert.equal(stats.completed_series, db.prepare(OLD_COMPLETED).get().count);
-    assert.ok(stats.completed_series >= 1);
+    assert.equal(stats.completed_series, db.prepare(SPEC_A2_COMPLETED).get().count);
+    assert.ok(stats.completed_series >= 2);
 
     for (const id of [a, b, c]) {
         const detail = (await editor('GET', `/mangas/${id}`)).body;

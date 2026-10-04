@@ -142,27 +142,85 @@ describe('Toaster', () => {
     expect(screen.getByText('Meldung 4')).toBeTruthy();
   });
 
-  it('never evicts a toast with a pending undo; only toasts without an action are capped', () => {
-    const undos = [1, 2, 3, 4, 5].map((n) => vi.fn());
+  it('notify.update changes the text in place, keeps the timer and the action, and never shows a closed toast again', () => {
+    vi.useFakeTimers();
+    const onClick = vi.fn();
+    const events = [];
+    const onEvent = (e) => events.push(e.detail.message);
+    window.addEventListener(NOTIFY_EVENT, onEvent);
     render(<Toaster />);
+    let id;
+    act(() => { id = notify.info('Lädt… 1 MB', { action: { label: 'Abbrechen', onClick }, duration: 5000 }); });
+    const toast = toastOf('Lädt… 1 MB');
+    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { notify.update(id, 'Lädt… 2 MB'); });
+    expect(toastOf('Lädt… 2 MB')).toBe(toast);
+    expect(screen.getByText('Lädt… 2 MB').getAttribute('aria-live')).toBe('off');
+    expect(screen.queryByText('Lädt… 1 MB')).toBeNull();
+    expect(events).toEqual(['Lädt… 1 MB']);
+    expect(toasts.messages()).toEqual(['Lädt… 1 MB']);
+    act(() => { vi.advanceTimersByTime(2100); });
+    expect(document.querySelectorAll('[data-toast]')).toHaveLength(0);
+    act(() => { notify.update(id, 'Lädt… 3 MB'); });
+    expect(document.querySelectorAll('[data-toast]')).toHaveLength(0);
+    act(() => { notify.update(null, 'nichts'); notify.update(id, ''); });
+    expect(onClick).not.toHaveBeenCalled();
+    window.removeEventListener(NOTIFY_EVENT, onEvent);
+  });
+
+  it('keeps at most three undo toasts: the oldest is committed (closed without its undo) and announced as dismissed', () => {
+    const undos = [1, 2, 3, 4, 5].map(() => vi.fn());
+    const events = [];
+    const stop = notify.subscribe((e) => { if (e.type === 'dismiss') events.push(e.id); });
+    render(<Toaster />);
+    let ids;
     act(() => {
-      undos.forEach((onClick, i) => notify.success(`Kauf ${i + 1}`, { action: { label: 'Rückgängig', onClick } }));
+      ids = undos.map((onClick, i) => notify.success(`Kauf ${i + 1}`, { action: { label: 'Rückgängig', onClick } }));
       notify.error('Kein Barcode erkannt');
       for (let i = 1; i <= 5; i++) notify.info(`Meldung ${i}`);
     });
-    expect(screen.getAllByRole('button', { name: 'Rückgängig' })).toHaveLength(5);
+    stop();
+    expect(screen.getAllByRole('button', { name: 'Rückgängig' })).toHaveLength(3);
+    expect(screen.queryByText('Kauf 1')).toBeNull();
+    expect(screen.queryByText('Kauf 2')).toBeNull();
+    expect(screen.getByText('Kauf 3')).toBeTruthy();
+    expect(undos.every((fn) => fn.mock.calls.length === 0)).toBe(true);
+    expect(events).toEqual(expect.arrayContaining([ids[0], ids[1]]));
+    expect(events).not.toContain(ids[2]);
     expect(screen.queryByText('Kein Barcode erkannt')).toBeNull();
     expect(screen.queryByText('Meldung 1')).toBeNull();
     expect(screen.getByText('Meldung 5')).toBeTruthy();
-    fireEvent.click(toastOf('Kauf 1').querySelector('button'));
-    expect(undos[0]).toHaveBeenCalledTimes(1);
+    fireEvent.click(toastOf('Kauf 3').querySelector('button'));
+    expect(undos[2]).toHaveBeenCalledTimes(1);
   });
 
-  it('trimToasts drops the oldest toasts without an action first', () => {
-    const t = (id, action = null) => ({ id, action });
+  it('a toast that waits for the user (duration 0) is never evicted', () => {
+    render(<Toaster />);
+    act(() => {
+      notify.info('Neue Version verfügbar', { duration: 0, action: { label: 'Neu laden', onClick: vi.fn() } });
+      for (let i = 1; i <= 5; i++) notify.success(`Gelesen ${i}`, { action: { label: 'Rückgängig', onClick: vi.fn() } });
+    });
+    expect(screen.getByRole('button', { name: 'Neu laden' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Rückgängig' })).toHaveLength(3);
+  });
+
+  it('the stack stays above the bottom bar and its height is bounded', () => {
+    render(<Toaster />);
+    const status = screen.getByRole('status');
+    expect(status.className).toMatch(/max-h-\[40vh\]/);
+    expect(status.className).toContain('overflow-y-clip');
+    expect(status.className).toContain('justify-end');
+    expect(status.parentElement.style.bottom).toContain('4.5rem');
+  });
+
+  it('trimToasts drops the oldest toasts without an action, then the oldest timed undo toasts', () => {
+    const t = (id, action = null, duration) => ({ id, action, duration });
     const list = [t(1), t(2, {}), t(3), t(4), t(5, {}), t(6)];
     expect(trimToasts(list, 2).map((x) => x.id)).toEqual([2, 4, 5, 6]);
     expect(trimToasts(list, 4)).toBe(list);
+    const undo = (id) => t(id, {}, 5000);
+    const mixed = [undo(1), t(2, {}, 0), undo(3), undo(4), undo(5), t(6)];
+    expect(trimToasts(mixed, 4, 2).map((x) => x.id)).toEqual([2, 4, 5, 6]);
   });
 });
 

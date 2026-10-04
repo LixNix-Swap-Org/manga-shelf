@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode } from 'lucide-react';
 import { buildScanVolumePayload, prefillTotalVolumes } from '../../utils/scanHelpers';
 import { MANGA_STATUSES, normalizeLookupStatus } from '../../hooks/useMangaData';
+import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { apiFetch, readJson, TIMEOUTS, assetImgProps } from '../../utils/api';
+import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { prepareImageForUpload } from '../../utils/imageResize';
+import { PRIORITY_OPTIONS, DEFAULT_WISH_PRIORITY } from '../../utils/priority';
 
 const EMPTY_FORM = {
   title: '',
@@ -17,7 +19,9 @@ const EMPTY_FORM = {
   total_volumes: '',
   description: '',
   cover_image: '',
-  manga_passion_id: null
+  manga_passion_id: null,
+  wish: false,
+  wish_priority: String(DEFAULT_WISH_PRIORITY)
 };
 const MAX_COVER_BYTES = 15 * 1024 * 1024;
 const NETWORK_ERROR = 'Netzwerkfehler – bitte Verbindung prüfen und erneut versuchen.';
@@ -27,6 +31,14 @@ const isRemoteUrl = (url) => /^https?:\/\//i.test(url || '');
 const isBlobUrl = (url) => typeof url === 'string' && url.startsWith('blob:');
 const knownValue = (value) => (value && value !== 'Unbekannt' ? value : '');
 const lookupKey = (item) => item.id ?? item.title;
+const SOURCE_LABELS = { anilist: '🌐 AniList', mal: '🌐 MyAnimeList' };
+
+/** Badges of a non-Manga-Passion lookup hit: its own source, then the sources the server merged into it (also_on). */
+export function lookupSourceLabels(item) {
+  const own = item?.source_label || SOURCE_LABELS[item?.source];
+  const merged = (Array.isArray(item?.also_on) ? item.also_on : []).map((source) => SOURCE_LABELS[source]).filter(Boolean);
+  return [...new Set([own, ...merged].filter(Boolean))];
+}
 
 async function request(url, init) {
   try {
@@ -64,6 +76,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const [scanVolume, setScanVolume] = useState(null);
   // series created, scanned volume failed: the next submit only retries the volume
   const [createdManga, setCreatedManga] = useState(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const uploadAbortRef = useRef(null);
 
   const sessionRef = useRef(0);
   const applySeqRef = useRef(0);
@@ -219,12 +233,27 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   /** Cover for POST /api/mangas: uploaded file, cached catalogue/typed URL, or null. A URL the server cannot fetch is kept as typed. */
   const resolveSeriesCover = async () => {
     if (coverFile) {
-      const fd = new FormData();
-      fd.append('image', await prepareImageForUpload(coverFile));
-      const upRes = await request('/api/upload', { method: 'POST', body: fd });
-      const upData = await readJson(upRes);
-      if (!upRes.ok || !upData?.url) throw new Error(upData?.error || 'Fehler beim Cover-Upload');
-      return upData.url;
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+      setUploadingCover(true);
+      try {
+        const fd = new FormData();
+        fd.append('image', await prepareImageForUpload(coverFile));
+        if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
+        let upRes;
+        try {
+          upRes = await apiFetch('/api/upload', { method: 'POST', body: fd, signal: controller.signal });
+        } catch (err) {
+          throw isAbortError(err) ? err : new Error(NETWORK_ERROR);
+        }
+        const upData = await readJson(upRes);
+        if (controller.signal.aborted) throw new DOMException(UPLOAD_CANCELLED, 'AbortError');
+        if (!upRes.ok || !upData?.url) throw new Error(upData?.error || 'Fehler beim Cover-Upload');
+        return upData.url;
+      } finally {
+        if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
+        setUploadingCover(false);
+      }
     }
     const typed = form.cover_image.trim();
     const pending = prefillCoverRef.current;
@@ -283,7 +312,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             total_volumes: form.total_volumes ? parseInt(form.total_volumes, 10) : null,
             description: form.description.trim() || null,
             cover_image: cover,
-            manga_passion_id: form.manga_passion_id || null
+            manga_passion_id: form.manga_passion_id || null,
+            wish_priority: form.wish ? Number(form.wish_priority) : null
           }
         });
         const data = await readJson(res);
@@ -307,11 +337,14 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       handleClose();
       if (onSuccess) onSuccess(manga);
     } catch (err) {
-      setErrorMessage(err?.message || 'Unbekannter Fehler');
+      setErrorMessage(isAbortError(err) ? UPLOAD_CANCELLED : (err?.message || 'Unbekannter Fehler'));
     } finally {
       setSubmitting(false);
     }
   };
+
+  const cancelCoverUpload = () => uploadAbortRef.current?.abort();
+  useEffect(() => () => uploadAbortRef.current?.abort(), []);
 
   const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
@@ -484,11 +517,11 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                           <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
                             🇩🇪 Manga Passion
                           </span>
-                        ) : (
-                          <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                            🌐 AniList
+                        ) : lookupSourceLabels(item).map((label) => (
+                          <span key={label} className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
+                            {label}
                           </span>
-                        )}
+                        ))}
                         {isApplying && (
                           <span className="flex items-center gap-1 text-[10px] text-brand-300">
                             <RefreshCw className="w-3 h-3 animate-spin" /> Wird übernommen…
@@ -585,6 +618,32 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, total_volumes: value })); }}
               />
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+            <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+              <input
+                id={`${ids}-wish`}
+                type="checkbox"
+                className="w-4 h-4 accent-rose-500"
+                checked={form.wish}
+                onChange={e => { const checked = e.target.checked; setForm(prev => ({ ...prev, wish: checked })); }}
+              />
+              Auf die Wunschliste
+            </label>
+            {form.wish && (
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                Priorität
+                <select
+                  id={`${ids}-wish-priority`}
+                  className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
+                  value={form.wish_priority}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, wish_priority: value })); }}
+                >
+                  {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+                </select>
+              </label>
+            )}
           </div>
 
           {/* Cover Upload / URL */}
@@ -696,6 +755,16 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             >
               {seriesLocked ? 'Schließen' : 'Abbrechen'}
             </button>
+            {uploadingCover && (
+              <button
+                type="button"
+                onClick={cancelCoverUpload}
+                className="btn-secondary text-sm flex items-center gap-1.5 text-red-300 hover:text-red-200"
+                title="Cover-Upload abbrechen"
+              >
+                <X className="w-4 h-4" aria-hidden="true" /> Upload abbrechen
+              </button>
+            )}
             <button
               type="submit"
               className="btn-primary text-sm flex items-center gap-2"
@@ -704,7 +773,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               {submitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  {coverCaching ? 'Cover wird geladen…' : 'Wird angelegt...'}
+                  {uploadingCover ? 'Cover wird hochgeladen…' : coverCaching ? 'Cover wird geladen…' : 'Wird angelegt...'}
                 </>
               ) : (
                 <>

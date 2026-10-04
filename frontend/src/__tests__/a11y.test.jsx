@@ -157,7 +157,7 @@ describe('page structure', () => {
     const header = screen.getByRole('banner');
     expect(header.hasAttribute('data-sticky-header')).toBe(true);
     expect(header.className).toMatch(/(^|\s)sticky(\s|$)/);
-    expect(screen.getAllByPlaceholderText('Titel, Autor, Verlag oder Tag suchen...').length).toBeGreaterThan(0);
+    expect(screen.getAllByPlaceholderText('Titel, Autor, Tag, ISBN oder Notiz suchen...').length).toBeGreaterThan(0);
   });
 
   it('a page that is still loading keeps the previous title instead of the generic one', () => {

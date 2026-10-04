@@ -9,6 +9,7 @@
   "files": [
     "index.js",
     "db.js",
+    "core/",
     "mangaPassion.js",
     "healthcheck.js",
     "middleware/",
@@ -27,10 +28,11 @@
     "seed": "node scripts/seed.js",
     "bench": "node scripts/bench/run.js",
     "check:bundle": "node scripts/check-bundle-size.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js test/core/*.test.js test/anime/*.test.js",
     "test:frontend": "cd frontend && npm test",
     "test:e2e": "node test/browser/run.js test/browser/e2e-suite.js",
     "test:radar": "node test/browser/run.js test/browser/release-radar.js",
+    "test:anime": "node test/browser/run.js test/browser/anime.js",
     "test:perf": "node test/browser/run.js test/browser/performance-suite.js",
     "test:deep": "node test/browser/run.js test/browser/deep-e2e.js",
     "lint": "eslint ."

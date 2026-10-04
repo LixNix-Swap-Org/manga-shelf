@@ -9,30 +9,42 @@ const moduleUrl = pathToFileURL(path.join(__dirname, '..', 'frontend', 'src', 'u
 let loads = 0;
 const load = () => import(`${moduleUrl}?t=${++loads}`);
 
-function fakeIndexedDB() {
-    const data = new Map();
+function fakeIndexedDB({ existingStores = [] } = {}) {
+    const stores = new Map([['kv', new Map()], ['outbox', new Map()]]);
+    const created = new Set(existingStores);
     const db = {
-        createObjectStore() {},
-        transaction() {
+        objectStoreNames: { contains: (name) => created.has(name) },
+        createObjectStore(name) { created.add(name); },
+        transaction(name) {
+            const data = stores.get(name);
             const ops = [];
+            // requests run in order and call their onsuccess; requests made there join the same transaction
+            const request = (op) => { const req = {}; ops.push(() => { req.result = op(); req.onsuccess?.(); }); return req; };
             const store = {
-                get(key) { const req = {}; ops.push(() => { req.result = structuredClone(data.get(key)); }); return req; },
-                put(value, key) { ops.push(() => data.set(key, structuredClone(value))); return {}; },
-                clear() { ops.push(() => data.clear()); return {}; }
+                get(key) { return request(() => structuredClone(data.get(key))); },
+                getAll() { return request(() => [...data.values()].map((v) => structuredClone(v))); },
+                put(value, key) { return request(() => { data.set(key, structuredClone(value)); }); },
+                delete(key) { return request(() => { data.delete(key); }); },
+                clear() { return request(() => { data.clear(); }); }
             };
             const tx = { objectStore: () => store, oncomplete: null, onerror: null, onabort: null };
-            setTimeout(() => { for (const op of ops) op(); if (tx.oncomplete) tx.oncomplete(); }, 0);
+            setTimeout(() => { for (let i = 0; i < ops.length; i++) ops[i](); if (tx.oncomplete) tx.oncomplete(); }, 0);
             return tx;
         }
     };
-    return {
-        data,
-        open() {
+    const fake = {
+        data: stores.get('kv'),
+        stores,
+        created,
+        versions: [],
+        open(name, version) {
+            fake.versions.push(version);
             const req = { result: db };
             setTimeout(() => { if (req.onupgradeneeded) req.onupgradeneeded(); req.onsuccess(); }, 0);
             return req;
         }
     };
+    return fake;
 }
 
 function memoryStorage(initial = {}) {
@@ -437,4 +449,103 @@ test('requestPersistentStorage asks once and skips an origin that is already per
     assert.equal(await (await load()).requestPersistentStorage({}), false);
     const failing = { persist: async () => { throw new Error('denied'); } };
     assert.equal(await (await load()).requestPersistentStorage(failing), false);
+});
+
+test('database version 2 adds the outbox store next to the offline copy; a logout keeps the outbox', async () => {
+    const { store, idb, restore } = await setup(async () => okResponse(snapshot));
+    try {
+        await store.saveUser({ id: 1, username: 'anna', role: 'editor' });
+        assert.deepEqual(idb.versions, [2]);
+        assert.deepEqual([...idb.created].sort(), ['kv', 'outbox']);
+        const entry = { key: 'web|1|read|4|1', kind: 'read', volumeId: 4, userId: 1, serverId: 'web', value: true };
+        await store.putOutboxEntries([entry, { ...entry, key: 'web|1|read|5|1', volumeId: 5 }]);
+        await store.deleteOutboxEntries(['web|1|read|5|1']);
+        assert.deepEqual(await store.loadOutboxEntries(), [entry]);
+        await store.clearOfflineData();
+        assert.equal(idb.data.size, 0, 'the offline copy is gone');
+        assert.deepEqual(await store.loadOutboxEntries(), [entry], 'queued changes stay for their user');
+    } finally {
+        restore();
+    }
+});
+
+test('an existing version 1 database only gets the outbox store added', async () => {
+    const idb = fakeIndexedDB({ existingStores: ['kv'] });
+    const restore = withGlobals({ indexedDB: idb, localStorage: memoryStorage(), window: new EventTarget(), requestIdleCallback: () => {}, fetch: async () => okResponse(snapshot) });
+    try {
+        const store = await load();
+        await store.saveUser({ id: 1, username: 'anna', role: 'editor' });
+        assert.deepEqual([...idb.created].sort(), ['kv', 'outbox']);
+        assert.deepEqual(await store.loadUser(), { id: 1, username: 'anna', role: 'editor' });
+    } finally {
+        restore();
+    }
+});
+
+test('the outbox calls reject without IndexedDB (the outbox then uses localStorage)', async () => {
+    const restore = withGlobals({});
+    try {
+        const store = await load();
+        await assert.rejects(() => store.loadOutboxEntries(), /IndexedDB/);
+        await assert.rejects(() => store.putOutboxEntries([]), /IndexedDB/);
+    } finally {
+        restore();
+    }
+});
+
+test('patchCachedManga changes the stored detail and list row; clearOfflineData also empties the in-memory data cache', async () => {
+    const { store, idb, restore } = await setup(async () => okResponse(snapshot));
+    try {
+        await store.saveSnapshot(snapshot);
+        const changed = await store.patchCachedManga(3, (detail, list) => ({
+            detail: { ...detail, title: 'Berserk (neu)' },
+            list: list.map((m) => ({ ...m, owned_volumes: 1 }))
+        }));
+        assert.equal(changed, true);
+        assert.equal((await store.loadMangaDetail(3)).title, 'Berserk (neu)');
+        assert.equal((await store.loadMangaList())[0].owned_volumes, 1);
+        assert.equal(await store.patchCachedManga(99, () => ({ detail: {} })), false, 'no stored detail: nothing written');
+        assert.equal(idb.data.has('manga:99'), false);
+
+        const dataCache = await import(pathToFileURL(path.join(__dirname, '..', 'frontend', 'src', 'utils', 'dataCache.js')).href);
+        dataCache.writeCache(1, 'mangas', [{ id: 3 }]);
+        await store.clearOfflineData();
+        assert.equal(dataCache.readCache(1, 'mangas'), null);
+    } finally {
+        restore();
+    }
+});
+
+test('patchCachedManga: concurrent patches of one series both land (get and put in one transaction)', async () => {
+    const { store, restore } = await setup(async () => okResponse(snapshot));
+    try {
+        const vols = [{ id: 10, status: 'Fehlt' }, { id: 11, status: 'Fehlt' }];
+        await store.saveSnapshot({ ...snapshot, details: { 3: { id: 3, title: 'Berserk', volumes: vols } } });
+        const own = (volumeId) => (detail) => ({
+            detail: { ...detail, volumes: detail.volumes.map((v) => (v.id === volumeId ? { ...v, status: 'Vorhanden' } : v)) }
+        });
+        const results = await Promise.all([store.patchCachedManga(3, own(10)), store.patchCachedManga(3, own(11))]);
+        assert.deepEqual(results, [true, true]);
+        assert.deepEqual((await store.loadMangaDetail(3)).volumes, [{ id: 10, status: 'Vorhanden' }, { id: 11, status: 'Vorhanden' }]);
+    } finally {
+        restore();
+    }
+});
+
+test('outbox rows are only replaced or deleted while they still hold the same entry (another tab may have a newer one)', async () => {
+    const { store, restore } = await setup(async () => okResponse(snapshot));
+    try {
+        const older = { key: 'web|1|owned|5|1', id: 'a', kind: 'owned', volumeId: 5, userId: 1, serverId: 'web', value: true };
+        const newer = { ...older, id: 'b', value: false };
+        await store.putOutboxEntries([newer]);
+        await store.updateOutboxEntriesById([{ ...older, attempts: 1 }]);
+        await store.deleteOutboxEntriesById([older]);
+        assert.deepEqual(await store.loadOutboxEntries(), [newer]);
+        await store.updateOutboxEntriesById([{ ...newer, attempts: 2 }]);
+        assert.equal((await store.loadOutboxEntries())[0].attempts, 2);
+        await store.deleteOutboxEntriesById([newer]);
+        assert.deepEqual(await store.loadOutboxEntries(), []);
+    } finally {
+        restore();
+    }
 });

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import BatchAddModal, { validateBatchRange, batchResultText } from '../components/detail/BatchAddModal';
 import BatchReadModal, { batchReadTarget } from '../components/detail/BatchReadModal';
-import MangaHeroCard, { heroCoverUrl, shouldShowCover } from '../components/detail/MangaHeroCard';
+import MangaHeroCard, { heroCoverUrl, shouldShowCover, authorShelfPath, tagShelfPath, lookupBadgeLabels, TagEditor } from '../components/detail/MangaHeroCard';
+import Toaster from '../components/common/Toaster';
+import { MemoryRouter } from 'react-router-dom';
 import GapNotices, { duplicateHint } from '../components/detail/GapNotices';
 import GapFillModal, { gapFillOptions, formatGermanDate } from '../components/detail/GapFillModal';
 import MpEditionModal, { mpModalActions } from '../components/detail/MpEditionModal';
@@ -213,6 +215,15 @@ describe('MangaHeroCard', () => {
     expect(region.textContent).toBe('');
   });
 
+  it('offers "Upload abbrechen" while the cover uploads', () => {
+    const onCancelCoverUpload = vi.fn();
+    const { rerender } = render(<MangaHeroCard {...baseProps({ onCancelCoverUpload })} />);
+    expect(screen.queryByRole('button', { name: 'Upload abbrechen' })).toBeNull();
+    rerender(<MangaHeroCard {...baseProps({ onCancelCoverUpload, uploadingCover: true })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Upload abbrechen' }));
+    expect(onCancelCoverUpload).toHaveBeenCalledTimes(1);
+  });
+
   it('clears the cover file input so the same file can be picked again', () => {
     const props = baseProps();
     render(<MangaHeroCard {...props} />);
@@ -223,6 +234,171 @@ describe('MangaHeroCard', () => {
     fireEvent.change(input, { target: { files: [file] } });
     expect(seen).toBe(file);
     expect(input.value).toBe('');
+  });
+});
+
+describe('MangaHeroCard: wishlist', () => {
+  const props = (over = {}) => ({
+    canEdit: true, completionPct: 0, editing: false, formData: { title: 'T', status: 'Laufend', cover_image: '' },
+    handleCoverUpload: vi.fn(), handleDeleteManga: vi.fn(), handleEditLookup: vi.fn(), handleUpdate: vi.fn(e => e.preventDefault()),
+    manga: { title: 'T', cover_image: null }, ownedCount: 0, saving: false, setEditLookupResults: vi.fn(), setEditing: vi.fn(),
+    startEditing: vi.fn(), cancelEditing: vi.fn(), setFormData: vi.fn(), totalOwnedValue: 0, totalTarget: 0, uploadingCover: false,
+    ...over
+  });
+
+  it('shows "Wunschliste · hoch" only while the series is a wished series', () => {
+    const { rerender } = render(<MangaHeroCard {...props({ manga: { title: 'T', wish_priority: 3, wished: 1, owned_volumes: 0 } })} />);
+    expect(document.getElementById('detail-wish-pill').textContent).toBe('Wunschliste · hoch');
+    rerender(<MangaHeroCard {...props({ manga: { title: 'T', wish_priority: 3, wished: 0, owned_volumes: 1 } })} />);
+    expect(document.getElementById('detail-wish-pill')).toBeNull();
+    rerender(<MangaHeroCard {...props({ manga: { title: 'T', wish_priority: 0, owned_volumes: 0 } })} />);
+    expect(document.getElementById('detail-wish-pill').textContent).toBe('Wunschliste');
+  });
+
+  it('the edit form toggles the wish and offers the priority only when ticked', () => {
+    const p = props({ editing: true, formData: { title: 'T', status: 'Laufend', cover_image: '', wish: false, wish_priority: '2' } });
+    const { rerender } = render(<MangaHeroCard {...p} />);
+    expect(screen.queryByLabelText('Priorität')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Wunschliste'));
+    expect(p.setFormData).toHaveBeenCalledWith(expect.objectContaining({ wish: true, wish_priority: '2' }));
+    rerender(<MangaHeroCard {...p} formData={{ ...p.formData, wish: true }} />);
+    fireEvent.change(screen.getByLabelText('Priorität'), { target: { value: '1' } });
+    expect(p.setFormData).toHaveBeenLastCalledWith(expect.objectContaining({ wish: true, wish_priority: '1' }));
+  });
+});
+
+describe('MangaHeroCard: authors and collecting status', () => {
+  const props = (over = {}) => ({
+    canEdit: true, completionPct: 0, editing: false, formData: { title: 'T', status: 'Laufend', cover_image: '' },
+    handleCoverUpload: vi.fn(), handleDeleteManga: vi.fn(), handleEditLookup: vi.fn(), handleUpdate: vi.fn(e => e.preventDefault()),
+    manga: { id: 7, title: 'Death Note', author: 'Tsugumi Ohba, Takeshi Obata', cover_image: null, collecting: 'aktiv' },
+    ownedCount: 0, saving: false, setEditLookupResults: vi.fn(), setEditing: vi.fn(), startEditing: vi.fn(), cancelEditing: vi.fn(),
+    setFormData: vi.fn(), totalOwnedValue: 0, totalTarget: 0, uploadingCover: false,
+    ...over
+  });
+
+  it('each author name links to the shelf filtered by that author', () => {
+    expect(authorShelfPath('Tsugumi Ohba')).toBe('/?author=Tsugumi+Ohba');
+    render(<MemoryRouter><MangaHeroCard {...props()} /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Tsugumi Ohba' }).getAttribute('href')).toBe('/?author=Tsugumi+Ohba');
+    expect(screen.getByRole('link', { name: 'Takeshi Obata' }).getAttribute('href')).toBe('/?author=Takeshi+Obata');
+  });
+
+  it('outside a router or without an author the name stays plain text', () => {
+    const { rerender } = render(<MangaHeroCard {...props()} />);
+    expect(screen.queryByRole('link', { name: 'Tsugumi Ohba' })).toBeNull();
+    expect(screen.getByText('Tsugumi Ohba, Takeshi Obata')).toBeTruthy();
+    rerender(<MemoryRouter><MangaHeroCard {...props({ manga: { id: 7, title: 'X', author: null } })} /></MemoryRouter>);
+    expect(screen.getByText(/^Autor:/).textContent).toBe('Autor: Unbekannt');
+    expect(screen.queryAllByRole('link').filter(a => a.getAttribute('href')?.includes('author='))).toHaveLength(0);
+  });
+
+  it('editors change the collecting status at once; a failed save goes back and says so', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ success: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onCollectingSaved = vi.fn();
+    render(<><MangaHeroCard {...props({ onCollectingSaved })} /><Toaster /></>);
+    const select = screen.getByLabelText('Sammelstatus');
+    expect(select.value).toBe('aktiv');
+    fireEvent.change(select, { target: { value: 'abgebrochen' } });
+    await waitFor(() => expect(onCollectingSaved).toHaveBeenCalledWith('abgebrochen'));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/mangas\/7$/);
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({ collecting: 'abgebrochen' });
+
+    fetchMock.mockImplementation(async () => jsonResponse({ error: 'Ungültiger Sammelstatus' }, 400));
+    fireEvent.change(select, { target: { value: 'pausiert' } });
+    await waitFor(() => expect(screen.getByText(/Ungültiger Sammelstatus/)).toBeTruthy());
+    expect(select.value).toBe('abgebrochen');
+    expect(onCollectingSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('read-only users see a pill only for a paused or dropped series', () => {
+    const { rerender } = render(<MangaHeroCard {...props({ canEdit: false })} />);
+    expect(screen.queryByLabelText('Sammelstatus')).toBeNull();
+    expect(document.getElementById('detail-collecting-pill')).toBeNull();
+    rerender(<MangaHeroCard {...props({ canEdit: false, manga: { id: 7, title: 'T', collecting: 'abgebrochen' } })} />);
+    expect(document.getElementById('detail-collecting-pill').textContent).toBe('Nicht mehr gesammelt');
+    rerender(<MangaHeroCard {...props({ canEdit: true, isOffline: true, manga: { id: 7, title: 'T', collecting: 'pausiert' } })} />);
+    expect(document.getElementById('detail-collecting-pill').textContent).toBe('Pausiert');
+  });
+});
+
+describe('MangaHeroCard: tags and lookup badges', () => {
+  const props = (over = {}) => ({
+    canEdit: true, completionPct: 0, editing: false, formData: { title: 'T', status: 'Laufend', cover_image: '', tags: '' },
+    handleCoverUpload: vi.fn(), handleDeleteManga: vi.fn(), handleEditLookup: vi.fn(), handleUpdate: vi.fn(e => e.preventDefault()),
+    manga: { id: 7, title: 'Frieren', tags: 'Adventure, Fantasy, Shounen', cover_image: null }, ownedCount: 0, saving: false,
+    setEditLookupResults: vi.fn(), setEditing: vi.fn(), startEditing: vi.fn(), cancelEditing: vi.fn(), setFormData: vi.fn(),
+    totalOwnedValue: 0, totalTarget: 0, uploadingCover: false,
+    ...over
+  });
+
+  it('shows the tags in German as links to the filtered shelf', () => {
+    expect(tagShelfPath('Slice of Life')).toBe('/?tags=Slice+of+Life');
+    render(<MemoryRouter><MangaHeroCard {...props()} /></MemoryRouter>);
+    const list = document.getElementById('detail-tags');
+    expect([...list.querySelectorAll('a')].map(a => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Abenteuer', '/?tags=Abenteuer'], ['Fantasy', '/?tags=Fantasy'], ['Shounen', '/?tags=Shounen']
+    ]);
+  });
+
+  it('the tag editor adds on Enter, comma and suggestion, removes chips and never submits the form', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<TagEditor id="t" value="Abenteuer" onChange={onChange} suggestions={[{ tag: 'Fantasy', count: 3 }, { tag: 'Abenteuer', count: 2 }]} />);
+    const input = screen.getByLabelText('Genres / Tags');
+    fireEvent.change(input, { target: { value: 'romance' } });
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    input.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    expect(onChange).toHaveBeenLastCalledWith('Abenteuer, Romantik');
+    fireEvent.change(input, { target: { value: 'Piraten,' } });
+    expect(onChange).toHaveBeenLastCalledWith('Abenteuer, Piraten');
+    expect(screen.queryByRole('button', { name: /\+ Abenteuer/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /\+ Fantasy/ }));
+    expect(onChange).toHaveBeenLastCalledWith('Abenteuer, Fantasy');
+    rerender(<TagEditor id="t" value="Abenteuer, Fantasy" onChange={onChange} suggestions={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Tag „Abenteuer“ entfernen' }));
+    expect(onChange).toHaveBeenLastCalledWith('Fantasy');
+  });
+
+  it('loads suggestions from /api/tags on first focus, not while offline', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ tags: [{ tag: 'Horror', count: 4 }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const p = props({ editing: true, formData: { title: 'T', status: 'Laufend', cover_image: '', tags: 'Drama' } });
+    const { unmount } = render(<MangaHeroCard {...p} />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.focus(screen.getByLabelText('Genres / Tags'));
+    expect(await screen.findByRole('button', { name: /\+ Horror/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /\+ Horror/ }));
+    expect(p.setFormData).toHaveBeenCalledWith(expect.objectContaining({ tags: 'Drama, Horror' }));
+    unmount();
+    fetchMock.mockClear();
+    render(<MangaHeroCard {...p} isOffline />);
+    fireEvent.focus(screen.getByLabelText('Genres / Tags'));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('auto-fill hits show the source label of the server; AniList only for AniList hits', () => {
+    expect(lookupBadgeLabels({ source: 'mal', source_label: '🌐 MyAnimeList' })).toEqual(['🌐 MyAnimeList']);
+    expect(lookupBadgeLabels({ source: 'anilist' })).toEqual(['🌐 AniList']);
+    expect(lookupBadgeLabels({ source: 'anilist', source_label: '🌐 AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
+    expect(lookupBadgeLabels({ source: 'other' })).toEqual([]);
+    render(<MangaHeroCard {...props({
+      editing: true,
+      editLookupResults: [
+        { id: 'mp_1', source: 'manga_passion', title: 'MP Treffer', status: 'Laufend' },
+        { id: 'mal_2', source: 'mal', source_label: '🌐 MyAnimeList', title: 'MAL Treffer', status: 'Laufend' },
+        { id: 'al_3', source: 'anilist', title: 'AL Treffer', status: 'Laufend', also_on: ['mal'] }
+      ]
+    })} />);
+    const hit = (title) => screen.getByText(title).closest('button');
+    expect(within(hit('MP Treffer')).getByText('🇩🇪 Manga Passion')).toBeTruthy();
+    expect(within(hit('MAL Treffer')).getByText('🌐 MyAnimeList')).toBeTruthy();
+    expect(within(hit('MAL Treffer')).queryByText('🌐 AniList')).toBeNull();
+    expect(within(hit('AL Treffer')).getByText('🌐 AniList')).toBeTruthy();
+    expect(within(hit('AL Treffer')).getByText('🌐 MyAnimeList')).toBeTruthy();
   });
 });
 
@@ -281,6 +457,17 @@ describe('GapNotices', () => {
     expect(screen.queryByText(/geprüft mit Manga Passion/)).toBeNull();
     rerender(<GapNotices {...base({ ...gaps, isOffline: true })} />);
     expect(screen.queryByRole('button', { name: /Manga-Passion-Edition/ })).toBeNull();
+  });
+
+  it('a dropped series shows no gap banner and no import, only a short note', () => {
+    const gaps = { detectedGaps: [3, 4], detectedGapEntries: [{ label: 3, type: 'volume' }, { label: 4, type: 'volume' }] };
+    const { rerender } = render(<GapNotices {...base({ ...gaps, collecting: 'abgebrochen' })} />);
+    expect(screen.queryByText(/Lücken entdeckt/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Alle auf Einkaufsliste/ })).toBeNull();
+    expect(document.getElementById('gap-notice-dropped').textContent).toContain('2 Lücken werden nicht angezeigt');
+    rerender(<GapNotices {...base({ ...gaps, collecting: 'pausiert' })} />);
+    expect(screen.getByText(/Lücken entdeckt/)).toBeTruthy();
+    expect(document.getElementById('gap-notice-dropped')).toBeNull();
   });
 
   it('renders the gap check hint', () => {

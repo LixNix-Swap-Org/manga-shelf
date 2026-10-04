@@ -184,6 +184,9 @@ jobs:
       - run: npm run test:radar
         env:
           CHROME_BIN: /usr/bin/google-chrome
+      - run: npm run test:anime
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
       - name: Keep screenshots of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

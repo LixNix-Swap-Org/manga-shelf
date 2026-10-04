@@ -27,7 +27,11 @@ export default function VolumeListView({
   handleOpenEditVolume,
   handleDeleteVolume,
   canToggleOthers,
-  gapsOfficial
+  gapsOfficial,
+  canToggle = canEdit,
+  selectionMode = false,
+  isSelected = () => false,
+  onSelectVolume
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
@@ -35,6 +39,7 @@ export default function VolumeListView({
       <table className="w-full text-left border-collapse text-xs">
         <thead>
           <tr className="border-b border-slate-800/90 bg-slate-900/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+            {selectionMode && <th scope="col" className="py-3 px-3 w-10 text-center"><span className="sr-only">Auswahl</span></th>}
             <th scope="col" className="py-3 px-3 w-12 text-center">Cover</th>
             <th scope="col" className="py-3 px-3">Band / Titel</th>
             <th scope="col" className="py-3 px-3">Typ</th>
@@ -57,6 +62,7 @@ export default function VolumeListView({
                   className={`border-b border-amber-500/20 transition-colors bg-amber-950/10 ${canEdit ? 'cursor-pointer hover:bg-amber-950/20' : 'cursor-default'}`}
                   onClick={canEdit ? () => setFillingGapNumber(item.gapNumber) : undefined}
                 >
+                  {selectionMode && <td className="py-2 px-3" />}
                   <td className="py-2 px-3 text-center">
                     {gapMeta?.cover_image ? (
                       <div className="w-8 h-12 rounded overflow-hidden shadow mx-auto border border-amber-500/40 relative">
@@ -140,15 +146,32 @@ export default function VolumeListView({
             const isOwned = statusKind === 'owned';
             const effUserId = selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
             const isRead = hasUserRead(vol, effUserId, user?.id);
-            const canToggleRead = canEdit && (mayToggleOthers || String(effUserId) === String(user?.id));
+            const canToggleRead = canToggle && (mayToggleOthers || String(effUserId) === String(user?.id));
             const [typeLabel, typeClass] = TYPE_BADGES[getVolumeBadge(vol).type];
             const effectivePublisher = (vol.publisher && vol.publisher.trim()) || (manga.publisher && manga.publisher.trim()) || '-';
+
+            const selected = selectionMode && isSelected(vol.id);
 
             return (
               <tr 
                 key={vol.id} 
-                className={`hover:bg-slate-900/60 transition-colors ${!isOwned ? 'opacity-75' : ''}`}
+                data-volume-id={vol.id}
+                onClick={selectionMode ? (e) => {
+                  if (!(e.target instanceof Element) || !e.target.closest('button, a, input')) onSelectVolume?.(vol, e);
+                } : undefined}
+                className={`hover:bg-slate-900/60 transition-colors ${!isOwned && !selected ? 'opacity-75' : ''} ${selected ? 'bg-brand-950/50' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
               >
+                {selectionMode && (
+                  <td className="py-2 px-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
+                      aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                      className="w-5 h-5 accent-brand-500 cursor-pointer align-middle"
+                    />
+                  </td>
+                )}
                 {/* Cover thumbnail */}
                 <td className="py-2 px-3 text-center">
                   {vol.cover_image ? (
@@ -205,10 +228,10 @@ export default function VolumeListView({
                 <td className="py-2 px-3">
                   <button
                     type="button"
-                    disabled={!canEdit}
-                    onClick={() => canEdit && handleToggleVolume(vol)}
+                    disabled={!canToggle}
+                    onClick={() => canToggle && handleToggleVolume(vol)}
                     className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                      canEdit ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+                      canToggle ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                     } ${
                       isOwned
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -220,7 +243,7 @@ export default function VolumeListView({
                               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     }`}
-                    title={canEdit ? 'Klicken zum Status umschalten' : ''}
+                    title={canToggle ? 'Klicken zum Status umschalten' : ''}
                   >
                     {isOwned ? (
                       '✓ Im Besitz'
@@ -243,7 +266,7 @@ export default function VolumeListView({
                       type="button"
                       disabled={!canToggleRead}
                       onClick={(e) => canToggleRead && handleToggleVolumeRead(vol, effUserId, e)}
-                      title={canEdit && !canToggleRead ? READ_OTHERS_ADMIN_ONLY : undefined}
+                      title={canToggle && !canToggleRead ? READ_OTHERS_ADMIN_ONLY : undefined}
                       className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                         canToggleRead ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                       } ${
@@ -276,7 +299,7 @@ export default function VolumeListView({
                 {/* Actions */}
                 <td className="py-2 px-3 text-right">
                   <div className="flex items-center justify-end gap-1.5">
-                    {canEdit && (
+                    {canEdit && !selectionMode && (
                       <button
                         type="button"
                         onClick={() => handleOpenEditVolume(vol)}
@@ -287,7 +310,7 @@ export default function VolumeListView({
                         <PenLine className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    {canEdit && (
+                    {canEdit && !selectionMode && (
                       <button
                         type="button"
                         onClick={(e) => handleDeleteVolume(e, vol)}

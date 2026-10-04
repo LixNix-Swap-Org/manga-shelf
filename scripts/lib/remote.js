@@ -19,13 +19,14 @@ function parsePort(raw) {
     return port;
 }
 
-// host[:port]/path followed by a query or fragment: an "@" after that belongs to the query, not to a user part
-const PLAIN_AUTHORITY_WITH_PATH = /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d+)?\/[^?#@]*[?#]/;
+// host/path followed by a query or fragment: an "@" after that belongs to the query, not to a user part. Without a
+// ":" before the first "/" only: "user:2024/secret?x@nas" reads like host:port/path, but 2024 may start a password.
+const PLAIN_AUTHORITY_WITH_PATH = /^[A-Za-z0-9.-]+\/[^?#@]*[?#]/;
 
 /**
  * Hides everything between the scheme and the last "@", so no message or log line can show a user:password part,
- * even one with "#", "/" or "?" in the password that the URL parser would cut elsewhere. Only when a plain host and
- * path come before a "?" or "#" is an "@" behind it left alone, so the host stays readable.
+ * even one with "#", "/" or "?" in the password that the URL parser would cut elsewhere. Only when a plain host
+ * (no port) and path come before a "?" or "#" is an "@" behind it left alone, so the host stays readable.
  */
 function redactUrl(value) {
     const text = String(value);

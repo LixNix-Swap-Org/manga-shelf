@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  parsePriceInput, priceForQuery, validateVolumeForm, buildSaveBody, partialDateLabel, isFullDate, filterUploadFiles,
+  parsePriceInput, priceForQuery, validateVolumeForm, buildSaveBody, rebaseForm, partialDateLabel, isFullDate, filterUploadFiles,
   chunk, addImages, removeImage, moveImage, deleteVolumeRequest, isAllowedImageUrl, buildEditorForm
 } from '../components/detail/volumeEdit/editorUtils';
 
 const reply = (status, body, type = 'application/json') => async () => new Response(body, { status, headers: { 'Content-Type': type } });
 
-describe('price parsing (same rules as routes/volumes.js parsePrice)', () => {
+describe('price parsing (same rules as core/lib/validate.js parsePrice)', () => {
   it.each([
     ['', null], ['7.5', 7.5], ['7,50', 7.5], ['€ 7,99', 7.99], ['7,99 €', 7.99], ['1.234,56', 1234.56], ['99999', 99999]
   ])('%s -> %s', (input, expected) => expect(parsePriceInput(input)).toBe(expected));
@@ -39,9 +39,21 @@ describe('validateVolumeForm / buildSaveBody', () => {
     expect(validateVolumeForm({ ...legacy, price: '12.9999' }, legacy).price).toBeTruthy();
   });
 
-  it('sends the status only when it differs from the server state', () => {
-    expect(buildSaveBody({ ...form, volume_number: ' 4 ' }, 'Fehlt')).toEqual({ volume_number: '4', price: '7.5', target_price: '' });
-    expect(buildSaveBody(form, 'Vorhanden').status).toBe('Fehlt');
+  it('sends only the fields that differ from the server state', () => {
+    const base = { ...form, images: ['/uploads/a.jpg'] };
+    expect(buildSaveBody({ ...base, volume_number: ' 4 ' }, base)).toEqual({ volume_number: '4' });
+    expect(buildSaveBody({ ...base, volume_number: ' 3 ' }, base)).toEqual({});
+    expect(buildSaveBody({ ...base, status: 'Vorhanden', price: '' }, base)).toEqual({ status: 'Vorhanden', price: '' });
+    expect(buildSaveBody({ ...base, images: ['/uploads/a.jpg', '/uploads/b.jpg'] }, base))
+      .toEqual({ images: ['/uploads/a.jpg', '/uploads/b.jpg'] });
+  });
+
+  it('rebaseForm moves untouched fields to the fresh state and keeps edits', () => {
+    const oldBase = { price: '7', notes: 'alt', status: 'Fehlt', images: [] };
+    const form = { ...oldBase, notes: 'meine Notiz' };
+    const fresh = { price: '9', notes: 'neu', status: 'Fehlt', images: ['/uploads/x.jpg'] };
+    expect(rebaseForm(form, oldBase, fresh)).toEqual({ price: '9', notes: 'meine Notiz', status: 'Fehlt', images: ['/uploads/x.jpg'] });
+    expect(rebaseForm(form, oldBase, oldBase)).toBe(form);
   });
 
   it('legacy Gelesen opens as Vorhanden', () => {

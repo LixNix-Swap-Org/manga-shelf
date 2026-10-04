@@ -424,3 +424,33 @@ test('owners: Rückgängig eines Kaufs stellt das vorherige Datum des Bands wied
     await admin('POST', `/volumes/${vid}/owners`, { owned: false });
     assert.equal((await detail(admin, id)).volumes[0].purchase_date, null);
 });
+
+test('owners: die Antwort nennt das gespeicherte Kaufdatum nach der Änderung', async () => {
+    const id = (await admin('POST', '/mangas', { title: 'Owners Antwortdatum' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    const buy = await admin('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-04-04' });
+    assert.equal(buy.body.purchase_date, '2024-04-04');
+    await editor('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-06-06' });
+    const leave = await admin('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(leave.body.purchase_date, '2024-06-06');
+    assert.equal(leave.body.previous_purchase_date, '2024-04-04');
+    const last = await editor('POST', `/volumes/${vid}/owners`, { owned: false });
+    assert.equal(last.body.status, 'Fehlt');
+    assert.equal(last.body.purchase_date, null);
+});
+
+test('owners: Löschen eines Mitbesitzers setzt das Kaufdatum auf das früheste der verbleibenden Besitzer', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'tmp2', password: 'password123', role: 'editor' })).status, 200);
+    const tmp = ctx.client();
+    await tmp('POST', '/auth/login', { username: 'tmp2', password: 'password123' });
+    const id = (await admin('POST', '/mangas', { title: 'Owners Mitbesitzer weg' })).body.id;
+    const vid = (await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    await tmp('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2023-03-03' });
+    await editor('POST', `/volumes/${vid}/owners`, { owned: true, purchase_date: '2024-06-06' });
+    assert.equal((await detail(admin, id)).volumes[0].purchase_date, '2023-03-03');
+    const tmpId = (await admin('GET', '/users')).body.find(u => u.username === 'tmp2').id;
+    assert.equal((await admin('DELETE', `/users/${tmpId}`)).status, 200);
+    const v = (await detail(admin, id)).volumes[0];
+    assert.deepEqual(v.owners.map(o => o.username), ['ed']);
+    assert.equal(v.purchase_date, '2024-06-06');
+});

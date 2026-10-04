@@ -1,0 +1,213 @@
+{
+ "data": {
+  "Page": {
+   "media": [
+    {
+     "id": 118586,
+     "idMal": 126287,
+     "title": {
+      "romaji": "Sousou no Frieren",
+      "english": "Frieren: Beyond Journey’s End",
+      "native": "葬送のフリーレン"
+     },
+     "synonyms": [
+      "Frieren at the Funeral",
+      "장송의 프리렌",
+      "Frieren: Oltre la Fine del Viaggio",
+      "คำอธิษฐานในวันที่จากลา Frieren",
+      "Frieren e a Jornada para o Além",
+      "Frieren – Nach dem Ende der Reise",
+      "葬送的芙莉蓮",
+      "Frieren After \"The End\"",
+      "Frieren: Remnants of the Departed",
+      "Frieren. U kresu drogi",
+      "Frieren",
+      "FRIEREN: Más allá del fin del viaje",
+      "Проводжальниця Фрірен",
+      "Frieren: Ved reisens ende",
+      "Frieren - Pháp sư tiễn táng"
+     ],
+     "relations": {
+      "edges": [
+       {
+        "relationType": "ADAPTATION",
+        "node": {
+         "id": 154587,
+         "idMal": 52991,
+         "type": "ANIME",
+         "format": "TV",
+         "status": "FINISHED",
+         "episodes": 28,
+         "seasonYear": 2023,
+         "title": {
+          "romaji": "Sousou no Frieren",
+          "english": "Frieren: Beyond Journey’s End",
+          "native": "葬送のフリーレン"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154587-qQTzQnEJJ3oB.jpg"
+         }
+        }
+       },
+       {
+        "relationType": "SIDE_STORY",
+        "node": {
+         "id": 173310,
+         "idMal": 164432,
+         "type": "MANGA",
+         "format": "MANGA",
+         "status": "FINISHED",
+         "episodes": null,
+         "seasonYear": null,
+         "title": {
+          "romaji": "Sousou no Frieren Anthology",
+          "english": null,
+          "native": "葬送のフリーレン アンソロジ"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx173310-IWXoTriCztvp.jpg"
+         }
+        }
+       },
+       {
+        "relationType": "SIDE_STORY",
+        "node": {
+         "id": 179850,
+         "idMal": 169340,
+         "type": "MANGA",
+         "format": "NOVEL",
+         "status": "FINISHED",
+         "episodes": null,
+         "seasonYear": null,
+         "title": {
+          "romaji": "Shousetsu Sousou no Frieren ~Zensou～",
+          "english": "Frieren: Beyond Journey’s End ~Prelude~",
+          "native": "小説 葬送のフリーレン　～前奏～"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx179850-zraVuNgk4XCI.jpg"
+         }
+        }
+       },
+       {
+        "relationType": "ADAPTATION",
+        "node": {
+         "id": 182255,
+         "idMal": 59978,
+         "type": "ANIME",
+         "format": "TV",
+         "status": "FINISHED",
+         "episodes": 10,
+         "seasonYear": 2026,
+         "title": {
+          "romaji": "Sousou no Frieren 2nd Season",
+          "english": "Frieren: Beyond Journey’s End Season 2",
+          "native": "葬送のフリーレン 第2期"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx182255-butzrqd4I0aC.jpg"
+         }
+        }
+       },
+       {
+        "relationType": "ADAPTATION",
+        "node": {
+         "id": 209939,
+         "idMal": 63816,
+         "type": "ANIME",
+         "format": "TV",
+         "status": "NOT_YET_RELEASED",
+         "episodes": null,
+         "seasonYear": 2027,
+         "title": {
+          "romaji": "Sousou no Frieren 3rd Season",
+          "english": null,
+          "native": "葬送のフリーレン 第3期"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209939-g2Njkml1rheG.jpg"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 173310,
+     "idMal": 164432,
+     "title": {
+      "romaji": "Sousou no Frieren Anthology",
+      "english": null,
+      "native": "葬送のフリーレン アンソロジ"
+     },
+     "synonyms": [
+      "Sousou no Frieren Anthology",
+      "Frieren: Beyond Journey’s End Anthology",
+      "Antología Frieren"
+     ],
+     "relations": {
+      "edges": [
+       {
+        "relationType": "PARENT",
+        "node": {
+         "id": 118586,
+         "idMal": 126287,
+         "type": "MANGA",
+         "format": "MANGA",
+         "status": "RELEASING",
+         "episodes": null,
+         "seasonYear": null,
+         "title": {
+          "romaji": "Sousou no Frieren",
+          "english": "Frieren: Beyond Journey’s End",
+          "native": "葬送のフリーレン"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx118586-CXKgWikBFQgS.jpg"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 179850,
+     "idMal": 169340,
+     "title": {
+      "romaji": "Shousetsu Sousou no Frieren ~Zensou～",
+      "english": "Frieren: Beyond Journey’s End ~Prelude~",
+      "native": "小説 葬送のフリーレン　～前奏～"
+     },
+     "synonyms": [
+      "Frieren – Nach dem Ende der Reise: Präludium",
+      "Frieren - Más allá del final - : Preludio"
+     ],
+     "relations": {
+      "edges": [
+       {
+        "relationType": "PARENT",
+        "node": {
+         "id": 118586,
+         "idMal": 126287,
+         "type": "MANGA",
+         "format": "MANGA",
+         "status": "RELEASING",
+         "episodes": null,
+         "seasonYear": null,
+         "title": {
+          "romaji": "Sousou no Frieren",
+          "english": "Frieren: Beyond Journey’s End",
+          "native": "葬送のフリーレン"
+         },
+         "coverImage": {
+          "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx118586-CXKgWikBFQgS.jpg"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

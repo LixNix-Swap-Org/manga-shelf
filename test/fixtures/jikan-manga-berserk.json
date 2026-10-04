@@ -1,0 +1,19 @@
+{
+ "_note": "Built from the documented Jikan v4 /manga search shape (unreachable from the recording machine on 2026-10-04).",
+ "data": [
+  {
+   "mal_id": 2,
+   "url": "https://myanimelist.net/manga/2/Berserk",
+   "images": { "jpg": { "image_url": "https://cdn.myanimelist.net/images/manga/1/157897.jpg", "large_image_url": "https://cdn.myanimelist.net/images/manga/1/157897l.jpg" } },
+   "title": "Berserk",
+   "title_english": "Berserk",
+   "title_japanese": "ベルセルク",
+   "type": "Manga",
+   "volumes": null,
+   "status": "Publishing",
+   "synopsis": "Guts, a former mercenary now known as the \"Black Swordsman,\" is out for revenge.",
+   "authors": [{ "mal_id": 1868, "type": "people", "name": "Miura, Kentarou" }],
+   "genres": [{ "mal_id": 1, "type": "manga", "name": "Action" }, { "mal_id": 10, "type": "manga", "name": "Fantasy" }]
+  }
+ ]
+}

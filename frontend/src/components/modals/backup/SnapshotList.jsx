@@ -1,6 +1,6 @@
 import { FileArchive, RefreshCw, Download, Trash } from 'lucide-react';
-import { apiUrl } from '../../../utils/api';
 import { formatDateTime, formatMegabytes } from '../../../utils/format';
+import DownloadLink from './DownloadLink';
 import { CATEGORY_LABELS, manifestSummary, versionSummary } from './backupHelpers';
 
 const CATEGORY_STYLES = {
@@ -72,14 +72,15 @@ export default function SnapshotList({ snapshots, disabled, onRestore, onDelete 
                 <RefreshCw className="w-3 h-3" aria-hidden="true" />
                 <span>Wiederherstellen</span>
               </button>
-              <a
-                href={apiUrl(`/api/backups/${encodeURIComponent(b.filename)}/download`)}
+              <DownloadLink
+                path={`/api/backups/${encodeURIComponent(b.filename)}/download`}
+                filename={b.filename}
                 className="btn-secondary text-[11px] py-1 px-2 flex items-center gap-1 text-sky-300 hover:text-white border-slate-700"
                 title="Herunterladen"
                 aria-label={`Snapshot ${b.filename} herunterladen`}
               >
                 <Download className="w-3 h-3" aria-hidden="true" />
-              </a>
+              </DownloadLink>
               <button
                 type="button"
                 onClick={() => onDelete(b.filename)}

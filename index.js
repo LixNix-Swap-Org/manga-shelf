@@ -36,19 +36,17 @@ const { initScheduler, lastVerifiedSnapshot } = require('./services/scheduler');
 const lifecycle = require('./services/lifecycle');
 const { setStaticHeaders, createUploadHeaders } = require('./utils/staticHeaders');
 const { freeBytes } = require('./utils/disk');
-const { defaultCode, errorBody } = require('./utils/httpError');
+const { defaultCode, errorBody, isAppCode } = require('./utils/httpError');
 const { requireEditor } = require('./middleware/auth');
 const { createOriginCheck, normalizeOrigin } = require('./middleware/originCheck');
 const { ALLOWED_IMAGE_EXTS } = require('./middleware/upload');
 
 const authRoutes = require('./routes/auth');
-const mangasRoutes = require('./routes/mangas');
-const volumesRoutes = require('./routes/volumes');
+const apiKeyRoutes = require('./routes/apiKeys');
+const coreRoutes = require('./routes/core');
 const backupsRoutes = require('./routes/backups');
-const statsRoutes = require('./routes/stats');
-const radarRoutes = require('./routes/radar');
-const lookupRoutes = require('./routes/lookup');
-const exchangeRoutes = require('./routes/exchange');
+const systemRoutes = require('./routes/system');
+const uploadRoutes = require('./routes/uploads');
 
 // The CSP allows https/http images because a cover may still point at another host, and inline styles because the
 // build and the React components use them; scripts and fonts (self-hosted) only come from this server.
@@ -111,9 +109,6 @@ function clientErrorMessage(err, req, status) {
     if (isLibraryError(err)) return CLIENT_ERROR_TEXTS[status] || 'Anfrage konnte nicht verarbeitet werden';
     return err.message;
 }
-
-// Own codes are upper-case words joined by "_" (SCHEMA_NEWER); errno (ENOENT) and Node's ERR_* codes stay internal
-const isAppCode = (code) => typeof code === 'string' && /^[A-Z]+(?:_[A-Z]+)*$/.test(code) && !code.startsWith('ERR_') && !/^E[A-Z]+$/.test(code);
 
 function errorCode(err, status) {
     if (err.type === 'entity.parse.failed') return 'INVALID_JSON';
@@ -344,7 +339,9 @@ function createApp() {
     // Liveness/readiness probe for Docker, Pterodactyl and reverse proxies (no auth, no paths or counts)
     app.get('/api/health', healthHandler);
 
-    for (const router of [authRoutes, mangasRoutes, volumesRoutes, backupsRoutes, statsRoutes, radarRoutes, lookupRoutes, exchangeRoutes]) {
+    // core/routes.js holds every endpoint that also runs in the apps; the others are server-only. systemRoutes comes
+    // first: it puts the rate limit in front of the core calendar feed.
+    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes]) {
         app.use('/api', router);
     }
 
@@ -404,6 +401,9 @@ function createApp() {
     return app;
 }
 
+// personal/instance API keys and the ANIME_* limits for the anime gateway in core/
+apiKeyRoutes.registerServerSources();
+
 const app = createApp();
 
 let running = null;
@@ -451,6 +451,7 @@ async function start({ host = '0.0.0.0', port = config.port, dataDir: wantedData
     const actualPort = server.address().port;
     if (banner) printBanner(actualPort, isNativeHttps);
     else printSetupNotice();
+    printSourcesNotice();
 
     const adminConsole = withConsole ? require('./services/console').startConsole() : null;
     try {
@@ -478,6 +479,16 @@ async function stop() {
 function printSetupNotice() {
     const notice = authRoutes.setupNotice();
     if (notice) console.log(notice);
+}
+
+// once per database: without an instance key every search shares the anonymous limit (spec-user-api-keys.md §7.2)
+function printSourcesNotice() {
+    try {
+        const notice = require('./services/console').sourcesNoticeOnce();
+        if (notice) console.log(notice);
+    } catch (err) {
+        log.warn('Quellen-Hinweis nicht verfügbar:', err);
+    }
 }
 
 // Pterodactyl Wings recognise "started" by exactly these lines (generic egg: 'change this text 1/2')

@@ -23,6 +23,24 @@ export function stampServiceWorker(source, { version, files }) {
     .replace('/*__PRECACHE__*/', files.map((file) => JSON.stringify(file)).join(', '))
 }
 
+const LOCAL_BOOT_STUB = '\0local-boot-stub'
+
+/**
+ * The standalone core (src/local/boot.js: sql.js, its wasm file and ../core) only belongs to the app build. Rollup emits
+ * the wasm asset as soon as it loads the module, so the web build never resolves it (the service worker would precache it).
+ */
+export const webBuildWithoutLocalCore = () => ({
+  name: 'web-build-without-local-core',
+  apply: 'build',
+  enforce: 'pre',
+  resolveId(source, importer) {
+    return source === './boot.js' && /[\\/]src[\\/]local[\\/]localTransport\.js$/.test(importer || '') ? LOCAL_BOOT_STUB : null
+  },
+  load(id) {
+    return id === LOCAL_BOOT_STUB ? "export function bootLocalRuntime() { throw new Error('Der Modus ohne Server gibt es nur in der App') }" : null
+  }
+})
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   // `vite build --mode app`: bundle for the Electron/Capacitor shells (server address and bearer token, see src/utils/api.js)
@@ -32,7 +50,7 @@ export default defineConfig(({ mode }) => {
     base: appMode ? './' : '/',
     plugins: [
       react(),
-      ...(appMode ? [appCspPlugin()] : []),
+      ...(appMode ? [appCspPlugin()] : [webBuildWithoutLocalCore()]),
       {
         name: 'build-out-dir',
         apply: 'build',
@@ -70,6 +88,8 @@ export default defineConfig(({ mode }) => {
       manifest: true,
       // Vite 5 browser floor; Vite 7's default (Safari 16 / Chrome 107) would drop older iPhones and iPads running the PWA
       target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+      // the domain core (../core, CommonJS) runs in the app build's standalone mode (src/local/runtime.js)
+      commonjsOptions: { include: [/node_modules/, /[\\/]core[\\/]/] },
     },
     test: {
       environment: 'jsdom',

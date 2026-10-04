@@ -3,7 +3,9 @@ import { BookOpen, Plus, RefreshCw, Trash, TriangleAlert, X } from 'lucide-react
 import MangaCard from './MangaCard';
 import MangaRow from './MangaRow';
 import useProgressiveList from '../../hooks/useProgressiveList';
-import { formatNumber, formatRelative } from '../../utils/format';
+import { formatCount, formatNumber, formatRelative } from '../../utils/format';
+import { isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
+import { viewSessionEnding } from '../../utils/viewState';
 
 export { seriesSummary } from './MangaCard';
 
@@ -14,6 +16,18 @@ export const GRID_DELETE_BUTTON_CLASS =
   'group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400';
 
 const ROW_CLASS = 'hover:bg-slate-850/60 transition-colors group';
+const GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-4 sm:gap-5 lg:gap-6 animate-fade-in';
+
+/** "Wunsch" on the card of a wished series (no volume owned, so the read badge never takes this corner). */
+function WishBadge({ manga }) {
+  return (
+    <span className="absolute top-11 right-4 z-10 pointer-events-none rounded-md bg-slate-950/90" title={wishLabel(manga)}>
+      <span className={`block text-[10px] font-bold px-1.5 py-0.5 rounded-md border shadow-sm ${priorityBadgeClass(manga.wish_priority)}`}>
+        Wunsch<span className="sr-only">: {wishLabel(manga)}</span>
+      </span>
+    </span>
+  );
+}
 // content-visibility skips layout and paint of off-screen cards; the padding keeps the hover lift inside the paint clip
 export const CARD_WRAPPER_CLASS =
   'group relative flex flex-col -m-2 p-2 [content-visibility:auto] [contain-intrinsic-block-size:auto_360px]';
@@ -24,7 +38,7 @@ export const SHELF_SCROLL_KEY = 'mangashelf_shelf_scroll';
 const STALE_AFTER_MS = 60 * 60 * 1000;
 
 /** Restores the shelf's scroll position once the list is on screen and records it until the shelf unmounts. */
-function useShelfScroll(ready) {
+export function useShelfScroll(ready) {
   const restored = useRef(false);
   useLayoutEffect(() => {
     if (!ready || restored.current) return;
@@ -42,9 +56,36 @@ function useShelfScroll(ready) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
+      if (viewSessionEnding()) return;
       try { window.sessionStorage.setItem(SHELF_SCROLL_KEY, String(Math.round(y))); } catch (_) { /* storage unavailable */ }
     };
   }, []);
+}
+
+/**
+ * The sections of the rendered part of a grouped list: groups cut to the first `shown` series, empty ones dropped;
+ * `count` is the size of the whole group. Without grouping (one unlabeled group) the result is [].
+ */
+export function visibleSections(groups, shown) {
+  if (!Array.isArray(groups) || groups.length === 0 || (groups.length === 1 && !groups[0].label)) return [];
+  const out = [];
+  let left = shown;
+  for (const g of groups) {
+    if (left <= 0) break;
+    const items = g.items.slice(0, left);
+    left -= items.length;
+    if (items.length > 0) out.push({ key: g.key, label: g.label, count: g.items.length, items });
+  }
+  return out;
+}
+
+function SectionHeading({ id, label, count, as: Tag = 'h3' }) {
+  return (
+    <Tag id={id} className="flex items-baseline gap-2 text-sm font-bold text-slate-200">
+      <span className="truncate">{label}</span>
+      <span className="text-[11px] font-mono font-semibold text-slate-400">{formatCount(count, 'Reihe', 'Reihen')}</span>
+    </Tag>
+  );
 }
 
 function ListProgress({ shown, total, onMore, sentinelRef }) {
@@ -144,14 +185,22 @@ function MangaCollectionGrid({
   setStatusFilter,
   sortBy = '',
   statusFilter,
-  viewMode
+  viewMode,
+  groups = null,
+  groupBy = 'none',
+  collectFilter = 'ALL',
+  setCollectFilter,
+  authorFilter = '',
+  setAuthorFilter,
+  onAuthorClick
 }) {
   const isList = viewMode === 'list';
   const { visible, total, shown, hasMore, showMore, sentinelRef } = useProgressiveList(filtered, {
     step: isList ? PAGE_SIZE.list : PAGE_SIZE.grid,
-    resetKey: JSON.stringify([viewMode, statusFilter, publisherFilter, sortBy, search]),
+    resetKey: JSON.stringify([viewMode, statusFilter, publisherFilter, sortBy, search, collectFilter, authorFilter, groupBy]),
     storageKey: SHELF_COUNT_KEY
   });
+  const sections = visibleSections(groups, visible.length);
   useShelfScroll(!loading && filtered.length > 0);
 
   if (loading) {
@@ -163,7 +212,7 @@ function MangaCollectionGrid({
     );
   }
 
-  const filtersActive = Boolean(search) || statusFilter !== 'ALL' || publisherFilter !== 'ALL';
+  const filtersActive = Boolean(search) || statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter);
   const showErrorPanel = Boolean(error) && filtered.length === 0 && !filtersActive;
   const banner = error && !showErrorPanel ? (
     <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
@@ -194,6 +243,8 @@ function MangaCollectionGrid({
             setSearch('');
             setStatusFilter('ALL');
             setPublisherFilter('ALL');
+            setCollectFilter?.('ALL');
+            setAuthorFilter?.('');
           }}
         />
       </>
@@ -202,6 +253,36 @@ function MangaCollectionGrid({
 
   const freshness = <FreshnessNote refreshing={refreshing} dataAt={dataAt} />;
   const progress = hasMore ? <ListProgress shown={shown} total={total} onMore={showMore} sentinelRef={sentinelRef} /> : null;
+
+  const renderRow = (manga) => (
+    <MangaRow
+      key={manga.id}
+      className={ROW_CLASS}
+      manga={manga}
+      canEdit={canEdit}
+      getStatusBadge={getStatusBadge}
+      onDelete={handleDeleteManga}
+      onAuthorClick={onAuthorClick}
+    />
+  );
+
+  const renderCard = (manga) => (
+    <div key={manga.id} className={CARD_WRAPPER_CLASS}>
+      <MangaCard manga={manga} getStatusBadge={getStatusBadge} onAuthorClick={onAuthorClick} />
+      {isWishedSeries(manga) && <WishBadge manga={manga} />}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
+          className={GRID_DELETE_BUTTON_CLASS}
+          title="Manga löschen"
+          aria-label={`${manga.title} löschen`}
+        >
+          <Trash className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
 
   if (isList) {
     return (
@@ -222,18 +303,20 @@ function MangaCollectionGrid({
                   <th scope="col" className="py-3 px-4 text-right w-24">Aktion</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {visible.map(manga => (
-                  <MangaRow
-                    key={manga.id}
-                    className={ROW_CLASS}
-                    manga={manga}
-                    canEdit={canEdit}
-                    getStatusBadge={getStatusBadge}
-                    onDelete={handleDeleteManga}
-                  />
-                ))}
-              </tbody>
+              {sections.length === 0 ? (
+                <tbody className="divide-y divide-slate-800/60">
+                  {visible.map(renderRow)}
+                </tbody>
+              ) : sections.map(section => (
+                <tbody key={section.key} className="divide-y divide-slate-800/60 border-t border-slate-800">
+                  <tr className="bg-slate-950/40">
+                    <th scope="colgroup" colSpan={7} className="py-2 px-4 text-left">
+                      <SectionHeading label={section.label} count={section.count} as="span" />
+                    </th>
+                  </tr>
+                  {section.items.map(renderRow)}
+                </tbody>
+              ))}
             </table>
           </div>
         </div>
@@ -246,24 +329,20 @@ function MangaCollectionGrid({
     <>
       {banner}
       {freshness}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-4 sm:gap-5 lg:gap-6 animate-fade-in">
-        {visible.map(manga => (
-          <div key={manga.id} className={CARD_WRAPPER_CLASS}>
-            <MangaCard manga={manga} getStatusBadge={getStatusBadge} />
-            {canEdit && (
-              <button
-                type="button"
-                onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}
-                className={GRID_DELETE_BUTTON_CLASS}
-                title="Manga löschen"
-                aria-label={`${manga.title} löschen`}
-              >
-                <Trash className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            )}
+      {sections.length === 0 ? (
+        <div className={GRID_CLASS}>
+          {visible.map(renderCard)}
+        </div>
+      ) : sections.map((section, i) => (
+        <section key={section.key} aria-labelledby={`shelf-group-${i}`} className="mb-8 last:mb-0">
+          <div className="mb-3 pb-2 border-b border-slate-800/80">
+            <SectionHeading id={`shelf-group-${i}`} label={section.label} count={section.count} />
           </div>
-        ))}
-      </div>
+          <div className={GRID_CLASS}>
+            {section.items.map(renderCard)}
+          </div>
+        </section>
+      ))}
       {progress}
     </>
   );

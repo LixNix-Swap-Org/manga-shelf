@@ -3,12 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { uploadsDir, tempDir } = require('../db');
-const { detectImageExt } = require('../utils/safeFetch');
+const { detectImageExt } = require('../core/lib/imageCheck');
 const { stripImageMetadata } = require('../utils/imageMeta');
 
 // Allowed image MIME types and extensions for secure uploads
 const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
-const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
+const { ALLOWED_IMAGE_EXTS } = require('../core/lib/imageCheck');
 
 const INVALID_TYPE_MESSAGE = 'Ungültiger Dateityp. Es sind ausschließlich Bilddateien (JPG, PNG, WebP, GIF, AVIF) erlaubt.';
 const SNIFF_BYTES = 64;

@@ -9,7 +9,7 @@ import {
 } from '../components/dashboard/dashboardShell';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import DashboardFooter from '../components/dashboard/DashboardFooter';
-import MangaCollectionGrid from '../components/dashboard/MangaCollectionGrid';
+import MangaCollectionGrid, { visibleSections } from '../components/dashboard/MangaCollectionGrid';
 import CollectionToolbar from '../components/dashboard/CollectionToolbar';
 import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
 import { SORT_OPTIONS, getStatusBadge } from '../utils/collectionHelpers';
@@ -28,6 +28,14 @@ describe('view parameter', () => {
     expect(viewSearch('?view=shopping', 'radar')).toBe('?view=radar');
     expect(viewSearch('?view=radar', 'shelf')).toBe('');
     expect(viewSearch('?view=stats&x=1', 'shelf')).toBe('?x=1');
+  });
+
+  it('knows the anime tab; ?add= never survives a view change, the shelf filters do', () => {
+    expect(parseInitialView('?view=anime&add=4')).toEqual({ mainView: 'anime', openStats: false });
+    expect(viewSearch('?view=anime&add=4', 'anime')).toBe('?view=anime');
+    expect(viewSearch('?view=anime&add=4', 'shelf')).toBe('');
+    expect(viewSearch('?collect=gaps&author=Oda', 'anime')).toBe('?collect=gaps&author=Oda&view=anime');
+    expect(viewSearch('?collect=gaps&view=radar', 'shelf')).toBe('?collect=gaps');
   });
 
   it('every manifest shortcut points at a view the dashboard handles', () => {
@@ -379,6 +387,75 @@ describe('MangaCollectionGrid', () => {
   });
 });
 
+describe('MangaCollectionGrid: groups', () => {
+  const groups = [
+    { key: 'a', label: 'Carlsen Manga', items: [series(1), series(2)] },
+    { key: '~', label: 'Ohne Verlag', items: [series(3)] }
+  ];
+
+  it('visibleSections cuts the groups to the rendered part and keeps the full counts', () => {
+    expect(visibleSections(groups, 2)).toEqual([{ key: 'a', label: 'Carlsen Manga', count: 2, items: [series(1), series(2)] }]);
+    expect(visibleSections(groups, 3).map(s => [s.label, s.items.length, s.count])).toEqual([['Carlsen Manga', 2, 2], ['Ohne Verlag', 1, 1]]);
+    expect(visibleSections([{ key: 'all', label: '', items: [series(1)] }], 1)).toEqual([]);
+    expect(visibleSections(null, 5)).toEqual([]);
+  });
+
+  it('grid and list show a heading with the count per section', () => {
+    const filtered = groups.flatMap(g => g.items);
+    const { unmount } = renderGrid({ filtered, groups, groupBy: 'publisher' });
+    expect(screen.getByRole('region', { name: /Carlsen Manga/ }).textContent).toContain('2 Reihen');
+    expect(screen.getByRole('region', { name: /Ohne Verlag/ }).textContent).toContain('Reihe 3');
+    unmount();
+    renderGrid({ filtered, groups, groupBy: 'publisher', viewMode: 'list' });
+    const headers = screen.getAllByRole('columnheader').filter(th => th.getAttribute('scope') === 'colgroup');
+    expect(headers.map(th => th.textContent)).toEqual(['Carlsen Manga2 Reihen', 'Ohne Verlag1 Reihe']);
+  });
+
+  it('the empty state resets the collect and author filters too', () => {
+    const { props } = renderGrid({ filtered: [], collectFilter: 'gaps', setCollectFilter: vi.fn(), authorFilter: 'Oda', setAuthorFilter: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: /Filter & Suche zurücksetzen/ }));
+    expect(props.setCollectFilter).toHaveBeenCalledWith('ALL');
+    expect(props.setAuthorFilter).toHaveBeenCalledWith('');
+  });
+});
+
+describe('MangaCollectionGrid: author links', () => {
+  const twoAuthors = series(1, { author: 'Tsugumi Ohba, Takeshi Obata' });
+
+  it('grid cards put one button per author below the card link, not inside it', () => {
+    const onAuthorClick = vi.fn();
+    renderGrid({ filtered: [twoAuthors], onAuthorClick });
+    const link = screen.getByRole('link', { name: 'Reihe 1' });
+    const ohba = screen.getByRole('button', { name: 'Tsugumi Ohba' });
+    const obata = screen.getByRole('button', { name: 'Takeshi Obata' });
+    expect(ohba.title).toBe('Alle Reihen von Tsugumi Ohba');
+    expect(link.contains(ohba)).toBe(false);
+    expect(link.querySelector('button')).toBeNull();
+    expect(link.textContent).not.toContain('Ohba');
+    fireEvent.click(obata);
+    expect(onAuthorClick).toHaveBeenCalledWith('Takeshi Obata');
+  });
+
+  it('list rows render each author as a button', () => {
+    const onAuthorClick = vi.fn();
+    renderGrid({ filtered: [twoAuthors], onAuthorClick, viewMode: 'list' });
+    const button = screen.getByRole('button', { name: 'Tsugumi Ohba' });
+    expect(button.title).toBe('Alle Reihen von Tsugumi Ohba');
+    expect(button.closest('a')).toBeNull();
+    fireEvent.click(button);
+    expect(onAuthorClick).toHaveBeenCalledWith('Tsugumi Ohba');
+  });
+
+  it('without the handler or an author the text stays plain', () => {
+    const { unmount } = renderGrid({ filtered: [twoAuthors] });
+    expect(screen.queryByRole('button', { name: 'Tsugumi Ohba' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Reihe 1' }).textContent).toContain('Tsugumi Ohba, Takeshi Obata');
+    unmount();
+    renderGrid({ filtered: [series(2, { author: '' })], onAuthorClick: vi.fn(), viewMode: 'list' });
+    expect(screen.getByText('Kein Autor')).toBeTruthy();
+  });
+});
+
 describe('CollectionToolbar', () => {
   const toolbarProps = {
     availablePublishers: ['Carlsen'], filterCounts: { ALL: 3, Laufend: 2 }, filtered: [], publisherFilter: 'ALL', search: '',
@@ -400,6 +477,42 @@ describe('CollectionToolbar', () => {
     expect(screen.getByRole('combobox', { name: 'Verlag filtern' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Rasteransicht', pressed: true })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Listenansicht', pressed: false })).toBeTruthy();
+  });
+});
+
+describe('CollectionToolbar: collect, grouping and author', () => {
+  const props = () => ({
+    availablePublishers: [], filterCounts: { ALL: 3 }, filtered: [], publisherFilter: 'ALL', search: '',
+    setPublisherFilter: vi.fn(), setSearch: vi.fn(), setSortBy: vi.fn(), setStatusFilter: vi.fn(), setViewMode: vi.fn(),
+    sortBy: 'title_asc', statusFilter: 'ALL', viewMode: 'grid', collectFilter: 'ALL', setCollectFilter: vi.fn(),
+    collectCounts: { ALL: 3, gaps: 2, preorder: 0, complete: 1, pausiert: 0, abgebrochen: 0 }, authorFilter: '',
+    setAuthorFilter: vi.fn(), groupBy: 'none', setGroupBy: vi.fn()
+  });
+
+  it('the collect select lists its options with counts; grouping offers none, publisher, author, status', () => {
+    const p = props();
+    render(<CollectionToolbar {...p} />);
+    const collect = screen.getByRole('combobox', { name: 'Sammelstand filtern' });
+    expect(Array.from(collect.options).map(o => o.textContent)).toEqual([
+      'Alle Reihen', 'Mit Lücken (2)', 'Mit Vorbestellungen (0)', 'Komplett (1)', 'Pausiert (0)', 'Nicht mehr gesammelt (0)'
+    ]);
+    fireEvent.change(collect, { target: { value: 'gaps' } });
+    expect(p.setCollectFilter).toHaveBeenCalledWith('gaps');
+    const group = screen.getByRole('combobox', { name: 'Gruppieren' });
+    expect(Array.from(group.options).map(o => o.value)).toEqual(['none', 'publisher', 'author', 'status']);
+    fireEvent.change(group, { target: { value: 'author' } });
+    expect(p.setGroupBy).toHaveBeenCalledWith('author');
+    expect(screen.queryByRole('button', { name: /Autor-Filter/ })).toBeNull();
+  });
+
+  it('an author filter shows a chip that clears it; reset clears collect and author as well', () => {
+    const p = { ...props(), authorFilter: 'Eiichiro Oda', collectFilter: 'gaps' };
+    render(<CollectionToolbar {...p} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Autor-Filter „Eiichiro Oda“ entfernen' }));
+    expect(p.setAuthorFilter).toHaveBeenCalledWith('');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter und Suche zurücksetzen' }));
+    expect(p.setCollectFilter).toHaveBeenCalledWith('ALL');
+    expect(p.setAuthorFilter).toHaveBeenCalledTimes(2);
   });
 });
 

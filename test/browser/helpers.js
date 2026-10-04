@@ -7,7 +7,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Endpoints backed by external services (Manga Passion, DNB, AniList); their failures say nothing about the app.
 // The personal radar (/api/release-radar) is pure SQLite and stays watched; only its date check calls Manga Passion.
-const EXTERNAL_API = /^\/api\/(lookup|manga-passion|upload-remote|volumes\/lookup|release-radar\/changes)\b|^\/api\/mangas\/\d+\/(gaps|sync-edition)\b/;
+const EXTERNAL_API = /^\/api\/(lookup|manga-passion|upload-remote|volumes\/lookup|release-radar\/changes|anime\/search|anime\/\d+\/refresh)\b|^\/api\/mangas\/\d+\/(gaps|sync-edition|adaptations)\b/;
 
 /** Variables set by test/browser/run.js; exits with a hint when a suite is started without it. */
 function suiteEnv() {

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import {
   loadUser, getClearGeneration, readShoppingCache, readShoppingCacheTimestamp, writeShoppingCache, updateShoppingCache
 } from '../utils/offlineStore';
+import { discardLegacyQueue, withoutVolumes, localToday } from '../utils/shoppingQueue';
 import {
-  enqueuePurchase, flushPurchaseQueue, pendingVolumeIds, pendingCount, discardLegacyQueue, withoutVolumes,
-  classifyQuickBuy, sendPurchase, localToday
-} from '../utils/shoppingQueue';
+  getOutbox, outboxScope, submitChange, isPurchaseEntry, applyChangeToCaches, OUTBOX_SYNCED_EVENT
+} from '../utils/outbox';
+import { useOutboxPending } from '../app/useOutbox';
 import { PURCHASE_RECORDED_EVENT } from '../appShell';
-import { apiFetch, readJson } from '../utils/api';
+import { apiFetch, readJson, sessionEndAnnounced } from '../utils/api';
 import { notify } from '../utils/notify';
 import { haptic } from '../utils/haptics';
 
@@ -18,7 +19,7 @@ async function errorText(res) {
 
 const browserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
-const SESSION_EXPIRED = 'Sitzung abgelaufen – bitte neu anmelden.';
+const SESSION_EXPIRED = 'Sitzung abgelaufen – der Kauf ist vorgemerkt und wird nach der Anmeldung übertragen.';
 const BUY_FAILED = 'Fehler beim Aktualisieren des Bands';
 const QUEUE_FAILED = 'Der Kauf konnte nicht vorgemerkt werden (Speicher voll oder nicht verfügbar). Bitte erneut versuchen, sobald eine Verbindung besteht.';
 
@@ -38,13 +39,19 @@ const removeId = (set, id) => {
   return next;
 };
 
+const mangaIdIn = (data, volumeId) => [...(data?.items || []), ...(data?.others || [])]
+  .find((item) => String(item?.id) === String(volumeId))?.manga_id ?? null;
+
+const pendingPurchaseIds = (id) => new Set(getOutbox().list(outboxScope(id)).filter(isPurchaseEntry).map((e) => e.volumeId));
+
 /**
- * Shopping list (missing volumes) with offline cache, quick buy and the per-user queue of purchases made while the
- * server was unreachable. `user` is the logged-in user (with `offline: true` in App's offline mode).
+ * Shopping list (missing volumes) with offline cache and quick buy. Purchases go through the outbox: made while the
+ * server is unreachable they are kept per user and sent later. `user` is the logged-in user (with `offline: true` in
+ * App's offline mode).
  */
 export default function useShoppingList({ user, setNetworkOffline, fetchMangas }) {
   const userId = user?.id ?? null;
-  const [shoppingData, setShoppingData] = useState(() => withoutVolumes(readShoppingCache(), pendingVolumeIds(userId)));
+  const [shoppingData, setShoppingData] = useState(() => withoutVolumes(readShoppingCache(), pendingPurchaseIds(userId)));
   const [loadingShopping, setLoadingShopping] = useState(false);
   const [shoppingPublisherFilter, setShoppingPublisherFilter] = useState('ALL');
   const [shoppingSearch, setShoppingSearch] = useState('');
@@ -52,8 +59,12 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
   const [shoppingError, setShoppingError] = useState(null);
   const [offlineLastUpdated, setOfflineLastUpdated] = useState(readShoppingCacheTimestamp);
   const [cacheWriteFailed, setCacheWriteFailed] = useState(false);
-  const [pendingPurchases, setPendingPurchases] = useState(() => pendingCount(userId));
+  const [cachedUserId, setCachedUserId] = useState(null);
+  const pending = useOutboxPending(userId ?? cachedUserId);
+  const pendingPurchases = pending.purchases;
   const [failedPurchases, setFailedPurchases] = useState([]);
+  const shoppingDataRef = useRef(shoppingData);
+  shoppingDataRef.current = shoppingData;
   // set when a request failed or a purchase was queued: the next successful list fetch then sends the queue
   const syncDueRef = useRef(false);
 
@@ -63,25 +74,22 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     return cached?.id ?? null;
   };
 
-  const refreshPending = (id) => setPendingPurchases(pendingCount(id));
-
+  /** Sends the outbox (purchases and other queued changes). Resolves to { synced, dropped, kept } or null. */
   const syncPendingPurchases = async () => {
     if (user?.offline || browserOffline()) return null;
     const id = await resolveUserId();
     if (id === null) return null;
     syncDueRef.current = false;
-    const result = await flushPurchaseQueue({ userId: id });
-    refreshPending(id);
-    if (result.dropped.length) {
-      console.warn(`[PWA] ${result.dropped.length} vorgemerkte Käufe vom Server abgelehnt`);
-      setFailedPurchases((prev) => [...prev, ...result.dropped]);
+    const outbox = getOutbox();
+    await outbox.migrateLegacy(outboxScope(id));
+    const result = await outbox.flush(outboxScope(id), { force: true });
+    const dropped = result.dropped.filter(isPurchaseEntry);
+    if (dropped.length) {
+      console.warn(`[PWA] ${dropped.length} vorgemerkte Käufe vom Server abgelehnt`);
+      setFailedPurchases((prev) => [...prev, ...dropped]);
     }
     if (result.kept.length) syncDueRef.current = true;
-    if (result.synced.length || result.dropped.length) {
-      fetchShoppingList();
-      fetchMangas();
-    }
-    return result;
+    return { synced: result.synced, dropped: result.dropped, kept: result.kept };
   };
 
   // On mount and whenever App leaves its offline mode (that happens without a browser 'online' event)
@@ -89,11 +97,33 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     const dropped = discardLegacyQueue();
     if (dropped) console.warn(`[PWA] ${dropped} vorgemerkte Käufe ohne Benutzerzuordnung verworfen`);
     let active = true;
-    resolveUserId().then((id) => { if (active && id !== null) refreshPending(id); });
+    resolveUserId().then((id) => {
+      if (!active || id === null) return;
+      if (userId === null) setCachedUserId(id);
+      getOutbox().migrateLegacy(outboxScope(id));
+    });
     if (!user?.offline) syncPendingPurchases();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei Benutzer- oder Offline-Wechsel
   }, [userId, user?.offline]);
+
+  // bought volumes leave the list as soon as they are in the outbox (also those of a replay on another view)
+  const pendingKey = [...pending.purchaseIds].sort((a, b) => a - b).join(',');
+  useEffect(() => {
+    if (!pending.purchaseIds.size) return;
+    setShoppingData((prev) => withoutVolumes(prev, pending.purchaseIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey steht für die Menge
+  }, [pendingKey]);
+
+  // a replay of queued changes (App, reconnect): the list and the shelf show the server state again
+  useEffect(() => {
+    const onSynced = () => {
+      fetchShoppingList();
+      fetchMangas();
+    };
+    window.addEventListener(OUTBOX_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(OUTBOX_SYNCED_EVENT, onSynced);
+  });
 
   const fallBackToCache = (unreachable) => {
     const cached = readShoppingCache();
@@ -120,14 +150,16 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
       const data = await readJson(res);
       if (data === null) throw new Error('Antwort ist kein JSON');
       if (generation !== getClearGeneration()) return; // logged out meanwhile: keep nothing of it
-      const visible = withoutVolumes(data, pendingVolumeIds(id));
+      await getOutbox().load();
+      if (generation !== getClearGeneration()) return;
+      const visible = withoutVolumes(data, pendingPurchaseIds(id));
       setShoppingError(null);
       setShoppingData(visible);
       setNetworkOffline(false);
       const savedAt = writeShoppingCache(visible, generation);
       setCacheWriteFailed(!savedAt);
       if (savedAt) setOfflineLastUpdated(savedAt);
-      if (syncDueRef.current && pendingCount(id)) syncPendingPurchases();
+      if (syncDueRef.current && getOutbox().count(outboxScope(id))) syncPendingPurchases();
     } catch (e) {
       console.warn('Network issue fetching shopping list, using offline cache:', e);
       if (generation === getClearGeneration()) {
@@ -151,6 +183,19 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
   };
 
   /**
+   * A purchase that was sent or queued reaches the stored copies (in-memory detail, offline detail and with it the ISBN
+   * index) and the listeners of PURCHASE_RECORDED_EVENT (offline overlay, open detail page). Call before markBought:
+   * the series is looked up on the list.
+   */
+  const recordPurchaseLocally = (volumeId, change, ownerId, queued) => {
+    const mangaId = mangaIdIn(shoppingDataRef.current, volumeId) ?? mangaIdIn(readShoppingCache(), volumeId);
+    window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: queued ? { volumeId, queued: true } : { volumeId } }));
+    if (mangaId === null) return Promise.resolve(false);
+    const me = user?.id !== undefined && user?.id !== null ? user : { id: ownerId };
+    return applyChangeToCaches({ user: me, mangaId, change }).catch(() => false);
+  };
+
+  /**
    * Records the purchase as the user's own ownership. Resolves to 'ok', 'queued' (sent later) or 'failed' (nothing
    * changed, the user was told why). With { batch: true } (a booking run over several scans) nothing is alerted or
    * refetched per item and the result is { status, error, httpStatus }; a volume that no longer exists (404) leaves the list.
@@ -165,42 +210,40 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     };
     setBuyingIds((prev) => addId(prev, volumeId));
     try {
-      // no await when the user is known: a flush on unmount must send the purchase before the next page loads
       const id = userId !== null ? userId : await resolveUserId();
-      const queue = () => {
-        if (!enqueuePurchase(id, volumeId)) return done('failed', QUEUE_FAILED);
-        syncDueRef.current = true;
-        refreshPending(id);
-        markBought(volumeId);
-        return done('queued');
-      };
-
-      if (user?.offline || browserOffline()) return queue();
-
-      let res;
+      if (id === null) return done('failed', QUEUE_FAILED);
+      const offline = Boolean(user?.offline) || browserOffline();
+      const change = { kind: 'purchase', volumeId, value: true, purchase_date: localToday() };
+      let result;
       try {
-        res = await sendPurchase(volumeId, localToday());
+        result = await submitChange(change, { userId: id, offline });
       } catch (_) {
-        setNetworkOffline(true);
-        return queue();
+        return done('failed', QUEUE_FAILED);
       }
-      const outcome = classifyQuickBuy(res);
-      if (outcome === 'ok') {
+      const { status, res } = result;
+      if (result.reason === 'storage') return done('failed', QUEUE_FAILED);
+      if (status === 'queued' || status === 'auth') {
+        syncDueRef.current = true;
+        if (!offline && status === 'queued') setNetworkOffline(true);
+        const recorded = recordPurchaseLocally(volumeId, change, id, true);
         markBought(volumeId);
-        window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: { volumeId } }));
+        if (status === 'auth' && !sessionEndAnnounced(res) && !batch) notify.info(SESSION_EXPIRED);
+        await recorded;
+        return done('queued');
+      }
+      if (status === 'sent' && res?.ok) {
+        const recorded = recordPurchaseLocally(volumeId, change, id, false);
+        markBought(volumeId);
+        await recorded;
         if (!batch) {
           fetchMangas();
           fetchShoppingList();
         }
         return done('ok', '', res.status);
       }
-      if (outcome === 'queue') {
-        setNetworkOffline(true);
-        return queue();
-      }
-      if (res.status === 404) dropItem(volumeId);
-      const message = outcome === 'auth' ? SESSION_EXPIRED : ((await errorText(res)) || BUY_FAILED);
-      return done('failed', message, res.status);
+      // 404: the volume no longer exists; other 4xx: the server refused the purchase
+      if (res?.status === 404) dropItem(volumeId);
+      return done('failed', (res && await errorText(res)) || BUY_FAILED, res?.status ?? null);
     } finally {
       setBuyingIds((prev) => removeId(prev, volumeId));
     }

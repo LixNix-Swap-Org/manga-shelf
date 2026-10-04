@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const pkg = require('../package.json');
-const { db, hasAdmin, runTransaction } = require('../db');
+const { db, hasAdmin, runTransaction, getInstanceId } = require('../db');
 const {
     AUTH_ERRORS,
     signSessionToken,
@@ -14,12 +14,14 @@ const {
     setAuthCookie,
     clearAuthCookie,
     requireAuth,
-    requireAdmin
+    requireAdmin,
+    requireEditor
 } = require('../middleware/auth');
 const { loginLimiter, logoutLimiter, setupLimiter, passwordChangeLimiter, loginGuard, accountKey, clientIp } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('auth');
 const { config, normalizeSetupToken } = require('../utils/config');
 const { HttpError, badRequest, notFound, sendError } = require('../utils/httpError');
+const { purchaseDateFromRemainingOwners } = require('../utils/owners');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const MIN_PASSWORD_LENGTH = 8;
@@ -222,6 +224,15 @@ router.get('/auth/me', requireAuth, (req, res) => {
     res.json({ user: req.user });
 });
 
+// QR code "Mit App verbinden": the address this browser used plus the instance id the app checks on /api/health
+router.get('/auth/connect-info', requireEditor, (req, res) => {
+    const url = `${req.protocol}://${req.get('host')}`;
+    const instanceId = getInstanceId();
+    const params = new URLSearchParams({ url, name: 'Manga Shelf', ...(instanceId ? { id: instanceId } : {}) });
+    res.set('Cache-Control', 'no-store');
+    res.json({ url, name: 'Manga Shelf', instance_id: instanceId, link: `manga-shelf://connect?${params}` });
+});
+
 // --- USER MANAGEMENT (Admin only) ---
 router.get('/users', requireAdmin, (req, res) => {
     const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
@@ -341,8 +352,12 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         }
     }
 
-    // volume_reads go with the user; mangas.updated_by is a plain foreign key and would block the delete otherwise
+    // volume_reads go with the user; mangas/animes.updated_by are plain foreign keys and would block the delete otherwise
     runTransaction(() => {
+        const shared = db.prepare(`
+            SELECT volume_id FROM volume_owners
+            WHERE user_id = ? AND volume_id IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
+        `).all(userId, userId).map(r => r.volume_id);
         db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
         // Bände, die nur dieser Benutzer besaß, gehen an den löschenden Admin, damit die Sammlung nicht schrumpft
         db.prepare(`
@@ -351,61 +366,13 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             WHERE user_id = ? AND volume_id NOT IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
         `).run(req.user.id, userId, userId);
         db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
+        for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        // anime progress and API keys go with the user (ON DELETE CASCADE)
+        db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
     res.json({ success: true });
-});
-
-router.get('/users/:id/stats', requireAuth, (req, res) => {
-    const userId = parseInt(req.params.id, 10);
-    
-    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
-    if (!user) throw notFound('Benutzer');
-
-    const readVolumes = db.prepare(`
-        SELECT strftime('%Y-%m-%dT%H:%M:%SZ', vr.read_at) AS read_at, v.id, v.volume_number, v.type, v.notes, v.pages,
-               m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
-        FROM volume_reads vr
-        JOIN volumes v ON vr.volume_id = v.id
-        JOIN mangas m ON v.manga_id = m.id
-        WHERE vr.user_id = ? AND v.status = 'Vorhanden'
-        ORDER BY vr.read_at DESC, v.id DESC
-    `).all(userId);
-
-    const totalVolumes = readVolumes.length;
-    const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);
-
-    const mangasReadMap = new Map();
-    readVolumes.forEach(v => {
-        if (!mangasReadMap.has(v.manga_id)) {
-            mangasReadMap.set(v.manga_id, {
-                id: v.manga_id,
-                title: v.manga_title,
-                cover_image: v.manga_cover,
-                volumes: []
-            });
-        }
-        mangasReadMap.get(v.manga_id).volumes.push({
-            id: v.id,
-            volume_number: v.volume_number,
-            type: v.type,
-            notes: v.notes,
-            read_at: v.read_at
-        });
-    });
-    
-    const readMangas = Array.from(mangasReadMap.values());
-
-    res.json({
-        user: { id: user.id, username: user.username },
-        stats: {
-            totalVolumes,
-            totalPages,
-            recentVolumes: readVolumes.slice(0, 10), // Last 10 read volumes for timeline
-            readMangas
-        }
-    });
 });
 
 module.exports = router;

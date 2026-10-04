@@ -9,7 +9,7 @@ describe('CollectionStats', () => {
     render(<CollectionStats totalSeries={12} totalOwnedVolumes={148} totalCollectionValue={1234.5} completedSeries={3} handleOpenStats={vi.fn()} />);
     expect(stat('Reihen')).toBe('12');
     expect(stat('Bände im Besitz')).toBe('148');
-    expect(stat('Abgeschlossen')).toBe('3');
+    expect(stat('Komplett')).toBe('3');
     expect(screen.getByText('1.234,50 €')).toBeTruthy();
   });
 

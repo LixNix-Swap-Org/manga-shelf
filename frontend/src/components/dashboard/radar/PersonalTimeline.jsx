@@ -18,15 +18,14 @@ const COVER_FALLBACK = (
   </div>
 );
 
-function RadarCover({ item, failedImages, setFailedImages }) {
-  // volume cover, else the series cover; a URL the dashboard already knows as broken is skipped
-  const sources = [item.vol_cover, item.manga_cover].filter((url) => url && !failedImages[`personal-${url}`]);
+const LOADING_TEXT = 'Lade deine Vorbestellungen...';
+
+function RadarCover({ item }) {
   return (
     <CoverImage
-      src={sources}
+      src={[item.vol_cover, item.manga_cover]}
       alt={item.manga_title}
       fallback={COVER_FALLBACK}
-      onFail={setFailedImages ? (url) => setFailedImages((prev) => ({ ...prev, [`personal-${url}`]: true })) : undefined}
       className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover/thumb:scale-105 transition-transform duration-300"
     />
   );
@@ -45,9 +44,7 @@ export default function PersonalTimeline({
   onResetFilters,
   canEdit,
   onMarkDelivered,
-  markingDeliveredIds = EMPTY_SET,
-  failedImages = {},
-  setFailedImages
+  markingDeliveredIds = EMPTY_SET
 }) {
   const view = radarViewState({
     loading: loadingRadar && !radarData,
@@ -61,35 +58,32 @@ export default function PersonalTimeline({
     [radarData, radarPublisherFilter, radarStatusFilter, radarSearch]
   );
 
-  if (view === 'idle') return null;
-
-  if (view === 'loading') {
-    return (
-      <div role="status" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
-        <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
-        <p className="text-sm font-semibold text-white">Lade deine Vorbestellungen...</p>
-      </div>
-    );
-  }
-
-  if (view === 'error') {
-    return (
-      <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
-          <CircleAlert className="w-8 h-8" />
-        </div>
-        <h3 className="text-base font-bold text-white mb-1">Vorbestellungen konnten nicht geladen werden</h3>
-        <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{radarError}</p>
-        <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
-          Erneut laden
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
-      {radarError && (
+      {/* mounted in every state and empty until a load starts, so the loading text is announced */}
+      <p role="status" className="sr-only">{view === 'loading' ? LOADING_TEXT : ''}</p>
+
+      {view === 'loading' && (
+        <div aria-hidden="true" className="glass-panel p-12 rounded-2xl border border-slate-800/80 text-center">
+          <RefreshCw className="w-8 h-8 text-sky-400 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-semibold text-white">{LOADING_TEXT}</p>
+        </div>
+      )}
+
+      {view === 'error' && (
+        <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
+            <CircleAlert className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1">Vorbestellungen konnten nicht geladen werden</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{radarError}</p>
+          <button type="button" onClick={onRetry} className="btn-primary text-xs px-4 py-2">
+            Erneut laden
+          </button>
+        </div>
+      )}
+
+      {(view === 'empty' || view === 'list') && radarError && (
         <div role="alert" className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
           <span>Aktualisieren fehlgeschlagen ({radarError}) – angezeigt wird der zuletzt geladene Stand.</span>
           <button type="button" onClick={onRetry} className="btn-secondary text-xs px-3 py-1.5">Erneut laden</button>
@@ -225,7 +219,7 @@ export default function PersonalTimeline({
                               aria-hidden="true"
                               className="shrink-0 relative group/thumb overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md"
                             >
-                              <RadarCover item={item} failedImages={failedImages} setFailedImages={setFailedImages} />
+                              <RadarCover item={item} />
                             </Link>
 
                             <div className="flex-1 min-w-0">

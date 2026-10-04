@@ -9,6 +9,7 @@ vi.mock('../utils/offlineStore', () => ({
 }));
 
 import MangaDetail, { backLinkTarget, DETAIL_SCROLL_KEY } from '../MangaDetail';
+import { loadMangaDetail } from '../utils/offlineStore';
 import { fakeResponse } from './fakeResponse';
 import { clearDataCache, writeCache, readCache, LIST_KEY, detailKey } from '../utils/dataCache';
 import { recordToasts } from './toastLog';
@@ -34,11 +35,11 @@ function stubFetch(mangaResponse) {
   return fetchMock;
 }
 
-function renderPage({ state, onUnauthorized } = {}) {
+function renderPage({ state, onUnauthorized, user = editor } = {}) {
   return render(
     <MemoryRouter initialEntries={[{ pathname: '/manga/5', state }]}>
       <Routes>
-        <Route path="/manga/:id" element={<MangaDetail user={editor} onUnauthorized={onUnauthorized} />} />
+        <Route path="/manga/:id" element={<MangaDetail user={user} onUnauthorized={onUnauthorized} />} />
         <Route path="/" element={<p>Regal</p>} />
       </Routes>
     </MemoryRouter>
@@ -229,5 +230,28 @@ describe('backLinkTarget', () => {
     expect(backLinkTarget({ from: '//example.com' })).toBe('/');
     expect(backLinkTarget({ from: '/\\example.com' })).toBe('/');
     expect(backLinkTarget({ from: { pathname: '/x' } })).toBe('/');
+  });
+});
+
+describe('MangaDetail offline toggles', () => {
+  const series = { ...MANGA, volumes: [{ id: 51, manga_id: 5, volume_number: '1', type: 'volume', status: 'Fehlt', owners: [], read_users: [] }] };
+  afterEach(() => {
+    loadMangaDetail.mockReset().mockResolvedValue(null);
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it('an editor in the offline mode can toggle the status; a visitor cannot', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    localStorage.setItem('mangashelf_volume_view_mode', 'grid');
+    loadMangaDetail.mockResolvedValue(series);
+    const view = renderPage({ user: { id: 2, username: 'ed', role: 'visitor', realRole: 'editor', offline: true } });
+    const toggle = await screen.findByRole('button', { name: /^Status: Fehlt/ });
+    expect(toggle.disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+    view.unmount();
+
+    renderPage({ user: { id: 3, username: 'gast', role: 'visitor', realRole: 'visitor', offline: true } });
+    expect((await screen.findByRole('button', { name: /^Status: Fehlt/ })).disabled).toBe(true);
   });
 });

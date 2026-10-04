@@ -4,6 +4,9 @@ import { formatAge } from '../../utils/offlineStore';
 import { APP_VERSION } from './dashboardShell';
 import { formatCount } from '../../utils/format';
 import { needsHttps } from '../../hooks/usePwaInstall';
+import { isAppMode } from '../../utils/api';
+import { useOutboxPending } from '../../app/useOutbox';
+import ConnectQr from '../common/ConnectQr';
 
 export const HTTPS_GUIDE_URL = 'https://github.com/MoltresHD/manga-shelf#6-https--eigene-domain-reverse-proxy-mit-nginx-oder-caddy';
 
@@ -14,7 +17,12 @@ export function formatStorageUsage(bytes) {
   return mb < 1 ? '< 1 MB' : `${Math.round(mb)} MB`;
 }
 
-/** Footer with app version, connection state, offline copy refresh and PWA install. */
+/** "Ausstehend: …" text: purchases by name, a mix of changes as "Änderungen". */
+export function pendingLabel(total, purchases) {
+  return total > purchases ? formatCount(total, 'Änderung', 'Änderungen') : formatCount(total, 'Kauf', 'Käufe');
+}
+
+/** Footer with app version, connection state, offline copy refresh, PWA install and the QR code for the apps. */
 export default function DashboardFooter({
   user, isOfflineMode, networkOffline, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy,
   pendingPurchases = 0, isInstallable, isInstalledApp, handleInstallClick
@@ -24,6 +32,10 @@ export default function DashboardFooter({
   const [storageUsed, setStorageUsed] = useState('');
   const insecure = typeof window !== 'undefined' && window.isSecureContext === false;
   const showHttpsGuide = user?.role === 'admin' && needsHttps();
+  const outbox = useOutboxPending(user?.id ?? null);
+  const pendingTotal = Math.max(outbox.total, pendingPurchases);
+  const pendingBuys = Math.max(outbox.purchases, pendingPurchases);
+  const showConnectQr = !isAppMode() && !user?.offline && (user?.role === 'admin' || user?.role === 'editor');
   useEffect(() => {
     if (!offlineCopyAt) return undefined;
     const timer = setInterval(() => setTick((t) => t + 1), 60000);
@@ -58,10 +70,10 @@ export default function DashboardFooter({
         <WifiOff className="w-3.5 h-3.5" />
         Offline-Modus aktiv
       </span>
-    ) : pendingPurchases > 0 ? (
+    ) : pendingTotal > 0 ? (
       <span className="inline-flex items-center gap-1.5 text-amber-300 font-medium bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
         <Clock className="w-3.5 h-3.5" />
-        Ausstehend: {formatCount(pendingPurchases, 'Kauf', 'Käufe')}
+        Ausstehend: {pendingLabel(pendingTotal, pendingBuys)}
       </span>
     ) : (
       <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
@@ -102,6 +114,7 @@ export default function DashboardFooter({
     ) : insecure && (
       <span className="text-slate-400">Offline-Start und App-Installation nur über HTTPS</span>
     )}
+    {showConnectQr && <ConnectQr />}
     {isInstallable && !isInstalledApp && (
       <button
         type="button"

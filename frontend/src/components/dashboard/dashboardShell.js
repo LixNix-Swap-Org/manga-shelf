@@ -3,7 +3,7 @@ import { scanSeriesTitle } from '../../utils/scanHelpers';
 // Vite always defines it; the guard keeps tests that render without Vite's define working.
 export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
-export const MAIN_VIEWS = ['shelf', 'shopping', 'radar'];
+export const MAIN_VIEWS = ['shelf', 'shopping', 'radar', 'anime'];
 
 const readView = (search) => {
   try {
@@ -16,11 +16,14 @@ const readView = (search) => {
 /** `?view=` of a start URL: a main view, or 'stats' (opens the statistics dialog over the shelf). */
 export const parseInitialView = (search) => {
   const view = readView(search);
-  if (view === 'shopping' || view === 'radar') return { mainView: view, openStats: false };
+  if (view !== 'shelf' && MAIN_VIEWS.includes(view)) return { mainView: view, openStats: false };
   return { mainView: 'shelf', openStats: view === 'stats' };
 };
 
-/** Query string for a main view; other parameters are kept, the shelf has no `view`. */
+/**
+ * Query string for a main view; other parameters (the shelf filters) are kept, the shelf has no `view`, and `add`
+ * (open the anime dialog for a series on arrival) never survives a view change.
+ */
 export const viewSearch = (search, view) => {
   let params;
   try {
@@ -28,6 +31,7 @@ export const viewSearch = (search, view) => {
   } catch (_) {
     params = new URLSearchParams();
   }
+  params.delete('add');
   if (view === 'shelf' || !MAIN_VIEWS.includes(view)) params.delete('view');
   else params.set('view', view);
   const query = params.toString();

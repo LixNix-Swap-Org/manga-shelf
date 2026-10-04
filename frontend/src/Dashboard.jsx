@@ -1,5 +1,6 @@
 import ShoppingListView from './components/dashboard/ShoppingListView';
 import ReleaseRadarView from './components/dashboard/ReleaseRadarView';
+import AnimeView from './components/dashboard/AnimeView';
 import MangaCollectionGrid from './components/dashboard/MangaCollectionGrid';
 import CollectionToolbar from './components/dashboard/CollectionToolbar';
 import DashboardHeader from './components/dashboard/DashboardHeader';
@@ -10,8 +11,10 @@ import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
 import { normalizePubName } from './utils/volumeHelpers';
-import { buildScanPrefill } from './utils/scanHelpers';
+import { buildScanPrefill, parseSharedScan } from './utils/scanHelpers';
+import { lookupLocalIsbn } from './utils/offlineStore';
 import { GERMAN_MONTHS, getStatusBadge } from './utils/collectionHelpers';
 import { mpMatchesSelection } from './utils/radarHelpers';
 import {
@@ -23,19 +26,42 @@ import useMangaList from './hooks/useMangaList';
 import useCollectionFilters from './hooks/useCollectionFilters';
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
+import useAnimeList from './hooks/useAnimeList';
 import useDashboardKeyboard from './hooks/useDashboardKeyboard';
+import { dialogEntryOnTop } from './hooks/useDialogA11y';
+import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
 import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { notify } from './utils/notify';
 
 // dialogs are loaded on first use and mounted only while open
 const UserManagementModal = lazy(() => import('./components/modals/UserManagementModal'));
-const ChangePasswordModal = lazy(() => import('./components/modals/ChangePasswordModal'));
+const AccountModal = lazy(() => import('./components/modals/AccountModal'));
+const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
+const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
 const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 
-const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar' };
+const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime' };
+const ANIME_VIEW = 'anime';
+
+// older names of the dashboardShell helpers (animeTab.test.jsx imports them from here)
+export const mainViewOf = (search) => parseInitialView(search).mainView;
+export const searchForView = viewSearch;
+
+/** ?add=<seriesId> next to ?view=anime: the series the add dialog links to. */
+const addTargetOf = (search) => {
+  try {
+    const params = new URLSearchParams(search || '');
+    const id = params.get('add');
+    return params.get('view') === ANIME_VIEW && /^\d+$/.test(id || '') ? Number(id) : null;
+  } catch (_) {
+    return null;
+  }
+};
+export const SHARED_NO_ISBN_MESSAGE = 'Im geteilten Text wurde keine ISBN gefunden.';
+export const SHARED_MP_LINK_MESSAGE = 'Manga-Passion-Link erkannt: Lege die Reihe an und übernimm die Daten per Auto-Fill.';
 
 export default function Dashboard({ user, onLogout }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
@@ -60,12 +86,14 @@ export default function Dashboard({ user, onLogout }) {
   const [scanChoice, setScanChoice] = useState(null); // { candidates, book, isbn }: several series match a scan
   const scanRequestRef = useRef(0);
   const scanToastRef = useRef(null);
-  const [failedImages, setFailedImages] = useState({}); // shopping list and radar covers
 
   // Modal visibility states
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [accountTab, setAccountTab] = useState('password');
+  const [animeAdd, setAnimeAdd] = useState(null); // { mangaId } while the add dialog is open
+  const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
 
@@ -79,11 +107,18 @@ export default function Dashboard({ user, onLogout }) {
 
   const { mangas, loading, refreshing, dataAt, error: mangasError, fetchMangas, handleDeleteManga } = useMangaList({ user, canEdit });
 
+  // the shelf filters are mirrored into the query string (replacing the entry), next to ?view=
+  const filterUrl = {
+    search: location.search,
+    replace: (nextSearch) => navigate({ search: nextSearch }, { replace: true, state: location.state })
+  };
   const {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
-    totalCollectionValue, completedSeries
-  } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id });
+    totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
+    groupBy, setGroupBy, groups
+  } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
+  const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
 
   const {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
@@ -100,18 +135,39 @@ export default function Dashboard({ user, onLogout }) {
     handlePrevMonth, handleNextMonth, handleCurrentMonth, handleImportMangaPassion
   } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline) });
 
+  const anime = useAnimeList({ user });
+
   onOnlineRef.current = () => {
     syncPendingPurchases();
     fetchShoppingList();
     fetchMangas();
   };
 
+  // the installed app comes back from the background: reload the shelf (the shopping list refreshes itself)
+  useForegroundRefresh(() => { if (!isOfflineMode) fetchMangas(); });
+  const { pullDistance, refreshing: pulling } = usePullToRefresh(async () => {
+    await Promise.all([fetchMangas(), activeMainView === 'shopping' ? fetchShoppingList() : null, activeMainView === ANIME_VIEW ? anime.fetchAnime() : null]);
+  }, { enabled: !isOfflineMode });
+
   useEffect(() => {
     fetchMangas();
     fetchShoppingList();
     if (!user?.offline) fetchReleaseRadar();
+    if (activeMainView === ANIME_VIEW) {
+      anime.fetchAnime();
+      anime.fetchSources();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount und beim Offline-Wechsel
   }, [user?.offline]);
+
+  // ?view=anime&add=<seriesId> (the "Anime-Adaption" button of a series) opens the add dialog linked to that series
+  useEffect(() => {
+    const target = addTargetOf(location.search);
+    if (target === null) return;
+    if (canEdit && !user?.offline) setAnimeAdd({ mangaId: target });
+    navigate({ search: viewSearch(location.search, ANIME_VIEW) }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf die URL
+  }, [location.search]);
 
   // the start URL was read once; strip ?view=stats so a reload does not reopen the dialog
   useEffect(() => {
@@ -123,6 +179,10 @@ export default function Dashboard({ user, onLogout }) {
 
   const loadViewData = (view) => {
     if (view === 'shopping') fetchShoppingList();
+    if (view === ANIME_VIEW) {
+      anime.fetchAnime();
+      anime.fetchSources();
+    }
     if (view === 'radar') {
       fetchReleaseRadar();
       // an explicit entry retries a month whose last load failed; a loaded month is not fetched again
@@ -173,14 +233,25 @@ export default function Dashboard({ user, onLogout }) {
     setShowAddModal(true);
   };
 
+  // right after a dialog closed its history entry is still current: the series replaces it
+  const navigateFromDialog = (path) => navigate(path, dialogEntryOnTop() ? { replace: true } : undefined);
+
   const openSeries = (manga) => {
     setSearch(manga.title || '');
-    navigate(`/manga/${manga.id}`);
+    navigateFromDialog(`/manga/${manga.id}`);
   };
 
   const handleBarcodeDetected = async (scannedCode) => {
     const requestId = ++scanRequestRef.current;
     const isLatest = () => requestId === scanRequestRef.current;
+    // a volume of the offline copy opens its series at once, also offline and without asking the server
+    const local = await lookupLocalIsbn(scannedCode);
+    if (!isLatest()) return;
+    if (local?.manga) {
+      showScanToast(null);
+      openSeries(local.manga);
+      return;
+    }
     if (isOfflineMode) {
       showScanToast('error', SCAN_OFFLINE_MESSAGE);
       return;
@@ -225,6 +296,26 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
+  // share target (manifest share_text / share_url): an ISBN is looked up like a scan, then the parameters are removed
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('share_text') && !params.has('share_url')) return;
+    const shared = parseSharedScan({ text: params.get('share_text') || '', url: params.get('share_url') || '' });
+    params.delete('share_text');
+    params.delete('share_url');
+    const rest = params.toString();
+    navigate({ search: rest ? `?${rest}` : '' }, { replace: true });
+    // after the first paint: a toast stack mounted after the dashboard would miss a message sent during mount
+    const timer = setTimeout(() => {
+      if (shared?.isbn) handleBarcodeDetected(shared.isbn);
+      else if (shared?.mpUrl && canEdit) {
+        showScanToast('info', SHARED_MP_LINK_MESSAGE, { duration: 0, action: { label: 'Reihe anlegen', onClick: () => openAddWithPrefill(null) } });
+      } else showScanToast('info', SHARED_NO_ISBN_MESSAGE, { duration: 8000 });
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount
+  }, []);
+
   const handleOpenStats = useCallback(() => {
     if (isOfflineMode) return;
     setShowStatsModal(true);
@@ -247,8 +338,23 @@ export default function Dashboard({ user, onLogout }) {
   }, [handleDeleteManga]);
 
   const handleOpenPasswordModal = () => {
+    setAccountTab('password');
     setShowPasswordModal(true);
   };
+
+  const openApiKeys = () => {
+    setAccountTab('keys');
+    setShowPasswordModal(true);
+  };
+
+  const animeEntry = (id) => anime.list.find((a) => a.id === id);
+  const handleAnimePlusOne = useCallback((entry) => {
+    anime.updateProgress(entry.id, { episodes_watched: (entry.my_progress?.episodes_watched || 0) + 1 });
+  }, [anime.updateProgress]); // eslint-disable-line react-hooks/exhaustive-deps -- the action is stable
+  const handleAnimeStatus = useCallback((entry, status) => {
+    if (status) anime.updateProgress(entry.id, { status });
+  }, [anime.updateProgress]); // eslint-disable-line react-hooks/exhaustive-deps -- the action is stable
+  const handleOpenAnime = useCallback((entry) => setAnimeDetailId(entry.id), []);
 
   const handleOpenUsersModal = () => {
     setShowUsersModal(true);
@@ -293,12 +399,24 @@ export default function Dashboard({ user, onLogout }) {
         user={user}
       />
 
+      {(pullDistance > 0 || pulling) && (
+        <div className="flex justify-center py-2" role="status" aria-live="polite">
+          <RefreshCw
+            className={`w-5 h-5 text-brand-400 ${pulling ? 'animate-spin' : ''}`}
+            style={pulling ? undefined : { transform: `rotate(${pullDistance * 4}deg)`, opacity: Math.min(1, pullDistance / PULL_THRESHOLD_PX) }}
+            aria-hidden="true"
+          />
+          {pulling && <span className="sr-only">Wird aktualisiert…</span>}
+        </div>
+      )}
+
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
-        
+
         <MainViewSwitcher
           activeMainView={activeMainView}
           onSelectView={setView}
           mangaCount={mangas.length}
+          animeCount={anime.list.length}
           shoppingData={shoppingData}
           radarData={radarData}
         />
@@ -332,6 +450,13 @@ export default function Dashboard({ user, onLogout }) {
           statusFilter={statusFilter}
           statusTabs={statusTabs}
           viewMode={viewMode}
+          collectFilter={collectFilter}
+          setCollectFilter={setCollectFilter}
+          collectCounts={collectCounts}
+          authorFilter={authorFilter}
+          setAuthorFilter={setAuthorFilter}
+          groupBy={groupBy}
+          setGroupBy={setGroupBy}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
@@ -354,6 +479,13 @@ export default function Dashboard({ user, onLogout }) {
           sortBy={sortBy}
           statusFilter={statusFilter}
           viewMode={viewMode}
+          groups={groups}
+          groupBy={groupBy}
+          collectFilter={collectFilter}
+          setCollectFilter={setCollectFilter}
+          authorFilter={authorFilter}
+          setAuthorFilter={setAuthorFilter}
+          onAuthorClick={handleAuthorClick}
         />
       </>
     )}
@@ -382,8 +514,26 @@ export default function Dashboard({ user, onLogout }) {
         pendingPurchases={pendingPurchases}
         failedPurchases={failedPurchases}
         cacheWriteFailed={cacheWriteFailed}
-        failedImages={failedImages}
-        setFailedImages={setFailedImages}
+      />
+    )}
+
+    {activeMainView === ANIME_VIEW && (
+      <AnimeView
+        list={anime.list}
+        loaded={anime.loaded}
+        loading={anime.loading}
+        error={anime.error}
+        fromCache={anime.fromCache}
+        cacheAt={anime.cacheAt}
+        sources={anime.sources}
+        canEdit={canEdit}
+        user={user}
+        onAdd={() => setAnimeAdd({ mangaId: null })}
+        onOpen={handleOpenAnime}
+        onPlusOne={handleAnimePlusOne}
+        onStatusChange={handleAnimeStatus}
+        onRetry={anime.fetchAnime}
+        onOpenAccount={user?.offline ? null : openApiKeys}
       />
     )}
 
@@ -427,8 +577,6 @@ export default function Dashboard({ user, onLogout }) {
         importingMpIds={importingMpIds}
         handleMarkDelivered={handleMarkDelivered}
         markingDeliveredIds={markingDeliveredIds}
-        failedImages={failedImages}
-        setFailedImages={setFailedImages}
         GERMAN_MONTHS={GERMAN_MONTHS}
       />
     )}
@@ -457,13 +605,45 @@ export default function Dashboard({ user, onLogout }) {
             onSeriesCreated={() => fetchMangas()}
             onSuccess={(created) => {
               fetchMangas();
-              if (scanPrefill && created?.id) navigate(`/manga/${created.id}`);
+              if (scanPrefill && created?.id) navigateFromDialog(`/manga/${created.id}`);
             }}
             prefill={scanPrefill}
           />
         )}
 
-        {showPasswordModal && <ChangePasswordModal isOpen onClose={() => setShowPasswordModal(false)} />}
+        {showPasswordModal && <AccountModal isOpen onClose={() => setShowPasswordModal(false)} user={user} initialTab={accountTab} />}
+
+        {animeAdd && (
+          <AddAnimeModal
+            isOpen
+            onClose={() => setAnimeAdd(null)}
+            search={anime.search}
+            loadAdaptations={anime.adaptations}
+            onAdd={anime.add}
+            onOpenExisting={(id) => setAnimeDetailId(id)}
+            mangas={mangas}
+            initialMangaId={animeAdd.mangaId}
+          />
+        )}
+
+        {animeDetailId !== null && (
+          <AnimeDetailModal
+            isOpen
+            animeId={animeDetailId}
+            fallback={animeEntry(animeDetailId)}
+            onClose={() => setAnimeDetailId(null)}
+            canEdit={canEdit && !user?.offline}
+            mangas={mangas}
+            fetchDetail={anime.fetchDetail}
+            updateProgress={anime.updateProgress}
+            removeFromMyList={anime.removeFromMyList}
+            update={anime.update}
+            refresh={anime.refresh}
+            remove={anime.remove}
+            onAdd={anime.add}
+            onOpenAnime={(id) => setAnimeDetailId(id)}
+          />
+        )}
 
         {showUsersModal && <UserManagementModal isOpen onClose={() => setShowUsersModal(false)} currentUser={user} />}
 

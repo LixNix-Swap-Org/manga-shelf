@@ -2,9 +2,12 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import useShoppingList from '../hooks/useShoppingList';
 import { clearOfflineData } from '../utils/offlineStore';
-import { queueKey, readQueue, enqueuePurchase, localToday } from '../utils/shoppingQueue';
+import { queueKey, localToday } from '../utils/shoppingQueue';
+import { getOutbox, outboxScope, resetOutbox, FALLBACK_KEY } from '../utils/outbox';
 import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
+import { readCache, writeCache, detailKey, clearDataCache } from '../utils/dataCache';
+import { PURCHASE_RECORDED_EVENT } from '../appShell';
 
 let toasts;
 beforeEach(() => { toasts = recordToasts(); });
@@ -39,6 +42,9 @@ function renderList(user = { id: 1 }) {
   return { ...hook, props };
 }
 
+const queued = (userId = 1) => getOutbox().list(outboxScope(userId)).map((e) => e.volumeId);
+const legacyQueue = (userId, entries) => localStorage.setItem(queueKey(userId), JSON.stringify(entries));
+
 async function loaded(fetchMock, user) {
   const r = renderList(user);
   await act(() => r.result.current.fetchShoppingList());
@@ -48,6 +54,8 @@ async function loaded(fetchMock, user) {
 describe('useShoppingList', () => {
   beforeEach(() => {
     localStorage.clear();
+    resetOutbox();
+    clearDataCache();
   });
 
   it('quick buy online records the buyer as owner with the purchase date of today', async () => {
@@ -73,11 +81,13 @@ describe('useShoppingList', () => {
     await act(async () => { ok = await result.current.handleQuickBuy(1, { batch: true }); });
     await act(async () => { auth = await result.current.handleQuickBuy(2, { batch: true }); });
     expect(ok).toEqual({ status: 'ok', error: '', httpStatus: 200 });
-    expect(auth).toEqual({ status: 'failed', error: 'Sitzung abgelaufen – bitte neu anmelden.', httpStatus: 401 });
-    expect(toasts.messages('error')).toEqual([]);
+    // the session ended: the purchase stays in the outbox and goes out after the next login
+    expect(auth).toEqual({ status: 'queued', error: '', httpStatus: null });
+    expect(toasts.messages()).toEqual([]);
     expect(props.fetchMangas).not.toHaveBeenCalled();
     expect(listCalls()).toBe(before);
-    expect(result.current.shoppingData.items.map(i => i.id)).toEqual([2]);
+    expect(result.current.shoppingData.items).toEqual([]);
+    expect(queued()).toEqual([2]);
   });
 
   it('batch mode: a volume that no longer exists leaves the list as a 404 result', async () => {
@@ -96,7 +106,8 @@ describe('useShoppingList', () => {
     let outcome;
     await act(async () => { outcome = await result.current.handleQuickBuy(1, { batch: true }); });
     expect(outcome).toEqual({ status: 'queued', error: '', httpStatus: null });
-    expect(readQueue(1).map(e => e.volumeId)).toEqual([1]);
+    expect(queued()).toEqual([1]);
+    expect(JSON.parse(localStorage.getItem(FALLBACK_KEY))).toMatchObject([{ kind: 'purchase', volumeId: 1, userId: 1, serverId: 'web' }]);
   });
 
   it('buyingIds holds every volume whose purchase is running', async () => {
@@ -140,29 +151,54 @@ describe('useShoppingList', () => {
     await act(async () => { outcome = await result.current.handleQuickBuy(1); });
     expect(outcome).toBe('queued');
     expect(toasts.messages('error')).toEqual([]);
-    expect(readQueue(1).map(e => e.volumeId)).toEqual([1]);
+    expect(queued()).toEqual([1]);
     expect(result.current.shoppingData.items.map(i => i.id)).toEqual([2]);
-    expect(result.current.pendingPurchases).toBe(1);
+    await waitFor(() => expect(result.current.pendingPurchases).toBe(1));
     expect(props.setNetworkOffline).toHaveBeenCalledWith(true);
   });
 
-  it('an expired session is reported and nothing is queued', async () => {
+  it('an expired session keeps the purchase in the outbox for the next login', async () => {
     const fetchMock = stubFetch({ putResponse: () => json(401, { error: 'Sitzung ungültig', code: 'SESSION_INVALID' }) });
     const { result } = await loaded(fetchMock);
     let outcome;
     await act(async () => { outcome = await result.current.handleQuickBuy(1); });
-    expect(outcome).toBe('failed');
-    expect(toasts.messages('error')).toContainEqual(expect.stringContaining('Sitzung abgelaufen'));
-    expect(readQueue(1)).toEqual([]);
-    expect(result.current.shoppingData.items).toHaveLength(2);
+    expect(outcome).toBe('queued');
+    expect(toasts.messages('error')).toEqual([]);
+    expect(queued()).toEqual([1]);
+    expect(result.current.shoppingData.items.map(i => i.id)).toEqual([2]);
+  });
+
+  it('a queued purchase is announced as queued and patches the stored series copy', async () => {
+    const fetchMock = stubFetch({ putResponse: () => json(401, { error: 'Sitzung ungültig', code: 'SESSION_INVALID' }) });
+    const { result } = await loaded(fetchMock);
+    writeCache(1, detailKey(9), { id: 9, title: 'Berserk', volumes: [{ id: 1, volume_number: '1', status: 'Fehlt', owners: [] }] });
+    const events = [];
+    const onPurchase = (e) => events.push(e.detail);
+    window.addEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
+    try {
+      await act(async () => { await result.current.handleQuickBuy(1); });
+    } finally {
+      window.removeEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
+    }
+    expect(events).toEqual([{ volumeId: 1, queued: true }]);
+    expect(readCache(1, detailKey(9)).data.volumes[0]).toMatchObject({ status: 'Vorhanden', owned_by_me: true, purchase_date: localToday() });
+  });
+
+  it('a 401 of an auth proxy (no app code) says so and keeps the purchase queued', async () => {
+    const fetchMock = stubFetch({ putResponse: () => json(401, { error: 'proxy' }) });
+    const { result } = await loaded(fetchMock);
+    await act(() => result.current.handleQuickBuy(1));
+    expect(toasts.messages('info')).toEqual([expect.stringContaining('nach der Anmeldung übertragen')]);
+    expect(queued()).toEqual([1]);
   });
 
   it('a rejected purchase shows the server message', async () => {
     const fetchMock = stubFetch({ putResponse: () => json(403, { error: 'Nur Lesezugriff', code: 'READ_ONLY' }) });
     const { result } = await loaded(fetchMock);
     await act(() => result.current.handleQuickBuy(1));
-    expect(toasts.messages('error')).toContainEqual('Nur Lesezugriff');
-    expect(readQueue(1)).toEqual([]);
+    expect(toasts.messages('error')).toEqual(['Nur Lesezugriff']);
+    expect(queued()).toEqual([]);
+    expect(result.current.shoppingData.items).toHaveLength(2);
   });
 
   it("in App's offline mode the purchase is queued without trying the server", async () => {
@@ -173,7 +209,8 @@ describe('useShoppingList', () => {
     await act(async () => { outcome = await result.current.handleQuickBuy(2); });
     expect(outcome).toBe('queued');
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(readQueue(1).map(e => e.volumeId)).toEqual([2]);
+    expect(queued()).toEqual([2]);
+    expect(getOutbox().list(outboxScope(1))[0]).toMatchObject({ kind: 'purchase', value: true, purchase_date: localToday(), deferred: true });
     expect(JSON.parse(localStorage.getItem('mangashelf_shopping_cache')).items.map(i => i.id)).toEqual([1]);
   });
 
@@ -182,39 +219,46 @@ describe('useShoppingList', () => {
     const { result } = await loaded(fetchMock);
     const original = Storage.prototype.setItem;
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
-      if (key.startsWith('mangashelf_pending_purchases')) throw new DOMException('full', 'QuotaExceededError');
+      if (key === FALLBACK_KEY) throw new DOMException('full', 'QuotaExceededError');
       return original.call(this, key, value);
     });
     let outcome;
     await act(async () => { outcome = await result.current.handleQuickBuy(1); });
     expect(outcome).toBe('failed');
-    expect(toasts.messages('error').length).toBeGreaterThan(0);
+    expect(toasts.messages('error')).toEqual([expect.stringContaining('nicht vorgemerkt')]);
     expect(result.current.shoppingData.items).toHaveLength(2);
+    expect(queued()).toEqual([]);
   });
 
-  it('sends the queue when App leaves offline mode (no browser online event)', async () => {
-    enqueuePurchase(1, 2, { purchasedAt: '2026-10-01' });
+  it('moves the old purchase queue into the outbox once and sends it when App leaves offline mode', async () => {
+    legacyQueue(1, [{ volumeId: 2, purchasedAt: '2026-10-01' }]);
     const fetchMock = stubFetch();
-    const { rerender, props } = renderList({ id: 1, offline: true });
+    const { rerender, props, result } = renderList({ id: 1, offline: true });
+    await waitFor(() => expect(localStorage.getItem(queueKey(1))).toBeNull());
+    expect(queued()).toEqual([2]);
+    await waitFor(() => expect(result.current.pendingPurchases).toBe(1));
     expect(puts(fetchMock)).toHaveLength(0);
     rerender({ ...props, user: { id: 1, offline: false } });
-    await waitFor(() => expect(localStorage.getItem(queueKey(1))).toBeNull());
+    await waitFor(() => expect(queued()).toEqual([]));
     const [url, opts] = puts(fetchMock)[0];
     expect(url).toBe('/api/volumes/2/owners');
     expect(JSON.parse(opts.body)).toEqual({ owned: true, purchase_date: '2026-10-01' });
+    await waitFor(() => expect(toasts.messages('success')).toEqual(['1 Änderung übertragen']));
+    await waitFor(() => expect(props.fetchMangas).toHaveBeenCalled());
   });
 
   it("does not send another user's queued purchases", async () => {
-    enqueuePurchase(1, 2);
+    legacyQueue(1, [{ volumeId: 2 }]);
     const fetchMock = stubFetch();
     renderList({ id: 7 });
     await act(async () => {});
     expect(puts(fetchMock)).toHaveLength(0);
-    expect(readQueue(1)).toHaveLength(1);
+    expect(localStorage.getItem(queueKey(1))).not.toBeNull();
+    expect(queued(7)).toEqual([]);
   });
 
   it('a fetched list hides purchases that are still queued', async () => {
-    enqueuePurchase(1, 2);
+    legacyQueue(1, [{ volumeId: 2 }]);
     const fetchMock = stubFetch({ putResponse: () => json(503) });
     const { result } = await loaded(fetchMock);
     expect(result.current.shoppingData.items.map(i => i.id)).toEqual([1]);
@@ -231,10 +275,10 @@ describe('useShoppingList', () => {
     const { result } = renderList({ id: 1 });
     await act(() => result.current.fetchShoppingList());
     await act(() => result.current.handleQuickBuy(2));
-    expect(readQueue(1)).toHaveLength(1);
+    expect(queued()).toEqual([2]);
     up = true;
     await act(() => result.current.fetchShoppingList());
-    await waitFor(() => expect(readQueue(1)).toEqual([]));
+    await waitFor(() => expect(queued()).toEqual([]));
     expect(puts(fetchMock).filter(([url]) => url === '/api/volumes/2/owners').length).toBeGreaterThanOrEqual(2);
   });
 

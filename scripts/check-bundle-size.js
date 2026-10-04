@@ -12,12 +12,21 @@ const DEFAULT_NEW_CHUNK_LIMIT = 20 * 1024;
 // a few hundred bytes are noise for tiny chunks (icons), where 15 % would be a handful of bytes
 const DEFAULT_MIN_SLACK = 512;
 const INITIAL_KEY = 'initial-load';
+// Route chunks keep their source path as key: Rollup emits them as a dynamic entry (`src/Dashboard.jsx`) or, when a modal
+// imports from them statically, as a shared chunk (`_Dashboard-AbC123.js`)
+const ROUTE_CHUNKS = { Dashboard: 'src/Dashboard.jsx', MangaDetail: 'src/MangaDetail.jsx' };
 
 // Shared chunks are keyed by their hashed file name (`_Button-AbC123.js`), dependencies by their path
 function normalizeKey(key) {
   const nm = key.lastIndexOf('node_modules/');
   if (nm !== -1) return key.slice(nm);
   return key.replace(/^_(.+)-[\w-]{8}(\.\w+)$/, '_$1$2');
+}
+
+function chunkKey(key) {
+  const name = normalizeKey(key);
+  const shared = /^_(.+)\.js$/.exec(name);
+  return (shared && ROUTE_CHUNKS[shared[1]]) || name;
 }
 
 function gzipSize(file) {
@@ -36,7 +45,7 @@ function collectSizes(distDir) {
   const chunks = {};
   const add = (key, bytes) => { chunks[key] = (chunks[key] || 0) + bytes; };
   for (const [key, chunk] of Object.entries(manifest)) {
-    const name = normalizeKey(key);
+    const name = chunkKey(key);
     if (/\.(js|mjs|css)$/.test(chunk.file)) add(name, sizeOf(chunk.file));
     for (const css of chunk.css || []) add(`${name} (css)`, sizeOf(css));
   }
@@ -131,4 +140,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { normalizeKey, collectSizes, compareToBudget, updateBudget, formatTable, INITIAL_KEY };
+module.exports = { normalizeKey, chunkKey, ROUTE_CHUNKS, collectSizes, compareToBudget, updateBudget, formatTable, INITIAL_KEY };

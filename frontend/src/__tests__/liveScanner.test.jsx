@@ -1,0 +1,184 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import LiveScanner, { cameraErrorText, createScanDebounce, SAME_ISBN_PAUSE_MS } from '../components/common/LiveScanner';
+import BarcodeScannerButton from '../components/common/BarcodeScannerButton';
+import { liveScanSupported } from '../utils/scanHelpers';
+
+const zxing = vi.hoisted(() => ({ calls: [], stop: null }));
+vi.mock('@zxing/browser', () => ({
+  BrowserMultiFormatReader: class {
+    constructor(hints, options) {
+      zxing.calls.push({ hints, options });
+    }
+
+    decodeFromStream(stream, video, callback) {
+      zxing.calls.push({ stream, video });
+      callback(null);
+      callback({ getText: () => '9783551762931' });
+      return Promise.resolve({ stop: zxing.stop });
+    }
+  }
+}));
+
+const ISBN = '9783551762931';
+
+function fakeCamera({ torch = true } = {}) {
+  const track = {
+    stop: vi.fn(),
+    getCapabilities: () => (torch ? { torch: true } : {}),
+    applyConstraints: vi.fn(async () => {})
+  };
+  const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  const mediaDevices = { getUserMedia: vi.fn(async () => stream) };
+  return { track, stream, mediaDevices };
+}
+
+/** BarcodeDetector stand-in: answers each detect() with the next list of barcodes (then nothing). */
+function fakeDetector(answers) {
+  const queue = [...answers];
+  const Detector = vi.fn(function Detector(options) {
+    this.options = options;
+    this.detect = vi.fn(async () => queue.shift() || []);
+  });
+  return Detector;
+}
+
+beforeEach(() => {
+  zxing.calls.length = 0;
+  zxing.stop = vi.fn();
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { configurable: true, get: () => 4 });
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  delete HTMLMediaElement.prototype.readyState;
+});
+
+describe('live scanner helpers', () => {
+  it('needs a secure context with getUserMedia', () => {
+    expect(liveScanSupported({ isSecureContext: true, navigator: { mediaDevices: { getUserMedia: () => {} } } })).toBe(true);
+    expect(liveScanSupported({ isSecureContext: false, navigator: { mediaDevices: { getUserMedia: () => {} } } })).toBe(false);
+    expect(liveScanSupported({ isSecureContext: true, navigator: {} })).toBe(false);
+    expect(liveScanSupported(null)).toBe(false);
+  });
+
+  it('ignores the same ISBN for two seconds, a different one at once', () => {
+    let t = 0;
+    const accept = createScanDebounce(SAME_ISBN_PAUSE_MS, () => t);
+    expect(accept(ISBN)).toBe(true);
+    t = 1500;
+    expect(accept(ISBN)).toBe(false);
+    expect(accept('9783551762948')).toBe(true);
+    t = 1600;
+    expect(accept(ISBN)).toBe(true);
+    t = 3700;
+    expect(accept(ISBN)).toBe(true);
+  });
+
+  it('names camera errors in German', () => {
+    expect(cameraErrorText({ name: 'NotAllowedError' })).toMatch(/Kein Zugriff auf die Kamera/);
+    expect(cameraErrorText({ name: 'NotFoundError' })).toBe('Keine passende Kamera gefunden.');
+    expect(cameraErrorText(new Error('x'))).toBe('Die Kamera ließ sich nicht starten.');
+  });
+});
+
+describe('LiveScanner', () => {
+  it('opens the rear camera, reports each new ISBN once and stays open in continuous mode', async () => {
+    const camera = fakeCamera();
+    const Detector = fakeDetector([[{ rawValue: '4006381333931', format: 'ean_13' }], [{ rawValue: ISBN, format: 'ean_13' }], [{ rawValue: ISBN, format: 'ean_13' }]]);
+    const onDetected = vi.fn();
+    const onClose = vi.fn();
+    const { unmount } = render(
+      <LiveScanner continuous onDetected={onDetected} onClose={onClose} mediaDevices={camera.mediaDevices} Detector={Detector}>
+        <p>Liste</p>
+      </LiveScanner>
+    );
+    expect(screen.getByRole('dialog', { name: 'Barcode scannen' })).toBeTruthy();
+    expect(camera.mediaDevices.getUserMedia).toHaveBeenCalledWith({
+      audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    await waitFor(() => expect(onDetected).toHaveBeenCalledWith(ISBN));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(onDetected).toHaveBeenCalledTimes(1);
+    expect(Detector).toHaveBeenCalledWith({ formats: ['ean_13', 'ean_8', 'upc_a'] });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText(`Erkannt: ${ISBN}`)).toBeTruthy();
+    expect(screen.getByText('Liste')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Licht' }));
+    await waitFor(() => expect(camera.track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] }));
+    expect(screen.getByRole('button', { name: 'Licht' }).getAttribute('aria-pressed')).toBe('true');
+
+    unmount();
+    expect(camera.track.stop).toHaveBeenCalled();
+  });
+
+  it('closes after the first ISBN without continuous mode', async () => {
+    const camera = fakeCamera({ torch: false });
+    const onDetected = vi.fn();
+    const onClose = vi.fn();
+    render(<LiveScanner onDetected={onDetected} onClose={onClose} mediaDevices={camera.mediaDevices} Detector={fakeDetector([[{ rawValue: ISBN }]])} />);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onDetected).toHaveBeenCalledWith(ISBN);
+    expect(screen.queryByRole('button', { name: 'Licht' })).toBeNull();
+  });
+
+  it('without BarcodeDetector ZXing decodes the same stream with EAN hints', async () => {
+    const camera = fakeCamera();
+    const onDetected = vi.fn();
+    const { unmount } = render(<LiveScanner continuous onDetected={onDetected} onClose={vi.fn()} mediaDevices={camera.mediaDevices} Detector={undefined} />);
+    await waitFor(() => expect(onDetected).toHaveBeenCalledWith(ISBN));
+    const [{ hints, options }, { stream }] = zxing.calls;
+    expect([...hints.values()][0]).toHaveLength(3);
+    expect(options.delayBetweenScanAttempts).toBe(125);
+    expect(stream).toBe(camera.stream);
+    unmount();
+    expect(zxing.stop).toHaveBeenCalled();
+  });
+
+  it('a refused camera shows the reason and offers the photo instead', async () => {
+    const mediaDevices = { getUserMedia: vi.fn(async () => { throw Object.assign(new Error('denied'), { name: 'NotAllowedError' }); }) };
+    const onClose = vi.fn();
+    const onPhotoFallback = vi.fn();
+    render(<LiveScanner onDetected={vi.fn()} onClose={onClose} onPhotoFallback={onPhotoFallback} mediaDevices={mediaDevices} Detector={undefined} />);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Kein Zugriff auf die Kamera/);
+    fireEvent.click(screen.getByRole('button', { name: 'Foto aufnehmen' }));
+    expect(onClose).toHaveBeenCalled();
+    expect(onPhotoFallback).toHaveBeenCalled();
+  });
+
+  it('Escape and the close button end the scan', async () => {
+    const camera = fakeCamera();
+    const onClose = vi.fn();
+    render(<LiveScanner onDetected={vi.fn()} onClose={onClose} mediaDevices={camera.mediaDevices} Detector={fakeDetector([])} />);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Scanner schließen' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+    await act(async () => {});
+  });
+});
+
+describe('BarcodeScannerButton with live scanning', () => {
+  it('opens the live scanner in a secure context and the photo picker otherwise', async () => {
+    const camera = fakeCamera();
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: camera.mediaDevices });
+    try {
+      render(<BarcodeScannerButton buttonText="Laden-Scan" continuous onDetected={vi.fn()} scannerChildren={<p>Feed</p>} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Laden-Scan' }));
+      expect(await screen.findByRole('dialog', { name: 'Laden-Scan' })).toBeTruthy();
+      expect(screen.getByText('Feed')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Fertig' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    } finally {
+      delete window.isSecureContext;
+      delete navigator.mediaDevices;
+    }
+    const { container } = render(<BarcodeScannerButton buttonText="Foto-Scan" onDetected={vi.fn()} />);
+    const input = container.querySelector('input[type="file"]');
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Foto-Scan' }));
+    expect(click).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

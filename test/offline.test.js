@@ -47,6 +47,7 @@ test('offline-snapshot mirrors /mangas and /mangas/:id for the requesting user',
         const list = (await client('GET', '/mangas')).body;
         assert.deepEqual(snap.mangas, list);
         assert.ok(snap.mangas.every(m => 'volume_search' in m), 'the dashboard search works offline too');
+        assert.ok(snap.mangas.every(m => 'wish_priority' in m && 'wished' in m), 'the wishlist chip works offline too');
         assert.deepEqual(Object.keys(snap.details).sort(), [String(a), String(b)].sort());
         for (const id of [a, b]) {
             assert.deepEqual(snap.details[id], (await client('GET', `/mangas/${id}`)).body);

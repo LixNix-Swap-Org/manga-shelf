@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import AddMangaModal from '../components/modals/AddMangaModal';
+import AddMangaModal, { lookupSourceLabels } from '../components/modals/AddMangaModal';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -199,6 +199,33 @@ describe('AddMangaModal: closing', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
+  it('badges each lookup hit with its own source; a hit found on both sources shows both', async () => {
+    mockFetch({
+      'GET /api/lookup/manga': () => json(200, [
+        { id: 'mal_2', source: 'mal', source_label: '🌐 MyAnimeList', title: 'Berserk (MAL)', status: 'Laufend' },
+        { id: 'al_30002', source: 'anilist', title: 'Berserk', status: 'Laufend', also_on: ['mal'] },
+        { id: 'al_9', source: 'anilist', source_label: '🌐 AniList', title: 'Berserk: Prototype', status: 'Abgeschlossen' }
+      ])
+    });
+    renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Berserk' } });
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
+    const badges = async (title) => {
+      const hit = (await screen.findByText(title)).closest('button');
+      return [...hit.querySelectorAll('span')].map((el) => el.textContent.trim()).filter((t) => t.startsWith('🌐'));
+    };
+    expect(await badges('Berserk (MAL)')).toEqual(['🌐 MyAnimeList']);
+    expect(await badges('Berserk')).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
+    expect(await badges('Berserk: Prototype')).toEqual(['🌐 AniList']);
+  });
+
+  it('lookupSourceLabels falls back to AniList only for AniList hits', () => {
+    expect(lookupSourceLabels({ source: 'anilist' })).toEqual(['🌐 AniList']);
+    expect(lookupSourceLabels({ source: 'mal' })).toEqual(['🌐 MyAnimeList']);
+    expect(lookupSourceLabels({ source: 'other' })).toEqual([]);
+    expect(lookupSourceLabels({ source: 'anilist', source_label: '🌐 AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
+  });
+
   it('Escape closes the result list first, then the dialog', async () => {
     mockFetch({
       'GET /api/lookup/manga': () => json(200, [
@@ -322,5 +349,63 @@ describe('AddMangaModal: choosing a lookup result', () => {
     await act(async () => { coverA.resolve(json(200, { url: '/uploads/a.jpg' })); });
     expect(titleInput().value).toBe('');
     expect(screen.getByPlaceholderText(/example\.com/).value).toBe('');
+  });
+});
+
+describe('AddMangaModal: wishlist', () => {
+  it('sends wish_priority (default mittel) only when "Auf die Wunschliste" is ticked', async () => {
+    const fetchFn = mockFetch({ 'POST /api/mangas': () => json(200, { success: true, id: 9 }) });
+    const { onSuccess } = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Wunschreihe' } });
+    const box = screen.getByLabelText('Auf die Wunschliste');
+    expect(box.checked).toBe(false);
+    expect(screen.queryByLabelText('Priorität')).toBeNull();
+    fireEvent.click(box);
+    const select = screen.getByLabelText('Priorität');
+    expect(select.value).toBe('2');
+    expect([...select.options].map(o => o.textContent)).toEqual(['Keine', 'Niedrig', 'Mittel', 'Hoch']);
+    fireEvent.change(select, { target: { value: '3' } });
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(bodyOf(callsTo(fetchFn, 'POST /api/mangas')[0]).wish_priority).toBe(3);
+  });
+
+  it('a series without the box ticked and a scan prefill send no wish', async () => {
+    const fetchFn = mockFetch({
+      'POST /api/mangas': () => json(200, { success: true, id: 10 }),
+      'POST /api/volumes': () => json(200, { success: true, id: 1 })
+    });
+    const { onSuccess } = renderModal({ prefill: scanPrefill() });
+    expect(screen.getByLabelText('Auf die Wunschliste').checked).toBe(false);
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(bodyOf(callsTo(fetchFn, 'POST /api/mangas')[0]).wish_priority).toBeNull();
+  });
+});
+
+describe('AddMangaModal: cover upload cancel', () => {
+  it('"Upload abbrechen" stops the cover upload; no series is created and the form stays usable', async () => {
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:cover');
+    URL.revokeObjectURL = vi.fn();
+    try {
+      const fetchFn = mockFetch({
+        'POST /api/upload': (url, init) => new Promise((_, reject) => {
+          init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        })
+      });
+      const { onSuccess } = renderModal();
+      fireEvent.change(titleInput(), { target: { value: 'Frieren' } });
+      fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [new File(['x'], 'c.png', { type: 'image/png' })] } });
+      fireEvent.click(submitButton());
+      fireEvent.click(await screen.findByRole('button', { name: 'Upload abbrechen' }));
+      expect(await screen.findByText('Upload abgebrochen')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Upload abbrechen' })).toBeNull();
+      expect(submitButton().disabled).toBe(false);
+      expect(callsTo(fetchFn, 'POST /api/mangas')).toHaveLength(0);
+      expect(onSuccess).not.toHaveBeenCalled();
+    } finally {
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+    }
   });
 });

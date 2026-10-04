@@ -10,7 +10,8 @@ import BackupRestoreModal from '../components/modals/BackupRestoreModal';
 import {
   UNDO_KEY, UNDO_TTL_MS, manifestSummary, readRestoreUndo, saveRestoreUndo, versionSummary
 } from '../components/modals/backup/backupHelpers';
-import { TIMEOUTS } from '../utils/api';
+import { TIMEOUTS, setServer } from '../utils/api';
+import { downloadProgressText } from '../components/modals/backup/DownloadLink';
 
 const ADMIN = { id: 1, username: 'admin', role: 'admin' };
 const SNAP = 'manual-2026-10-02T10-00-00.zip';
@@ -281,6 +282,126 @@ describe('BackupRestoreModal two-step restore', () => {
     rerender(<BackupRestoreModal isOpen={false} onClose={vi.fn()} user={ADMIN} />);
     await act(async () => { late.resolve(json(200, inspection({ staging_id: 'late-id' }))); });
     await waitFor(() => expect(calls(fetchMock, 'DELETE', '/api/backup/restore/late-id')).toHaveLength(1));
+  });
+
+  it('unmounting during a pending inspect aborts it and discards the late answer', async () => {
+    const late = deferred();
+    let signal;
+    const fetchMock = mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': (init) => { signal = init.signal; return late.promise; },
+      'DELETE /api/backup/restore/late-id': () => json(200, { success: true })
+    });
+    const { unmount } = renderBackup();
+    fireEvent.click(await screen.findByRole('button', { name: `Snapshot ${SNAP} wiederherstellen` }));
+    await waitFor(() => expect(calls(fetchMock, 'POST', '/api/backup/inspect')).toHaveLength(1));
+    unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => { late.resolve(json(200, inspection({ staging_id: 'late-id' }))); });
+    await waitFor(() => expect(calls(fetchMock, 'DELETE', '/api/backup/restore/late-id')).toHaveLength(1));
+  });
+
+  it('unmounting during an upload inspect aborts the upload', async () => {
+    let signal;
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [] }),
+      'POST /api/backup/inspect': (init) => { signal = init.signal; return new Promise(() => {}); }
+    });
+    const { unmount } = renderBackup();
+    fireEvent.click(screen.getByRole('tab', { name: 'ZIP-Datei hochladen' }));
+    fireEvent.change(document.getElementById('backup-file-input'), { target: { files: [new File(['zip'], 'b.zip')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Backup prüfen' }));
+    await waitFor(() => expect(signal).toBeTruthy());
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('app build: snapshot and ZIP downloads go through the token-carrying download with progress', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    setServer({ base: 'https://shelf.example.org', token: 'tok' });
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const file = deferred();
+    try {
+      const fetchMock = mockFetch({
+        'GET https://shelf.example.org/api/backups': () => json(200, { backups: [snapshot()] }),
+        [`GET https://shelf.example.org/api/backups/${SNAP}/download`]: () => file.promise
+      });
+      renderBackup();
+      const link = await screen.findByRole('link', { name: `Snapshot ${SNAP} herunterladen` });
+      fireEvent.click(link);
+      expect(await within(link).findByText('Lädt… 0 MB')).toBeTruthy();
+      const [, init] = calls(fetchMock, 'GET', `https://shelf.example.org/api/backups/${SNAP}/download`)[0];
+      expect(init.headers.Authorization).toBe('Bearer tok');
+      await act(async () => { file.resolve(new Response('zip', { status: 200 })); });
+      await waitFor(() => expect(within(link).queryByText(/Lädt/)).toBeNull());
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+      clickSpy.mockRestore();
+      vi.unstubAllEnvs();
+      setServer({ base: '', token: '' });
+    }
+  });
+
+  it('app build: a running download keeps the dialog from closing by backdrop or Escape, the X lets it go on', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    setServer({ base: 'https://shelf.example.org', token: 'tok' });
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const file = deferred();
+    try {
+      const fetchMock = mockFetch({
+        'GET https://shelf.example.org/api/backups': () => json(200, { backups: [snapshot()] }),
+        'GET https://shelf.example.org/api/backup': () => file.promise
+      });
+      const onClose = vi.fn();
+      const { unmount } = renderBackup({ onClose });
+      const dialog = screen.getByRole('dialog');
+      fireEvent.click(screen.getByRole('link', { name: /Direkt-ZIP/ }));
+      await waitFor(() => expect(dialog.getAttribute('data-busy')).toBe('true'));
+      fireEvent.click(dialog);
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(document.getElementById('btn-close-restore-modal-x'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      unmount();
+      const [, init] = calls(fetchMock, 'GET', 'https://shelf.example.org/api/backup')[0];
+      expect(init.signal.aborted).toBe(false);
+      await act(async () => {
+        file.resolve(new Response('zip', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="backup.zip"' } }));
+      });
+      await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+      expect(clickSpy.mock.contexts[0].download).toBe('backup.zip');
+    } finally {
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+      clickSpy.mockRestore();
+      vi.unstubAllEnvs();
+      setServer({ base: '', token: '' });
+    }
+  });
+
+  it('browser build: the download links stay plain links', async () => {
+    mockFetch({ 'GET /api/backups': () => json(200, { backups: [snapshot()] }) });
+    renderBackup();
+    const link = await screen.findByRole('link', { name: `Snapshot ${SNAP} herunterladen` });
+    expect(link.getAttribute('href')).toBe(`/api/backups/${SNAP}/download`);
+    let prevented = null;
+    const stop = (e) => { prevented = e.defaultPrevented; e.preventDefault(); };
+    window.addEventListener('click', stop);
+    fireEvent.click(link);
+    window.removeEventListener('click', stop);
+    expect(prevented).toBe(false);
+    expect(screen.getByRole('link', { name: /Direkt-ZIP/ }).getAttribute('href')).toBe('/api/backup');
+  });
+
+  it('download progress text', () => {
+    expect(downloadProgressText({ loaded: 3.2 * 1024 * 1024, total: 10 * 1024 * 1024 })).toBe('Lädt… 3,2 von 10 MB');
+    expect(downloadProgressText({ loaded: 0, total: 0 })).toBe('Lädt… 0 MB');
+    expect(downloadProgressText(null)).toBe('');
   });
 
   it('relogin: the line about the own account is prominent', async () => {

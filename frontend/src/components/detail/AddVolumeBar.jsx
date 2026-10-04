@@ -20,9 +20,11 @@ export default function AddVolumeBar({
   setNewVolumeReleaseDate,
   setNewVolumeStatus,
   setNewVolumeType,
-  uploadingNewCover
+  uploadingNewCover,
+  onCancelUpload
 }) {
   const ids = useId();
+  const cancelUpload = onCancelUpload ?? handleUploadNewSingleCover?.cancel;
   // Enter in a text field submits too: while the photo uploads the volume would be created without it
   const handleSubmit = (e) => {
     if (uploadingNewCover) {
@@ -140,6 +142,17 @@ export default function AddVolumeBar({
               <Camera className="w-3.5 h-3.5 text-brand-400" />
               <span>{uploadingNewCover ? 'Lädt...' : (newVolumeCover ? '✓ Foto' : 'Foto')}</span>
             </FilePickerButton>
+
+            {uploadingNewCover && cancelUpload && (
+              <button
+                type="button"
+                onClick={cancelUpload}
+                className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 shrink-0 text-red-300 hover:text-red-200"
+                title="Foto-Upload abbrechen"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" /> Upload abbrechen
+              </button>
+            )}
 
             {newVolumeCover && (
               <div className="relative group shrink-0">

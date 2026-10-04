@@ -11,7 +11,9 @@ const UNDO_SNAPSHOT = /^(vor-wiederherstellung|vor-update)-.+\.zip$/;
 
 const REFERENCE_COLUMNS = {
     mangas: ['cover_image', 'banner_image', 'description', 'manga_passion_edition_data'],
-    volumes: ['cover_image', 'images', 'notes']
+    volumes: ['cover_image', 'images', 'notes'],
+    animes: ['cover_image', 'banner_image'],
+    trash: ['payload']
 };
 
 /** Every column value that can name an upload (cover/banner URLs, JSON image lists, markdown/HTML in texts). */

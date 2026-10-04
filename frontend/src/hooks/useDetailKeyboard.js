@@ -33,13 +33,15 @@ export function resolveVolumeShortcut(e, { shelfActive, modalOpen }) {
 
 /**
  * Escape closes the topmost dialog (a dialog that handles Escape itself calls preventDefault). J / K / Space / E
- * drive the shelf view; arrow keys in the lightbox belong to LightboxGallery.
+ * drive the shelf view; arrow keys in the lightbox belong to LightboxGallery. Space follows `canToggle` (default
+ * canEdit, an editor in offline mode may queue read toggles), E follows `canEdit`.
  */
 export default function useDetailKeyboard({
   lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
   showBatchReadModal, setShowBatchReadModal, fillingGapNumber, setFillingGapNumber,
   showMpEditionModal, setShowMpEditionModal, editing, setEditing, cancelEditing, isEditDirty, volumeViewMode,
-  filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume
+  filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, canToggle = canEdit, handleToggleVolumeRead,
+  handleOpenEditVolume
 }) {
   const latest = useRef({});
   latest.current = { isEditDirty, cancelEditing, setEditing };
@@ -142,15 +144,14 @@ export default function useDetailKeyboard({
       if (!targetVol) return;
 
       e.preventDefault();
-      if (!canEdit) return;
       if (action === 'toggleRead') {
         // the read toggle exists only for owned volumes
-        if (targetVol.status === 'Vorhanden') handleToggleVolumeRead(targetVol);
-      } else if (action === 'edit') {
+        if (canToggle && targetVol.status === 'Vorhanden') handleToggleVolumeRead(targetVol);
+      } else if (action === 'edit' && canEdit) {
         handleOpenEditVolume(targetVol);
       }
     };
     window.addEventListener('keydown', handleVolumeKeyboardNav);
     return () => window.removeEventListener('keydown', handleVolumeKeyboardNav);
-  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing, volumeViewMode, filteredVolumes, focusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume, setFocusedVolumeId]);
+  }, [lightboxData, activeVolume, showBatchModal, showBatchReadModal, fillingGapNumber, showMpEditionModal, editing, volumeViewMode, filteredVolumes, focusedVolumeId, canEdit, canToggle, handleToggleVolumeRead, handleOpenEditVolume, setFocusedVolumeId]);
 }

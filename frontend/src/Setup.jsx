@@ -1,12 +1,64 @@
 import { useState, useId } from 'react';
-import { User, Lock, Sparkles, ArrowRight, KeyRound } from 'lucide-react';
+import { User, Lock, Sparkles, ArrowRight, KeyRound, Plug } from 'lucide-react';
 import { apiFetch, readJson, rememberToken } from './utils/api';
 import { useDocumentTitle } from './components/common/PageChrome';
+import ApiKeyCard from './components/modals/ApiKeyCard';
+import { useApiKeys } from './components/modals/AccountModal';
 
 const MIN_PASSWORD_LENGTH = 8; // routes/auth.js enforces the same minimum
 
+/** Optional second step: instance keys (MyAnimeList, Google Books) over the admin routes; skippable. */
+function SourcesStep({ onDone }) {
+  const keys = useApiKeys({ admin: true, user: false });
+  const [finishing, setFinishing] = useState(false);
+  const finish = async () => {
+    setFinishing(true);
+    try {
+      await onDone();
+    } finally {
+      setFinishing(false);
+    }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <div className="mx-auto w-12 h-12 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center mb-3">
+          <Plug className="w-6 h-6 text-brand-300" aria-hidden="true" />
+        </div>
+        <h1 className="text-xl font-extrabold text-white">Quellen verbinden (später möglich)</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das
+          anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).
+        </p>
+      </div>
+      {keys.error && <p className="text-sm text-amber-300" role="status">{keys.error}</p>}
+      {keys.instanceKeys.map((state) => {
+        const guide = keys.guideOf(state.provider);
+        return guide ? (
+          <ApiKeyCard
+            key={state.provider}
+            guide={guide}
+            state={state}
+            scope="instance"
+            busy={keys.busy === `instance:${state.provider}`}
+            onSave={(secret) => keys.save('instance', state.provider, secret)}
+            onRemove={() => keys.remove('instance', state.provider)}
+          />
+        ) : null;
+      })}
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" className="btn-secondary text-sm" onClick={finish} disabled={finishing}>Überspringen</button>
+        <button type="button" className="btn-primary text-sm flex items-center gap-1.5" onClick={finish} disabled={finishing}>
+          Weiter zur Sammlung <ArrowRight className="w-4 h-4" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Setup({ onComplete }) {
   useDocumentTitle('Ersteinrichtung');
+  const [step, setStep] = useState('account');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [setupToken, setSetupToken] = useState('');
@@ -46,7 +98,7 @@ export default function Setup({ onComplete }) {
       const data = await readJson(res);
       if (res.ok) {
         rememberToken(data);
-        await onComplete();
+        setStep('sources');
       } else if (data?.code === 'ADMIN_EXISTS') {
         // Another tab or browser finished the setup first: continue to the login
         await onComplete({ adminExists: true });
@@ -62,7 +114,8 @@ export default function Setup({ onComplete }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4 bg-gradient-to-b from-[#0b0f19] via-[#0f172a] to-[#0b0f19]">
-      <div className="glass-panel p-8 sm:p-10 rounded-3xl w-full max-w-md border border-slate-700/80 shadow-2xl relative animate-fade-in">
+      <div className={`glass-panel p-8 sm:p-10 rounded-3xl w-full ${step === 'sources' ? 'max-w-xl' : 'max-w-md'} border border-slate-700/80 shadow-2xl relative animate-fade-in`}>
+        {step === 'sources' ? <SourcesStep onDone={() => onComplete()} /> : (<>
         <div className="text-center mb-8">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center mb-4 shadow-xl shadow-brand-500/25">
             <Sparkles className="w-8 h-8 text-white" aria-hidden="true" />
@@ -167,6 +220,7 @@ export default function Setup({ onComplete }) {
             )}
           </button>
         </form>
+        </>)}
       </div>
     </main>
   );

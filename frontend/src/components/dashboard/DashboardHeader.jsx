@@ -1,9 +1,42 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
-import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, ShoppingCart, Users, X } from 'lucide-react';
+import BottomNav, { useIsNarrow } from '../common/BottomNav';
+import { isAppMode } from '../../utils/api';
+import useConnection from '../../app/useConnection';
+import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, Server, ShoppingCart, Tv, Users, X } from 'lucide-react';
 import { APP_VERSION, formatBadgeCount, nextQuickView, roleBadgeClass, roleLabel } from './dashboardShell';
 
-const SEARCH_PLACEHOLDER = 'Titel, Autor, Verlag oder Tag suchen...';
+const SystemModal = lazy(() => import('../modals/SystemModal'));
+
+const SEARCH_PLACEHOLDER = 'Titel, Autor, Tag, ISBN oder Notiz suchen...';
+
+const PILL_STATE = {
+  online: { dot: 'bg-emerald-400', text: 'verbunden' },
+  connecting: { dot: 'bg-sky-400 animate-pulse', text: 'verbinde…' },
+  offline: { dot: 'bg-amber-400 animate-pulse', text: 'offline' }
+};
+
+/** App build: server name and connection state; opens the server screen. */
+function ConnectionPill() {
+  const { state, server } = useConnection();
+  const look = PILL_STATE[state] || PILL_STATE.offline;
+  const name = server?.name || 'Kein Server';
+  return (
+    <Link
+      to="/server"
+      id="btn-connection-pill"
+      className="inline-flex items-center gap-1.5 min-w-0 max-w-full rounded-full border border-slate-700/70 bg-slate-900/70 px-2 py-0.5 hover:border-brand-500/60 hover:text-slate-200"
+      aria-label={`Server ${name}, ${look.text}. Server wechseln`}
+      title="Server wechseln oder Verbindung prüfen"
+    >
+      <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${look.dot}`}></span>
+      <span className="truncate">{name}</span>
+      <span className="text-slate-500 shrink-0" aria-hidden="true">· {look.text}</span>
+    </Link>
+  );
+}
 
 /** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational; all state and handlers come in via props. */
 export default function DashboardHeader({
@@ -34,11 +67,28 @@ export default function DashboardHeader({
   user
 }) {
   const menuToggleRef = useRef(null);
+  // phones: quick toggles and menu button live in the bottom navigation, the menu opens as a bottom sheet
+  const narrow = useIsNarrow();
   const isAdmin = user?.role === 'admin';
   // export for every logged-in user, import for editors; admins have it in the backup dialog
   const showCsvEntry = Boolean(user) && !isAdmin && !user.offline && Boolean(handleOpenCsvModal);
   const missingCount = shoppingData?.total_missing || 0;
   const releaseCount = radarData?.total_releases || 0;
+  // the system page lives here so the admin menu needs no new prop; rendered into body (the header's backdrop filter
+  // would anchor a fixed dialog)
+  const [systemOpen, setSystemOpen] = useState(false);
+  const showSystemEntry = isAdmin && !user?.offline;
+
+  // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
+  const sheet = (drawer) => (narrow
+    ? createPortal(
+      <>
+        <div aria-hidden="true" className="fixed inset-0 z-30 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
+        {drawer}
+      </>,
+      document.body
+    )
+    : drawer);
 
   // the menu item that opens a dialog unmounts with the menu; the toggle then becomes the dialog's opener
   const runFromMenu = (action) => {
@@ -67,14 +117,21 @@ export default function DashboardHeader({
                   v{APP_VERSION}
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
-                <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block shrink-0`}></span>
-                <span className="truncate">{isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}</span>
-              </p>
+              {isAppMode() ? (
+                <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 min-w-0">
+                  <ConnectionPill />
+                </p>
+              ) : (
+                <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
+                  <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'} inline-block shrink-0`}></span>
+                  <span className="truncate">{isOfflineMode ? 'Offline-Modus' : 'Sammlung & Tracker'}</span>
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Tablet & Mobile Quick Controls (< xl) */}
+          {/* Tablet Quick Controls (sm to xl); phones use the bottom navigation */}
+          {!narrow && (
           <div className="flex xl:hidden items-center gap-1 sm:gap-1.5 shrink-0">
             <button 
               id="btn-mobile-shopping"
@@ -120,6 +177,23 @@ export default function DashboardHeader({
               )}
             </button>
 
+            <button
+              id="btn-mobile-anime"
+              type="button"
+              aria-pressed={activeMainView === 'anime'}
+              aria-label="Anime"
+              onClick={() => setView(nextQuickView(activeMainView, 'anime'))}
+              className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
+                activeMainView === 'anime'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/50 shadow-sm'
+                  : 'btn-secondary text-slate-300'
+              }`}
+              title="Anime umschalten"
+            >
+              <Tv className="w-4 h-4 text-fuchsia-400 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline">Anime</span>
+            </button>
+
             {canEdit && (
               <button 
                 type="button"
@@ -147,6 +221,7 @@ export default function DashboardHeader({
               {mobileMenuOpen ? <X className="w-4 h-4" aria-hidden="true" /> : <Menu className="w-4 h-4" aria-hidden="true" />}
             </button>
           </div>
+          )}
         </div>
 
         {/* Search bar: Full width on < xl, Centered & spacious on >= xl */}
@@ -264,6 +339,20 @@ export default function DashboardHeader({
                 <CloudUpload className="w-4 h-4 text-emerald-400 shrink-0" /> 
                 <span>Backups</span>
               </button>
+
+              {showSystemEntry && (
+                <button
+                  id="btn-open-system"
+                  type="button"
+                  onClick={() => setSystemOpen(true)}
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
+                  title="System: Version, Speicher, Backups, Quellen"
+                  aria-label="System"
+                >
+                  <Server className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
+                  <span className="hidden 2xl:inline">System</span>
+                </button>
+              )}
             </>
           )}
 
@@ -282,8 +371,8 @@ export default function DashboardHeader({
               id="btn-change-password"
               onClick={handleOpenPasswordModal}
               className="btn-secondary p-2 text-slate-300 hover:text-brand-300 transition-colors shrink-0"
-              title="Eigenes Passwort ändern"
-              aria-label="Eigenes Passwort ändern"
+              title="Konto: Passwort und API-Schlüssel"
+              aria-label="Konto: Passwort und API-Schlüssel"
             >
               <Lock className="w-4 h-4" />
             </button>
@@ -303,9 +392,15 @@ export default function DashboardHeader({
 
       </div>
 
-      {/* Dropdown Menu Drawer for < xl */}
-      {mobileMenuOpen && (
-        <div id="mobile-menu-drawer" className="xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto">
+      {/* Dropdown Menu Drawer for < xl (a bottom sheet above the bottom navigation on phones) */}
+      {mobileMenuOpen && sheet(
+        <div
+          id="mobile-menu-drawer"
+          className={narrow
+            ? 'fixed inset-x-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-slate-700/80 bg-slate-950/[0.98] p-4 space-y-2 animate-fade-in shadow-2xl'
+            : 'xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto'}
+          style={narrow ? { bottom: 'calc(3.5rem + env(safe-area-inset-bottom))' } : undefined}
+        >
           <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
             <div className="flex items-center gap-2">
               <span className="text-slate-400">Angemeldet als:</span>
@@ -337,6 +432,18 @@ export default function DashboardHeader({
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
             >
               <Calendar className="w-4 h-4 text-sky-400" /> Release-Radar
+            </button>
+
+            <button
+              id="btn-mobile-menu-anime"
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setView('anime');
+              }}
+              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-fuchsia-200 border-fuchsia-500/30"
+            >
+              <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" /> Anime
             </button>
 
             {canEdit && (
@@ -380,6 +487,17 @@ export default function DashboardHeader({
                 >
                   <CloudUpload className="w-4 h-4 text-emerald-400" /> Backups
                 </button>
+
+                {showSystemEntry && (
+                  <button
+                    id="btn-mobile-menu-system"
+                    type="button"
+                    onClick={() => runFromMenu(() => setSystemOpen(true))}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
+                  >
+                    <Server className="w-4 h-4 text-brand-400" aria-hidden="true" /> System
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -402,7 +520,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleOpenPasswordModal)}
               className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
             >
-              <Lock className="w-4 h-4 text-brand-400" /> Passwort ändern
+              <Lock className="w-4 h-4 text-brand-400" /> Passwort & API-Schlüssel
             </button>
           )}
 
@@ -415,6 +533,24 @@ export default function DashboardHeader({
             <LogOut className="w-4 h-4 text-red-400" /> Abmelden
           </button>
         </div>
+      )}
+      {systemOpen && createPortal(
+        <Suspense fallback={null}>
+          <SystemModal isOpen onClose={() => setSystemOpen(false)} />
+        </Suspense>,
+        document.body
+      )}
+      {narrow && (
+        <BottomNav
+          activeMainView={activeMainView}
+          setView={setView}
+          missingCount={missingCount}
+          releaseCount={releaseCount}
+          onScan={handleBarcodeDetected}
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          menuToggleRef={menuToggleRef}
+        />
       )}
     </header>
   );

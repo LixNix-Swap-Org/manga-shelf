@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense } from 'react';
-import { useParams, Link, useLocation, useNavigationType } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleAlert } from 'lucide-react';
 import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
@@ -11,16 +11,21 @@ import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import ShelfSpine from './components/detail/ShelfSpine';
+import BulkActionBar from './components/detail/BulkActionBar';
+import DetailBottomBar from './components/detail/DetailBottomBar';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
 import useMangaData from './hooks/useMangaData';
 import useVolumeFilters from './hooks/useVolumeFilters';
 import useMpGaps from './hooks/useMpGaps';
 import useVolumeActions from './hooks/useVolumeActions';
+import useVolumeSelection from './hooks/useVolumeSelection';
 import useVolumeGallery from './hooks/useVolumeGallery';
 import useShelfLayout from './hooks/useShelfLayout';
 import useDetailKeyboard from './hooks/useDetailKeyboard';
 import { PURCHASE_RECORDED_EVENT } from './appShell';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
+import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
+import { viewSessionEnding } from './utils/viewState';
 import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
 
 // dialogs are loaded on first use and mounted only while open
@@ -66,6 +71,7 @@ function useDetailScroll(ready) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
+      if (viewSessionEnding()) return;
       const map = readScrollPositions();
       delete map[entryKey];
       map[entryKey] = Math.round(y);
@@ -95,6 +101,11 @@ export function backLinkTarget(state) {
   return from;
 }
 
+// phones: room for the context bar (3.5rem + inset) and, offline, the banner; a selection's bar sits above it
+const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-hidden max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]';
+const PHONE_PADDING = 'max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]';
+const PHONE_PADDING_OFFLINE = 'max-sm:pb-[calc(8rem+env(safe-area-inset-bottom))]';
+
 const LOAD_ERRORS = {
   server: { title: 'Server nicht erreichbar', text: 'Die Reihe konnte gerade nicht geladen werden.' },
   'offline-missing': { title: 'Nicht in der Offline-Kopie', text: 'Diese Reihe war beim letzten Abgleich noch nicht gespeichert. Mit Verbindung erneut öffnen.' },
@@ -104,12 +115,16 @@ const LOAD_ERRORS = {
 export default function MangaDetail({ user, onUnauthorized }) {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const backTo = backLinkTarget(location.state);
+  const addVolumeRef = useRef(null);
 
   // Role permissions (visitor / guest are read-only)
   const canEdit = user && (user.role === 'admin' || user.role === 'editor');
 
   const isOffline = Boolean(user?.offline);
+  // offline the app makes every user a visitor; editors can still record read/owned toggles (queued in the outbox)
+  const canToggle = Boolean(canEdit || (isOffline && ['admin', 'editor'].includes(user?.realRole)));
 
   const {
     manga, loading, notFound, loadError, refreshError, clearRefreshError,
@@ -117,7 +132,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     uploadingCover,
     editLookingUp, editLookupResults, setEditLookupResults, editLookupError,
     applyEditLookupResult, handleEditLookup,
-    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload
+    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload, cancelCoverUpload, patchManga
   } = useMangaData({ id, user, canEdit, onUnauthorized });
 
   const volumes = useMemo(() => manga?.volumes || [], [manga?.volumes]);
@@ -162,11 +177,16 @@ export default function MangaDetail({ user, onUnauthorized }) {
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover, uploadingNewCover,
     activeVolume, setActiveVolume, canToggleOthers,
-    handleAddSingleVolume, handleUploadNewSingleCover,
-    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume
-  } = useVolumeActions({ id, user, canEdit, selectedReaderId, fetchManga, volumes, onUnauthorized });
+    handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
+    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
+  } = useVolumeActions({ id, user, canEdit, canToggle, selectedReaderId, fetchManga, patchManga, volumes, onUnauthorized });
 
   const { lightboxData, setLightboxData, openVolumeGallery } = useVolumeGallery({ manga });
+  // the editor follows a refreshed copy of its volume (useVolumeEditForm rebases the untouched fields)
+  const editingVolume = useMemo(
+    () => activeVolume && (volumes.find((v) => String(v.id) === String(activeVolume.id)) || activeVolume),
+    [activeVolume, volumes]
+  );
 
   useEffect(() => {
     fetchManga();
@@ -183,6 +203,15 @@ export default function MangaDetail({ user, onUnauthorized }) {
     const onPurchase = (event) => purchaseRefetchRef.current(event.detail?.volumeId);
     window.addEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
     return () => window.removeEventListener(PURCHASE_RECORDED_EVENT, onPurchase);
+  }, []);
+
+  // queued changes replayed by the outbox can belong to this series
+  const outboxRefetchRef = useRef(null);
+  outboxRefetchRef.current = () => fetchManga();
+  useEffect(() => {
+    const onSynced = () => outboxRefetchRef.current();
+    window.addEventListener(OUTBOX_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(OUTBOX_SYNCED_EVENT, onSynced);
   }, []);
 
   const ownedCount = volumes.filter(v => v.status === 'Vorhanden').length;
@@ -220,6 +249,27 @@ export default function MangaDetail({ user, onUnauthorized }) {
     handleSetShelfMode, handleSetShelfScale, scrollShelf, shelfRows, isFitMultiRow
   } = useShelfLayout(displayVolumeItems);
 
+  const selection = useVolumeSelection({ volumes });
+  const canSelect = Boolean(canEdit) && !isOffline;
+  const selecting = canSelect && selection.active;
+  const visibleVolumeIds = useMemo(() => displayVolumeItems.filter((item) => !item.isGap).map((item) => item.volume.id), [displayVolumeItems]);
+  const allVisibleSelected = visibleVolumeIds.length > 0 && visibleVolumeIds.every((volId) => selection.selected.has(volId));
+  const selectVolume = (vol, e) => selection.toggle(vol.id, { range: Boolean(e?.shiftKey), orderedIds: visibleVolumeIds });
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const applyBulk = async (change, doneText) => {
+    setBulkBusy(true);
+    try {
+      const ok = await handleBulkEdit(selection.ids, change, doneText);
+      if (ok && change.delete) selection.clear();
+      return ok;
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+  const selectionProps = selecting
+    ? { selectionMode: true, isSelected: selection.isSelected, onSelectVolume: selectVolume }
+    : {};
+
   // while loading: the title the shelf already knows, else null (the previous title stays, no generic title in between)
   const listTitle = useMemo(
     () => readCache(cacheOwner(user), LIST_KEY)?.data?.find((m) => String(m.id) === String(id))?.title || null,
@@ -237,8 +287,30 @@ export default function MangaDetail({ user, onUnauthorized }) {
     lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
     showBatchReadModal, setShowBatchReadModal, fillingGapNumber, setFillingGapNumber,
     showMpEditionModal, setShowMpEditionModal, editing, setEditing, cancelEditing, isEditDirty, volumeViewMode,
-    filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, handleToggleVolumeRead, handleOpenEditVolume
+    filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, canToggle, handleToggleVolumeRead, handleOpenEditVolume
   });
+
+  const focusAddVolume = () => {
+    const field = addVolumeRef.current?.querySelector('input[id$="-number"]');
+    if (!field) return;
+    field.scrollIntoView?.({ block: 'center' });
+    field.focus({ preventScroll: true });
+  };
+  const openScannedVolume = (vol) => {
+    if (canEdit) {
+      handleOpenEditVolume(vol);
+      return;
+    }
+    document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' });
+  };
+  const prefillScannedVolume = ({ number, price }) => {
+    if (number) {
+      setNewVolumeType('volume');
+      setNewVolumeNum(number);
+    }
+    if (price) setNewVolumePrice(price);
+    focusAddVolume();
+  };
 
   const renderShelfSpine = (item, idx, currentMode = shelfMode) => (
     <ShelfSpine
@@ -258,6 +330,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
       setFocusedVolumeId={setFocusedVolumeId}
       handleOpenEditVolume={handleOpenEditVolume}
       gapsOfficial={gapsOfficial}
+      selectionMode={selecting}
+      selected={selecting && !item.isGap && selection.isSelected(item.volume.id)}
+      onSelect={selectVolume}
     />
   );
 
@@ -329,7 +404,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   if (!manga) return null;
 
   return (
-    <div className="min-h-screen pb-20 overflow-x-hidden">
+    <div className={`${PAGE_CLASS} ${isOffline ? PHONE_PADDING_OFFLINE : PHONE_PADDING}`}>
       <SkipLink />
       <nav aria-label="Seitennavigation" className="max-w-[1680px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4">
         <Link 
@@ -371,6 +446,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
           formData={formData}
           headingRef={headingRef}
           handleCoverUpload={handleCoverUpload}
+          onCancelCoverUpload={cancelCoverUpload}
           handleDeleteManga={handleDeleteManga}
           handleEditLookup={handleEditLookup}
           handleUpdate={handleUpdate}
@@ -386,6 +462,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
           totalOwnedValue={totalOwnedValue}
           totalTarget={totalTarget}
           uploadingCover={uploadingCover}
+          onCollectingSaved={(collecting) => patchManga((m) => ({ ...m, collecting }))}
         />
 
         {/* VOLUMES CHECKLIST SECTION */}
@@ -485,6 +562,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
             volumeTypeFilter={volumeTypeFilter}
             volumeViewMode={volumeViewMode}
             volumes={volumes}
+            canSelect={canSelect}
+            selectionMode={selecting}
+            onToggleSelectionMode={selection.toggleMode}
           />
 
           {/* Edition confirmation, duplicates, Manga-Passion discrepancy and gaps: also above an empty (filtered) list */}
@@ -509,6 +589,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             handleBatchFillGaps={handleBatchFillGaps}
             handleSelectMpEdition={handleSelectMpEdition}
             setShowMpEditionModal={setShowMpEditionModal}
+            collecting={manga.collecting}
           />
 
           {/* Volumes Grid */}
@@ -558,6 +639,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   manga={manga}
                   user={user}
                   canEdit={canEdit}
+                  canToggle={canToggle}
                   canToggleOthers={canToggleOthers}
                   gapsOfficial={gapsOfficial}
                   selectedReaderId={selectedReaderId}
@@ -567,6 +649,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   handleToggleVolumeRead={handleToggleVolumeRead}
                   handleOpenEditVolume={handleOpenEditVolume}
                   handleDeleteVolume={handleDeleteVolume}
+                  {...selectionProps}
                 />
               )}
 
@@ -574,6 +657,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
               {volumeViewMode === 'grid' && (
                 <VolumeGridView
                   canEdit={canEdit}
+                  canToggle={canToggle}
                   canToggleOthers={canToggleOthers}
                   gapsOfficial={gapsOfficial}
                   displayVolumeItems={displayVolumeItems}
@@ -588,40 +672,71 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   selectedReaderId={selectedReaderId}
                   setFillingGapNumber={setFillingGapNumber}
                   user={user}
+                  {...selectionProps}
                 />
               )}
             </>
           )}
 
+          {selecting && (
+            <BulkActionBar
+              count={selection.count}
+              visibleCount={visibleVolumeIds.length}
+              allVisibleSelected={allVisibleSelected}
+              onSelectAllVisible={() => selection.selectAll(visibleVolumeIds)}
+              onClear={selection.clear}
+              onClose={selection.exit}
+              onApply={applyBulk}
+              busy={bulkBusy}
+              userId={user?.id}
+              readerId={canToggleOthers && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id}
+            />
+          )}
+
           {/* Add Single Volume / Schuber Bar */}
-          <AddVolumeBar
-            canEdit={canEdit}
-            handleAddSingleVolume={handleAddSingleVolume}
-            handleUploadNewSingleCover={handleUploadNewSingleCover}
-            newVolumeCover={newVolumeCover}
-            newVolumeNum={newVolumeNum}
-            newVolumePrice={newVolumePrice}
-            newVolumeReleaseDate={newVolumeReleaseDate}
-            newVolumeStatus={newVolumeStatus}
-            newVolumeType={newVolumeType}
-            setNewVolumeCover={setNewVolumeCover}
-            setNewVolumeNum={setNewVolumeNum}
-            setNewVolumePrice={setNewVolumePrice}
-            setNewVolumeReleaseDate={setNewVolumeReleaseDate}
-            setNewVolumeStatus={setNewVolumeStatus}
-            setNewVolumeType={setNewVolumeType}
-            uploadingNewCover={uploadingNewCover}
-          />
+          <div ref={addVolumeRef} className="contents">
+            <AddVolumeBar
+              canEdit={canEdit}
+              handleAddSingleVolume={handleAddSingleVolume}
+              handleUploadNewSingleCover={handleUploadNewSingleCover}
+              onCancelUpload={cancelNewCoverUpload}
+              newVolumeCover={newVolumeCover}
+              newVolumeNum={newVolumeNum}
+              newVolumePrice={newVolumePrice}
+              newVolumeReleaseDate={newVolumeReleaseDate}
+              newVolumeStatus={newVolumeStatus}
+              newVolumeType={newVolumeType}
+              setNewVolumeCover={setNewVolumeCover}
+              setNewVolumeNum={setNewVolumeNum}
+              setNewVolumePrice={setNewVolumePrice}
+              setNewVolumeReleaseDate={setNewVolumeReleaseDate}
+              setNewVolumeStatus={setNewVolumeStatus}
+              setNewVolumeType={setNewVolumeType}
+              uploadingNewCover={uploadingNewCover}
+            />
+          </div>
 
         </section>
       </main>
+
+      <DetailBottomBar
+        backTo={backTo}
+        mangaId={manga.id}
+        volumes={volumes}
+        canEdit={Boolean(canEdit)}
+        isOffline={isOffline}
+        onOpenVolume={openScannedVolume}
+        onPrefill={prefillScannedVolume}
+        onOtherSeries={(other) => navigate(`/manga/${other.id}`, { state: location.state })}
+        onAddVolume={focusAddVolume}
+      />
 
       {/* MODALS & OVERLAYS */}
       <Suspense fallback={null}>
         {activeVolume && (
           <VolumeEditModal
             isOpen
-            activeVolume={activeVolume}
+            activeVolume={editingVolume}
             onClose={() => setActiveVolume(null)}
             manga={manga}
             mangaId={id}

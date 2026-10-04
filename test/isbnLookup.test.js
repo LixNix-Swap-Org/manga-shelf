@@ -405,3 +405,53 @@ test('decodeHtmlEntities: HTML named entities, one pass only, unknown entities k
     assert.equal(decodeHtmlEntities('a&mdash;b &hellip; &rsquo;x&rsquo; &amp;lt; &unknown; &#8217;'), 'a—b … ’x’ &lt; &unknown; ’');
     assert.equal(decodeXmlEntities('&mdash;'), '&mdash;');
 });
+
+test('Google Books: the instance key goes along, a refused key is switched off and gets one retry without it, the key is never logged', async () => {
+    const core = require('../core/isbnLookup');
+    const { createCtx } = require('../db');
+    const answer = JSON.stringify({ items: [{ volumeInfo: { title: 'Berserk 7', publisher: 'Panini Manga' } }] });
+    const lines = [];
+    const log = { debug() {}, info() {}, warn: (...args) => lines.push(args.map(String).join(' ')), error() {} };
+    log.child = () => log;
+    let reports = [];
+    const lookup = async (key, google) => {
+        const urls = [];
+        reports = [];
+        const credentials = {
+            instance: (provider) => (provider === 'google_books' && key ? { secret: key, fromEnv: true } : null),
+            failed: (...args) => reports.push(['failed', ...args]),
+            used: (...args) => reports.push(['used', ...args])
+        };
+        const ctx = createCtx({ log, credentials });
+        const book = await core.lookupBookByIsbn(ctx, '9783551745811', {
+            fetchText: async (url) => {
+                if (!url.includes('googleapis')) return '<empty/>';
+                urls.push(url);
+                return google(url);
+            }
+        });
+        return { book, urls };
+    };
+
+    const keyed = await lookup('geheim+1', async () => answer);
+    assert.equal(keyed.book.source, 'Google Books');
+    assert.deepEqual(keyed.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811&key=geheim%2B1']);
+    assert.deepEqual(reports, [['used', null, 'google_books', true]]);
+
+    for (const status of [400, 403]) {
+        const refused = await lookup('geheim+1', async (url) => { if (url.includes('key=')) throw new Error(`HTTP ${status}`); return answer; });
+        assert.equal(refused.book.title, 'Berserk 7', `HTTP ${status}`);
+        assert.equal(refused.urls.length, 2);
+        assert.ok(!refused.urls[1].includes('key='));
+        assert.deepEqual(reports, [['failed', null, 'google_books', `Google Books lehnt den Schlüssel ab (HTTP ${status})`]], 'the instance key is switched off');
+    }
+
+    const down = await lookup('geheim+1', async (url) => { throw new Error(`HTTP 500 for ${url}`); });
+    assert.equal(down.book, null);
+    assert.equal(down.urls.length, 1, 'only a refused key is retried');
+    assert.deepEqual(reports, [], 'a server error says nothing about the key');
+
+    const none = await lookup(null, async () => answer);
+    assert.deepEqual(none.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811']);
+    assert.ok(lines.length > 0 && lines.every(line => !line.includes('geheim')), lines.join('\n'));
+});

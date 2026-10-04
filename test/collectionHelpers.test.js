@@ -198,6 +198,10 @@ test('filterAndSortMangas: ISBNs, notes and named volumes when the list carries 
     assert.deepEqual(ids('erstaufl'), [1]);
     assert.deepEqual(ids('artbook'), [2]);
     assert.deepEqual(ids('3551000'), [2]);
+    // digits of an ISBN never match as loose volume numbers, 4+ digits still find it
+    assert.deepEqual(ids('berserk 4'), []);
+    assert.deepEqual(ids('berserk 123'), []);
+    assert.deepEqual(ids('89921'), [1]);
     assert.deepEqual(ids('monster'), [3]);
 });
 
@@ -218,6 +222,96 @@ test('title and publisher sorts are natural: numbers by value, case and accents 
 
 test('getCollectionTotals: owned volumes, collection value and completed series', async () => {
     const { getCollectionTotals } = await load();
-    assert.deepEqual(getCollectionTotals(series), { totalOwnedVolumes: 20, totalCollectionValue: 180.5, completedSeries: 1 });
+    // "Abgeschlossen" is the publication status: Akira has no target, so it is not a completed collection
+    assert.deepEqual(getCollectionTotals(series), { totalOwnedVolumes: 20, totalCollectionValue: 180.5, completedSeries: 0 });
     assert.deepEqual(getCollectionTotals([]), { totalOwnedVolumes: 0, totalCollectionValue: 0, completedSeries: 0 });
+});
+
+test('isSeriesComplete: spec A2, a known total and that many regular volumes owned, publication status ignored', async () => {
+    const { isSeriesComplete, getCollectionTotals } = await load();
+    const list = [
+        { id: 1, status: 'Abgeschlossen', total_volumes: 20, owned_volumes: 1, regular_owned: 1, max_regular_number: 1 },
+        { id: 2, status: 'Abgeschlossen', total_volumes: 0, owned_volumes: 0, regular_owned: 0 },
+        { id: 3, status: 'Laufend', total_volumes: 3, owned_volumes: 4, regular_owned: 3, max_regular_number: 3, extras_owned: 1 },
+        { id: 4, status: 'Laufend', total_volumes: 3, owned_volumes: 4, regular_owned: 4, max_regular_number: 5 },
+        { id: 5, status: 'Laufend', total_volumes: null, owned_volumes: 2, regular_owned: 2, max_regular_number: 2 }
+    ];
+    assert.deepEqual(list.map(isSeriesComplete), [false, false, true, true, false]);
+    assert.equal(getCollectionTotals(list).completedSeries, 2);
+});
+
+test('wishlist: chip counts wished series (server flag first), filter shows only them', async () => {
+    const { getFilterCounts, filterAndSortMangas, getStatusTabs, isStatusFilter } = await load();
+    const list = [
+        { id: 1, title: 'Wunsch', status: 'Laufend', wish_priority: 2, wished: 1, owned_volumes: 0 },
+        { id: 2, title: 'Gekauft', status: 'Laufend', wish_priority: 3, wished: 0, owned_volumes: 1 },
+        { id: 3, title: 'Offline alt', status: 'Geplant', wish_priority: 0, owned_volumes: 0 },
+        { id: 4, title: 'Ohne', status: 'Laufend', wish_priority: null, owned_volumes: 0 }
+    ];
+    const counts = getFilterCounts(list);
+    assert.equal(counts.WISHLIST, 2);
+    assert.ok(getStatusTabs(counts, 'ALL').some(t => t.id === 'WISHLIST' && t.label === 'Wunschliste' && t.count === 2));
+    assert.equal(getStatusTabs(getFilterCounts(series), 'ALL').some(t => t.id === 'WISHLIST'), false, 'no chip without wished series');
+    assert.equal(isStatusFilter('WISHLIST'), true);
+    const opts = { search: '', publisherFilter: 'ALL', sortBy: 'title_asc', statusFilter: 'WISHLIST' };
+    assert.deepEqual(filterAndSortMangas(list, opts).map(m => m.title), ['Offline alt', 'Wunsch']);
+});
+
+test('collect filter: gaps need a missing volume or an unreached total; dropped and complete series have none', async () => {
+    const { hasCollectionGaps, matchesCollectFilter, getCollectCounts, collectingOf } = await load();
+    assert.equal(hasCollectionGaps({ missing_count: 1, total_volumes: null, regular_owned: 3 }), true);
+    assert.equal(hasCollectionGaps({ missing_count: 0, total_volumes: 10, regular_owned: 4 }), true);
+    assert.equal(hasCollectionGaps({ missing_count: 0, total_volumes: null, regular_owned: 4 }), false);
+    assert.equal(hasCollectionGaps({ missing_count: 2, total_volumes: 5, regular_owned: 5 }), false, 'complete (spec A2) wins over a stale entry');
+    assert.equal(hasCollectionGaps({ missing_count: 2, collecting: 'abgebrochen' }), false);
+    assert.equal(hasCollectionGaps({ missing_count: 2, collecting: 'pausiert' }), true);
+    assert.equal(matchesCollectFilter({ preorder_count: 1 }, 'preorder'), true);
+    assert.equal(matchesCollectFilter({}, 'preorder'), false);
+    assert.equal(matchesCollectFilter({ total_volumes: 3, regular_owned: 3 }, 'complete'), true);
+    assert.equal(matchesCollectFilter({ collecting: 'pausiert' }, 'pausiert'), true);
+    assert.equal(matchesCollectFilter({}, 'abgebrochen'), false);
+    assert.equal(matchesCollectFilter({}, 'ALL'), true);
+    assert.equal(collectingOf({ collecting: 'unbekannt' }), 'aktiv');
+    assert.deepEqual(getCollectCounts([{ missing_count: 1 }, { collecting: 'abgebrochen', missing_count: 3 }, { preorder_count: 2 }]),
+        { ALL: 3, gaps: 1, preorder: 1, complete: 0, pausiert: 0, abgebrochen: 1 });
+});
+
+test('authors: a shared author field is split into names; the filter matches one name, case and spacing independent', async () => {
+    const { splitAuthors, matchesAuthor, filterAndSortMangas } = await load();
+    assert.deepEqual(splitAuthors('Tsugumi Ohba, Takeshi  Obata'), ['Tsugumi Ohba', 'Takeshi Obata']);
+    assert.deepEqual(splitAuthors('A & B / C; D und E'), ['A', 'B', 'C', 'D', 'E']);
+    assert.deepEqual(splitAuthors(null), []);
+    assert.equal(matchesAuthor({ author: 'Tsugumi Ohba, Takeshi Obata' }, ' tsugumi  OHBA '), true);
+    assert.equal(matchesAuthor({ author: 'Tsugumi Ohba' }, 'Ohba'), false);
+    assert.equal(matchesAuthor({ author: null }, ''), true);
+    const list = [{ id: 1, title: 'B', author: 'Oda' }, { id: 2, title: 'A', author: 'Toriyama, Oda' }, { id: 3, title: 'C', author: 'Kubo' }];
+    assert.deepEqual(filterAndSortMangas(list, { search: '', statusFilter: 'ALL', publisherFilter: 'ALL', sortBy: 'title_asc', authorFilter: 'oda' }).map(m => m.id), [2, 1]);
+});
+
+test('groupMangas: sections per publisher / author / status, the empty one last, list order kept inside', async () => {
+    const { groupMangas } = await load();
+    const list = [
+        { id: 1, title: 'A', publisher: 'carlsen manga', author: 'X', status: 'Abgeschlossen' },
+        { id: 2, title: 'B', publisher: null, author: null, status: 'Laufend' },
+        { id: 3, title: 'C', publisher: 'Altraverse', author: 'X', status: 'Laufend' },
+        { id: 4, title: 'D', publisher: 'Carlsen Manga', author: 'Y, Z', status: null }
+    ];
+    const sections = (by) => groupMangas(list, by).map(s => [s.label, s.items.map(m => m.id)]);
+    assert.deepEqual(sections('publisher'), [['Altraverse', [3]], ['Carlsen Manga', [1, 4]], ['Ohne Verlag', [2]]]);
+    assert.deepEqual(sections('author'), [['X', [1, 3]], ['Y, Z', [4]], ['Ohne Autor', [2]]]);
+    assert.deepEqual(sections('status'), [['Laufend', [2, 3]], ['Abgeschlossen', [1]], ['Ohne Status', [4]]]);
+    assert.deepEqual(sections('none'), [['', [1, 2, 3, 4]]]);
+    assert.deepEqual(sections('genre'), [['', [1, 2, 3, 4]]]);
+});
+
+test('filter URL: valid values are read, defaults leave the query, other parameters stay', async () => {
+    const { readFilterParams, writeFilterParams } = await load();
+    assert.deepEqual(readFilterParams('?view=radar&status=Laufend&collect=gaps&author=Oda&sort=nope&group=status&publisher=Panini'),
+        { status: 'Laufend', publisher: 'Panini', collect: 'gaps', author: 'Oda', group: 'status' });
+    assert.deepEqual(readFilterParams('?status=Unsinn&collect=&author=%20'), {});
+    assert.deepEqual(readFilterParams('%%%'), {});
+    assert.equal(writeFilterParams('?view=radar', { status: 'ALL', collect: 'gaps', author: 'Eiichiro Oda', sort: 'title_asc', group: 'none' }),
+        '?view=radar&collect=gaps&author=Eiichiro+Oda');
+    assert.equal(writeFilterParams('?collect=gaps&view=shopping', { collect: 'ALL' }), '?view=shopping');
+    assert.equal(writeFilterParams('', { author: '' }), '');
 });
