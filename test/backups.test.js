@@ -176,11 +176,13 @@ test('the session issued after a restore carries the session claims and survives
 
 test('runTransaction/withTransaction reject async callbacks and roll back their writes', () => {
     const before = mangaCount();
+    // BEGIN fails inside an open transaction (DatabaseSync.isTransaction needs a newer Node than the engines floor)
+    const assertNoTransaction = () => assert.doesNotThrow(() => dbm.db.exec('BEGIN; ROLLBACK;'));
     for (const helper of [dbm.runTransaction, dbm.withTransaction]) {
         assert.throws(() => helper(async () => {
             dbm.db.prepare("INSERT INTO mangas (title) VALUES ('async tx')").run();
         }), /asynchrone Callbacks/);
-        assert.equal(dbm.db.isTransaction, false);
+        assertNoTransaction();
     }
     assert.equal(mangaCount(), before);
     assert.throws(() => dbm.runTransaction(() => {

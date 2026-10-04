@@ -77,7 +77,8 @@ describe('workflows', () => {
 
     test('ci.yml builds on every branch push, calls build.yml without publishing and keeps its jobs', () => {
         const ci = workflows['ci.yml'];
-        assert.deepEqual(ci.on.push.branches, ['**']);
+        assert.deepEqual(ci.on.push.branches, ['main'], 'one run per change: pull requests and main only');
+        assert.equal(ci.on.push['branches-ignore'], undefined);
         assert.ok('pull_request' in ci.on);
         for (const job of ['test', 'frontend', 'package', 'docker', 'browser']) assert.ok(ci.jobs[job], `ci.yml lost the ${job} job`);
         assert.equal(ci.jobs.build.uses, './.github/workflows/build.yml');
@@ -239,5 +240,15 @@ describe('workflows', () => {
         assert.match(step.run, /CN=Android Debug/);
         assert.match(step.run, /test -f build\/out\/\*-android\.aab/);
         assert.equal(step.env.ANDROID_KEYSTORE_BASE64, '${{ secrets.ANDROID_KEYSTORE_BASE64 }}');
+    });
+
+    test('every finished mobile job uploads an artifact: debug builds in smoke mode, release builds in build mode', () => {
+        for (const job of ['android', 'ios']) {
+            const upload = workflows['mobile.yml'].jobs[job].steps.find(s => String(s.uses).startsWith('actions/upload-artifact@'));
+            assert.equal(upload.if, "steps.project.outputs.present == 'true'", job);
+            assert.match(upload.with.name, /^\$\{\{ env\.MODE == 'build' && 'mobile-(android|ios)' \|\| 'mobile-(android-debug|ios-simulator)' \}\}$/, job);
+            assert.equal(upload.with['if-no-files-found'], 'error', job);
+            assert.match(upload.with.path, job === 'android' ? /\*\.apk/ : /\*\.zip/, job);
+        }
     });
 });
