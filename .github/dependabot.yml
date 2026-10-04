@@ -10,7 +10,7 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
       eslint:
-        patterns: ["eslint", "@eslint/*", "eslint-plugin-*"]
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "globals"]
         update-types: ["major"]
 
   - package-ecosystem: npm
@@ -65,6 +65,7 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
+  # one pull request for all actions: SHA-pinned bumps carry no update type and would otherwise come one by one
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -72,10 +73,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-        update-types: ["minor", "patch"]
-      actions-major:
-        patterns: ["*"]
-        update-types: ["major"]
 
   # keeps the pinned node:22.x-alpine base image in the Dockerfile current
   - package-ecosystem: docker
