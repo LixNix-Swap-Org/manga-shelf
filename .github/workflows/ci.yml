@@ -4,7 +4,7 @@ name: CI
 # builds only run on main and in pull requests (Actions → Release → action build covers other branches).
 on:
   push:
-    branches: ['**']
+    branches-ignore: ['dependabot/**']   # bot branches run through their pull request only
     tags-ignore: ['**']
   pull_request:
 
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -247,11 +247,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       publish: false
-      installers: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
+      installers: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') }}
 
   mobile:
     name: Mobile apps (smoke)
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]')
     permissions:
       contents: read
     uses: ./.github/workflows/mobile.yml

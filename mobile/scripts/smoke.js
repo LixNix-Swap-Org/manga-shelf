@@ -13,6 +13,7 @@ function iosSimulatorArgs(derivedData) {
     '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', derivedData, 'CODE_SIGNING_ALLOWED=NO', 'build'];
 }
 
+// cap sync runs before cap doctor: the gitignored assets folders exist only after a sync
 async function smoke(platform, { from = null, env = process.env } = {}) {
   if (platform !== 'android' && platform !== 'ios') throw new Error('Plattform android oder ios angeben');
   if (from || !fs.existsSync(path.join(WWW_DIR, 'index.html'))) await prepareWeb(from ? { from } : { build: true });
@@ -20,8 +21,8 @@ async function smoke(platform, { from = null, env = process.env } = {}) {
     const sdk = androidSdkDir(env);
     if (!sdk) throw new Error('Kein Android SDK gefunden (ANDROID_HOME setzen)');
     const aenv = { ...env, ANDROID_HOME: sdk };
-    run('npx', ['cap', 'doctor', 'android'], { env: aenv });
     run('npx', ['cap', 'sync', 'android'], { env: aenv });
+    run('npx', ['cap', 'doctor', 'android'], { env: aenv });
     run('./gradlew', ['assembleDebug', '--no-daemon'], { cwd: path.join(MOBILE_DIR, 'android'), env: aenv });
     const apk = path.join(MOBILE_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
     if (!fs.existsSync(apk)) throw new Error(`${apk} fehlt nach assembleDebug`);
@@ -29,8 +30,8 @@ async function smoke(platform, { from = null, env = process.env } = {}) {
   }
   if (process.platform !== 'darwin') throw new Error('Der iOS-Smoke-Test braucht macOS mit Xcode');
   const xenv = toolEnv(env);
-  run('npx', ['cap', 'doctor', 'ios'], { env: xenv });
   run('npx', ['cap', 'sync', 'ios'], { env: xenv });
+  run('npx', ['cap', 'doctor', 'ios'], { env: xenv });
   const derivedData = path.join(MOBILE_DIR, 'build', 'ios', 'DerivedData');
   run('xcodebuild', iosSimulatorArgs(derivedData), { cwd: path.join(MOBILE_DIR, 'ios', 'App'), env: xenv });
   const app = path.join(derivedData, 'Build', 'Products', 'Debug-iphonesimulator', 'App.app');

@@ -147,6 +147,12 @@ async function checkForUpdate(now = Date.now()) {
             headers: { Accept: 'application/vnd.github+json', 'User-Agent': `manga-shelf/${pkg.version}` },
             signal: AbortSignal.timeout(UPDATE_TIMEOUT_MS)
         });
+        if (res.status === 404) {
+            // no release yet, or a private repository: that is an answer, not an outage
+            update.result = { latest: null, available: false, url: null, checked_at: new Date(now).toISOString() };
+            update.nextAt = now + UPDATE_TTL_MS;
+            return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const latest = String(data?.tag_name || '').replace(/^v/, '');

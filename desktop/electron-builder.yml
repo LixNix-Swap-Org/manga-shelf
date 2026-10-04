@@ -39,6 +39,8 @@ protocols:
 publish: null
 
 mac:
+  # bare-* prebuilds (via archiver/tar-stream) are identical in both slices; @electron/universal refuses them otherwise
+  x64ArchFiles: "Contents/Resources/server/node_modules/**/prebuilds/**"
   target:
     - target: dmg
       arch: universal

@@ -9,6 +9,13 @@ updates:
       minor-and-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      eslint:
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*"]
+        update-types: ["major"]
+    ignore:
+      # archiver 8 is ESM-only without a callable default export (backups and package.js call archiver(...))
+      - dependency-name: archiver
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -19,11 +26,16 @@ updates:
       minor-and-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      react:
+        patterns: ["react", "react-dom", "@types/react*"]
+        update-types: ["major"]
     ignore:
       # Tailwind 4 and Vite 8 need a migration (config format, plugin and vitest majors move together)
       - dependency-name: tailwindcss
         update-types: ["version-update:semver-major"]
       - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
 
   # desktop/ and mobile/ track Electron and Capacitor; their majors need a migration
@@ -61,6 +73,9 @@ updates:
       actions:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      actions-major:
+        patterns: ["*"]
+        update-types: ["major"]
 
   # keeps the pinned node:22.x-alpine base image in the Dockerfile current
   - package-ecosystem: docker
