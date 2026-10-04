@@ -244,7 +244,8 @@ describe('App shell', () => {
   });
 
   it('the desktop menu "Quellen & Schlüssel…" opens the keys from any route of a signed-in user; signed out it stays unhandled', async () => {
-    const fire = () => window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }));
+    // the listener is attached in a passive effect once the user is known: fire until the event is handled
+    const fire = () => waitFor(() => expect(window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }))).toBe(false));
     go('/manga/7');
     vi.stubGlobal('fetch', routes({
       'GET /api/setup/status': json(200, { needsSetup: false }),
@@ -252,17 +253,14 @@ describe('App shell', () => {
     }));
     const view = render(<App />);
     expect(await screen.findByText(/Reihe 7/)).toBeTruthy();
-    let unhandled;
-    act(() => { unhandled = fire(); });
-    expect(unhandled).toBe(false);
+    await fire();
     expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
 
     view.unmount();
     go('/?view=shopping');
     render(<App />);
     expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
-    act(() => { unhandled = fire(); });
-    expect(unhandled).toBe(false);
+    await fire();
     await waitFor(() => expect(screen.getByTestId('dashboard-wiring').textContent).toBe('keys ?view=shopping function'));
   });
 
@@ -277,9 +275,7 @@ describe('App shell', () => {
     expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
     window.history.pushState({ ...window.history.state, mangashelfDialogs: ['dialog-1'] }, '');
     const length = window.history.length;
-    let unhandled;
-    act(() => { unhandled = window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true })); });
-    expect(unhandled).toBe(false);
+    await waitFor(() => expect(window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }))).toBe(false));
     expect(screen.getByTestId('dashboard-opened').textContent).toBe('keys');
     expect(screen.getByTestId('dashboard-wiring').textContent).toBe('- ?view=shopping function');
     expect(window.history.length).toBe(length);
@@ -288,7 +284,7 @@ describe('App shell', () => {
   });
 
   it('from another route the menu replaces the entry only when a dialog entry is on top', async () => {
-    const fire = () => act(() => { window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true })); });
+    const fire = () => waitFor(() => expect(window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }))).toBe(false));
     vi.stubGlobal('fetch', routes({
       'GET /api/setup/status': json(200, { needsSetup: false }),
       'GET /api/auth/me': json(200, { user: admin })
@@ -298,7 +294,7 @@ describe('App shell', () => {
     expect(await screen.findByText(/Reihe 7/)).toBeTruthy();
     window.history.pushState({ ...window.history.state, mangashelfDialogs: ['dialog-2'] }, '');
     let length = window.history.length;
-    fire();
+    await fire();
     expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
     expect(window.history.length).toBe(length);
     expect(window.history.state?.mangashelfDialogs).toBeUndefined();
@@ -308,7 +304,7 @@ describe('App shell', () => {
     render(<App />);
     expect(await screen.findByText(/Reihe 8/)).toBeTruthy();
     length = window.history.length;
-    fire();
+    await fire();
     expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
     expect(window.history.length).toBe(length + 1);
   });

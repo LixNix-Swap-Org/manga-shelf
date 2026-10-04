@@ -225,7 +225,8 @@ describe('Dashboard', () => {
     );
     fireEvent.click(headerScan());
     await screen.findByText('Mehrere Reihen passen – bitte auswählen');
-    expect(window.history.length).toBe(length + 1);
+    // the lazy dialog writes its history entry in an effect after its chunk resolved
+    await waitFor(() => expect(window.history.length).toBe(length + 1));
     fireEvent.click(screen.getByText('Naruto Shippuden'));
     expect(await screen.findByText('Detailseite')).toBeTruthy();
     await act(() => new Promise((r) => setTimeout(r, 50)));
