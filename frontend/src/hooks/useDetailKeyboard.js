@@ -13,6 +13,23 @@ function isTextEntry(target) {
   return el.tagName === 'INPUT' && !NON_TEXT_INPUTS.has(String(el.type || 'text').toLowerCase());
 }
 
+/** What a dialog's fields and toggles hold right now (file pickers aside). */
+export function dialogFormState(root) {
+  if (!root || typeof root.querySelectorAll !== 'function') return null;
+  const fields = Array.from(root.querySelectorAll('input, select, textarea'))
+    .filter((el) => String(el.type || '').toLowerCase() !== 'file')
+    .map((el) => (el.type === 'checkbox' || el.type === 'radio' ? String(el.checked) : el.value));
+  const toggles = Array.from(root.querySelectorAll('[aria-pressed]')).map((el) => el.getAttribute('aria-pressed'));
+  return JSON.stringify([fields, toggles]);
+}
+
+/** Unknown counts as changed: without a recorded start the editor stays open. */
+function dialogChanged(starts, target) {
+  const dialog = asElement(target)?.closest('[role="dialog"]');
+  if (!dialog || !starts.has(dialog)) return true;
+  return starts.get(dialog) !== dialogFormState(dialog);
+}
+
 /**
  * Which shelf shortcut a keydown means: 'next' | 'prev' | 'toggleRead' | 'edit' | null.
  * Only in the shelf view (the only view that shows the focused volume), never with modifiers, auto-repeat or IME input.
@@ -32,9 +49,8 @@ export function resolveVolumeShortcut(e, { shelfActive, modalOpen }) {
 }
 
 /**
- * Escape closes the topmost dialog (a dialog that handles Escape itself calls preventDefault). J / K / Space / E
- * drive the shelf view; arrow keys in the lightbox belong to LightboxGallery. Space follows `canToggle` (default
- * canEdit, an editor in offline mode may queue read toggles), E follows `canEdit`.
+ * Escape closes the topmost dialog (one that handles Escape itself calls preventDefault). J / K / Space / E drive
+ * the shelf view; Space follows `canToggle` (default canEdit), E follows `canEdit`.
  */
 export default function useDetailKeyboard({
   lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
@@ -46,6 +62,17 @@ export default function useDetailKeyboard({
   const latest = useRef({});
   latest.current = { isEditDirty, cancelEditing, setEditing };
 
+  // each dialog's state when focus first entered it (the dialog focuses itself on open, before any input)
+  const dialogStart = useRef(new WeakMap());
+  useEffect(() => {
+    const remember = (e) => {
+      const dialog = asElement(e.target)?.closest('[role="dialog"]');
+      if (dialog && !dialogStart.current.has(dialog)) dialogStart.current.set(dialog, dialogFormState(dialog));
+    };
+    document.addEventListener('focusin', remember, true);
+    return () => document.removeEventListener('focusin', remember, true);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
@@ -54,8 +81,8 @@ export default function useDetailKeyboard({
         return;
       }
       if (activeVolume) {
-        // Escape in a text field (dismissing autocomplete, IME) must not throw away the editor's unsaved input
-        if (isTextEntry(e.target)) return;
+        // Escape in a field must not throw away the editor's unsaved input; an untouched editor closes
+        if (isTextEntry(e.target) && dialogChanged(dialogStart.current, e.target)) return;
         setActiveVolume(null);
         return;
       }
@@ -76,8 +103,8 @@ export default function useDetailKeyboard({
         return;
       }
       if (editing) {
-        if (isTextEntry(e.target)) return;
         const { isEditDirty: dirty, cancelEditing: cancel, setEditing: set } = latest.current;
+        if (isTextEntry(e.target) && dirty !== false) return;
         // cancelEditing resets the form: without a dirty flag from the caller, ask rather than lose input
         const mayLoseInput = cancel ? dirty !== false : Boolean(dirty);
         if (mayLoseInput && !confirm('Ungespeicherte Änderungen verwerfen?')) return;

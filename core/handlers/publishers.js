@@ -51,9 +51,8 @@ function rewriteRows(ctx, aliases, target) {
 }
 
 /**
- * { from: name | [names], to: name }: every spelling in `from` becomes an alias of `to` and all series and volumes
- * with one of them are rewritten, in one transaction. A rename is a merge into a new name. Aliases that pointed at a
- * merged name follow; an alias of `to` itself is dropped (it is canonical now).
+ * { from: name | [names], to: name }: every `from` spelling becomes an alias of `to` and all matching series and
+ * volumes are rewritten, in one transaction. An alias of `to` is dropped unless the built-in map spells `to` differently.
  */
 function merge(ctx, { body }) {
     const to = cleanName(body.to);
@@ -76,6 +75,11 @@ function merge(ctx, { body }) {
         follow.run(to, toKey);
         ctx.db.prepare('DELETE FROM publisher_aliases WHERE alias = ?').run(toKey);
         const aliases = new Map(ctx.db.prepare('SELECT alias, canonical FROM publisher_aliases').all().map(r => [r.alias, r.canonical]));
+        // a target the built-in map spells differently ("TOKYOPOP" -> "Tokyopop") keeps an identity alias
+        if (resolvePublisher(to, new Map()) !== to || resolvePublisher(to, aliases) !== to) {
+            upsert.run(toKey, to);
+            aliases.set(toKey, to);
+        }
         changed = rewriteRows(ctx, aliases, to);
         // exact spellings of the target ("carlsen manga" -> "Carlsen Manga") are rewritten as well
         for (const table of ['mangas', 'volumes']) {

@@ -1,3 +1,4 @@
+// Logger (utils/logger.js): levels, formats and redaction.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createLogger } = require('../utils/logger');

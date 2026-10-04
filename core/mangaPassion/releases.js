@@ -1,12 +1,15 @@
 // Monthly release calendar of Manga Passion: fetching (with cache) and matching against the user's collection.
 const { normalizePublisher } = require('../lib/publishers');
-const { inferVolumeType, volumeNumberOf } = require('../lib/volumeType');
+const { inferVolumeType } = require('../lib/volumeType');
 const { API_BASE, mpHeaders, fetchWithTimeout, readCache, writeCache } = require('./client');
 const { classifyOfficialVolume, cleanOfficialDate } = require('./classify');
+const { HttpError } = require('../errors');
 
 const log = (ctx) => ctx.log.child('mp-releases');
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+// the wording of v2.19.1, answered with 503 when neither the API nor an older cached copy of the month is there
+const RELEASES_UNAVAILABLE = 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen';
 const PAGE_SIZE = 100;
 // upper bound for one month; the real page count follows hydra:totalItems of the first page
 const HARD_MAX_PAGES = 20;
@@ -71,9 +74,8 @@ function mapRelease(v) {
 }
 
 /**
- * All pages of one month. `complete` is false when a later page failed or the month has more entries than
- * HARD_MAX_PAGES pages (`truncated`): the entries are usable, but must not be cached as if they were the whole month.
- * A failing first page throws.
+ * All pages of one month. `complete` is false when a later page failed or the month exceeds HARD_MAX_PAGES
+ * (`truncated`): usable, but not to be cached as the whole month. A failing first page throws.
  */
 async function fetchReleasePages(ctx, year, month) {
     // Many releases share a day. Ordering by date alone is not stable across pages (the same entry can appear on two pages
@@ -161,11 +163,9 @@ function untilAborted(promise, signal) {
     });
 }
 
-/**
- * Calendar entries of a month: from the 12-hour cache, else from the API. Only complete answers are cached; when the
- * API is unreachable (or `signal` aborts first) the last cached month (any age) is served and `stale` is true.
- * A month that failed within FAILURE_TTL_MS is not fetched again; `forceRefresh` only waits FORCE_COOLDOWN_MS.
- */
+// Calendar entries of a month: from the 12-hour cache, else the API. Only complete answers are cached; when the API
+// is unreachable (or `signal` aborts) the last cached month is served with `stale: true`. A month that failed within
+// FAILURE_TTL_MS is not refetched; `forceRefresh` only waits FORCE_COOLDOWN_MS.
 async function getMonthlyReleases(ctx, year, month, forceRefresh = false, { signal } = {}) {
     const cacheKey = `mp_releases_${year}_${month}`;
 
@@ -178,7 +178,8 @@ async function getMonthlyReleases(ctx, year, month, forceRefresh = false, { sign
             if (logIt) log(ctx).warn(`Serving stale releases for ${year}-${month}:`, err);
             return { items: old, stale: true, truncated: false };
         }
-        throw err;
+        if (logIt) log(ctx).warn(`Releases ${year}-${month} unavailable:`, err);
+        throw Object.assign(new HttpError(503, RELEASES_UNAVAILABLE, 'MP_UNAVAILABLE'), { cause: err });
     };
 
     if (signal?.aborted) return serveStale(signal.reason || new Error('aborted'), false);
@@ -193,6 +194,11 @@ async function getMonthlyReleases(ctx, year, month, forceRefresh = false, { sign
     } catch (err) {
         return serveStale(err);
     }
+}
+
+/** True when the month is answered from the 12-hour cache without asking Manga Passion. */
+function monthCached(ctx, year, month) {
+    return Array.isArray(readCache(ctx, `mp_releases_${year}_${month}`, CACHE_TTL_MS));
 }
 
 /**
@@ -233,6 +239,18 @@ function resetReleaseFetchState() {
 /** Comparison key of a title: accents folded, case and everything but letters / digits dropped (any script). */
 const titleKey = (s) => String(s || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 const volumeKey = (n) => String(n ?? '').trim().toLowerCase();
+// Number fallback of the matcher: a regular volume or a Schuber only by a number prefix ("Band", "Vol.", "Teil", "#",
+// "Box" ...), never an edition word, so a row "Ultimative Edition 14" stored as type volume is not the calendar's "14";
+// specials and special editions carry their own type.
+const NUMBER_LABELS = {
+    volume: /^(?:(?:band|bd\.?|vol(?:ume)?\.?|nr\.?|no\.?|teil|tome|ausgabe|#)\s*)?(\d+)$/i,
+    schuber: /^(?:(?:schuber|box)\s*(?:nr\.?\s*)?)?(\d+)$/i
+};
+const ANY_LABEL = /^(?:\D*?\s)?(\d+)$/;
+const labelNumberOf = (number, type) => {
+    const m = String(number ?? '').trim().match(NUMBER_LABELS[type] || ANY_LABEL);
+    return m ? parseInt(m[1], 10) : null;
+};
 const MIN_PREFIX_KEY = 4;
 // match kinds that identify the user's volume, not just the series
 const VOLUME_MATCH_KINDS = new Set(['volume_id', 'edition', 'exact', 'variant']);
@@ -240,13 +258,10 @@ const VOLUME_MATCH_KINDS = new Set(['volume_id', 'edition', 'exact', 'variant'])
 /** A wished series: wish_priority set and no owned volume (owned_count from the query). */
 const isWishedSeries = (m) => m.wish_priority !== null && m.wish_priority !== undefined && !(Number(m.owned_count) > 0);
 
-/**
- * Lookup structures for matching calendar entries against the collection, built once per request.
- * Series: linked MP volume > linked MP edition > title / alt title (an unlinked series before one linked to another
- * edition) > prefix before "–", "-", ":" (series badge only).
- * Volumes: series + type + number (a Collectors Edition never stands in for the regular volume and vice versa);
- * "Band 14" / "Schuber 8" in the collection are the calendar's "14" / "8" of the same type.
- */
+// Lookup structures for matching calendar entries against the collection, built once per request.
+// Series: linked MP volume > linked MP edition > title / alt title > prefix before "–", "-", ":" (badge only).
+// Volumes: series + type + number ("Band 14", "Vol. 14", "Schuber 8" equal the calendar's "14" / "8" of that type;
+// a Collectors Edition never stands in for the regular volume).
 function buildMatcher(userMangas, userVolumes = []) {
     const mangaById = new Map();
     const byEdition = new Map();
@@ -274,7 +289,7 @@ function buildMatcher(userMangas, userVolumes = []) {
         const type = inferVolumeType(uv);
         const key = `${uv.manga_id}:${type}:${volumeKey(uv.volume_number)}`;
         if (!volumeByKey.has(key)) volumeByKey.set(key, uv);
-        const n = volumeNumberOf(uv);
+        const n = labelNumberOf(uv.volume_number, type);
         const numKey = `${uv.manga_id}:${type}:#${n}`;
         if (n !== null && !volumeByNumber.has(numKey)) volumeByNumber.set(numKey, uv);
         if (uv.manga_passion_volume_id) {
@@ -328,7 +343,7 @@ function buildMatcher(userMangas, userVolumes = []) {
     const ownVolume = (mangaId, type, number) => {
         const exact = volumeByKey.get(`${mangaId}:${type}:${volumeKey(number)}`);
         if (exact) return exact;
-        const n = volumeNumberOf({ volume_number: number });
+        const n = labelNumberOf(number, type);
         return n === null ? null : (volumeByNumber.get(`${mangaId}:${type}:#${n}`) || null);
     };
 
@@ -367,12 +382,9 @@ function enrichReleases(rawItems, userMangas, userVolumes) {
     return buildMatcher(userMangas, userVolumes).enrich(rawItems);
 }
 
-/**
- * Existing series an import without manga_id belongs to: the series linked to the entry's edition, else the same title
- * or alt title (case / whitespace independent), else the same comparison key when it is long enough to be specific;
- * by title a series without an edition link (or linked to this edition) comes before one linked to another edition.
- * Never the prefix rule.
- */
+// Existing series an import without manga_id belongs to: the one linked to the entry's edition, else the same title
+// or alt title (case / whitespace independent), else the same comparison key when long enough. By title, a series
+// without an edition link (or linked to this one) wins. Never the prefix rule.
 function findSeriesForImport(mangas, title, editionId = null) {
     const edition = Number(editionId) || null;
     if (edition) {
@@ -397,11 +409,9 @@ const MAX_CHECK_MONTHS = 14;
 const LOOKBACK_MONTHS = 1;
 const LOOKAHEAD_MONTHS = 6;
 
-/**
- * Months (year, month) to compare against the calendar: from the earliest pending month, but at most LOOKBACK_MONTHS
- * before the current month, to LOOKAHEAD_MONTHS after the latest pending month (at least the next month), capped at
- * MAX_CHECK_MONTHS. A postponed volume is listed under its new month, so the window reaches past the stored dates.
- */
+// Months to compare against the calendar: from the earliest pending month (at most LOOKBACK_MONTHS back) to
+// LOOKAHEAD_MONTHS after the latest (at least the next month), capped at MAX_CHECK_MONTHS. A postponed volume is
+// listed under its new month, so the window reaches past the stored dates.
 function monthsToCheck(pending, now = new Date()) {
     const indexOf = (d) => {
         const m = String(d || '').trim().match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
@@ -429,9 +439,8 @@ const monthOf = (d) => {
 };
 
 /**
- * Pending volumes (pre-ordered / announced) whose stored date differs from the calendar. `enriched` are calendar entries
- * after `enrichReleases`. A volume counts as unchanged when any of its print entries has the stored date, whatever the
- * order of the entries. A month-only date on either side ("2026-11") only counts as changed when the month differs.
+ * Pending volumes whose stored date differs from the calendar; `enriched` = entries after `enrichReleases`. Unchanged
+ * when any print entry has the stored date; a month-only date on either side only counts when the month differs.
  */
 function detectDateChanges(pending, enriched) {
     const byId = new Map(pending.map(p => [p.id, p]));
@@ -461,7 +470,7 @@ function detectDateChanges(pending, enriched) {
 }
 
 module.exports = {
-    getMonthlyReleases, fetchMonthsForCheck, resetReleaseFetchState,
+    getMonthlyReleases, monthCached, fetchMonthsForCheck, resetReleaseFetchState,
     enrichReleases, buildMatcher, findSeriesForImport, calendarItemType, titleKey,
     mapRelease, monthsToCheck, detectDateChanges
 };

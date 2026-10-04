@@ -113,16 +113,16 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
       aria-modal="true"
       aria-label="Bände hinzufügen"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
     >
-      <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Layers className="w-4 h-4 text-brand-400" aria-hidden="true" /> Mehrere Bände auf einmal hinzufügen
+      <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 mb-4 pb-3 short:mb-3 short:pb-2 border-b border-slate-800">
+          <h2 className="min-w-0 pt-1.5 text-base font-bold text-white flex items-start gap-2 break-words">
+            <Layers className="w-4 h-4 mt-0.5 shrink-0 text-brand-400" aria-hidden="true" /> <span className="min-w-0">Mehrere Bände auf einmal hinzufügen</span>
           </h2>
-          <button type="button" onClick={onClose} disabled={loading} aria-label="Schließen" title="Schließen" className="p-1 -m-1 rounded-lg text-slate-400 hover:text-white disabled:opacity-50">
-            <X className="w-4 h-4" aria-hidden="true" />
+          <button type="button" onClick={onClose} disabled={loading} aria-label="Schließen" title="Schließen" className="hit-44 shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -190,17 +190,17 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
             </div>
             <div>
               <label htmlFor={`${ids}-price`} className="block text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5" aria-hidden="true" /> Preis pro Band (€)
+                <Coins className="w-3.5 h-3.5" aria-hidden="true" /> Preis pro Band (€, optional)
               </label>
               <div className="relative">
                 <input
                   id={`${ids}-price`}
                   type="text"
                   inputMode="decimal"
-                  placeholder="z. B. 7,99 (optional)"
+                  placeholder="z. B. 7,99"
                   aria-invalid={priceInvalid || undefined}
                   aria-describedby={priceInvalid ? `${ids}-price-error` : undefined}
-                  className={`input-field text-base sm:text-xs font-mono text-emerald-300 pr-8 py-2.5 font-bold ${priceInvalid ? 'border-rose-500/70 focus:border-rose-500' : 'border-emerald-500/40 focus:border-emerald-500'}`}
+                  className={`input-field text-base sm:text-xs font-mono placeholder:font-sans placeholder:font-normal text-emerald-300 pr-8 py-2.5 font-bold ${priceInvalid ? 'border-rose-500/70 focus:border-rose-500' : 'border-emerald-500/40 focus:border-emerald-500'}`}
                   value={batchPrice}
                   onChange={e => setBatchPrice(e.target.value)}
                 />

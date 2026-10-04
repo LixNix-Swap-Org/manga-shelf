@@ -1,3 +1,4 @@
+// useMangaList: loading, caching, offline fallback and the session-expired event.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
@@ -145,6 +146,40 @@ describe('useMangaList', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/mangas/1', expect.objectContaining({ method: 'DELETE' }));
     expect(syncOfflineCopy).toHaveBeenCalledWith({ force: true });
     await act(async () => { refetch.resolve(json(200, listB)); });
+  });
+
+  it('delete: the series goes to the trash; "Rückgängig" restores it and reloads the list', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchMock = vi.fn(async (url, init) => {
+      if (init?.method === 'DELETE') return json(200, { success: true, trash_id: 42 });
+      if (url === '/api/trash/42/restore') return json(200, { success: true, kind: 'manga', id: 1 });
+      return json(200, fetchMock.restored ? listA : listB);
+    });
+    fetchMock.restored = false;
+    const { result } = await mount(fetchMock);
+    await act(async () => { await result.current.handleDeleteManga(click(), 1, 'Akira'); });
+    expect(window.confirm.mock.calls[0][0]).toMatch(/Papierkorb/);
+    const toast = toasts.last();
+    expect(toast).toMatchObject({ kind: 'success', message: '„Akira“ in den Papierkorb gelegt', action: { label: 'Rückgängig' } });
+    syncOfflineCopy.mockClear();
+    fetchMock.restored = true;
+    await act(async () => { await toast.action.onClick(); });
+    expect(fetchMock).toHaveBeenCalledWith('/api/trash/42/restore', expect.objectContaining({ method: 'POST' }));
+    expect(result.current.mangas).toEqual(listA);
+    expect(syncOfflineCopy).toHaveBeenCalledWith({ force: true });
+  });
+
+  it('delete: a failed restore from the toast shows the server text', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchMock = vi.fn(async (url, init) => {
+      if (init?.method === 'DELETE') return json(200, { success: true, trash_id: 43 });
+      if (url === '/api/trash/43/restore') return json(409, { error: 'Eine Reihe mit dieser ID existiert wieder', code: 'TRASH_ID_TAKEN' });
+      return json(200, listB);
+    });
+    const { result } = await mount(fetchMock);
+    await act(async () => { await result.current.handleDeleteManga(click(), 1, 'Akira'); });
+    await act(async () => { await toasts.last().action.onClick(); });
+    expect(toasts.messages('error')).toEqual(['Eine Reihe mit dieser ID existiert wieder']);
   });
 
   it('delete: an HTML error page is a server error, not a network error', async () => {

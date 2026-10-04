@@ -1,3 +1,4 @@
+// Trash: soft delete, restore, bulk undo and purge of series and volumes.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -151,7 +152,7 @@ test('bulk delete fills the trash; the bulk undo takes the entries out again', a
     assert.equal(res.status, 200);
     const refs = (await trashItems()).filter(t => t.kind === 'volume' && ids.includes(t.ref_id));
     assert.equal(refs.length, 2);
-    assert.equal((await editor('POST', '/volumes/bulk', { revert: res.body.previous })).status, 200);
+    assert.equal((await editor('POST', '/volumes/bulk', { revert: res.body.undo_token })).status, 200);
     assert.equal((await trashItems()).filter(t => t.kind === 'volume' && ids.includes(t.ref_id)).length, 0);
     assert.equal((await editor('GET', `/mangas/${id}`)).body.volumes.length, 2);
 });
@@ -213,4 +214,65 @@ test('scheduler: an anime refresh run is a tracked job and stops once a shutdown
     release();
     await run;
     assert.deepEqual(lifecycle.runningJobs(), []);
+});
+
+test('a restored owned volume whose owners were all deleted meanwhile is missing, or goes to the restoring admin', async () => {
+    const kim = await admin('POST', '/users', { username: 'kim', password: 'password123', role: 'editor' });
+    const kimClient = ctx.client();
+    assert.equal((await kimClient('POST', '/auth/login', { username: 'kim', password: 'password123' })).status, 200);
+    const created = await kimClient('POST', '/mangas', { title: 'Verlassene Bände', publisher: 'Carlsen Manga' });
+    const id = created.body.id;
+    const add = async (n) => (await kimClient('POST', '/volumes', { manga_id: id, volume_number: n, status: 'Vorhanden', price: 9, purchase_date: '2024-03-04' })).body.id;
+    const v1 = await add('1');
+    const v2 = await add('2');
+    const t1 = (await kimClient('DELETE', `/volumes/${v1}`)).body.trash_id;
+    const t2 = (await kimClient('DELETE', `/volumes/${v2}`)).body.trash_id;
+    assert.equal((await admin('DELETE', `/users/${kim.body.user.id}`)).status, 200);
+
+    assert.equal((await editor('POST', `/trash/${t1}/restore`)).status, 200);
+    const missing = (await editor('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === v1);
+    assert.equal(missing.status, 'Fehlt');
+    assert.deepEqual(missing.owners, []);
+    assert.equal(missing.purchase_date, null);
+
+    assert.equal((await admin('POST', `/trash/${t2}/restore`)).status, 200);
+    const handed = (await admin('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === v2);
+    assert.equal(handed.status, 'Vorhanden');
+    assert.deepEqual(handed.owners.map(o => [o.username, o.price, o.purchase_date]), [['admin', 9, '2024-03-04']]);
+    assert.equal(db.prepare('SELECT owned_volumes FROM mangas WHERE id = ?').get(id).owned_volumes, 1);
+});
+
+test('a restore never claims an id above the table sequence', async () => {
+    const id = await series('Fremde IDs');
+    const v1 = await volume(id, '1');
+    const volTrash = (await editor('DELETE', `/volumes/${v1}`)).body.trash_id;
+    const seq = (table) => db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table).seq;
+    const bumpId = (trashId, mutate) => {
+        const payload = JSON.parse(db.prepare('SELECT payload FROM trash WHERE id = ?').get(trashId).payload);
+        mutate(payload);
+        db.prepare('UPDATE trash SET payload = ? WHERE id = ?').run(JSON.stringify(payload), trashId);
+    };
+    const farVolume = seq('volumes') + 100;
+    bumpId(volTrash, (p) => {
+        p.volume.id = farVolume;
+        for (const row of [...(p.owners || []), ...(p.reads || [])]) row.volume_id = farVolume;
+    });
+    const refused = await editor('POST', `/trash/${volTrash}/restore`);
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, 'TRASH_INVALID');
+
+    const v2 = await volume(id, '2');
+    const seriesTrash = (await editor('DELETE', `/mangas/${id}`)).body.trash_id;
+    const farManga = seq('mangas') + 100;
+    bumpId(seriesTrash, (p) => { p.manga.id = farManga; });
+    assert.equal((await editor('POST', `/trash/${seriesTrash}/restore`)).body.code, 'TRASH_INVALID');
+    bumpId(seriesTrash, (p) => {
+        p.manga.id = id;
+        const v = p.volumes.find(x => x.id === v2);
+        v.id = farVolume + 1;
+    });
+    assert.equal((await editor('POST', `/trash/${seriesTrash}/restore`)).status, 200);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM volumes WHERE manga_id = ?').get(id).n, 0, 'the foreign volume id stays out');
+    assert.ok(seq('volumes') < farVolume, 'the sequence is not pushed up');
+    assert.ok(seq('mangas') < farManga);
 });

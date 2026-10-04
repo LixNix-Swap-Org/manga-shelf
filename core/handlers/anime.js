@@ -1,4 +1,4 @@
-// Anime tab (reports/spec-anime-tab.md C3): shared list, progress per user, search and refresh over the gateway
+// Anime tab: shared list, progress per user, search and refresh over the gateway
 // (core/anime/gateway.js), adaptations of a series and the CSV export.
 const { qstr } = require('../lib/query');
 const { HttpError, badRequest, notFound, conflict } = require('../errors');
@@ -250,9 +250,8 @@ function parseScore(value) {
 }
 
 /**
- * Own progress (admins may pass user_id). The counter is clamped to a known episode count; reaching it means
- * "Gesehen" (finished today), "Gesehen" fills the counter, the first episode sets started_at, and a counter above 0
- * moves "Geplant" to "Schaue".
+ * Own progress (admins may pass user_id). The counter is clamped to the episode count; reaching it means "Gesehen",
+ * the first episode sets started_at, and a counter above 0 moves "Geplant" to "Schaue".
  */
 function updateProgress(ctx, { params, body }) {
     const id = parseId(params.id);

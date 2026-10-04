@@ -6,7 +6,7 @@ const TRASH_RETENTION_DAYS = 30;
 const sqlTimestamp = (date) => date.toISOString().slice(0, 19).replace('T', ' ');
 
 const OWNERS_SQL = 'SELECT vo.* FROM volume_owners vo WHERE vo.volume_id = ? ORDER BY vo.created_at, vo.rowid';
-const READS_SQL = 'SELECT vr.* FROM volume_reads vr WHERE vr.volume_id = ? ORDER BY vr.read_at, vr.user_id';
+const READS_SQL = 'SELECT vr.* FROM volume_reads vr WHERE vr.volume_id = ? ORDER BY vr.read_at, vr.rowid';
 
 function volumeParts(ctx, volumeIds) {
     const owners = [];

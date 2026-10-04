@@ -1,3 +1,4 @@
+// Remote image download with SSRF protection: only public addresses, size cap, timeouts, magic-byte check.
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
@@ -8,7 +9,7 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 10000;
 const TOTAL_TIMEOUT_MS = 30000;
-const USER_AGENT = 'MangaShelf (+https://github.com/MoltresHD/manga-shelf)';
+const USER_AGENT = 'MangaShelf (+https://github.com/LixNix-Swap-Org/manga-shelf)';
 
 function isPrivateIPv4(address) {
     const [a, b, c] = address.split('.').map(Number);
@@ -44,10 +45,8 @@ function ipv6Groups(address) {
 const v4FromGroups = (hi, lo) => [hi >> 8, hi & 255, lo >> 8, lo & 255].join('.');
 
 /**
- * True for loopback, private, link-local, CGNAT, multicast and other non-public addresses.
- * IPv6 is compared numerically, because the URL parser and DNS write the same address in
- * different notations ("[::ffff:127.0.0.1]" becomes "[::ffff:7f00:1]"). IPv6 forms that carry
- * an IPv4 address (mapped, compatible, NAT64, 6to4) are judged by that IPv4 address.
+ * True for loopback, private, link-local, CGNAT, multicast and other non-public addresses. IPv6 is compared
+ * numerically (notations differ between URL parser and DNS); forms carrying an IPv4 address are judged by it.
  */
 function isPrivateAddress(address) {
     if (net.isIPv4(address)) return isPrivateIPv4(address);
@@ -157,9 +156,8 @@ function requestOnce(url, depthLeft, ctx) {
 }
 
 /**
- * Downloads an image from a remote URL with SSRF protection (public addresses only), a size cap,
- * an idle timeout plus an overall deadline and magic-byte verification. Resolves with { buffer, ext }.
- * `options` exists for tests only; production callers pass just the URL.
+ * Downloads a remote image with SSRF protection (public addresses only), size cap, idle and overall timeouts and
+ * magic-byte verification; resolves { buffer, ext }. `options` is for tests only.
  */
 function fetchRemoteImage(url, options = {}) {
     const isBlocked = options.isBlockedAddress || isPrivateAddress;

@@ -1,3 +1,4 @@
+// Covers the bottom navigation and its interplay with the dashboard header on narrow screens.
 import { useState } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
@@ -67,8 +68,8 @@ describe('bottom navigation on phones', () => {
       expect(nav.contains(document.getElementById(id))).toBe(true);
     }
     expect(document.getElementById('btn-mobile-anime')).toBeNull();
-    expect(within(nav).getByRole('button', { name: 'Einkaufsliste, 12 fehlend' })).toBeTruthy();
-    expect(within(nav).getByRole('button', { name: 'Release-Radar, 3 Termine' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Einkauf – Einkaufsliste, 12 fehlend' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Radar – Release-Radar, 3 Termine' })).toBeTruthy();
     expect(within(nav).getByRole('button', { name: 'Scannen' })).toBeTruthy();
     expect(within(nav).getByRole('button', { name: 'Sammlung' }).getAttribute('aria-current')).toBe('page');
   });
@@ -108,7 +109,9 @@ describe('bottom navigation on phones', () => {
     const media = stubMatchMedia(false);
     render(<Header />);
     expect(screen.queryByRole('navigation', { name: 'Hauptnavigation' })).toBeNull();
-    expect(document.getElementById('btn-mobile-anime')).toBeTruthy();
+    expect(ids('btn-mobile-menu-toggle')).toBe(1);
+    // the views are the tabs below the header; the header keeps no second set of view buttons
+    for (const id of ['btn-mobile-shopping', 'btn-mobile-radar', 'btn-mobile-anime']) expect(ids(id)).toBe(0);
     expect(document.getElementById('mobile-menu-drawer')).toBeNull();
     act(() => media.set(true));
     expect(screen.getByRole('navigation', { name: 'Hauptnavigation' })).toBeTruthy();
@@ -117,10 +120,64 @@ describe('bottom navigation on phones', () => {
     expect(screen.queryByRole('navigation', { name: 'Hauptnavigation' })).toBeNull();
   });
 
+  it('every accessible name starts with the visible label (voice control: "Mehr", "Einkauf", "Radar")', () => {
+    stubMatchMedia(true);
+    render(<Header />);
+    const nav = screen.getByRole('navigation', { name: 'Hauptnavigation' });
+    for (const button of within(nav).getAllByRole('button')) {
+      const visible = button.textContent.trim();
+      const name = button.getAttribute('aria-label') || visible;
+      expect(name.startsWith(visible), `${name} / ${visible}`).toBe(true);
+    }
+    const more = document.getElementById('btn-mobile-menu-toggle');
+    expect(more.getAttribute('aria-label')).toBe('Mehr – Menü öffnen');
+    fireEvent.click(more);
+    expect(more.getAttribute('aria-label')).toBe('Mehr – Menü schließen');
+    expect(within(nav).getByRole('button', { name: 'Einkauf – Einkaufsliste, 12 fehlend' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Radar – Release-Radar, 3 Termine' })).toBeTruthy();
+  });
+
+  it('rotating past 640 px keeps the bar (and a scanner opened from it) mounted, hidden and without ids', () => {
+    const media = stubMatchMedia(true);
+    render(<Header />);
+    const nav = document.getElementById('bottom-nav');
+    const scan = document.getElementById('btn-bottom-scan');
+    act(() => media.set(false));
+    expect(document.getElementById('bottom-nav')).toBe(nav);
+    expect(nav.hidden).toBe(true);
+    expect(scan.isConnected).toBe(true);
+    expect(nav.contains(scan)).toBe(true);
+    expect(nav.querySelectorAll('[id]').length).toBe(0);
+    expect(ids('btn-mobile-menu-toggle')).toBe(1);
+    expect(nav.contains(document.getElementById('btn-mobile-menu-toggle'))).toBe(false);
+    act(() => media.set(true));
+    expect(document.getElementById('bottom-nav')).toBe(nav);
+    expect(nav.hidden).toBe(false);
+    expect(document.getElementById('btn-bottom-scan')).toBe(scan);
+    expect(ids('btn-mobile-menu-toggle')).toBe(1);
+    expect(nav.contains(document.getElementById('btn-mobile-menu-toggle'))).toBe(true);
+  });
+
   it('without matchMedia nothing changes (old browsers, tests)', () => {
     render(<Header />);
     expect(screen.queryByRole('navigation', { name: 'Hauptnavigation' })).toBeNull();
-    expect(ids('btn-mobile-shopping')).toBe(1);
+    expect(ids('btn-mobile-menu-toggle')).toBe(1);
+    expect(ids('btn-mobile-shopping')).toBe(0);
+  });
+
+  it('caps the badges at 99+ in at least 10 px text and keeps the full number in the accessible name', () => {
+    render(<BottomNav activeMainView="shelf" setView={vi.fn()} onScan={vi.fn()} missingCount={120} releaseCount={7} setMobileMenuOpen={vi.fn()} />);
+    const cart = document.getElementById('btn-mobile-shopping');
+    expect(cart.getAttribute('aria-label')).toBe('Einkauf – Einkaufsliste, 120 fehlend');
+    // beside the button, not inside: the visible label stays "Einkauf" (label in name)
+    expect(within(cart).queryByText('99+')).toBeNull();
+    const badge = within(cart.parentElement).getByText('99+');
+    expect(badge.getAttribute('aria-hidden')).toBe('true');
+    expect(badge.className).toContain('pointer-events-none');
+    expect(badge.className).toContain('min-w-4');
+    expect(badge.className).toContain('text-[10px]');
+    expect(badge.className).not.toContain('text-[9px]');
+    expect(cart.className).toContain('text-[11px]');
   });
 
   it('items are at least 44 px tall and the bar keeps clear of the home indicator', () => {

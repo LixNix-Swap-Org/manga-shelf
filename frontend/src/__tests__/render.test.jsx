@@ -1,3 +1,4 @@
+// Render behaviour: cover images, memoised cards, progressive shelf and dialog history.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -117,7 +118,7 @@ describe('memoised cards', () => {
 
   it('card wrappers skip off-screen rendering with content-visibility', () => {
     renderGrid();
-    const wrapper = screen.getByRole('link', { name: 'Reihe 1' }).parentElement;
+    const wrapper = screen.getByRole('link', { name: /^Reihe 1\b/ }).parentElement;
     expect(wrapper.className).toBe(CARD_WRAPPER_CLASS);
     expect(wrapper.className).toContain('[content-visibility:auto]');
   });

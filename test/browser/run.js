@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 /**
- * Runs a browser test against an ISOLATED server: temporary data folder, free port, throw-away admin account.
- * The browser tests create, edit, delete and restore data, so they must never be pointed at a real instance.
- *
- *   node test/browser/run.js test/browser/e2e-suite.js
- *   node test/browser/run.js test/browser/performance-suite.js --db path/to/manga.db   # start from a COPY of a database
- *
- * Needs a built frontend (npm run build:frontend) and Chrome/Chromium/Edge (CHROME_BIN overrides the lookup).
+ * Runs a browser test against an ISOLATED server (temp data folder, free port, throw-away admin): never point the
+ * tests at a real instance. Usage: node test/browser/run.js <suite> [--db copy.db]. Needs build:frontend and Chrome.
  */
 const { spawn } = require('child_process');
 const crypto = require('crypto');

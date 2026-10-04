@@ -1,3 +1,4 @@
+// DetailBottomBar on phones and the detail scan action.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
@@ -189,10 +190,10 @@ describe('detailScanAction', () => {
   });
 
   it('prefills for editors (number only when the catalogue knew it), tells visitors it is missing', () => {
-    expect(detailScanAction({ ok: true, data: { found: true, matched_manga: { id: 5 }, book }, mangaId: 5, canEdit: true }))
-      .toEqual({ type: 'prefill', number: '4', price: '7', title: '' });
+    expect(detailScanAction({ ok: true, data: { isbn: '9783551000019', found: true, matched_manga: { id: 5 }, book }, mangaId: 5, canEdit: true }))
+      .toEqual({ type: 'prefill', number: '4', price: '7', title: '', isbn: '9783551000019' });
     expect(detailScanAction({ ok: true, data: { found: true, matched_manga: null, matched_candidates: [{ id: 5 }, { id: 8 }], book: { ...book, volume_number_known: false, price: null } }, mangaId: 5, canEdit: true }))
-      .toEqual({ type: 'prefill', number: '', price: '', title: 'Naruto' });
+      .toEqual({ type: 'prefill', number: '', price: '', title: 'Naruto', isbn: '' });
     expect(detailScanAction({ ok: true, data: { found: true, matched_manga: { id: 5 }, book }, mangaId: 5, canEdit: false }).type).toBe('notice');
   });
 

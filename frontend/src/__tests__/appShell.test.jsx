@@ -1,7 +1,8 @@
+// Covers the app shell: login and logout flow, routing, session handling and offline start.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
-import { lazy, Suspense } from 'react';
-import { useParams, MemoryRouter } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { useParams, useLocation, MemoryRouter } from 'react-router-dom';
 
 vi.mock('../utils/offlineStore', () => ({
   saveUser: vi.fn(async () => {}),
@@ -13,15 +14,27 @@ vi.mock('../utils/offlineStore', () => ({
   formatAge: vi.fn(() => 'vor 5 Min.')
 }));
 
+const shelf = vi.hoisted(() => ({ takesAccountEvent: false }));
+
 // the real shelf scroll hook: it stores the position when the shelf unmounts
 vi.mock('../Dashboard', async () => {
   const { useShelfScroll } = await vi.importActual('../components/dashboard/MangaCollectionGrid');
   return {
-    default: function DashboardStub({ user, onLogout }) {
+    default: function DashboardStub({ user, onLogout, onLocalReplaced }) {
       useShelfScroll(true);
+      const { state, search } = useLocation();
+      const [opened, setOpened] = useState('-');
+      useEffect(() => {
+        if (!shelf.takesAccountEvent) return undefined;
+        const onOpen = (event) => { event.preventDefault(); setOpened(event.detail); };
+        window.addEventListener('mangashelf:open-account', onOpen);
+        return () => window.removeEventListener('mangashelf:open-account', onOpen);
+      }, []);
       return (
         <div>
           <p>Dashboard von {user.username}{user.offline ? ' (offline)' : ''}</p>
+          <p data-testid="dashboard-wiring">{`${state?.openAccount || '-'} ${search || '-'} ${typeof onLocalReplaced}`}</p>
+          <p data-testid="dashboard-opened">{opened}</p>
           <button type="button" onClick={onLogout}>Abmelden</button>
         </div>
       );
@@ -84,6 +97,7 @@ describe('App shell', () => {
     localStorage.clear();
     sessionStorage.clear();
     go('/');
+    shelf.takesAccountEvent = false;
     loadUser.mockReset().mockResolvedValue(null);
     loadMeta.mockReset().mockResolvedValue(null);
     clearOfflineData.mockClear();
@@ -227,6 +241,99 @@ describe('App shell', () => {
     }));
     render(<App />);
     expect(await screen.findByText('Reihe 7 mit 401-Handler')).toBeTruthy();
+  });
+
+  it('the desktop menu "Quellen & Schlüssel…" opens the keys from any route of a signed-in user; signed out it stays unhandled', async () => {
+    const fire = () => window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }));
+    go('/manga/7');
+    vi.stubGlobal('fetch', routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    const view = render(<App />);
+    expect(await screen.findByText(/Reihe 7/)).toBeTruthy();
+    let unhandled;
+    act(() => { unhandled = fire(); });
+    expect(unhandled).toBe(false);
+    expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
+
+    view.unmount();
+    go('/?view=shopping');
+    render(<App />);
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    act(() => { unhandled = fire(); });
+    expect(unhandled).toBe(false);
+    await waitFor(() => expect(screen.getByTestId('dashboard-wiring').textContent).toBe('keys ?view=shopping function'));
+  });
+
+  it('on the shelf the menu opens the keys in place: no history write, an open dialog keeps its entry', async () => {
+    shelf.takesAccountEvent = true;
+    go('/?view=shopping');
+    vi.stubGlobal('fetch', routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    render(<App />);
+    expect(await screen.findByText('Dashboard von admin')).toBeTruthy();
+    window.history.pushState({ ...window.history.state, mangashelfDialogs: ['dialog-1'] }, '');
+    const length = window.history.length;
+    let unhandled;
+    act(() => { unhandled = window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true })); });
+    expect(unhandled).toBe(false);
+    expect(screen.getByTestId('dashboard-opened').textContent).toBe('keys');
+    expect(screen.getByTestId('dashboard-wiring').textContent).toBe('- ?view=shopping function');
+    expect(window.history.length).toBe(length);
+    expect(window.history.state.mangashelfDialogs).toEqual(['dialog-1']);
+    expect(window.location.search).toBe('?view=shopping');
+  });
+
+  it('from another route the menu replaces the entry only when a dialog entry is on top', async () => {
+    const fire = () => act(() => { window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true })); });
+    vi.stubGlobal('fetch', routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': json(200, { user: admin })
+    }));
+    go('/manga/7');
+    const view = render(<App />);
+    expect(await screen.findByText(/Reihe 7/)).toBeTruthy();
+    window.history.pushState({ ...window.history.state, mangashelfDialogs: ['dialog-2'] }, '');
+    let length = window.history.length;
+    fire();
+    expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
+    expect(window.history.length).toBe(length);
+    expect(window.history.state?.mangashelfDialogs).toBeUndefined();
+    view.unmount();
+
+    go('/manga/8');
+    render(<App />);
+    expect(await screen.findByText(/Reihe 8/)).toBeTruthy();
+    length = window.history.length;
+    fire();
+    expect((await screen.findByTestId('dashboard-wiring')).textContent).toBe('keys - function');
+    expect(window.history.length).toBe(length + 1);
+  });
+
+  it('signed out the menu event stays unhandled (the desktop asks to sign in); offline it says why nothing opens', async () => {
+    const fire = () => window.dispatchEvent(new CustomEvent('mangashelf:open-api-keys', { cancelable: true }));
+    vi.stubGlobal('fetch', routes({
+      'GET /api/setup/status': json(200, { needsSetup: false }),
+      'GET /api/auth/me': sessionGone()
+    }));
+    const view = render(<App />);
+    expect(await screen.findByLabelText('Benutzername')).toBeTruthy();
+    expect(fire()).toBe(true);
+    view.unmount();
+
+    loadUser.mockResolvedValue(admin);
+    vi.stubGlobal('fetch', routes({ 'GET /api/setup/status': html(), 'GET /api/auth/me': html() }));
+    go('/manga/5');
+    render(<App />);
+    expect(await screen.findByText(/Reihe 5/)).toBeTruthy();
+    let unhandled;
+    act(() => { unhandled = fire(); });
+    expect(unhandled).toBe(false);
+    expect(await screen.findByText('Quellen & Schlüssel lassen sich nur mit Verbindung zum Server bearbeiten.')).toBeTruthy();
+    expect(screen.getByText(/Reihe 5/)).toBeTruthy();
   });
 
   it('an offline logout stays pending and is sent before /auth/me on the next start', async () => {
@@ -378,6 +485,8 @@ describe('App shell', () => {
     const rendered = container.firstElementChild.outerHTML;
     const normalise = (markup) => markup.replace(/\s+/g, ' ').replace(/="([^"]*)"/g, (_, v) => `="${v.trim()}"`);
     expect(normalise(staticShell)).toBe(normalise(rendered));
+    // env(safe-area-inset-*) is only non-zero in the iOS WebView with viewport-fit=cover
+    expect(new DOMParser().parseFromString(html, 'text/html').querySelector('meta[name="viewport"]').content).toMatch(/viewport-fit=cover/);
   });
 
   it('a captive portal answering 200 HTML keeps the offline copy instead of showing the login', async () => {

@@ -1,3 +1,4 @@
+// Covers CSV export and import in the exchange modal, including encoding detection.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import CsvExchangeModal from '../components/dashboard/CsvExchangeModal';

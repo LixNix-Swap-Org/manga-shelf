@@ -70,7 +70,7 @@ const loadUserMangas = (ctx) => ctx.db.prepare(`
 `).all();
 const loadUserVolumes = (ctx) => ctx.db.prepare('SELECT id, manga_id, volume_number, type, notes, status, price, release_date, manga_passion_volume_id FROM volumes ORDER BY id').all();
 
-// Vorbestellungen, deren Termin im Manga-Passion-Kalender inzwischen anders lautet (Verschiebungen)
+// Preorders whose date in the Manga Passion calendar has changed since (postponements)
 async function dateChanges(ctx) {
     const pending = ctx.db.prepare(`
         SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.release_date, m.title AS manga_title
@@ -119,6 +119,21 @@ function feedEntryFor(ctx, token) {
     if (!entry || !Number.isInteger(entry.user_id)) return null;
     if (!ctx.db.prepare('SELECT 1 FROM users WHERE id = ?').get(entry.user_id)) return null;
     return { key, entry };
+}
+
+/**
+ * Deletes the calendar feed tokens of `userId`, or of every user when it is null (sessions ended for everyone).
+ * `db` is ctx.db or the server connection; returns how many were removed.
+ */
+function revokeFeedTokens(db, userId = null) {
+    const rows = db.prepare('SELECT key, value FROM app_settings WHERE substr(key, 1, ?) = ?').all(FEED_KEY_PREFIX.length, FEED_KEY_PREFIX);
+    let removed = 0;
+    for (const row of rows) {
+        let owner;
+        try { owner = JSON.parse(row.value)?.user_id; } catch (e) { owner = undefined; }
+        if (userId === null || owner === userId) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
+    }
+    return removed;
 }
 
 function feedVolumeLabel(row) {
@@ -181,4 +196,4 @@ function calendarFeed(ctx, { query }) {
     };
 }
 
-module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedVolumeLabel, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };
+module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedVolumeLabel, revokeFeedTokens, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };

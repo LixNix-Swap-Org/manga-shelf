@@ -86,13 +86,13 @@ export default function AnimeView({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <label htmlFor="anime-sort" className="text-xs text-slate-400">Sortierung</label>
-          <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <label htmlFor="anime-sort" className="sr-only sm:not-sr-only text-xs text-slate-400 whitespace-nowrap">Sortierung</label>
+          <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5 min-w-0 flex-1 sm:flex-initial sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
             {ANIME_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           {canEdit && !offline && (
-            <button id="btn-add-anime" type="button" onClick={() => onAdd()} className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5">
+            <button id="btn-add-anime" type="button" onClick={() => onAdd()} className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
               <Plus className="w-4 h-4" aria-hidden="true" /> Anime hinzufügen
             </button>
           )}
@@ -129,7 +129,7 @@ export default function AnimeView({
       {loading && !list.length && <p className="text-sm text-slate-400" role="status">Anime-Liste wird geladen…</p>}
 
       {loaded && !list.length && !loading && !error && (
-        <div className="text-center py-16 border border-dashed border-slate-700 rounded-3xl">
+        <div id="anime-empty" className="text-center py-16 px-6 border border-dashed border-slate-700 rounded-3xl">
           <Tv className="w-10 h-10 mx-auto text-slate-500 mb-3" aria-hidden="true" />
           <p className="text-slate-200 font-semibold">Noch keine Anime in der Liste</p>
           <p className="text-sm text-slate-400 mt-1">

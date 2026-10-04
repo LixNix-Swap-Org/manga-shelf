@@ -1,3 +1,4 @@
+// GET offline-snapshot: the per-user offline copy mirrors /mangas and /mangas/:id.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -20,6 +21,13 @@ test.before(async () => {
 });
 
 test.after(async () => { await ctx.close(); });
+
+// GET /mangas plus the search text the dashboard loads separately: the offline copy carries both in one row
+async function onlineList(client) {
+    const list = (await client('GET', '/mangas')).body;
+    const search = new Map((await client('GET', '/mangas/volume-search')).body.map(r => [r.id, r.volume_search]));
+    return list.map(m => ({ ...m, volume_search: search.get(m.id) ?? null }));
+}
 
 test('offline-snapshot requires authentication', async () => {
     const res = await ctx.client()('GET', '/offline-snapshot');
@@ -44,7 +52,7 @@ test('offline-snapshot mirrors /mangas and /mangas/:id for the requesting user',
 
     for (const client of [editor, visitor]) {
         const snap = (await client('GET', '/offline-snapshot')).body;
-        const list = (await client('GET', '/mangas')).body;
+        const list = await onlineList(client);
         assert.deepEqual(snap.mangas, list);
         assert.ok(snap.mangas.every(m => 'volume_search' in m), 'the dashboard search works offline too');
         assert.ok(snap.mangas.every(m => 'wish_priority' in m && 'wished' in m), 'the wishlist chip works offline too');
@@ -72,6 +80,23 @@ test('read_users entries expose the reader under both id and user_id (same shape
     assert.equal(toggled.body.read_users[0].user_id, reader.user_id);
 });
 
+test('offline-snapshot carries read_at of every reader and condition/created_at of every owner', async () => {
+    const { db } = require('../db');
+    const m = (await editor('POST', '/mangas', { title: 'Lesedaten' })).body.id;
+    await editor('POST', '/volumes/batch', { manga_id: m, from: 1, to: 1, status: 'Vorhanden' });
+    const vol = (await editor('GET', `/mangas/${m}`)).body.volumes[0];
+    assert.equal((await editor('POST', `/volumes/${vol.id}/read`, { read: true })).status, 200);
+    db.prepare("UPDATE volume_reads SET read_at = '2023-02-11 10:00:00' WHERE volume_id = ?").run(vol.id);
+    db.prepare("UPDATE volume_owners SET condition = 'Gebraucht', created_at = '2022-05-06 07:08:09' WHERE volume_id = ?").run(vol.id);
+
+    const snapshot = (await editor('GET', '/offline-snapshot')).body;
+    const [read] = snapshot.details[m].volumes[0].read_users;
+    assert.deepEqual([read.username, read.read_at], ['ed', '2023-02-11 10:00:00']);
+    const [owner] = snapshot.details[m].volumes[0].owners;
+    assert.deepEqual([owner.username, owner.condition, owner.created_at], ['ed', 'Gebraucht', '2022-05-06 07:08:09']);
+    assert.deepEqual((await editor('GET', `/mangas/${m}`)).body, snapshot.details[m]);
+});
+
 test('offline-snapshot details equal /mangas/:id per user for mixed types, owners and readers', async () => {
     const users = (await admin('GET', '/users')).body;
     const edId = users.find(u => u.username === 'ed').id;
@@ -97,7 +122,7 @@ test('offline-snapshot details equal /mangas/:id per user for mixed types, owner
 
     for (const client of [editor, visitor, admin]) {
         const snap = (await client('GET', '/offline-snapshot')).body;
-        assert.deepEqual(snap.mangas, (await client('GET', '/mangas')).body);
+        assert.deepEqual(snap.mangas, await onlineList(client));
         for (const id of Object.keys(snap.details)) {
             assert.deepEqual(snap.details[id], (await client('GET', `/mangas/${id}`)).body, `details of ${id}`);
         }
@@ -153,7 +178,7 @@ test('offline-snapshot is built in blocks: 300 series, identical output, other w
         const series = db.prepare('SELECT count(*) AS n FROM mangas').get().n;
         assert.ok(series >= 300);
         const snap = (await editor('GET', '/offline-snapshot')).body;
-        assert.deepEqual(snap.mangas, (await editor('GET', '/mangas')).body);
+        assert.deepEqual(snap.mangas, await onlineList(editor));
         assert.equal(Object.keys(snap.details).length, series);
         for (const id of Object.keys(snap.details)) {
             assert.deepEqual(snap.details[id], (await editor('GET', `/mangas/${id}`)).body, `details of ${id}`);

@@ -10,7 +10,7 @@ export function useOutboxEntries(userId) {
     outbox.load();
     return unsubscribe;
   }, [outbox]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- version: neu lesen bei jeder Änderung
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- version: read again on every change
   return useMemo(() => (userId === null || userId === undefined ? [] : outbox.list(outboxScope(userId))), [outbox, userId, version]);
 }
 

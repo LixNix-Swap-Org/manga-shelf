@@ -1,3 +1,4 @@
+// Typed, validated access to every environment variable; bad values fall back to a default with a German warning.
 const path = require('path');
 const fs = require('fs');
 const { parseTrustProxy } = require('./trustProxy');
@@ -82,6 +83,23 @@ const appOrigins = (raw, name) => {
     return warn(valid, `${name} enthält ungültige Ursprünge (${invalid.join(', ')}; erwartet z. B. capacitor://localhost), sie werden ignoriert`);
 };
 
+const ANIME_SOURCE_NAMES = ['anilist', 'jikan', 'mal'];
+const DEFAULT_ANIME_SOURCES = Object.freeze(['anilist', 'jikan']);
+
+// "jikan" and "mal" both mean the MyAnimeList side (core/anime/settings.js)
+const animeSources = (raw, name) => {
+    if (blank(raw)) return ok(DEFAULT_ANIME_SOURCES);
+    const list = String(raw).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const unknown = list.filter(s => !ANIME_SOURCE_NAMES.includes(s));
+    const valid = Object.freeze([...new Set(list.filter(s => ANIME_SOURCE_NAMES.includes(s)))]);
+    const allowed = `erlaubt: ${ANIME_SOURCE_NAMES.join(', ')}`;
+    if (!valid.length) {
+        return warn(DEFAULT_ANIME_SOURCES, `${name}="${String(raw).trim()}" nennt keine bekannte Quelle (${allowed}), es gilt ${DEFAULT_ANIME_SOURCES.join(',')}`);
+    }
+    if (unknown.length) return warn(valid, `${name} enthält unbekannte Quellen (${unknown.join(', ')}; ${allowed}), es gilt ${valid.join(',')}`);
+    return ok(valid);
+};
+
 const MIN_SETUP_TOKEN_LENGTH = 12;
 /** Setup codes are compared without spaces and dashes and regardless of case. */
 const normalizeSetupToken = (value) => String(value).replace(/[\s-]/g, '').toUpperCase();
@@ -138,7 +156,14 @@ const ENTRIES = [
     { key: 'backupKeepManual', name: 'BACKUP_KEEP_MANUAL', parse: keepCount(10) },
     { key: 'backupKeepPreRestore', name: 'BACKUP_KEEP_PRE_RESTORE', parse: keepCount(3) },
     { key: 'backupKeepPreUpdate', name: 'BACKUP_KEEP_PRE_UPDATE', parse: keepCount(3) },
+    { key: 'migrateWithoutSnapshot', name: 'MIGRATE_WITHOUT_SNAPSHOT', parse: flag(false) },
     { key: 'adminConsole', name: 'ADMIN_CONSOLE', parse: flag(true) },
+    { key: 'updateCheck', name: 'UPDATE_CHECK', parse: flag(true) },
+    { key: 'animeAnilistRpm', name: 'ANIME_ANILIST_RPM', parse: intIn(1, 600, 30) },
+    { key: 'animeJikanRpm', name: 'ANIME_JIKAN_RPM', parse: intIn(1, 600, 60) },
+    { key: 'animeSources', name: 'ANIME_SOURCES', parse: animeSources },
+    { key: 'malClientId', name: 'MAL_CLIENT_ID', parse: text() },
+    { key: 'googleBooksKey', name: 'GOOGLE_BOOKS_KEY', parse: text() },
     { key: 'restoreMaxDbBytes', name: 'RESTORE_MAX_DB_BYTES', parse: intIn(1, Number.MAX_SAFE_INTEGER, 2 * 1024 ** 3) },
     { key: 'restoreMaxUploadsBytes', name: 'RESTORE_MAX_UPLOADS_BYTES', parse: intIn(1, Number.MAX_SAFE_INTEGER, 4 * 1024 ** 3) },
     { key: 'restoreMaxEntries', name: 'RESTORE_MAX_ENTRIES', parse: intIn(1, 10000000, 100000) },

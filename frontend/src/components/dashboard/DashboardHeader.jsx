@@ -1,16 +1,19 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import BottomNav, { useIsNarrow } from '../common/BottomNav';
-import { isAppMode } from '../../utils/api';
+import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
-import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, Server, ShoppingCart, Tv, Users, X } from 'lucide-react';
-import { APP_VERSION, formatBadgeCount, nextQuickView, roleBadgeClass, roleLabel } from './dashboardShell';
+import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
+import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 
 const SystemModal = lazy(() => import('../modals/SystemModal'));
+const BackupExportModal = lazy(() => import('../modals/BackupExportModal'));
 
 const SEARCH_PLACEHOLDER = 'Titel, Autor, Tag, ISBN oder Notiz suchen...';
+// BarcodeScannerButton's look plus the touch hit area
+const HEADER_SCAN_CLASS = 'hit-44 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white transition shadow-sm active:scale-95 disabled:opacity-50';
 
 const PILL_STATE = {
   online: { dot: 'bg-emerald-400', text: 'verbunden' },
@@ -23,19 +26,78 @@ function ConnectionPill() {
   const { state, server } = useConnection();
   const look = PILL_STATE[state] || PILL_STATE.offline;
   const name = server?.name || 'Kein Server';
+  // without a server the collection lives on the device: no connection state to report
+  const local = Boolean(server?.local) || isLocalMode();
   return (
     <Link
       to="/server"
       id="btn-connection-pill"
       className="inline-flex items-center gap-1.5 min-w-0 max-w-full rounded-full border border-slate-700/70 bg-slate-900/70 px-2 py-0.5 hover:border-brand-500/60 hover:text-slate-200"
-      aria-label={`Server ${name}, ${look.text}. Server wechseln`}
+      aria-label={local ? `${name}. Server wechseln` : `Server ${name}, ${look.text}. Server wechseln`}
       title="Server wechseln oder Verbindung prüfen"
     >
-      <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${look.dot}`}></span>
-      <span className="truncate">{name}</span>
-      <span className="text-slate-500 shrink-0" aria-hidden="true">· {look.text}</span>
+      <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${local ? 'bg-slate-400' : look.dot}`}></span>
+      <span className="min-w-0 truncate">{name}</span>
+      {!local && <span className="text-slate-400 shrink-0" aria-hidden="true">· {look.text}</span>}
     </Link>
   );
+}
+
+/** An outcome of App's status check that opens the collection (as on the device screen). */
+export const opensCollection = (outcome) => ['local', 'online', 'offline'].includes(outcome?.status);
+
+/** Standalone mode: a restore runs App's reload (onLocalReplaced), then the shelf or, without a profile, the device screen. */
+function LocalBackupDialog({ onClose, onLocalReplaced }) {
+  const navigate = useNavigate();
+  const onReplaced = async () => {
+    onClose();
+    const outcome = await onLocalReplaced?.();
+    if (opensCollection(outcome)) navigate('/', { replace: true });
+    else navigate('/server');
+  };
+  return <BackupExportModal onClose={onClose} onReplaced={onReplaced} />;
+}
+
+/**
+ * Publishes the sticky header's height as `--sticky-header-h` on <html> (index.css turns it into scroll-padding-top, so
+ * keyboard focus never lands under the header); 0 while the header scrolls with the page (short: screens).
+ */
+function useStickyHeaderHeight(headerRef) {
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return undefined;
+    const root = document.documentElement;
+    const update = () => {
+      const sticky = window.getComputedStyle(header).position === 'sticky';
+      root.style.setProperty('--sticky-header-h', `${sticky ? Math.ceil(header.getBoundingClientRect().height) : 0}px`);
+    };
+    update();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+    observer?.observe(header);
+    window.addEventListener('resize', update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+      root.style.removeProperty('--sticky-header-h');
+    };
+  }, [headerRef]);
+}
+
+/**
+ * Touch scrolling closes an untouched search field (like a native keyboardDismissMode): while it has focus, iPadOS
+ * offsets the layout viewport and the sticky header slides under the status bar.
+ */
+function useBlurSearchOnScroll(searchInputRef, headerRef, typedRef) {
+  useEffect(() => {
+    const onTouchMove = (e) => {
+      const input = searchInputRef.current;
+      if (!input || document.activeElement !== input || typedRef.current) return;
+      if (headerRef.current?.contains(e.target)) return;
+      input.blur();
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    return () => window.removeEventListener('touchmove', onTouchMove);
+  }, [searchInputRef, headerRef, typedRef]);
 }
 
 /** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational; all state and handlers come in via props. */
@@ -57,6 +119,7 @@ export default function DashboardHeader({
   isVisitor,
   mobileMenuOpen,
   onLogout,
+  onLocalReplaced,
   radarData,
   search,
   searchInputRef,
@@ -67,6 +130,10 @@ export default function DashboardHeader({
   user
 }) {
   const menuToggleRef = useRef(null);
+  const headerRef = useRef(null);
+  const searchTypedRef = useRef(false);
+  useStickyHeaderHeight(headerRef);
+  useBlurSearchOnScroll(searchInputRef, headerRef, searchTypedRef);
   // phones: quick toggles and menu button live in the bottom navigation, the menu opens as a bottom sheet
   const narrow = useIsNarrow();
   const isAdmin = user?.role === 'admin';
@@ -77,7 +144,13 @@ export default function DashboardHeader({
   // the system page lives here so the admin menu needs no new prop; rendered into body (the header's backdrop filter
   // would anchor a fixed dialog)
   const [systemOpen, setSystemOpen] = useState(false);
-  const showSystemEntry = isAdmin && !user?.offline;
+  // without a server: no users, snapshots or system page; the backup entry exports/imports a ZIP on the device
+  const local = isLocalMode();
+  const showSystemEntry = isAdmin && !local && !user?.offline;
+  const [backupOpen, setBackupOpen] = useState(false);
+  const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
+  const logoutLabel = local ? 'Sammlung schließen' : 'Abmelden';
+  const accountLabel = local ? 'Konto: API-Schlüssel' : 'Konto: Passwort und API-Schlüssel';
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -98,7 +171,7 @@ export default function DashboardHeader({
   };
 
   return (
-    <header data-sticky-header="" className="sticky top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
+    <header ref={headerRef} data-sticky-header="" className="sticky short:static top-0 z-30 glass-panel border-b border-slate-800/80 mb-8 px-4 sm:px-6 lg:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
       <div className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4 min-w-0">
 
         {/* Top Bar for Mobile & Tablet / Left item for Desktop */}
@@ -109,11 +182,11 @@ export default function DashboardHeader({
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-lg sm:text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent leading-tight truncate">
                   MangaShelf
                 </h1>
-                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none shrink-0">
+                <span id="app-version-badge" className="min-w-0 truncate text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 leading-none">
                   v{APP_VERSION}
                 </span>
               </div>
@@ -130,80 +203,19 @@ export default function DashboardHeader({
             </div>
           </div>
 
-          {/* Tablet Quick Controls (sm to xl); phones use the bottom navigation */}
+          {/* sm to xl: add and menu; the views are the tabs below the header (phones: the bottom navigation) */}
           {!narrow && (
           <div className="flex xl:hidden items-center gap-1 sm:gap-1.5 shrink-0">
-            <button 
-              id="btn-mobile-shopping"
-              type="button"
-              aria-pressed={activeMainView === 'shopping'}
-              aria-label={missingCount > 0 ? `Einkaufsliste, ${missingCount} fehlend` : 'Einkaufsliste'}
-              onClick={() => setView(nextQuickView(activeMainView, 'shopping'))}
-              className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
-                activeMainView === 'shopping'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
-                  : 'btn-secondary text-slate-300'
-              }`}
-              title="Einkaufsliste umschalten"
-            >
-              <ShoppingCart className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline">Einkauf</span>
-              {missingCount > 0 && (
-                <span aria-hidden="true" className="bg-emerald-500 text-slate-950 font-bold text-[9px] h-4 min-w-4 px-1 rounded-full flex items-center justify-center font-mono shrink-0">
-                  {formatBadgeCount(missingCount)}
-                </span>
-              )}
-            </button>
-
-            <button 
-              id="btn-mobile-radar"
-              type="button"
-              aria-pressed={activeMainView === 'radar'}
-              aria-label={releaseCount > 0 ? `Release-Radar, ${releaseCount} Termine` : 'Release-Radar'}
-              onClick={() => setView(nextQuickView(activeMainView, 'radar'))}
-              className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
-                activeMainView === 'radar'
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
-                  : 'btn-secondary text-slate-300'
-              }`}
-              title="Release-Radar umschalten"
-            >
-              <Calendar className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline">Radar</span>
-              {releaseCount > 0 && (
-                <span aria-hidden="true" className="bg-sky-500 text-slate-950 font-bold text-[9px] h-4 min-w-4 px-1 rounded-full flex items-center justify-center font-mono shrink-0">
-                  {formatBadgeCount(releaseCount)}
-                </span>
-              )}
-            </button>
-
-            <button
-              id="btn-mobile-anime"
-              type="button"
-              aria-pressed={activeMainView === 'anime'}
-              aria-label="Anime"
-              onClick={() => setView(nextQuickView(activeMainView, 'anime'))}
-              className={`p-1.5 sm:px-3 sm:py-2 rounded-xl border transition-all relative flex items-center gap-1.5 text-xs shrink-0 ${
-                activeMainView === 'anime'
-                  ? 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/50 shadow-sm'
-                  : 'btn-secondary text-slate-300'
-              }`}
-              title="Anime umschalten"
-            >
-              <Tv className="w-4 h-4 text-fuchsia-400 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline">Anime</span>
-            </button>
-
             {canEdit && (
               <button 
                 type="button"
+                id="btn-header-add-manga"
                 onClick={handleOpenModal}
-                aria-label="Neuen Manga anlegen"
-                className="hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm shrink-0"
+                className="hit-44 hidden sm:flex btn-primary text-xs py-2 px-3 items-center gap-1.5 shadow-sm shrink-0"
                 title="Neuen Manga anlegen"
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Neuer Manga</span>
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span>Neuer Manga</span>
               </button>
             )}
 
@@ -212,7 +224,7 @@ export default function DashboardHeader({
               ref={menuToggleRef}
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
+              className="hit-44 btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
               title={mobileMenuOpen ? 'Menü schließen' : 'Menü öffnen'}
               aria-label={mobileMenuOpen ? 'Menü schließen' : 'Menü öffnen'}
               aria-expanded={mobileMenuOpen}
@@ -231,7 +243,7 @@ export default function DashboardHeader({
             if (e.target instanceof Element && e.target.closest('button, input[type="file"]')) return;
             searchInputRef.current?.focus();
           }}
-          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 py-2.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[200px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
+          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[200px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
         >
           <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
           <input 
@@ -240,25 +252,28 @@ export default function DashboardHeader({
             type="text" 
             aria-label="Sammlung durchsuchen"
             placeholder={activeMainView === 'shelf' ? SEARCH_PLACEHOLDER : 'In der Sammlung suchen...'}
-            className="w-full min-w-0 bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
+            className="w-full min-w-0 bg-transparent border-0 px-0 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
             value={search} 
+            onFocus={() => { searchTypedRef.current = false; }}
             onChange={e => {
+              searchTypedRef.current = true;
               // the header search always searches the collection: typing on another view shows the shelf
               if (activeMainView !== 'shelf') setView('shelf');
               setSearch(e.target.value);
             }} 
           />
           <div className="shrink-0 flex items-center gap-1">
-            <BarcodeScannerButton compact onDetected={handleBarcodeDetected} />
+            <BarcodeScannerButton compact onDetected={handleBarcodeDetected} className={HEADER_SCAN_CLASS} />
             {search && (
               <button 
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSearch('');
+                  searchTypedRef.current = false;
                   searchInputRef.current?.focus();
                 }}
-                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 shrink-0 transition-colors"
+                className="hit-44 text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 shrink-0 transition-colors"
                 title="Suche zurücksetzen"
                 aria-label="Suche zurücksetzen"
               >
@@ -299,6 +314,7 @@ export default function DashboardHeader({
               onClick={handleInstallClick}
               className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-2.5 2xl:px-3 shadow-sm transition-all whitespace-nowrap"
               title="Manga Shelf als native App auf deinem Gerät installieren"
+              aria-label="App installieren"
             >
               <Download className="w-4 h-4 text-brand-400 shrink-0" />
               <span className="hidden 2xl:inline">App installieren</span>
@@ -320,24 +336,28 @@ export default function DashboardHeader({
 
           {isAdmin && (
             <>
-              <button
-                id="btn-open-users"
-                onClick={handleOpenUsersModal}
-                className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                title="Benutzer anlegen und verwalten"
-              >
-                <Users className="w-4 h-4 text-brand-400 shrink-0" /> 
-                <span>Benutzer</span>
-              </button>
+              {!local && (
+                <button
+                  id="btn-open-users"
+                  onClick={handleOpenUsersModal}
+                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
+                  title="Benutzer anlegen und verwalten"
+                  aria-label="Benutzer"
+                >
+                  <Users className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
+                  <span className="hidden 2xl:inline">Benutzer</span>
+                </button>
+              )}
 
               <button
                 id="btn-open-backups"
-                onClick={handleOpenRestoreModal}
+                onClick={openBackups}
                 className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                title="Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung"
+                title={local ? 'Sicherung als ZIP exportieren oder importieren' : 'Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung'}
+                aria-label="Backups"
               >
-                <CloudUpload className="w-4 h-4 text-emerald-400 shrink-0" /> 
-                <span>Backups</span>
+                <CloudUpload className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                <span className="hidden 2xl:inline">Backups</span>
               </button>
 
               {showSystemEntry && (
@@ -371,8 +391,8 @@ export default function DashboardHeader({
               id="btn-change-password"
               onClick={handleOpenPasswordModal}
               className="btn-secondary p-2 text-slate-300 hover:text-brand-300 transition-colors shrink-0"
-              title="Konto: Passwort und API-Schlüssel"
-              aria-label="Konto: Passwort und API-Schlüssel"
+              title={accountLabel}
+              aria-label={accountLabel}
             >
               <Lock className="w-4 h-4" />
             </button>
@@ -383,8 +403,8 @@ export default function DashboardHeader({
             type="button"
             onClick={onLogout} 
             className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors shrink-0" 
-            title="Abmelden"
-            aria-label="Abmelden"
+            title={logoutLabel}
+            aria-label={logoutLabel}
           >
             <LogOut className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -394,8 +414,9 @@ export default function DashboardHeader({
 
       {/* Dropdown Menu Drawer for < xl (a bottom sheet above the bottom navigation on phones) */}
       {mobileMenuOpen && sheet(
-        <div
+        <nav
           id="mobile-menu-drawer"
+          aria-label="Menü"
           className={narrow
             ? 'fixed inset-x-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-slate-700/80 bg-slate-950/[0.98] p-4 space-y-2 animate-fade-in shadow-2xl'
             : 'xl:hidden mt-3 pt-3 border-t border-slate-800/80 space-y-2 animate-fade-in max-w-[1720px] 2xl:max-w-[1840px] mx-auto'}
@@ -470,19 +491,21 @@ export default function DashboardHeader({
 
             {isAdmin && (
               <>
-                <button 
-                  id="btn-mobile-menu-users"
-                  type="button"
-                  onClick={() => runFromMenu(handleOpenUsersModal)}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
-                >
-                  <Users className="w-4 h-4 text-brand-400" /> Benutzer
-                </button>
+                {!local && (
+                  <button
+                    id="btn-mobile-menu-users"
+                    type="button"
+                    onClick={() => runFromMenu(handleOpenUsersModal)}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
+                  >
+                    <Users className="w-4 h-4 text-brand-400" /> Benutzer
+                  </button>
+                )}
 
                 <button 
                   id="btn-mobile-menu-backups"
                   type="button"
-                  onClick={() => runFromMenu(handleOpenRestoreModal)}
+                  onClick={() => runFromMenu(openBackups)}
                   className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
                 >
                   <CloudUpload className="w-4 h-4 text-emerald-400" /> Backups
@@ -520,7 +543,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleOpenPasswordModal)}
               className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
             >
-              <Lock className="w-4 h-4 text-brand-400" /> Passwort & API-Schlüssel
+              <Lock className="w-4 h-4 text-brand-400" /> {local ? 'API-Schlüssel' : 'Passwort & API-Schlüssel'}
             </button>
           )}
 
@@ -530,9 +553,9 @@ export default function DashboardHeader({
             onClick={onLogout} 
             className="w-full btn-secondary text-xs py-2 text-red-300 hover:bg-red-950/40 border-red-900/40 flex items-center justify-center gap-2"
           >
-            <LogOut className="w-4 h-4 text-red-400" /> Abmelden
+            <LogOut className="w-4 h-4 text-red-400" /> {logoutLabel}
           </button>
-        </div>
+        </nav>
       )}
       {systemOpen && createPortal(
         <Suspense fallback={null}>
@@ -540,18 +563,23 @@ export default function DashboardHeader({
         </Suspense>,
         document.body
       )}
-      {narrow && (
-        <BottomNav
-          activeMainView={activeMainView}
-          setView={setView}
-          missingCount={missingCount}
-          releaseCount={releaseCount}
-          onScan={handleBarcodeDetected}
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-          menuToggleRef={menuToggleRef}
-        />
+      {backupOpen && createPortal(
+        <Suspense fallback={null}>
+          <LocalBackupDialog onClose={() => setBackupOpen(false)} onLocalReplaced={onLocalReplaced} />
+        </Suspense>,
+        document.body
       )}
+      <BottomNav
+        narrow={narrow}
+        activeMainView={activeMainView}
+        setView={setView}
+        missingCount={missingCount}
+        releaseCount={releaseCount}
+        onScan={handleBarcodeDetected}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        menuToggleRef={menuToggleRef}
+      />
     </header>
   );
 }

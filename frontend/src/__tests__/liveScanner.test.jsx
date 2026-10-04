@@ -1,3 +1,4 @@
+// LiveScanner and its helpers, with a BarcodeDetector stand-in.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import LiveScanner, { cameraErrorText, createScanDebounce, SAME_ISBN_PAUSE_MS } from '../components/common/LiveScanner';
@@ -145,6 +146,43 @@ describe('LiveScanner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Foto aufnehmen' }));
     expect(onClose).toHaveBeenCalled();
     expect(onPhotoFallback).toHaveBeenCalled();
+  });
+
+  it('closed before the camera answered: the late stream is stopped at once', async () => {
+    const camera = fakeCamera();
+    let grant;
+    camera.mediaDevices.getUserMedia = vi.fn(() => new Promise((resolve) => { grant = resolve; }));
+    const { container, unmount } = render(<LiveScanner onDetected={vi.fn()} onClose={vi.fn()} mediaDevices={camera.mediaDevices} Detector={fakeDetector([])} />);
+    const video = container.querySelector('video');
+    unmount();
+    await act(async () => { grant(camera.stream); });
+    expect(camera.track.stop).toHaveBeenCalledTimes(1);
+    expect(video.srcObject ?? null).toBeNull();
+  });
+
+  it('closing releases the video element as well as the tracks', async () => {
+    const camera = fakeCamera();
+    const { container, unmount } = render(<LiveScanner onDetected={vi.fn()} onClose={vi.fn()} mediaDevices={camera.mediaDevices} Detector={fakeDetector([])} />);
+    const video = container.querySelector('video');
+    await waitFor(() => expect(video.srcObject).toBe(camera.stream));
+    unmount();
+    expect(video.srcObject).toBeNull();
+    expect(camera.track.stop).toHaveBeenCalled();
+  });
+
+  it('pads for every safe area and sizes the guide frame by width and height (landscape phones)', async () => {
+    const camera = fakeCamera();
+    const { container } = render(<LiveScanner onDetected={vi.fn()} onClose={vi.fn()} mediaDevices={camera.mediaDevices} Detector={fakeDetector([])} />);
+    // jsdom drops env() from inline styles, so the source is checked
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const source = fs.readFileSync(path.resolve(import.meta.dirname, '../components/common/LiveScanner.jsx'), 'utf8');
+    for (const side of ['Top', 'Right', 'Bottom', 'Left']) expect(source).toContain(`padding${side}: 'env(safe-area-inset-${side.toLowerCase()})'`);
+    const guide = container.querySelector('[data-scan-guide]');
+    expect(guide.className).toContain('supports-[width:1cqw]:w-[min(78cqw,28rem,150cqh)]');
+    expect(guide.className).toContain('aspect-[2/1]');
+    expect(guide.parentElement.className).toContain('[container-type:size]');
+    await act(async () => {});
   });
 
   it('Escape and the close button end the scan', async () => {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { KeyRound, Lock, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
-import api, { apiFetch, readJson, rememberToken } from '../../utils/api';
+import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import ApiKeyCard from './ApiKeyCard';
 
@@ -30,7 +30,7 @@ function PasswordTab({ onClose }) {
       });
       const data = (await readJson(res)) ?? {};
       if (res.ok) {
-        rememberToken(data);
+        rememberToken(data, { rotate: true });
         setDone(true);
       }
       else setError(data.error || 'Das Passwort konnte nicht geändert werden.');
@@ -203,13 +203,16 @@ const TABS = [
   { id: 'password', label: 'Passwort', Icon: Lock },
   { id: 'keys', label: 'API-Schlüssel', Icon: KeyRound }
 ];
-const TAB_KEYS = TABS.map((t) => t.id);
+// without a server there is no password, only the keys
+const LOCAL_TABS = TABS.filter((t) => t.id !== 'password');
 
 /** Account dialog (lock icon in the header): own password and personal API keys; admins also the instance keys. */
 export default function AccountModal({ isOpen, onClose, user, initialTab = 'password' }) {
-  const [tab, setTab] = useState(initialTab);
+  const tabs = isLocalMode() ? LOCAL_TABS : TABS;
+  const [chosen, setTab] = useState(initialTab);
+  const tab = tabs.some((t) => t.id === chosen) ? chosen : tabs[0].id;
   const dialogRef = useDialogA11y(isOpen);
-  const { tabListProps, tabProps, panelProps } = useTabList({ tabs: TAB_KEYS, selected: tab, onSelect: setTab, prefix: 'account' });
+  const { tabListProps, tabProps, panelProps } = useTabList({ tabs: tabs.map((t) => t.id), selected: tab, onSelect: setTab, prefix: 'account' });
 
   useEffect(() => {
     if (isOpen) setTab(initialTab);
@@ -226,9 +229,9 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8">
+      <div className="dialog-box glass-panel max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 short:p-4 border border-slate-700/80 shadow-2xl">
         <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center">
@@ -236,13 +239,13 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
             </div>
             <h2 className="text-xl font-bold text-white">Konto</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+          <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <div {...tabListProps} aria-label="Bereich" className="flex gap-1 mb-5 bg-slate-900/80 border border-slate-800 p-1 rounded-xl w-fit">
-          {TABS.map(({ id, label, Icon }) => (
+          {tabs.map(({ id, label, Icon }) => (
             <button
               key={id}
               {...tabProps(id)}

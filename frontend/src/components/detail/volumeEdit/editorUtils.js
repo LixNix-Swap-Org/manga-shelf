@@ -149,11 +149,14 @@ export const moveImage = (form, url, delta) => {
   return { ...form, images };
 };
 
-/** DELETE /api/volumes/:id; a 404 means another tab already removed it, which counts as done. */
+/**
+ * DELETE /api/volumes/:id; a 404 means another tab already removed it, which counts as done. `trash_id` is the trash
+ * entry the volume went to (null when the server sent none).
+ */
 export const deleteVolumeRequest = async (volId, { signal } = {}) => {
   try {
     const res = await apiFetch(`/api/volumes/${volId}`, { method: 'DELETE', signal });
-    if (res.ok) return { ok: true, gone: false };
+    if (res.ok) return { ok: true, gone: false, trash_id: (await readJsonSafe(res)).trash_id ?? null };
     if (res.status === 404) return { ok: true, gone: true };
     const data = await readJsonSafe(res);
     return { ok: false, error: data.error || `Fehler beim Löschen des Bands (HTTP ${res.status})` };

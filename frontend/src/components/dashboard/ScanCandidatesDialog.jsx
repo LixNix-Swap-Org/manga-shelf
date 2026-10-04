@@ -22,9 +22,9 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
         e.preventDefault();
         onClose();
       }}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl my-3 sm:my-8 space-y-4">
+      <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 id="scan-candidates-title" className="text-lg font-bold text-white">Mehrere Reihen passen – bitte auswählen</h2>
@@ -34,7 +34,7 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
             type="button"
             onClick={onClose}
             aria-label="Schließen"
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
+            className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>

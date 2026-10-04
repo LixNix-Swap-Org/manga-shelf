@@ -26,7 +26,8 @@ const TABS = [
 ];
 const LOADING_TEXT = 'Berechne Statistiken & Finanzdaten...';
 
-const DEFAULT_START_DATE = '2021-04-09';
+// without a stored start date the editor starts at today (the server derives the real one from the oldest purchase)
+const defaultStartDate = () => new Date().toISOString().slice(0, 10);
 const READER_SERIES_STEP = 30;
 
 /**
@@ -71,7 +72,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       if (!isCurrent()) return;
       if (data === null) throw new Error('Antwort ist kein JSON');
       setStatsData(data);
-      setNewStartDate(data.summary?.collection_start_date || DEFAULT_START_DATE);
+      setNewStartDate(data.summary?.collection_start_date || defaultStartDate());
     } catch (e) {
       if (!isCurrent()) return;
       setStatsData(null);
@@ -125,7 +126,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
   };
 
   const toggleStartDateEditor = () => {
-    if (editingStartDate) setNewStartDate(statsData?.summary?.collection_start_date || DEFAULT_START_DATE);
+    if (editingStartDate) setNewStartDate(statsData?.summary?.collection_start_date || defaultStartDate());
     setStartDateError(null);
     setEditingStartDate(!editingStartDate);
   };
@@ -179,21 +180,20 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in overflow-y-auto"
+      className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-md animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-4xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] rounded-3xl p-6 sm:p-8 border border-slate-700/80 shadow-2xl relative flex flex-col overflow-hidden">
+      <div className="dialog-box glass-panel max-w-4xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none max-sm:max-h-none rounded-3xl p-6 sm:p-8 short:p-4 border border-slate-700/80 shadow-2xl relative flex flex-col overflow-hidden">
         
-        {/* Modal Header */}
-        <div className="flex items-start justify-between pb-5 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/40">
+        <div className="flex items-start justify-between gap-3 pb-5 short:pb-2 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 short:hidden shrink-0 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/40">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
               <h2 id={titleId} className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
                 Statistik- & Finanz-Dashboard
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5 short:hidden max-sm:hidden">
                 Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking
               </p>
             </div>
@@ -202,7 +202,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             id="btn-close-stats-modal-x"
             type="button"
             onClick={onClose} 
-            className="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
+            className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
             title="Schließen"
             aria-label="Schließen"
           >
@@ -230,7 +230,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
 
         {/* one live region that stays mounted, so the loading text is announced */}
         <p role="status" className="sr-only">{loadingStats ? LOADING_TEXT : ''}</p>
-        <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 pt-4 space-y-6">
+        <div className="overflow-y-auto max-sm:overflow-visible short:overflow-visible custom-scrollbar flex-1 pr-1 pt-4 space-y-6">
           {loadingStats ? (
             <div aria-hidden="true" className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
@@ -332,7 +332,6 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             })()}
         </div>
 
-        {/* Modal Footer */}
         <div className="pt-4 mt-4 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2 shrink-0">
           <div role="group" aria-label="Werkzeuge" className="flex flex-wrap gap-2 mr-auto">
             <button id="btn-open-trash" type="button" onClick={() => setTool('trash')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">

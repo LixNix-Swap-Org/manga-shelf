@@ -1,4 +1,5 @@
 // @vitest-environment node
+// Safe-area inset rules in the stylesheets and HTML shell.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';

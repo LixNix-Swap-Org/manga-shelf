@@ -80,10 +80,8 @@ const KEEP_WHEN_EMPTY = ['description', 'relations', 'title_english', 'studios',
 const emptyColumn = (value) => value === null || value === undefined || value === '' || value === '[]';
 
 /**
- * Writes a fresh snapshot (synchronous, call it after the network part). The display title follows the source only
- * while the user has not changed it; ids are added when missing and not taken by another entry. `partial`: the meta
- * comes from a background batch, so empty description, relations, English title, studios and genres keep the stored
- * values.
+ * Writes a fresh snapshot (synchronous). The display title follows the source only while the user has not changed
+ * it. `partial` (background batch): empty description, relations, English title, studios and genres keep stored values.
  */
 function applySnapshot(ctx, id, meta, images = {}, { partial = false } = {}) {
     const row = ctx.db.prepare('SELECT * FROM animes WHERE id = ?').get(id);

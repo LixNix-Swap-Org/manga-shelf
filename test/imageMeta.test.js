@@ -1,3 +1,4 @@
+// Image metadata stripping and EXIF orientation reading (utils/imageMeta.js) on hand-built JPEG/PNG buffers.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { stripImageMetadata, readExifOrientation } = require('../utils/imageMeta');

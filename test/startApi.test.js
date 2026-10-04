@@ -84,6 +84,28 @@ test('stop() waits for a running job and cuts a stalled connection', async () =>
     socket.destroy();
 });
 
+test('desktop mode switch: a restart on another host keeps the data; SETUP_TOKEN set by the app is the setup code', async () => {
+    const local = await app.start({ host: '127.0.0.1', port: 0, console: false });
+    const status = await (await fetch(local.url + '/api/setup/status')).json();
+    assert.equal(status.needsSetup, true);
+    const res = await fetch(local.url + '/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'desktop', password: 'Sehr-geheim-123', setup_token: 'START-SETUP-TOKEN' })
+    });
+    assert.equal(res.status, 200);
+    await app.stop();
+
+    const shared = await app.start({ host: '0.0.0.0', port: 0, console: false });
+    try {
+        assert.equal(shared.url, `http://127.0.0.1:${shared.port}`);
+        const after = await (await fetch(shared.url + '/api/setup/status')).json();
+        assert.equal(after.needsSetup, false);
+    } finally {
+        await app.stop();
+    }
+});
+
 test('shutdown: idempotent, gives up on a job after the deadline and still closes everything', async () => {
     lifecycle.resetLifecycle();
     const calls = [];

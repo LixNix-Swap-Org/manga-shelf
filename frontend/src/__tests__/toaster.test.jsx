@@ -1,3 +1,4 @@
+// notify() and the Toaster: announcements, timers, undo toasts and the toast limits.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, renderHook, waitFor } from '@testing-library/react';
 import Toaster, { trimToasts } from '../components/common/Toaster';
@@ -210,7 +211,9 @@ describe('Toaster', () => {
     expect(status.className).toMatch(/max-h-\[40vh\]/);
     expect(status.className).toContain('overflow-y-clip');
     expect(status.className).toContain('justify-end');
-    expect(status.parentElement.style.bottom).toContain('4.5rem');
+    expect(status.parentElement.className).toContain('max-sm:bottom-[calc(var(--toast-offset,4.5rem)+env(safe-area-inset-bottom))]');
+    expect(status.parentElement.className).toContain('sm:bottom-[calc(1rem+env(safe-area-inset-bottom))]');
+    expect(status.className).toContain('sm:max-w-sm');
   });
 
   it('trimToasts drops the oldest toasts without an action, then the oldest timed undo toasts', () => {
@@ -385,5 +388,124 @@ describe('undo for quick actions', () => {
     imported = { success: true, imported_count: 1, updated_count: 1, imported_ids: [33] };
     await act(async () => { await result.current.handleBatchFillGaps('Fehlt'); });
     expect(toasts.last()).toMatchObject({ message: '2 Lücken erfasst', action: null });
+  });
+});
+
+describe('Toaster above the raised offline banner (phones)', () => {
+  it('below sm the bottom follows --toast-offset (4.5rem without it), from sm on 1rem; the offline banner sets 7rem on / and /manga/:id only', async () => {
+    const path = await import('node:path');
+    const { default: postcss } = await import('postcss');
+    const { default: tailwindcss } = await import('tailwindcss');
+    const { default: config } = await import('../../tailwind.config.js');
+    const { MemoryRouter } = await import('react-router-dom');
+    const { default: OfflineBanner, TOAST_OFFSET_VAR } = await import('../components/common/OfflineBanner');
+
+    const content = [path.resolve(import.meta.dirname, '../components/common/Toaster.jsx')];
+    const { css } = await postcss([tailwindcss({ ...config, content, corePlugins: { preflight: false } })])
+      .process('@tailwind utilities;', { from: undefined });
+    const phone = css.slice(css.indexOf('@media not all and (min-width: 640px)'));
+    expect(phone).toMatch(/bottom:\s*calc\(var\(--toast-offset,\s*4\.5rem\) \+ env\(safe-area-inset-bottom\)\)/);
+    const wide = css.slice(css.indexOf('@media (min-width: 640px)'));
+    expect(wide).toMatch(/bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom\)\)/);
+
+    const { unmount } = render(<Toaster />);
+    act(() => { notify.info('Kauf vorgemerkt'); });
+    const stack = toastOf('Kauf vorgemerkt').closest('.fixed');
+    expect(stack.className).toContain('max-sm:bottom-[calc(var(--toast-offset,4.5rem)+env(safe-area-inset-bottom))]');
+    expect(stack.getAttribute('style')).toBeNull();
+    unmount();
+
+    const root = document.documentElement;
+    const banner = (pathname) => render(<MemoryRouter initialEntries={[pathname]}><OfflineBanner lastSync={null} /></MemoryRouter>);
+    const shelf = banner('/');
+    expect(root.style.getPropertyValue(TOAST_OFFSET_VAR)).toBe('7rem');
+    shelf.unmount();
+    expect(root.style.getPropertyValue(TOAST_OFFSET_VAR)).toBe('');
+    const detail = banner('/manga/5');
+    expect(root.style.getPropertyValue(TOAST_OFFSET_VAR)).toBe('7rem');
+    detail.unmount();
+    banner('/einstellungen');
+    expect(root.style.getPropertyValue(TOAST_OFFSET_VAR)).toBe('');
+  }, 60000);
+});
+
+describe('Toaster layout around dialogs, selection bar and short screens', () => {
+  it('stacks above the tool dialogs (z-[70] over z-[60])', async () => {
+    const { default: ToolDialog } = await import('../components/modals/ToolDialog');
+    render(<><ToolDialog title="Papierkorb" onClose={vi.fn()}>Inhalt</ToolDialog><Toaster /></>);
+    act(() => { notify.error('Datei konnte nicht gespeichert werden'); });
+    const stack = toastOf('Datei konnte nicht gespeichert werden').closest('.fixed');
+    expect(stack.className).toMatch(/(^|\s)z-\[70\](\s|$)/);
+    expect(screen.getByRole('dialog').className).toMatch(/(^|\s)z-\[60\](\s|$)/);
+  });
+
+  it('sits above the selection bar while it is on screen and drops the offset when it scrolls away or goes', async () => {
+    const bar = document.createElement('div');
+    bar.id = 'bulk-action-bar';
+    let top = window.innerHeight - 172;
+    bar.getBoundingClientRect = () => ({ height: 160, top, bottom: top + 160, left: 0, right: 0, width: 0 });
+    document.body.appendChild(bar);
+    render(<Toaster />);
+    act(() => { notify.success('3 Bände gelesen', { action: { label: 'Rückgängig', onClick: vi.fn() } }); });
+    const stack = toastOf('3 Bände gelesen').closest('.fixed');
+    await waitFor(() => expect(stack.style.bottom).toBe('calc(172px + 0.5rem)'));
+    top = window.innerHeight + 300;
+    act(() => { window.dispatchEvent(new Event('scroll')); });
+    await waitFor(() => expect(stack.style.bottom).toBe(''));
+    top = window.innerHeight - 172;
+    act(() => { window.dispatchEvent(new Event('scroll')); });
+    await waitFor(() => expect(stack.style.bottom).toBe('calc(172px + 0.5rem)'));
+    bar.remove();
+    await waitFor(() => expect(stack.style.bottom).toBe(''));
+  });
+
+  it('shows only the newest two toasts on short screens; the hidden ones keep their undo', () => {
+    vi.stubGlobal('matchMedia', (query) => ({
+      matches: query === '(max-height: 500px)', media: query, addEventListener: vi.fn(), removeEventListener: vi.fn()
+    }));
+    render(<Toaster />);
+    act(() => {
+      for (let i = 1; i <= 3; i++) notify.success(`Gelesen ${i}`, { action: { label: 'Rückgängig', onClick: vi.fn() } });
+    });
+    expect(toastOf('Gelesen 1').className).toMatch(/(^|\s)hidden(\s|$)/);
+    expect(toastOf('Gelesen 2').className).not.toMatch(/(^|\s)hidden(\s|$)/);
+    expect(toastOf('Gelesen 3').className).not.toMatch(/(^|\s)hidden(\s|$)/);
+  });
+
+  it('shows every toast on tall screens and gives undo and close 44 px touch targets', () => {
+    render(<Toaster />);
+    act(() => {
+      for (let i = 1; i <= 3; i++) notify.success(`Gelesen ${i}`, { action: { label: 'Rückgängig', onClick: vi.fn() } });
+    });
+    for (let i = 1; i <= 3; i++) expect(toastOf(`Gelesen ${i}`).className).not.toMatch(/(^|\s)hidden(\s|$)/);
+    for (const button of screen.getAllByRole('button', { name: 'Rückgängig' })) expect(button.className).toContain('hit-44');
+    for (const button of screen.getAllByRole('button', { name: 'Meldung schließen' })) expect(button.className).toContain('hit-44');
+  });
+});
+
+describe('OfflineBanner', () => {
+  const renderBanner = async (pathname, lastSync) => {
+    const { MemoryRouter } = await import('react-router-dom');
+    const { default: OfflineBanner } = await import('../components/common/OfflineBanner');
+    return render(<MemoryRouter initialEntries={[pathname]}><OfflineBanner lastSync={lastSync} /></MemoryRouter>);
+  };
+
+  it('ends the sentence with one period after an abbreviated age', async () => {
+    await renderBanner('/', Date.now() - 2 * 60000);
+    const text = screen.getByText(/Offline – Stand der Sammlung/).textContent;
+    expect(text).toMatch(/Min\. Nur Ansicht/);
+    expect(text).not.toMatch(/\.\./);
+  });
+
+  it('adds the period after an age without one', async () => {
+    await renderBanner('/einstellungen', null);
+    expect(screen.getByText(/Offline – Stand der Sammlung/).textContent).toMatch(/unbekannt\. Nur Ansicht/);
+  });
+
+  it('on phones keeps its text above the raised scan button of the bottom bars', async () => {
+    await renderBanner('/manga/5', null);
+    const banner = screen.getByText(/Offline – Stand der Sammlung/).closest('[role="status"]');
+    expect(banner.className).toContain('max-sm:bottom-[calc(3.5rem+env(safe-area-inset-bottom))]');
+    expect(banner.className).toContain('max-sm:!pb-6');
   });
 });

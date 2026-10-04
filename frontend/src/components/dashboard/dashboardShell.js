@@ -68,9 +68,8 @@ export const SCAN_OFFLINE_MESSAGE = 'Die ISBN-Suche braucht eine Verbindung zum 
 export const SCAN_FAILED_MESSAGE = 'ISBN-Suche fehlgeschlagen (Server nicht erreichbar).';
 
 /**
- * What the dashboard does with an answer of /api/lookup/isbn:
- * navigate (one series matches), choose (several candidates), prefill (unknown series, editor),
- * notice (unknown series, read-only user), notFound (no catalogue data), error.
+ * Dashboard action for an /api/lookup/isbn answer: navigate (one series), choose (several), prefill (unknown, editor),
+ * notice (unknown, read-only user), notFound, error.
  */
 export const scanDashboardAction = ({ ok, data, canEdit }) => {
   if (!ok || !data) {

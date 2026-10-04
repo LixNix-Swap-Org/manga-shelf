@@ -1,6 +1,6 @@
 // Pure helpers shared by Dashboard and MangaDetail (no React / no component state).
 
-// Known canonical German publishers map for clean display
+// Built-in names of core/lib/publishers.js: the fallback while the server's names (setPublisherNames) are not loaded
 export const CANONICAL_PUBLISHERS = {
   'altraverse': 'Altraverse',
   'carlsen manga': 'Carlsen Manga',
@@ -23,12 +23,47 @@ export const CANONICAL_PUBLISHERS = {
   'tokyopop': 'TOKYOPOP'
 };
 
+// Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
+const publisherKey = (name) => (typeof name === 'string' ? name.trim().toLowerCase().replace(/\s*!+$/, '') : '');
+
+// own keys only ("constructor" is no publisher); Object.hasOwn is newer than the build's browser targets
+const builtInPublisher = (key) => (Object.prototype.hasOwnProperty.call(CANONICAL_PUBLISHERS, key) ? CANONICAL_PUBLISHERS[key] : undefined);
+
+let serverNames = new Map();
+let serverNamesVersion = 0;
+const serverNameListeners = new Set();
+
+/**
+ * Canonical names as the server resolves them (GET /api/publishers: { publishers: [{ name, canonical }], aliases:
+ * [{ alias, canonical }] }), including the aliases of merged publishers; null forgets them.
+ */
+export function setPublisherNames(data) {
+  const map = new Map();
+  const add = (name, canonical) => {
+    if (typeof name !== 'string' || typeof canonical !== 'string' || !name.trim() || !canonical.trim()) return;
+    map.set(publisherKey(name), canonical.trim());
+  };
+  for (const a of Array.isArray(data?.aliases) ? data.aliases : []) add(a?.alias, a?.canonical);
+  for (const p of Array.isArray(data?.publishers) ? data.publishers : []) add(p?.name, p?.canonical);
+  serverNames = map;
+  serverNamesVersion++;
+  for (const listener of [...serverNameListeners]) listener();
+}
+
+export const publisherNamesVersion = () => serverNamesVersion;
+
+export function subscribePublisherNames(listener) {
+  serverNameListeners.add(listener);
+  return () => { serverNameListeners.delete(listener); };
+}
+
 export const normalizePubName = (name) => {
   if (!name || typeof name !== 'string') return '';
   const trimmed = name.trim();
-  // Manga Passion writes the imprint as "Carlsen Manga!"; the trailing "!" must not create a second publisher
-  const lower = trimmed.toLowerCase().replace(/\s*!+$/, '');
-  return CANONICAL_PUBLISHERS[lower] || trimmed.replace(/\s*!+$/, '');
+  const key = publisherKey(trimmed);
+  const canonical = serverNames.get(key) || builtInPublisher(key) || trimmed.replace(/\s*!+$/, '');
+  // a built-in name the server merged into another one
+  return serverNames.get(publisherKey(canonical)) || canonical;
 };
 
 /** Derives the entry type from vol.type, falling back to keywords in volume_number / notes. */
@@ -103,9 +138,8 @@ export const isGapCovered = (gap, volumes) => {
 };
 
 /**
- * detectedGaps entries are either a plain volume number (114) or a label with the official title
- * ("26 (Abenteuer auf der Insel des Gottes)", "East Blue Leerschuber"). Returns the volume number
- * of numbered entries and null for labels without one (schuber, specials).
+ * detectedGaps entries are a volume number (114) or a label with the official title ("26 (Titel)", "East Blue
+ * Leerschuber"). Returns the volume number of numbered entries, null for labels without one.
  */
 export const gapVolumeNumber = (gap) => {
   if (typeof gap === 'number') return Number.isInteger(gap) ? gap : null;
@@ -114,12 +148,8 @@ export const gapVolumeNumber = (gap) => {
 };
 
 /**
- * Collection progress of a series. Only regular volumes count towards completion (schuber and extras are
- * "+N"), and the target grows with the highest owned volume number: an ongoing series whose stored total is
- * stale ("21 / 18") shows 21 / 21 instead of an impossible ratio.
- * Accepts the /api/mangas row (regular_owned, max_regular_number, extras_owned) or getVolumeProgressCounts().
- * Without extras_owned (older rows) extras are owned minus regular, which also counts duplicates.
- * An incomplete series never shows 100 %, a started one never 0 %.
+ * Collection progress of a series. Only regular volumes count (schuber and extras are "+N"); the target grows with
+ * the highest owned number so a stale total never shows "21 / 18". Incomplete never 100 %, started never 0 %.
  */
 export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes, extras_owned }) => {
   const all = owned_volumes || 0;
@@ -411,9 +441,8 @@ export const gapStatusText = (mpGapData, error) => {
 };
 
 /**
- * Gaps as { label, type }: label is what the banner shows ("26 (Titel)", "5 (Collectors Edition)", 114), type
- * decides how it is drawn (only regular volumes get ghost entries) and imported. Uses the official edition when
- * Manga Passion matched, otherwise counts the regular volumes 1..max(total, highest owned number).
+ * Gaps as { label, type }: label is shown in the banner, type decides drawing (only regular volumes get ghost
+ * entries) and import. Uses the Manga Passion edition when matched, else the volumes 1..max(total, highest owned).
  */
 export const detectGapEntries = (mpGapData, volumes, totalVolumes) => {
   if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
@@ -462,10 +491,8 @@ export const filtersAllowGaps = ({
   && (volumeOwnerFilter === 'ALL' || Boolean(volumeOwnerMissing));
 
 /**
- * Rows for the shelf / grid / list views: the filtered volumes (already sorted by useVolumeFilters) with ghost
- * entries for detected gaps, only when sorting by number and filtersAllowGaps(). The volumes keep their order; a
- * ghost takes the slot of its regular volume, so it goes in front of a special edition with the same number in
- * both directions.
+ * Rows for the shelf/grid/list views: the sorted volumes plus ghost entries for gaps (only when sorting by number
+ * and filtersAllowGaps()). A ghost takes the slot of its regular volume, ahead of a special edition of that number.
  */
 export const buildDisplayVolumeItems = ({
   filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeSort, ...filters

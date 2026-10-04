@@ -1,3 +1,4 @@
+// The data version counter: stable on reads, changes with every write, restore or write by another connection.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');

@@ -1,3 +1,4 @@
+// Authentication: first-run setup, login and logout, sessions, roles, last-admin guards and restores, over HTTP and core/routes.js.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

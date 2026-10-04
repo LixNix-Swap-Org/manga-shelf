@@ -1,3 +1,4 @@
+// startTestServer: hermetic data dir and the one-server-per-process rule.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');

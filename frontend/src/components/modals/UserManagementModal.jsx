@@ -178,7 +178,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       const data = await readJson(res);
       if (res.ok) {
         // only an own reset answers with a token: it revokes the old one, and the app build continues with the new one
-        rememberToken(data);
+        rememberToken(data, { rotate: true });
         setResetTargetId(null);
         setResetPassword('');
         showResult('', `Neues Passwort für "${target.username}" gesetzt. ${target.username} wurde auf allen Geräten abgemeldet.`);
@@ -228,11 +228,10 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       aria-modal="true"
       aria-label="Benutzerverwaltung"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8 relative">
+      <div className="dialog-box glass-panel max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 short:p-4 border border-slate-700/80 shadow-2xl relative">
 
-        {/* Header */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-400 flex items-center justify-center">
@@ -248,13 +247,12 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
             type="button"
             onClick={onClose}
             aria-label="Schließen"
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+            className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Feedback messages */}
         {userError && (
           <div role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3.5 rounded-xl mb-5 text-sm flex items-center gap-2">
             <span>{userError}</span>
@@ -267,7 +265,6 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
           {userSuccess && <span>{userSuccess}</span>}
         </div>
 
-        {/* Section 1: Create New User */}
         <div className="bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-slate-800 mb-6">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-brand-400" /> Neuen Benutzer anlegen
@@ -344,7 +341,6 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
           </form>
         </div>
 
-        {/* Section 2: List of Users */}
         <div>
           <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
             <Users className="w-4 h-4 text-slate-400" /> Registrierte Benutzer{countLabel}
@@ -400,7 +396,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0 ml-auto">
+                      <div className="flex items-center gap-2 [@media(pointer:coarse)]:gap-5 shrink-0 ml-auto">
                         {isSelf ? (
                           <span
                             className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
@@ -437,7 +433,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             aria-expanded={resetOpen}
                             aria-label={`Passwort von ${u.username} zurücksetzen`}
                             title="Passwort zurücksetzen"
-                            className="p-1.5 hover:bg-slate-700/60 text-slate-400 hover:text-white rounded-lg transition-colors"
+                            className="hit-44 p-1.5 hover:bg-slate-700/60 text-slate-400 hover:text-white rounded-lg transition-colors"
                           >
                             <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
@@ -448,7 +444,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             type="button"
                             onClick={() => handleDeleteUser(u)}
                             disabled={Boolean(pending)}
-                            className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
+                            className="hit-44 p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
                             title={`Benutzer "${u.username}" löschen`}
                             aria-label={`Benutzer ${u.username} löschen`}
                           >
@@ -491,10 +487,9 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
               })}
             </div>
           )}
-          <p className="text-[10px] text-slate-400 mt-2">Dein eigenes Passwort änderst du über „Passwort ändern“.</p>
+          <p className="text-[10px] text-slate-400 mt-2">Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).</p>
         </div>
 
-        {/* Close Button */}
         <div className="flex justify-end pt-5 mt-5 border-t border-slate-800">
           <button
             id="btn-close-users-modal"

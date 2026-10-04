@@ -1,23 +1,7 @@
 // The one thing core/ handlers and modules get from their host: no Node API, no Express, only this object.
-//
-// ctx = {
-//   db:     prepare(sql) -> { get, all, run }, exec(sql), transaction(fn) (synchronous fn, commit or rollback),
-//           generation() (changes when the database file was reopened, e.g. after a restore)
-//   files:  uploads; names are plain file names, url(name) = '/uploads/<name>' is what the database stores.
-//           write(name, bytes, { image }) (image: extension, the host strips metadata), stat(name) -> { size } | null,
-//           touch(name), remove(name), list()
-//   http:   fetch(url, init) for JSON APIs, fetchText(url, timeoutMs) for the catalogues,
-//           fetchImage(url) -> { buffer, ext } (public hosts only, size cap, image check by magic bytes)
-//   now():  current Date
-//   log:    { debug, info, warn, error } plus child(name)
-//   user:   { id, username, role } of the caller, null for background work
-//   config: { appTimeZone, anime? } (config.anime { anilistRpm, jikanRpm, sources } overrides core/anime/settings.js)
-//   credentials (optional): provider from core/sources/credentials.js (own API keys per user, instance keys)
-//   signal: AbortSignal of the caller (client went away), optional
-//   limit(name): per-account budget of external lookups; the host answers 429 itself and throws ANSWERED
-//   randomId(): unique id for file names
-//   yield():    lets other work run between blocks of a long build
-// }
+// ctx = { db, files, http, now(), log, user, config, credentials?, signal?, limit(name), randomId(), undo, yield() }
+// db: prepare/exec/transaction/generation(); files: uploads by plain name; http: fetch, fetchText, fetchImage;
+// user: { id, username, role } (null in background work); undo: bulk-undo Map shared per database.
 
 const ANSWERED = Symbol('core.answered');
 
@@ -73,6 +57,16 @@ function dbFromConnection(conn, { log, generation = () => 1 } = {}) {
     };
 }
 
+const undoStores = new WeakMap();
+function undoStoreFor(db) {
+    let store = undoStores.get(db);
+    if (!store) {
+        store = new Map();
+        undoStores.set(db, store);
+    }
+    return store;
+}
+
 /** Fills the optional parts; `db` is required. */
 function createCtx(parts) {
     if (!parts || !parts.db || typeof parts.db.prepare !== 'function') throw new Error('createCtx: db fehlt');
@@ -88,6 +82,7 @@ function createCtx(parts) {
         limit: noop,
         randomId,
         yield: () => new Promise(resolve => setTimeout(resolve, 0)),
+        undo: undoStoreFor(parts.db),
         ...parts,
         db: { generation: () => 1, ...parts.db },
         files,

@@ -1,3 +1,4 @@
+// iCalendar feed builder (core/ical.js): escaping, line folding, stamps and calendar output.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');

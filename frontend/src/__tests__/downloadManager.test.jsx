@@ -1,3 +1,4 @@
+// Downloads that outlive their dialog and stay tied to one session.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import CsvExchangeModal from '../components/dashboard/CsvExchangeModal';
@@ -141,5 +142,53 @@ describe('downloads outlive their dialog (app build)', () => {
     expect(await first).toBe(true);
     expect(toasts.messages()).toEqual([]);
     expect(screen.getByRole('link', { name: /CSV herunterladen/ })).toBeTruthy();
+  });
+});
+
+describe('downloads belong to one session', () => {
+  it('a server switch aborts the running download; the same path on the new server starts its own', async () => {
+    const net = streamingFetch();
+    const first = startDownload('/api/export/csv');
+    const firstSignal = net.signal;
+    setServer({ base: 'https://other.example.org' });
+    expect(firstSignal.aborted).toBe(true);
+    expect(downloadsRunning()).toBe(false);
+    const second = startDownload('/api/export/csv');
+    expect(second).not.toBe(first);
+    expect(await first).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toMatch(/^https:\/\/other\.example\.org\/api\/export\/csv/);
+    expect(net.signal.aborted).toBe(false);
+  });
+
+  it('a new sign-in on the same server aborts the download of the old session', async () => {
+    const net = streamingFetch();
+    const first = startDownload('/api/backup');
+    const firstSignal = net.signal;
+    setServer({ token: 'other-session' });
+    expect(firstSignal.aborted).toBe(true);
+    expect(startDownload('/api/backup')).not.toBe(first);
+    expect(await first).toBe(false);
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
+  it('a logout (cancelAllDownloads) never lets a start right after it join the cancelled download', async () => {
+    streamingFetch();
+    const first = startDownload('/api/backup');
+    cancelAllDownloads();
+    const second = startDownload('/api/backup');
+    expect(second).not.toBe(first);
+    expect(downloadsRunning()).toBe(true);
+    expect(await first).toBe(false);
+    expect(downloadsRunning()).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('choosing the address in use again keeps the download', async () => {
+    const net = streamingFetch();
+    startDownload('/api/backup');
+    setServer({ base: 'https://shelf.example.org' });
+    expect(net.signal.aborted).toBe(false);
+    expect(downloadsRunning()).toBe(true);
   });
 });

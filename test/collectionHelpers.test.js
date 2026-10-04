@@ -1,3 +1,4 @@
+// Pure dashboard helpers of the frontend (filters, sorting, counts, progress, search) loaded as ESM from the CommonJS test runner.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
@@ -182,6 +183,22 @@ test('filterAndSortMangas: with a search, title-prefix hits come first; the chos
     assert.deepEqual(ids('volumes_desc'), [4, 3, 5, 2, 1]);
     // no search: the chosen sort alone
     assert.deepEqual(filterAndSortMangas(list, { search: '  ', statusFilter: 'ALL', publisherFilter: 'ALL', sortBy: 'volumes_desc' }).map(m => m.id), [1, 5, 4, 3, 2]);
+});
+
+test('withVolumeSearch merges the volume-search index by id; rows without an entry stay the same object', async () => {
+    const { withVolumeSearch, filterAndSortMangas } = await load();
+    const list = [{ id: 1, title: 'Berserk' }, { id: 2, title: 'Akira', volume_search: 'Artbook' }, { id: 3, title: 'Monster' }];
+    assert.equal(withVolumeSearch(list, null), list);
+    assert.equal(withVolumeSearch(list, new Map()), list);
+    const merged = withVolumeSearch(list, new Map([['1', '978-3-89921-123-4\nSigniert'], ['2', 'Artbook']]));
+    assert.equal(merged[1], list[1]);
+    assert.equal(merged[2], list[2]);
+    assert.deepEqual(merged[0], { id: 1, title: 'Berserk', volume_search: '978-3-89921-123-4\nSigniert' });
+    assert.equal(list[0].volume_search, undefined, 'the cached list is never changed');
+    const ids = (search) => filterAndSortMangas(merged, { search, statusFilter: 'ALL', publisherFilter: 'ALL', sortBy: 'title_asc' }).map(m => m.id);
+    assert.deepEqual(ids('9783899211234'), [1]);
+    assert.deepEqual(ids('signiert'), [1]);
+    assert.deepEqual(ids('artbook'), [2]);
 });
 
 test('filterAndSortMangas: ISBNs, notes and named volumes when the list carries volume_search', async () => {

@@ -59,3 +59,16 @@ desktop.ini
 .idea/
 .claude/
 frontend/dist-app/
+
+# desktop (Electron) and mobile (Capacitor) build output
+desktop/dist/
+desktop/node_modules/
+mobile/node_modules/
+mobile/www/
+mobile/build/
+mobile/ios/App/Pods/
+mobile/ios/App/App/public/
+mobile/android/app/src/main/assets/public/
+mobile/android/**/build/
+mobile/android/.gradle/
+mobile/android/local.properties

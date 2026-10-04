@@ -46,7 +46,7 @@ const parseTrueFlag = (value, fallback) => {
     return value === true || value === 'true' || value === 1 || value === '1';
 };
 
-/** 0 (keine) bis 3 (hoch); leer = 0, alles andere null (ungültig). */
+/** 0 (none) to 3 (high); empty = 0, anything else null (invalid). */
 const parsePriority = (val) => {
     if (val === undefined || val === null || val === '') return 0;
     const n = Number(val);
@@ -152,8 +152,8 @@ const parseBulkSet = (set) => {
     if (typeof set !== 'object' || Array.isArray(set)) return { error: 'set' };
     const value = {};
     for (const [key, raw] of Object.entries(set)) {
+        if (!Object.prototype.hasOwnProperty.call(BULK_SET_PARSERS, key)) return { error: key };
         const parse = BULK_SET_PARSERS[key];
-        if (!parse) return { error: key };
         const parsed = parse(raw);
         if (parsed.error) return { error: key };
         value[key] = parsed.value;

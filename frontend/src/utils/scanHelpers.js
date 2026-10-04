@@ -1,3 +1,4 @@
+// Pure helpers of the barcode scanner and shopping mode: ISBN handling, scan-list entries, classification of results.
 import { getVolumeDisplayTitle } from './volumeHelpers.js';
 import { formatDayMonth, formatTime } from './format.js';
 import { createSearch, prepareQuery } from './search.js';
@@ -91,9 +92,8 @@ const ownerNames = (owners) => (Array.isArray(owners) ? owners : [])
   .filter(Boolean);
 
 /**
- * Einkaufsmodus: macht aus einer ISBN-Antwort (`/api/lookup/isbn`) einen Eintrag für die Scan-Liste.
- * kind: `buy` (steht auf der Einkaufsliste, `itemId` zum Abhaken), `owned`, `partner` (nur andere Benutzer besitzen ihn),
- * `check` (Reihe bekannt, Band unklar/andere Reihe), `new` (Reihe fehlt in der Sammlung), `unknown` (kein Katalogtreffer).
+ * Shopping mode: turns an ISBN lookup answer into a scan-list entry. kind: buy (on the list, `itemId` to tick off),
+ * owned, partner (only other users own it), check (series known, volume unclear), new (series missing), unknown.
  */
 export const classifyShopScan = (isbn, data, shoppingItems = []) => {
   const clean = isbnDigits(isbn);
@@ -179,9 +179,8 @@ export const findVolumeByIsbn = (index, isbn) => {
 };
 
 /**
- * Scan result for a volume of the offline copy ({ manga, volume }), without the server. Every result, a `buy` too, is
- * provisional: the note in its label and `offline: true`, so the server's answer replaces it and it cannot be booked
- * before that answer (isBookable); `source` says where it came from.
+ * Scan result for a volume of the offline copy ({ manga, volume }). Always provisional (`offline: true`, note in the
+ * label) so the server's answer replaces it and it is not bookable before (isBookable).
  */
 export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note = 'offline geprüft', source = 'offline' } = {}) => {
   const clean = isbnDigits(isbn);

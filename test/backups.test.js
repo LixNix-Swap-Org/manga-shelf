@@ -1,3 +1,4 @@
+// Migrations, database restore and backup validation, ZIP safety limits, streaming of large archives and backup scheduling.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -814,7 +815,9 @@ test('inspect stages an uploaded backup, reports its content and restores it in 
     assert.equal(b.schema_version, b.current_schema_version);
     assert.deepEqual(b.current_user, { username: 'admin', exists: true, role: 'admin' });
     assert.equal(b.relogin, false);
+    assert.deepEqual(b.accounts_without_password, []);
     assert.ok(b.warnings.some(w => /Sitzungen/.test(w)));
+    assert.ok(!b.warnings.some(w => /Passwort-Reset/.test(w)));
     assert.equal(mangaCount(), live, 'inspect never touches the live database');
     assert.deepEqual(stagedFiles(), [`restore-staged-${b.staging_id}.zip`]);
 
@@ -828,6 +831,27 @@ test('inspect stages an uploaded backup, reports its content and restores it in 
     const again = await admin('POST', `/backup/restore/${b.staging_id}`);
     assert.equal(again.status, 404);
     assert.equal(again.body.code, 'STAGING_NOT_FOUND');
+});
+
+test('inspect names the accounts without a password (app backup after a pull) in a field and a warning', async () => {
+    const data = await snapshotDbBuffer((d) => {
+        const add = d.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'editor')");
+        add.run('kim', '!local-profile');
+        add.run('Anna', '!local-profile');
+        add.run('leer', '');
+        add.run('mit-passwort', '$2b$10$abcdefghijklmnopqrstuuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0');
+    });
+    const one = await snapshotDbBuffer((d) => d.prepare("INSERT INTO users (username, password_hash, role) VALUES ('solo', '!local-profile', 'visitor')").run());
+    const res = await uploadZip(zipOf({ 'manga.db': data }).toBuffer(), '/backup/inspect');
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.accounts_without_password, ['Anna', 'kim', 'leer']);
+    assert.ok(res.body.warnings.includes('3 Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): Anna, kim, leer.'),
+        JSON.stringify(res.body.warnings));
+    assert.equal((await admin('DELETE', `/backup/restore/${res.body.staging_id}`)).status, 200);
+
+    const single = await uploadZip(zipOf({ 'manga.db': one }).toBuffer(), '/backup/inspect');
+    assert.ok(single.body.warnings.includes('1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): solo.'));
+    assert.equal((await admin('DELETE', `/backup/restore/${single.body.staging_id}`)).status, 200);
 });
 
 test('inspect of a server snapshot, of a backup without the current user, cancel and invalid input', async () => {
@@ -1060,4 +1084,28 @@ test('restored covers lose their EXIF/GPS metadata before they reach uploads/', 
     assert.ok(!restored.includes('GPS-SECRET'), 'metadata is stripped');
     assert.deepEqual([...restored.subarray(0, 2)], [0xff, 0xd8]);
     assert.deepEqual(fs.readdirSync(dbm.uploadsDir).filter(f => f.startsWith('.strip-')), []);
+});
+
+test('inspecting or staging a backup leaves the live publisher aliases alone; a restore loads its own', async () => {
+    const { normalizePublisher } = require('../core/lib/publishers');
+    const before = await createSnapshot();
+    const merged = await admin('POST', '/publishers/merge', { from: ['Kaze Manga'], to: 'Crunchyroll' });
+    assert.equal(merged.status, 200, JSON.stringify(merged.body));
+    assert.equal(normalizePublisher('Kaze Manga'), 'Crunchyroll');
+
+    const inspected = await admin('POST', '/backup/inspect', { filename: before });
+    assert.equal(inspected.status, 200);
+    assert.equal((await admin('DELETE', `/backup/restore/${inspected.body.staging_id}`)).status, 200);
+    const uploaded = await uploadZip(fs.readFileSync(path.join(ctx.dataDir, 'backups', before)), '/backup/inspect');
+    assert.equal(uploaded.status, 200);
+    assert.equal((await admin('DELETE', `/backup/restore/${uploaded.body.staging_id}`)).status, 200);
+    assert.equal(normalizePublisher('Kaze Manga'), 'Crunchyroll');
+    const created = await admin('POST', '/mangas', { title: 'Alias nach Prüfung', publisher: 'Kaze Manga' });
+    assert.equal(created.status, 200);
+    assert.equal(dbm.db.prepare('SELECT publisher FROM mangas WHERE id = ?').get(created.body.id).publisher, 'Crunchyroll');
+
+    const restored = await admin('POST', `/backups/${before}/restore`);
+    assert.equal(restored.status, 200, JSON.stringify(restored.body));
+    assert.equal(normalizePublisher('Kaze Manga'), 'Kazé Manga', 'the restored database has no such alias');
+    assert.equal(normalizePublisher('EMA'), 'Egmont Manga', 'its seeded aliases are live');
 });

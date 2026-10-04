@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, CircleAlert, CircleCheck, Coins, Heart, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
+import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatEuro } from '../../utils/format';
@@ -25,10 +25,16 @@ export function heroCoverUrl({ manga, formData, editing }) {
 
 export { authorShelfPath };
 
+/** Below md a long description is clamped behind "Mehr anzeigen". */
+export const isLongDescription = (text) => {
+  const value = String(text || '');
+  return value.length > 280 || value.split('\n').length > 5;
+};
+
 /** Shelf filtered by one genre/tag (the dashboard reads ?tags=). */
 export const tagShelfPath = (tag) => `/?${new URLSearchParams({ tags: String(tag || '').trim() })}`;
 
-const SOURCE_LABELS = { anilist: '🌐 AniList', mal: '🌐 MyAnimeList' };
+const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList' };
 
 /**
  * Badges of a non-Manga-Passion lookup hit (same rule as AddMangaModal): the label the server sends, else the label of a
@@ -165,14 +171,19 @@ export default function MangaHeroCard({
   uploadingCover,
   onCancelCoverUpload,
   onCollectingSaved,
-  tagSuggestions = null
+  tagSuggestions = null,
+  canFillTags = false,
+  fillingTags = false,
+  handleFillTags
 }) {
   const [failedCoverUrl, setFailedCoverUrl] = useState(null);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   const inRouter = useInRouterContext();
   const ids = useId();
   const coverUrl = heroCoverUrl({ manga, formData, editing });
   const authors = splitAuthors(manga.author);
   const seriesTags = splitTags(manga.tags);
+  const longDescription = isLongDescription(manga.description);
   const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
   const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
   // the hook reads the file synchronously; clearing the input lets the same file be picked again
@@ -259,15 +270,15 @@ export default function MangaHeroCard({
       </div>
 
       {/* Details Column */}
-      <div className="flex-1 relative z-10">
+      <div className="flex-1 min-w-0 relative z-10">
         {editing ? (
           /* EDIT MODE */
           <form onSubmit={handleUpdate} className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <PenLine className="w-4 h-4 text-brand-400" /> Manga bearbeiten
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+              <h2 className="min-w-0 text-lg font-bold text-white flex items-center gap-2">
+                <PenLine className="w-4 h-4 text-brand-400" aria-hidden="true" /> Manga bearbeiten
               </h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 ml-auto">
                 <button 
                   type="button" 
                   onClick={endEdit} 
@@ -379,12 +390,12 @@ export default function MangaHeroCard({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {item.source === 'manga_passion' ? (
-                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                              {item.source_label || '🇩🇪 Manga Passion'}
+                            <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
+                              <Library className="w-3 h-3" aria-hidden="true" />{item.source_label || 'Manga Passion'}
                             </span>
                           ) : lookupBadgeLabels(item).map((label) => (
-                            <span key={label} className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                              {label}
+                            <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
+                              <Globe className="w-3 h-3" aria-hidden="true" />{label}
                             </span>
                           ))}
                         </div>
@@ -485,6 +496,7 @@ export default function MangaHeroCard({
                 <input 
                   id={`${ids}-total`}
                   type="number" 
+                  inputMode="numeric"
                   min="1"
                   max="5000"
                   step="1"
@@ -548,17 +560,17 @@ export default function MangaHeroCard({
           <div className="flex flex-col h-full justify-between">
             <div>
               {/* Title & Action Buttons */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-3">
-                <div>
-                  <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              <div id="detail-hero-title-row" className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-3">
+                <div className="min-w-0 basis-full xl:basis-0 xl:flex-1">
+                  <h1 ref={headingRef} tabIndex={-1} lang={langFor(manga.title) || 'de'} className="focus:outline-none text-2xl sm:text-3xl xl:text-4xl font-extrabold text-white tracking-tight break-words hyphens-auto [overflow-wrap:anywhere]">
                     {manga.title}
                   </h1>
                   {manga.alt_title && (
-                    <p className="text-sm text-slate-400 mt-0.5" lang={langFor(manga.alt_title)}>{manga.alt_title}</p>
+                    <p className="text-sm text-slate-400 mt-0.5 break-words" lang={langFor(manga.alt_title)}>{manga.alt_title}</p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div id="detail-hero-actions" className="flex flex-wrap items-center gap-2 xl:shrink-0">
                   {canEdit ? (
                     <>
                       {inRouter && manga.id && (
@@ -572,12 +584,14 @@ export default function MangaHeroCard({
                         </Link>
                       )}
                       <button 
+                        id="btn-edit-manga"
                         onClick={beginEdit} 
                         className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
                       >
                         <PenLine className="w-3.5 h-3.5" /> Bearbeiten
                       </button>
                       <button 
+                        id="btn-delete-manga"
                         onClick={handleDeleteManga} 
                         className="btn-danger text-xs flex items-center gap-1.5 py-2 px-3"
                         title="Reihe löschen"
@@ -595,8 +609,8 @@ export default function MangaHeroCard({
               </div>
 
               {/* Badges */}
-              <div className="flex flex-wrap items-center gap-2 text-xs mb-6">
-                <span className="bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium">
+              <div className="flex flex-wrap items-center gap-2 text-xs mb-6 min-w-0">
+                <span className="max-w-full break-words bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium">
                   Autor:{' '}
                   {inRouter && authors.length > 0 ? authors.map((name, i) => (
                     <span key={`${i}-${name}`}>
@@ -611,9 +625,9 @@ export default function MangaHeroCard({
                     </span>
                   )) : <strong className="text-white">{manga.author || 'Unbekannt'}</strong>}
                 </span>
-                <span className="bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
-                  <BuildingComplex className="w-3.5 h-3.5 text-brand-400" />
-                  Verlag: <strong className="text-white">{manga.publisher || 'Unbekannt'}</strong>
+                <span className="max-w-full min-w-0 bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
+                  <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                  <span className="min-w-0 break-words">Verlag: <strong className="text-white">{manga.publisher || 'Unbekannt'}</strong></span>
                 </span>
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">
                   {manga.status || 'Laufend'}
@@ -654,21 +668,54 @@ export default function MangaHeroCard({
                   ))}
                 </ul>
               )}
+              {seriesTags.length === 0 && canFillTags && handleFillTags && (
+                <div className="-mt-3 mb-6">
+                  <button
+                    type="button"
+                    id="btn-fill-tags"
+                    onClick={handleFillTags}
+                    disabled={fillingTags}
+                    className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                    title="Genres aus der verknüpften Manga-Passion-Edition übernehmen"
+                  >
+                    <Tag className="w-3.5 h-3.5 text-fuchsia-400" aria-hidden="true" />
+                    {fillingTags ? 'Genres werden geladen…' : 'Genres nachladen'}
+                  </button>
+                </div>
+              )}
 
               {/* Description */}
               <div className="mb-6">
                 <h2 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Beschreibung</h2>
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line max-w-2xl bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60">
-                  {manga.description || (canEdit
-                    ? 'Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.'
-                    : 'Keine Beschreibung vorhanden.')}
-                </p>
+                <div className="max-w-2xl bg-slate-950/40 p-4 rounded-2xl border border-slate-800/60">
+                  <p
+                    id={`${ids}-description-text`}
+                    className={`text-sm text-slate-300 leading-relaxed whitespace-pre-line break-words ${longDescription && !descriptionOpen ? 'line-clamp-5 md:line-clamp-none' : ''}`}
+                  >
+                    {manga.description || (canEdit
+                      ? 'Keine Beschreibung vorhanden. Klicke auf "Bearbeiten", um eine Inhaltsangabe hinzuzufügen.'
+                      : 'Keine Beschreibung vorhanden.')}
+                  </p>
+                  {longDescription && (
+                    <button
+                      type="button"
+                      id="btn-description-more"
+                      aria-expanded={descriptionOpen}
+                      aria-controls={`${ids}-description-text`}
+                      onClick={() => setDescriptionOpen((open) => !open)}
+                      className="hit-44 md:hidden mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-300 hover:text-brand-200"
+                    >
+                      {descriptionOpen ? 'Weniger anzeigen' : 'Mehr anzeigen'}
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${descriptionOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Progress bar */}
             <div className="pt-4 border-t border-slate-800/80">
-              <div className="flex justify-between items-center text-xs mb-2">
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs mb-2">
                 <span className="font-semibold text-slate-300 flex items-center gap-1.5">
                   <CircleCheck className="w-4 h-4 text-emerald-400" />
                   Sammlungs-Fortschritt

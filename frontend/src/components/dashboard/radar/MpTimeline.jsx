@@ -226,6 +226,7 @@ export default function MpTimeline({
                   const isOwned = volumeStatusGroup(item.user_volume_status) === 'owned';
                   const actions = mpCardActions(item.user_volume_status);
                   const busy = importingMpIds.has(item.id);
+                  const volumeName = `${getVolumeDisplayTitle(item)} von ${item.title}`;
 
                   return (
                     <div
@@ -255,13 +256,13 @@ export default function MpTimeline({
                             {item.in_collection && item.user_manga_id && item.match_kind !== 'prefix' ? (
                               <Link
                                 to={`/manga/${item.user_manga_id}`}
-                                className="text-xs sm:text-sm font-bold text-white hover:text-sky-300 truncate block transition-colors leading-snug"
+                                className="text-xs sm:text-sm font-bold text-white hover:text-sky-300 line-clamp-2 break-words hyphens-auto transition-colors leading-snug"
                                 title={`${item.title} (In deiner Sammlung ansehen)`}
                               >
                                 {item.title}
                               </Link>
                             ) : (
-                              <span className="text-xs sm:text-sm font-bold text-white truncate block leading-snug" title={item.title}>
+                              <span className="text-xs sm:text-sm font-bold text-white line-clamp-2 break-words hyphens-auto leading-snug" title={item.title}>
                                 {item.title}
                               </span>
                             )}
@@ -300,7 +301,8 @@ export default function MpTimeline({
                           {isOwned ? (
                             <Link
                               to={`/manga/${item.user_manga_id}`}
-                              className="p-1 px-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-semibold flex items-center gap-1 hover:bg-emerald-500/30 transition-colors"
+                              aria-label={`Im Besitz: ${volumeName}`}
+                              className="hit-44 p-1 px-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-semibold flex items-center gap-1 hover:bg-emerald-500/30 transition-colors"
                             >
                               <span>Im Besitz</span> <span aria-hidden="true">↗</span>
                             </Link>
@@ -311,7 +313,8 @@ export default function MpTimeline({
                                   type="button"
                                   disabled={busy}
                                   onClick={() => onImport(item, 'Vorbestellt')}
-                                  className="bg-sky-600/20 hover:bg-sky-700 text-sky-300 hover:text-white border border-sky-500/40 hover:border-sky-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                                  aria-label={`${volumeName} vorbestellen`}
+                                  className="hit-44 bg-sky-600/20 hover:bg-sky-700 text-sky-300 hover:text-white border border-sky-500/40 hover:border-sky-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
                                   title="Diesen Band als vorbestellt in deine Sammlung übernehmen"
                                 >
                                   {busy ? (
@@ -327,9 +330,9 @@ export default function MpTimeline({
                                   type="button"
                                   disabled={busy}
                                   onClick={() => onImport(item, 'Fehlt')}
-                                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 py-1 px-2 rounded-xl text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
+                                  className="hit-44 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 py-1 px-2 rounded-xl text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
                                   title="Diesen Band auf die Einkaufsliste setzen"
-                                  aria-label="Auf die Einkaufsliste setzen"
+                                  aria-label={`${volumeName} auf die Einkaufsliste`}
                                 >
                                   <ShoppingCart className="w-3 h-3 text-slate-400" />
                                 </button>
@@ -337,9 +340,9 @@ export default function MpTimeline({
                               {item.in_collection && item.user_manga_id && (
                                 <Link
                                   to={`/manga/${item.user_manga_id}`}
-                                  className="p-1 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-colors"
+                                  className="hit-44 p-1 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-colors"
                                   title={item.match_kind === 'prefix' ? 'Zur ähnlichen Reihe in deiner Sammlung' : 'Zu den Manga-Details'}
-                                  aria-label={item.match_kind === 'prefix' ? 'Zur ähnlichen Reihe in deiner Sammlung' : 'Zu den Manga-Details'}
+                                  aria-label={`${item.match_kind === 'prefix' ? 'Zur ähnlichen Reihe in deiner Sammlung' : 'Zu den Manga-Details'}: ${item.title}`}
                                 >
                                   <span aria-hidden="true">↗</span>
                                 </Link>

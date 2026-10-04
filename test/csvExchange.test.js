@@ -1,3 +1,4 @@
+// CSV export and import (services/csvExchange): round trips, formula protection, field validation and per-row messages.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
@@ -161,7 +162,7 @@ test('Formelschutz nach Kommas (Excel mit Komma als Listentrenner), Rundlauf ble
     assert.equal(records[0].series, 'a,=1+1');
     assert.equal(records[0].notes, "x, @y,-z, -5, 1,+2,'=q");
 
-    // jede Kombination aus Komma, Leerraum, Apostroph und Formelzeichen übersteht guardFormulas + unescapeCell
+    // every combination of comma, whitespace, apostrophe and formula character survives guardFormulas + unescapeCell
     const alphabet = [',', ' ', '\t', "'", '=', '-', '+', '@', '1', '.', 'a'];
     let seed = 7;
     const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
@@ -180,7 +181,7 @@ test('parseCsv bricht bei zu vielen Zeilen, Spalten oder zu langen Zellen früh 
     assert.throws(() => parseCsv('Reihe;Bandnummer\na;1\nb;2\nc;3\nd;4', limits), (err) => err instanceof CsvFormatError && /Zu viele Zeilen \(maximal 3\)/.test(err.message) && err.line === 5);
     assert.throws(() => parseCsv('a;b;c;d;e', limits), (err) => err instanceof CsvFormatError && /zu viele Spalten/.test(err.message));
     assert.throws(() => parseCsv('Reihe;Bandnummer\n"' + 'x'.repeat(11) + '";1', limits), (err) => err instanceof CsvFormatError && err.line === 2);
-    // das Trennzeichen kommt aus der ersten nicht leeren Zeile
+    // the delimiter is taken from the first non-empty line
     assert.deepEqual(parseCsv('\n\n  \nReihe,Bandnummer\nA,1')[1], ['A', '1']);
     assert.deepEqual(parseCsv('\r\nReihe;Bandnummer,x\r\nA;1,5')[1], ['A', '1,5']);
 });
@@ -313,6 +314,54 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             const res = await admin('POST', '/volumes', { manga_id: mangaId, ...volume });
             assert.equal(res.status, 200, JSON.stringify(res.body));
         };
+
+        await t.test('"Band 3" neben "3" (v2.19.1): der Rundlauf behält beide, in beiden Reihenfolgen', async () => {
+            wipe();
+            const id = await addSeries('Doppelband');
+            await addVolume(id, { volume_number: '3', status: 'Vorhanden' });
+            // POST /volumes refuses the pair; v2.19.1 stored it
+            db.prepare("INSERT INTO volumes (manga_id, volume_number, type, status, priority, target_price, release_date) VALUES (?, 'Band 3', 'volume', 'Vorbestellt', 3, 5.99, '2027-03-01')").run(id);
+            const owned = db.prepare("SELECT id FROM volumes WHERE manga_id = ? AND volume_number = '3'").get(id).id;
+            assert.equal((await admin('POST', `/volumes/${owned}/read`, { read: true })).status, 200);
+            const lines = (await exportCsv()).split('\r\n').filter(Boolean);
+            assert.equal(lines.length, 3);
+            for (const csv of [lines.join('\r\n'), [lines[0], lines[2], lines[1]].join('\r\n')]) {
+                wipe();
+                const res = (await admin('POST', '/import/csv', { csv })).body;
+                assert.deepEqual([res.created_volumes, res.skipped_existing, res.errors], [2, 0, []]);
+                assert.ok(res.warnings.some(w => /„Band 3“ und „3“/.test(w.message)), JSON.stringify(res.warnings));
+                const series = (await admin('GET', '/mangas')).body.find(m => m.title === 'Doppelband');
+                const volumes = (await admin('GET', `/mangas/${series.id}`)).body.volumes;
+                const plain = volumes.find(v => v.volume_number === '3');
+                const legacy = volumes.find(v => v.volume_number === 'Band 3');
+                assert.deepEqual([plain.status, plain.is_read, plain.owners.map(o => o.username)], ['Vorhanden', true, ['admin']]);
+                assert.deepEqual([legacy.status, legacy.priority, legacy.target_price, legacy.release_date], ['Vorbestellt', 3, 5.99, '2027-03-01']);
+                const again = (await admin('POST', '/import/csv', { csv })).body;
+                assert.deepEqual([again.created_volumes, again.skipped_existing], [0, 2], 'a second import changes nothing');
+            }
+        });
+
+        await t.test('"Band 3"/"3" in ein Ziel, das eines davon schon hat: das andere kommt dazu, in beiden Reihenfolgen', async () => {
+            wipe();
+            const id = await addSeries('Halbpaar');
+            await addVolume(id, { volume_number: '3', status: 'Fehlt' });
+            db.prepare("INSERT INTO volumes (manga_id, volume_number, type, status, priority) VALUES (?, 'Band 3', 'volume', 'Vorbestellt', 3)").run(id);
+            const lines = (await exportCsv()).split('\r\n').filter(Boolean);
+            const numbers = () => db.prepare("SELECT volume_number, status FROM volumes WHERE manga_id = (SELECT id FROM mangas WHERE title = 'Halbpaar') ORDER BY volume_number").all().map(v => [v.volume_number, v.status]);
+            for (const keep of ['3', 'Band 3']) {
+                for (const csv of [lines.join('\r\n'), [lines[0], lines[2], lines[1]].join('\r\n')]) {
+                    wipe();
+                    const target = await addSeries('Halbpaar');
+                    db.prepare("INSERT INTO volumes (manga_id, volume_number, type, status) VALUES (?, ?, 'volume', 'Fehlt')").run(target, keep);
+                    const res = (await admin('POST', '/import/csv', { csv })).body;
+                    assert.deepEqual([res.created_volumes, res.skipped_existing, res.errors], [1, 1, []], keep);
+                    assert.deepEqual(numbers(), [['3', 'Fehlt'], ['Band 3', keep === 'Band 3' ? 'Fehlt' : 'Vorbestellt']], keep);
+                    assert.equal(res.warnings.some(w => /„Band 3“ und „3“/.test(w.message)), keep === '3', JSON.stringify(res.warnings));
+                    const again = (await admin('POST', '/import/csv', { csv })).body;
+                    assert.deepEqual([again.created_volumes, again.skipped_existing], [0, 2]);
+                }
+            }
+        });
 
         await t.test('Umlaut-Titel werden beim erneuten Import wiedererkannt', async () => {
             wipe();
@@ -505,7 +554,7 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             const res = (await admin('POST', '/import/csv', { csv: 'Reihe;Bandnummer;Besitzer\n' + rows.join('\n'), dry_run: true })).body;
             assert.ok(Date.now() - started < 1500, `Import dauerte ${Date.now() - started} ms`);
             assert.equal(res.created_volumes, 400);
-            // je Zeile höchstens fünf Hinweise plus eine Zusammenfassung
+            // at most five notices per row plus one summary
             assert.equal(res.warnings.filter(w => w.line === 2).length, 6);
             assert.match(res.warnings.filter(w => w.line === 2)[5].message, /und 44 weitere/);
             const tooMany = Array.from({ length: 1600 }, () => 'x').join(',');
@@ -545,7 +594,7 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             const res = (await editor('POST', '/import/csv', {
                 csv: 'Reihe;Bandnummer;Status;Gelesen von;Besitzer\nRechte;1;Gelesen;;admin\nRechte;2;Vorhanden;admin;"admin, csved"\n'
             })).body;
-            // Zeile 2 nennt nur einen anderen Besitzer: Fehler der Zeile statt den Editor einzusetzen
+            // row 2 names only another owner: a row error instead of falling back to the editor
             assert.equal(res.created_volumes, 1);
             assert.deepEqual(res.errors, [{ line: 2, message: 'Besitz anderer Benutzer kann nur ein Admin importieren' }]);
             assert.ok(res.warnings.some(w => w.line === 3 && /nur ein Admin/.test(w.message)));
@@ -756,6 +805,52 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             assert.equal(res.created_volumes, 1);
             const m = db.prepare("SELECT status, total_volumes, manga_passion_id FROM mangas WHERE title = 'Erste kaputt'").get();
             assert.deepEqual({ ...m }, { status: 'Abgeschlossen', total_volumes: 5, manga_passion_id: 77 });
+        });
+
+        await t.test('Export in Blöcken: gleiche Datei, und /api/health antwortet währenddessen', async () => {
+            wipe();
+            const insertSeries = db.prepare('INSERT INTO mangas (title, description) VALUES (?, ?)');
+            const insertVolume = db.prepare("INSERT INTO volumes (manga_id, volume_number, status, price) VALUES (?, ?, 'Vorhanden', 7)");
+            db.exec('BEGIN');
+            for (let i = 0; i < 300; i++) {
+                const id = Number(insertSeries.run(`Block ${String(i).padStart(3, '0')}`, `Beschreibung ${i}`).lastInsertRowid);
+                for (let n = 1; n <= 20; n++) insertVolume.run(id, String(n));
+            }
+            db.exec('COMMIT');
+            const { exportOptions } = require('../core/handlers/csv');
+            const original = exportOptions.seriesPerBlock;
+            const csvHandlers = require('../core/handlers/csv');
+            const adminUser = { ...db.prepare("SELECT id, username, role FROM users WHERE username = 'admin'").get() };
+            const exportWith = async (size) => {
+                const finished = [];
+                let health;
+                // read once when the export starts: a timer and a health check are queued while the export runs
+                Object.defineProperty(exportOptions, 'seriesPerBlock', {
+                    configurable: true,
+                    get() {
+                        setTimeout(() => finished.push('tick'), 0);
+                        health = fetch(ctx.base + '/health').then((res) => { finished.push('health'); return res.status; });
+                        return size;
+                    }
+                });
+                const { body: text } = await csvHandlers.exportCsv(require('../db').createCtx({ user: adminUser }));
+                finished.push('export');
+                assert.equal(await health, 200);
+                return { text, finished };
+            };
+            try {
+                const whole = await exportWith(1000);
+                assert.equal(whole.finished[0], 'export', 'one block holds the event loop');
+                const blocks = await exportWith(10);
+                assert.deepEqual(blocks.finished, ['tick', 'health', 'export'], 'timers and requests run between the blocks');
+                assert.equal((await fetch(ctx.base + '/export/csv', { headers: { Cookie: admin.cookie } })).status, 200);
+                assert.equal(blocks.text, whole.text);
+                assert.equal(whole.text.split('\r\n').filter(Boolean).length, 1 + 300 * 20);
+                assert.equal((whole.text.match(/Beschreibung \d+/g) || []).length, 300, 'series details only on the first row of a series');
+            } finally {
+                Object.defineProperty(exportOptions, 'seriesPerBlock', { configurable: true, writable: true, enumerable: true, value: original });
+                wipe();
+            }
         });
     } finally {
         await ctx.close();

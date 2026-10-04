@@ -1,11 +1,14 @@
+// Parses TRUST_PROXY for Express; the default trusts only a proxy on this host.
 const express = require('express');
 
 // Only a proxy on this host may set the client address. Trusting private ranges would let every LAN, link-local or
 // Docker-gateway peer (docker-proxy forwards IPv6 clients as 172.x.0.1) pick its own req.ip through X-Forwarded-For
-// and walk around the per-IP limits. Setups with a proxy elsewhere set a hop count or the proxy's subnet.
+// and walk around the per-IP limits. Setups with a proxy elsewhere list that proxy's address (behind
+// Docker/Pterodactyl only the network gateway), never a hop count or a shared subnet.
 const DEFAULT_TRUST_PROXY = 'loopback';
 
-const ALLOWED = 'erlaubt: true/false, Anzahl Proxys (z. B. 1) oder Adressen/Subnetze wie "loopback, uniquelocal" oder "172.16.0.0/12"';
+const ALLOWED = 'erlaubt: false, loopback oder Adressen wie "loopback, 172.18.0.1" (nur die Gateway-Adresse des Docker-Netzes, '
+    + 'siehe README Abschnitt 6); true und Hop-Zahlen nur, wenn der Port ausschließlich über den Proxy erreichbar ist';
 
 /** Value for Express' `trust proxy` setting from the TRUST_PROXY environment variable. Throws on values Express cannot use. */
 function parseTrustProxy(raw) {

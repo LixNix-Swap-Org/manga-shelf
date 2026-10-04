@@ -212,6 +212,8 @@ const scenarios = [
             assert.equal((await ed('GET', '/volumes/lookup')).body.error, 'Band-Nummer, ISBN oder URL erforderlich');
             assert.equal((await vis('GET', '/volumes/lookup?volume_number=1')).status, 403);
             assert.equal((await vis('GET', '/manga-passion/releases?month=13')).body.error, 'Ungültiges Jahr oder Monat');
+            const releases = await vis('GET', `/manga-passion/releases?year=${new Date().getFullYear() - 1}&month=7`);
+            assert.deepEqual([releases.status, releases.body.code, releases.body.error], [503, 'MP_UNAVAILABLE', 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen']);
         }
     },
     {
@@ -228,7 +230,8 @@ const scenarios = [
             assert.equal((await vis('GET', '/lookup/isbn?isbn=9783551023453')).status, 400);
             assert.equal((await vis('GET', '/lookup/isbn?isbn=123')).body.error, 'Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)');
             assert.equal((await vis('GET', '/lookup/manga?q=%20')).body.error, 'Suchbegriff erforderlich');
-            assert.deepEqual((await vis('GET', '/lookup/manga?q=Kern%20Offline')).body, []);
+            const offline = await vis('GET', '/lookup/manga?q=Kern%20Offline');
+            assert.deepEqual([offline.status, offline.body.code], [503, 'SOURCES_UNAVAILABLE'], 'no network is not "no hits"');
             assert.equal((await ed('POST', '/upload-remote', { url: 'ftp://x' })).body.error, 'Ungültige Bild-URL');
             const unreachable = await ed('POST', '/upload-remote', { url: 'https://does-not-exist.invalid/cover.jpg' });
             assert.deepEqual([unreachable.status, unreachable.body.error], [400, 'Bild-URL nicht erreichbar oder nicht erlaubt']);
@@ -306,8 +309,8 @@ const scenarios = [
         }
     },
     {
-        name: 'volumes bulk: set status and priority, revert, validation, rights',
-        async run({ ed, vis }) {
+        name: 'volumes bulk: set status and priority, undo by token, validation, rights',
+        async run({ admin, ed, vis }) {
             const id = await newSeries(ed, 'Kern Reihe Bulk');
             const ids = [];
             for (const n of ['1', '2', '3']) ids.push(await newVolume(ed, id, n, { status: 'Fehlt' }));
@@ -320,19 +323,130 @@ const scenarios = [
 
             const done = await ed('POST', '/volumes/bulk', { ids: ids.slice(0, 2), set: { status: 'Vorhanden', priority: 2 } });
             assert.equal(done.status, 200, JSON.stringify(done.body));
-            assert.deepEqual([done.body.success, done.body.updated, done.body.not_found], [true, 2, []]);
-            assert.equal(done.body.previous.length, 2);
+            assert.deepEqual([done.body.success, done.body.updated, done.body.not_found, 'previous' in done.body], [true, 2, [], false]);
+            assert.equal(typeof done.body.undo_token, 'string');
             let after = await volumes();
             assert.deepEqual(after.map(v => [v.status, v.priority, v.owners.map(o => o.username)]), [
                 ['Vorhanden', 2, ['ed']], ['Vorhanden', 2, ['ed']], ['Fehlt', 0, []]
             ]);
 
-            const reverted = await ed('POST', '/volumes/bulk', { revert: done.body.previous });
+            const forged = await ed('POST', '/volumes/bulk', { revert: [{ id: ids[0], volume: { status: 'Fehlt' }, owners: [] }] });
+            assert.deepEqual([forged.status, forged.body.code], [400, 'BULK_REVERT']);
+            assert.deepEqual([(await admin('POST', '/volumes/bulk', { revert: done.body.undo_token })).body.code], ['BULK_UNDO_FORBIDDEN']);
+            const reverted = await ed('POST', '/volumes/bulk', { revert: done.body.undo_token });
             assert.equal(reverted.status, 200, JSON.stringify(reverted.body));
             assert.deepEqual([reverted.body.restored, reverted.body.conflicts], [ids.slice(0, 2), []]);
             after = await volumes();
             assert.deepEqual(after.map(v => [v.status, v.priority, v.owners.length]), [['Fehlt', 0, 0], ['Fehlt', 0, 0], ['Fehlt', 0, 0]]);
-            assert.equal((await ed('POST', '/volumes/bulk', { revert: 'kaputt' })).body.code, 'BULK_REVERT');
+            const again = await ed('POST', '/volumes/bulk', { revert: done.body.undo_token });
+            assert.deepEqual([again.status, again.body.code], [410, 'BULK_UNDO_EXPIRED']);
+            assert.equal((await ed('POST', '/volumes/bulk', { revert: 'kaputt' })).status, 410);
+        }
+    },
+    {
+        name: 'volumes bulk: delete and undo bring back ids, owners of every user and reads',
+        async run({ admin, ed }) {
+            const id = await newSeries(ed, 'Kern Reihe Bulk Löschen');
+            const a = await newVolume(ed, id, '1', { price: 7, purchase_date: '2024-01-01' });
+            const b = await newVolume(ed, id, '2', { status: 'Fehlt' });
+            await admin('POST', `/volumes/${a}/owners`, { owned: true, purchase_date: '2024-02-02', price: 6 });
+            await ed('POST', `/volumes/${a}/read`, { read: true, read_at: '2024-03-03 12:00:00' });
+            await admin('POST', `/volumes/${a}/read`, { read: true, read_at: '2024-04-04 12:00:00' });
+            const before = (await ed('GET', `/mangas/${id}`)).body.volumes;
+
+            const removed = await ed('POST', '/volumes/bulk', { ids: [a, b], delete: true });
+            assert.deepEqual([removed.status, removed.body.deleted], [200, true]);
+            assert.equal((await ed('GET', `/mangas/${id}`)).body.volumes.length, 0);
+            assert.ok((await ed('GET', '/trash')).body.items.some(t => t.kind === 'volume' && t.ref_id === a));
+            const undo = await ed('POST', '/volumes/bulk', { revert: removed.body.undo_token });
+            assert.deepEqual([undo.status, undo.body.restored, undo.body.not_found], [200, [a, b], []]);
+            const back = (await ed('GET', `/mangas/${id}`)).body.volumes;
+            const view = (list) => list.map(v => [v.id, v.status, v.price, v.owners.map(o => [o.username, o.price, o.purchase_date]), v.read_users.map(r => [r.username, r.read_at])]);
+            assert.deepEqual(view(back), view(before));
+            assert.ok(!(await ed('GET', '/trash')).body.items.some(t => t.kind === 'volume' && [a, b].includes(t.ref_id)), 'the trash entries went with the undo');
+        }
+    },
+    {
+        name: 'trash: a deleted series and a deleted volume come back with their ids',
+        async run({ ed, vis }) {
+            const id = await newSeries(ed, 'Kern Reihe Papierkorb', { publisher: 'Carlsen', tags: 'Adventure' });
+            const keep = await newVolume(ed, id, '1', { price: 5 });
+            const gone = await newVolume(ed, id, '2', { status: 'Fehlt' });
+            await ed('POST', `/volumes/${keep}/read`, { read: true, read_at: '2025-01-01 09:00:00' });
+            const before = (await ed('GET', `/mangas/${id}`)).body;
+
+            const volumeDelete = await ed('DELETE', `/volumes/${gone}`);
+            assert.equal(typeof volumeDelete.body.trash_id, 'number');
+            assert.equal((await vis('POST', `/trash/${volumeDelete.body.trash_id}/restore`)).status, 403);
+            const volumeBack = await ed('POST', `/trash/${volumeDelete.body.trash_id}/restore`);
+            assert.deepEqual([volumeBack.status, volumeBack.body.kind, volumeBack.body.id], [200, 'volume', gone]);
+
+            const seriesDelete = await ed('DELETE', `/mangas/${id}`);
+            assert.equal((await ed('GET', `/mangas/${id}`)).status, 404);
+            const listed = (await vis('GET', '/trash')).body;
+            const entry = listed.items.find(t => t.id === seriesDelete.body.trash_id);
+            assert.deepEqual([entry.kind, entry.title, entry.restorable, listed.retention_days], ['manga', 'Kern Reihe Papierkorb', true, 30]);
+            const seriesBack = await ed('POST', `/trash/${seriesDelete.body.trash_id}/restore`);
+            assert.deepEqual([seriesBack.status, seriesBack.body.id], [200, id]);
+            const after = (await ed('GET', `/mangas/${id}`)).body;
+            const view = (m) => [m.title, m.tags, m.volumes.map(v => [v.id, v.volume_number, v.status, v.price, v.is_read, v.owners.map(o => o.username)])];
+            assert.deepEqual(view(after), view(before));
+            assert.equal((await ed('POST', `/trash/${seriesDelete.body.trash_id}/restore`)).status, 404);
+        }
+    },
+    {
+        name: 'reading over time, tags and data quality',
+        async run({ ed, vis, run }) {
+            const id = await newSeries(ed, 'Kern Reihe Lesen', { tags: 'Adventure; Slice of Life, adventure' });
+            const tags = (await vis('GET', '/tags')).body.tags;
+            assert.ok(tags.some(t => t.tag === 'Abenteuer' && t.count >= 1));
+            assert.ok(tags.some(t => t.tag === 'Alltag'));
+            assert.equal((await vis('GET', `/mangas/${id}`)).body.tags, 'Abenteuer, Alltag');
+
+            const ids = [];
+            for (const n of ['1', '2', '3']) ids.push(await newVolume(ed, id, n, { pages: 180 }));
+            const month = monthFromNow(0);
+            await ed('POST', `/volumes/${ids[0]}/read`, { read: true, read_at: `${month}-01 10:00:00` });
+            const reading = (await vis('GET', '/stats/reading?user_id=2')).body;
+            assert.deepEqual([reading.user.username, reading.months, reading.by_month.length], ['ed', 24, 24]);
+            const thisMonth = reading.by_month.find(m => m.month === month);
+            assert.ok(thisMonth.volumes >= 1 && thisMonth.pages >= 180);
+            const next = reading.continue_reading.find(c => c.manga_id === id);
+            assert.equal(next.next_volume.id, ids[1]);
+            assert.equal((await vis('GET', '/stats/reading?user_id=999999')).status, 404);
+
+            const legacy = await newVolume(ed, id, '4', { status: 'Fehlt' });
+            run("UPDATE volumes SET status = 'Gelesen' WHERE id = ?", legacy);
+            const quality = (await vis('GET', '/maintenance/quality')).body;
+            const check = (name) => quality.checks.find(c => c.id === name);
+            assert.ok(check('series_without_cover').items.some(m => m.id === id));
+            assert.ok(check('legacy_read_status').items.some(v => v.id === legacy));
+            assert.equal(check('legacy_read_status').fix, 'legacy_read');
+            assert.equal((await vis('POST', '/maintenance/fix', { check: 'legacy_read' })).status, 403);
+            assert.equal((await ed('POST', '/maintenance/fix', { check: 'nope' })).body.code, 'FIX_UNKNOWN');
+            const fixed = await ed('POST', '/maintenance/fix', { check: 'legacy_read' });
+            assert.ok(fixed.body.changed >= 1);
+            assert.ok(!(await vis('GET', '/maintenance/quality')).body.checks.find(c => c.id === 'legacy_read_status').items.some(v => v.id === legacy));
+        }
+    },
+    {
+        name: 'calendar feed: the token in the query is the credential',
+        async run({ ed, anonymous, run }) {
+            const id = await newSeries(ed, 'Kern Reihe Kalender');
+            await newVolume(ed, id, '9', { status: 'Vorbestellt', release_date: `${monthFromNow(1)}-10`, price: 8 });
+            const token = `kern${'A'.repeat(36)}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, 'x');
+            const hash = require('crypto').createHash('sha256').update(token, 'utf8').digest('hex');
+            run('INSERT INTO app_settings (key, value) VALUES (?, ?)', `calendar_feed:${hash}`, JSON.stringify({ user_id: 2, created_at: new Date().toISOString(), last_used_at: null }));
+
+            const feed = await anonymous.raw('GET', `/radar/feed.ics?token=${token}`);
+            assert.equal(feed.status, 200);
+            const type = Object.entries(feed.headers).find(([k]) => k.toLowerCase() === 'content-type')[1];
+            assert.match(type, /^text\/calendar/);
+            assert.ok(feed.text.startsWith('BEGIN:VCALENDAR'));
+            assert.ok(feed.text.includes('Kern Reihe Kalender'));
+            const wrong = await anonymous('GET', `/radar/feed.ics?token=${'B'.repeat(43)}`);
+            assert.deepEqual([wrong.status, wrong.body.code], [404, 'NOT_FOUND']);
+            assert.equal((await anonymous('GET', '/radar/feed.ics')).status, 404);
         }
     },
     {

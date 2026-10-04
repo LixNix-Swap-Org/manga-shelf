@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { loadMeta, syncOfflineCopy, OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
 
 /**
- * Network state and the offline copy. `onOnlineRef.current()` is called whenever the browser comes back online
- * (a ref so the caller can point it at functions that are defined after this hook).
- * `offlineCopyAt` follows every stored snapshot (also the background syncs started by App) and a logout.
+ * Network state and the offline copy. `onOnlineRef.current()` runs when the browser comes back online (a ref, so it
+ * can point at functions defined after this hook). `offlineCopyAt` follows every stored snapshot and a logout.
  */
 export default function useOfflineStatus({ user, onOnlineRef }) {
   const [networkOffline, setNetworkOffline] = useState(!navigator.onLine);

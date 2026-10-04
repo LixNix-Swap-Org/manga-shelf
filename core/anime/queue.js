@@ -86,10 +86,8 @@ function createBatcher({ run, maxSize = BATCH_SIZE, maxWaitMs = BATCH_WAIT_MS })
 }
 
 /**
- * Search terms that wait for the same token go out together (AniList aliases): add(terms) joins the open group while
- * it has room and is not sealed. run({ seal }) waits for its token, then calls seal() to get the final terms and
- * resolves with one result per term. `size()` is read on every add (the gateway halves it after a "max query
- * complexity" answer).
+ * Search terms waiting for the same token go out together (AniList aliases). run({ seal }) calls seal() for the
+ * final terms; `size()` is read on every add (the gateway halves it after a "max query complexity" answer).
  */
 function createGrouper({ run, size }) {
     let open = null;

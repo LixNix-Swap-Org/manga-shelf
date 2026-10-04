@@ -44,7 +44,7 @@ export default function AutofillPanel({
             <span>
               {autofillingVolume 
                 ? 'Lade Daten von Manga Passion...' 
-                : (editVolForm.type === 'schuber' ? '✨ Schuber-Cover & Details jetzt laden' : '✨ Daten jetzt automatisch ausfüllen')}
+                : (editVolForm.type === 'schuber' ? 'Schuber-Cover & Details jetzt laden' : 'Daten jetzt automatisch ausfüllen')}
             </span>
           </button>
         </div>
@@ -74,7 +74,7 @@ export default function AutofillPanel({
               type="button"
               onClick={() => setAutofillMessage(null)}
               aria-label="Meldung schließen"
-              className="p-1 -m-1 rounded text-slate-400 hover:text-white"
+              className="hit-44 shrink-0 p-1 -m-1 rounded text-slate-400 hover:text-white"
             >
               <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>

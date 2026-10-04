@@ -1,0 +1,43 @@
+# Server packages (.deb/.rpm) of the headless server binary, built in CI (.github/workflows/build.yml):
+#   VERSION=2.20.0 ARCH=amd64 nfpm package --config nfpm.yaml --packager deb --target dist/packages/
+# The binary for ARCH is expected at dist/server/manga-shelf-server-linux (build.yml copies the right one there).
+name: manga-shelf-server
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: 1
+section: web
+priority: optional
+maintainer: Manga Shelf <manga-shelf@users.noreply.github.com>
+vendor: Manga Shelf
+homepage: https://github.com/LixNix-Swap-Org/manga-shelf
+description: |-
+  Manga Shelf Server: Manga-Sammlung mit Web-Portal, ohne grafische Oberfläche.
+  Läuft als systemd-Dienst manga-shelf (Benutzer manga-shelf, Daten in /var/lib/manga-shelf).
+
+contents:
+  - src: dist/server/manga-shelf-server-linux
+    dst: /usr/bin/manga-shelf-server
+    file_info:
+      mode: 0755
+  - src: scripts/server-bin/packaging/manga-shelf.service
+    dst: /usr/lib/systemd/system/manga-shelf.service
+    file_info:
+      mode: 0644
+  - dst: /var/lib/manga-shelf
+    type: dir
+    file_info:
+      mode: 0750
+
+scripts:
+  postinstall: scripts/server-bin/packaging/postinstall.sh
+  preremove: scripts/server-bin/packaging/preremove.sh
+  postremove: scripts/server-bin/packaging/postremove.sh
+
+deb:
+  fields:
+    Bugs: https://github.com/LixNix-Swap-Org/manga-shelf/issues
+
+rpm:
+  group: Applications/Internet

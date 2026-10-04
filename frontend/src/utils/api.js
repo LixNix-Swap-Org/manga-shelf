@@ -5,13 +5,9 @@ import { localTransport, localUploadUrl } from '../local/localTransport.js';
 /** Dispatched on window when the server says the session is gone; App clears the offline copy and logs out. */
 export const SESSION_EXPIRED_EVENT = 'mangashelf:session-expired';
 
-/**
- * Client timeouts in ms; 0 means none (the server's own limits apply).
- * auth: startup and logout checks. read: plain GETs (default). write: plain writes (default).
- * lookup / remote: requests the server answers from Manga Passion, ISBN sources or a remote download (its worst case
- * chains several 6-20 s upstream calls). long: jobs that run on the server (autofill, batch and gap import, gap check,
- * CSV import, snapshots). upload: restores (explicit, none); other FormData bodies get uploadTimeout(bytes).
- */
+// Client timeouts in ms; 0 means none (the server's own limits apply). lookup / remote wait for upstream calls
+// (several 6-20 s in the worst case), long is for server jobs (imports, snapshots), upload for restores (none) and
+// FormData bodies (uploadTimeout(bytes)).
 export const TIMEOUTS = {
   auth: 4000,
   write: 8000,
@@ -82,7 +78,7 @@ export const isAbortError = (e) => e?.name === 'AbortError';
 // written out in full so Vite can replace it at build time; import.meta.env is missing when Node loads this module
 export const isAppMode = () => Boolean(import.meta.env) && import.meta.env.VITE_APP_MODE === 'app';
 
-/** App build without a server (spec-standalone §2): requests below /api go to the core on the device. */
+/** App build without a server: requests below /api go to the core on the device. */
 export const isLocalMode = () => isAppMode() && storedModeIsLocal();
 
 /** '' in the browser build (same origin) and in the local mode; the active server in the app build. */
@@ -97,9 +93,12 @@ export function setServer({ base, token } = {}) {
   else if (token !== undefined && isAppMode()) setToken(token);
 }
 
-/** Keeps the session token of a login / password change answer (app build only; the browser build uses the cookie). */
-export function rememberToken(data) {
-  if (isAppMode() && typeof data?.token === 'string' && data.token) setToken(data.token);
+/**
+ * Keeps the session token of a login / password change answer (app build only; the browser build uses the cookie).
+ * `{ rotate: true }` for a new token of the same session (password change, end all sessions): the trusted addresses stay.
+ */
+export function rememberToken(data, options) {
+  if (isAppMode() && typeof data?.token === 'string' && data.token) setToken(data.token, options);
 }
 
 export function apiUrl(path) {
@@ -280,12 +279,9 @@ async function send(path, { body, headers, timeout, signal, ...init } = {}) {
   return { res, link };
 }
 
-/**
- * fetch through the client (server base, bearer token in the app build, timeout, session-expiry check). Resolves to the
- * Response for every HTTP status; rejects with ApiError NETWORK/TIMEOUT, or the AbortError of the caller's signal.
- * Plain objects as `body` are sent as JSON. The timeout covers the request until the headers arrive; the caller's
- * signal also aborts the body read afterwards.
- */
+// fetch through the client (base, bearer token, timeout, session-expiry check); plain-object bodies go as JSON.
+// Resolves to the Response for any HTTP status; rejects with ApiError NETWORK/TIMEOUT or the caller's AbortError.
+// The timeout ends with the headers; the caller's signal also aborts the body read.
 export async function apiFetch(path, options) {
   const { res, link } = await send(path, options);
   link.stopTimer();
@@ -344,12 +340,9 @@ function saveBlob(blob, name, doc) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-/**
- * Downloads a server file (backup ZIP, snapshot, CSV). Browser build: a plain link, the cookie authenticates and the
- * browser shows its progress; resolves to null. App build: a link carries no bearer token, so the file is fetched
- * with it into a blob and saved from there; onProgress(loaded, total) reports the transfer (total 0 when unknown).
- * Resolves to { filename, bytes }; rejects with ApiError, or the AbortError of `signal`.
- */
+// Downloads a server file. Browser build: a plain link (cookie auth), resolves to null. App build: a link has no
+// bearer token, so it is fetched into a blob; onProgress(loaded, total), total 0 when unknown.
+// Resolves to { filename, bytes }; rejects with ApiError or the AbortError of `signal`.
 export async function downloadFile(path, { filename, onProgress, signal, doc = globalThis.document } = {}) {
   if (!isAppMode()) {
     const link = doc.createElement('a');

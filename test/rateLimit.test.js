@@ -1,3 +1,4 @@
+// Rate limiter, failure tracker and client key derivation.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWindowStore, createRateLimiter, createFailureTracker, clientKey, resetRateLimits } = require('../middleware/rateLimit');

@@ -1,3 +1,4 @@
+// Multer image uploads into uploadsDir, plus byte-level verification of what was stored (see verifyImageUploads).
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -94,10 +95,8 @@ function stripImageFileSync(filePath) {
 }
 
 /**
- * Checks the stored bytes of every uploaded image (multer's fileFilter only sees the client's MIME type and name).
- * Any non-image removes all files of the request and answers 400; an image whose extension does not match its
- * content is renamed to the detected extension so it is served with the right Content-Type. Metadata such as the
- * GPS position of a phone photo is removed, since /uploads is served without login.
+ * Checks the stored bytes of every uploaded image (multer only sees the client MIME type): a non-image removes all
+ * files and answers 400, a wrong extension is renamed, metadata (GPS) is stripped because /uploads is public.
  */
 async function verifyImageUploads(req, res, next) {
     const files = storedFiles(req);

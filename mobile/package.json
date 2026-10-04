@@ -1,0 +1,41 @@
+{
+  "name": "manga-shelf-mobile",
+  "private": true,
+  "version": "2.19.1",
+  "description": "Manga Shelf für Android und iPhone (Capacitor 7)",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build:web": "node scripts/prepare-web.js --build",
+    "prepare:web": "node scripts/prepare-web.js",
+    "version:sync": "node scripts/sync-version.js",
+    "sync": "npm run build:web && cap sync",
+    "doctor": "cap doctor",
+    "build:android": "node scripts/build-android.js",
+    "build:ios": "node scripts/build-ios.js",
+    "smoke:android": "node scripts/smoke.js android",
+    "smoke:ios": "node scripts/smoke.js ios",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^7.1.6",
+    "@capacitor-mlkit/barcode-scanning": "^7.5.0",
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/browser": "^7.0.5",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/haptics": "^7.0.5",
+    "@capacitor/ios": "^7.6.9",
+    "@capacitor/network": "^7.0.4",
+    "@capacitor/preferences": "^7.0.4",
+    "@capacitor/share": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.6"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -12,7 +12,7 @@ function PartialDateHint({ value, onClear, className }) {
   return (
     <p className={`text-[11px] mt-1 flex items-center gap-1.5 flex-wrap ${className}`}>
       <span>Gespeichert: {label}{PRECISION[String(value).trim().length] || ''}</span>
-      <button type="button" onClick={onClear} className="underline hover:text-white">entfernen</button>
+      <button type="button" onClick={onClear} className="inline-flex items-center [@media(pointer:coarse)]:min-h-[44px] underline hover:text-white">entfernen</button>
     </p>
   );
 }
@@ -34,7 +34,7 @@ export default function DetailFields({
   return (
     <div className="space-y-4">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 mb-1">
                       <label htmlFor={`${id}-publisher`} className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                         <BuildingComplex className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> Verlag
                       </label>
@@ -42,7 +42,7 @@ export default function DetailFields({
                         <button
                           type="button"
                           onClick={() => setValue('publisher', manga.publisher)}
-                          className="text-[11px] text-brand-400 hover:text-brand-300 underline"
+                          className="inline-flex items-center [@media(pointer:coarse)]:min-h-[44px] text-right text-[11px] text-brand-400 hover:text-brand-300 underline"
                         >
                           Vom Manga ({manga.publisher}) übernehmen
                         </button>
@@ -86,6 +86,7 @@ export default function DetailFields({
                       <input
                         id={`${id}-year`}
                         type="number"
+                        inputMode="numeric"
                         placeholder="z. B. 2023"
                         className="input-field"
                         value={editVolForm.release_year ?? ''}
@@ -103,6 +104,7 @@ export default function DetailFields({
                       <input
                         id={`${id}-pages`}
                         type="number"
+                        inputMode="numeric"
                         placeholder="z. B. 192"
                         className="input-field"
                         value={editVolForm.pages ?? ''}
@@ -144,7 +146,7 @@ export default function DetailFields({
                           type="button"
                           onClick={() => handleAutofillVolumeData()}
                           disabled={autofillingVolume}
-                          className="text-[10px] text-sky-400 hover:text-sky-300 underline font-normal flex items-center gap-1 cursor-pointer"
+                          className="inline-flex items-center [@media(pointer:coarse)]:min-h-[44px] gap-1 text-[11px] text-sky-400 hover:text-sky-300 underline font-normal cursor-pointer"
                           title="Erscheinungsdatum und Details automatisch suchen"
                         >
                           <Sparkles className="w-3 h-3" aria-hidden="true" />

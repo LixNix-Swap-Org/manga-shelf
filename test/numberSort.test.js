@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
 
 // volumes.number_sort (migration 15) replaces the volume-number expressions the routes computed per query. The
-// expressions below are the ones the routes used before (v2.19 / audit wave 4), kept here as the reference.
+// expressions below are the earlier per-query ones, kept here as the reference.
 const OLD_NO = (col) => `TRIM(REPLACE(REPLACE(COALESCE(${col}, ''), 'Band ', ''), 'band ', ''))`;
 const OLD_NUMBER_SORT = (col) => `CASE WHEN ${OLD_NO(col)} GLOB '[0-9]*' AND ${OLD_NO(col)} NOT GLOB '*[^0-9.]*' THEN CAST(${OLD_NO(col)} AS REAL) ELSE NULL END`;
 const OLD_VOLUME_NO = OLD_NO('v.volume_number');
@@ -15,7 +15,7 @@ const OLD_LIST_AGGREGATES = `
            MAX(CASE WHEN v.status = 'Vorhanden' AND ${OLD_IS_REGULAR} THEN CAST(${OLD_VOLUME_NO} AS INTEGER) END) as max_regular_number,
            COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND NOT ${OLD_IS_REGULAR} THEN v.id END) as extras_owned
     FROM mangas m LEFT JOIN volumes v ON m.id = v.manga_id GROUP BY m.id`;
-// spec A2 (review11-backend): complete = a stored total and at least that many distinct regular numbers owned
+// Complete series: a stored total and at least that many distinct regular numbers owned
 const SPEC_A2_COMPLETED = `
     SELECT count(*) AS count FROM mangas m
     WHERE COALESCE(m.total_volumes, 0) > 0

@@ -1,3 +1,4 @@
+// Detail header components: hero card, batch dialogs, gap notices, edition and add-volume bars.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import BatchAddModal, { validateBatchRange, batchResultText } from '../components/detail/BatchAddModal';
@@ -381,24 +382,26 @@ describe('MangaHeroCard: tags and lookup badges', () => {
   });
 
   it('auto-fill hits show the source label of the server; AniList only for AniList hits', () => {
-    expect(lookupBadgeLabels({ source: 'mal', source_label: '🌐 MyAnimeList' })).toEqual(['🌐 MyAnimeList']);
-    expect(lookupBadgeLabels({ source: 'anilist' })).toEqual(['🌐 AniList']);
-    expect(lookupBadgeLabels({ source: 'anilist', source_label: '🌐 AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
+    expect(lookupBadgeLabels({ source: 'mal', source_label: 'MyAnimeList' })).toEqual(['MyAnimeList']);
+    expect(lookupBadgeLabels({ source: 'anilist' })).toEqual(['AniList']);
+    expect(lookupBadgeLabels({ source: 'anilist', source_label: 'AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['AniList', 'MyAnimeList']);
     expect(lookupBadgeLabels({ source: 'other' })).toEqual([]);
     render(<MangaHeroCard {...props({
       editing: true,
       editLookupResults: [
         { id: 'mp_1', source: 'manga_passion', title: 'MP Treffer', status: 'Laufend' },
-        { id: 'mal_2', source: 'mal', source_label: '🌐 MyAnimeList', title: 'MAL Treffer', status: 'Laufend' },
+        { id: 'mal_2', source: 'mal', source_label: 'MyAnimeList', title: 'MAL Treffer', status: 'Laufend' },
         { id: 'al_3', source: 'anilist', title: 'AL Treffer', status: 'Laufend', also_on: ['mal'] }
       ]
     })} />);
     const hit = (title) => screen.getByText(title).closest('button');
-    expect(within(hit('MP Treffer')).getByText('🇩🇪 Manga Passion')).toBeTruthy();
-    expect(within(hit('MAL Treffer')).getByText('🌐 MyAnimeList')).toBeTruthy();
-    expect(within(hit('MAL Treffer')).queryByText('🌐 AniList')).toBeNull();
-    expect(within(hit('AL Treffer')).getByText('🌐 AniList')).toBeTruthy();
-    expect(within(hit('AL Treffer')).getByText('🌐 MyAnimeList')).toBeTruthy();
+    const mpBadge = within(hit('MP Treffer')).getByText('Manga Passion');
+    expect(mpBadge.querySelector('svg.lucide-library[aria-hidden="true"]')).toBeTruthy();
+    const malBadge = within(hit('MAL Treffer')).getByText('MyAnimeList');
+    expect(malBadge.querySelector('svg.lucide-globe[aria-hidden="true"]')).toBeTruthy();
+    expect(within(hit('MAL Treffer')).queryByText('AniList')).toBeNull();
+    expect(within(hit('AL Treffer')).getByText('AniList').querySelector('svg.lucide-globe')).toBeTruthy();
+    expect(within(hit('AL Treffer')).getByText('MyAnimeList').querySelector('svg.lucide-globe')).toBeTruthy();
   });
 });
 
@@ -512,7 +515,8 @@ describe('MpEditionModal', () => {
     render(<MpEditionModal {...p} />);
     fireEvent.click(screen.getByRole('button', { name: /Bandzahl auf 11 korrigieren/ }));
     expect(p.handleSyncTotalVolumes).toHaveBeenCalledWith();
-    expect(screen.getByRole('button', { name: /anreichern/ })).toBeTruthy();
+    const enrich = screen.getByRole('button', { name: 'Alle Bände mit Erscheinungsdaten anreichern' });
+    expect(enrich.querySelector('svg.lucide-sparkles[aria-hidden="true"]')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Übernehmen' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Daten neu laden/ }));
     expect(p.fetchMpGaps).toHaveBeenCalledWith(7, true);

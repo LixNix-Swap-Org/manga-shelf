@@ -12,7 +12,8 @@ function runScenarios(label, start) {
             ed: harness.client('ed'),
             vis: harness.client('vis'),
             anonymous: harness.client(null),
-            users: harness.users
+            users: harness.users,
+            run: harness.run
         };
     });
     test.after(async () => { await harness.close(); });

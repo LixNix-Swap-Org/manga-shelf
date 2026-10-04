@@ -1,11 +1,6 @@
-// The one list of the core endpoints (paths below /api). The server mounts it into Express (routes/core.js), the
-// apps call the same handlers in-process through dispatch().
-//
+// The one list of the core endpoints (paths below /api): the server mounts it into Express, the apps call it via dispatch().
 // Row: { method, path, role, handler(ctx, input) -> { status?, body, headers? }, parse?, conditional?, limit? }
-//   role:        public | auth (signed in) | editor (not visitor/guest) | admin
-//   parse:       (req-like { params, query, body }) -> input; default passes the three on
-//   conditional: server-side ETag/304 of a read endpoint (true or { cacheControl })
-//   limit:       per-account budget the host applies before the handler ('lookup', 'remoteImage')
+// role: public | auth | editor (not visitor/guest) | admin; conditional: ETag/304 for reads; limit: per-account budget.
 const mangas = require('./handlers/mangas');
 const snapshot = require('./handlers/snapshot');
 const volumes = require('./handlers/volumes');
@@ -23,11 +18,14 @@ const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
 const cleanup = require('./handlers/cleanup');
 const { guidesHandler } = require('./sources/guides');
+const { listVolumeSearch } = require('./snapshot');
 const { HttpError, AUTH_TEXTS } = require('./errors');
 
 const routes = [
     { method: 'GET', path: '/mangas', role: 'auth', conditional: true, handler: mangas.list },
     { method: 'POST', path: '/mangas', role: 'editor', handler: mangas.create },
+    // before /mangas/:id; the list leaves the search text out, the dashboard loads it on demand
+    { method: 'GET', path: '/mangas/volume-search', role: 'auth', conditional: true, handler: (ctx) => ({ body: listVolumeSearch(ctx) }) },
     { method: 'GET', path: '/mangas/:id', role: 'auth', conditional: true, handler: mangas.detail },
     // the 30 MB copy never lands in the HTTP cache; the client sends If-None-Match by hand
     { method: 'GET', path: '/offline-snapshot', role: 'auth', conditional: { cacheControl: 'private, no-store' }, handler: snapshot.offlineSnapshot },
@@ -49,7 +47,7 @@ const routes = [
     { method: 'GET', path: '/volumes/lookup', role: 'editor', limit: 'lookup', handler: mangaPassion.volumeLookup },
 
     { method: 'GET', path: '/stats', role: 'auth', conditional: true, handler: stats.stats },
-    { method: 'PUT', path: '/stats/settings', role: 'admin', handler: settings.updateSettings },
+    { method: 'PUT', path: '/stats/settings', role: 'admin', handler: (ctx, input) => stats.clearStartDate(ctx, input) || settings.updateSettings(ctx, input) },
     { method: 'GET', path: '/users/:id/stats', role: 'auth', handler: reads.userStats },
     { method: 'GET', path: '/stats/reading', role: 'auth', handler: stats.reading },
 

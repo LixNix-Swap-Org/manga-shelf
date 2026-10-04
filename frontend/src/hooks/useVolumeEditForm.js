@@ -6,12 +6,12 @@ import {
 } from '../components/detail/volumeEdit/editorUtils';
 import { apiFetch, TIMEOUTS } from '../utils/api';
 import { prepareImagesForUpload } from '../utils/imageResize';
-import { UPLOAD_CANCELLED } from './useVolumeActions';
+import { UPLOAD_CANCELLED, notifyTrashed, volumeDeleteConfirmText } from './useVolumeActions';
+import { getVolumeDisplayTitle } from '../utils/volumeHelpers';
 
 /**
- * State and actions of the volume editor: form, photo upload / URL / ordering, Manga-Passion autofill, save and delete.
- * Mount it once per opened volume (VolumeEditModal keys it by id): requests still running when the editor closes are
- * aborted, so their results can never land in another volume's form.
+ * State and actions of the volume editor: form, photos, Manga-Passion autofill, save and delete. Mount it once per
+ * opened volume (keyed by id): requests still running on close are aborted, so they never land in another form.
  */
 export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onClose, onSuccess }) {
   const [editVolForm, setEditVolForm] = useState(() => buildEditorForm(activeVolume));
@@ -290,7 +290,8 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
   const handleDeleteVolume = async (e, volId) => {
     if (e) e.stopPropagation();
     if (!canEdit) return;
-    if (!confirm('Band wirklich entfernen?')) return;
+    const vol = activeVolume && String(activeVolume.id) === String(volId) ? activeVolume : null;
+    if (!confirm(volumeDeleteConfirmText(vol))) return;
     setFormError('');
     const result = await deleteVolumeRequest(volId, { signal: signal() });
     if (result.aborted) return;
@@ -300,6 +301,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     }
     onClose();
     if (onSuccess) await onSuccess();
+    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : 'Band', result.trash_id, onSuccess);
   };
 
   return {

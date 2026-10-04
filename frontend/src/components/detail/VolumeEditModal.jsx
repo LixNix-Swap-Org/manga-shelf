@@ -1,3 +1,4 @@
+// Volume editor dialog: composes the volumeEdit/ field groups around useVolumeEditForm.
 import { TriangleAlert, X } from 'lucide-react';
 import VolumePhotoManager from './VolumePhotoManager';
 import EditHeader from './volumeEdit/EditHeader';
@@ -65,11 +66,11 @@ function VolumeEditDialog({
           aria-modal="true"
           aria-label="Band bearbeiten"
           tabIndex={-1}
-          className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in overflow-hidden"
+          className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-md animate-fade-in"
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <div
-            className="glass-panel w-full max-w-lg max-h-[92vh] supports-[height:100dvh]:max-h-[92dvh] flex flex-col rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl relative overflow-hidden my-auto"
+            className="dialog-box glass-panel max-w-lg max-h-[92vh] supports-[height:100dvh]:max-h-[92dvh] short:max-h-none flex flex-col rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl relative overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <EditHeader
@@ -78,9 +79,9 @@ function VolumeEditDialog({
               onClose={onClose}
             />
 
-            <form onSubmit={handleSaveVolume} noValidate className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <form onSubmit={handleSaveVolume} noValidate className="flex flex-col flex-1 min-h-0 overflow-hidden short:overflow-visible">
               {/* Scrollable Form Body */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto short:overflow-visible p-4 sm:p-6 space-y-4 custom-scrollbar">
                 <AutofillPanel
                   editVolForm={editVolForm}
                   autofillingVolume={autofillingVolume}

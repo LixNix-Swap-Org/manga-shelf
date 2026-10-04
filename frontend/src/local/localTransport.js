@@ -1,11 +1,30 @@
 // The `local` transport of utils/api.js: a request below /api goes to the standalone core on the device and comes back
 // as a Response, so every caller (request, apiFetch, downloadFile) works unchanged. The core loads on first use.
-import { getLocalProfile, setLocalProfile } from './profile.js';
+import { getLocalProfile, setLocalProfile, storedModeIsLocal } from './profile.js';
 
 let runtimePromise = null;
 let runtime = null;
 let adapters = {};
 let blockedListener = null;
+
+// the database lock of this window between two runtimes (reopen, profile switch): a waiting window must not get it
+const keptLocks = new Map();
+export const windowLocks = {
+  keep(name, lock) {
+    const previous = keptLocks.get(name);
+    keptLocks.set(name, lock);
+    if (previous && previous !== lock) previous.release();
+  },
+  take(name) {
+    const lock = keptLocks.get(name) ?? null;
+    keptLocks.delete(name);
+    return lock;
+  },
+  releaseAll() {
+    for (const lock of keptLocks.values()) lock.release();
+    keptLocks.clear();
+  }
+};
 
 /**
  * The apps plug in their own storage/http (see capacitor.js); call before the first request. `boot(profile)` replaces
@@ -33,7 +52,8 @@ export function getLocalRuntime() {
         runtime = rt;
         const profile = rt.getProfile();
         const stored = getLocalProfile();
-        if (!stored || stored.id !== profile.id || stored.name !== profile.username) setLocalProfile({ id: profile.id, name: profile.username });
+        // a pending profile (negative id) of a window that does not hold the database yet is not remembered
+        if (profile.id > 0 && (!stored || stored.id !== profile.id || stored.name !== profile.username)) setLocalProfile({ id: profile.id, name: profile.username });
         return rt;
       })
       .catch((err) => {
@@ -47,12 +67,17 @@ export function getLocalRuntime() {
 /** The runtime once loaded (synchronous callers such as assetUrl), else null. */
 export const loadedLocalRuntime = () => runtime;
 
-/** Closes the core (after a mode switch); the next request opens it again. */
+/**
+ * Closes the core; the next request opens it again. Still in the standalone mode (profile switch, reopen) this window
+ * keeps the database lock for its next runtime; after leaving the mode the lock is given back.
+ */
 export async function resetLocalRuntime() {
   const current = runtimePromise;
   runtimePromise = null;
   runtime = null;
-  if (current) await current.then((rt) => rt.close()).catch(() => {});
+  const keepLock = storedModeIsLocal();
+  if (current) await current.then((rt) => rt.close({ keepLock })).catch(() => {});
+  if (!keepLock) windowLocks.releaseAll();
 }
 
 /** For tests: use this runtime instead of booting one. */

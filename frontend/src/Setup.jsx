@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { User, Lock, Sparkles, ArrowRight, KeyRound, Plug } from 'lucide-react';
 import { apiFetch, readJson, rememberToken } from './utils/api';
 import { useDocumentTitle } from './components/common/PageChrome';
@@ -11,6 +11,9 @@ const MIN_PASSWORD_LENGTH = 8; // routes/auth.js enforces the same minimum
 function SourcesStep({ onDone }) {
   const keys = useApiKeys({ admin: true, user: false });
   const [finishing, setFinishing] = useState(false);
+  const headingRef = useRef(null);
+  // replaces the setup form and its focused submit button
+  useEffect(() => { headingRef.current?.focus(); }, []);
   const finish = async () => {
     setFinishing(true);
     try {
@@ -25,7 +28,7 @@ function SourcesStep({ onDone }) {
         <div className="mx-auto w-12 h-12 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center mb-3">
           <Plug className="w-6 h-6 text-brand-300" aria-hidden="true" />
         </div>
-        <h1 className="text-xl font-extrabold text-white">Quellen verbinden (später möglich)</h1>
+        <h1 ref={headingRef} tabIndex={-1} className="text-xl font-extrabold text-white focus:outline-none">Quellen verbinden (später möglich)</h1>
         <p className="text-sm text-slate-400 mt-1">
           Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das
           anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).
@@ -40,6 +43,7 @@ function SourcesStep({ onDone }) {
             guide={guide}
             state={state}
             scope="instance"
+            headingLevel={2}
             busy={keys.busy === `instance:${state.provider}`}
             onSave={(secret) => keys.save('instance', state.provider, secret)}
             onRemove={() => keys.remove('instance', state.provider)}
@@ -62,18 +66,27 @@ export default function Setup({ onComplete }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [setupToken, setSetupToken] = useState('');
+  // the desktop app sets the code itself and hands it over the bridge
+  useEffect(() => {
+    window.mangashelfDesktop?.setupToken?.().then((t) => { if (t) setSetupToken((cur) => cur || t); }).catch(() => {});
+  }, []);
   const [error, setError] = useState('');
+  const [tokenInvalid, setTokenInvalid] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const tokenRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const usernameId = useId();
   const passwordId = useId();
   const hintId = useId();
   const tokenId = useId();
   const tokenHintId = useId();
+  const errorId = useId();
 
-  const fail = (message) => {
+  const fail = (message, { badToken = false } = {}) => {
     setError(message);
+    setTokenInvalid(badToken);
     setAttempt((n) => n + 1);
+    if (badToken) tokenRef.current?.focus();
   };
 
   const handleSubmit = async (e) => {
@@ -103,7 +116,7 @@ export default function Setup({ onComplete }) {
         // Another tab or browser finished the setup first: continue to the login
         await onComplete({ adminExists: true });
       } else {
-        fail(data?.error || 'Fehler bei der Einrichtung');
+        fail(data?.error || 'Fehler bei der Einrichtung', { badToken: data?.code === 'SETUP_TOKEN_INVALID' });
       }
     } catch (err) {
       fail('Verbindungsfehler zum Server');
@@ -125,7 +138,7 @@ export default function Setup({ onComplete }) {
         </div>
 
         {error && (
-          <div key={attempt} role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3.5 rounded-xl mb-6 text-sm text-center">
+          <div key={attempt} id={errorId} role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3.5 rounded-xl mb-6 text-sm text-center">
             {error}
           </div>
         )}
@@ -138,6 +151,7 @@ export default function Setup({ onComplete }) {
             <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
               <KeyRound className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
               <input
+                ref={tokenRef}
                 id={tokenId}
                 name="setup_token"
                 type="text"
@@ -145,11 +159,12 @@ export default function Setup({ onComplete }) {
                 autoCapitalize="characters"
                 spellCheck={false}
                 autoFocus
-                aria-describedby={tokenHintId}
+                aria-describedby={tokenInvalid ? `${tokenHintId} ${errorId}` : tokenHintId}
+                aria-invalid={tokenInvalid || undefined}
                 className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm font-mono tracking-wider"
                 placeholder="XXXX-XXXX-XXXX-XXXX"
                 value={setupToken}
-                onChange={e => setSetupToken(e.target.value)}
+                onChange={e => { setSetupToken(e.target.value); setTokenInvalid(false); }}
               />
             </div>
             <p id={tokenHintId} className="mt-1.5 text-xs text-slate-400">

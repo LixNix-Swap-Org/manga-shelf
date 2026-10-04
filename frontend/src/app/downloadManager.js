@@ -1,6 +1,8 @@
-import { downloadFile, isAbortError } from '../utils/api';
+import { downloadFile, isAbortError, isLocalMode } from '../utils/api';
 import { notify } from '../utils/notify';
 import { formatNumber } from '../utils/format';
+import { getActiveServer, subscribeServers } from './serverStore';
+import { getLocalProfile, subscribeMode } from '../local/profile';
 
 const MB = 1024 * 1024;
 const UNKNOWN_SIZE_STEP = 5 * MB;
@@ -14,12 +16,39 @@ export function downloadProgressText(progress) {
     : `Lädt… ${loaded} MB`;
 }
 
-// path -> running download; path -> number of mounted links showing it
+// session key + path -> running download; path -> number of mounted links showing it
 const downloads = new Map();
 const views = new Map();
 const listeners = new Set();
 
 const changed = () => { for (const listener of [...listeners]) listener(); };
+
+// Bumped by cancelAllDownloads (logout, 401, server or profile switch): a new session never joins an old download.
+let epoch = 0;
+
+function session() {
+  if (isLocalMode()) {
+    const id = `local:${getLocalProfile()?.id ?? ''}`;
+    return { id, signature: id };
+  }
+  const server = getActiveServer();
+  return { id: server?.id ?? '', signature: `${server?.id ?? ''}\n${server?.token ?? ''}` };
+}
+
+const keyOf = (path) => `${session().id}:${epoch}:${path}`;
+const find = (path) => (downloads.size ? downloads.get(keyOf(path)) : undefined);
+
+// read on the first start, not at import (the shells swap the server storage first)
+let signature = null;
+function sessionChanged() {
+  if (signature === null) return;
+  const next = session().signature;
+  if (next === signature) return;
+  signature = next;
+  cancelAllDownloads();
+}
+subscribeServers(sessionChanged);
+subscribeMode(sessionChanged);
 
 export function subscribeDownloads(listener) {
   listeners.add(listener);
@@ -27,7 +56,7 @@ export function subscribeDownloads(listener) {
 }
 
 /** { loaded, total } of the running download of `path`, else null. */
-export const downloadProgress = (path) => downloads.get(path)?.progress ?? null;
+export const downloadProgress = (path) => find(path)?.progress ?? null;
 export const downloadsRunning = () => downloads.size > 0;
 
 // a toast per tenth of a known size (or per 5 MB), not per chunk
@@ -55,7 +84,7 @@ function hideToast(d) {
  */
 export function watchDownload(path) {
   views.set(path, (views.get(path) || 0) + 1);
-  const running = downloads.get(path);
+  const running = find(path);
   if (running) hideToast(running);
   return () => {
     const left = (views.get(path) || 1) - 1;
@@ -63,7 +92,7 @@ export function watchDownload(path) {
     else views.delete(path);
     // a remount in the same tick (StrictMode, a re-keyed row) keeps the link
     setTimeout(() => {
-      const d = downloads.get(path);
+      const d = find(path);
       if (!d || views.get(path) || d.toastId !== null) return;
       d.background = true;
       showToast(d);
@@ -76,7 +105,9 @@ export function watchDownload(path) {
  * file is saved even after its dialog closed. A second start of a running path joins it. Resolves to true when saved.
  */
 export function startDownload(path, { filename } = {}) {
-  const running = downloads.get(path);
+  if (signature === null) signature = session().signature;
+  const key = keyOf(path);
+  const running = downloads.get(key);
   if (running) return running.promise;
   const d = {
     controller: new AbortController(), progress: { loaded: 0, total: 0 }, toastId: null, toastStep: 0, background: false
@@ -86,7 +117,7 @@ export function startDownload(path, { filename } = {}) {
     if (d.toastId !== null && toastStep(d.progress) !== d.toastStep) showToast(d);
     changed();
   };
-  downloads.set(path, d);
+  downloads.set(key, d);
   d.promise = (async () => {
     try {
       const saved = await downloadFile(path, { filename, signal: d.controller.signal, onProgress });
@@ -98,7 +129,7 @@ export function startDownload(path, { filename } = {}) {
       return false;
     } finally {
       hideToast(d);
-      if (downloads.get(path) === d) downloads.delete(path);
+      if (downloads.get(key) === d) downloads.delete(key);
       changed();
     }
   })();
@@ -106,8 +137,13 @@ export function startDownload(path, { filename } = {}) {
   return d.promise;
 }
 
-export const cancelDownload = (path) => downloads.get(path)?.controller.abort();
+export const cancelDownload = (path) => find(path)?.controller.abort();
 
+/** Aborts every download and forgets them at once, so a start right after it begins a new one. */
 export function cancelAllDownloads() {
-  for (const d of downloads.values()) d.controller.abort();
+  epoch++;
+  const running = [...downloads.values()];
+  downloads.clear();
+  for (const d of running) d.controller.abort();
+  if (running.length) changed();
 }

@@ -1,3 +1,4 @@
+// Setup, login, session and user-management routes.
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -22,6 +23,7 @@ const log = require('../utils/logger').child('auth');
 const { config, normalizeSetupToken } = require('../utils/config');
 const { HttpError, badRequest, notFound, sendError } = require('../utils/httpError');
 const { purchaseDateFromRemainingOwners } = require('../utils/owners');
+const { revokeFeedTokens } = require('../core/handlers/radar');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const MIN_PASSWORD_LENGTH = 8;
@@ -198,7 +200,10 @@ router.put('/auth/password', requireAuth, passwordChangeLimiter, async (req, res
     // happened during the bcrypt awaits
     const outcome = runTransaction(() => {
         const version = bumpSessionVersion(user.id, hash, { username: user.username, passwordHash: user.password_hash });
-        if (version !== null) return { version };
+        if (version !== null) {
+            revokeFeedTokens(db, user.id);
+            return { version };
+        }
         const now = db.prepare('SELECT username FROM users WHERE id = ?').get(user.id);
         return { gone: !now || !sameUsername(now.username, user.username) };
     });
@@ -316,6 +321,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         }
         const version = hash ? bumpSessionVersion(userId, hash, { username: user.username, passwordHash: user.password_hash }) : current.password_changed_at;
         if (hash && version === null) return { status: 409 };
+        if (hash) revokeFeedTokens(db, userId);
         db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
         return { status: 200, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
     });
@@ -359,7 +365,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             WHERE user_id = ? AND volume_id IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
         `).all(userId, userId).map(r => r.volume_id);
         db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
-        // Bände, die nur dieser Benutzer besaß, gehen an den löschenden Admin, damit die Sammlung nicht schrumpft
+        // Volumes only this user owned go to the deleting admin so the collection does not shrink
         db.prepare(`
             INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
             SELECT volume_id, ?, price, purchase_date, condition FROM volume_owners
@@ -370,6 +376,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
         // anime progress and API keys go with the user (ON DELETE CASCADE)
         db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        revokeFeedTokens(db, userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
     res.json({ success: true });

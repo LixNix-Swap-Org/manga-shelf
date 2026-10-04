@@ -44,13 +44,15 @@ export async function buildBackupZip(runtime, { now = new Date(), appVersion = '
 
 const isJunkPath = (name) => name.split('/').some((segment) => segment === '__MACOSX' || segment.startsWith('.'));
 
-/** Same rule as the server's restorableUploadName: flat image files below <prefix>uploads/. */
+/** The server's restorableUploadName: a flat image file name (no folder, no dot file, no control character), else null. */
+export function restorableUploadName(name) {
+  if (typeof name !== 'string' || !name || name.startsWith('.') || /[/\\:]/.test(name) || [...name].some((c) => c.charCodeAt(0) < 32)) return null;
+  return ALLOWED_IMAGE.test(name) ? name : null;
+}
+
 function uploadName(entryName, prefix) {
   const base = `${prefix}uploads/`;
-  if (!entryName.startsWith(base)) return null;
-  const name = entryName.slice(base.length);
-  if (!name || name.startsWith('.') || /[/\\:]/.test(name) || [...name].some((c) => c.charCodeAt(0) < 32)) return null;
-  return ALLOWED_IMAGE.test(name) ? name : null;
+  return entryName.startsWith(base) ? restorableUploadName(entryName.slice(base.length)) : null;
 }
 
 /** { dbBytes, uploads: Map(name -> bytes), manifest } of a backup ZIP; throws a German message for anything else. */

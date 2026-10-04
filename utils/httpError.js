@@ -1,3 +1,4 @@
+// Re-exports core/errors and adds sendError for handlers that cannot throw.
 const errors = require('../core/errors');
 
 /** For handlers that answer an error themselves instead of throwing (streams already set up, cleanup in finally). */

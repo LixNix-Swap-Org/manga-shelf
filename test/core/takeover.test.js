@@ -1,4 +1,4 @@
-// Takeover paths of the standalone mode (spec-standalone §4, §6): the app's ZIP restores on a fresh server and a
+// Takeover paths of the standalone mode: the app's ZIP restores on a fresh server and a
 // server backup restores in the app; the non-admin pull goes through the offline snapshot; the CSV merge is idempotent.
 // Uses the frontend modules (frontend/src/local, frontend/src/app/takeover.js) with sql.js and fflate from frontend/.
 const test = require('node:test');
@@ -106,9 +106,14 @@ test('the app ZIP restores on a fresh server, the local profile becomes the admi
 test('a server backup restores in the app, covers included', opts, async () => {
     const { remoteLogin, pullFromServer } = mods.takeover;
     const session = await remoteLogin({ url: server.root, username: 'admin', password: PASSWORD });
+    assert.equal((await fetch(`${session.base}/api/radar/feed-token`, { method: 'POST', headers: bearer(session) })).status, 200);
     const rt = await newRuntime('Neu');
     const result = await pullFromServer(session, rt);
     assert.equal(result.kind, 'backup');
+    const count = (sql) => rt.getContext().db.prepare(sql).get().n;
+    assert.equal(count("SELECT count(*) AS n FROM app_settings WHERE key LIKE 'calendar_feed:%'"), 0, 'no feed token on the device');
+    assert.equal(count('SELECT count(*) AS n FROM user_api_credentials'), 0);
+    assert.equal(count("SELECT count(*) AS n FROM users WHERE password_hash <> '!local-profile'"), 0, 'no password hash on the device');
     assert.equal(result.profile.username, 'admin');
     assert.equal(result.counts.mangas, 1);
     const [manga] = await local(rt, 'GET', '/api/mangas');

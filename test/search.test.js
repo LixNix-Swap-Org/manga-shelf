@@ -1,3 +1,4 @@
+// Frontend search helper (matching and ranking), loaded as ESM.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');

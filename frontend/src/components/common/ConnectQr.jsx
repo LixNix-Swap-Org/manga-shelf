@@ -59,12 +59,12 @@ function ConnectDialog({ onClose, returnFocusRef }) {
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in text-left"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in text-left"
     >
-      <div className="glass-panel w-full max-w-sm rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl my-3 sm:my-8">
+      <div className="dialog-box glass-panel max-w-sm rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 id="connect-qr-title" className="text-lg font-bold text-white">Mit App verbinden</h2>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+          <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -98,7 +98,7 @@ export default function ConnectQr({ className = '' }) {
         type="button"
         id="footer-connect-app"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors ${className}`}
+        className={`hit-44 inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors ${className}`}
         title="QR-Code für die Manga-Shelf-App auf Handy oder Desktop anzeigen"
       >
         <QrCode className="w-3.5 h-3.5" aria-hidden="true" />

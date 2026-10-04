@@ -72,7 +72,7 @@ export function rememberServer(session) {
 }
 
 /**
- * One of the three takeover dialogs (spec-standalone §4). `onDone({ mode: 'local' })` when the device keeps working
+ * One of the three takeover dialogs . `onDone({ mode: 'local' })` when the device keeps working
  * standalone, `onDone({ mode: 'server', serverId })` to connect to the server afterwards.
  */
 export default function TakeoverDialog({ kind, onClose, onDone, initialSession = null }) {

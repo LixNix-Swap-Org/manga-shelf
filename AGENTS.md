@@ -1,616 +1,1119 @@
-# 📚 Manga Shelf 2.0 – Entwickler- & Agenten-Wissensdatenbank (AGENTS.md)
+# 📚 Manga Shelf – Entwickler- & Agenten-Wissensdatenbank (AGENTS.md)
 
-> Diese Datei dient als zentrale Wissensdatenbank und Architekturübersicht für KI-Agenten und Entwickler.  
-> Sie dokumentiert die Codebase, Datenstrukturen, API-Endpunkte sowie konkrete Anleitungen, **wo** bei künftigen Änderungen eingegriffen werden muss.
+> Zentrale Wissensdatenbank und Architekturübersicht für KI-Agenten und Entwickler.
+> Sie dokumentiert Codebase, Datenmodell, API-Endpunkte und konkret, **wo** bei künftigen Änderungen eingegriffen werden muss.
+> Repository: `https://github.com/LixNix-Swap-Org/manga-shelf` (Felix + Max; das Projekt begann unter MoltresHD/manga-shelf).
+> `test/agentsMd.test.js` prüft, dass jeder hier genannte Dateipfad existiert, die Migrationsliste `migrationList()` und die Konsolenbefehle `COMMANDS` entsprechen und jeder Endpunkt in §5 steht. Wer eine Datei verschiebt oder löscht, passt diese Datei im selben Commit an.
 
 ---
 
 ## 1. Projektübersicht & Tech-Stack
 
-* **Zweck:** Leichtgewichtiges, modernes Manga-Verwaltungssystem (Self-hosted) mit Multi-User-Support, Rollenmodell, Lese-Tracking, Statistiken und Backup-System.
-* **Architektur:** Monolithisch für minimalen Deployment-Overhead (Backend serviert das vorkompilierte React-Frontend als statische Dateien unter `/`).
+* **Zweck:** Selbst gehostete Manga-Verwaltung für einen Haushalt: Reihen und Bände (inkl. Schuber, Special Editions, Specials), Besitz und Lesestand pro Person, Einkaufsliste mit Laden-Scan, Release-Radar mit Manga-Passion-Kalender, Wunschreihen, Anime-Reiter, Statistiken, Papierkorb, Backups.
+* **Architektur:** Ein Domänen-Kern (`core/`) enthält alle fachlichen Endpunkte als reine Handler. Der Server (Express) hängt sie über `routes/core.js` ein und ergänzt nur Server-Themen (Sitzungen, Backups als ZIP, Uploads per multer, Rate-Limits, Systemseite). Dieselben Handler laufen in den Apps ohne Server im Gerät (sql.js). Der Server liefert das gebaute React-Frontend unter `/` aus.
+* **Betriebsarten:** Browser gegen den Server (PWA), Desktop-App (Electron: lokal, als Client oder als Server), Android/iPhone-App (Capacitor: mit Server oder ohne Server), Headless-Server als Binärdatei (Node SEA, Dienst für systemd/launchd/Windows), Docker-Image, Pterodactyl-ZIP.
 * **Backend:**
-  * **Runtime:** Node.js >= 22.13 (`node:sqlite` ohne `--experimental-sqlite`-Flag erst ab 22.13; `engines` in `package.json`, Docker-Image `node:22-alpine`, Pterodactyl-Egg `yolks:nodejs_22`)
-  * **Framework:** Express.js 5 (`index.js`)
-  * **Datenbank:** SQLite (`manga.db` im WAL-Modus) via `node:sqlite` (`db.js`). `better-sqlite3` wird nur als optionaler Fallback geladen und ist **keine** Dependency
-  * **Auth:** JSON Web Token (JWT) in `httpOnly`-Cookies (`token`), Kennwort-Hashing via asynchrones `bcryptjs`. Nutzer und Rolle werden bei **jedem** Request aus der DB geladen (`middleware/auth.js`), nicht aus dem Token
-  * **Dateiverwaltung:** `multer` für Cover- & Bild-Uploads (gespeichert in `data/uploads/`)
-  * **Backups:** `archiver` & `adm-zip` für Zero-Dependency ZIP-Backups der SQLite-DB + Uploads
+  * **Runtime:** Node.js >= 22.13 (`node:sqlite` ohne Flag erst ab 22.13; `engines` in `package.json`). Docker-Image `node:22.x-alpine3.x` (gepinnt, Dependabot hält es aktuell), Pterodactyl-Egg `yolks:nodejs_22`, CI-Matrix 22.13.0 / 22 / 24, SEA-Binärdateien mit Node 26, Desktop mit Electron 44 (Node 24).
+  * **Framework:** Express 5 (`index.js`).
+  * **Datenbank:** SQLite (`manga.db`, WAL) über `node:sqlite` (`db.js`); `better-sqlite3` wird nur als optionaler Rückfall geladen und ist **keine** Abhängigkeit. Schema und Migrationen in `core/schema.js`.
+  * **Auth:** JWT als `httpOnly`-Cookie `token` (Browser) oder `Authorization: Bearer` (Apps); Kennwörter mit `bcryptjs`. Nutzer und Rolle werden bei **jeder** Anfrage aus der DB geladen (`middleware/auth.js`), nicht aus dem Token.
+  * **Dateien:** `multer` für Bilder und Backup-ZIPs; Uploads liegen in `<DATA_DIR>/uploads/`.
+  * **Backups:** `archiver` zum Schreiben (`services/backupArchive.js`: zlib-Stufe 6, Bilder unkomprimiert, `manifest.json` in jedem Archiv), beim Einspielen ein eigener Streaming-Leser (`zlib`). `adm-zip` schreibt nur die kleine Sicherung vor Migrationen in `db.js` und liest ZIPs in Tests.
 * **Frontend:**
-  * **Tooling:** Vite + React 18 (`frontend/`)
-  * **Styling:** Tailwind CSS + Lucide Icons + Custom CSS Animations (`frontend/src/index.css`)
-  * **Routing:** `react-router-dom` v7 (nur `BrowserRouter`, `Routes`, `Route`, `Navigate`, `Link`, `useNavigate`, `useParams` genutzt)
-* **Deployment-Target:**
-  * Speziell für **Pterodactyl Panel** (Generic Node.js Egg oder Custom Egg `egg-manga-shelf.json`)
-  * Reverse Proxy Unterstützung (Nginx, Caddy, Cloudflare) mit `trust proxy = true`
+  * **Tooling:** Vite 7 + React 18 (`frontend/`), Tests mit Vitest 5 + Testing Library + jsdom.
+  * **Styling:** Tailwind CSS 3, lucide-react 1.x, selbst gehostete Schrift Plus Jakarta Sans (`frontend/src/fonts/`), eigenes CSS in `frontend/src/index.css`.
+  * **Routing:** `react-router-dom` v7 (`BrowserRouter`; Routen `/`, `/manga/:id`, `/login`, im App-Build zusätzlich `/server` und `/lokal`).
+  * **Zwei Builds:** Web-Build (`npm run build` → `frontend/dist`, Service Worker, vom Server ausgeliefert) und App-Build (`npm run build:app` = `vite build --mode app` → `frontend/dist-app`, `base: './'`, CSP-Meta, mit dem Kern für den Standalone-Modus).
+* **Deployment:** Pterodactyl (Egg `egg-manga-shelf.json` + ZIP), Docker/Compose (`ghcr.io/lixnix-swap-org/manga-shelf`), Server-Binärdatei bzw. `.deb`/`.rpm`, Desktop-Installer. Reverse Proxy (nginx, Caddy, Cloudflare): `trust proxy` kommt aus `TRUST_PROXY` (Standard `loopback`, siehe Gotcha 3).
 
 ---
 
 ## 2. Verzeichnis- & Datei-Landkarte
 
+Ein Eintrag je Zeile; `test/agentsMd.test.js` setzt die Pfade aus den Einrückungen zusammen und prüft, dass es sie gibt (`data/` ist Laufzeit-Inhalt und wird nicht geprüft).
+
 ```text
 manga-shelf/
-├── AGENTS.md                  # <-- DIESE WISSENSDATENBANK
-├── README.md                  # Setup- & Deployment-Anleitung für Nutzer/Admins
-├── .env.example               # Vorlage für Umgebungsvariablen (Port, Host, Secrets)
-├── Dockerfile                 # Multi-Stage Docker-Build (Vite Build -> Alpine Runner)
-├── docker-compose.yml         # Docker Compose Setup mit Volume-Mapping auf ./data
-├── package.json               # Backend Root Dependencies & NPM Scripts
-├── eslint.config.js           # ESLint (Flat Config), `npm run lint`
-├── package.js                 # Packager-Skript: baut Frontend & packt Backend als ZIP
-├── index.js                   # Schlanker Hauptserver: Express Initialisierung & Route-Mounting
-├── db.js                      # DB-Verbindung, Schema, Indizes & sequentielle Migrationen
-├── mangaPassion.js            # Re-Export von `services/mangaPassion/` (Dockerfile/package.js und alle `require('../mangaPassion')` bleiben so gültig)
-├── egg-manga-shelf.json       # Pterodactyl Egg Vorlage
-├── Caddyfile.example          # Beispiel-Konfiguration für Reverse Proxy via Caddy
-├── nginx.conf.example         # Beispiel-Konfiguration für Reverse Proxy via Nginx
-├── release.js                 # GitHub Release Automatisierung & Asset-Upload
-├── PROJECT_KNOWLEDGE.md       # Nur Verweis auf diese Datei
-├── scripts/                   # Administrative Hilfsskripte (Remote-Prüfung, Seed)
-│   ├── check-remote.js
-│   ├── seed-remote.js
-│   └── verify-remote.js
-├── middleware/                # Wiederverwendbare Express-Middlewares
-│   ├── auth.js                # Auth, Rollenprüfungen (requireAdmin, requireEditor) & JWT
-│   ├── rateLimit.js           # In-Memory Rate-Limiter (Login, Setup)
-│   └── upload.js              # Multer Konfiguration (Covers & Staging für Backups)
-├── routes/                    # Modularisierte Express Router
-│   ├── auth.js                # Setup, Login, Logout, Session & Benutzerverwaltung
-│   ├── mangas.js              # Manga CRUD, Editionsabgleich & Lückenverwaltung
-│   ├── volumes.js             # Band CRUD, Batch-Generierung & Lese-Status
-│   ├── backups.js             # Server-Snapshots & Wiederherstellung (Disk-Staging)
-│   ├── stats.js               # Sammlungsstatistiken & Einstellungen
-│   ├── radar.js               # Einkaufsliste, Release-Radar & Manga Passion Monatsradar (nur Routen + SQL, Logik in `services/radar.js` und `services/mangaPassionReleases.js`)
-│   ├── exchange.js            # CSV-Export (`GET /api/export/csv`) & -Import (`POST /api/import/csv`, `dry_run`)
-│   └── lookup.js              # Routen: ISBN-Suche, Manga Passion / AniList Lookup & Uploads (Logik der ISBN-Suche in `services/isbnLookup.js`)
-├── services/                  # Hintergrund-Dienste
-│   ├── scheduler.js           # Täglicher automatischer Backup-Scheduler (7 Snapshots); räumt nach dem Auto-Backup verwaiste Uploads auf
-│   ├── uploadCleanup.js       # `cleanOrphanUploads`: löscht Dateien in `uploads/`, die keine Reihe/kein Band mehr nennt und älter als 7 Tage sind (Test: `test/uploadCleanup.test.js`)
-│   ├── csvExchange.js         # Reine Funktionen: `toCsv`, `parseCsv`, `mapCsvRows` (Semikolon, BOM, Formel-Schutz; Test: `test/csvExchange.test.js`)
-│   ├── isbnLookup.js          # ISBN-Suche: DNB → K10plus → Google Books (`lookupBookByIsbn`, `parseMarc21Xml`), Abgleich mit der Sammlung (`matchCollection`)
-│   ├── radar.js               # Reine Funktionen: `countdownFor`, `buildShoppingList`, `buildReleaseRadar` (Monatsgruppen, Budgets)
-│   ├── mangaPassionReleases.js # Monatskalender von Manga Passion: Abruf mit Cache (`getMonthlyReleases`), Abgleich mit der Sammlung (`enrichReleases`)
-│   └── mangaPassion/          # Manga-Passion-Anbindung
-│       ├── client.js          # API-Aufrufe (Timeout, Basis-URL), 12-h-Cache (nur vollständige Antworten), Editionssuche, Cover-Download
-│       ├── classify.js        # Reine Funktionen: scoreEdition, classifyOfficialVolume, findRegularVolume, matchSchuberVolume, cleanOfficialDate
-│       ├── gaps.js            # reconcileMangaGaps, batchImportGaps, syncMangaWithEdition
-│       ├── autofill.js        # lookupVolumeMetadata, autofillMangaVolumes, applyAutofillUpdates
-│       └── index.js           # bündelt die Exporte
-├── utils/                     # Hilfsfunktionen & Normalisierer
-│   ├── publishers.js          # Verlags-Normalisierung & Mappings
-│   ├── owners.js              # Besitz pro Benutzer: `addOwner`, `syncOwnersWithStatus`, `syncStatusWithOwners` (Test: `test/owners.test.js`)
-│   ├── isbn.js                # ISBN-10/13-Normalisierung (`normalizeIsbn`) und Prüfziffern (`isValidIsbn`)
-│   ├── logger.js              # Zentraler Logger (`LOG_LEVEL`, `LOG_FORMAT`)
-│   ├── query.js               # `qstr()`: Query-Strings sicher lesen (Express 5)
-│   ├── staticHeaders.js       # Cache-Header für `index.html`, `sw.js`, `manifest.json`
-│   ├── volumeType.js          # `inferVolumeType` / `classifyOfficialVolume` (Backend)
-│   └── safeFetch.js           # SSRF-sicherer Bild-Download (nur öffentliche Hosts, Größenlimit, Magic Bytes); Tests in `test/safeFetch.test.js`
-├── test/                      # node:test-Tests (`npm test` = `test/*.test.js`) & Deep-E2E
-│   ├── helpers.js             # Startet die App gegen eine temporäre DATA_DIR
-│   ├── api.test.js            # Auth, CRUD, Rollen, Backups
-│   ├── radar.test.js          # Import-Route (Validierung, Duplikate, Besitz bleibt) & Monatskalender (Cache, Ausfall, Duplikate)
-│   ├── radarServices.test.js  # Countdown, Gruppen, Budgets, Serien-Abgleich
-│   ├── isbnLookup.test.js     # MARC-Parser, Quellen-Reihenfolge, Titel-/ISBN-Abgleich
-│   ├── routing.test.js, upload.test.js, logger.test.js, isbn.test.js
-│   ├── mangapassion.test.js   # Manga-Passion-Matching, Datumsbereinigung, Schuber
-│   ├── specialeditions.test.js # Typ+Nummer-Logik; hält Backend/Frontend-`inferVolumeType` synchron
-│   ├── realdata.test.js       # Fortschritt, Doppelte, Platzhalterdaten
-│   ├── offline.test.js, offlineStore.test.js, volumeHelpers.test.js, collectionHelpers.test.js, radarHelpers.test.js, volumeFormHelpers.test.js
-│   └── browser/               # Puppeteer-Browsertests (nicht in `npm test`), alle über `run.js` gegen einen isolierten Server
-│       ├── run.js             # Startet Server mit temporärem DATA_DIR + freiem Port + Wegwerf-Admin, führt das Skript aus, räumt auf
-│       ├── chrome.js          # Findet Chrome/Chromium/Edge (`CHROME_BIN` überschreibt)
-│       ├── e2e-suite.js       # Login, Dashboard, Benutzer, Backup-Restore, Reihe/Bände anlegen & löschen (`npm run test:e2e`)
-│       ├── release-radar.js   # Release-Radar (`npm run test:radar`)
-│       ├── performance-suite.js # Seitenladezeiten, API-Latenz, Bundle-Größen (`npm run test:perf`)
-│       └── deep-e2e.js        # Visueller Regressionstest mit Bildschirmfotos aller Modals + Mobile (`npm run test:deep`)
-├── .github/workflows/ci.yml   # CI: Lint, Tests, Docker-Build + Start-Test
-├── deploy/workflows/          # Vorlagen für Release-Workflows
-├── data/                      # Persistente Anwendungsdaten (in .gitignore)
-│   ├── manga.db               # SQLite-Hauptdatenbank (WAL-Modus)
-│   ├── temp/                  # Temporäres Staging für Backup-Uploads (Anti-OOM)
-│   └── uploads/               # Hochgeladene Cover- & Bandbilder
-├── dist_pack/                 # Ausgabeordner für Pterodactyl ZIP-Pakete
-└── frontend/                  # React Frontend Projekt
-    ├── index.html             # HTML Entrypoint
-    ├── vite.config.js         # Vite-Konfiguration (Proxy auf :3000 im Dev-Modus)
-    ├── tailwind.config.js     # Tailwind CSS Konfiguration & Themes
-    └── src/
-        ├── main.jsx           # React Root Mount
-        ├── App.jsx            # Routing, Auth-Check & Setup-Check
-        ├── Dashboard.jsx      # Schlanker Container des Dashboards: setzt die Hooks aus `hooks/` und die Komponenten aus `components/dashboard/` zusammen, hält Hauptumschalter (`activeMainView`) und Modal-Sichtbarkeit
-        ├── MangaDetail.jsx    # Schlanker Container der Detailansicht: setzt die Hooks aus `hooks/` und die Komponenten aus `components/detail/` zusammen
-        ├── Login.jsx          # Login-Maske
-        ├── Setup.jsx          # Initialer Einrichtungs-Assistent (Admin-Account)
-        ├── hooks/             # Zustand & Aktionen von Dashboard und Detailansicht (je ein Thema)
-        │   ├── useMangaList.js        # Dashboard: Reihenliste (Server/Offline-Kopie), Reihe löschen
-        │   ├── useCollectionFilters.js # Dashboard: Suche, Status-/Verlagsfilter, Sortierung, Ansicht (localStorage), Statistiken
-        │   ├── useShoppingList.js     # Dashboard: Einkaufsliste mit Offline-Cache, Schnellkauf, Offline-Kaufwarteschlange
-        │   ├── useReleaseRadar.js     # Dashboard: Release-Radar und Manga-Passion-Monatskalender
-        │   ├── useOfflineStatus.js    # Dashboard: Netzwerkstatus, Offline-Kopie; `onOnlineRef` wird beim Wiederverbinden aufgerufen
-        │   ├── usePwaInstall.js       # Dashboard: „App installieren“
-        │   ├── useDashboardKeyboard.js # Dashboard: `/`, Escape
-        │   ├── useDialogA11y.js       # Modals: Fokus hinein/zurück, Tab-Falle; mit `role="dialog" aria-modal` am äußeren Element verwenden (alle Modals tun das)
-        │   ├── useMangaData.js        # Reihe laden (Server/Offline-Kopie), Bearbeiten-Formular, Cover-Upload, Metadaten-Lookup
-        │   ├── useVolumeFilters.js    # Filter, Suche, Sortierung, Typ-Zähler, Ansichtsmodus
-        │   ├── useMpGaps.js           # Manga-Passion-Lückenabgleich, Lücken übernehmen, Edition wählen/synchronisieren, Autofill
-        │   ├── useVolumeActions.js    # Band anlegen, Besitz-/Lesestatus umschalten, bearbeiten, löschen
-        │   ├── useVolumeGallery.js    # Foto-Lightbox
-        │   ├── useShelfLayout.js      # Regal-Modus, Skalierung, Zeilenaufteilung, Tastatur-Fokus
-        │   ├── useDetailKeyboard.js   # Escape, Pfeiltasten, J/K/Leertaste/E
-        │   └── useVolumeEditForm.js   # Band-Editor: Formular, Foto-Upload/-URL/-Reihenfolge, MP-Autofill, Speichern, Löschen
-        ├── utils/
-        │   ├── offlineStore.js    # IndexedDB-Offline-Kopie (nur lesend)
-        │   ├── volumeHelpers.js   # Anzeigenamen, Typ-/Editions-Logik, Fortschritt (`getSeriesProgress`), `hasUserRead`, `buildDisplayVolumeItems`
-        │   ├── volumeFormHelpers.js # Band-Editor ohne React: `buildVolumeForm` (Formularfelder), `applyLookupToForm` (Autofill-Regeln)
-        │   ├── scanHelpers.js     # ISBN-Scan ohne React: `buildScanPrefill` (Katalogtreffer → Formular der neuen Reihe + gescannter Band), `buildScanVolumePayload`
-        │   ├── radarHelpers.js    # Release-Radar ohne React: `filterMpItems`, `groupMpItemsByDate`, `filterRadarItems`
-        │   └── collectionHelpers.js # Dashboard-Logik ohne React: Filter/Sortierung (`filterAndSortMangas`), Zähler, Summen, Datumsformat
-        ├── index.css          # Globale Styles, Scrollbars, Glasmorphismus & Farbtöne
-        └── components/        # Modulare Komponenten & Modals (Frontend-Refactoring)
-            ├── modals/        # Dashboard-Modals
-            │   ├── UserManagementModal.jsx  # Benutzerverwaltung (Rollenwechsel, Anlegen, Löschen)
-            │   ├── ChangePasswordModal.jsx  # Eigenes Passwort ändern
-            │   ├── BackupRestoreModal.jsx   # Server-Snapshots, Uploads & 1-Klick Restore
-            │   ├── StatsModal.jsx           # Finanz-KPIs, Charts, Leserranking & Leser-Details
-            │   └── AddMangaModal.jsx        # Reihe anlegen mit Manga Passion/AniList Metadatensuche
-            ├── common/
-            │   └── BarcodeScannerButton.jsx # ISBN-Barcode per Foto (BarcodeDetector, Fallback ZXing)
-            ├── dashboard/     # Dashboard Views
-            │   ├── MainViewSwitcher.jsx     # Tabs Sammlung / Einkaufsliste / Release-Radar
-            │   ├── CollectionStats.jsx      # Kennzahlen-Leiste (Reihen, Bände, Wert, abgeschlossen)
-            │   ├── DashboardFooter.jsx      # Version, Online-Status, Offline-Kopie, App-Installation
-            │   ├── DashboardHeader.jsx      # Kopfzeile, Hauptumschalter, Scanner
-            │   ├── CollectionToolbar.jsx    # Suche, Filter, Sortierung, Ansicht
-            │   ├── MangaCollectionGrid.jsx  # Regal-/Grid-Darstellung der Reihen
-            │   ├── ShoppingListView.jsx     # Einkaufsliste, Buchladen-Modus & Schnellkauf
-            │   ├── ReleaseRadarView.jsx     # Zusammenbau des Release-Radars (Reiter Manga-Passion-Kalender / Meine Vorbestellungen)
-            │   └── radar/                   # Teile des Radars
-            │       ├── RadarTabs.jsx, MpMonthNav.jsx, MpFilters.jsx, MpTimeline.jsx            # Manga-Passion-Monatskalender
-            │       └── PersonalSummary.jsx, PersonalFilters.jsx, PersonalTimeline.jsx          # Persönliche Vorbestellungen & Budget
-            └── detail/        # Manga-Detailansicht Subkomponenten & Modals
-                ├── MangaHeroCard.jsx        # Banner/Kopf der Reihe mit Metadaten & Fortschritt
-                ├── ReaderBar.jsx            # Leser-Umschalter mit Lese-Fortschritt
-                ├── GapNotices.jsx           # Banner: Doppelte, Editions-Abweichung, erkannte Lücken
-                ├── ShelfSpine.jsx           # Ein Buchrücken (oder Ghost-Spine) im Regal
-                ├── AddVolumeBar.jsx         # Schnelles Anlegen einzelner Bände
-                ├── VolumeFilterBar.jsx      # Filter-Chips (Alle/Bände/Special Editions/Schuber/Specials)
-                ├── VolumeShelfView.jsx      # Buchrücken-Regal inkl. Ghost-Spines für Lücken
-                ├── VolumeGridView.jsx       # Kartenansicht
-                ├── VolumeListView.jsx       # Listen-/Tabellenansicht
-                ├── VolumePhotoManager.jsx   # Foto-Manager (Upload, Sortieren, Löschen)
-                ├── VolumeEditModal.jsx      # Band-Editor (Rahmen); Zustand in `hooks/useVolumeEditForm.js`
-                ├── volumeEdit/              # Teile des Band-Editors: EditHeader, AutofillPanel, TypeNumberFields, StatusPriceFields, DetailFields, EditFooter
-                ├── BatchAddModal.jsx        # Batch-Generator für Bandnummern 1..N
-                ├── BatchReadModal.jsx       # Batch-Lesestatus bis Band X für Leser
-                ├── GapFillModal.jsx         # 1-Klick-Lückenfüller mit MP-Preis/Cover
-                ├── MpEditionModal.jsx       # Manga Passion Editionsabgleich & Sync
-                └── LightboxGallery.jsx      # Vollbild-Lightbox für Cover- & Bandfotos
+├── AGENTS.md                     # DIESE WISSENSDATENBANK
+├── CHANGELOG.md                  # Änderungen je Branch/Release (Handover-Branch: Runden 1–5 nach Gebiet)
+├── README.md                     # Nutzer-/Admin-Doku: Funktionen, Pterodactyl, Ersteinrichtung + Konsole, API-Schlüssel, Backups, HTTPS/TRUST_PROXY (§6), Docker, Headless, Desktop, Android/iPhone, Release (§11), Umgebungsvariablen (§12), Entwicklung
+├── PROJECT_KNOWLEDGE.md          # nur Verweis auf diese Datei
+├── .env.example                  # jede Variable aus utils/config.js (ENTRIES) plus REMOTE_*, CHROME_BIN; deutsch kommentiert
+├── .dockerignore                 # hält data/, data-dev/, node_modules usw. aus dem Image
+├── Dockerfile                    # Multi-Stage, Multi-Arch (Frontend + Datei-Staging auf $BUILDPLATFORM), Labels, DATA_DIR=/app/data, HEALTHCHECK über healthcheck.js, App läuft als node
+├── docker-entrypoint.sh          # startet als root, übernimmt /app/data für uid 1000 und wechselt per su-exec zu node
+├── docker-compose.yml            # Beispiel mit ghcr.io/lixnix-swap-org/manga-shelf:latest (build: . auskommentiert), Block „Hinter einem Reverse Proxy“
+├── healthcheck.js                # Docker-HEALTHCHECK: gleicher Port (SERVER_PORT > PORT > 3000) und gleiche HTTPS-Wahl wie index.js
+├── egg-manga-shelf.json          # Pterodactyl-Egg (Install-Container alpine/ash, Variable TRUST_PROXY = loopback)
+├── Caddyfile.example             # Reverse Proxy über Caddy
+├── nginx.conf.example            # nur Port-80-Block mit proxy_pass (certbot --nginx --redirect ergänzt TLS); X-Forwarded-For = $remote_addr, client_max_body_size 512M
+├── nfpm.yaml                     # Server-Pakete .deb/.rpm (Binärdatei nach /usr/bin/manga-shelf-server, systemd-Unit, Benutzer manga-shelf, /var/lib/manga-shelf)
+├── eslint.config.js              # ESLint 9 flat config: Backend (CommonJS), core/ (es2020, keine Node-API), Frontend (react, hooks v5), sw.js als Service Worker
+├── package.json                  # Backend-Abhängigkeiten, npm-Skripte, "files" = Liste der ausgelieferten Backend-Dateien (ZIP, Docker, Desktop)
+├── package.js                    # Packager: Pterodactyl-ZIP aus package.json, package-lock.json, .env.example, "files" und frontend/dist; bricht ab, wenn etwas fehlt
+├── release.js                    # lokaler Versions-Helfer: node release.js <patch/minor/major/X.Y.Z/vX.Y.Z> [--dry-run]; setzt nur die Version (kein Commit, Tag, Push)
+├── index.js                      # Express-Server: createApp(), start()/stop(), Sicherheits-Header, Fehler-Handler, Frontend-Auslieferung, Start-Banner
+├── db.js                         # node:sqlite-Verbindung (WAL), Proxy db, runTransaction, Restore-Staging (validateDbFile/migrateDbFile), Sicherung vor Migrationen, createCtx() für core/
+├── mangaPassion.js               # Re-Export von services/mangaPassion/ (Funktionen an den Server-ctx gebunden)
+├── core/                         # Domänen-Kern: läuft auf dem Server und im Gerät (Standalone-App); keine Node-API (Gotcha 17)
+│   ├── ctx.js                    # Vertrag ctx = { db, files, http, now, log, user, config, signal, limit, randomId, yield, undo, credentials }; createCtx, withUser, dbFromConnection, transactionFor
+│   ├── schema.js                 # CREATE TABLE, Einstellungs-Seed, migrationList(), runSequentialMigrations(), applySchema(conn, { loadAliases }) (Aliase nur für die Live-Verbindung); LATEST_SCHEMA_VERSION
+│   ├── errors.js                 # HttpError, badRequest/notFound/conflict/forbidden, errorBody, errorAnswer (Fehlerantwort wie der Server), AUTH_TEXTS
+│   ├── routes.js                 # DIE Liste der Kern-Endpunkte { method, path, role, handler, parse?, conditional?, limit? }; matchRoute, parseQuery, roleError, dispatch
+│   ├── snapshot.js               # listMangas, listVolumeSearch, loadMangaDetail/buildMangaDetail, buildOfflineSnapshot (Antwortformen von /mangas, /mangas/volume-search, /mangas/:id, /offline-snapshot)
+│   ├── radar.js                  # countdownFor, buildShoppingList, buildReleaseRadar, zonedToday (reine Funktionen)
+│   ├── isbnLookup.js             # DNB → K10plus → Google Books über ctx.http.fetchText, MARC-Parser, matchCollection
+│   ├── anilist.js                # AniList-Medien in der Form der Reihensuche (mapAniListMedia) und cleanAniListDescription
+│   ├── csvExchange.js            # toCsv, parseCsv, mapCsvRows, Formelschutz, strenge Prüfer (reine Funktionen)
+│   ├── ical.js                   # iCalendar-Schreiber (RFC 5545) und reines SHA-256 für das Kalender-Token
+│   ├── handlers/                 # ein Modul je Gebiet, Signatur handler(ctx, { params, query, body }) -> { status?, body, headers? }
+│   │   ├── mangas.js             # GET/POST /mangas, GET/PUT/DELETE /mangas/:id, GET /tags
+│   │   ├── volumes.js            # POST /volumes, /volumes/batch, /volumes/bulk (Sammelbearbeitung + Rückgängig-Token), PUT/DELETE /volumes/:id
+│   │   ├── owners.js             # POST /volumes/:id/owners
+│   │   ├── reads.js              # POST /volumes/:id/read, /volumes/batch-read, GET /users/:id/stats
+│   │   ├── stats.js              # GET /stats, GET /stats/reading (Leseverlauf), clearStartDate (PUT /stats/settings mit null)
+│   │   ├── settings.js           # PUT /stats/settings
+│   │   ├── shopping.js           # GET /shopping-list (SHOPPING_SERIES)
+│   │   ├── radar.js              # GET /release-radar, /dashboard-summary, /release-radar/changes, /radar/feed.ics (Kalender-Abo)
+│   │   ├── mangaPassion.js       # Lücken, sync-edition, batch-import-gaps, autofill-volumes, /volumes/lookup, Monatskalender, Kalender-Import, Editionssuche
+│   │   ├── lookup.js             # GET /lookup/manga, /lookup/isbn, POST /upload-remote
+│   │   ├── csv.js                # GET /export/csv, POST /import/csv
+│   │   ├── snapshot.js           # GET /offline-snapshot
+│   │   ├── wishlist.js           # Wunschreihen-Abfragen (Einkaufsliste, Statistik)
+│   │   ├── anime.js              # /anime/*, /mangas/:id/adaptations, /export/anime.csv
+│   │   ├── trash.js              # GET /trash, POST /trash/:id/restore, DELETE /trash(/:id); purgeTrash() für den Scheduler
+│   │   ├── publishers.js         # GET /publishers, POST /publishers/merge, DELETE /publishers/aliases/:alias
+│   │   └── cleanup.js            # GET /maintenance/quality, POST /maintenance/fix
+│   ├── mangaPassion/             # Manga-Passion-Anbindung, alle Funktionen mit ctx als erstem Argument
+│   │   ├── client.js             # API-Aufrufe (Timeout, Budget), 12-h-Cache, Editionssuche, Editionsdaten, Cover-Download
+│   │   ├── classify.js           # scoreEdition, classifyOfficialVolume, findRegularVolume, matchSchuberVolume, cleanOfficialDate, isConfidentMatch
+│   │   ├── gaps.js               # reconcileMangaGaps, batchImportGaps, syncMangaWithEdition
+│   │   ├── autofill.js           # lookupVolumeMetadata, autofillMangaVolumes, applyAutofillUpdates
+│   │   ├── tags.js               # fillTagsFromEdition(): leere Genres einer verknüpften Reihe aus gespeicherter Edition, Cache, zuletzt API
+│   │   ├── releases.js           # Monatskalender (getMonthlyReleases, enrichReleases, buildMatcher), Terminabgleich (monthsToCheck, detectDateChanges)
+│   │   └── index.js              # bündelt die Exporte
+│   ├── anime/                    # Anime-Metadaten-Gateway (reines JS über ctx.http/ctx.db/ctx.now)
+│   │   ├── gateway.js            # searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, refreshDue (Sweeps), scheduleRefresh (SWR), scheduleMalRefresh, adaptationsOf, sourcesState
+│   │   ├── budget.js             # Token-Bucket je Zugang, 40 % Reserve für interaktiv, 429-Pause, Circuit Breaker
+│   │   ├── queue.js              # acquire (interaktiv max. 8 s), Coalescing, AniList-Batcher (50 IDs/150 ms), Hintergrund-Warteschlange
+│   │   ├── cache.js              # api_cache: Suche 1 h, nur eine Quelle 5 min, „nicht gefunden“ 10 min, Adaptionen 1 Tag; Fehler nie
+│   │   ├── normalize.js          # AnimeMeta, Umlaut-Faltung, Titel-Ranking, nextCheckAt, Sendeplatz-Schätzung
+│   │   ├── anilist.js            # Adapter AniList (GraphQL mit Aliasen/id_in)
+│   │   ├── jikan.js              # Adapter Jikan v4
+│   │   ├── mal.js                # Adapter MyAnimeList-API v2 (X-MAL-CLIENT-ID)
+│   │   ├── request.js            # ein Quellen-Request über ctx.http.fetch: Timeout, Größenlimit, SourceError(kind)
+│   │   ├── store.js              # animes-Zeilen: applySnapshot (partial), Cover nur bei neuer Quell-URL, KEEP_WHEN_EMPTY
+│   │   ├── settings.js           # ANIME_ANILIST_RPM / ANIME_JIKAN_RPM / ANIME_SOURCES (ctx.config.anime)
+│   │   └── stats.js              # anime-Block von GET /stats
+│   ├── sources/                  # Quellen-Zugänge
+│   │   ├── guides.js             # Anleitungen zu den API-Schlüsseln (AniList, MyAnimeList, Google Books) als reine Daten: einzige Quelle der Texte
+│   │   └── credentials.js        # Zugangs-Anbieter-Schnittstelle (ctx.credentials): get, instance, background, failed, used, status
+│   ├── adapters/                 # Datenbank-Adapter
+│   │   └── sqljs.js              # sql.js als node:sqlite-förmige Verbindung (prepare().get/all/run, exec, export, close); sqlJsDb()
+│   └── lib/                      # reine Helfer
+│       ├── validate.js           # Eingabe-Parser aller Endpunkte (parsePrice, parseDate, parseFlag, parseIdList, parseBulkSet …) sowie VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, BULK_SET_FIELDS
+│       ├── owners.js             # Besitz pro Benutzer: addOwner, syncOwnersWithStatus, syncStatusWithOwners, purchaseDateFromRemainingOwners, convertLegacyRead, migrateLegacyReadStatus
+│       ├── publishers.js         # CANONICAL_PUBLISHERS, PUBLISHER_ALIAS_SEED, normalizePublisher/resolvePublisher (gespeicherte Aliase vor der eingebauten Liste), loadPublisherAliases (prozessweite Alias-Tabelle)
+│       ├── volumeNumber.js       # canonicalVolumeNumber („Band 14“ = 14), SQL-Bausteine auf number_sort (regularNumberedSql, volumeOrderSql)
+│       ├── volumeType.js         # inferVolumeType / Typ-Logik (Gegenstück im Frontend, Test hält beide synchron)
+│       ├── isbn.js               # normalizeIsbn, isValidIsbn
+│       ├── query.js              # qstr(): Query-Werte sicher lesen
+│       ├── access.js             # resolveTargetUser (fremde user_id nur für Admins)
+│       ├── imageCheck.js         # Magic Bytes (detectImageExt), fetchImage
+│       ├── md5.js                # MD5 für Cover-Dateinamen (ohne crypto)
+│       ├── signals.js            # timeoutSignal, anySignal (statt AbortSignal.timeout/any)
+│       ├── tags.js               # GENRE_DE, splitTags, normalizeTags (Spiegel: frontend/src/utils/tags.js)
+│       └── trash.js              # moveMangaToTrash, moveVolumeToTrash, forgetTrashedVolume, TRASH_RETENTION_DAYS = 30
+├── routes/                       # nur Server-Rand (Express)
+│   ├── core.js                   # Adapter: hängt core/routes.js in Express ein (Rolle -> requireAuth/Editor/Admin, conditional(), Limiter, ctx je Anfrage)
+│   ├── auth.js                   # Setup, Login, Logout, Sitzung, Passwort, Benutzerverwaltung, /version, /auth/connect-info
+│   ├── apiKeys.js                # eigene und Instanz-API-Schlüssel (verschlüsselt, Live-Prüfung, nie lesbar), registerServerSources() für den Kern
+│   ├── backups.js                # ZIP-Download, Server-Snapshots, Restore (einstufig und inspect/restore in zwei Schritten)
+│   ├── system.js                 # Admin-Systemseite, Waisen aufräumen, alle Sitzungen beenden, Update-Prüfung, Kalender-Token; Rate-Limit vor dem Kern-Feed
+│   ├── uploads.js                # POST /upload, /upload/multiple (multer)
+│   ├── volumes.js                # nur Re-Export des Kern-Routers (Tests)
+│   ├── radar.js                  # nur Re-Export des Kern-Routers (Tests)
+│   └── lookup.js                 # Re-Export des Kern-Routers plus remoteImageError, lookupTimings (Tests)
+├── middleware/                   # Express-Middlewares
+│   ├── auth.js                   # JWT (Cookie oder Bearer), requireAuth/requireEditor/requireAdmin, signSessionToken, bumpSessionVersion, secret.key
+│   ├── rateLimit.js              # In-Memory-Zähler (Login, Logout, Setup, Passwortwechsel, loginGuard), createRateLimiter/createFailureTracker/createWindowStore
+│   ├── userLimits.js             # Limits je Konto für externe Dienste: lookupLimiter, remoteImageLimiter (je 30/min)
+│   ├── originCheck.js            # createOriginCheck: lehnt schreibende Cross-Origin-Anfragen ab (403 CROSS_ORIGIN)
+│   └── upload.js                 # multer für Bilder (Magic Bytes, Metadaten entfernen) und Backup-ZIPs
+├── services/                     # Server-Dienste und Bindungen des Kerns an den Server-ctx
+│   ├── scheduler.js              # Snapshots, Kategorien, Aufbewahrung, Sidecars, Tagesfenster, Anime-Sweeps, Papierkorb-Purge, Start-Aufräumen
+│   ├── backupArchive.js          # Archiv-Helfer: createArchive, Manifest, readDbFacts, Streaming-ZIP-Leser, verifyArchive
+│   ├── console.js                # Server-Konsole (stdin) und scripts/admin.js: COMMANDS, runCommand, startConsole, statusLines
+│   ├── lifecycle.js              # trackJob, shutdown, exitAfterShutdown, healthReport (für /api/health)
+│   ├── uploadCleanup.js          # cleanOrphanUploads (Waisen älter als 7 Tage, REFERENCE_COLUMNS inkl. trash.payload), referencedUploadNames
+│   ├── snapshot.js               # Bindung von core/snapshot.js
+│   ├── radar.js                  # Bindung von core/radar.js (APP_TIMEZONE als Vorgabe)
+│   ├── isbnLookup.js             # Bindung von core/isbnLookup.js plus fetchTextHttps
+│   ├── csvExchange.js            # Re-Export von core/csvExchange.js
+│   ├── mangaPassionReleases.js   # Bindung von core/mangaPassion/releases.js
+│   └── mangaPassion/             # Bindungen von core/mangaPassion/* an den Server-ctx
+│       └── index.js              # bündelt die gebundenen Funktionen (Ziel von mangaPassion.js)
+├── utils/                        # Server-Helfer; isbn, owners, publishers, query, validate, volumeNumber, volumeType sind Re-Exporte von core/lib/
+│   ├── config.js                 # alle Umgebungsvariablen (ENTRIES), config.<schlüssel>, validateConfig, loadDotenv
+│   ├── logger.js                 # zentraler Logger (LOG_LEVEL, LOG_FORMAT), child('name')
+│   ├── httpError.js              # Re-Export von core/errors.js plus sendError
+│   ├── dataVersion.js            # Datenstand für ETags (readDataVersion, dataEtag, conditional)
+│   ├── safeFetch.js              # SSRF-sicherer Bild-Download (fetchRemoteImage, isPrivateAddress)
+│   ├── imageMeta.js              # stripImageMetadata: EXIF/GPS/XMP aus JPEG/PNG/WebP ohne Neukodierung
+│   ├── secretBox.js              # AES-256-GCM, Schlüssel per HKDF aus dem JWT-Secret (API-Schlüssel, Kalender-Token)
+│   ├── disk.js                   # freeBytes, ensureFreeSpace (507 INSUFFICIENT_SPACE), fileSize, formatMb
+│   ├── staticHeaders.js          # Cache-Header für index.html/sw.js/manifest.json; createUploadHeaders für /uploads
+│   └── trustProxy.js             # parseTrustProxy, DEFAULT_TRUST_PROXY = loopback
+├── scripts/                      # Hilfsskripte (nur scripts/admin.js wird ausgeliefert)
+│   ├── admin.js                  # Konsolenbefehle als Einmal-Aufruf (node scripts/admin.js <befehl>)
+│   ├── dev.js                    # npm run dev: Backend mit node --watch + Vite-Dev-Server, Demo-Daten in data-dev/
+│   ├── seed.js                   # deterministische Demo-Sammlung in eine leere DATA_DIR (Logins in <DATA_DIR>/seed-users.json)
+│   ├── bench/                    # Benchmark
+│   │   └── run.js                # kopfloser API-Benchmark gegen eine frisch geseedete Temp-DB (npm run bench)
+│   ├── check-bundle-size.js      # Bundle-Budget gegen frontend/bundle-budget.json (CI)
+│   ├── migrate-dry-run.js        # Probelauf ausstehender Migrationen auf einer Kopie
+│   ├── stage-backend.js          # kopiert die Backend-Dateien aus package.json "files" (Docker-Stage)
+│   ├── check-remote.js           # Remote-Instanz prüfen
+│   ├── seed-remote.js            # Demo-Reihen auf eine Remote-Instanz (löscht nichts; --wipe nur Demo-Reihen)
+│   ├── verify-remote.js          # Screenshots einer laufenden Instanz (puppeteer-core, Remote-Regeln wie check-remote)
+│   ├── lib/                      # gemeinsame Helfer der Remote-Skripte
+│   │   └── remote.js             # Ziel-URL (Argument > REMOTE_URL > REMOTE_HOST/PORT), Login, redactUrl
+│   ├── release/                  # Release-Pipeline
+│   │   ├── version.js            # Versionslogik (resolveTargetVersion, writeVersion für alle Pakete, syncMobileVersion)
+│   │   ├── bump-version.js       # CLI für release.yml: <patch/minor/major/none/X.Y.Z> [--write]; schreibt version/tag nach $GITHUB_OUTPUT
+│   │   ├── checksums.js          # SHA256SUMS.txt schreiben/prüfen
+│   │   ├── signing.js            # welche Signier-Secrets vollständig sind + deutscher Release-Abschnitt
+│   │   └── notes.js              # Release-Text (Downloads, Prüfsummen, Signierstand)
+│   └── server-bin/               # Headless-Server als Node-SEA-Binärdatei
+│       ├── main.js               # Einstieg: Optionen, Konsolenbefehle als Unterbefehle, install-service/uninstall-service
+│       ├── entry.js              # Bundle-Einstieg
+│       ├── cli.js                # Argumente, Hilfetext, Standard-Daten- und Cache-Ordner je System
+│       ├── services.js           # systemd-Unit, launchd-Plist, Windows-Aufgabe als testbare Schrittlisten + runPlan()
+│       ├── acl.js                # Rechte: Windows-ACLs als SIDs (PowerShell), .env-Prüfung, nur-Besitzer-Dateien
+│       ├── webAssets.js          # eingebettetes Web-Portal nach <cache>/manga-shelf-portal/server-<id>/frontend/dist entpacken
+│       ├── logFile.js            # --log-file mit Rotation 10 MB × 5 (0600)
+│       ├── build-sea.js          # esbuild-Bundle (dist/server/server.cjs) + node --build-sea je Ziel
+│       ├── smoke.js              # Smoke-Test einer Binärdatei oder von server.cjs
+│       ├── service-probe.js      # CI: install-service echt einrichten, Rechte prüfen, wieder entfernen
+│       ├── sea-config.json       # Vorlage der SEA-Konfiguration
+│       ├── entitlements.plist    # macOS Hardened Runtime (JIT)
+│       └── packaging/            # manga-shelf.service (= services.systemdUnit), postinstall/preremove/postremove.sh für nfpm
+├── .github/                      # GitHub-Konfiguration
+│   ├── dependabot.yml            # npm (/ und /frontend), Actions, Docker; wöchentlich
+│   └── workflows/                # Workflows
+│       ├── ci.yml                # jeder Push + PR: test, frontend, package, docker, browser, desktop-smoke, build (build.yml; Desktop-Installer nur main/PR), mobile (mobile.yml, nur main/PR)
+│       ├── build.yml             # wiederverwendbar: Web-Portal, ZIP + SBOM, Server-Binärdateien, .deb/.rpm, Docker (nicht gepusht), Desktop-Installer; nur Artefakte
+│       ├── mobile.yml            # wiederverwendbar + manuell: Android/iPhone (smoke oder build)
+│       ├── release.yml           # nur workflow_dispatch; einziger Workflow mit Schreibrechten
+│       └── codeql.yml            # CodeQL (security-extended)
+├── test/                         # node:test-Tests (npm test) und Browsertests
+│   ├── agentsMd.test.js          # prüft AGENTS.md gegen den Code: Pfade, Migrationen, Konsolenbefehle, Endpunkte
+│   ├── docs.test.js              # Doku-Drift: .env.example, README-Variablentabelle (§12) und -Anker, manuelle ZIP-Liste = "files", Egg/Compose, nginx-Vorlage
+│   ├── helpers.js                # startTestServer({ env }): temporäre DATA_DIR, hermetische Umgebung, nur einmal pro Prozess
+│   ├── core/                     # Kern-Tests (Express und In-Memory-ctx)
+│   │   ├── harness.js            # gleiche client()-API für Express-Testserver, In-Memory-ctx und sql.js
+│   │   ├── scenarios.js          # Handler-Szenarien (laufen gegen alle Wege)
+│   │   ├── parity.test.js        # vergleicht die JSON-Antworten beider Wege
+│   │   └── noNodeApi.test.js     # lädt core/ in einem vm-Kontext ohne Node-Globals
+│   ├── anime/                    # Gateway-Tests (helpers.js fakeFetch + Memory-Core, nie echte APIs)
+│   ├── fixtures/                 # aufgezeichnete AniList-, Jikan- und MAL-Antworten
+│   └── browser/                  # Puppeteer-Browsertests (nicht in npm test), alle über run.js gegen einen isolierten Server
+│       ├── run.js                # Server mit temporärem DATA_DIR + freiem Port + Wegwerf-Admin, führt das Skript aus, räumt auf
+│       ├── chrome.js             # findet Chrome/Chromium/Edge/Brave (CHROME_BIN hat Vorrang)
+│       ├── helpers.js            # Klick-/Warte-Helfer, die werfen; watchPage/assertClean; waitForToast
+│       ├── e2e-suite.js          # npm run test:e2e
+│       ├── release-radar.js      # npm run test:radar
+│       ├── anime.js              # npm run test:anime
+│       ├── performance-suite.js  # npm run test:perf
+│       └── deep-e2e.js           # npm run test:deep (Rundgang mit Bildschirmfotos aller Ansichten + Mobile, Querformat, Tablet, Regal 360 px, Kopf-Prüfungen); exportiert focusUnderHeader, shelfProblems
+├── frontend/                     # React-Frontend (Web-Build und App-Build)
+│   ├── index.html                # HTML-Einstieg (Markup des LoadingScreen in #root, color-scheme dark)
+│   ├── vite.config.js            # Proxy auf :3000, sw.js-Stempel + Precache-Liste, build.target es2020/safari14, precompress-assets, Manifest, App-Modus (dist-app, CSP), Vitest-Block
+│   ├── tailwind.config.js        # Tailwind 3 mit Sonderwerten (z-60, slate-850 …) und der Variante short: (max. 500 px Höhe)
+│   ├── precompress.js            # .br/.gz neben jedes komprimierbare Asset > 1 KB
+│   ├── bundle-budget.json        # gzip-Budget je Chunk + initial-load
+│   ├── public/                   # statische Dateien
+│   │   ├── sw.js                 # Service Worker (Version und Precache-Liste beim Build ersetzt)
+│   │   └── manifest.json         # PWA-Manifest: id, Icons (any + maskable), Shortcuts, share_target
+│   └── src/                      # Quellcode
+│       ├── main.jsx              # React-Root; installiert im App-Build die Hüllen (Capacitor/Electron) vor dem Render, Service Worker, Prefetch
+│       ├── App.jsx               # Routing, Auth-/Setup-Prüfung, Offline-Modus, Logout, /server, /lokal
+│       ├── AppErrorBoundary.jsx  # Fehlergrenze: veralteter Chunk → einmal neu laden, sonst Fehlerbildschirm
+│       ├── appShell.js           # Hilfen der App-Hülle: ausstehender Logout, Cover-Cache löschen, Rücksprungziele, runBeforeLogout, MESSAGES
+│       ├── Dashboard.jsx         # Container des Dashboards (Hooks + Komponenten, ?view=, Dialoge)
+│       ├── MangaDetail.jsx       # Container der Detailansicht
+│       ├── Login.jsx             # Login-Maske
+│       ├── Setup.jsx             # Ersteinrichtung (Einrichtungscode, Admin, Quellen verbinden)
+│       ├── fonts/                # selbst gehostete Plus Jakarta Sans (woff2, OFL.txt)
+│       ├── index.css             # globale Styles, Fokusring, Spines, Scrollbars, reduced motion, Dialog-Overlay, hit-44, Statusleisten-Abdeckung, scroll-padding
+│       ├── app/                  # App-Build (Electron/Capacitor): Server, Verbindung, Standalone-Bildschirme
+│       │   ├── serverStore.js    # gespeicherte Server ({ id, name, urls, tokenOrigins, instanceId … }), Speicher-Adapter, isSecureEnough
+│       │   ├── connection.js     # Verbindungsmanager (Health-Check mit instance_id), getActiveBase/getToken für utils/api.js
+│       │   ├── useConnection.js  # React-Anbindung des Verbindungszustands
+│       │   ├── ServerScreen.jsx  # Route /server: Serverliste, anlegen/bearbeiten, Verbindungslink, entfernen
+│       │   ├── deepLink.js       # manga-shelf://connect?url=…&name=…&id=… lesen/bauen
+│       │   ├── qr.js             # QR-Encoder ohne Abhängigkeiten
+│       │   ├── csp.js            # CSP-Meta des App-Builds (connect-src ohne blob:/data:, Gotcha 34)
+│       │   ├── downloadManager.js # Downloads mit Token (Modulzustand, Toast, Sitzungs-Epoche)
+│       │   ├── useDownload.js    # React-Anbindung des Download-Managers
+│       │   ├── useOutbox.js      # Zähler der vorgemerkten Änderungen
+│       │   ├── openExternal.js   # Links nach außen (Shells setzen setOpenExternal)
+│       │   ├── LocalSetup.jsx    # Route /lokal: Einrichtung ohne Server
+│       │   ├── LocalScreen.jsx   # Route /server im Standalone-Modus: Profil, Quellen, Sicherung, Übernahme, Modus wechseln
+│       │   ├── LocalOffer.jsx    # „Ohne Server nutzen“ auf dem Server-Bildschirm
+│       │   ├── SourcesPanel.jsx  # „Quellen & Schlüssel“ ohne Server
+│       │   ├── takeover.js       # Übernahmewege: remoteLogin, inspectTransfer/finishTransfer, mergeCsv, pullFromServer
+│       │   ├── TakeoverDialog.jsx # Dialoge „Auf Server übertragen“, „Zusammenführen“, „Vom Server holen“
+│       │   ├── takeoverTexts.js  # Texte der Übernahme-Dialoge
+│       │   └── shell/            # Hüllen der nativen Apps
+│       │       ├── electron.js   # Electron: Speicher-Adapter (safeStorage), openExternal, Deep Links, Recheck nach Ruhezustand
+│       │       └── capacitor.js  # Capacitor: installCapacitorShell() (Preferences, sicherer Speicher, Links, Downloads über installObjectUrls, Zurück-Taste, Deep Links, Netzwerk)
+│       ├── local/                # Standalone-Modus (nur App-Build): der Kern aus ../core läuft im Gerät
+│       │   ├── profile.js        # Modus (mangashelf_mode = 'local') und lokales Profil
+│       │   ├── localTransport.js # Modus local von utils/api.js: /api/… -> Kern im Gerät -> Response
+│       │   ├── boot.js           # lädt sql.js + wasm; im Web-Build durch einen Stub ersetzt
+│       │   ├── runtime.js        # createLocalRuntime({ SQL, store, http, files?, locks?, channel? }): manga.db mit core/schema.js, dispatch(), Schreib-Hook + Speichern, Sperre gegen zweites Fenster, Papierkorb-Bereinigung
+│       │   ├── localServer.js    # Server-Routen im Gerät (/auth/me, /setup/status, /users, /upload, /auth/api-keys …)
+│       │   ├── store.js          # Schlüssel-Wert-Speicher (IndexedDB mangashelf-local: db, files, secrets; lockName; memoryStore()), LOCAL_STORE_EVENT, Texte der Speicher-Hinweise
+│       │   ├── files.js          # ctx.files: Uploads als Blobs, Anzeige über Object-URLs
+│       │   ├── http.js           # ctx.http: fetch vom Gerät, CORS_BLOCKED als deutscher Fehler
+│       │   ├── credentials.js    # API-Schlüssel außerhalb von manga.db
+│       │   ├── backupZip.js      # ZIP im Backup-Format des Servers (fflate)
+│       │   ├── sanitize.js       # sanitizeImportedDatabase(conn): eingespielte Datenbank ohne Passwort-Hashes, API-Schlüssel, Kalender-Abos, Secrets; LOCAL_PASSWORD_HASH
+│       │   └── capacitor.js      # native Standalone-Adapter (Directory.Data, sicherer Speicher, natives fetch)
+│       ├── hooks/                # Zustand & Aktionen (je ein Thema)
+│       │   ├── useMangaList.js   # Regalliste (Cache, Offline-Kopie), Reihe löschen mit Papierkorb-Toast
+│       │   ├── useCollectionFilters.js # Suche, Status-/Verlags-/Sammelstand-/Autor-/Genre-Filter, Sortierung, Gruppierung, Ansicht (localStorage + URL), Verlagsnamen
+│       │   ├── useShoppingList.js # Einkaufsliste, Schnellkauf über die Outbox, buyingIds, shoppingError
+│       │   ├── useReleaseRadar.js # Release-Radar und Monatskalender (radarError/mpError, Request-Folge)
+│       │   ├── useAnimeList.js   # Anime-Liste, Quellenzustand, Fortschritt optimistisch, Offline-Kopie
+│       │   ├── useOfflineStatus.js # Netzwerkstatus, Offline-Kopie, refreshError
+│       │   ├── usePwaInstall.js  # „App installieren“, iOS-Hinweis, watchServiceWorkerUpdates
+│       │   ├── usePullToRefresh.js # Ziehen zum Aktualisieren, useForegroundRefresh
+│       │   ├── useDashboardKeyboard.js # / und Escape (respektiert data-busy und offene Dialoge)
+│       │   ├── useDialogA11y.js  # Fokus, Tab-Falle, Rückgabe, History-Eintrag je Dialog
+│       │   ├── useKeyboardOpen.js # useKeyboardOpen (untere Leisten bei offener Tastatur ausblenden), useRevealFocusedField, isTypingTarget
+│       │   ├── useTabList.js     # ARIA-Reiter (roving tabIndex, Pfeiltasten)
+│       │   ├── useLatestRequest.js # begin() bricht die vorige Anfrage ab ({ signal, isCurrent })
+│       │   ├── useProgressiveList.js # lange Listen seitenweise (Sentinel, showMore)
+│       │   ├── useMangaData.js   # Reihe laden, Fehlerzustände, Bearbeiten-Formular, Cover-Upload (abbrechbar), Lookup
+│       │   ├── useVolumeFilters.js # Bandfilter, Bandsuche (createVolumeSearch), Sortierung, Ansichtsmodus
+│       │   ├── useMpGaps.js      # Manga-Passion-Lücken, Edition bestätigen/wählen, Autofill
+│       │   ├── useVolumeActions.js # Band anlegen, Umschalter über die Outbox, löschen (Papierkorb-Toast), handleBulkEdit
+│       │   ├── useVolumeSelection.js # Auswahlmodus, Shift-Bereich, „Alle sichtbaren“
+│       │   ├── useVolumeGallery.js # Foto-Lightbox öffnen
+│       │   ├── useShelfLayout.js # Regal-Modus, Skalierung, Zeilenaufteilung nach gemessener Breite (shelfMeasureRef)
+│       │   ├── useDetailKeyboard.js # Escape, J/K/Leertaste/E in der Regalansicht (Pfeiltasten in LightboxGallery)
+│       │   └── useVolumeEditForm.js # Band-Editor: Formular, Fotos, Autofill, buildSaveBody/rebaseForm, Speichern, Löschen
+│       ├── utils/                # Logik ohne React
+│       │   ├── api.js            # API-Client: apiFetch/get/post/put/del/upload, Transport web/remote/local, TIMEOUTS, assetUrl/assetImgProps, downloadFile
+│       │   ├── notify.js         # Toasts: notify.error/success/info/update/dismiss/subscribe, notifyResponseError
+│       │   ├── format.js         # alle Zahlen-, Preis- und Datumsformate (Intl, de-DE)
+│       │   ├── search.js         # gemeinsame Suche: foldText, createSearch, prepareQuery, compareNatural
+│       │   ├── offlineStore.js   # IndexedDB mangashelf-offline (kv + outbox), Offline-Kopie, ISBN-Index, patchCachedManga
+│       │   ├── outbox.js         # Outbox: Umschalter und Käufe sofort zeigen, senden oder vormerken
+│       │   ├── volumePatch.js    # wendet eine Änderung rein funktional auf Detail und Regalliste an
+│       │   ├── dataCache.js      # In-Memory-Kopien der Serverantworten je Benutzer mit ETag
+│       │   ├── shoppingQueue.js  # localToday, sendPurchase, Statuszuordnung (alte Warteschlange wird in die Outbox übernommen)
+│       │   ├── storageKeys.js    # localStorage-Schlüssel, die clearOfflineData löscht (Anime-Cache)
+│       │   ├── viewState.js      # Ansichtszustände des Tabs (Scrollpositionen, Seitenzahl), clearViewState
+│       │   ├── volumeHelpers.js  # Anzeigenamen, Typ-/Editions-Logik, Fortschritt, Lücken-Map, Verlagsnamen (setPublisherNames)
+│       │   ├── volumeFormHelpers.js # buildVolumeForm, applyLookupToForm (Autofill-Regeln)
+│       │   ├── scanHelpers.js    # Scan-Logik: Prefill, Laden-Scan (classifyShopScan, mergeScanEntry), ISBN-Index, liveScanSupported
+│       │   ├── radarHelpers.js   # Release-Radar ohne React (Filter, Statusgruppen, Request-Folge, localISODate)
+│       │   ├── collectionHelpers.js # Regal-Logik: filterAndSortMangas (seriesSearch), COLLECT_FILTERS, groupMangas, URL-Filter, isSeriesComplete
+│       │   ├── seriesMeta.js     # Sammelstatus (COLLECTING_OPTIONS), splitAuthors, authorShelfPath (für die Detailseite)
+│       │   ├── priority.js       # Wunsch-Priorität (PRIORITY_OPTIONS, isWishedSeries)
+│       │   ├── tags.js           # Spiegel von core/lib/tags.js
+│       │   ├── animeHelpers.js   # Anime: Filter/Sortierung, Countdown, Fortschritt
+│       │   ├── imageResize.js    # prepareImageForUpload (1600 px, JPEG, entfernt EXIF)
+│       │   ├── haptics.js        # haptic('success' / 'error' / 'tap'): Vibration, auf iOS optional leiser Klick
+│       │   └── shareList.js      # Einkaufsliste als Text (teilen, kopieren, Datei)
+│       ├── __tests__/            # Vitest-Komponenten- und Hook-Tests (setup.js, fakeResponse.js, toastLog.js, localFakes.js)
+│       └── components/           # Komponenten
+│           ├── common/           # gemeinsame Bausteine
+│           │   ├── BarcodeScannerButton.jsx # Scan-Knopf: Live-Scanner im sicheren Kontext, nativ (ML Kit) in der App, sonst Foto
+│           │   ├── LiveScanner.jsx # Vollbild-Live-Scanner (BarcodeDetector bzw. ZXing), eigener Lazy-Chunk
+│           │   ├── BottomNav.jsx # untere Navigation unter 640 px (immer gemountet, darüber hidden ohne IDs), useIsNarrow
+│           │   ├── OfflineBanner.jsx # Offline-Hinweis unten, setzt --toast-offset
+│           │   ├── Toaster.jsx   # Toasts aus utils/notify.js (z-[70], über einer sichtbaren #bulk-action-bar)
+│           │   ├── PageChrome.jsx # SkipLink, useDocumentTitle, usePageHeading
+│           │   ├── CoverImage.jsx # Cover-<img> mit eigenem Fehlerzustand und Kandidatenliste
+│           │   ├── ConnectQr.jsx # QR-Code „Mit App verbinden“
+│           │   ├── FilePickerButton.jsx # Dateiauswahl als echter Button
+│           │   ├── Spinner.jsx   # Lade-Kreisel mit role="status"
+│           │   └── lang.js       # langFor(text): lang="ja" für Kana/Kanji
+│           ├── dashboard/        # Dashboard-Ansichten
+│           │   ├── dashboardShell.js # APP_VERSION, MAIN_VIEWS, parseInitialView/viewSearch, roleLabel, scanDashboardAction
+│           │   ├── DashboardHeader.jsx # Kopfzeile, Suche + Scanner, CSV/Backups/Benutzer/System, Verbindungs-Pille, Menü
+│           │   ├── MainViewSwitcher.jsx # Reiter Sammlung / Einkaufsliste / Release-Radar / Anime
+│           │   ├── CollectionStats.jsx # Kennzahlen-Leiste
+│           │   ├── CollectionToolbar.jsx # Status-Chips, Verlag, Sammelstand, Genre, Sortierung, Gruppieren, Autor-Chip, Ansicht
+│           │   ├── MangaCollectionGrid.jsx # Raster/Liste seitenweise, Gruppen, Scrollposition
+│           │   ├── MangaCard.jsx # Rasterkarte (React.memo); der Link deckt die Karte per ::after ab, die Autor-Knöpfe liegen darüber im Rahmen
+│           │   ├── MangaRow.jsx  # Tabellenzeile der Listenansicht (React.memo)
+│           │   ├── DashboardFooter.jsx # Version, Online-Status, Offline-Kopie, Outbox, App-Installation; im Standalone-Modus Profil und Speicherstand des Geräts
+│           │   ├── ShoppingListView.jsx # Einkaufsliste, Wunschreihen, Laden-Scan, Teilen/Drucken
+│           │   ├── ReleaseRadarView.jsx # Release-Radar (Kalender / Meine Vorbestellungen)
+│           │   ├── ContinueReading.jsx # Leiste „Weiterlesen“ über der Toolbar (continueReadingItems, CONTINUE_READING_LIMIT = 3)
+│           │   ├── CsvExchangeModal.jsx # CSV-Export und -Import (Editoren; Gäste nur Export)
+│           │   ├── ScanCandidatesDialog.jsx # Barcode-Scan mit mehreren passenden Reihen
+│           │   ├── AnimeView.jsx # Anime-Reiter
+│           │   ├── AnimeCard.jsx # Anime-Karte
+│           │   └── radar/        # Teile des Radars
+│           │       ├── RadarTabs.jsx # Reiter des Radars
+│           │       ├── MpMonthNav.jsx # Monatsnavigation des Kalenders
+│           │       ├── MpFilters.jsx # Filter des Kalenders
+│           │       ├── MpTimeline.jsx # Kalender-Einträge (Wunschliste-/Sammelstatus-Badges)
+│           │       ├── PersonalSummary.jsx # Budget und CalendarFeedPanel („Kalender abonnieren“)
+│           │       ├── PersonalFilters.jsx # Filter der Vorbestellungen
+│           │       ├── PersonalTimeline.jsx # Vorbestellungen nach Monaten
+│           │       ├── PersonalDateChanges.jsx # Banner „Termin übernehmen“
+│           │       └── useRadarDateChanges.js # Terminabgleich (einmal pro Radar-Besuch)
+│           ├── detail/           # Detailansicht
+│           │   ├── MangaHeroCard.jsx # Kopf der Reihe, Bearbeiten-Formular, Tags, Autor-Links, Wunschliste
+│           │   ├── CollectingControl.jsx # Sammelstatus (aktiv/pausiert/abgebrochen)
+│           │   ├── ReaderBar.jsx # Leser-Umschalter
+│           │   ├── OwnerFilterBar.jsx # Besitz pro Person
+│           │   ├── OwnerBadges.jsx # Besitzer-Marken
+│           │   ├── GapNotices.jsx # Banner: Doppelte, Edition, Lücken
+│           │   ├── VolumeFilterBar.jsx # Filter-Chips, Manga-Passion-Pille, „Auswählen“
+│           │   ├── BulkActionBar.jsx # Leiste der Sammelbearbeitung
+│           │   ├── DetailBottomBar.jsx # Handy-Leiste der Reihenseite (Zurück, Band scannen, Band hinzufügen)
+│           │   ├── AddVolumeBar.jsx # einzelnen Band anlegen (Upload abbrechbar)
+│           │   ├── VolumeShelfView.jsx # Buchrücken-Regal mit Ghost-Spines
+│           │   ├── ShelfSpine.jsx # ein Buchrücken
+│           │   ├── VolumeGridView.jsx # Kartenansicht
+│           │   ├── VolumeListView.jsx # Listenansicht
+│           │   ├── volumeViewHelpers.js # getVolumeBadge, formatEuro, formatShortDate, gapLabel, mpPillText
+│           │   ├── VolumeEditModal.jsx # Band-Editor (Rahmen, key je Band)
+│           │   ├── volumeEdit/   # Teile des Band-Editors (EditHeader, AutofillPanel, TypeNumberFields, StatusPriceFields, DetailFields, OwnersField, EditFooter)
+│           │   │   └── editorUtils.js # Preis-/Formularprüfung, buildSaveBody, rebaseForm, ownersUndoBody
+│           │   ├── VolumePhotoManager.jsx # Foto-Manager
+│           │   ├── LightboxGallery.jsx # Vollbild-Galerie (Portal, Pfeiltasten, Wischen)
+│           │   ├── BatchAddModal.jsx # Bände 1..N anlegen
+│           │   ├── BatchReadModal.jsx # Lesestatus in Serie
+│           │   ├── GapFillModal.jsx # eine Lücke füllen
+│           │   └── MpEditionModal.jsx # Edition wählen, synchronisieren, anreichern
+│           └── modals/           # Dialoge des Dashboards
+│               ├── AddMangaModal.jsx # Reihe anlegen (Manga Passion + AniList/MAL parallel, Scan-Prefill, Wunschliste)
+│               ├── AccountModal.jsx # Konto: Passwort + API-Schlüssel (useTabList)
+│               ├── ChangePasswordModal.jsx # nur Re-Export von AccountModal
+│               ├── ApiKeyCard.jsx # Karte je Anbieter (useApiKeys)
+│               ├── UserManagementModal.jsx # Benutzer anlegen, Rolle, Passwort-Reset, löschen
+│               ├── BackupRestoreModal.jsx # Snapshots, ZIP-Upload, zweistufige Wiederherstellung, Rückgängig, CSV-Reiter
+│               ├── backup/       # Teile des Backup-Dialogs (SnapshotList, RestoreConfirm, CsvImportPanel, DownloadLink)
+│               │   └── backupHelpers.js # Fehlertexte, Manifest-Zusammenfassung, Undo-Eintrag
+│               ├── BackupExportModal.jsx # Sicherung exportieren/importieren im Standalone-Modus
+│               ├── StatsModal.jsx # Statistik: Rahmen, Reiter, Laden/Fehler, Startdatum, Werkzeuge
+│               ├── stats/        # KpiCards, TopSeriesCard, PublisherTab, ReadingTab, ReadingOverTime, AnimeStatsCard
+│               ├── statsFormat.js # Formatierung der Statistik (Hüllen um utils/format.js), cssPct
+│               ├── SpendingCard.jsx # Ausgaben nach Kaufdatum
+│               ├── OwnerStatsCard.jsx # Besitz pro Nutzer
+│               ├── SystemModal.jsx # Admin „System“
+│               ├── ToolDialog.jsx # Hülle der Werkzeug-Dialoge
+│               ├── TrashModal.jsx # Papierkorb
+│               ├── PublishersModal.jsx # Verlage zusammenführen
+│               ├── CleanupModal.jsx # Sammlung aufräumen (Datenqualität)
+│               ├── AddAnimeModal.jsx # Anime hinzufügen (Suche oder manuell)
+│               └── AnimeDetailModal.jsx # Anime-Detail mit Fortschritt
+├── desktop/                      # Desktop-App (Electron, electron-builder); eigene package.json, Version = Wurzel
+│   ├── main.js                   # Hauptprozess: Betriebsart, Server über index.js start()/stop(), Fenster, Menü, Tray, app://, Deep Links, IPC
+│   ├── preload.js                # window.mangashelfDesktop (Brücke)
+│   ├── modes.js                  # rein: Betriebsarten local / client / server, Einstellungen normalisieren, parseArgs, resolveRun
+│   ├── menu.js                   # Menü-Vorlage (deutsch, „&&“ zeigt „&“)
+│   ├── tray.js                   # Tray-Vorlage
+│   ├── lib/                      # server.js, secureStore.js, settings.js, appProtocol.js (originOf), lan.js, pages.js, qrCode.js, autostart.js, paths.js, jsonFile.js
+│   ├── ui/                       # dialogPreload.js (Adresse, Port)
+│   ├── scripts/                  # Build-Skripte
+│   │   ├── stage.js              # baut dist/stage/ (Backend aus "files", Web-Build, App-Build)
+│   │   ├── builder.js            # ruft electron-builder; ohne Signatur-Variablen CSC_IDENTITY_AUTO_DISCOVERY=false (unsigniert)
+│   │   └── smoke.js              # CI-Smoke: entpackte App mit --server-only
+│   ├── electron-builder.yml      # Ziele je OS, extraResources, Schema manga-shelf://
+│   ├── build/                    # Icons, entitlements.mac.plist
+│   ├── flatpak/                  # Flatpak-Manifest, .desktop, metainfo
+│   └── test/                     # node:test über die reinen Teile + Server-Steuerung
+├── mobile/                       # Android/iPhone-App (Capacitor 7, App-ID de.mangashelf.app)
+│   ├── capacitor.config.ts       # webDir www, androidScheme https, CapacitorHttp aktiv, backgroundColor #0b0f19, android.adjustMarginsForEdgeToEdge auto
+│   ├── package.json              # Plugins + Skripte (build:web, version:sync, sync, build:android, build:ios, smoke:*, test)
+│   ├── src/                      # Quellen der Brücke
+│   │   └── native-bridge.mjs     # bündelt die Plugins als window.mangashelfNative
+│   ├── scripts/                  # Build-Skripte
+│   │   ├── prepare-web.js        # www/ = App-Build + native-bridge.js
+│   │   ├── sync-version.js       # Version der Wurzel → build.gradle, project.pbxproj, mobile/package.json
+│   │   ├── build-android.js      # APK + AAB (Signierung aus ANDROID_*-Secrets)
+│   │   ├── build-ios.js          # IPA (Signierung aus IOS_*-Secrets)
+│   │   ├── smoke.js              # CI: cap doctor, cap sync, Debug-Builds
+│   │   └── lib.js                # gemeinsame Helfer
+│   ├── test/                     # Tests
+│   │   └── scripts.test.js       # node:test für Skripte und native Einstellungen
+│   ├── android/                  # natives Android-Projekt (eingecheckt)
+│   └── ios/                      # natives iOS-Projekt (eingecheckt)
+└── data/                         # persistente Daten (DATA_DIR, in .gitignore)
+    ├── manga.db                  # SQLite-Hauptdatenbank (WAL)
+    ├── secret.key                # Signatur-Schlüssel der Sitzungen (0600, nie im Backup)
+    ├── uploads/                  # Cover und Bandbilder (<UUID>.<ext>)
+    ├── backups/                  # Snapshots (*.zip + Sidecar *.json)
+    └── temp/                     # Staging für Backups, Restores und Prüfungen
 ```
+
+* **Erzeugte Ordner (nicht im Repository):** `frontend/dist/` (Web-Build), `frontend/dist-app/` (App-Build), `dist_pack/` und `pterodactyl-manga-shelf.zip` (`npm run package`), `dist/server/` (SEA-Bundle), `data-dev/` (Datenordner von `npm run dev` mit Demo-Logins im Klartext in `seed-users.json`; nie committen), `desktop/dist/`, `mobile/www/`, `mobile/build/out/`.
+* **`data/secret.key`:** Signatur-Schlüssel der Sitzungen (0600, nicht im Backup-ZIP, nicht in Git). Löschen = neuer Schlüssel, alle Sitzungen enden, gespeicherte API-Schlüssel und Kalender-Abos sind danach nicht mehr lesbar.
+* **Ausgelieferte Backend-Dateien:** Eine neue Top-Level-Backenddatei oder ein neuer Backend-Ordner wird nur in `package.json` → `files` eingetragen; `package.js`, das Dockerfile (Stage `backend-files` über `scripts/stage-backend.js`) und `desktop/scripts/stage.js` lesen dieselbe Liste, das SEA-Bundle folgt den `require`s. `test/package.test.js` prüft, dass jede lokale `require`-Abhängigkeit einer ausgelieferten Datei mit ausgeliefert wird. Aus `scripts/` steht nur `scripts/admin.js` in `files`.
 
 ---
 
-## 3. Datenbank-Schema & Datenmodelle (`db.js`)
+## 3. Datenbank-Schema & Datenmodelle (`core/schema.js`, Verbindung in `db.js`)
 
-Die SQLite-Datenbank befindet sich in `./data/manga.db`.
+Die Datenbank liegt in `<DATA_DIR>/manga.db` (Standard `./data`). `core/schema.js` läuft auf jeder Verbindung mit `prepare`/`exec` (Server, In-Memory-Tests, sql.js im Gerät) und loggt über `options.log`.
 
 ### Tabellen-Übersicht
 
 1. **`users`**
-   * `id` (INTEGER, PK, AI)
-   * `username` (TEXT, UNIQUE, NOT NULL)
-   * `password_hash` (TEXT, NOT NULL)
-   * `role` (TEXT, DEFAULT `'editor'`) – Werte: `'admin'`, `'editor'`, `'visitor'`
-   * `created_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP)
-
+   * `id` (INTEGER, PK), `username` (TEXT, UNIQUE, NOT NULL; zusätzlich Unique-Index `idx_users_username_nocase` auf `username COLLATE NOCASE`, siehe Migration 14), `password_hash`, `role` (`admin`, `editor`, `visitor`, `guest`; Standard `editor`), `created_at`.
+   * `password_changed_at` (INTEGER, ms, Migration 9) ist zugleich die **Sitzungsversion**: jedes JWT trägt sie als `pv` und gilt nur, solange sie gleich ist. Neue Werte sind streng steigend (`max(now, alt + 1)`); Passwortänderung, Admin-Reset, Restore und „Alle Sitzungen beenden“ erhöhen sie.
 2. **`mangas`**
-   * `id` (INTEGER, PK, AI)
-   * `title` (TEXT, NOT NULL)
-   * `alt_title` (TEXT)
-   * `author` (TEXT)
-   * `publisher` (TEXT)
-   * `language` (TEXT)
-   * `status` (TEXT) – z. B. `'Laufend'`, `'Abgeschlossen'`, etc.
-   * `tags` (TEXT) – z. B. kommagetrennte Genres / Tags
-   * `total_volumes` (INTEGER) – Geplante / bekannte Gesamtbandanzahl
-   * `owned_volumes` (INTEGER, DEFAULT 0) – Automatisch oder manuell gezählt
-   * `manga_passion_id` (INTEGER, NULL) – Verknüpfte deutsche Manga-Passion-Edition (Index `idx_mangas_passion_id`); wird automatisch nur bei eindeutigem Treffer gesetzt (siehe Fall K)
-   * `manga_passion_edition_data` (TEXT, NULL) – JSON-Metadaten der verknüpften Edition
-   * `description` (TEXT)
-   * `cover_image` (TEXT) – Relativer Pfad, z. B. `uploads/xyz.jpg`
-   * `banner_image` (TEXT) – Optionales Bannerbild
-   * `created_at`, `updated_at` (DATETIME)
-   * `updated_by` (INTEGER, FK -> `users.id`)
-
+   * `id`, `title` (NOT NULL), `alt_title`, `author`, `publisher` (normalisiert, siehe `publisher_aliases`), `language`, `description`, `cover_image`, `banner_image` (`/uploads/<name>` oder eine fremde URL), `created_at`, `updated_at`, `updated_by` (FK `users.id`).
+   * `status` – Erscheinungsstatus laut Verlag: `Laufend`, `Abgeschlossen`, `Pausiert`, `Abgebrochen`, `Geplant` (`MANGA_STATUSES` in `core/lib/validate.js`; `Unbekannt` von Manga Passion wird als `Laufend` gespeichert). Ältere Zeilen können andere Werte tragen; `PUT` lässt einen unverändert zurückgeschickten Altwert durch.
+   * `tags` – kommagetrennter Text, beim Speichern normalisiert („Abenteuer, Fantasy“, `core/lib/tags.js`).
+   * `total_volumes` (INTEGER, NULL) – bekannte Gesamtbandzahl 1–5000; `''`, `null` und `0` leeren sie (`parseTotalVolumes`).
+   * `owned_volumes` (INTEGER, DEFAULT 0) – Anzahl Bände mit Status `Vorhanden`, gepflegt von SQLite-Triggern (Migration 16). Nie von Hand setzen; `PUT /api/mangas/:id` ignoriert das Feld.
+   * `manga_passion_id` (INTEGER, NULL) – verknüpfte deutsche Manga-Passion-Edition (Index `idx_mangas_passion_id`), automatisch nur bei eindeutigem Treffer (Fall K); `manga_passion_edition_data` (TEXT, Altfeld, in keiner Antwort mehr).
+   * `wish_priority` (INTEGER, NULL, Migration 17) – Wunschreihe: NULL = nicht gewünscht, sonst 0–3 wie `volumes.priority`. Eine Reihe ist **Wunschreihe**, solange das Feld gesetzt ist und kein Band `Vorhanden` ist (`wished` in `GET /api/mangas`). Keine Kopplung an `status`.
+   * `collecting` (TEXT NOT NULL DEFAULT `'aktiv'`, Migration 20) – Sammelstatus des Haushalts: `aktiv`, `pausiert`, `abgebrochen` (Gotcha 33).
 3. **`volumes`**
-   * `id` (INTEGER, PK, AI)
-   * `manga_id` (INTEGER, FK -> `mangas.id` ON DELETE CASCADE)
-   * `volume_number` (TEXT, NOT NULL) – String, um z. B. "1", "0", "12.5" oder "Special" zu erlauben
-   * `isbn` (TEXT)
-   * `price` (REAL) – Kaufpreis in €
-   * `release_date` (TEXT) – Konkretes Erscheinungsdatum (Format `YYYY-MM-DD` oder `YYYY-MM`) für Release-Radar
-   * `release_year` (INTEGER)
-   * `condition` (TEXT) – Zustand (z. B. "Sehr gut", "Neu")
-   * `pages` (INTEGER) – Seitenanzahl (wichtig für Lesestatistiken)
-   * `publisher` (TEXT)
-   * `purchase_date` (TEXT) – Kaufdatum (Format `YYYY-MM-DD`)
-   * `status` (TEXT) – z. B. "Vorhanden", "Fehlt", "Vorbestellt", "Erscheint bald", "Bestellt"
-   * `notes` (TEXT)
-   * `cover_image` (TEXT)
-   * `images` (TEXT) – JSON-String für Zusatzbilder / Galerie
-   * `priority` (INTEGER, DEFAULT 0) – Wunsch-Priorität für Bände mit Status `Fehlt`: 0 keine, 1 niedrig, 2 mittel, 3 hoch (Einkaufsliste: Badge + „Wichtigste zuerst“)
-   * `target_price` (REAL, NULL) – Zielpreis (z. B. gebraucht); wird in der Einkaufsliste als „Zielpreis“ gezeigt
-   * `type` (TEXT, DEFAULT `'volume'`) – Werte: `'volume'` (Einzelband), `'special_edition'` (Special / Limited Edition), `'schuber'` (Sammelschuber / Box Set), `'special'` (Sonderband / Extra / Fanbook)
-   * `created_at` (DATETIME)
+   * `id`, `manga_id` (FK, ON DELETE CASCADE), `volume_number` (TEXT, NOT NULL: „1“, „0“, „12.5“, „Schuber 3“, „Artbook“; reguläre Bände ohne „Band “-Präfix), `type` (`volume`, `special_edition`, `schuber`, `special`; Standard `volume`), `status` (`VOLUME_STATUSES`: `Vorhanden`, `Fehlt`, `Vorbestellt`, `Erscheint bald`, `Bestellt`), `isbn` (normalisiert, Index `idx_volumes_isbn`), `price`, `target_price` (Zielpreis), `priority` (0–3, Wunsch-Priorität für `Fehlt`), `release_date` (`JJJJ`, `JJJJ-MM` oder `JJJJ-MM-TT`), `release_year`, `purchase_date`, `condition`, `pages`, `publisher` (nur abweichender Bandverlag), `notes`, `cover_image`, `images` (JSON-Array), `manga_passion_volume_id` (verknüpfter MP-Band), `created_at`.
+   * `number_sort` (REAL, NULL, Migration 15) – numerischer Wert der Bandnummer („Band 12“ = 12, „12.5“ = 12.5, Etiketten = NULL), gepflegt von Triggern, Index `idx_volumes_manga_number (manga_id, type, number_sort)`. **Regel:** Bandnummer-Logik nie per `CAST`/`GLOB` im SQL, immer über `core/lib/volumeNumber.js` (`regularNumberedSql`, `volumeOrderSql`). Die Spalte ist intern und erscheint in keiner Antwort.
+   * `purchase_date` des Bands: der erste Kauf über die Besitz-Route füllt es (überschreibt nie); gibt ein Besitzer ab und bleiben andere, gilt das früheste Kaufdatum der verbleibenden (`purchaseDateFromRemainingOwners`); gibt der letzte ab, wird es geleert.
+4. **`volume_reads`** – Lesestand **pro Benutzer**: `volume_id`, `user_id` (beide FK, CASCADE), `read_at`; PK (`volume_id`, `user_id`). Lese-Einträge bleiben beim Abgeben eines Bandes erhalten und zählen wieder, sobald er wieder besessen wird. „Gelesen“ ist **kein** Status.
+5. **`volume_owners`** (Migration 11) – Besitz pro Benutzer: `volume_id`, `user_id` (PK zusammen, CASCADE), `price`, `purchase_date`, `condition`, `created_at`. `volumes.status = 'Vorhanden'` heißt „mindestens ein Besitzer“; `core/lib/owners.js` hält beides synchron (Status Vorhanden ohne Besitzer → der Handelnde wird Besitzer; Status ≠ Vorhanden → alle Besitzer entfallen; letzter Besitzer weg → `Fehlt`). Besitzerlisten sind überall nach `created_at, rowid` sortiert. `volume_owners.price` ist ein Schnappschuss ohne Editor; Statistiken rechnen mit `volumes.price`. Ändert `PUT /api/volumes/:id` Preis, Kaufdatum oder Zustand, übernehmen Besitzerzeilen mit dem alten Bandwert den neuen. Beim Löschen eines Benutzers gehen seine Einzelbesitze an den löschenden Admin.
+6. **`app_settings`** – `key`/`value`: `collection_start_date` (neue Datenbanken ohne Eintrag: `derivedStartDate()` in `core/handlers/stats.js` nimmt das früheste Kaufdatum – reines Jahr ab 1.1., Monat ab dem 1. – bzw. das früheste Anlagedatum einer Reihe oder eines Bands, sonst heute; ältere Datenbanken verlieren den alten Standard `2021-04-09` per Migration 24, außer ein Band wurde davor gekauft oder angelegt; ein selbst gewähltes Datum bleibt; `PUT /api/stats/settings` mit `null` oder `''` löscht den Eintrag), `instance_id` (UUID der Instanz, reist mit der Datenbank), `revoked_sessions` (per Logout gesperrte Tokens bis zu ihrem Ablauf, max. 5000), `calendar_feed:<sha256>` (Kalender-Abos, Fall R), `uploads_metadata_stripped`, `anime_refresh_day`, `sources_notice_shown`. Ein alter `jwt_secret`-Eintrag wird beim Start gelöscht (Gotcha 6).
+7. **`manga_passion_cache`** – `cache_key` (z. B. `releases_2026_10`, `mp_search_q_<anfrage>`, `mp_edition_vols_<id>`, `mp_edition_info_<id>`), `json_data`, `created_at` (Unix-Zeit, 12-h-Cache).
+8. **`animes`**, **`anime_progress`**, **`api_cache`** (Migration 18) – Anime-Einträge für alle (`anilist_id`/`mal_id` UNIQUE, beide NULL = manueller Eintrag; Metadaten-Snapshot, `manga_id` ON DELETE SET NULL, `next_check_at`), Fortschritt je Benutzer (`status` Geplant|Schaue|Gesehen|Pausiert|Abgebrochen, `episodes_watched`, `score` 1–10, `started_at`/`finished_at` in `APP_TIMEZONE`) und Antwort-Cache der Quellen (`expires_at`).
+9. **`user_api_credentials`** (Migration 19) – eigene und Instanz-API-Schlüssel: `user_id` (NULL = Instanz, nur Admins), `provider` (`anilist`, `mal`, `google_books`), `secret_enc` (AES-256-GCM, `utils/secretBox.js`), `label`, `last4`, `allow_background`, `last_used_at`/`last_ok_at`/`last_error`; eindeutig über (`COALESCE(user_id, 0)`, `provider`).
+10. **`trash`** (Migration 21) – Papierkorb: `kind` (`manga`|`volume`), `ref_id`, `manga_id`, `title`, `payload` (JSON mit Reihe bzw. Band, Bänden, Besitzern, Lesestand, verknüpften Anime), `deleted_by`, `deleted_at`. Gelöschte Zeilen verlassen ihre Tabellen; nach 30 Tagen löscht der Scheduler endgültig.
+11. **`publisher_aliases`** (Migration 22) – `alias` (klein, ohne „!“ am Ende) → `canonical`. `normalizePublisher` prüft zuerst diese Tabelle, dann die eingebaute Liste, dann den Namen ohne Rechtsform (GmbH, Verlag, Co., KG, AG, mbH). Ein Ergebnis, das selbst ein Alias ist, folgt diesem einmal (auch über die eingebaute Liste); deshalb behält eine Zusammenführung in eine anders geschriebene eingebaute Schreibweise eine Identitäts-Zeile (`tokyopop` → `Tokyopop`), Migration 23 ergänzt sie für ältere Zusammenführungen.
+12. **`schema_migrations`** – `version`, `name`, `applied_at`.
 
-4. **`volume_reads`**
-   * Verknüpfungstabelle für den individuellen Lesestatus **pro Benutzer**:
-   * `volume_id` (INTEGER, FK -> `volumes.id` ON DELETE CASCADE)
-   * `user_id` (INTEGER, FK -> `users.id` ON DELETE CASCADE)
-   * `read_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP)
-   * *PK: (`volume_id`, `user_id`)*
+### Migrationen
 
-5. **`volume_owners`** (Migration 11) – Besitz pro Benutzer: `volume_id`, `user_id` (beide FK, ON DELETE CASCADE, PK zusammen), `price`, `purchase_date`, `condition`, `created_at`. `volumes.status = 'Vorhanden'` bedeutet „mindestens ein Besitzer“; `utils/owners.js` hält beides synchron (Band mit Status Vorhanden ohne Besitzer → der Bearbeiter wird Besitzer; Status ≠ Vorhanden → alle Besitzer entfallen; letzter Besitzer weg → `Fehlt`). Bestehende Bände gehören nach der Migration dem ältesten Admin; beim Löschen eines Benutzers gehen seine Einzelbesitze an den löschenden Admin.
+Neue Migrationen werden in `migrationList()` in `core/schema.js` ans Array **angehängt**; ausgelieferte Migrationen nie ändern. Jede läuft in einer eigenen Transaktion, das Log nennt geänderte Zeilen und Dauer. Schlägt eine fehl, bricht der Start ab; `initDb()` setzt die Verbindung erst nach erfolgreicher Migration. Stehen beim Start Migrationen an und gibt es Benutzer, schreibt `db.js` vorher die DB-Sicherung `backups/vor-update-v<alt>-auf-v<neu>-<Zeitstempel>.zip`. Misslingt sie, bricht der Start vor der ersten Migration mit deutscher Meldung ab (nichts geändert); nur `MIGRATE_WITHOUT_SNAPSHOT=1` migriert trotzdem. Migration 22 schreibt vorhandene Verlagsschreibweisen um (Seed-Aliase und Rechtsform-Suffixe eingebauter Verlage), ein späteres Alias-Löschen macht das nicht rückgängig. Einen Rückweg gibt es nur über die `vor-update`-Sicherung in der alten Version (README §5); eine ältere Version auf der migrierten Datenbank schreibt wieder Altformen (z. B. Status „Gelesen“), die keine Migration erneut umstellt. Eingespielte Backups laufen vor dem Tausch durch dieselben Migrationen (`migrateDbFile()`, ohne Vor-Update-Sicherung). Vor dem Ausliefern einer neuen Migration den Probelauf gegen eine Kopie einer echten Datenbank machen: `node scripts/migrate-dry-run.js pfad/zu/manga.db` (ausstehende Migrationen mit Zeilen und Dauer, `integrity_check`, `foreign_key_check`; das Original wird nur lesend geöffnet).
 
-6. **`app_settings`**
-   * `key` (TEXT, PK)
-   * `value` (TEXT)
-   * z. B. `collection_start_date` (Default: `'2021-04-09'`) für die Berechnung der Sammeljahre
-
-6. **`manga_passion_cache`**
-   * `cache_key` (TEXT, PK) – z. B. `'releases_2026_10'`
-   * `json_data` (TEXT) – Gecachte Rohdaten der Manga Passion API
-   * `created_at` (INTEGER) – Unix-Timestamp für 12h-Cache-Invalidierung
-
-7. **`schema_migrations`**
-   * `version` (INTEGER, PK) – Nummer der sequentiellen Migration
-   * `name` (TEXT, NOT NULL) – Name der Migration
-   * `applied_at` (DATETIME, DEFAULT CURRENT_TIMESTAMP) – Ausführungszeitpunkt
-   * Aktuell Version 1–11 (`volume_owners`; Spalten, Typ-/Verlagsnormalisierung, Indizes, Verlagsnamen, ISBN-Format, Bandnummern ohne Label, Platzhalterdaten `2999-12-31`, „Band“-Präfix entfernen, `users.password_changed_at`, `volumes.priority`/`target_price`). Schlägt eine Migration fehl, bricht der Start ab (kein Weiterlaufen mit halbem Schema). Neue Migrationen werden in `runSequentialMigrations()` in `db.js` ans Array **angehängt**; bereits ausgelieferte Migrationen nie ändern.
+| Version | Name | Inhalt |
+| :--- | :--- | :--- |
+| 1 | `add_manga_and_volume_columns` | Spalten für Manga Passion, Preise, Daten, Seiten, Bilder, Typ |
+| 2 | `normalize_volume_types_and_publishers` | Schuber/Specials/Special Editions aus Altdaten, Verlagsschreibweisen |
+| 3 | `add_explicit_performance_indices` | Indizes auf Bänden, Lese-Einträgen, Manga-Passion-ID |
+| 4 | `normalize_manga_passion_publisher_names` | Verlagsnamen von Manga Passion |
+| 5 | `normalize_isbn_format` | ISBN-10 → ISBN-13 (nur mit gültiger Prüfziffer) |
+| 6 | `clean_labelled_volume_numbers` | Bandnummern ohne Etikett |
+| 7 | `drop_placeholder_release_dates` | Platzhalterdatum `2999-12-31` entfernt |
+| 8 | `strip_band_prefix_from_volume_numbers` | „Band 14“ → „14“ |
+| 9 | `add_users_password_changed_at` | Sitzungsversion |
+| 10 | `add_volumes_priority_target_price` | Wunsch-Priorität und Zielpreis |
+| 11 | `add_volume_owners` | Besitz pro Benutzer (Altbestand → ältester Admin) |
+| 12 | `index_volumes_isbn_drop_redundant_reads_index` | `idx_volumes_isbn`, `idx_volume_reads_vol` entfernt |
+| 13 | `convert_legacy_gelesen_status` | Altstatus „Gelesen“ → `Vorhanden` + Lese-Eintrag über `migrateLegacyReadStatus` (Regel in `convertLegacyRead`: der Besitzer bzw. ältester Admin wird nur Leser, wenn der Band noch keinen Lese-Eintrag hat) |
+| 14 | `users_username_nocase_unique` | Benutzername ohne Groß-/Kleinschreibung eindeutig (bei Doppelten nur Warnung, Wiederholung bei jedem Start) |
+| 15 | `add_volumes_number_sort` | `volumes.number_sort` + Trigger + Index |
+| 16 | `maintain_mangas_owned_volumes_by_triggers` | `mangas.owned_volumes` per Trigger |
+| 17 | `add_mangas_wish_priority` | Wunschreihen |
+| 18 | `add_animes` | `animes`, `anime_progress`, `api_cache` |
+| 19 | `add_user_api_credentials` | verschlüsselte API-Schlüssel |
+| 20 | `add_mangas_collecting` | Sammelstatus |
+| 21 | `add_trash` | Papierkorb |
+| 22 | `add_publisher_aliases` | Verlags-Aliase (mit Startliste, schreibt vorhandene Verlage um) |
+| 23 | `add_publisher_identity_aliases` | Identitäts-Alias für ältere Zusammenführungen in eine Schreibweise, die die eingebaute Liste anders schreibt („Tokyopop“) |
+| 24 | `clear_seeded_start_date` | Startdatum `2021-04-09` (Vorgabe bis v2.19.1) entfernt, wenn kein Band davor gekauft oder angelegt wurde; die Statistik leitet den Beginn dann aus den Daten ab |
 
 ### Performance-Indizes
-Zur Gewährleistung optimaler Query-Laufzeiten bei großen Sammlungen (>10.000 Bände):
-* `idx_volumes_manga_id` auf `volumes (manga_id)`
-* `idx_volumes_status` auf `volumes (status)`
-* `idx_volume_reads_user` auf `volume_reads (user_id)`
-* `idx_volume_reads_vol` auf `volume_reads (volume_id)`
-* `idx_mangas_passion_id` auf `mangas (manga_passion_id)`
+* `idx_volumes_manga_id` auf `volumes (manga_id)`, `idx_volumes_status` auf `volumes (status)`, `idx_volumes_isbn` auf `volumes (isbn)` (bewusst nicht UNIQUE), `idx_volumes_manga_number` auf `volumes (manga_id, type, number_sort)`.
+* `idx_volume_reads_user` auf `volume_reads (user_id)` (Abfragen nach `volume_id` nutzen den Primärschlüssel), `idx_volume_owners_user` auf `volume_owners (user_id)`, `idx_mangas_passion_id` auf `mangas (manga_passion_id)`.
+* Anime: `idx_anime_progress_user`, `idx_animes_manga`, `idx_animes_next_check`; Papierkorb: `idx_trash_deleted_at`, `idx_trash_ref`.
+
+### Abgeleitete Werte und Trigger
+* `number_sort` und `owned_volumes` pflegt SQLite in jedem Schreibpfad (Handler, CSV-Import, Lücken-Import, Restore-Migration). Massen-Inserts zahlen zwei Trigger je Band. Der Seeder (`scripts/seed.js`) schreibt rohes SQL; eine neue Pflichtspalte ohne Default muss er setzen (`test/seed.test.js`).
+* `initDb()` setzt `journal_mode = WAL` und `synchronous = NORMAL` (ein Absturz verliert nichts, ein Stromausfall höchstens die letzten Commits).
 
 ---
 
-## 4. Rollen- & Berechtigungskonzept
+## 4. Rollen, Berechtigungen & Betriebsarten
 
-* **`admin`**:
-  * Volle Kontrolle über das gesamte System
-  * Benutzerverwaltung (Nutzer anlegen, Rollen ändern, Passwörter zurücksetzen, löschen)
-  * Backups herunterladen (`GET /api/backup`) & einspielen (`POST /api/backup/restore`)
-  * Sammlungs-Einstellungen anpassen (`PUT /api/stats/settings`, Datum `YYYY-MM-DD`, nicht in der Zukunft)
-* **`editor`**:
-  * Kann Mangas erstellen, bearbeiten und löschen
-  * Kann Bände anlegen (einzeln oder per Batch), bearbeiten, löschen
-  * Kann Bände als gelesen/ungelesen markieren (individuell pro Benutzer)
-  * Kann Bilder/Cover hochladen
-  * *Kein Zugriff* auf Benutzerverwaltung oder Backups
-* **`visitor` / `guest`**:
-  * Reiner **Lesezugriff** (Read-Only)
-  * Sieht alle Mangas, Bände und Statistiken
-  * Kann *keine* Daten manipulieren (wird serverseitig über `requireEditor` Middleware mit HTTP 403 geblockt)
+### Rollen
+* **`admin`:** alles; Benutzerverwaltung, Backups, Systemseite, Instanz-API-Schlüssel, Verlage zusammenführen, Papierkorb leeren, Sammlungs-Einstellungen (`PUT /api/stats/settings`, Datum `YYYY-MM-DD` ab 1900, höchstens ein Tag nach dem heutigen UTC-Datum). Nur Admins dürfen Besitz und Lesestand **anderer** Benutzer ändern (`user_id`, sonst 403 `FORBIDDEN`) und beim CSV-Import fremde Besitzer/Leser eintragen.
+* **`editor`:** Reihen, Bände, Anime anlegen, bearbeiten, löschen (Papierkorb); Bilder hochladen; eigener Besitz- und Lesestand; CSV-Import; Daten aufräumen.
+* **`visitor` / `guest`** (Anzeige überall „Gast“): nur lesen; schreibende Endpunkte antworten 403 `READ_ONLY`. Gäste sehen CSV nur als Export.
+* Rollen werden im Frontend nur über `roleLabel()` (`components/dashboard/dashboardShell.js`) angezeigt (Admin, Editor, Gast, offline „Offline“).
+* **Offline-Modus:** Antwortet der Server nicht, läuft die App als `{ role: 'visitor', realRole, offline: true }`. Editoren und Admins dürfen trotzdem Besitz- und Lesestand umschalten (`canToggle` in `MangaDetail.jsx`, `useVolumeActions`, `useDetailKeyboard`); die Änderungen landen in der Outbox. Anlegen, Bearbeiten und Löschen bleiben offline gesperrt.
+
+### Frontend-Architektur & Betriebsarten
+* **Drei Transport-Modi in `utils/api.js`:** `web` (Browser vom Server, Cookie, relative `/api`-URLs), `remote` (App mit Server: `getApiBase() + path`, `Authorization: Bearer`, `X-Client: app`, `credentials: 'omit'`), `local` (App ohne Server: `isLocalMode()` = App-Build und `localStorage.mangashelf_mode === 'local'`; relative `/api/…`-Pfade gehen an `local/localTransport.js`, die Antwort ist eine echte `Response`).
+* **Standalone-Modus (App ohne Server):** `local/runtime.js` öffnet `manga.db` in sql.js über `core/adapters/sqljs.js`, wendet `core/schema.js` unverändert an (eine Server-Sicherung ist eine gültige App-Sicherung) und ruft `dispatch()` aus `core/routes.js` mit dem lokalen Profil als `ctx.user` (Rolle immer `admin`, kein Login). Die Datenbank wird 300 ms nach jeder Änderung als Ganzes gespeichert (Browser-Build: IndexedDB `mangashelf-local`; Capacitor: echte Datei in `Directory.Data`; Android schließt `manga.db` samt `.new`/`.old`/`.tmp`/`.seq` und `uploads` in `backup_rules.xml`/`data_extraction_rules.xml` von Cloud-Sicherung und Geräteumzug aus, Test `mobile/test/backupRules.test.js`; iOS sichert `Directory.Data` noch per iCloud). Die Fußzeile zeigt dort „Auf diesem Gerät · <Profil>“ und den Speicherstand (Ereignis `mangashelf:local-store`), nie Online-Status oder Offline-Kopie. `local/localServer.js` beantwortet die Server-Routen, die die Oberfläche braucht (`/auth/me` mit `local: true`, `/setup/status`, `/auth/logout`, `/health`, `/users` als Profile, `/upload`, `/upload/multiple`, `/auth/api-keys`, `/admin/api-keys`); alles andere Server-Exklusive antwortet 404 `NOT_AVAILABLE_LOCALLY` „Im Modus ohne Server nicht verfügbar“. Uploads liegen als Blobs, in der Datenbank steht wie auf dem Server `/uploads/<name>`, `assetUrl()` liefert eine Object-URL. Externe Quellen gehen direkt vom Gerät (`ctx.http`); blockiert CORS im Browser-Build, kommt einmal je Host der Hinweis `CORS_BLOCKED`, in den Apps ersetzt CapacitorHttp den Weg. API-Schlüssel nie in `manga.db` (Browser-Build: IndexedDB mit Hinweis „nicht sicher, nur für Tests“, Apps: sicherer Speicher).
+* **Speichern im Gerät** (`local/runtime.js`): ein Schreib-Hook an der Verbindung (`trackWrites`: `prepare().run` mit geänderten Zeilen, `get`/`all` einer schreibenden Anweisung – beginnt mit WITH/INSERT/UPDATE/DELETE/REPLACE oder enthält RETURNING, z. B. `DELETE … RETURNING` beim Sammel-„ungelesen“ –, `exec` außer BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE) markiert die Datenbank als geändert, auch bei Schreibzugriffen während eines GET; als Netz darunter vergleicht jede schreibende Anfrage `SELECT total_changes()` davor und danach. Gespeichert wird 300 ms danach, bei `pagehide` und `visibilitychange` (hidden) sofort. Scheitert das Speichern, bleibt der Fehler stehen (`runtime.status().saveError`), es wird mit Backoff (1 s bis 60 s) wiederholt, `flush()` wirft, schreibende Anfragen antworten 507 `LOCAL_SAVE_FAILED`, und die App zeigt einen bleibenden Hinweis bis zum nächsten erfolgreichen Speichern; eine Änderung, die während eines Wiederholungsversuchs kam, wird nach dessen Erfolg gespeichert.
+* **Zwei Fenster:** ein Fenster hält die Sperre `mangashelf-local:manga.db` (`navigator.locks`, `store.lockName`) für seine Laufzeit; ein weiteres liest nur (Schreiben → 423 `LOCAL_LOCKED`, Hinweis mit „Neu laden“), liest nach jedem Speichern des anderen (BroadcastChannel `saved`) neu und übernimmt, sobald die Sperre frei wird. Ein lesendes Fenster legt kein Profil an: fehlt sein Profil in der gespeicherten Datenbank, gilt es vorläufig (`PENDING_PROFILE_ID` = -1, wird nicht als lokales Profil gemerkt) und wird erst mit der Sperre angelegt und gespeichert; beim Neuladen zählt die Profil-ID nur, solange der Name (ohne Groß-/Kleinschreibung) noch passt, sonst der Name. Ein Wiederöffnen im selben Fenster (Profilwechsel, `openLocal`) gibt die Sperre nicht frei: `resetLocalRuntime()` schließt im Standalone-Modus mit `close({ keepLock: true })`, die Sperre wartet in `windowLocks` (`local/localTransport.js`) auf die nächste Laufzeit dieses Fensters; erst nach dem Verlassen des Modus wird sie freigegeben und ein wartendes Fenster übernimmt. Ohne `navigator.locks` schützt ein Speicherzähler (`manga.db.seq`): ein älteres Fenster überschreibt nie einen neueren Stand (409 `LOCAL_CONFLICT`).
+* **Sammlung ersetzen** (Sicherung importieren, „Vom Server holen“, `replaceDatabase`): nachdem die Profilzeile feststeht und vor `prepare` und dem ersten Speichern läuft `sanitizeImportedDatabase(conn)` (`local/sanitize.js`) auf jeder eingespielten Datenbank: unter `PRAGMA secure_delete = ON` (danach der alte Wert) wird **jeder** `password_hash` `!local-profile` (auch der des holenden Admins; das Profil behält seine Rolle), `user_api_credentials` sowie `app_settings` `calendar_feed:*`, `revoked_sessions` und `jwt_secret` werden gelöscht; eine Datenbank der App selbst bleibt unverändert. Eine ZIP der App enthält danach für kein Konto ein Passwort: auf einem Server wiederhergestellt, nennt `POST /api/backup/inspect` diese Konten (`accounts_without_password`), sie brauchen einen Passwort-Reset; in eine bestehende Server-Sammlung führt „Zusammenführen“. Danach: erst neue Dateien schreiben (ein vorhandener Name mit anderem Inhalt zuerst als `.incoming-<name>`), dann die Datenbank speichern, dann umschalten, zuletzt Uploads außerhalb des neuen Satzes löschen; scheitert etwas vorher, bleibt die alte Sammlung unverändert (samt ungespeicherter Änderungen). Solange das läuft, antworten schreibende Anfragen (und ein zweites `replaceDatabase`) 423 `LOCAL_BUSY` („Die Sammlung wird gerade ersetzt – bitte gleich noch einmal versuchen.“), und von der alten Datenbank wird nichts mehr gespeichert. Danach feuert das Fenster-Ereignis `mangashelf:local-store` (`replaced`), App lädt neu (`handleLocalReplaced`, ein Lauf je Wiederherstellung). „Backups“ im Regal-Kopf reicht dieselbe Funktion durch (`onLocalReplaced`: App → Dashboard → DashboardHeader → LocalBackupDialog); danach lädt das Regal seine Daten neu und bleibt auf `/`, ohne geöffnete Sammlung geht es nach `/server`. Nur die aktive Datenbank füllt die Verlags-Aliase (`openDatabase(SQL, bytes, { live: true })`).
+* **Aufräumen im Gerät:** das Fenster mit der Sperre ruft beim Start und alle 24 Stunden `trash.purgeTrash(ctx)` und löscht Uploads, auf die nichts mehr verweist (Spalten wie `services/uploadCleanup.js`, Papierkorb eingeschlossen). `setLocalAdapters({ store, http, files, secureCredentials })`: mit eigenem `files` (z. B. `urlFor()` über `convertFileSrc`) entfällt das Vorladen aller Uploads als Blob-URLs.
+* **Outbox im Standalone-Modus:** es startet keine Outbox-Synchronisierung; Einträge gehören zu `local:<Profil-ID>`, `sendEntry` schickt nie Server-Einträge an den Gerätekern oder umgekehrt. Der Gerätekern antwortet sofort und endgültig: `submitChange` merkt dort nichts vor (auch nicht offline), und `classifyOutboxResponse(res, entry)` verwirft jede Antwort außer 2xx/404 (507/423/409, auch keine Antwort) als `drop`; der Aufrufer nimmt die optimistische Änderung zurück und lädt neu, den bleibenden Hinweis zeigt App aus dem Status des Kerns.
+* **Routen im App-Build:** ohne gespeicherten Server `/server`; Server erreichbar und Token da → Sammlung; sonst Login mit Servername. `/lokal` = Einrichtung ohne Server; im Standalone-Modus zeigt `/server` den `LocalScreen` (Profil, Quellen, Sicherung, Übernahme, „Modus wechseln“) und `/login` leitet dorthin. „Abmelden“ heißt dort „Sammlung schließen“ und löscht nichts.
+* **Übernahmewege** (`app/takeover.js`, `app/TakeoverDialog.jsx`): „Auf Server übertragen“ (Admin-Anmeldung, App-ZIP, lokales Profil wird in der Kopie zum Admin-Konto, Server `inspect` + `restore`), „Zusammenführen“ (CSV lokal → `POST /api/import/csv` Probelauf, dann Import; Cover nicht), „Vom Server holen“ (Admin: `GET /api/backup` mit Covern, bereinigt wie jede eingespielte Datenbank von `replaceDatabase`, siehe „Sammlung ersetzen“; sonst `/api/offline-snapshot`: Lesestand mit seinem `read_at`, eigener Besitz mit Preis, Kaufdatum, Zustand und `created_at`; der Status jedes Bands folgt den übernommenen Besitzern, Bände nur anderer Haushaltsmitglieder kommen als „Fehlt“; Cover nur mit flachem Bildnamen und erkanntem Format). In der Desktop-App ruft „Ohne Server nutzen“ stattdessen `window.mangashelfDesktop.setMode('local')`. `BackupExportModal` exportiert/importiert genau das Server-Backup-Format.
+* **Desktop-App (Electron, `desktop/`):** Betriebsarten `local` („Nur auf diesem Gerät“: Express im Hauptprozess auf `127.0.0.1:37210`, Fenster zeigt den Web-Build mit Cookie-Sitzung), `client` („Mit Server verbinden“: kein lokaler Server, App-Build über `app://manga-shelf/`, Server und Token im `safeStorage`), `server` („Dieses Gerät ist Server“: Express auf `0.0.0.0:3000`, Adresse + QR für andere Geräte, Tray). Kommandozeile `--server-only`, `--port`, `--host`, `--data-dir`, `--connect <url>`, `--user-data-dir`, `--hidden`. Die App erzeugt einmal einen `SETUP_TOKEN` und zeigt ihn, solange kein Admin existiert. Brücke `window.mangashelfDesktop` (`desktop/preload.js`): `storage` nur auf `app://manga-shelf`, `setupToken()` nur für den lokalen Server; jede IPC-Nachricht prüft den Absender. `secure-store.json` wird nie herabgestuft: ist die Datei verschlüsselt, der Schlüsselbund aber (noch) gesperrt, bleibt der Speicher `locked` (Änderungen nur im Speicher; Hinweis „Schlüsselbund nicht verfügbar“ einmal je Sitzung, sobald das Fenster die App-Ansicht zeigt, `createLockedWarning`), nicht entschlüsselbare Einträge werden unverändert zurückgeschrieben. Kamera, Zwischenablage und Vollbild nur für `app://manga-shelf` oder den laufenden lokalen Server (`permissionAllowed`, nie für den Ursprung `null`). Menü „Quellen & Schlüssel…“ feuert `mangashelf:open-api-keys` (abbrechbar): App behandelt es im Router auf jeder Route eines angemeldeten Nutzers (`preventDefault`): auf `/` feuert App das Seitenereignis `mangashelf:open-account` (`detail: 'keys'`, abbrechbar), das gemountete Dashboard öffnet den Schlüssel-Tab ohne History-Schreiben (offene Dialoge behalten ihre History-Einträge); fängt es keiner ab oder kommt das Menü auf einer anderen Route, navigiert App zu `/` mit `state: { openAccount: 'keys' }` (`replace` auf `/` und wenn ein Dialogeintrag oben liegt, `dialogEntryOnTop()`), das Dashboard öffnet daraus einmal den Schlüssel-Tab; offline nur ein Hinweis; ohne Nutzer bleibt es unbehandelt und die Desktop-App sagt „Bitte zuerst anmelden“.
+* **Android/iPhone (Capacitor, `mobile/`):** keine Capacitor-Abhängigkeit im Frontend. `mobile/src/native-bridge.mjs` wird zu `www/native-bridge.js` gebündelt und setzt nur auf nativen Plattformen `window.mangashelfNative`. `installCapacitorShell()` (`app/shell/capacitor.js`, `main.jsx` wartet vor dem Render) legt die Serverliste in Preferences und jedes Token in den sicheren Speicher (`server-token:<id>`), leitet Links über `@capacitor/browser`, Downloads über Datei + Teilen-Dialog, die Android-Zurück-Taste auf `history.back()` und `manga-shelf://connect` an `receiveDeepLink`. Ohne Server läuft der Kern weiter in sql.js (`local/capacitor.js`: `manga.db` als Datei, Uploads in `Directory.Data/uploads/`, Schlüssel im Keychain/Keystore). `manga.db` wird als `manga.db.new` geschrieben, die alte Datei liegt bis zum Tausch als `manga.db.old` daneben; fehlt `manga.db`, wird vor jedem Lesen/Schreiben die letzte vollständige Kopie (`.new` neben `.old`, sonst `.old`, sonst ein altes `.tmp`) umbenannt, ein einzelnes `.new` verworfen; alle Datenbank-Zugriffe laufen nacheinander. `createCapacitorAdapters` bringt ein eigenes `files` mit: `<img>` lädt `convertFileSrc(<uploads-URI>/<name>)` (neu geschriebene Namen mit `?v=<n>`), Lesen/Größe/Liste gehen bei Bedarf ans Dateisystem, beim Start wird nichts vorgeladen. Der Scan-Knopf öffnet in der App den nativen ML-Kit-Scanner.
 
 ---
 
-## 5. API-Endpunkte Übersicht (`routes/*.js`, eingebunden in `index.js`)
+## 5. API-Endpunkte (`core/routes.js`, Server-Rand in `routes/*.js`, eingebunden in `index.js`)
 
-| Endpunkt | Methode | Middleware | Beschreibung |
+Rollen: `public` (ohne Anmeldung), `auth` (`requireAuth`), `editor` (`requireEditor`), `admin` (`requireAdmin`). Kern-Endpunkte stehen als Zeile in `core/routes.js` und laufen auch im Gerät; Setup, Login, Benutzer, API-Schlüssel, Backups, Uploads und Systemseite gibt es nur auf dem Server. `lookup` = Limit je Konto für externe Dienste (gemeinsam 30/min, `middleware/userLimits.js`), `remoteImage` = eigenes Limit 30/min; darüber 429 mit `Retry-After`. `ETag` = schwaches ETag mit `If-None-Match` → 304 (Gotcha 20).
+
+**Fehlerantworten:** Jede JSON-Fehlerantwort unter `/api` hat die Form `{ error, code }` (deutsche Meldung, Code), bei 5xx zusätzlich `ref` (= Header `X-Request-Id`, im Frontend „Fehler-ID“). Standardcodes je Status (`BAD_REQUEST`, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`, `INVALID_JSON`, `PAYLOAD_TOO_LARGE`, `UPLOAD_REJECTED` …) und fachliche Codes: `AUTH_REQUIRED`, `SESSION_INVALID`, `READ_ONLY`, `ADMIN_EXISTS`, `SETUP_TOKEN_INVALID`, `INVALID_CREDENTIALS`, `WRONG_PASSWORD`, `TOO_MANY_ATTEMPTS`, `USERNAME_TAKEN`, `CHANGED_MEANWHILE`, `CROSS_ORIGIN`, `VOLUME_DUPLICATE` (mit `existing_id`), `NOTES_TOO_LONG`, `EDITION_NOT_CONFIRMED` (`needs_confirmation: true`), `CSV_FORMAT` (mit `line`), `DB_REOPENED` (CSV-Export), `MP_UNAVAILABLE`, `BULK_FIELD`, `BULK_IDS`, `BULK_REVERT`, `BULK_UNDO_FORBIDDEN`, `BULK_UNDO_EXPIRED`, `TRASH_SERIES_MISSING`, `TRASH_ID_TAKEN`, `TRASH_INVALID`, `TOO_MANY_SEARCHES`, `SOURCES_UNAVAILABLE`, `DUPLICATE`, `REFRESH_TOO_SOON`, `KEY_FORMAT`, `KEY_REJECTED`, `PROVIDER_UNREACHABLE`, `NO_BACKUP_FILE`, `SCHEMA_NEWER`, `ROLLBACK_COPY_PENDING`, `INSUFFICIENT_SPACE`, `STAGING_NOT_FOUND`, `RESTORE_RUNNING`, `JOB_RUNNING`, `MP_NOT_LINKED`, `MP_EDITION_NOT_FOUND`; nur im Gerät `NOT_AVAILABLE_LOCALLY`, `LOCAL_SAVE_FAILED` (507), `LOCAL_LOCKED` (423), `LOCAL_BUSY` (423), `LOCAL_CONFLICT` (409). Fehlerantworten tragen nie ein ETag und immer `Cache-Control: no-store`.
+
+### Server, Sitzung, Benutzer (`routes/auth.js`, `index.js`)
+
+| Methode | Pfad | Rolle | Beschreibung |
 | :--- | :--- | :--- | :--- |
-| `/api/version` | GET | public | App-Version aus `package.json` |
-| `/api/health` | GET | public | Liveness-/Readiness-Probe (DB-Check, Version, Uptime); 503 wenn DB nicht erreichbar. Nutzt Docker-`HEALTHCHECK` und CI |
-| `/api/setup/status` | GET | public | Prüft ob initialer Admin existiert (`needsSetup`) |
-| `/api/setup` | POST | public | Erstellt initialen Admin-User bei Setup |
-| `/api/auth/login` | POST | public | Login (setzt JWT `httpOnly` Cookie) |
-| `/api/auth/logout` | POST | public | Logout (löscht Cookie) |
-| `/api/auth/me` | GET | `requireAuth` | Gibt aktuell eingeloggten Benutzer zurück |
-| `/api/auth/password` | PUT | `requireAuth` | Eigenes Passwort ändern (`current_password`, `new_password`); beendet alle anderen Sitzungen, die aktuelle bekommt ein neues Token. Dialog: `ChangePasswordModal` (Schloss-Symbol im Header) |
-| `/api/users` | GET, POST | `requireAdmin` | Nutzer auflisten / neuen Nutzer anlegen |
-| `/api/users/:id` | PUT, DELETE | `requireAdmin` | Rolle/Passwort ändern / Nutzer löschen |
-| `/api/users/:id/stats` | GET | `requireAuth` | Persönliche Lesestatistiken eines Nutzers |
-| `/api/mangas` | GET | `requireAuth` | Alle Mangas für die Übersicht abrufen |
-| `/api/mangas` | POST | `requireEditor` | Neuen Manga anlegen |
-| `/api/mangas/:id` | GET | `requireAuth` | Details eines Mangas inkl. Bände, Lesestatus (`read_users`, `is_read` für den Aufrufer) und `reader_stats` (je Benutzer: `read_count`, `total_owned`, `unread_count`, `percentage`; Quelle der Leser-Leiste) |
-| `/api/mangas/:id` | PUT | `requireEditor` | Manga Metadaten bearbeiten |
-| `/api/mangas/:id` | DELETE | `requireEditor` | Manga löschen (löscht kaskadierend Bände) |
-| `/api/volumes` | POST | `requireEditor` | Einzelnen Band anlegen |
-| `/api/volumes/batch` | POST | `requireEditor` | Mehrere Bände auf einmal generieren |
-| `/api/volumes/:id` | PUT | `requireEditor` | Banddetails bearbeiten |
-| `/api/volumes/:id` | DELETE | `requireEditor` | Einzelnen Band löschen |
-| `/api/volumes/:id/read` | POST | `requireEditor` | Lesestatus für Band umschalten (Toggle) |
-| `/api/volumes/:id/owners` | POST | `requireEditor` | Eigenen Besitz umschalten (`{ owned?: bool }`, ohne Angabe Toggle); Admins dürfen mit `user_id` für andere eintragen. Antwort: `status`, `owners`, `owned_by_me`. `GET /api/mangas/:id` liefert je Band `owners` und `owned_by_me` |
-| `/api/volumes/batch-read` | POST | `requireEditor` | Bände 1 bis X auf einen Klick als gelesen markieren |
-| `/api/volumes/lookup` | GET | `requireAuth` | Metadaten (Datum, Seiten, ISBN, Preis, Cover) für einen Band via Manga Passion / DNB; akzeptiert auch MP-URL oder -ID (`manga_id`, `volume_number`) |
-| `/api/stats` | GET | `requireAuth` | Gesamte Sammlungs-Statistiken abrufen (inkl. `owner_stats` (je Benutzer Bände, Reihen, Wert, `shared_count`; Anzeige `OwnerStatsCard.jsx` ab zwei Nutzern) und `spending`: Ausgaben nach Kaufdatum je Jahr / letzte 12 Monate / ohne Datum; Anzeige `SpendingCard.jsx`) |
-| `/api/stats/settings` | PUT | `requireAdmin` | z. B. Sammelstartdatum aktualisieren |
-| `/api/upload` | POST | `requireEditor` | Einzelnes Bild hochladen (Multer -> `data/uploads`) |
-| `/api/upload/multiple` | POST | `requireEditor` | Bis zu 10 Bilder auf einmal hochladen |
-| `/api/upload-remote` | POST | `requireEditor` | Externes Bild per URL herunterladen & lokal cachen |
-| `/api/lookup/manga` | GET | `requireAuth` | Metadaten & Cover-Suche via Manga Passion API (Prio 1) & AniList GraphQL API (Fallback) |
-| `/api/lookup/isbn` | GET | `requireAuth` | Deutscher ISBN- & Barcode-Lookup (DNB MARC21 XML + Bestandsabgleich) |
-| `/api/offline-snapshot` | GET | `requireAuth` | Gesamte Sammlung (Liste + alle Reihen-Details, Lesestatus des Aufrufers) in einer Antwort für die Offline-Kopie im Browser |
-| `/api/shopping-list` | GET | `requireAuth` | Gibt alle fehlenden Bände (`status = 'Fehlt'`) inkl. Verlag & Gesamtkosten zurück; mit `?include_others=1` zusätzlich `others`: Bände, die andere besitzen, der Aufrufer in einer von ihm gesammelten Reihe aber nicht (`owned_by_others`) |
-| `/api/release-radar` | GET | `requireAuth` | Release-Radar: Vorbestellungen & Neuerscheinungen nach Monaten gruppiert inkl. Budget |
-| `/api/release-radar/changes` | GET | `requireAuth` | Vorbestellungen, deren Termin im Manga-Passion-Kalender abweicht (`monthsToCheck`, `detectDateChanges` in `services/mangaPassionReleases.js`; nutzt den 12-h-Cache); Oberfläche: Banner `radar/PersonalDateChanges.jsx` mit „Termin übernehmen“ |
-| `/api/manga-passion/releases` | GET | `requireAuth` | Deutscher monatlicher Manga-Erscheinungskalender via Manga Passion API mit Sammlungsabgleich |
-| `/api/manga-passion/editions` | GET | `requireAuth` | Suche & Auflistung passender Manga Passion Editionen nach Titel & Verlag |
-| `/api/manga-passion/import` | POST | `requireEditor` | 1-Klick-Übernahme eines Bands in die Sammlung (`target_status`: Vorbestellt, Fehlt, Erscheint bald oder Bestellt; validiert Status/Preis/Datum/Titel). Serie + Band in einer Transaktion; vorhandene Einträge (gleiche Reihe + Typ `volume` + Nummer) werden aktualisiert, **Vorhanden/Gelesen bleibt unangetastet** (`skipped_owned: true`) |
-| `/api/mangas/:id/gaps` | GET | `requireAuth` | Intelligente Lücken-Erkennung & Abgleich gegen offizielle deutsche Manga Passion Edition |
-| `/api/mangas/:id/sync-edition` | POST | `requireEditor` | 1-Klick-Synchronisation von `total_volumes` und Editions-Metadaten |
-| `/api/mangas/:id/autofill-volumes` | POST | `requireEditor` | Batch-Anreicherung aller Bände einer Reihe (Datum, Seiten, ISBN, Preis, Schuber-Cover) |
-| `/api/mangas/:id/batch-import-gaps` | POST | `requireEditor` | Batch-Übernahme aller echten Lücken auf die Einkaufsliste (inkl. Preisen & Covern) |
-| `/api/export/csv` | GET | `requireAuth` | Alle Bände als CSV (Semikolon, UTF-8 mit BOM); Spalte „Besitzer“ (Benutzernamen, kommagetrennt; beim Import werden unbekannte Namen ignoriert, ohne Treffer wird der Importierende Besitzer) |
-| `/api/import/csv` | POST | `requireEditor` | CSV-Import (`{ csv, dry_run }`, 10 MB); legt Reihen/Bände an, vorhandene (Reihe + Typ + Nummer) bleiben unangetastet; Oberfläche: Reiter „CSV“ in `BackupRestoreModal` |
-| `/api/backup` | GET | `requireAdmin` | Erzeugt & streamt ZIP-Backup von `data/` |
-| `/api/backup/restore` | POST | `requireAdmin` | Lädt ZIP-Backup hoch, synchronisiert DB & Bilder (Alias: `POST /api/restore`) |
-| `/api/backups` | GET | `requireAdmin` | Listet alle Server-Snapshots in `data/backups/` auf |
-| `/api/backups/create` | POST | `requireAdmin` | Erstellt sofort einen neuen Server-Snapshot |
-| `/api/backups/:filename/restore` | POST | `requireAdmin` | Stellt einen Server-Snapshot mit 1 Klick wieder her |
-| `/api/backups/:filename/download` | GET | `requireAdmin` | Lädt einen bestimmten Snapshot herunter |
-| `/api/backups/:filename` | DELETE | `requireAdmin` | Löscht einen Snapshot vom Server |
+| GET | `/api/version` | public | App-Version aus `package.json` |
+| GET | `/api/health` | public | `{ status: 'ok'\|'degraded'\|'error', version, uptime, name: 'Manga Shelf', instance_id, checks: { db, writable, disk, backup, restoring } }`; 503 nur bei `error` (DB weg, `DATA_DIR` nicht beschreibbar, Herunterfahren). `degraded`: wenig Platz oder kein geprüftes Backup seit 48 h. Keine Pfade, keine Zahlen; Backup-Abfrage 60 s gecacht. Docker-`HEALTHCHECK` prüft nur den Status |
+| GET | `/api/setup/status` | public | `needsSetup` |
+| POST | `/api/setup` | public | Erster Admin; verlangt `setup_token` (Einrichtungscode, 403 `SETUP_TOKEN_INVALID`); gibt es schon einen Admin, 400 `ADMIN_EXISTS`. Mit `X-Client: app` zusätzlich `{ token }` |
+| POST | `/api/auth/login` | public | Setzt das Cookie; mit `X-Client: app` (oder Body `client: 'app'`) zusätzlich `{ token }` (dasselbe JWT, 7 Tage) |
+| POST | `/api/auth/logout` | public | Löscht das Cookie und sperrt das vorgelegte Token (Cookie oder Bearer) bis zu seinem Ablauf; 30 je 15 Min. je Adresse |
+| GET | `/api/auth/me` | auth | angemeldeter Benutzer |
+| PUT | `/api/auth/password` | auth | Eigenes Passwort (`current_password`, `new_password`); Limit je Benutzer, falsche aktuelle Passwörter zählen wie fehlgeschlagene Logins (403 `WRONG_PASSWORD`). Andere Sitzungen und die Kalender-Abo-Adresse enden; bei Bearer bzw. `X-Client: app` neuer `token` im Body |
+| GET | `/api/auth/connect-info` | editor | Daten für „Mit App verbinden“: `{ url, name, instance_id, link }` (`manga-shelf://connect?…`) |
+| GET | `/api/users` | admin | Benutzer auflisten |
+| POST | `/api/users` | admin | Benutzer anlegen (Name max. 64 Zeichen, ohne `,`, `\|` und Steuerzeichen) |
+| PUT | `/api/users/:id` | admin | Rolle/Passwort ändern; „letzter Admin“ wird atomar geprüft; ein Passwort-Reset beendet alle Sitzungen und die Kalender-Abo-Adresse des Benutzers und hebt seine Login-Sperre auf; das eigene Passwort hier → neues Cookie bzw. `token` |
+| DELETE | `/api/users/:id` | admin | Benutzer löschen: Einzelbesitze gehen an den löschenden Admin (Kaufdatum wie bei der Besitz-Route), `animes.updated_by = NULL`, Kalender-Abos des Benutzers entfallen |
+
+### Reihen, Bände, Besitz, Lesen (Kern)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/mangas` | auth | Reihenliste (ETag): Spalten einzeln gewählt (keine `description`), dazu `regular_owned`, `max_regular_number`, `extras_owned`, `read_volume_count` (nur `Vorhanden`), `wish_priority`, `wished`, `collecting`, `missing_count`, `preorder_count` (kein `volume_search`, kein `manga_passion_edition_data`) |
+| GET | `/api/mangas/volume-search` | auth | Suchtext je Reihe für die Regalsuche (ETag wie die Liste): `[{ id, volume_search }]` nach `id`, nur Reihen mit Text; ISBNs, benannte Bandnummern, Notizen je Zeile, jede Notiz max. 200, Feld max. 4000 Zeichen. Die Offline-Kopie trägt `volume_search` weiter in `mangas[]` |
+| POST | `/api/mangas` | editor | Reihe anlegen (`readMangaFields`: Längen, `manga_passion_id` positiv oder null, `wish_priority` null oder 0–3, `collecting`) |
+| GET | `/api/mangas/:id` | auth | Detail (ETag): Bände mit `owners`, `owned_by_me`, `read_users`, `is_read`; `reader_stats` je Benutzer (`user_id`, `username`, `role`, `read_count`, `total_owned`, `unread_count`, `percentage` ≤ 100); `read_users` mit `read_at`, `owners` mit `condition` und `created_at` (ebenso in der Offline-Kopie); Sortierung reguläre Bände/Special Editions nach Nummer, dann Schuber, dann Specials |
+| PUT | `/api/mangas/:id` | editor | Metadaten bearbeiten (gleiche Regeln wie POST; `owned_volumes` wird ignoriert; `wish_priority: null` nimmt von der Wunschliste) |
+| DELETE | `/api/mangas/:id` | editor | Reihe in den Papierkorb (Antwort `trash_id`) |
+| GET | `/api/tags` | auth | alle Tags mit Anzahl Reihen |
+| GET | `/api/offline-snapshot` | auth | Gesamte Sammlung für die Offline-Kopie (`private, no-store` + ETag): `mangas` wie die Liste, `details[id]` wie `GET /api/mangas/:id`; in Blöcken zu 200 Reihen gebaut; 503, wenn währenddessen die DB neu geöffnet wird |
+| POST | `/api/volumes` | editor | Band anlegen: Nummer (Text/Zahl, max. 80 Zeichen), Typ, Status, Daten, Preise, Seiten, Jahr, Notizen (max. 10 000, `NOTES_TOO_LONG`) geprüft; Doppelte (Reihe + Typ + Nummer, „Band 5“ = „5“) → 409 `VOLUME_DUPLICATE` mit `existing_id` |
+| POST | `/api/volumes/batch` | editor | Reguläre Bände `from`..`to` (ganze Zahlen ≥ 1, höchstens 300); vorhandene reguläre werden übersprungen. Antwort `{ success, created, skipped }` |
+| POST | `/api/volumes/bulk` | editor | Sammelbearbeitung bis 500 Bände in einer Transaktion (`set`, `owners`, `read`, `delete`); Antwort mit `undo_token`/`undo_expires_at`; `{ revert: undo_token }` stellt den Stand wieder her (Fall P) |
+| PUT | `/api/volumes/:id` | editor | Band bearbeiten; geprüft werden nur Felder, deren Wert sich ändert; Altstatus „Gelesen“ als Eingabe → `Vorhanden` + Lese-Eintrag |
+| DELETE | `/api/volumes/:id` | editor | Band in den Papierkorb (Antwort `trash_id`) |
+| POST | `/api/volumes/:id/owners` | editor | Eigenen Besitz setzen/umschalten `{ owned?, user_id?, price?, purchase_date?, previous_purchase_date? }` (`user_id` nur Admins). Antwort: `status`, `owners`, `owned_by_me`, `purchase_date`, `previous_purchase_date`, `removed_owner` (für Rückgängig) |
+| POST | `/api/volumes/:id/read` | editor | Lesestand setzen/umschalten (`read`, optional `read_at` UTC, `user_id` nur Admins); Antwort mit `read_by` und `read_users` (`user_id`, `username`, `read_at`); `read: false` antwortet mit `previous_read_at` |
+| POST | `/api/volumes/batch-read` | editor | Bände bis Nummer X gelesen/ungelesen (nur `Vorhanden`, keine Schuber; optional `read_at` UTC für neu gelesene Bände, schon gelesene behalten ihr Datum); Antwort `{ success, count, changed_ids, previous_read_at? }` |
+| GET | `/api/volumes/lookup` | editor, lookup | Metadaten eines Bands via Manga Passion (`manga_id`, `volume_number`, auch MP-URL oder -ID); nur Editoren, weil Cover nach `uploads/` geladen werden; ohne Bandnummer nennt „Keine Daten für …“ die ISBN bzw. URL |
+| GET | `/api/users/:id/stats` | auth | Persönliche Lesestatistik (nur `Vorhanden`; `read_at` ISO-UTC) |
+
+### Statistik, Einstellungen, Pflege (Kern)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/stats` | auth | `{ summary, publishers, top_series, owner_stats, owner_publishers, user_reading_stats, spending, anime? }` (ETag). `completed_series` = komplett gesammelt nach Spec A2 (Gotcha 16); Durchschnittspreise nur über bepreiste Bände; `owner_stats` mit Listenpreis; `anime` nur, wenn es Anime gibt |
+| PUT | `/api/stats/settings` | admin | `collection_start_date` (Alias `start_date`): `YYYY-MM-DD` ab 1900, höchstens heute + 1 Tag; `null` oder `''` löscht die Einstellung (Beginn wieder abgeleitet) |
+| GET | `/api/stats/reading` | auth | Leseverlauf (`?user_id=`): 24 Monate Bände/Seiten/Reihen, Stapel, Jahre, Lesesträhne, `continue_reading` |
+| GET | `/api/trash` | auth | Papierkorb, neueste zuerst (`restorable`, `series_in_trash`, `purge_at`), `retention_days` |
+| POST | `/api/trash/:id/restore` | editor | Wiederherstellen mit alten IDs; 409 `TRASH_SERIES_MISSING`, `VOLUME_DUPLICATE`, `TRASH_ID_TAKEN`, `TRASH_INVALID` (ID oberhalb von `sqlite_sequence`; solche Bände einer Reihe bleiben draußen). Ein „Vorhanden“-Band, dessen Besitzer alle gelöscht wurden, bekommt bei einem Admin diesen als Besitzer, sonst wird er „Fehlt“ |
+| DELETE | `/api/trash/:id` | editor | Eintrag endgültig löschen |
+| DELETE | `/api/trash` | admin | Papierkorb leeren |
+| GET | `/api/publishers` | auth | jede gespeicherte Verlagsschreibweise mit Reihen/Bänden, `canonical`, `known`, `outdated`; `aliases` |
+| POST | `/api/publishers/merge` | admin | `{ from, to }`: Aliase speichern und Reihen/Bände in einer Transaktion umschreiben. Weicht das Ziel nur in der Schreibweise von einem eingebauten Namen ab („TOKYOPOP“ → „Tokyopop“), bleibt eine Identitäts-Zeile in `publisher_aliases` (ohne sie drehten `normalizePublisher` und der Qualitäts-Fix die Umbenennung zurück) |
+| DELETE | `/api/publishers/aliases/:alias` | admin | Alias entfernen (Zeilen bleiben) |
+| GET | `/api/maintenance/quality` | auth | Datenqualität: Prüfungen mit Anzahl und bis zu 50 Einträgen |
+| POST | `/api/maintenance/fix` | editor | `{ check: 'legacy_read' \| 'normalize_publishers' }`; `legacy_read` stellt über `convertLegacyRead` um (vorhandene Lese-Einträge bleiben die einzigen) |
+
+### Einkaufsliste, Radar, Manga Passion, Lookup, CSV (Kern)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/shopping-list` | auth | Fehlende Bände (`Fehlt`) ohne Reihen mit Sammelstatus `pausiert`/`abgebrochen`, Verlage, Summen (ETag); `wished_series[]` (Wunschreihen mit `known_missing_count`/`_cost`), `total_wished_series`, je Verlags-Chip `wished_count`; mit `?include_others=1` zusätzlich `others` (Bände, die andere besitzen, der Aufrufer nicht; `owned_by_others`) |
+| GET | `/api/release-radar` | auth | Vorbestellungen & Neuerscheinungen nach Monaten in `groups[].items` (ETag) inkl. Budget, `countdown_label`, `days_until`, `date_precision: 'month'` bei `YYYY-MM`; abgebrochene Reihen nur mit bestellten Bänden; Monatsgrenze aus `APP_TIMEZONE` |
+| GET | `/api/dashboard-summary` | auth | `{ total_missing, total_releases, preordered_count }` wie Einkaufsliste/Radar, ohne Listen (ETag) |
+| GET | `/api/release-radar/changes` | auth | Vorbestellungen, deren Termin im Manga-Passion-Kalender abweicht (höchstens 3 Monate parallel, 12 s Budget; veraltete oder unfertige Monate zählen als `months_failed`); Oberfläche `components/dashboard/radar/PersonalDateChanges.jsx` |
+| GET | `/api/radar/feed.ics` | public | Kalender-Abo `?token=…` (120 Abrufe / 15 min je Adresse): ganztägiges VEVENT je Radar-Band mit genauem Tag, ab 30 Tage zurück; falsches/widerrufenes Token → 404 |
+| GET | `/api/manga-passion/releases` | auth | Monatskalender mit Sammlungsabgleich: je Eintrag `type`, `volume_title`, `match_kind` (`volume_id`, `edition`, `exact`, `variant`, `other_edition`, `prefix`, `null`), `user_manga_wished`, `user_manga_collecting`; `user_series_print_count`, `truncated` (> 2000 Einträge), `stale`; Jahr nur heute − 5 bis heute + 3 (sonst 400 „Ungültiges Jahr oder Monat“); `force_refresh` nur für Admins/Editoren (sonst ignoriert), frühestens nach 60 s; nicht aus dem 12-h-Cache beantwortete Monate (`releases.monthCached()`) zählen gegen das `lookup`-Budget (429); weder API noch Cache-Kopie des Monats → 503 `MP_UNAVAILABLE` „Fehler beim Abrufen der Manga-Passion-Neuerscheinungen“ (nie 500) |
+| POST | `/api/manga-passion/import` | editor | 1-Klick-Übernahme eines Kalender-Bands (`target_status` Vorbestellt, Fehlt, Erscheint bald, Bestellt; Felder streng geprüft). Ohne `manga_id`: zuerst die mit `edition_id` verknüpfte Reihe, dann gleicher Titel, sonst neue Reihe (mit `manga_passion_id`, Autor/Tags aus dem Cache). `Vorhanden` bleibt unangetastet (`skipped_owned`), `Vorbestellt`/`Bestellt` wird nie `Fehlt` (`skipped_ordered`). Antwort mit `type`, `series_created` |
+| GET | `/api/manga-passion/editions` | auth, lookup | Passende Editionen nach Titel & Verlag; `force_refresh=true` umgeht den Such-Cache; 503 `MP_UNAVAILABLE` |
+| GET | `/api/mangas/:id/gaps` | auth | Lücken-Abgleich gegen die deutsche Edition (Fall K); Admins/Editoren speichern eine eindeutig gefundene Edition, Gäste nicht; `link_confirmed`, `unavailable`, `stale`. Muss die Prüfung Manga Passion fragen (`force_refresh`, keine Edition bekannt oder Edition nicht frisch im 12-h-Cache, `client.editionCached()`), zählt sie gegen das `lookup`-Budget (429); `force_refresh` gilt nur für Admins/Editoren |
+| POST | `/api/mangas/:id/sync-edition` | editor | `edition_id` (positive Zahl), `update_total_volumes` (Standard an), `update_status`, `update_publisher`; füllt zusätzlich leere `tags` aus der Edition; 404 unbekannte Edition, 503 nicht erreichbar. Mit `{ tags_only: true }` („Genres nachladen“, ohne `edition_id`): nur leere Tags aus der verknüpften Edition (gespeicherte Edition → Cache → API mit `lookup`-Limit); Antwort `{ success, updated, source, tags, manga }`; 409 `MP_NOT_LINKED`, 404 `MP_EDITION_NOT_FOUND`, 503 `MP_UNAVAILABLE` |
+| POST | `/api/mangas/:id/batch-import-gaps` | editor | Echte Lücken übernehmen (`target_status` aus `GAP_IMPORT_STATUSES`, Standard `Fehlt`; `volume_numbers` 1–500). Fremde `edition_id` braucht `confirm_edition: true`, sonst 409 `needs_confirmation`. Antwort mit `imported_ids`, `skipped_invalid_count` |
+| POST | `/api/mangas/:id/autofill-volumes` | editor | Alle Bände anreichern (nur leere Felder, mit `overwrite` auch belegte; keine ISBN); bei unbestätigter Edition `needs_confirmation` |
+| GET | `/api/lookup/manga` | auth, lookup | Reihensuche: Manga Passion und internationale Quellen (AniList + Jikan über das Gateway) parallel, Manga Passion vorn; Suchbegriff max. 100 Zeichen; Treffer mit `source_label`, `mal_id`, `also_on`; `[]` heißt nur „keine Treffer“: konnte keine Quelle gefragt werden (Manga Passion wirft mit `err.unavailable`; `gateway.searchManga()` wirft mit `err.unavailable`, wenn keine eingeschaltete Quelle geantwortet hat – auch für jeden gleichzeitigen Aufrufer derselben Suche – oder der Benutzer zu viele wartende Suchen hat), 503 `SOURCES_UNAVAILABLE` „Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.“ |
+| GET | `/api/lookup/isbn` | auth | ISBN-Suche (Fall G); `lookup`-Limit nur, wenn die ISBN nicht schon in der Sammlung steht. `matched_volume` mit `owned_by_me`, `owners`, `type`, `notes` |
+| POST | `/api/upload-remote` | editor, remoteImage | Externes Bild per URL laden (SSRF-sicher, Metadaten entfernt); feste deutsche Fehlertexte: 400 ungültig/nicht erreichbar, 413 zu groß, 415 kein Bild, 504 Zeitüberschreitung, 502 sonst |
+| GET | `/api/export/csv` | auth | Alle Reihen und Bände als CSV (Fall A/B, Gotcha 21); in Blöcken zu 50 Reihen gebaut (`exportOptions.seriesPerBlock`), dazwischen `ctx.yield()`, Reihendetails nur auf der ersten Zeile einer Reihe; 503 `DB_REOPENED`, wenn die Datenbank währenddessen neu geöffnet wird |
+| POST | `/api/import/csv` | editor | CSV-Import `{ csv, dry_run }` (10 MB; der Parser liest erst nach `requireEditor`); Antwort `{ created_series, created_volumes, updated_series, skipped_existing, errors, warnings }`. „Band N“ = „N“, außer beide stehen für dieselbe Reihe in der Datei (Altbestand aus v2.19.1): dann legt der Import beide an, „Band N“ unter dieser Bezeichnung, mit Hinweiszeile; jede der beiden Zeilen wird dabei nur mit einem gespeicherten Band derselben Schreibweise abgeglichen (hat das Ziel schon eine Hälfte, kommt die andere dazu). „Bd. N“ neben „Band N“ ohne „N“ bleibt ein Band |
+
+### Anime & Quellen (Kern)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/anime/search` | auth, lookup | Gateway-Suche `?q=` (2–100 Zeichen): `{ results, sources_used, cached, partial, credential_used }`; 429 `TOO_MANY_SEARCHES` ab 3 wartenden Suchen je Nutzer, 503 `SOURCES_UNAVAILABLE` |
+| GET | `/api/anime/sources` | auth | Budget/Circuit je Quelle, `slow_recently` |
+| GET | `/api/anime` | auth | gemeinsame Liste mit `my_progress`, `progress_users`, `stale` (veraltete werden im Hintergrund aufgefrischt) |
+| POST | `/api/anime` | editor | aus Suchtreffer (`anilist_id`/`mal_id`) oder manuell (`title`, `episodes`); `manga_id` optional; 409 `DUPLICATE` |
+| GET | `/api/anime/:id` | auth | Detail mit Relationen, `manga`, `my_progress`, `progress` |
+| PUT | `/api/anime/:id` | editor | `title`, `title_de`, `notes`, `manga_id`; `episodes` nur manuell |
+| DELETE | `/api/anime/:id` | editor | Eintrag + Fortschritte |
+| PUT | `/api/anime/:id/progress` | editor | eigener Fortschritt (Admin mit `user_id`) |
+| DELETE | `/api/anime/:id/progress` | editor | „Von meiner Liste entfernen“ |
+| POST | `/api/anime/:id/refresh` | editor | interaktiv auffrischen; 429 `REFRESH_TOO_SOON` innerhalb 60 s; 503, wenn währenddessen wiederhergestellt wurde |
+| GET | `/api/mangas/:id/adaptations` | auth, lookup | Anime-Adaptionen der Reihe |
+| GET | `/api/export/anime.csv` | auth | Anime-Liste als CSV |
+| GET | `/api/sources/guides` | auth | Anleitungen aus `core/sources/guides.js` |
+
+### API-Schlüssel (`routes/apiKeys.js`, alle `no-store`)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/auth/api-keys` | auth | eigene Schlüssel maskiert (`provider`, `configured`, `label`, `last4`, `allow_background`, `last_ok_at`, `last_error`) |
+| PUT | `/api/auth/api-keys/:provider` | auth | `{ secret, allow_background }` (anilist, mal): Format- und Live-Prüfung, dann verschlüsselt (5/min je Nutzer); 400 `KEY_FORMAT`/`KEY_REJECTED`, 502 `PROVIDER_UNREACHABLE` |
+| DELETE | `/api/auth/api-keys/:provider` | auth | eigenen Schlüssel löschen |
+| DELETE | `/api/users/:id/api-keys/:provider` | admin | fremden Schlüssel entfernen (lesen geht nicht) |
+| GET | `/api/admin/api-keys` | admin | Instanz-Schlüssel (`mal`, `google_books`) mit `users_with_keys`; Umgebung (`MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY`) hat Vorrang |
+| GET | `/api/admin/api-keys/:provider` | admin | ein Instanz-Schlüssel (maskiert) |
+| PUT | `/api/admin/api-keys/:provider` | admin | Instanz-Schlüssel setzen |
+| DELETE | `/api/admin/api-keys/:provider` | admin | Instanz-Schlüssel löschen |
+
+### Backups (`routes/backups.js`, alle `admin`)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/backup` | admin | ZIP von DB (VACUUM-INTO-Kopie ohne Secret) + `uploads/` + `manifest.json` streamen |
+| GET | `/api/backups` | admin | Snapshots, neueste zuerst: `{ filename, size, created_at, category, verified, verify_error, manifest }` (`category`: `daily`, `manual`, `pre-restore`, `pre-update`, `other`) |
+| POST | `/api/backups/create` | admin | Snapshot jetzt: `{ success, snapshot, warning? }`; 507 `INSUFFICIENT_SPACE` |
+| GET | `/api/backups/:filename/download` | admin | Snapshot herunterladen (nur schlichte `.zip`-Namen) |
+| DELETE | `/api/backups/:filename` | admin | Snapshot samt Sidecar löschen; 404, wenn es ihn nicht gibt |
+| POST | `/api/backups/:filename/restore` | admin | Snapshot einstufig wiederherstellen |
+| POST | `/api/backup/restore` | admin | Hochgeladenes ZIP (Feld `backup`) einstufig wiederherstellen |
+| POST | `/api/restore` | admin | Alias von `/api/backup/restore` |
+| POST | `/api/backup/inspect` | admin | Schritt 1: Upload (Feld `backup`) oder `{ filename }` prüfen, ohne die Live-DB anzufassen → `staging_id` (15 Min., max. 3), Datum, App-/Schema-Version (`schema_newer`), Zähler Backup/aktuell, `current_user`, `relogin`, `warnings`; `accounts_without_password` (Benutzernamen, deren Hash in der Sicherung `!local-profile` oder leer ist, z. B. eine App-Sicherung, immer da, sonst `[]`) mit der Hinweiszeile „N Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): …“ (höchstens 10 Namen, dann „und N weitere“); `BackupRestoreModal` ergänzt daraus Hinweise zum eigenen Konto (`withPasswordWarnings`) |
+| POST | `/api/backup/restore/:stagingId` | admin | Schritt 2 (`{ allow_newer_schema?: true }`); 404 `STAGING_NOT_FOUND` |
+| DELETE | `/api/backup/restore/:stagingId` | admin | Prüfung verwerfen |
+
+Alle Wiederherstellungen liefern `preRestoreSnapshot`, lehnen ein neueres Schema mit 400 `SCHEMA_NEWER` ab (Override `allow_newer_schema`), antworten 409 bei einer parallelen Wiederherstellung, 503 `ROLLBACK_COPY_PENDING` bei liegengebliebener `manga.db.bak` und 507 bei zu wenig Platz.
+
+### Uploads & Systemseite (`routes/uploads.js`, `routes/system.js`)
+
+| Methode | Pfad | Rolle | Beschreibung |
+| :--- | :--- | :--- | :--- |
+| POST | `/api/upload` | editor | Ein Bild (Feld `image`, max. 15 MB; JPG/PNG/WebP/GIF/AVIF; Name `<UUID>.<ext>`) |
+| POST | `/api/upload/multiple` | editor | Bis zu 10 Bilder (Feld `images`) |
+| GET | `/api/system` | admin | Systemseite: Version, Node, Plattform, `instance_id`, Laufzeit, Speicher, `data_dir`, `health`, `database`, `storage`, `orphans` (Trockenlauf, 10 min gecacht, `?refresh=1`), `backups`, `jobs`, `sources.users_with_keys`, `update` |
+| POST | `/api/system/orphans/clean` | admin | verwaiste Uploads löschen (älter als 7 Tage, von keinem Undo-Snapshot und nicht in `trash.payload` gebraucht); 409 `RESTORE_RUNNING`, `JOB_RUNNING` nur während eines Jobs, der `uploads/` liest oder ersetzt (Snapshot, Wiederherstellung; die Meldung nennt ihn); `{ removed, bytes, skipped }` |
+| POST | `/api/system/sessions/end-all` | admin | Sitzungsversion aller Benutzer erhöhen und alle Kalender-Abo-Adressen (`calendar_feed:*`) löschen; der Aufrufer bekommt sofort eine neue Sitzung |
+| GET | `/api/radar/feed-token` | auth | Kalender-Abo des Benutzers: `active`, `path`, `url`, `created_at`, `last_used_at`, `unreadable` |
+| POST | `/api/radar/feed-token` | auth | neues Token (ersetzt das alte) |
+| DELETE | `/api/radar/feed-token` | auth | Abo beenden |
+
+`/uploads/*` (außerhalb `/api`): ohne Anmeldung, eigene CSP (`default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox`), Nicht-Bilder nur als Download, immer `Cross-Origin-Resource-Policy: same-origin` + `Vary: Origin`, fehlende Datei = 404 (nie `index.html`).
 
 ---
 
 ## 6. Wo muss was geändert werden? (Task-to-File Guide)
 
-### 🔹 Fall A: Neues Feld für Mangas hinzufügen (z. B. "Demographie" oder "Originalsprache")
-1. **Datenbank (`db.js`):**
-   * Im `CREATE TABLE IF NOT EXISTS mangas` das Feld ergänzen.
-   * Zusätzlich eine **neue Migration** (nächste freie `version`) in `runSequentialMigrations()` anhängen: `PRAGMA table_info(mangas)` prüfen und `ALTER TABLE mangas ADD COLUMN ...` ausführen, damit bestehende Datenbanken das Feld erhalten. Die Migration läuft selbst in einer Transaktion – kein eigenes `BEGIN`.
-2. **Backend API (`routes/`):**
-   * Im `POST /api/mangas` das Feld aus `req.body` entgegennehmen und im `INSERT INTO mangas` eintragen.
-   * Im `PUT /api/mangas/:id` das Feld in das `UPDATE mangas SET ...` aufnehmen.
-   * Im `GET /api/mangas` und `GET /api/mangas/:id` sicherstellen, dass das Feld selektiert wird (meist durch `SELECT *`).
-3. **Frontend UI:**
-   * `frontend/src/components/modals/AddMangaModal.jsx`: Eingabefelder für neue Metadaten beim Anlegen ergänzen.
-   * `frontend/src/components/detail/MangaHeroCard.jsx`: Feld in der Detailansicht anzeigen und im Bearbeiten-Formular editierbar machen (State/Speichern in `frontend/src/hooks/useMangaData.js`).
+### 🔹 Fall A: Neues Feld für Reihen (z. B. „Demographie“)
+1. **Datenbank (`core/schema.js`):** Spalte in `CREATE TABLE IF NOT EXISTS mangas` ergänzen **und** eine neue Migration anhängen (`PRAGMA table_info(mangas)` prüfen, dann `ALTER TABLE mangas ADD COLUMN …`; die Migration läuft selbst in einer Transaktion, kein eigenes `BEGIN`). Probelauf mit `scripts/migrate-dry-run.js`, Erwartung in `test/migrations.test.js` ergänzen.
+2. **Backend (`core/handlers/mangas.js`):** POST und PUT lesen Felder über `readMangaFields`; Eingaben mit Parsern aus `core/lib/validate.js` prüfen (neue Parser dort, nicht im Handler).
+   * `GET /api/mangas` (`listMangas` in `core/snapshot.js`) wählt die Spalten **einzeln** aus: ein neues Listenfeld dort eintragen, sonst fehlt es in Übersicht und Offline-Kopie. Die Detailansicht nutzt `SELECT *`.
+   * CSV: Spalte in `COLUMNS` (`core/csvExchange.js`, vor „Gelesen von“) und im Export-SELECT (`core/handlers/csv.js`) ergänzen; beim Import in `readSeriesMeta` lesen und in `createSeries` schreiben (Rundlauf-Test in `test/csvExchange.test.js`).
+3. **Frontend:** `components/modals/AddMangaModal.jsx` (Anlegen), `components/detail/MangaHeroCard.jsx` (Anzeige + Bearbeiten-Formular; Zustand und `updateBody` in `hooks/useMangaData.js`, gesendet werden nur geänderte Felder). Optimistische Änderungen in `utils/volumePatch.js` mitziehen, wenn das Feld abgeleitet ist.
 
-### 🔹 Fall B: Neues Feld für Bände/Volumes hinzufügen (z. B. "Edition", "Farbe", "Format")
-1. **Datenbank (`db.js`):**
-   * In `CREATE TABLE IF NOT EXISTS volumes` Spalte ergänzen.
-   * Eine neue Migration (nächste freie `version`) anhängen, die per `PRAGMA table_info(volumes)` prüft und `ALTER TABLE volumes ADD COLUMN ...` ausführt.
-   * Feld ggf. in `GET /api/offline-snapshot` / `GET /api/mangas/:id` prüfen, damit auch die Offline-Kopie es enthält.
-2. **Backend API (`routes/`):**
-   * In `POST /api/volumes`, `POST /api/volumes/batch` und `PUT /api/volumes/:id` das Feld berücksichtigen.
-3. **Frontend UI:**
-   * Band-Editor: Feld in `frontend/src/utils/volumeFormHelpers.js` (`buildVolumeForm`) aufnehmen und im passenden Teil unter `frontend/src/components/detail/volumeEdit/` (`DetailFields.jsx`, `TypeNumberFields.jsx`, `StatusPriceFields.jsx`) als Eingabefeld ergänzen; die Form-Daten gehen unverändert per `PUT /api/volumes/:id` an den Server. Soll der Autofill das Feld füllen, `applyLookupToForm` erweitern (mit Test in `test/volumeFormHelpers.test.js`).
-   * `frontend/src/components/detail/BatchAddModal.jsx`: Falls das Feld im Batch-Generator gesetzt werden soll, Eingabefeld hinzufügen.
-   * `VolumeGridView.jsx`, `VolumeListView.jsx`, `VolumeShelfView.jsx` (alle in `components/detail/`): Feld in Karte, Liste und Regal rendern.
+### 🔹 Fall B: Neues Feld für Bände (z. B. „Format“)
+1. **Datenbank (`core/schema.js`):** wie Fall A für `volumes`. Neue Bandspalten erscheinen automatisch in `GET /api/mangas/:id` und `GET /api/offline-snapshot` (`core/snapshot.js` liest die Spalten per `PRAGMA table_info(volumes)`, ohne `number_sort`); nur rein interne Spalten dort ausschließen. Der Papierkorb nimmt neue Spalten automatisch mit.
+2. **Backend (`core/handlers/volumes.js`):** `POST /api/volumes`, `/volumes/batch`, `PUT /api/volumes/:id`; Prüfung in `core/lib/validate.js`. Soll die Sammelbearbeitung das Feld ändern, Parser in `BULK_SET_PARSERS` und Text in `BULK_FIELD_ERRORS` (Fall P).
+3. **Frontend:** Feld in `utils/volumeFormHelpers.js` (`buildVolumeForm`) aufnehmen und im passenden Teil unter `components/detail/volumeEdit/` als Eingabe ergänzen. `buildSaveBody(form, base)` (`components/detail/volumeEdit/editorUtils.js`) schickt nur geänderte Felder; prüft der Server das Feld, dieselbe Regel in `validateVolumeForm` ergänzen, damit der Fehler inline erscheint. Soll der Autofill es füllen, `applyLookupToForm` erweitern (Test `test/volumeFormHelpers.test.js`). Anzeige in `VolumeGridView.jsx`, `VolumeListView.jsx`, `VolumeShelfView.jsx`; Batch-Generator `BatchAddModal.jsx`.
+4. **Kaufdatum im Editor:** wird nur gesendet, wenn der Nutzer es geändert hat; nimmt ein Besitzer-Umschalten den letzten Besitzer weg, übernimmt der Editor das geleerte Datum.
 
-### 🔹 Fall C: Neues Statistik-Widget oder Auswertung hinzufügen
-1. **Backend API (`routes/`):**
-   * Route `GET /api/stats` aufrufen/bearbeiten.
-   * Die SQLite-Aggregatsabfrage (SUM, AVG, COUNT, GROUP BY) hinzufügen und im Antwort-JSON zurückgeben.
-2. **Frontend UI:**
-   * `frontend/src/components/modals/StatsModal.jsx`: Das neue KPI-Widget, Diagramm oder die Leser-Statistik gestalten.
+### 🔹 Fall C: Neue Statistik oder Auswertung
+1. **Backend (`core/handlers/stats.js`):** Aggregat-SQL in `stats` bzw. `reading`; jede neue Abfrage gegen den Testserver prüfen (`test/stats.test.js`). Bei Verlagsgruppen den Alias `pub_name` nutzen (`publisher` steht in beiden Tabellen → „ambiguous column“). Durchschnittspreise zählen nur Bände mit Preis (Preis 0 = Geschenk zählt mit). „Komplett“ nur über `COMPLETED_SERIES_SQL`.
+2. **Frontend:** `components/modals/StatsModal.jsx` ist nur der Rahmen (Reiter, Laden, Fehler, Startdatum, Werkzeuge). Karten liegen in `components/modals/stats/` bzw. `SpendingCard.jsx`/`OwnerStatsCard.jsx`. Zahlen, Beträge und Prozente nur über `components/modals/statsFormat.js` → `utils/format.js`; CSS-Breiten nie formatieren, sondern `cssPct()` (ein Komma macht die Breite ungültig). Überschriften: Dialog `h2`, Karten `h3`, Leserkarten `h4`. Die Leiste „Weiterlesen“ über der Regal-Toolbar (`components/dashboard/ContinueReading.jsx`) zeigt die ersten drei `continue_reading`-Einträge aus `GET /api/stats/reading` („Weiter mit Band N · M ungelesen“); offline, leer oder bei Fehlern unsichtbar. Die Anker `stats-spending`, `stats-owners`, `stats-top-series`, `stats-publishers`, `stats-wishlist` beibehalten. Die Reiterleiste scrollt waagerecht, lieber Karten in bestehende Reiter als einen weiteren Reiter.
 
-### 🔹 Fall D: UI/Design/Styling ändern
-1. **Globale Farbtöne, Scrollbars, Glasmorphismus:**
-   * `frontend/src/index.css` (enthält CSS-Variablen, Scrollbar-Klassen, Animationen).
-2. **Tailwind-Konfiguration:**
-   * `frontend/tailwind.config.js`.
-3. **Komponenten:**
-   * Header, Regal-Ansicht, Grid-Ansicht: `frontend/src/Dashboard.jsx` und `components/dashboard/` (`DashboardHeader`, `CollectionToolbar`, `MangaCollectionGrid`).
-   * Dashboard-Modals: `frontend/src/components/modals/`.
-   * Einkaufsliste & Release-Radar: `frontend/src/components/dashboard/`.
-   * Banner, Buchrücken-Regal, Bandkarten: `frontend/src/components/detail/` (`MangaHeroCard`, `VolumeShelfView`, `VolumeGridView`, `VolumeListView`).
-   * Band-Editor, Batch-Tools, Lückenfüller, Lightbox: `frontend/src/components/detail/`.
+### 🔹 Fall D: UI, Design, Barrierefreiheit
+1. **Farben, Fokus, Spines, Scrollbars:** `frontend/src/index.css`; Tailwind-Sonderwerte in `frontend/tailwind.config.js` (Gotcha 24). Gemeinsame Bausteine dort: `.dialog-overlay`/`.dialog-box`/`.dialog-safe-area` (Punkt 6), `.hit-44` (Punkt 5), Variante `short:` (= `@media (max-height: 500px)`: Querformat-Handy, 200 % Zoom; als `:root .short\:…` erzeugt, schlägt `sm:`/`supports-[]:`).
+2. **Komponenten:** Dashboard `Dashboard.jsx` + `components/dashboard/`; Dialoge `components/modals/`; Detailansicht `components/detail/`; gemeinsame Bausteine `components/common/`.
+3. **Rückmeldungen:** nie `alert()`. Fehler über `notify.error(err)` bzw. `await notifyResponseError(res, 'Fehler beim …')`, Erfolge über `notify.success(…)`; `confirm()` nur für Löschen/Überschreiben. Rückgängig-Toasts: Schnellkauf, Lesestatus, „Lesestatus in Serie“ (`changed_ids`), Lücke füllen, Lücken übernehmen (`imported_ids`), Besitzer im Band-Editor (`ownersUndoBody`), Sammelbearbeitung (`undo_token`), Löschen von Band/Reihe (Papierkorb). Fortschritt in einem stehenden Toast über `notify.update(id, text)`.
+4. **Formate:** Preise, Zahlen und Daten nie mit `toLocaleString`/`toFixed`, sondern über `utils/format.js`; Zähltexte mit `formatCount` („1 Band“ / „3 Bände“). `formatEuro` liefert ein geschütztes Leerzeichen vor „€“.
+5. **Barrierefreiheit (Pflicht bei neuen Komponenten):** globaler `:focus-visible`-Ring, nie `outline: none !important` ohne Ersatz; informativer Text mindestens `text-slate-400`, weiße Schrift nur auf 700er-Flächen (Verläufe `from-brand-800 to-brand-700`); Bedienelemente mind. 24 × 24 px (auf dem Handy 44 px Trefferfläche); Icon-Buttons immer `aria-label` (die `title`-Attribute bleiben für die Browsertests); ein `aria-label` beginnt mit dem sichtbaren Wort (Label in Name, WCAG 2.5.3: „Mehr – Menü öffnen“), Zähl-Badges liegen neben dem Knopf statt darin; Umschalter `aria-pressed`; Reiter über `hooks/useTabList.js`; Fortschrittsbalken `role="progressbar"` mit `aria-valuetext`; jedes Eingabefeld mit `<label htmlFor>` (IDs per `useId`); Dateiauswahl über `FilePickerButton`; eine `h1` je Seite; neue Seiten mit `SkipLink`, `<main id={MAIN_ID} tabIndex={-1}>`, `useDocumentTitle`, `usePageHeading` (`components/common/PageChrome.jsx`). Eingaben auf dem Handy 16 px (`text-base sm:text-sm`, in `.input-field` eingebaut; auf Touch erzwingt `index.css` unter `(pointer: coarse)` mindestens 1rem für jedes Textfeld, `select` und `textarea`, sonst zoomt iOS beim Fokus). `prefers-reduced-motion` wird in `index.css` beachtet; eigene JS-Animationen prüfen es selbst. `test/contrast.test.js` und `frontend/src/__tests__/styles.test.js` prüfen Kontraste, Klassen und Schriftgrößen.
+   * **Trefferflächen:** 44 px auf Touch über die gemeinsame Klasse `hit-44` (unsichtbares `::before`, nur unter `(pointer: coarse)`; setzt `position: relative` nur ohne `absolute`/`fixed`/`sticky`), keine eigenen `before:-inset-*`. Ein Eltern-Element mit `overflow: hidden` (`line-clamp-*`, `truncate`) schneidet die Fläche ab: die Begrenzung dort nur für `[@media(pointer:fine)]` setzen. Nebeneinander liegende `hit-44`-Knöpfe auf Touch mit `[@media(pointer:coarse)]:gap-5` trennen (26-px-Knöpfe + 20 px Abstand), sonst überdecken sich die Flächen.
+   * **Eingabefelder mit Symbol:** Symbol `absolute … pointer-events-none aria-hidden`, das Feld füllt die ganze Box (Polsterung am `<input>`, nicht am Wrapper; Vorlagen `Login.jsx`, Kopf-Suche `#main-search-input`). Fehler, die zu einem Feld gehören, setzen dort `aria-invalid` und `aria-describedby` (Hinweis-ID + Fehler-ID) und fokussieren es (Vorlagen `Setup.jsx`, `app/ServerScreen.jsx`).
+   * **Überschriften in wiederverwendeten Karten:** die Ebene folgt dem Ort. `ApiKeyCard` nimmt `headingLevel` (Vorgabe `h3`, Instanz-Karten `h4`), `SourcesPanel` reicht es durch (Vorgabe 3); `Setup.jsx` und `app/LocalScreen.jsx` übergeben 2, weil die Karten dort direkt unter der `h1` stehen.
+   * **Keine Emoji in UI-Code:** Symbole kommen aus lucide-react (`w-3`–`w-4`, `aria-hidden`, der Text daneben ist der zugängliche Inhalt); in nativen `<option>` nur Text. `frontend/src/__tests__/uiEmoji.test.jsx` sucht `\p{Extended_Pictographic}`/`\p{Regional_Indicator}` in allen `.js`/`.jsx`/`.mjs` unter `frontend/src` (ohne Tests) und in `SORT_OPTIONS`, `RADAR_STATUS_CHIPS` und den Lookup-Labels; erlaubt sind nur ✓ ✕ ★ ☐ ♡ • → — ↗ ◀ ▶.
+6. **Neuer Dialog:** `lazy(() => import(…))` im Elternteil, nur rendern solange offen (`{show && <X … />}` in `<Suspense fallback={null}>`), `useDialogA11y(open)` am äußeren `role="dialog" aria-modal`-Element; während laufender Anfragen `data-busy="true"`. Vorlage für Schließen-Verhalten: `AddMangaModal.jsx` (Gotcha 24).
+   * **Overlay und Box (jeder Dialog):** äußeres Element `className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"`, die Box direkt darunter `dialog-box … max-w-*` (Vorlage `BatchAddModal.jsx`). Kein `fixed inset-0 flex items-center p-*` und kein `my-*` dazu (ein übrig gebliebenes `p-*` oder `items-center` überschreibt die Klasse). `.dialog-overlay` ist der Scroll-Container über den ganzen Viewport mit Safe-Area-Abstand auf allen Seiten (0,5 rem, ab 640 px 1 rem); `.dialog-box` zentriert per `margin-block: auto`, ist sie höher als der Viewport, beginnt sie oben (Kopf und X bleiben erreichbar). `styles.test.js` hält die Liste der Dialoge mit diesem Overlay.
+   * Dialoge mit eigenem Scroll-Body (`max-h-[90dvh]`): `short:max-h-none` an der Box, `short:overflow-visible` am Body (dann scrollt das ganze Overlay), kompakter Kopf mit `short:p-4`/`short:py-2` und `short:hidden` an Untertitel und Icon. Schließen-Knopf mit `hit-44`. Vollbild-Ebenen ohne Scroll (Galerie): `dialog-safe-area`.
+7. **Begriffe:** Status `Vorhanden` heißt in der Oberfläche „Im Besitz“; Marke „Manga Passion“ (in Zusammensetzungen „Manga-Passion-Edition“); Preise mit Komma; „z. B.“ mit Leerzeichen (Ausnahme: Platzhalter in `AddMangaModal.jsx`, die `test/browser/e2e-suite.js` sucht).
 
-### 🔹 Fall E: Benutzerberechtigungen anpassen
-1. **Backend Middleware (`middleware/auth.js`):**
-   * Funktionen `requireAuth`, `requireAdmin`, `requireEditor`.
-   * Neue Rollen oder feinere Rechte direkt in den entsprechenden Routen prüfen.
-2. **Frontend UI:**
-   * Bedingte Buttons (`user.role === 'admin'` oder `user.role !== 'visitor'`) in `Dashboard.jsx`, `MangaDetail.jsx` (`canEdit` wird an Hooks und Komponenten durchgereicht) und den jeweiligen Modals in `components/`.
+### 🔹 Fall E: Berechtigungen anpassen
+1. **Backend:** Kern-Endpunkte bekommen ihre Rolle in der Zeile von `core/routes.js`; fremde `user_id` über `resolveTargetUser` (`core/lib/access.js`, nur Admins). Server-Routen nutzen `requireAuth`, `requireEditor`, `requireAdmin` aus `middleware/auth.js`. Antworten 401/403 mit `code` (`AUTH_REQUIRED`, `SESSION_INVALID`, `FORBIDDEN`, `READ_ONLY`); das Frontend reagiert auf `code`, nicht auf den Text.
+2. **Frontend:** `canEdit` (Bearbeiten) und `canToggle` (nur Besitz-/Lese-Umschalter, auch offline für Editoren/Admins) in `Dashboard.jsx`, `MangaDetail.jsx`, `hooks/useVolumeActions.js`, `hooks/useDetailKeyboard.js`; Admin-Einträge in `components/dashboard/DashboardHeader.jsx`.
 
-### 🔹 Fall F: Einkaufsliste / Buchladen-Modus anpassen
-1. **Backend API (`routes/`):**
-   * Route `GET /api/shopping-list` selektiert alle Bände mit `status = 'Fehlt'`, ermittelt den effektiven Verlag (`v.publisher` oder `m.publisher`) und summiert Preise & Verlage.
-   * `PUT /api/volumes/:id` schaltet den Status um (z. B. von 'Fehlt' auf 'Gekauft' / 'Besitz').
-2. **Frontend UI (`frontend/src/components/dashboard/ShoppingListView.jsx`):**
-   * Filtern nach Verlagschips, Echtzeit-Suche, Offline-Puffer und Schnellkauf-Button (`handleQuickBuy`).
-   * Hauptumschalter `activeMainView: 'shelf' | 'shopping' | 'radar'` in `Dashboard.jsx`.
+### 🔹 Fall F: Einkaufsliste / Laden-Modus
+1. **Backend (`core/handlers/shopping.js` + `core/handlers/wishlist.js`):** welche Reihen auf die Einkaufsliste kommen, steht einmal in `SHOPPING_SERIES` (nicht `pausiert`/`abgebrochen`); `core/handlers/radar.js` nutzt es für `dashboard-summary`. Wunschreihen kommen als `wished_series`. Der Effektiv-Verlag ist `v.publisher` oder `m.publisher`.
+2. **Kauf = eigener Besitz:** Schnellkauf, nachgereichter Offline-Kauf und ✓ auf einem fehlenden Band gehen über die Outbox (`utils/outbox.js`, `submitChange({ kind: 'purchase', … })`) als `POST /api/volumes/:id/owners { owned: true, purchase_date: localToday() }`, nie als `PUT` mit `status: 'Vorhanden'` (sonst fehlt der Käufer in `volume_owners`). `useShoppingList.handleQuickBuy` liefert `'ok' | 'queued' | 'failed'` (mit `{ batch: true }`: `{ status, error, httpStatus }`), dazu `buyingIds` und `shoppingError`. Nach einem Kauf feuert `PURCHASE_RECORDED_EVENT` (`{ volumeId, queued? }`), eine offene Detailseite lädt neu; auch vorgemerkte Käufe gehen über `applyChangeToCaches` in die Offline-Kopie.
+3. **„Gekauft“ hat ein 5-s-Rückgängig-Fenster** (`components/dashboard/ShoppingListView.jsx`): gesendet wird nach Ablauf, beim Verstecken der Seite, beim Verlassen der Ansicht oder vor dem Abmelden (`runBeforeLogout()` in `appShell.js`, Event `mangashelf:before-logout`). Verdrängt der Toaster einen Rückgängig-Toast, wird der Kauf sofort gesendet (`notify.subscribe`, Ereignis `dismiss`). Browsertests warten bis ~5 s auf den Statuswechsel.
+4. **Laden-Scan:** `BarcodeScannerButton` mit `continuous` hält den Live-Scanner offen (letzte drei Scans in `#shop-scan-feed`). Reihenfolge: Einkaufsliste, ISBN-Index der Offline-Kopie (sofort, immer vorläufig `offline: true`), dann `/api/lookup/isbn` (maßgeblich, ersetzt den vorläufigen Eintrag über `mergeScanEntry`). Scan-Arten `buy`, `owned`, `partner`, `check`, `new`, `unknown`, `offline`, `pending` (`classifyShopScan` in `utils/scanHelpers.js`). „N als gekauft abhaken“ zählt nur `isBookable`-Einträge. Die Scanliste liegt 12 h in `localStorage` (`mangashelf_shop_session`, an den Benutzer gebunden, beim Logout gelöscht). `/?view=shopping&scan=1` (App-Verknüpfung) zeigt oben „Foto aufnehmen“.
+5. **Anzeige:** Band-Karten und „Bei anderen vorhanden“ seitenweise (`useProgressiveList`, 50 je Seite), Suche mit `useDeferredValue`, Cover über `CoverImage`; „★ Wichtigste zuerst“ sortiert auch Wunschreihen; Verlags-Chips zählen Bände + Wunschreihen (`mergeWishedPublisherChips`). „Alles komplett im Regal!“ nur nach erfolgreichem Laden.
+6. **Teilen/Drucken:** Text in `utils/shareList.js`, Knöpfe `#btn-shop-share` (nur mit `navigator.share`), `#btn-shop-copy`, `#btn-shop-print`, Druckblatt `#shopping-print-sheet` (Portal, eigenes `@media print`). Sie nehmen genau das, was die Liste gerade zeigt.
 
-### 🔹 Fall G: ISBN- & Metadaten-Lookup (DNB API)
-1. **Backend (`routes/lookup.js` → `services/isbnLookup.js`):**
-   * `GET /api/lookup/isbn?isbn=...`: lehnt Eingaben ohne gültige Prüfziffer sofort mit 400 ab (falsch gescannter Barcode, EAN ohne 978/979), ohne Kataloge zu fragen. Danach: Ist die ISBN an einem gespeicherten Band, ist das der sichere Treffer (kein Netzwerk nötig, funktioniert offline im Laden). Sonst DNB-SRU (MARC21) → K10plus → Google Books; die erste Quelle mit Ergebnis gewinnt.
-   * `parseMarc21Xml` liest nur den **ersten** Datensatz (ein Treffer kann mehrere liefern, deren Felder sonst vermischt würden), dekodiert XML-Entities (`&amp;`) und liefert Titel (`245$a`), Bandnummer (`245$n`), Untertitel (`245$p`), Autor (`100$a`), Verlag (`264$b`), Jahr, Seiten (`300$a`) und Preis (`020$c`). Fehlt die Bandnummer, ist `volume_number` nur der Platzhalter „1“ und `volume_number_known` ist `false`.
-   * **DNB-Eigenheiten (in `parseMarc21Xml` abgefangen):** (1) Ein führender Artikel („Der“, „Die“, „A“ …) steht in Steuerzeichen `U+0098`/`U+009C` (im XML als `&#152;`/`&#156;`) – `stripMarcControls` entfernt sie, sonst passt kein Titel („A Returner's Magic“ wurde früher fälschlich „Magi“ zugeordnet) und sie erscheinen als Müll in der Anzeige. (2) `245$a` ist oft nur der **Bandtitel** („Mein kleiner Bruder!“); Reihe und Nummer stehen in `800 $t/$v` bzw. `490 $a/$v` (`series`, `series_number`) und gewinnen vor dem freien Text `245$n` („2021,16“ = Jahr, Band). Abgleich und Anzeige nutzen `series` vor `title`.
-   * `matchCollection` (Antwortfelder `matched_manga`, `matched_volume`, `match_reason`: `isbn` | `title`, `matched_candidates`): zuerst gleiche ISBN, sonst bester Titeltreffer (`titleMatchScore`: gleiche Wörter = 100, sonst kürzerer Titel auf Wortgrenzen mit mind. 4 Buchstaben), nur wenn er mit ≥ 15 Punkten Vorsprung heraussticht – sonst keine Reihe, aber Kandidaten. Der Band wird nur über die Nummer gesucht, wenn der Katalog sie kannte (sonst würde „du besitzt Band 1“ behauptet), und nur Typ `volume`.
-   * **Neue Reihe per Scan:** Findet `Dashboard.jsx` (Barcode) einen Katalogtreffer ohne passende Reihe (`matched_manga` leer, keine `matched_candidates`) und darf der Nutzer bearbeiten, öffnet sich `AddMangaModal` mit `prefill` (Titel = `series` vor `title`, Autor, Verlag, Cover von Open Library mit `?default=false`, gescannter Band mit ISBN/Preis/Seiten/Jahr). Der Band wird per `POST /api/volumes` mit angelegt (Status Vorhanden oder Fehlt; unbekannte Bandnummer bleibt leer und ist Pflichtfeld); scheitert nur der Band, merkt sich der Dialog die Reihe und versucht beim nächsten Klick nur den Band. Danach öffnet die App die neue Reihe.
-   * Beide Frontend-Aufrufer (`Dashboard.jsx` Barcode → Reihe öffnen, `ShoppingListView.jsx` Einkaufsmodus) nutzen diese Felder; im Einkaufsmodus sammelt `ShoppingListView` mehrere Scans in einer Liste „Gescannt“ (`classifyShopScan` in `scanHelpers.js`: `buy`/`owned`/`check`/`new`/`unknown`) und hakt alle `buy`-Treffer auf Knopfdruck per Schnellkauf ab; bei unbekannter Bandnummer bzw. mehreren passenden Reihen ehrlich „bitte prüfen“ gemeldet statt falscher Besitz-/Fehlt-Aussagen.
-2. **Architektur-Hinweis (Barcode-Scan):**
-   * Kein Live-Kamerastream: Mobile Browser sperren WebRTC bei HTTP-Deployments ohne SSL (z. B. Standard-Pterodactyl-Ports). `frontend/src/components/common/BarcodeScannerButton.jsx` nutzt stattdessen ein `<input type="file" capture="environment">` und dekodiert das Foto mit dem nativen `BarcodeDetector` (Fallback: ZXing, dynamisch geladen). Funktioniert daher auch über HTTP.
-   * ISBN-Normalisierung (10→13, Prüfsumme) liegt in `utils/isbn.js`.
-   * Mit einer echten Handy-Kamera ist der Scan noch ungetestet.
+### 🔹 Fall G: ISBN- & Metadaten-Lookup, Barcode-Scan
+1. **Backend (`core/handlers/lookup.js` → `core/isbnLookup.js`):** `GET /api/lookup/isbn` lehnt Eingaben ohne gültige Prüfziffer sofort mit 400 ab. Steht die ISBN an einem gespeicherten Band, ist das der sichere Treffer (offline-tauglich, kein Netz). Sonst DNB-SRU (MARC21) → K10plus → Google Books; die erste Quelle mit Ergebnis gewinnt (Gotcha 22). Google Books hängt den Instanz-Schlüssel an (`credentialsOf(ctx).instance('google_books')`); lehnt Google ihn ab, folgt genau ein Versuch ohne Schlüssel.
+2. **`matchCollection`** (`matched_manga`, `matched_volume`, `match_reason`: `isbn` | `title`, `matched_candidates`): zuerst gleiche ISBN, sonst bester Titeltreffer (`titleMatchScore`) nur mit ≥ 15 Punkten Vorsprung, sonst Kandidaten. Bei Gleichstand gewinnt eigener Titel vor Reihenname vor Alternativtitel, dann der Verlag; sonst keine Reihe raten. Der Band wird nur über die Nummer gesucht, wenn der Katalog sie kannte, und nur Typ `volume`.
+3. **Dashboard-Scan** (`handleBarcodeDetected` in `Dashboard.jsx`, Entscheidung in `scanDashboardAction`): zuerst der ISBN-Index der Offline-Kopie (`lookupLocalIsbn`), dann der Server. Eine passende Reihe → öffnen; mehrere Kandidaten → `ScanCandidatesDialog`; Katalogtreffer ohne Reihe → Editoren bekommen `AddMangaModal` mit `prefill` (Titel = `series` vor `title`, Cover von Open Library, gescannter Band), Leser „Nicht in der Sammlung: <Reihe>“; `found: false` → Servermeldung, Editoren zusätzlich „Reihe manuell anlegen“. Meldungen über den Toaster. Scheitert beim Anlegen per Scan nur der Band, merkt sich der Dialog die Reihe, sperrt die Reihenfelder und versucht beim nächsten Klick nur den Band (ein 409 mit `existing_id` gilt als angelegt). Teilen-Ziel (`share_target`): `parseSharedScan` liest ISBN oder Manga-Passion-Link aus `?share_text`/`share_url`.
+4. **Scan auf der Reihenseite (Handy):** `components/detail/DetailBottomBar.jsx` sucht zuerst in den geladenen Bänden (`findScannedVolume`), dann über `/api/lookup/isbn`; Band dieser Reihe → Band-Editor, andere Reihe → Hinweis, Katalogtreffer → Nummer/Preis/ISBN ins Formular „Band hinzufügen“ (`prefillScannedVolume`; ISBN aus der Antwort, sonst der gescannte Code als ISBN-13). Die gescannte ISBN geht als `newVolumeIsbn` (`useVolumeActions`) mit `POST /api/volumes` und steht in `AddVolumeBar` als Chip „Gescannte ISBN entfernen“; das Nummernfeld hat die feste ID `add-volume-number` (`ADD_VOLUME_NUMBER_ID`).
+5. **Scanner-Architektur:** In einem sicheren Kontext (HTTPS, localhost, Apps; `liveScanSupported()`) öffnet `BarcodeScannerButton` den Live-Scanner `components/common/LiveScanner.jsx` (Rückkamera, `BarcodeDetector` ~8 fps, sonst ZXing `decodeFromStream` mit EAN-Hinweisen; nur 978/979 zählt, dieselbe ISBN 2 s nur einmal, Licht-Schalter mit `torch`). In der Capacitor-App der native ML-Kit-Scanner. Über HTTP bleibt der Foto-Weg (`<input type="file" capture="environment">`, Bild auf 1600 px, `BarcodeDetector`, sonst ZXing `decodeFromCanvas`, zweiter Versuch TRY_HARDER auf 2400 px; der 978/979-EAN gewinnt vor Preisaufklebern). Treffer melden sich über `utils/haptics.js`. Auf echten Geräten ist der Scan noch ungetestet.
+6. **Reihensuche** (`GET /api/lookup/manga`): Manga Passion und das Anime-Gateway (AniList + Jikan) parallel, je Quelle höchstens 12 s (`withDeadline`). Abzeichen aus `source_label`, `also_on` zeigt doppelte Quellen (`lookupSourceLabels` in `AddMangaModal.jsx`, `lookupBadgeLabels` in `MangaHeroCard.jsx`). `source_label` ist reiner Text (`'AniList'` aus `core/anilist.js`, `'MyAnimeList'` aus `core/anime/jikan.js`, `'Manga Passion'` aus `core/mangaPassion/client.js`; keine Emoji oder Flaggen, `test/lookupRoute.test.js`); das Badge setzt davor ein Lucide-Icon (`Globe` für AniList/MyAnimeList, `Library` für Manga Passion, `aria-hidden`). Ein Lookup-Status „Unbekannt“ behält den bisherigen Wert, ein Lookup-Verlag „Unbekannt“ wird ignoriert.
 
-### 🔹 Fall H: Backup-System & automatische Snapshots anpassen
-1. **Backend API (`routes/backups.js`) & Scheduler (`services/scheduler.js`):**
-   * Server-Snapshots werden unter `data/backups/` im ZIP-Format gespeichert.
-   * `createBackupSnapshot(prefix)` sichert eine konsistente Kopie der DB (`copyDatabaseToTemp()` = `VACUUM INTO` nach `data/temp/`, wird danach gelöscht; auch `GET /api/backup` nutzt sie) und den Ordner `uploads/` und löscht automatisch Snapshots, die älter als die neuesten 7 sind.
-   * Ein Scheduler prüft 10s nach Serverstart und danach alle 24h, ob für heute bereits ein Backup existiert (`daily-auto`).
-   * `restoreFromZipBuffer` führt vor dem Entpacken einen SQLite-Checkpoint und ein Schließen der Verbindung durch und legt ein temporäres Rollback-Backup `manga.db.bak` an.
-2. **Frontend UI (`frontend/src/components/modals/BackupRestoreModal.jsx`):**
-   * Snapshot-Verwaltung (Erstellen, Wiederherstellen, Download, Löschen) und ZIP-Datei-Upload.
+### 🔹 Fall H: Backup-System & Snapshots
+1. **Backend (`routes/backups.js`, `services/scheduler.js`, `services/backupArchive.js`):**
+   * `createBackupSnapshot(prefix, { includeUploads })` prüft zuerst den Platz (frei ≥ 1,2 × (DB + Uploads), sonst 507), kopiert die DB (`copyDatabaseToTemp()`: `VACUUM INTO` nach `data/temp/`, ohne `jwt_secret`, Teilkopie bei Fehler samt `-journal/-wal/-shm` weg), schreibt `<name>.zip.part` mit `manga.db`, `uploads/` und `manifest.json` (App- und Schema-Version, Kategorie, Zähler, Größe und sha256 der DB), testet das Archiv (`verifyArchive`: entpacken, sha256, read-only öffnen, `quick_check`, Zähler), schreibt das Sidecar `backups/<name>.json` und benennt erst dann um. Ein Snapshot, der den Test nicht besteht, bleibt als „beschädigt“ liegen.
+   * **Kategorien und Aufbewahrung** (je Kategorie, sortiert nach dem Zeitstempel im Namen): `daily-auto-*` 7 (`BACKUP_KEEP_DAILY`), `manual-*` 10 (`BACKUP_KEEP_MANUAL`), `vor-wiederherstellung-*` 3 (`BACKUP_KEEP_PRE_RESTORE`), `vor-update-*` 3 (`BACKUP_KEEP_PRE_UPDATE`). Gezählt werden nur gute Snapshots; von beschädigten bleibt höchstens der neueste. Andere Namen werden nie gelöscht; ein Sidecar ohne `verified` gilt als ungeprüft. Gerade wiederhergestellte bzw. geprüfte Snapshots hält `holdSnapshot()` fest. Ein ungültiger Wert (`30d`, `-1`, `0`) löscht gar nichts (`KEEP_ALL`, Warnung bei jedem Lauf).
+   * **Täglicher Snapshot:** Prüfung 10 s nach dem Start und danach stündlich; gesichert wird, sobald `BACKUP_HOUR` (Standard 3) in `BACKUP_TIMEZONE` (Standard `Europe/Berlin`) erreicht ist und es für den Tag noch keinen **geprüften** `daily-auto`-Snapshot gibt. Danach `cleanOrphanUploads()`; der Lauf ist als `lifecycle.trackJob` angemeldet.
+   * **Wiederherstellung** (`restoreFromZip(pfad, { allowNewerSchema })`): Sperre bei liegengebliebener `manga.db.bak` (503 `ROLLBACK_COPY_PENDING`, auch nach Neustarts), Platzprüfung, streamendes Entpacken nach `manga.db.restore-tmp` mit Grenzen (`RESTORE_MAX_DB_BYTES` 2 GiB, `RESTORE_MAX_UPLOADS_BYTES` 4 GiB, `RESTORE_MAX_ENTRIES` 100 000; gezählt werden entpackte Bytes, Größe und CRC werden geprüft), `validateDbFile` (integrity_check, Tabellen, mindestens ein Admin), Schema-Prüfung, `migrateDbFile`, Cover nach `temp/restore-uploads-*` (nur flache Bilddateien, Metadaten entfernt). Vor dem Tausch entsteht `vor-wiederherstellung-<ts>.zip` (nur DB, muss den Test bestehen; Sidecar mit `referenced_uploads`), dessen Name als `preRestoreSnapshot` zurückkommt. Dann `swapInStagedDb()` synchron (Gotcha 2), danach `persistJwtSecret()`: alle früheren Sitzungen enden, nur der wiederherstellende Admin bekommt ein neues Token über `signSessionToken()`.
+   * **Zweistufig:** `POST /api/backup/inspect` legt Uploads als `temp/restore-staged-<id>.zip` ab bzw. hält Server-Snapshots 15 Min.; `POST /api/backup/restore/:id` führt aus. `requireSpaceForUpload` prüft schon vor multer anhand von `Content-Length`. Ist der Client während der Prüfung gegangen, wird nichts bereitgestellt.
+   * **Start-Aufräumen** (`sweepTempArtefacts()`): `temp/backup-db-*`, `temp/verify-*`, `temp/inspect-*`, `temp/vor-update-db-*`, Restore-ZIPs und Staging-Ordner, `manga.db.restore-tmp*`, `manga.db.bak.tmp`, `*.zip.part`, `*.json.tmp`, Sidecars ohne ZIP, `.strip-*.tmp`. `manga.db.bak` bleibt bewusst liegen (nur Warnung). Danach entfernt `stripExistingUploadsOnce()` einmalig EXIF/GPS aus vorhandenen Uploads (Merker `uploads_metadata_stripped`).
+   * **Waisen-Bereinigung** (`services/uploadCleanup.js`): eine Datei gilt als benutzt, wenn ihr Name in Cover-, Banner-, Beschreibungs-, Editions-, Bilder-, Notiz-, Anime- oder `trash.payload`-Spalten (`REFERENCE_COLUMNS`) oder in `referenced_uploads` einer Undo-Sicherung vorkommt; Dateien jünger als 7 Tage bleiben immer. Ist ein Undo-ZIP unlesbar, löscht die Bereinigung in dieser Nacht nichts.
+2. **Frontend (`components/modals/BackupRestoreModal.jsx`, Teile in `components/modals/backup/`):** Snapshot-Liste mit Kategorie, Prüfstatus und Manifest-Inhalt; Wiederherstellen immer zweistufig ohne `confirm()` (`#btn-inspect-backup` → Bestätigungsansicht `RestoreConfirm.jsx` → `#btn-confirm-restore`); Schließen verwirft die Prüfung (`DELETE /api/backup/restore/:id`) und bricht laufende Prüf-Anfragen ab. Nach jeder Wiederherstellung: Offline-Kopie löschen, Seite nach 2 s neu laden (bis dahin `data-busy`). „Wiederherstellung rückgängig machen“ 30 Minuten lang über `mangashelf_restore_undo` (sessionStorage). Download-Links nur über `components/modals/backup/DownloadLink.jsx` (App-Build: mit Token über den Download-Manager). Im Standalone-Modus öffnet „Backups“ stattdessen `BackupExportModal`.
+3. **Systemseite:** „Backup jetzt“ nutzt `POST /api/backups/create` (Fall R).
 
-### 🔹 Fall I: Schuber, Special Editions & Sonderbände erfassen & sortieren
-1. **Datenbank (`db.js`):**
-   * `volumes.type` (`'volume'`, `'special_edition'`, `'schuber'`, `'special'`).
-   * Automatische Migration in `db.js` konvertiert vorhandene "Special X" Einträge bei Reihen wie One Piece in `type = 'schuber'` und `volume_number = 'Schuber X'`, sowie Einträge mit "Special Edition" oder "Limited Edition" in `type = 'special_edition'`.
-2. **Backend API (`routes/`):**
-   * `GET /api/mangas/:id`: Sortiert per `ORDER BY CASE` reguläre Bände und nummerierte Special Editions an erster Stelle (Standard Band 1 -> Band 1 Special Edition -> Band 2). Unnummerierte Special Editions ordnen sich direkt dahinter ein (Rang 1.5), gefolgt von Schubern (Rang 2) und Specials/Extras (Rang 3).
-   * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `type` entgegen, validieren gegen die erlaubten Typen und speichern ihn ab.
-3. **Frontend UI:**
-   * `frontend/src/components/detail/volumeEdit/TypeNumberFields.jsx`: Dropdown zur Auswahl des Eintrags-Typs ("📖 Einzelband", "✨ Special Edition", "📦 Schuber", "⭐ Special / Extra") mit dynamischen Feldern.
-   * `frontend/src/components/detail/VolumeFilterBar.jsx`: Filter-Chips `[Alle]`, `[Nur Bände]`, `[✨ Special Editions]`, `[📦 Nur Schuber]`, `[⭐ Specials]` und Badges in den Ansichten.
+### 🔹 Fall I: Schuber, Special Editions & Sonderbände
+1. **Datenbank:** `volumes.type` (`volume`, `special_edition`, `schuber`, `special`); Migration 2 hat Altdaten umgestellt.
+2. **Backend:** `GET /api/mangas/:id` sortiert über `volumeOrderSql` (reguläre Bände und nummerierte Special Editions nach Nummer, unnummerierte Special Editions dahinter, dann Schuber, dann Specials). `POST`/`PUT` validieren den Typ (`VOLUME_TYPES`, leer = `volume`, Unbekanntes = 400).
+3. **Frontend:** Typ-Auswahl in `components/detail/volumeEdit/TypeNumberFields.jsx`; Filter-Chips in `components/detail/VolumeFilterBar.jsx`; Typ-Badges nur über `getVolumeBadge()` (`components/detail/volumeViewHelpers.js`, nutzt `inferVolumeType`), keine eigenen `includes('limited edition')`-Prüfungen in Komponenten.
 
-### 🔹 Fall J: Fotogalerie & Zusatzbilder pro Band & Schuber (Feature 7)
-1. **Datenbank (`db.js`):**
-   * `volumes.images` speichert ein JSON-Array von Strings (`["/uploads/...", ...]`).
-2. **Backend API (`routes/`):**
-   * `POST /api/upload/multiple`: Nimmt bis zu 10 Bilddateien entgegen und speichert sie lokal unter `data/uploads/`.
-   * `GET /api/mangas/:id`: Parst `vol.images` automatisch als echtes Array.
-   * `POST /api/volumes` und `PUT /api/volumes/:id`: Nehmen `images` entgegen und serialisieren es als JSON in die DB.
-3. **Frontend UI:**
-   * `frontend/src/components/detail/LightboxGallery.jsx`: Moderne Vollbild-Galerie mit Tastaturnavigation (`Pfeiltaste links/rechts`, `Escape`), Zähler (`1 / X`) und 1-Klick-Cover-Festlegung.
-   * `frontend/src/components/detail/VolumePhotoManager.jsx` (Zustand/Aktionen in `hooks/useVolumeEditForm.js`): Foto-Manager mit Multi-Upload (bis zu 10 Fotos), URL-Eingabe, Sortieren (`◀`/`▶`) und Löschen.
-   * `frontend/src/components/detail/VolumeGridView.jsx`: Badges `📷 X Fotos` auf Karten und Listen.
+### 🔹 Fall J: Fotogalerie & Zusatzbilder
+1. **Datenbank:** `volumes.images` = JSON-Array von Strings (`["/uploads/…"]`); `GET /api/mangas/:id` liefert es als Array.
+2. **Backend:** `POST /api/upload/multiple` (bis 10 Bilder je Anfrage), `POST /api/upload-remote`; Bänder speichern `images` als JSON.
+3. **Frontend:** `components/detail/LightboxGallery.jsx` (Portal in `body`, `z-60`, Pfeiltasten, Escape im Capture-Modus, Wischen ab 50 px, Cover festlegen); `components/detail/VolumePhotoManager.jsx` (Zustand in `hooks/useVolumeEditForm.js`): beliebig viele Fotos in Paketen zu 10, Dateien, die der Server ablehnen würde, werden vorher aussortiert und gemeldet; ein neues Bild wird nur Cover, wenn es noch keines gibt; scheitert `/api/upload-remote`, wird die fremde URL nur nach „Trotzdem als externen Link hinzufügen“ gespeichert. Die Galerie im Editor ändert nur das Formular; nur die Galerie der Detailseite schickt direkt `PUT /api/volumes/:id`. Fotos werden vor jedem Upload mit `prepareImageForUpload` (`utils/imageResize.js`) auf 1600 px verkleinert und neu kodiert (EXIF/GPS weg); Uploads sind abbrechbar („Upload abbrechen“).
 
-### 🔹 Fall K: Manga Passion – Editionsabgleich, Lücken, Autofill & Schuber
-Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`, 12-h-Cache in `manga_passion_cache`) ab. Alle Logik liegt in `services/mangaPassion/`; Identitätsregeln für Sonderausgaben stehen in Gotcha 14.
-1. **Backend (`services/mangaPassion/`, `routes/mangas.js`, `routes/volumes.js`):**
-   * `GET /api/mangas/:id/gaps` → `reconcileMangaGaps`: echte Lücken mit deutschem Preis, Datum und Cover; erkennt Abweichungen zwischen DB-Gesamtzahl und deutscher Edition. Abgleich über **Typ + Nummer**, Notizen, Titel und Saga-Namen; vorhandene Schuber gelten nicht als Lücke.
-   * **Editionssuche** (`searchMangaPassionEditions` in `client.js`): Die Manga-Passion-Titelsuche findet nur nahe Schreibweisen („One Punch Man“ findet nichts, „One-Punch Man“ schon). Deshalb: Runde 1 `buildSearchQueries().primary` (Titel, Bindestriche, Doppelpunkt-Teil …); gibt es danach keinen Treffer mit Titel-Score ≥ 100, Runde 2 `variants` (Bindestrich zwischen Wörtern, Apostroph vor dem s, „Eyeshield21“ → „Eyeshield 21“); ohne jeden Kandidaten Runde 3 mit einzelnen seltenen Wörtern. `titleKey()` vergleicht Titel unabhängig von Apostroph, Punkt, `!`, Bindestrich; Verlag und Bandzahl zählen im Score erst ab einer gewissen Titelähnlichkeit (`score < 15` → nur Titelscore), sonst gewinnt jede Edition desselben Verlags. Eine Empfehlung gibt es erst ab Score 50. Änderungen an der Bewertung immer mit der Live-API gegen eine echte Sammlung prüfen (Gegenprobe: bisherige Treffer dürfen sich nicht ändern).
-   * **Automatische Verknüpfung nur bei eindeutigem Treffer** (`isConfidentMatch` in `classify.js`: Score ≥ 120 und ≥ 20 Punkte vor Platz 2, kalibriert an einer echten Sammlung; zusätzlich `title_relation` nicht `target-longer`/`fuzzy`, damit „Dragon Ball max“ nicht ungefragt an „Dragon Ball“ hängt). Sonst wird die Edition nur für diese Antwort benutzt, **nicht** gespeichert (`link_confirmed: false` in `GET /api/mangas/:id/gaps`); die Detailansicht zeigt dann „Edition nicht bestätigt“ mit „Edition bestätigen“ (ruft `sync-edition`) bzw. „Andere wählen“. `autofillMangaVolumes` verweigert bei unbestätigter Edition (`needs_confirmation`), damit keine falschen Daten in alle Bände geschrieben werden.
-   * `POST /api/mangas/:id/sync-edition` (`syncMangaWithEdition`): Gesamtbandzahl und Metadaten auf die deutsche Edition setzen.
-   * `POST /api/mangas/:id/batch-import-gaps` (`batchImportGaps`): Lücken als `Fehlt` mit Typ (`schuber`/`special_edition`/`volume`), Preis, Datum, Notizen und Cover übernehmen.
-   * `GET /api/volumes/lookup` (`lookupVolumeMetadata`, Fallback DNB) und `POST /api/mangas/:id/autofill-volumes` (`autofillMangaVolumes`, eine Transaktion): füllen nur **leere** Felder (`release_date`, `release_year`, `pages`, `isbn`, `price`, `publisher`); akzeptieren auch Manga-Passion-URLs oder -IDs.
-   * Schuber: `matchSchuberVolume` erkennt sie gezielt (`type === 3`, `specialType === 1`), unterscheidet Leerschuber (~12 €) von Sammelschubern (>25 €) und ordnet „Schuber N“ dem N-ten Schuber zu – nie dem Band N. `downloadRemoteImageToUploads` lädt das Cover über `safeFetch` nach `data/uploads/`.
-2. **Frontend (`hooks/useMpGaps.js`, `MangaDetail.jsx`, `components/detail/`):**
-   * Diskrepanz-Warnung mit 1-Klick-Anpassung, Ghost-Spines für Lücken im Regal (`VolumeShelfView`), Lücken-Banner mit Band-Präfix bzw. Volltitel (`VolumeFilterBar`), `GapFillModal` (Vorschau vor Übernahme), `MpEditionModal` (alternative Editionen wählen, „Alle Bände anreichern“).
-   * `volumeEdit/AutofillPanel.jsx` im Band-Editor: Banner „Automatisch ausfüllen (Manga Passion)“, Schuber-Banner „Schuber laden“; eine eingefügte MP-Volume-URL/-ID lädt Datensatz und Cover und überschreibt fälschlich eingetragene Band-1-Daten.
+### 🔹 Fall K: Manga Passion – Editionsabgleich, Lücken, Autofill, Kalender
+Hintergrund: AniList liefert japanische Tankōbon-Zahlen (20th Century Boys: 22 vs. 11 deutsche Doppelbände), deshalb gleicht die App Reihen mit der offiziellen deutschen Edition der Manga Passion API (`https://api.manga-passion.de`) ab. Logik in `core/mangaPassion/`, Endpunkte in `core/handlers/mangaPassion.js`; Identitätsregeln in Gotcha 14, Client und Kalender in Gotcha 15.
+1. **Lücken** (`GET /api/mangas/:id/gaps` → `reconcileMangaGaps`): echte Lücken mit deutschem Preis, Datum und Cover; Abweichung der Gesamtzahl nur gegen die von Manga Passion angegebene Zahl. Abgleich über **Typ + Nummer**, Notizen (nur innerhalb desselben Typs), Titel und Saga-Namen (nur für Einträge, die `classifyOfficialVolume()` als Schuber erkennt). Schuber mit Bereichsnummer („1-5“) sind nie eine Lücke. `?edition_id=` muss eine positive Zahl sein; `link_confirmed` ist nur `true`, wenn sie der gespeicherten Verknüpfung entspricht.
+2. **Editionssuche** (`searchMangaPassionEditions`): Runde 1 `buildSearchQueries().primary`; erreicht danach kein Kandidat einen Gesamt-Score ≥ 100 (`scoreEdition` inkl. Verlag/Bandzahl), Runde 2 `variants` (Bindestriche, Apostroph, „Eyeshield21“ → „Eyeshield 21“); ohne Kandidaten Runde 3 mit einzelnen seltenen Wörtern. `titleKey()` vergleicht unabhängig von Apostroph, Punkt, `!`, Bindestrich; Verlag und Bandzahl zählen erst ab einer gewissen Titelähnlichkeit; eine Empfehlung gibt es ab Score 50. Bewertungsänderungen immer mit der Live-API gegen eine echte Sammlung prüfen (bisherige Treffer dürfen sich nicht ändern).
+3. **Automatische Verknüpfung nur bei eindeutigem Treffer** (`isConfidentMatch`: Score ≥ 120, ≥ 20 Punkte vor Platz 2, `title_relation` nicht `target-longer`/`fuzzy`), als Compare-and-set (`saveEditionLink`, nur solange `manga_passion_id` leer ist); hat der Nutzer währenddessen gewählt, gilt seine Wahl (`superseded: true`). Lese-Rollen speichern nie (`persist: false`). Sonst `link_confirmed: false`: die Detailseite zeigt „Edition nicht bestätigt“ mit „Edition bestätigen“ (`sync-edition`) bzw. „Andere wählen“; „Alle auf Einkaufsliste“ und „Bandzahl anpassen“ sind dann gesperrt (`isGapEditionUnconfirmed`, `canFixVolumeCount` in `hooks/useMpGaps.js`), `autofillMangaVolumes` antwortet `needs_confirmation`.
+4. **Lücken übernehmen** (`batchImportGaps`): Cover werden **vor** der Transaktion nach `uploads/` geladen (`downloadRemoteImageToUploads`, 4 parallel, Rückfall Remote-URL); vorhandene Bände werden über Typ + Nummer gefunden („Band 2“ = 2) und nie angefasst, wenn `Vorhanden`. Status nur aus `GAP_IMPORT_STATUSES` (nie `Vorhanden`, das braucht einen Besitzer). Ohne Manga-Passion-Daten bestimmt `classifyOfficialVolume` den Typ aus der Beschriftung („5 (Variant Edition)“ → Sonderausgabe).
+5. **Autofill:** `GET /api/volumes/lookup` (`lookupVolumeMetadata`, nur Manga Passion) liefert die Daten eines Bands; der Band-Editor übernimmt sie mit `applyLookupToForm` (`utils/volumeFormHelpers.js`): Datum, Jahr, Seiten, ISBN, Verlag werden ersetzt, sobald Manga Passion einen Wert hat; Preis nur, wenn leer bzw. 0; Titel (`notes`) nur, wenn leer oder ein Eintrag aus `PLACEHOLDER_NOTES`. Schuber übernehmen Preis, Titel und „Schuber N“ immer und leeren Seiten/ISBN. Gemeldet werden nur echte Änderungen. Eine eingefügte MP-Volume-URL lädt Datensatz und Cover; das bisherige Cover bleibt als weiteres Bild (nur `STALE_COVER_MARKERS` werden verworfen). `POST /api/mangas/:id/autofill-volumes` (`autofillMangaVolumes`, eine Transaktion) füllt nur leere Felder (`release_date`, `release_year`, `pages`, `price`, `publisher`; keine ISBN), mit `overwrite` auch belegte. Der Platzhalter-Verlag „Unbekannt“ wird nie geschrieben (`knownPublisher()`).
+6. **Frontend (`hooks/useMpGaps.js`, `MangaDetail.jsx`, `components/detail/`):** Diskrepanz-Warnung, Ghost-Spines nur für reguläre Bände (`buildMpGapMap`, `getRegularGapMeta`), `GapFillModal` (übernimmt bei nur vermuteter Edition weder Preis noch Termin noch Cover; für unveröffentlichte Bände „Vorbestellt“/„Erscheint bald“/„Fehlt“), `MpEditionModal` (für Gäste und offline reine Leseansicht), `components/detail/volumeEdit/AutofillPanel.jsx`. Nur die letzte Lücken-Anfrage der aktuellen Reihe schreibt Zustand. Läuft ein nicht idempotenter Langläufer in den Client-Timeout, lädt der Hook den Serverstand neu statt „Netzwerkfehler“ zu melden.
+7. **Genres nachladen:** `fillTagsFromEdition()` (`core/mangaPassion/tags.js`) füllt leere Tags einer verknüpften Reihe aus der gespeicherten Edition, dem Cache (Edition-Daten in jedem Alter; ein gecachter 404 antwortet nur innerhalb von `EDITION_CACHE_TTL_MS` ohne Anfrage, danach wird die API wieder gefragt), zuletzt der API; `sync-edition` macht das bei jedem Abgleich mit, `{ tags_only: true }` nur das. Frontend: `canFillTags`, `fillingTags`, `handleFillTags` in `hooks/useMangaData.js`; der Knopf `#btn-fill-tags` steht in `MangaHeroCard` dort, wo sonst die Tags stehen. Tests: `test/mangaPassionTags.test.js`.
+8. **Kalender** (`core/mangaPassion/releases.js`, Oberfläche `components/dashboard/ReleaseRadarView.jsx`): Abgleich `buildMatcher` – Reihe über verknüpftes MP-Band > verknüpfte Edition > Titel/Alternativtitel (unverknüpfte Reihe zuerst) > Präfix vor „–“, „-“, „:“; Band über Reihe + Typ + Nummer. Details in Gotcha 15. Tests: `test/radarServices.test.js`, `test/mangapassion.test.js`, `test/mangaPassionGaps.test.js`, `test/mpClient.test.js`.
+
+### 🔹 Fall L: Anime
+1. **Backend:** Endpunkte in `core/handlers/anime.js`, Quellen/Budget/Cache/Failover in `core/anime/gateway.js`, Adapter `core/anime/anilist.js`, `core/anime/jikan.js`, `core/anime/mal.js`. Neue Felder einer Quelle zuerst in den Adapter (`normalize` → AnimeMeta), dann in `core/anime/store.js` (`snapshotColumns`, `entryOf`), Schema in `core/schema.js`. Hintergrund-Abrufe (Sweep, SWR, ID-Auflösung, MAL-Rückfall) schreiben immer `applySnapshot(…, { partial: true })`; Felder, die nur die Detailabfrage liefert, in `KEEP_WHEN_EMPTY` aufnehmen, sonst leert der nächste Sweep sie.
+2. **Schlüssel:** Anleitungstexte nur in `core/sources/guides.js`; Speicherung und Prüfung in `routes/apiKeys.js`; der Kern bekommt sie über `core/sources/credentials.js` (Server: `registerServerSources()` in `index.js` und der Konsole; Apps: `ctx.credentials`).
+3. **Frontend:** `hooks/useAnimeList.js`, `components/dashboard/AnimeView.jsx`/`AnimeCard.jsx`, Dialoge `AddAnimeModal.jsx`/`AnimeDetailModal.jsx`, Konto-Dialog `AccountModal.jsx` + `ApiKeyCard.jsx` (Links über `openExternal`); Reiter in `MainViewSwitcher.jsx`/`DashboardHeader.jsx`, `?view=anime` und `?add=<reihenId>` in `Dashboard.jsx`.
+4. **Tests:** `test/anime/*.test.js` (fakeFetch + Memory-Core aus `test/anime/helpers.js`, nie echte APIs; `gateway.resetGatewayState()` setzt Budget/Warteschlangen zurück), `test/anime.test.js`, `test/apiKeys.test.js`, `test/secretBox.test.js`, Vitest `animeTab.test.jsx`, `accountModal.test.jsx`, Browser `npm run test:anime`.
+
+### 🔹 Fall M: Neuer Endpunkt
+1. **Handler** in `core/handlers/<gebiet>.js`: `function name(ctx, { params, query, body }) { …; return { body }; }` (async erlaubt). Daten nur über `ctx.db` (`ctx.db.transaction(fn)` für mehrstufige Schreibvorgänge, `fn` synchron), Dateien über `ctx.files`, externe Dienste über `ctx.http`, Uhrzeit über `ctx.now()`, Logs über `ctx.log.child('name')`, Aufrufer `ctx.user`. Fehler als `throw badRequest(…)`/`notFound(…)`/`new HttpError(…)` aus `core/errors.js`. Query-Werte immer über `qstr()` (`core/lib/query.js`).
+2. **Eine Zeile in `core/routes.js`:** `{ method, path, role: 'auth' | 'editor' | 'admin' | 'public', handler }`; Lese-Endpunkte mit ETag `conditional: true` (nur, wenn die Antwort allein vom Datenstand abhängt, Gotcha 20); Suchen gegen externe Dienste `limit: 'lookup'`. Nie einen Express-Handler in `routes/` schreiben: der Server hängt die Zeile über `routes/core.js` ein, die Apps rufen sie über `dispatch()` direkt auf.
+3. **Doku:** eine Zeile in §5 dieser Datei (`test/agentsMd.test.js` prüft das).
+4. **Tests:** ein Szenario in `test/core/scenarios.js` (läuft gegen den Express-Testserver, den In-Memory-ctx und sql.js; `run(sql, …params)` setzt Daten, die kein Endpunkt schreibt) und, wenn die Antwort offline gelesen wird, die URL in `test/core/parity.test.js`. Spezialfälle in `test/<gebiet>.test.js`.
+5. Nur echte Server-Themen (Sitzungen, Passwörter, Backups als ZIP, multer-Uploads, Rate-Limits, CORS, Systemseite) gehören in `routes/`, `middleware/` oder `services/`. Braucht die Oberfläche eine Server-Route auch im Standalone-Modus, gehört sie zusätzlich in `frontend/src/local/localServer.js`.
+
+### 🔹 Fall N: App-Build – Server, Verbindung, Token, Outbox
+1. **Server und Verbindung:** `app/serverStore.js` (Einträge, Speicher-Adapter `setStorageAdapter()`, den die Hüllen mit sicherem Speicher belegen), `app/connection.js` (Health-Check der Adressen eines Servers mit 3 s, `name: 'Manga Shelf'` und passender `instance_id`; beim Start, bei `online`, im Vordergrund höchstens alle 30 s, „Verbindung prüfen“), Zustand per `useConnection()`. Verbindungs-Pille `#btn-connection-pill` in der Kopfzeile → `/server`.
+2. **Token:** gilt nur für die Origins, an denen sich der Nutzer angemeldet hat (`tokenOrigins`, gesetzt von `setToken` bei Login/Passwortwechsel, verworfen mit dem Token). `getToken()` gibt es nur heraus, wenn die aktive Adresse eine dieser Origins ist und `isSecureEnough` gilt (Gotcha 28). Eine neue Adresse braucht eine neue Anmeldung („Neue Adresse – bitte erneut anmelden“). Ein neues Token derselben Sitzung (Passwortänderung in `AccountModal`, „Alle Sitzungen beenden“ in `SystemModal`, eigenes Passwort in `UserManagementModal`) geht über `rememberToken(data, { rotate: true })` → `setToken(token, { rotate: true })` und behält die vertrauten Adressen; nur Login und Einrichtung beginnen mit `[aktiver Origin]`. Ein Verbindungslink (`manga-shelf://connect`) zu einem bekannten Server mit neuer Adresse fragt nach, statt den Eintrag still zu ändern.
+3. **Abmelden im App-Build:** das Token verlässt den Eintrag sofort und wartet als Vormerk in `mangashelf_pending_logouts` (über den Storage-Adapter); `flushPendingLogout` schickt ihn nur an Adressen, an denen das Token galt. Server entfernen nennt die Zahl der vorgemerkten Änderungen; mit Instanz-ID wandern sie nach `removed:<instance-id>` und kommen beim erneuten Hinzufügen zurück.
+4. **Netzwerkzugriffe** immer über `utils/api.js` (Basis + Token); Bilder mit Serverpfad über `{...assetImgProps(pfad)}`; Downloads über `downloadFile`/`useDownload`/`DownloadLink`, nie als nackter `<a href>`.
+5. **Outbox** (`utils/outbox.js`, Store `outbox` der Offline-Datenbank, Rückfall `localStorage.mangashelf_outbox`, getrennt nach Server und Benutzer): nur idempotente Set-Operationen (`POST /volumes/:id/read {read}`, `POST /volumes/:id/owners {owned, purchase_date}`, `PUT /volumes/:id {status}`); pro (Art, Band, Person) zählt die letzte Änderung. 2xx/404 = erledigt, 401 = bleibt bis zum nächsten Login, keine Antwort/Gateway/429/500 = später erneut (Backoff), andere 4xx = verworfen mit Toast; im Standalone-Modus ist jede andere Antwort endgültig (verworfen). Replay unter `navigator.locks`, vorher `GET /api/auth/me` (nur derselbe Benutzer), gespeicherte Zeile wird vor jedem Senden neu gelesen (mehrere Tabs). Umschalter nie direkt per `apiFetch` senden. `utils/volumePatch.js` wendet Änderungen optimistisch auf Detail und Liste an (inkl. `reader_stats`, `wished`, `collecting`, Zähler).
+6. **Standalone-Modus:** §4; neue Kern-Endpunkte laufen dort automatisch (Gotcha 19).
+7. **Tests:** Vitest `connection.test.jsx`, `serverScreen.test.jsx`, `outbox.test.jsx`, `localRuntime.test.jsx`, `localApp.test.jsx`, App-Modus-Fälle in `appShell.test.jsx` (`vi.stubEnv('VITE_APP_MODE', 'app')`, vorher `setStorageAdapter(null); resetServers(); resetConnection(); resetOutbox()`); Node `test/outbox.test.js`, `test/core/takeover.test.js`.
+
+### 🔹 Fall O: Regal – Filter, Gruppierung, Suche, Daten laden
+1. **Reine Logik** in `frontend/src/utils/collectionHelpers.js`: neuer Filter = Eintrag in `COLLECT_FILTERS` + Zweig in `matchesCollectFilter` (Zähler über `getCollectCounts`); neue Gruppierung = Eintrag in `GROUP_OPTIONS` + Zweig in `groupLabelOf`.
+2. **Zustand** in `hooks/useCollectionFilters.js`: localStorage ist die Vorgabe, die URL (`status`, `publisher`, `collect`, `author`, `tags`, `sort`, `group`) gewinnt beim Laden; Änderungen ersetzen den History-Eintrag, beim Mount wird nichts geschrieben. Neuer URL-Schlüssel in `FILTER_DEFAULTS` + `FILTER_VALID`. Genre-Filter `tagFilter` (`mangashelf_tag_filter`, `?tags=a,b`). Verlagsnamen lädt `loadPublisherNames` (höchstens alle 10 Minuten je Server und Benutzer).
+3. **Anzeige:** `components/dashboard/CollectionToolbar.jsx` (Chips unter 640 px zu zweit pro Zeile), Abschnitte in `components/dashboard/MangaCollectionGrid.jsx` (`visibleSections` schneidet die Gruppen auf die gerenderte Seite). Die Detailseite importiert nur `utils/seriesMeta.js`, nie `utils/collectionHelpers.js` (sonst wandert der Suchindex in einen gemeinsamen Chunk und sprengt das Bundle-Budget).
+4. **Suche:** alle Suchfelder laufen über `frontend/src/utils/search.js`. Ein neues Suchfeld bekommt einen Sucher auf Modulebene: `const s = createSearch(item => ({ primary: [Titel…], secondary: [Rest…], codes: [ISBN…] }))`, dann `prepareQuery(text)` einmal pro Filterlauf und `s.matches(item, query)` / `s.rank(item, query)` (oder `s.filter(items, text)`). ISBNs und Kennungen gehören in `codes`. Bestehende Sucher: `seriesSearch` (Regal, inkl. `volume_search` aus dem nachgeladenen Index), Radar (`utils/radarHelpers.js`), `createVolumeSearch` (`hooks/useVolumeFilters.js`), `filterShoppingItems` (`utils/scanHelpers.js`). Titel-/Verlagssortierung immer mit `compareNatural`. Tests: `test/search.test.js`.
+5. **Daten laden:** Regalliste (`useMangaList`) und Reihen-Detail (`useMangaData`) arbeiten stale-while-revalidate: zuerst die In-Memory-Kopie aus `utils/dataCache.js`, bei der Liste sonst die Offline-Kopie, parallel die Serveranfrage mit `If-None-Match` (304 = kein Parsen, kein setState). Neue Daten nur über `writeCache(owner, key, data, etag)`, Objekte im Cache nie verändern. Startkette: `main.jsx` startet `GET /api/mangas` parallel zur Sitzungsprüfung, `App.jsx` lädt den Dashboard-Chunk schon beim Modulstart, `index.html` enthält das Markup des LoadingScreen (bei Änderungen beide anpassen, `appShell.test.jsx`). Lange Listen über `useProgressiveList(items, { step, resetKey, storageKey })`. Der Suchindex (`volume_search`) kommt nicht mit der Liste: `loadVolumeSearch(owner)` in `hooks/useCollectionFilters.js` holt `GET /api/mangas/volume-search` beim ersten Suchzeichen (auch bei einer gemerkten Suche), cacht ihn in `dataCache` unter `VOLUME_SEARCH_KEY` mit ETag, prüft ihn bei jeder neuen Liste neu, solange gesucht wird (eine Anfrage je Benutzer gleichzeitig); ohne Serverantwort (Netzfehler, 502–504) die Kopie im Speicher, sonst `loadOfflineVolumeSearch()` aus der Offline-Kopie; bei anderen Fehlern (z. B. 404 eines älteren Servers) zählt `volume_search` aus den Listenzeilen. `withVolumeSearch(mangas, index)` (`utils/collectionHelpers.js`) mischt ihn als neue Zeilenobjekte ein, `volumeSearchMap(rows)` in `utils/dataCache.js`. Tests: `useCollectionFilters.test.jsx`, `test/collectionHelpers.test.js`, `test/offlineStore.test.js`.
+
+### 🔹 Fall P: Mehrere Bände auf einmal ändern (Sammelbearbeitung)
+1. **Backend:** `bulk` in `core/handlers/volumes.js`. Neue Felder für `set` in `BULK_SET_PARSERS` (`core/lib/validate.js`) und `BULK_FIELD_ERRORS`; das Rückgängig liest dieselbe Liste `BULK_SET_FIELDS`. Rückgängig nur per Server-Token (`ctx.undo`, 10 Minuten, höchstens 20 je Benutzer und 200 insgesamt, dazu ein Größenbudget über die JSON-Länge der Snapshots: 8 MB je Benutzer, 32 MB insgesamt, älteste zuerst verdrängt; ein einzelner Snapshot über 8 MB bekommt kein Token; an den Aufrufer gebunden, nach einer Wiederherstellung ungültig): `{ revert: undo_token }` stellt Felder, Besitzer aller Benutzer (mit Preis/Datum/`created_at`), Lesestand und gelöschte Bände mit ihrer ID wieder her und verbraucht das Token. Ein Sammel-Löschen merkt sich nur `trash_id` je Band; das Rückgängig holt Zeile, Besitzer und Lesestand aus dem Papierkorb-Eintrag (ist er inzwischen geleert oder wiederhergestellt, steht der Band in `not_found` bzw. `restored`); 400 `BULK_REVERT` ohne Token, 403 `BULK_UNDO_FORBIDDEN`, 410 `BULK_UNDO_EXPIRED`; ist Typ+Nummer eines gelöschten Bands wieder belegt, steht er in `conflicts`. `delete` ist nicht kombinierbar, `set.status` nicht zusammen mit `owners`; Nicht-Admins nur eigene ID bei Besitz/Lesen.
+2. **Frontend:** „Auswählen“ in `VolumeFilterBar` (`#btn-volume-select-mode`), Auswahl in `hooks/useVolumeSelection.js`, Kontrollkästchen in Karten/Liste, Buchrücken als `role="checkbox"` in `ShelfSpine`; Shift-Klick wählt den Bereich in der sichtbaren Reihenfolge. `components/detail/BulkActionBar.jsx` baut die Änderung, `useVolumeActions.handleBulkEdit` sendet sie, lädt die Reihe einmal neu und bietet 10 s „Rückgängig“ (ein Request mit dem `undo_token`). Solange die Leiste (`#bulk-action-bar`, die ID lesen Toaster und Tests) gemountet ist, setzt sie `scroll-padding-bottom` direkt am `<html>` (Höhe per ResizeObserver + `0.75rem + 5.5rem + env(safe-area-inset-bottom)`) und entfernt es beim Abbau, damit der Tastaturfokus nie unter ihr landet. Unter 640 px und auf niedrigen Bildschirmen (`short:`) liegen die Aktionen in einer waagerecht scrollenden Zeile; unter 640 px ist „Fertig“ nur ein X-Knopf (Name „Auswahl beenden“).
+3. **Tests:** `test/api.test.js` (bulk), `test/validate.test.js`, `frontend/src/__tests__/bulkEdit.test.jsx`, `volumeViews.test.jsx`, Browser-Schritt „TEST 6b: Bulk Edit“ in `test/browser/e2e-suite.js`.
+
+### 🔹 Fall Q: Löschen, Papierkorb, Wiederherstellen
+1. Löschen läuft immer über `core/lib/trash.js` (`moveMangaToTrash` / `moveVolumeToTrash` in der Transaktion des Handlers), nie über ein rohes `DELETE FROM volumes/mangas` in einem Handler.
+2. **Papierkorb-Toast im Frontend:** `notifyTrashed(label, trashId, onDone)` und `restoreTrashed(trashId, onDone)` aus `hooks/useVolumeActions.js` („<label> in den Papierkorb gelegt“ mit „Rückgängig“, 10 s, nichts ohne `trash_id`). Genutzt beim Löschen eines Bands (Seite und Editor, Bestätigung `volumeDeleteConfirmText`), beim Rückgängig eines Lücken-Eintrags (`undoGapFill` in `GapFillModal`), beim Löschen einer Reihe auf der Detailseite (`useMangaData`; die wiederhergestellte Reihe öffnet sich wieder) und im Regal (`useMangaList({ onRestored })`, das Dashboard lädt dann Einkaufsliste und Radar neu). `deleteVolumeRequest` liefert `trash_id`.
+3. Neue Spalten in `mangas`, `volumes`, `volume_owners`, `volume_reads` reisen automatisch mit (die Wiederherstellung schreibt nur Spalten, die die Tabelle noch hat).
+4. Neue Tabellen mit Fremdschlüssel auf `mangas`/`volumes` müssen in `moveMangaToTrash` und in der Wiederherstellung (`core/handlers/trash.js`) ergänzt werden, sonst gehen ihre Zeilen beim Löschen verloren.
+5. Wer Uploads aufräumt oder Referenzen sucht, liest `trash.payload` mit (`REFERENCE_COLUMNS`).
+6. Tests: `test/trash.test.js` (Sichtbarkeit in Liste, Statistik, Einkaufsliste, Radar, Offline-Kopie und CSV; Wiederherstellen; Purge), Vitest `trash.test.jsx`. Die Werkzeug-Dialoge (Papierkorb, Aufräumen, Verlage) öffnen aus dem Statistik-Dialog als Geschwister-Dialoge (`z-[60]`); danach lädt `onDataChanged` Regal, Einkaufsliste, Radar und Verlagsnamen neu.
+
+### 🔹 Fall R: Systemseite, Kalender-Abo, Einkaufsliste teilen
+* **Systemseite erweitern** (Kennzahl, Admin-Aktion): `routes/system.js` (Server-Rand, darf `fs`/`process` benutzen) + `components/modals/SystemModal.jsx`; Tests `test/system.test.js` und `frontend/src/__tests__/systemModal.test.jsx`. Eintrag „System“ (`#btn-open-system`, Menü `#btn-mobile-menu-system`) in `DashboardHeader.jsx`.
+* **Kalender-Feed ändern:** `calendarFeed`/`feedVolumeLabel` in `core/handlers/radar.js`, Format in `core/ical.js`, Token-Ausgabe in `routes/system.js`, Oberfläche `CalendarFeedPanel` in `components/dashboard/radar/PersonalSummary.jsx`. Tests: `test/ical.test.js`, `test/radar.test.js`, Vitest `calendarFeed.test.jsx`.
+* **Einkaufsliste teilen/drucken:** Fall F, Punkt 6.
+
+### 🔹 Fall S: Admin-Passwort vergessen / Server-Konsole
+Befehle in der Pterodactyl-Konsole (stdin des Servers, `startConsole()` nach dem Start-Banner), als Einmal-Aufruf `node scripts/admin.js <befehl>` (Exit-Code 0/1) bzw. als Unterbefehl der Server-Binärdatei. Konsolenzugang ist Admin-Zugang; `ADMIN_CONSOLE=false` schaltet das Lesen von stdin ab. Im Docker-Container immer als `node`: `docker exec -it -u node manga-shelf node scripts/admin.js <befehl>` (sonst entstehen root-eigene Dateien).
+
+| Befehl | Aliasse | Wirkung |
+| :--- | :--- | :--- |
+| `hilfe` | `help`, `?` | Liste der Befehle |
+| `status` | – | Version, Datenordner, Datenbank, Speicherplatz, letztes Backup |
+| `backup` | `sichern` | Snapshot jetzt (wie „Snapshot erstellen“) |
+| `benutzer` | `users` | alle Benutzer mit Rolle |
+| `passwort-reset` | `reset-password` | `passwort-reset <name>`: 16 Zeichen, beendet alle Sitzungen des Benutzers. Angezeigt nur auf einem Terminal; sonst (Pterodactyl-Konsole, `docker exec` ohne `-t`, Pipes) in `<DATA_DIR>/reset-<benutzer>.txt` (0600), ausgegeben wird nur der Pfad. Nie geloggt |
+| `admin` | `promote` | `admin <name>`: macht ihn zum Admin, nur wenn es keinen gibt |
+| `rollback-aufraeumen` | `rollback-cleanup` | prüft die aktuelle `manga.db` und löscht erst mit `bestaetigen` eine liegengebliebene `manga.db.bak` |
+| `quellen` | `sources` | API-Schlüssel: Zustandstabelle; `quellen anleitung <anilist\|mal\|google_books>`; `quellen setzen <anbieter> [--benutzer Name] [--aus-datei pfad] [--hintergrund]` (fragt verdeckt, prüft live, speichert verschlüsselt; AniList immer mit `--benutzer`); `quellen entfernen <anbieter> [--benutzer Name]` |
+
+* Neue Befehle mit Geheimnissen bekommen `{ revealSecrets }` und behandeln es wie `passwort-reset`; `startConsole()` gibt nie ein Passwort aus.
+* Die Server-Konsole puffert Zeilen und führt sie nacheinander aus; fragt ein Befehl nach einer Eingabe, bekommt er die nächste Zeile (ein mitkopierter Schlüssel landet nie im Befehlsparser). Unbekannte Befehle werden mit höchstens 8 Zeichen wiederholt; bei `quellen` wird nur der Unterbefehl geloggt, ein Schlüssel in der Befehlszeile wird abgelehnt. In der Pterodactyl-Konsole ist die Eingabe sichtbar; verdeckt geht es mit `node scripts/admin.js quellen setzen <anbieter>` oder `--aus-datei`.
+* Beim ersten Start ohne Instanz-Schlüssel druckt der Server einmal den Hinweis auf `quellen anleitung` (Merker `sources_notice_shown`).
+* Tests: `test/console.test.js` (alle Befehle und `scripts/admin.js`).
 
 ---
 
 ## 7. Build-, Test- & Release-Workflow
 
 ### Lokaler Entwicklungsmodus
-* **Backend starten:**
-  ```powershell
-  npm run dev
-  # Server lauscht auf http://localhost:3000 (oder PORT aus .env)
-  ```
-* **Frontend Hot-Reload starten:**
-  ```powershell
-  cd frontend
-  npm run dev
-  # Vite startet auf http://localhost:5173 und proxied API-Calls auf :3000
-  ```
+* **Ein Befehl für Backend + Frontend:** `npm run dev` (`scripts/dev.js`): Backend mit `node --watch index.js` auf `http://localhost:3000` mit `DATA_DIR=./data-dev` und `LOG_LEVEL=debug`, dazu der Vite-Dev-Server auf `http://localhost:5173` (Proxy für `/api` und `/uploads`). Ist `data-dev/` leer, wird zuerst eine Demo-Sammlung angelegt (120 Reihen, 2.400 Einträge; Logins admin/anna/ben in `data-dev/seed-users.json`). Voraussetzung: `npm ci` im Root und in `frontend/`. Nur das Backend: `npm run dev:api`.
+* Der Service Worker wird nur in Produktions-Builds auf einem sicheren Ursprung registriert, nicht von `vite dev`. SW testen: `cd frontend && npm run build && npx vite preview`.
+* Der Vite-Dev-Server kann den CommonJS-Kern nicht laden: den Standalone-Modus mit `npx vite build --mode app` und einem statischen Server prüfen.
+* **Seeder & Benchmark** (nicht in `npm test`): `npm run seed -- --series 1500 --volumes 45000 --seed 42 [--data-dir <ordner>]` füllt eine **leere** Datenbank deterministisch (eine Datenbank mit Benutzern oder Reihen wird nie angefasst). `npm run bench` seedet eine Temp-DB, startet `index.js` in einem Kindprozess und misst Median/Min/Max je Endpunkt, `/api/health` während eines Snapshots und den Spitzen-RSS (`--runs`, `--out`, `--write-budget`, `--budget` mit Exit-Code 1 bei > 30 % Regression). Vergleiche immer mit demselben Seed, derselben Größe und Node-Version.
 
 ### Tests, Lint & CI
-* **API-Tests (schnell, ohne Browser):** `npm test` (`node --test test/*.test.js`) startet die App gegen eine temporäre `DATA_DIR`. Neue Backend-Features sollten hier einen Test bekommen.
-* **Testdateien, die DB oder Services laden** (alles, was `db.js` direkt oder indirekt `require`t, z. B. `services/*`), müssen **vorher** `process.env.DATA_DIR` auf ein Temp-Verzeichnis setzen (Beispiel: `test/radarServices.test.js`); sonst landet die Datenbank im echten `data/`. API-Tests nutzen `startTestServer()` aus `test/helpers.js` und dürfen vorher nichts davon laden. Wer `global.fetch` für externe APIs fälscht, muss Aufrufe an den Testserver (`ctx.base`) durchreichen, weil auch der Testclient `fetch` nutzt.
-* **Lint:** `npm run lint` (ESLint). Fehler brechen die CI, Warnungen nicht.
-* **CI (`.github/workflows/ci.yml`):** vier Jobs: `test` (Lint + Tests, Node 22), `frontend` (Vite-Build), `docker` (Build + Start-Test über `/api/health`) und `browser` (Chrome vom Runner, `npm run test:e2e` + `npm run test:radar` gegen einen isolierten Server; Bildschirmfotos als Artefakt bei Fehlern). Die Browsertests prüfen mit `assert` und brechen bei Fehlern ab; neue Browsertests sollen das auch tun (kein reines `console.log` eines Booleans). Der Release-Workflow-Entwurf liegt weiterhin in `deploy/workflows/release.yml`.
+* **Backend:** `npm test` = `node --test test/*.test.js test/core/*.test.js test/anime/*.test.js`. Neue Backend-Funktionen bekommen hier einen Test.
+* **Doku-Drift:** `test/agentsMd.test.js` (Pfade, Migrationen, Konsolenbefehle und Endpunkte in dieser Datei) und `test/docs.test.js` (`.env.example`, README-Variablentabelle und -Anker, ZIP-Liste, Egg/Compose, nginx-Vorlage) laufen mit `npm test`.
+* **Testdateien, die DB oder Services laden** (alles, was `db.js` direkt oder indirekt lädt), setzen **vorher** `process.env.DATA_DIR` auf ein Temp-Verzeichnis; sonst landet die Datenbank im echten `data/`. API-Tests nutzen `startTestServer()` aus `test/helpers.js` – **nur einmal pro Testdatei/Prozess** (ein zweiter Aufruf wirft), mehrere Tests teilen sich ein `ctx` über `test.before`/`test.after`. Der Helper setzt eine feste Umgebung (`TRUST_PROXY=true`, `SETUP_TOKEN=test-setup-token` und ergänzt `setup_token` bei `POST /setup`, `CORS_ORIGIN`/`COOKIE_SECURE`/`APP_ORIGINS` leer, `JWT_SECRET`/`FRONTEND_DIR` entfernt, `LOG_LEVEL=silent`); Abweichungen nur über `startTestServer({ env })`. Rückgabe `{ client, close, dataDir, base, root }`. Nicht mit `--test-isolation=none` laufen lassen.
+* Wer `global.fetch` für externe APIs fälscht, reicht Aufrufe an den Testserver (`ctx.base`) durch. `resetRateLimits()` setzt alle Limiter zurück (Tests mit mehr als 30 Lookups pro Minute). Asynchrone Tests warten mit `waitUntil(() => bedingung)` bzw. Deferreds, nie mit festen Sleeps.
+* Tests, die ein Modul fälschen (`t.mock.method`), fälschen das Modul, das der Handler aufruft: `core/snapshot.js`, `core/mangaPassion/client.js` (Funktionen mit ctx als erstem Argument); `services/*` sind nur Bindungen. Verhalten, das erst beim Laden von `index.js` feststeht, prüft `test/serverEntry.test.js` in Kindprozessen; `test/startApi.test.js` testet `start()`/`stop()` im selben Prozess; `test/authSecret.test.js` lädt `middleware/auth.js` mehrfach neu.
+* **`test/core/`:** `harness.js` stellt dieselbe `client()`-API für den Express-Testserver, einen In-Memory-ctx auf `node:sqlite` (`createMemoryCore`) und sql.js bereit; `scenarios.js` enthält die Szenarien, `express.test.js`, `memory.test.js` und `adapters.test.js` führen sie aus; `parity.test.js` vergleicht die JSON-Antworten (u. a. `/mangas`, `/mangas/:id`, `/offline-snapshot`, `/stats`, `/shopping-list`, `/release-radar`, `/tags`, `/trash`, `/publishers`, `/stats/reading`, `/maintenance/quality`, Sammelbearbeitung) bis auf Zeitstempel; `noNodeApi.test.js` lädt jedes Modul aus `core/` in einem vm-Kontext ohne Node-Globals und prüft jedes `require` statisch (Proben in `test/core/fixtures/` müssen scheitern); `takeover.test.js` spielt App-ZIPs auf dem Testserver ein und zurück. sql.js/fflate/bcryptjs kommen aus der Wurzel oder `frontend/node_modules`; der CI-Job `test` bricht ab, wenn `adapters.test.js` oder `takeover.test.js` etwas überspringen.
+* **Frontend:** `npm run test:frontend` (= `cd frontend && npm test`, `vitest run`). Testdateien in `frontend/src/__tests__/`; `describe/it/expect/vi` immer aus `vitest` importieren. `fetch` mit `vi.stubGlobal` fälschen und echte `Response`-Objekte bzw. `fakeResponse(status, body)` (`frontend/src/__tests__/fakeResponse.js`) liefern; der Client parst nur `application/json`, `init.body` kommt als String, `init` enthält ein `signal` (`expect.objectContaining`). Auf asynchrone Updates mit `findBy*` warten; Dialoge sind lazy (`await screen.findBy…`). Toasts mit `recordToasts()` aus `frontend/src/__tests__/toastLog.js` prüfen, `<Toaster />` mitrendern, wenn er im DOM erscheinen soll. `clearDataCache()` im `beforeEach`, wenn `useMangaList`/`useMangaData` beteiligt sind. App-Modus: `vi.stubEnv('VITE_APP_MODE', 'app')` + `setServer({ base, token })`, danach `vi.unstubAllEnvs()`. Downloads mit `cancelAllDownloads()` aufräumen. jsdom hat kein Layout: Fokus-Falle, Sichtbarkeit und Scrollen gehören in die Browsertests. jsdom bleibt auf 29.x, solange `engines` Node 22.13 erlaubt.
+* Node-Tests laden `utils/shoppingQueue.js`, `utils/offlineStore.js`, `utils/volumeHelpers.js` und `utils/format.js` aus dem Frontend direkt: dort Imports mit Endung `.js`, kein React, `import.meta.env` darf fehlen.
+* **Lint:** `npm run lint` (ESLint 9). Fehler brechen die CI, Warnungen nicht. Frontend: `react` recommended + jsx-runtime, `react-hooks` **v5** (`rules-of-hooks` Fehler, `exhaustive-deps` Warnung, derzeit 0 Warnungen); bewusste Mount-/Öffnen-Effekte tragen `// eslint-disable-next-line react-hooks/exhaustive-deps -- <Grund>`. `core/**` mit ecmaVersion 2020 und ohne Node-API (Gotcha 17). Generierte Kopien (`mobile/www`, Desktop-Stage) werden nicht gelintet.
+* **Bundle-Budget** (`scripts/check-bundle-size.js`, `frontend/bundle-budget.json`): misst jeden JS-/CSS-Chunk aus `frontend/dist/.vite/manifest.json` mit gzip 9 sowie `initial-load` und bricht ab bei mehr als 15 % (mind. 512 Bytes) über Budget oder einem neuen Chunk > 20 KB ohne Budget. Route-Chunks heißen immer `src/Dashboard.jsx` und `src/MangaDetail.jsx` (`ROUTE_CHUNKS`). Anderer Build: `--dist <ordner>`. Gewolltes Wachstum: bauen, `npm run check:bundle -- --update`, Budget committen.
+* **CI (`.github/workflows/ci.yml`, jeder Push und PR):** alle Jobs mit `timeout-minutes`, Token nur `contents: read`, Actions per Commit-SHA gepinnt, ältere Läufe desselben Branches werden abgebrochen. `test` (Matrix Node 22.13.0/22/24: Frontend-Abhängigkeiten, Lint, `npm test`, Prüfung „Kern-Tests überspringen nichts“, `npm audit --omit=dev`), `frontend` (Audit, Vite-Build, Bundle-Budget, `dist/sw.js` ohne `__APP_VERSION__`, Vitest), `package` (ZIP entpacken, installieren wie das Egg, Lockfile byte-gleich, Start, `/api/health`, `GET /`, `done`-Zeilen des Eggs, `node scripts/admin.js status`), `docker` (Build, Start-Test, Bind-Mount-/HEALTHCHECK-Fälle), `browser` (Chrome vom Runner: `npm run test:e2e`, `test:radar`, `test:anime`; Bildschirmfotos als Artefakt bei Fehlern), `desktop-smoke`, `build` (ruft `build.yml`, nur Artefakte) und `mobile` (ruft `mobile.yml`, nur `main`/PR). Dazu `codeql.yml` und `.github/dependabot.yml` (Major-Updates von `tailwindcss` und `vite` ignoriert). `test/ci.test.js` prüft Schreibrechte, SHA-Pinning, Timeouts, bedingte Signierschritte und die Ein-/Ausgaben der wiederverwendbaren Workflows (`actionlint` ist nicht eingebunden).
 
-### Automatisierte E2E Browser-Tests
-* Voraussetzungen: gebautes Frontend (`npm run build:frontend`) und ein installierter Chrome/Chromium/Edge.
-* Jedes Skript läuft über `test/browser/run.js`: temporäre Datenbank, freier Port, Wegwerf-Admin (`BASE_URL`, `E2E_USER`, `E2E_PASSWORD` werden den Skripten per Umgebung übergeben). Die Tests legen Daten an, ändern, löschen und spielen Backups ein – **nie** `BASE_URL` auf eine echte Instanz zeigen lassen. Ohne diese Variablen brechen die Skripte ab.
+### Automatisierte E2E-Browsertests
+* Voraussetzungen: gebautes Frontend (`npm run build:frontend`) und ein Chrome/Chromium/Edge/Brave (`test/browser/chrome.js`, `CHROME_BIN` hat Vorrang).
+* Jedes Skript läuft über `test/browser/run.js`: temporäre Datenbank, freier Port, Wegwerf-Admin (mit `SETUP_TOKEN`); `BASE_URL`, `E2E_USER`, `E2E_PASSWORD` gehen per Umgebung an das Skript. `run.js` setzt `PORT` **und** `SERVER_PORT` und schaltet natives HTTPS ab. Die Tests legen Daten an, ändern, löschen und spielen Backups ein – **nie** `BASE_URL` auf eine echte Instanz zeigen lassen.
   ```powershell
-  npm run test:e2e     # UI, Login, CRUD, Backups
-  npm run test:deep    # visuelle Regression, Bildschirmfotos aller Modals, Mobile-Check
+  npm run test:e2e     # Login, Suche/Filter, Benutzer, Backup → Restore, Bände, Status, Wunschliste, Sammelbearbeitung, Mobile ohne Seitwärts-Scroll
   npm run test:radar   # Release-Radar
-  npm run test:perf    # Performance-Benchmark
+  npm run test:anime   # Anime-Reiter ohne externe API
+  npm run test:deep    # Rundgang mit Bildschirmfotos aller Ansichten/Modals + Handy (390 px), Querformat (844 × 390), Tablet (820 × 1180), Regal (360 px), Kopf (1280 × 800, 640 × 400)
+  npm run test:perf    # Seitenladezeiten, API-Latenz, Bundle-Größen; --db pfad\zu\manga.db nutzt eine Kopie (VACUUM INTO)
   ```
-* Mit echten Daten testen: `npm run test:perf -- --db pfad\zu\manga.db` startet den isolierten Server mit einer **Kopie** dieser Datenbank (die Originaldatei wird nur gelesen); `PERF_MANGA_ID` wählt die Reihe für die Detailseiten-Messung.
+* **`test:deep` ab Schritt 9** (alle Befunde landen im Bericht und werden am Ende mit `assert` geprüft):
+  * Schritt 9, 390 × 844: kein Seitwärts-Scroll auf Regal und Reihenseite, Toolbar-Chips ohne Überlappung, im Raster liegt jeder Autor-Knopf in seiner Karte (Reihe „Lange Autorenzeile“ mit zwei Autoren), `focusUnderHeader`: Tab-Fokus landet nicht unter dem sticky Kopf.
+  * Schritt 10, 844 × 390 und 820 × 1180: Reihenkopf (`#btn-edit-manga`, `#btn-delete-manga`, `#btn-anime-adaption` in Karte und Viewport, `h1` in ihrer Box); Dialog „Neuen Manga anlegen“ (`#btn-mobile-menu-toggle` → `#btn-mobile-menu-add`) mit Überschrift und „Schließen“ im Bild bei `scrollTop` 0, das Overlay scrollt. Schritt 10b, 360 × 800: `shelfProblems` – kein Buchrücken außerhalb des Viewports (Regalbretter M, Auto-Fit M, Regalbretter L; 24 Bände, 2 Lücken, Schuber, Special Edition).
+  * Schritt 11, 1280 × 800: nach einem gefälschten `beforeinstallprompt` (`#btn-install-pwa`) läuft der Kopf nicht über, `#btn-logout` bleibt im Viewport; 640 × 400: `#app-version-badge` schneidet `#btn-header-add-manga` nicht, der Kopf ist `static`, `focusUnderHeader` ohne Befund.
+  * `deep-e2e.js` exportiert `focusUnderHeader(page, stops = 25)` und `shelfProblems(page, minEntries = 26)` und startet den Rundgang nur bei direktem Aufruf (`require.main === module`).
+* **IDs des Dashboard-Kopfes:** `#btn-mobile-shopping`, `#btn-mobile-radar`, `#btn-bottom-scan` und das untere `#btn-mobile-menu-toggle` gibt es nur unter 640 px (in `BottomNav`); ab 640 px hat der Kopf `#btn-mobile-menu-toggle` und (sm bis xl, Editoren) „Neuer Manga“ `#btn-header-add-manga`, aber keine `#btn-mobile-shopping`/`#btn-mobile-radar`/`#btn-mobile-anime` mehr (die Ansichten wechselt `MainViewSwitcher`, `#btn-nav-*`). Weitere feste IDs: `#app-version-badge`, `#shop-total-pill`, `#mp-month-nav`, `#anime-empty`, `#bulk-action-bar`.
+* Die Browsertests prüfen mit `assert`. Helfer in `test/browser/helpers.js`: `clickText`/`clickSelector`/`typeInto` warten und werfen (nie `if (el) el.click()`); `watchPage()` sammelt Seitenfehler, Konsolenfehler, API-Antworten ≥ 400 (außer Endpunkten mit externen Diensten, `EXTERNAL_API`) und Fehler-Toasts (Event `mangashelf:notify`); `assertClean()` am Ende; erwartete Fehler per `watcher.reset()` bzw. `await watcher.expectApiError('GET /api/mangas/7 -> 404')`. `waitForToast(page, text, { kind })` gibt den Selektor genau dieses Toasts zurück. Ergebnisse über die API prüfen, nicht über `document.body.innerText`.
 * Bildschirmfotos und Berichte landen in `test/browser/screenshots/`, `test/browser/test_screenshots/` bzw. `test/browser/reports/` (in `.gitignore`).
 
-### Paketierung & GitHub Releases
-* **Regelmäßige Releases (WICHTIG!):**
-  * Das Release wird **nach dem Merge** des Feature-/Fix-Branches auf dem Hauptbranch ausgeführt (nicht auf offenen PR-Branches), da `release.js` Commit, Tag und GitHub-Release pusht.
-  * Nach einer abgeschlossenen Feature-Implementierung, einem Bugfix oder einer UI-Verbesserung wird ein Git-Release via `node release.js patch` (bzw. `minor` bei neuen Funktionen) erstellt, damit die Versionierung lückenlos und das Pterodactyl-ZIP auf GitHub aktuell bleibt. Läuft im Hauptordner auf `main`; **vor dem Release immer beim Maintainer nachfragen** (der Befehl pusht Tag und Release).
-  * Pull Requests dürfen bei grüner CI (Lint, Tests, Frontend-Build, Docker) per Squash-Merge gemergt werden. Arbeitsablauf: Branch → `npm run lint` + `npm test` + Frontend-Build → im Browser prüfen → PR → CI abwarten → mergen.
-* **Nur ZIP bauen:**
-  ```powershell
-  npm run package
-  ```
-  * Ergebnis: `pterodactyl-manga-shelf.zip` im Root- und `dist_pack/`-Verzeichnis.
-* **Automatisiertes Release auf GitHub erstellen & ZIP hochladen:**
-  ```powershell
-  npm run release
-  # oder mit gezielter Version / Semver:
-  node release.js patch   # Erhöht z.B. von v2.2.0 auf v2.2.1
-  node release.js minor   # Erhöht z.B. von v2.2.0 auf v2.3.0
-  node release.js v2.3.0  # Explizite Version
-  ```
-  * Was passiert automatisch:
-    1. Baut das Frontend neu (`npm run build`).
-    2. Erzeugt die saubere `pterodactyl-manga-shelf.zip`.
-    3. Synchronisiert die Version in `package.json` und `frontend/package.json`.
-    4. Erstellt einen Git-Commit und den Git-Tag `vX.Y.Z`.
-    5. Pusht Commit und Tag zu GitHub.
-    6. Erstellt via GitHub CLI (`gh release create`) den offiziellen GitHub-Release mit Release-Notes und hängt die ZIP-Datei als Download-Asset an.
-* **GitHub Releases Übersicht:**
-  * Alle Releases und deren ZIP-Archive sind jederzeit unter `https://github.com/MoltresHD/manga-shelf/releases` einsehbar und versioniert.
+### Umgebungsvariablen (`utils/config.js`)
+Eine neue Variable bekommt einen Eintrag in `ENTRIES` (deutsche Warnung bei ungültigem Wert; interne Schalter `doc: false`), eine kommentierte Zeile `# NAME=…` in `.env.example` und eine Zeile in der Tabelle README §12 (`test/serverEntry.test.js` und `test/docs.test.js` prüfen das); soll Pterodactyl sie anbieten, auch eine Egg-Variable (`rules` mit `nullable|string`). Code liest `config.<schlüssel>`, nie `process.env`. Unbrauchbare Werte geben beim Start eine deutsche Warnung und den Standard; nur `PORT`/`SERVER_PORT` und `TRUST_PROXY` beenden den Start (Exit-Code 1). Ganzzahlen über der Obergrenze gelten als Obergrenze (`intIn`). `.env` lesen drei Stellen: `index.js` (`loadDotenv()`, `.env` im Arbeitsverzeichnis, nur ohne `MANGA_SHELF_NO_LISTEN=1`), `scripts/admin.js` (`.env` im App-Verzeichnis neben `index.js`, ebenfalls nur ohne `MANGA_SHELF_NO_LISTEN=1`) und die Server-Binärdatei (`scripts/server-bin/main.js`: `.env` im Datenordner, geprüft über `acl.readEnvFile`, vor `start()`). Läuft `index.js` nicht im App-Verzeichnis (z. B. `node /opt/manga-shelf/index.js` aus einem anderen Ordner), lesen Server und `scripts/admin.js` verschiedene Dateien. Die Umgebung hat überall Vorrang.
 
-### Git & GitHub Deployment
-* Repository: `https://github.com/MoltresHD/manga-shelf`
-* Push-Befehle:
-  ```powershell
-  git add .
-  git commit -m "feat/fix: Beschreibung"
-  git push
-  ```
+| Variable | Standard | Bedeutung |
+| :--- | :--- | :--- |
+| `PORT` / `SERVER_PORT` | 3000 | Port (`SERVER_PORT` gewinnt, 0–65535) |
+| `DATA_DIR` | `./data` | Datenordner; wird beim Laden von `db.js` gelesen |
+| `FRONTEND_DIR` | `frontend/dist`, dann `dist` | anderer Frontend-Ordner (nie App- oder Datenverzeichnis, Gotcha 4) |
+| `TRUST_PROXY` | `loopback` | Express `trust proxy` (Gotcha 3) |
+| `CORS_ORIGIN` | leer | Ursprünge externer Clients mit Credentials |
+| `APP_ORIGINS` | `capacitor://localhost`, `https://localhost`, `ionic://localhost`, `app://manga-shelf` | App-Ursprünge (CORS ohne Credentials); `none` schaltet ab |
+| `COOKIE_SECURE` | aus | `secure`-Cookie erzwingen, sendet HSTS |
+| `SSL_KEY_PATH` / `SSL_CERT_PATH` | `ssl/privkey.pem`, `ssl/fullchain.pem` (sonst `ssl/cert.pem`) im App-Verzeichnis; Server-Binärdatei `<Datenordner>/ssl/…` | natives HTTPS, wenn beide existieren |
+| `JWT_SECRET` | leer | ≥ 32 Zeichen, sonst `<DATA_DIR>/secret.key` |
+| `SETUP_TOKEN` | erzeugt | Einrichtungscode (≥ 12 Zeichen nach Normalisierung) |
+| `LOG_LEVEL` / `LOG_FORMAT` | `info` / `text` | debug, info, warn, error, silent / text, json |
+| `APP_TIMEZONE` | `Europe/Berlin` | „heute“ für Radar, Kalender, Anime-Daten |
+| `BACKUP_HOUR` / `BACKUP_TIMEZONE` | 3 / `Europe/Berlin` | Zeitfenster des täglichen Snapshots |
+| `BACKUP_KEEP_DAILY` / `_MANUAL` / `_PRE_RESTORE` / `_PRE_UPDATE` | 7 / 10 / 3 / 3 | Aufbewahrung je Kategorie (1–1000) |
+| `ADMIN_CONSOLE` | an | Konsolenbefehle über stdin |
+| `UPDATE_CHECK` | an | Update-Prüfung der Systemseite gegen GitHub |
+| `MIGRATE_WITHOUT_SNAPSHOT` | aus | Migrationen auch dann, wenn die Sicherung `vor-update-…` nicht geschrieben werden kann (sonst bricht `initDb()` ab) |
+| `RESTORE_MAX_DB_BYTES` / `RESTORE_MAX_UPLOADS_BYTES` / `RESTORE_MAX_ENTRIES` | 2 GiB / 4 GiB / 100 000 | Grenzen beim Entpacken |
+| `MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY` | leer | Instanz-Schlüssel aus der Umgebung (`config.malClientId`, `config.googleBooksKey`; haben Vorrang vor gespeicherten) |
+| `ANIME_ANILIST_RPM`, `ANIME_JIKAN_RPM`, `ANIME_SOURCES` | 30, 60, `anilist,jikan` | Budget (1–600 je Minute) und Quellen des Anime-Gateways; unbekannte Quellnamen werden mit Startwarnung ignoriert, ohne gültigen Namen gilt der Standard; `registerServerSources()` reicht sie an `core/anime/settings.js` weiter |
+
+### Paketierung & Releases
+* **Pterodactyl-ZIP:** `npm run package` → `pterodactyl-manga-shelf.zip` (in `dist_pack/` und im Root) mit `package.json`, `package-lock.json`, `.env.example`, allen Einträgen aus `files` und `frontend/dist/` (inkl. `.br`/`.gz`). Fehlt eine Eingabe, bricht `package.js` mit Exit-Code 1 ab und lässt die letzte ZIP unverändert. `npm run build:frontend` nutzt `npm ci`.
+* **Abhängigkeiten deterministisch:** Docker installiert mit `npm ci --omit=dev --ignore-scripts`, das Egg mit `npm install --omit=dev --ignore-scripts --no-audit --no-fund` (die CI prüft die entpackte ZIP genau damit, `test/deploy.test.js` vergleicht beide). Eine neue Laufzeit-Abhängigkeit mit Install-Skript vorher besprechen.
+* **Bauen bei jedem Push:** `ci.yml` ruft `build.yml` auf (Artefakte 14 Tage: `pterodactyl-zip` inkl. SBOM `manga-shelf-sbom.cdx.json`, `server-linux`/`server-windows`/`server-macos`, `server-packages`; `desktop-<OS>` (Eingabe `installers`) und der Mobil-Smoke (`mobile.yml`) nur auf `main` und in Pull Requests, andere Branches über den Release-Workflow mit `action` = `build`). CI-Läufe bekommen keine Secrets (unsigniert).
+* **Veröffentlichen nur per Knopf:** Actions → Release → Run workflow, `action` = `build` (alles bauen, nichts pushen) oder `release` mit `bump` = patch|minor|major|none: `version` → `tag` (`scripts/release/bump-version.js --write` inkl. `mobile/scripts/sync-version.js`, Commit `vX.Y.Z`, annotierter Tag, `git push --atomic`; `RELEASE_TOKEN` falls gesetzt, sonst `GITHUB_TOKEN`) → `build` + `mobile` am Tag-Commit → `docker` (erst wenn `build` **und** `mobile` fertig sind; buildx amd64+arm64 nach `ghcr.io/<owner>/manga-shelf` nur mit den festen Tags `X.Y.Z`, `vX.Y.Z`; cosign keyless) → `publish` (`SHA256SUMS.txt`, Release-Text aus `scripts/release/notes.js`, generierte Notizen, `make_latest`; erst danach zeigen `X.Y` und `latest` per `docker buildx imagetools create` auf denselben Digest). Ein Tag-Push allein löst nichts aus; ein abgebrochener Lauf verschiebt `latest` nie. Releases nie als Pre-Release (die Update-Prüfung liest `releases/latest`).
+* **Schreibrechte** gibt es nur in `release.yml` (Jobs `tag`, `docker`, `publish`; `packages: write` in `docker` und `publish`); ein aufgerufener Workflow kann nie mehr Rechte haben als der Aufrufer.
+* **Signierung aus Secrets, sonst unsigniert:** `scripts/release/signing.js` meldet je Gruppe, ob alle Secrets gesetzt sind (Windows `WIN_CSC_LINK`+`WIN_CSC_KEY_PASSWORD`; macOS `MAC_CSC_LINK`+`MAC_CSC_KEY_PASSWORD`; Notarisierung `APPLE_ID`+`APPLE_APP_SPECIFIC_PASSWORD`+`APPLE_TEAM_ID`; Android `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`; iOS `IOS_CERT_P12_BASE64`, `IOS_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`, `APPLE_TEAM_ID`). Herkunft der Secrets: README §11.
+* **Lokal:** `node release.js minor --dry-run` / `node release.js minor` (nur Version setzen; sauberer Arbeitsbaum, Tag darf nicht existieren), dann committen, pushen, Workflow mit `bump = none`. **Vor jedem Release beim Maintainer nachfragen.**
+* **Einmalig (Max/Felix):** GHCR-Paket nach dem ersten Release auf Public stellen; bei geschütztem Branch `RELEASE_TOKEN` (Fine-grained-PAT, Contents: Read and write) anlegen. Der erste echte Release-Lauf steht noch aus.
+* **Arbeitsablauf:** Branch → `npm run lint` + `npm test` + `npm run test:frontend` + Frontend-Build → im Browser prüfen → PR → CI abwarten → Squash-Merge. Änderungen kurz im `CHANGELOG.md` festhalten.
+
+### Headless-Server (Binärdatei)
+* `npm run build:server` (= `node scripts/server-bin/build-sea.js [--target host|linux-x64,linux-arm64,windows-x64,macos-arm64,macos-x64,macos-universal] [--bundle-only]`): esbuild bündelt `scripts/server-bin/entry.js` mit dem Backend nach `dist/server/server.cjs`; das gebaute Frontend wird SEA-Asset. `node --build-sea` (Node ≥ 25.5; CI Node 26) injiziert beides in ein offizielles Node je Ziel (fremde Ziele von nodejs.org, gegen SHASUMS256.txt geprüft), sonst postject. macOS: ad hoc signiert, Universal per `lipo`.
+* **`__dirname` im Bundle:** ein esbuild-Plugin gibt jedem Repository-Modul einen eigenen Wert unterhalb von `globalThis.__MANGA_SHELF_APP_DIR__`; `scripts/server-bin/main.js` setzt das auf `<cache>/manga-shelf-portal/server-<id>`, wohin das Portal entpackt wird (nie in den Datenordner). Alte Builds löscht `prepareAppDir` nur in `manga-shelf-portal/` und nur, wenn dort die Markierungsdatei `.manga-shelf-portal` liegt; andere `server-*`-Einträge eines frei gewählten `MANGA_SHELF_CACHE_DIR` bleiben unberührt. Neue Laufzeitdateien neben dem Code (außer JSON per require) als Asset einbetten. Laufzeit-`require` nur für Node-Module; `test/sea.test.js` bricht bei jedem neuen dynamischen require ab.
+* Start: `MANGA_SHELF_NO_LISTEN=1`, `DATA_DIR`, `.env` aus dem Datenordner, dann `start({ host, port })`; Optionen `--port`, `--host`, `--data-dir`, `--log-file`, `--no-console`; alles andere geht als Unterbefehl an `scripts/admin.js`. Die `.env` wird einmal über einen geprüften Dateideskriptor gelesen und an `dotenv.parse` gegeben (`acl.readEnvFile`; die Umgebung hat Vorrang). Danach setzt `applySslDefaults` leere `SSL_KEY_PATH`/`SSL_CERT_PATH` auf `<Datenordner>/ssl/privkey.pem` und `fullchain.pem` (sonst `cert.pem`), nie in den Portal-Cache, den ein Update löscht. Start und Konsolenbefehle brechen ab (fail closed), wenn sie eine Verknüpfung ist, einem anderen Konto gehört, andere sie ändern können (Unix: Besitzer nicht die eigene uid und nicht root, `g+w`/`o+w`, ein Datenordner mit `g+w`/`o+w`, der weder uns noch root gehört, ein Sticky-Ordner mit fremder `.env`; Windows: Besitzer und jeder Schreibeintrag nur eigenes Konto, Administratoren, SYSTEM) oder die Prüfung nicht laufen kann (PowerShell blockiert, keine SID in der Ausgabe). Windows-ACLs liest `acl.readWindowsSecurity` nur als SIDs (`GetAccessRules(…, SecurityIdentifier)`; `parseSecurity` wirft bei jedem Namen); `powershell.exe`, `whoami.exe`, `icacls.exe` und `schtasks.exe` laufen immer mit absolutem Pfad aus `%SystemRoot%\System32` (`acl.systemTool`). Die Logdatei ist 0600; unter Windows bekommen `secret.key`, `reset-*.txt` und die Logdatei, falls ein anderes Konto als das eigene, die Administratoren oder SYSTEM sie öffnen kann, eine ACL nur für das eigene Konto und die Administratoren.
+* `install-service`/`uninstall-service`: systemd (Benutzer `manga-shelf`, `/var/lib/manga-shelf` mit 0750; `--user` als Benutzer-Dienst, Datenordner 0700; beide Units mit `UMask=0027`; System-Unit mit `ProtectHome=true` + `ReadWritePaths=<Datenordner>`, liegt der Datenordner unter `/home`, `/root` oder `/run/user` stattdessen `ProtectHome=tmpfs` + `BindPaths=<Datenordner>` (`services.isUnderHome`), die gepackte Unit bleibt bei `/var/lib/manga-shelf`), macOS LaunchAgent `de.manga-shelf.server` (Datenordner 0700), Windows geplante Aufgabe „Manga Shelf Server“ als **LOCAL SERVICE** (`S-1-5-19`, `RunLevel` LeastPrivilege; `--account LocalService|NetworkService|LocalSystem`, sonst eine SID oder ein Konto `DOMÄNE\name`/`.\name` (= `%COMPUTERNAME%\name`, Unicode erlaubt) als S4U; solche Konten werden vor jedem Schritt per `NTAccount.Translate` zur SID aufgelöst, Rechte und Prüfung nutzen die SID). Windows-Plan (<root> = `%ProgramData%\manga-shelf` beim Standardordner, sonst der `--data-dir`): `windowsRoot` (keine Verknüpfung/kein Reparse-Punkt für <root>, die Ordner bis zum Datenordner und jeden neu angelegten Vorfahren; ein schon vorhandenes <root> muss den Administratoren oder SYSTEM gehören), `icacls <root> /setowner *S-1-5-32-544 /T /Q`, dann PowerShell: frische geschützte DACL auf <root> (`DirectorySecurity`, `SetAccessRuleProtection($true, $false)`, nur Administratoren, SYSTEM und das Dienstkonto, (OI)(CI) Vollzugriff), darunter alle expliziten Einträge entfernt, ein Reparse-Punkt im Baum bricht ab; beide Schritte ohne `allowFail`. `checkAcl` prüft Datenordner, `logs`, Logdatei, `secret.key` und `.env` per Allow-Liste (Besitzer und Allow-Einträge nur Administratoren, SYSTEM, Dienstkonto; CREATOR OWNER nur inherit-only; ein Deny für das Dienstkonto oder ein fehlendes Dienstkonto bricht ab). Erst danach `schtasks /End`, Programm kopieren, Aufgabe anlegen und starten. Konsolenbefehle für den Dienst als Administrator mit `--data-dir`. Windows ist nur über die erzeugten Pläne getestet; `service-probe.js` richtet den Dienst in `build.yml` auf den Windows- und Linux-Runnern echt ein (noch `continue-on-error`). Die gepackte Unit in `scripts/server-bin/packaging/` muss `services.systemdUnit(...)` entsprechen (Test).
+
+### Desktop-App bauen
+* `cd desktop && npm ci && npm run build:desktop` (Installer des laufenden Systems in `desktop/dist/installers/`), `npm run build:dir` (nur entpackt), `npm run smoke` (entpackte App mit `--server-only` starten, `/api/health` + `GET /` prüfen). `desktop/scripts/stage.js` baut vorher `desktop/dist/stage/`: Backend aus `files` mit `npm ci --omit=dev --ignore-scripts`, Web-Build nach `server/frontend/dist`, App-Build nach `app-frontend/` (`--build-frontend` oder `--web <dir> --app <dir>`).
+* Ziele: Windows NSIS + portable, macOS dmg + zip (universal, hardenedRuntime), Linux AppImage/deb/rpm, Flatpak (Versuch). Ohne Zertifikate unsigniert: `build:desktop` und `build:dir` laufen über `desktop/scripts/builder.js`, das `CSC_IDENTITY_AUTO_DISCOVERY=false` setzt, solange keine Signatur-Variable (`CSC_LINK`, `CSC_NAME`, `WIN_CSC_LINK`, `APPLE_ID`, `APPLE_API_KEY`, `APPLE_KEYCHAIN_PROFILE`) und kein eigener Wert gesetzt ist (sonst signiert electron-builder auf macOS mit irgendeiner Identität aus dem Schlüsselbund). Lokal signieren: `CSC_NAME="<Identität>"` oder `CSC_IDENTITY_AUTO_DISCOVERY=true` setzen. Entwicklung: `cd desktop && npm start` (Web-Build aus `frontend/dist`, App-Build aus `frontend/dist-app` oder `MANGA_SHELF_APP_DIST`). Tests: `cd desktop && npm test`.
+
+### Android/iPhone bauen
+* Voraussetzungen: `cd frontend && npm ci`, dann `cd mobile && npm ci`. Android: JDK 21, Android SDK 35 (`ANDROID_HOME`). iOS: macOS, Xcode 16+, CocoaPods (die Skripte setzen eine UTF-8-Locale).
+* `npm run sync` (App-Build, `www/` zusammenstellen, `cap sync`); `npm run smoke:android` / `smoke:ios` (CI, Debug ohne Signatur); `npm run build:android` / `build:ios` schreiben nach `mobile/build/out/` (`manga-shelf-<v>-android.apk`, `…-android.aab` bzw. `…-android-unsigned.aab`, `…-ios.ipa` bzw. `…-ios-unsigned.ipa`).
+* Signierung: `build-android.js` gibt den Schlüssel über `MANGASHELF_KEYSTORE_FILE`, `MANGASHELF_STORE_PASSWORD`, `MANGASHELF_KEY_ALIAS`, `MANGASHELF_KEY_PASSWORD` an den `signingConfigs`-Block in `mobile/android/app/build.gradle` (Namen mit Punkt verwirft dash als `/bin/sh` von `gradlew`); mit Schlüssel muss `app-release.apk` existieren und `apksigner verify --print-certs` genau dessen SHA-256 zeigen, sonst bricht der Build ab; `mobile.yml` prüft die APK danach noch einmal (nie der Debug-Schlüssel, signiertes AAB vorhanden).
+* Version immer aus der Wurzel-`package.json`; `npm run version:sync` nach jedem Versionssprung (versionCode = Major·1000000 + Minor·1000 + Patch). `npm test` in `mobile/` schlägt fehl, solange die nativen Projekte eine andere Version tragen. Mindestversionen: Android 6 (minSdk 23), iOS 15.5.
+
+### Git
+* Repository: `https://github.com/LixNix-Swap-Org/manga-shelf`. Commits und Pushes nur nach Absprache; Releases nur über den Release-Workflow.
 
 ---
 
 ## 8. Wichtige Fallstricke & Gotchas (Merke dir das!)
 
-1. **Node.js 25+ Warning Suppression (`index.js` Zeile 1–9):**
-   * Node 25 wirft für ältere `fs.Stats` Konstruktoren Warnungen (`DEP0180`). Diese werden am Dateianfang von `index.js` abgefangen, um Logs sauber zu halten. Nicht entfernen!
-2. **SQLite WAL-Modus & Backup-Restore:**
-   * Vor dem Entpacken eines Restore-Archivs muss `setRestoringState(true)` und `closeDb()` aufgerufen werden (inkl. `PRAGMA wal_checkpoint(TRUNCATE)`), da Windows offene Dateihandles sperrt. Während des Entpackens blockiert der DB-Proxy parallele Zugriffe mit 503. Nach erfolgreichem Restore wird `initDb()` und `setRestoringState(false)` aufgerufen.
-3. **Cookie-Handling & HTTPS:**
-   * `app.set('trust proxy', true)` ist aktiv. `setAuthCookie` prüft `req.secure` sowie `x-forwarded-proto === 'https'`. Bei reinem HTTP im LAN oder ohne SSL wird das `secure`-Flag dynamisch weggelassen, damit der Login auch ohne HTTPS reibungslos funktioniert.
-4. **Verzeichnisse:**
-   * Alle persistenten Daten liegen ausschließlich unter `data/` (`manga.db` und `data/uploads/`).
-   * Alles unter `data/` ist in `.gitignore`, damit keine privaten Daten oder Passwörter in GitHub landen.
-5. **Transaktionen (`db.js`):**
-   * Es gibt nur **eine** SQLite-Connection. Für mehrstufige Schreiboperationen (Bände anlegen/löschen + Zähler, Batch-Read, Lücken-Import) immer einen Helper aus `db.js` nutzen statt rohem `db.exec('BEGIN')`: `runTransaction(fn)` (in den Routen; wirft 503-artigen Fehler während eines Restores) bzw. `withTransaction(fn)` (in `mangaPassion.js`; lehnt asynchrone Callbacks ausdrücklich ab).
-   * `fn` muss **synchron** sein – niemals `await` innerhalb einer Transaktion, sonst laufen fremde Requests darin. Netzwerk-I/O (z. B. Cover-Downloads) vorher erledigen.
-6. **JWT-Secret (`middleware/auth.js`):**
-   * `JWT_SECRET` aus der Umgebung wird nur akzeptiert, wenn es mindestens 32 Zeichen lang und kein bekannter Platzhalter ist. Sonst wird ein zufälliges Secret in `app_settings.jwt_secret` erzeugt und genutzt. Es gibt bewusst keinen Prozess-Fallback.
-7. **Externe Downloads / SSRF (`utils/safeFetch.js`):**
-   * Alle Remote-Bilder (Cover per URL, Manga-Passion-Cover) laufen über `fetchRemoteImage()`: SSRF-Schutz (nur öffentliche Hosts, DNS-Prüfung, jede Weiterleitung neu geprüft), 15-MB-Limit, Redirect-Limit, 10 s Leerlauf- und 30 s Gesamt-Timeout, Magic-Byte-Prüfung. Nie `http.get`/`fetch` direkt auf Nutzer-URLs.
-   * IPv6 wird in `isPrivateAddress` numerisch verglichen: Der URL-Parser schreibt `[::ffff:127.0.0.1]` als `[::ffff:7f00:1]`, ein reiner Textvergleich ließ das durch. Formen mit eingebetteter IPv4 (mapped, NAT64, 6to4) zählen nach dieser IPv4.
-8. **Passwörter & Rate-Limit:**
-   * Mindestens 8 Zeichen (max. 72 Bytes wegen bcrypt). `/auth/login` und `/setup` sind per `middleware/rateLimit.js` begrenzt (429).
-   * Zusätzlich sperrt `loginFailures` einen Benutzernamen nach 10 Fehlversuchen in 15 Min. (429, unabhängig von der IP). `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`, Standard `true`): Ohne Proxy davor lässt sich die IP per `X-Forwarded-For` fälschen, dann `TRUST_PROXY=false` setzen.
-   * Eine Passwortänderung durch den Admin setzt `users.password_changed_at`; ältere Sitzungen dieses Benutzers (JWT `iat` davor) werden mit 401 abgelehnt. Es gibt keine CORS-Freigabe außer für Ursprünge in `CORS_ORIGIN`; `index.js` setzt `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` und eine Content-Security-Policy (`CONTENT_SECURITY_POLICY` in `index.js`: Skripte nur von der eigenen Domain, Bilder auch von `http(s)`, weil ein Cover noch auf einen fremden Host zeigen kann, Inline-Styles erlaubt). Neue externe Skript-/API-Hosts müssen dort eingetragen werden, sonst blockt der Browser sie.
-   * Benutzernamen sind unabhängig von Groß-/Kleinschreibung eindeutig (`COLLATE NOCASE` beim Anlegen und beim Login).
-   * Rollen sind `admin`, `editor`, `visitor`, `guest`; eine unbekannte Rolle wird mit 400 abgelehnt. Volume-Status wird gegen `VOLUME_STATUSES` (`routes/volumes.js`) geprüft.
-9. **Restore (`routes/backups.js`):**
-   * Die DB aus dem ZIP wird erst als `manga.db.restore-tmp` entpackt und mit `validateDbFile()` geprüft (integrity_check, Tabellen `users`/`mangas`/`volumes`, mindestens ein Admin), dann atomar per `rename` ersetzt. `restoreFromZip` ist synchron, damit kein anderer Request zwischen `closeDb()` und `initDb()` die DB nutzt.
-10. **`DATA_DIR`:**
-   * Optionale Umgebungsvariable für das Datenverzeichnis (Standard `./data`). Wird von den Tests für isolierte Temp-Datenbanken genutzt.
-11. **Express 5 (`index.js`):**
-   * Catch-all-Route heißt `app.get('/{*splat}', ...)` (ein nacktes `'*'` ist ungültig). `req.body` ist ohne Body `undefined`; eine Middleware setzt es auf `{}`, weil Handler direkt destrukturieren. `req.query` ist nur lesbar; Strings daraus immer über `qstr()` (`utils/query.js`) lesen, sonst werfen `?a=1&a=2` bzw. `?a[x]=1` bei `.trim()` einen 500.
-   * Unbekannte `/api/*`-Pfade liefern JSON-404; der letzte Error-Handler gibt bei 5xx nur eine generische Meldung aus (Details im Log), bei 4xx die Fehlermeldung (z. B. abgelehnter Upload).
-12. **Offline-Kopie (`frontend/src/utils/offlineStore.js`):**
-   * Nur lesend. IndexedDB `mangashelf-offline` hält letzten Benutzer, Reihenliste und alle Details aus `/api/offline-snapshot`. Sync beim Start, beim Zurückkehren in den Vordergrund und per Button im Footer (gedrosselt auf 5 Min.); danach werden Route-Chunks und die Reihen-Cover (nicht die Band-Cover, bei großen Sammlungen dutzende MB) vorgeladen und vom Service Worker gecached; `/uploads/*` ist dort cache-first, weil Dateinamen eindeutig und unveränderlich sind. Der App-Cache heißt `mangashelf-app-<Version>` (`__APP_VERSION__` in `frontend/public/sw.js` wird beim Build per Vite-Plugin ersetzt, alte Versionen werden beim Aktivieren gelöscht); Cover liegen in `mangashelf-uploads-v1` und überleben Updates.
-   * `App.jsx`: Antwortet `/api/auth/me` nicht (Netz/Gateway weg) und es gibt einen gespeicherten Benutzer, läuft die App als `{ role: 'visitor', realRole, offline: true }` weiter (alle Bearbeiten-Buttons verschwinden; Einkaufslisten-Schnellkauf nutzt `realRole` und die vorhandene Offline-Warteschlange). Alle 30 s und beim `online`-Event wird erneut geprüft. Bei 401 und beim Logout wird alles gelöscht (`clearOfflineData`) – nie Daten nach dem Abmelden lesbar lassen.
-   * Nicht offline verfügbar: Statistiken, Release-Radar, alles Schreibende.
-13. **Logging (`utils/logger.js`):**
-   * Backend-Code loggt ausschließlich über `const log = require('../utils/logger').child('name')` (`log.info/warn/error/debug(msg, ...args)`; ein `Error` als Argument wird mit Stack bzw. als `err`-Feld ausgegeben, ein Objekt als Kontextfelder). Kein neues `console.*` im Backend. `LOG_LEVEL` (debug|info|warn|error|silent) und `LOG_FORMAT` (text|json) per Umgebungsvariable; `debug` aktiviert das API-Zugriffs-Log, Anfragen > 2 s werden immer als Warnung geloggt.
-   * **Ausnahme:** Die Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1/2`, `Server is online and ready.`) bleiben bewusst rohes `console.log`: Das Pterodactyl-Egg erkennt „Server gestartet“ an genau diesen Zeichenketten.
-   * Fehlercodes: Ungültige Backup-Dateien (kein ZIP, keine `manga.db`, kaputte/ungültige Datenbank) liefern 400 (`err.status`), echte Serverfehler 500. Gilt auch für das Wiederherstellen eines Server-Snapshots (`/backups/:filename/restore`).
-14. **Sonderausgaben / Lücken-Identität (`services/mangaPassion/`, `utils/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
-   * Eine Collectors-/Limited Edition oder ein Schuber trägt dieselbe Nummer wie der normale Band. Lücken werden deshalb über **Typ + Nummer** abgeglichen (`reconcileMangaGaps`, `isGapCovered`), nie nur über die Nummer. `classifyOfficialVolume()` bestimmt den Typ eines offiziellen Eintrags; ein generischer Titel („Collectors Edition“) oder eine nackte Zahl wird nie per Namenssuche zugeordnet.
-   * `batchImportGaps` löst die UI-Beschriftungen auf (`"26 (Titel)"`, `"5 (Collectors Edition)"`, `"East Blue Leerschuber"`, reine Zahl = regulärer Band), speichert die saubere Nummer samt Preis/Datum/Cover und fasst vorhandene (`Vorhanden`/`Gelesen`) Einträge nie an. Ghost-Einträge im Regal gibt es nur für reguläre Bände (`detectedGapEntries` mit `type`).
-   * Anzeigenamen: `getVolumeDisplayTitle()` / `getEditionLabel()` (Collectors, Limited, Special, Variant …, aus den Notizen) – überall verwenden (Karten, Liste, Regal, Einkaufsliste, Radar), keine eigenen „Band X“-Strings. `inferVolumeType` existiert in Backend und Frontend und wird per `test/specialeditions.test.js` synchron gehalten.
-15. **Manga-Passion-Kalender (`services/mangaPassionReleases.js`):**
-   * Die API-Seiten müssen eindeutig sortiert sein: `order[date]=asc` allein ist über Seiten hinweg nicht stabil (an einem Tag erscheinen viele Bände; im Test fehlten ~3 % der Einträge, andere kamen doppelt) – deshalb zusätzlich `order[id]=asc` und Dedupe nach `id`.
-   * Nur vollständige Monate werden 12 h gecacht; fällt eine spätere Seite aus, werden die Treffer gezeigt, aber nicht gespeichert. Ist die API nicht erreichbar, wird der letzte gespeicherte Monat geliefert (`stale: true`, die Oberfläche zeigt einen Hinweis).
-   * `countdownFor()` rechnet in Kalendertagen über UTC-Mitternächte (lokale Mitternächte sind über die Zeitumstellung 23/25 h auseinander) und in Kalendermonaten (Dezember → Januar = „Nächsten Monat“).
-16. **Fortschritt, Doppelte, Platzhalter (aus dem Test mit einer großen echten Sammlung):**
-   * Fortschritt einer Reihe = **verschiedene numerierte reguläre Bände** (`regular_owned` in `GET /api/mangas`, `getSeriesProgress()` im Frontend); Schuber, Specials, Extras und nicht numerierte „Starter 1“-Einträge zählen als „+N“. Das Ziel wächst mit der höchsten besessenen Nummer (`max_regular_number`), weil die gespeicherte Gesamtzahl bei laufenden Reihen veraltet. „Band 14“ und „14“ sind derselbe Band (`volumeNumberOf`, Migration v8). Eine Reihe gilt in der Statistik nur als komplett, wenn die regulären Bände reichen.
-   * `POST /api/volumes` verweist Doppelte (gleiche Reihe + Typ + Nummer, case-/whitespace-unabhängig) mit **409** ab; ein Collectors-Band mit gleicher Nummer ist erlaubt. Die Detailansicht zeigt schon vorhandene Doppelte als Banner, das Formular ignoriert einen zweiten Submit.
-   * Manga Passion nutzt `2999-12-31` für „Termin nicht bekannt“: `cleanOfficialDate()` macht daraus `null` (Eintrag zählt als „kommt noch“), Migration v7 bereinigt Altdaten.
-   * Cache-Header: `index.html`, `sw.js` und `manifest.json` immer `no-cache` (`utils/staticHeaders.js`), sonst verweist eine gecachte Startseite nach einem Update auf nicht mehr vorhandene Dateien.
+1. **Node.js 25+ Warnung (`index.js`, erste Zeilen):** `DEP0180` (`fs.Stats`) wird am Dateianfang abgefangen, damit die Logs sauber bleiben. Nicht entfernen.
+2. **SQLite WAL & Wiederherstellung:** Langsame Schritte (Entpacken, Prüfen, Migrieren, Sicherung vor der Wiederherstellung) laufen asynchron **vor** dem Tausch; andere Anfragen arbeiten so lange auf der alten DB. Der Tausch (`swapInStagedDb`: `closeDb()` mit `wal_checkpoint(TRUNCATE)` → `manga.db.bak` über `manga.db.bak.tmp` → `rename` → `initDb()` → `persistJwtSecret()`) ist synchron, ohne `await`; ein Sperr-Flag oder 503 gibt es dafür nicht. Nie eine Datei unter einem offenen Handle austauschen (erst schließen, dann `-wal/-shm` löschen, dann ersetzen). Scheitert etwas nach dem Tausch, wird zurückgerollt; die `.bak` bleibt bei einem gescheiterten Rollback liegen und sperrt alle Wiederherstellungen (503 `ROLLBACK_COPY_PENDING`, auch nach Neustarts) bis `rollback-aufraeumen bestaetigen` oder Zurückkopieren von Hand. `initDb()` legt keine neue leere Datenbank an, wenn `manga.db` fehlt/0 Byte hat und eine `.bak` existiert (`DB_ROLLBACK_COPY_PENDING`). Es läuft immer nur eine Wiederherstellung (zweite: 409).
+3. **Cookies, HTTPS, Proxy:**
+   * `trust proxy` kommt aus `TRUST_PROXY` (`utils/trustProxy.js`), Standard `loopback`: nur ein Proxy auf demselben Host darf die Client-Adresse per `X-Forwarded-For` setzen. Hinter einem anderen Proxy dessen Adresse eintragen, **keine Hop-Zahl**: bei `1` wählt jeder, der den App-Port direkt erreicht, sein `req.ip` selbst. Läuft nginx/Caddy auf dem Host vor Pterodactyl oder Docker, sieht die App das Docker-Gateway: `TRUST_PROXY=loopback, 172.18.0.1` (nur die Gateway-Adresse; Pterodactyl `pterodactyl_nw` = `172.18.0.1`, Docker `docker network inspect <netz>` → `Gateway`); reines `loopback` steckte alle Besucher in ein Login-Limit. **Nie das ganze Subnetz** eines geteilten Netzes: andere Container darin (auf einem Pterodactyl-Node fremde Server) erreichen den Container-Port direkt und könnten `X-Forwarded-For` frei wählen. Ein Subnetz nur für einen Proxy-Container in einem eigenen Netz, in dem allein Proxy und App hängen. README §6, `Caddyfile.example`, `nginx.conf.example` und `.env.example` sagen dasselbe. Der Port muss dann nur über den Proxy erreichbar sein (Compose `127.0.0.1:3000:3000` bzw. kein `ports:` im selben Docker-Netz; veröffentlichte Docker-Ports umgehen ufw/firewalld; Pterodactyl: Allocation an 127.0.0.1). Ohne passende Einstellung teilen sich alle Clients hinter dem Proxy ein Login-Limit (einmalige Warnung „X-Forwarded-For von … wird ignoriert“). Ungültige Werte beenden den Start („TRUST_PROXY ungültig“).
+   * `setAuthCookie` prüft `req.secure` und `x-forwarded-proto === 'https'`; über reines HTTP im LAN fehlt das `secure`-Flag, Login funktioniert. `COOKIE_SECURE` (`true/1/yes/on/ja`) erzwingt es; mit HTTPS sendet `index.js` `Strict-Transport-Security`. Speichert der Browser das Cookie nicht, meldet das Login-Formular das ausdrücklich.
+   * **Offline-Start, App-Installation, Live-Scanner und Einkauf offline nach Neustart nur über HTTPS oder localhost** (Anleitung README §6) (Browser bieten `navigator.serviceWorker` und die Kamera sonst nicht an).
+   * **Cross-Origin-Schutz** (`middleware/originCheck.js`, vor den Body-Parsern): GET/HEAD/OPTIONS laufen durch, `CORS_ORIGIN`-Ursprünge auch; sonst mit `Sec-Fetch-Site` nur `same-origin`/`none`, ohne diesen Header muss `Origin` zum `Host` passen; ohne beide Header (curl, Skripte) durch. Anfragen ohne `token`-Cookie passieren mit wohlgeformtem Bearer oder von einem App-Ursprung. Das Cookie wird wie cookie-parser erkannt (nie per Regex). Reverse-Proxys müssen `Host` unverändert weitergeben (`proxy_set_header Host $host;`).
+   * **CORS:** das mitgelieferte Frontend nutzt relative URLs und braucht kein `CORS_ORIGIN`. `CORS_ORIGIN`-Einträge bekommen Credentials, `APP_ORIGINS` CORS **ohne** Credentials (Header Authorization, X-Client, Content-Type, If-None-Match; sichtbar ETag, X-Request-Id, Retry-After, Content-Disposition). Nie andere Ursprünge spiegeln.
+4. **Verzeichnisse & Frontend-Auslieferung:** Alle persistenten Daten liegen unter `DATA_DIR` (`manga.db`, `secret.key`, `uploads/`, `backups/`, `temp/`); `data/` ist in `.gitignore`. Ist der Datenordner nicht beschreibbar, beendet sich der Server mit „Datenordner … ist für uid … nicht beschreibbar (z. B. chown 1000:1000 ./data)“. Das Frontend kommt aus `FRONTEND_DIR`, sonst `frontend/dist`, dann `dist/`; das App-Verzeichnis selbst oder ein Verzeichnis darüber wird **nie** ausgeliefert (Vergleich nach `realpathSync.native`, auch Symlinks wie `ln -s . dist` werden abgelehnt), `FRONTEND_DIR` darf weder App- noch Datenverzeichnis enthalten oder darin liegen. Fehlende Dateien unter `/uploads/*` und `/assets/*` sowie jeder Pfad mit Dateiendung liefern 404, nie `index.html` (Client-Routen ohne Punkt). Vorkomprimierte Assets (`.br`/`.gz`) liefert eine eigene Middleware vor `express.static`; bricht ein Client den Download ab, darf der Callback keine Header mehr setzen. Cache-Header: `index.html`, `sw.js`, `manifest.json` immer `no-cache` (`utils/staticHeaders.js`), `/assets` ein Jahr `immutable`.
+5. **Transaktionen:** Es gibt nur **eine** SQLite-Verbindung. Mehrstufige Schreibvorgänge immer über `runTransaction(fn)` aus `db.js` bzw. `ctx.db.transaction(fn)` im Kern (`BEGIN IMMEDIATE`, Rollback bei Fehler; `withTransaction` ist ein alter Alias), nie rohes `BEGIN`. `fn` muss **synchron** sein – nie `await` darin (ein async-Callback wird abgelehnt, was er nach dem ersten `await` tut, liefe außerhalb). Netzwerk-I/O (Cover-Downloads) vorher erledigen.
+6. **JWT-Secret & Sitzungen (`middleware/auth.js`):**
+   * `JWT_SECRET` wird nur akzeptiert, wenn es ≥ 32 Zeichen lang und kein Platzhalter ist; sonst liest der Server `<DATA_DIR>/secret.key` bzw. erzeugt ihn (48 Zufallsbytes, 0600). Nie in der Datenbank, also in keinem Backup; ein alter `app_settings.jwt_secret` wird beim Start gelöscht (einmalige Rotation). Datei unlesbar → Start bricht ab.
+   * Tokens nur über `signSessionToken(user)` (enthält `pv` = Sitzungsversion, `jti`, `exp`), nie `jwt.sign` direkt. `requireAuth` lehnt ab, wenn `pv` nicht stimmt, der Benutzername nicht mehr zur ID passt, `iat` mehr als 60 s in der Zukunft liegt oder das Token per Logout gesperrt ist. `tokenFromRequest` liest zuerst das Cookie, sonst `Authorization: Bearer` (das Cookie gewinnt; App-Clients senden deshalb `credentials: 'omit'`).
+   * Passwort schreiben (`PUT /auth/password`, `PUT /users/:id`) nach dem bcrypt-await nur per `bumpSessionVersion(id, hash, { username, passwordHash })` in einer Transaktion mit dem vor dem await gelesenen Hash; hat sich die Zeile geändert, 409 `CHANGED_MEANWHILE` bzw. 401.
+   * `persistJwtSecret()` ist der Restore-Hook: löscht ein `jwt_secret` aus der eingespielten DB, beendet alle Sitzungen und leert die Abmeldeliste.
+7. **Externe Downloads, Uploads, Bild-Metadaten:**
+   * Alle Remote-Bilder laufen über `fetchRemoteImage()` (`utils/safeFetch.js`): nur öffentliche Hosts (DNS geprüft, jede Weiterleitung neu, IPv6 numerisch inkl. eingebetteter IPv4; gesperrt u. a. 192.0.0.0/24, 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 192.88.99.0/24), 15 MB, 10 s Leerlauf- und 30 s Gesamt-Timeout, Magic-Byte-Prüfung. Im Kern über `ctx.http.fetchImage` + `fetchImage()` aus `core/lib/imageCheck.js`. Nie `fetch` direkt auf Nutzer-URLs.
+   * Lokale Uploads prüft `verifyImageUploads` (`middleware/upload.js`): kein Bild → alle Dateien der Anfrage weg, 400; falsche Endung → umbenannt; danach Metadaten entfernen (`utils/imageMeta.js`: JPEG ohne EXIF/XMP/Kommentare/Zweitbilder, Ausrichtung bleibt als minimaler EXIF-Block; PNG ohne Text-Chunks; WebP ohne EXIF/XMP; GIF/AVIF unverändert), weil `/uploads` ohne Anmeldung ausgeliefert wird. Die Stripper bauen das Ergebnis mit einer Allokation; mehr als 4096 Segmente oder Unparsebares bleibt unverändert. Dateinamen `crypto.randomUUID()`.
+   * Wiederhergestellte Bilder laufen durch `stripImageFileSync` (Dateien über 32 MB bleiben unverändert).
+8. **Passwörter, Rate-Limits, Benutzernamen, Ersteinrichtung:**
+   * Passwörter mindestens 8 Zeichen (max. 72 Bytes, bcrypt). Benutzernamen max. 64 Zeichen, ohne `,`, `|` und Steuerzeichen (`usernameError()`), eindeutig ohne Groß-/Kleinschreibung (`COLLATE NOCASE` + Index aus Migration 14).
+   * `/auth/login`: zuerst `loginGuard.check()` (je Konto+Adresse nach 10, je Konto nach 50 Fehlversuchen in 15 Min.; Adressen, die sich schon erfolgreich angemeldet haben, sind ausgenommen, so kann niemand den Admin von außen aussperren); eine gesperrte Anfrage antwortet 429, ohne das Adress-Budget zu verbrauchen. Dann `loginLimiter` (50 Fehlversuche je 15 Min. je Adresse, Erfolg wird abgezogen). Der Versuch wird **vor** `await bcrypt.compare` gezählt. `/setup` 10 je 15 Min., `/auth/logout` 30 je 15 Min., Passwortwechsel eigenes Limit je Benutzer; ein Admin-Passwort-Reset hebt Sperren auf. Sperren werden mit `log.warn` geloggt.
+   * Zähler-Speicher (`createWindowStore`): max. 50 000 Einträge, IPv6 je /64 (ein /48 belegt höchstens 256 Schlüssel), IPv4-gemappte als IPv4; voll → ältester ungesperrter Eintrag weicht, eine aktive Sperre nie; sind alle gesperrt, fail open für Anfrage-Limiter, fail closed für `loginGuard`.
+   * **Ersteinrichtung:** Solange es keinen Admin gibt, braucht `POST /api/setup` den Einrichtungscode. Ohne `SETUP_TOKEN` erzeugt der Server einen 16-stelligen Code (`XXXX-XXXX-XXXX-XXXX`), hält ihn nur im Speicher und druckt ihn per `console.log` im Start-Banner (bei jedem `LOG_LEVEL` sichtbar). Vergleich per `timingSafeEqual` über SHA-256, Groß-/Kleinschreibung, Leerzeichen und Bindestriche egal; keine Loopback-Ausnahme. `SETUP_TOKEN` unter 12 Zeichen → Warnung, es gilt der erzeugte Code.
+   * Status wird gegen `VOLUME_STATUSES` (`core/lib/validate.js`) geprüft. Der Altwert `Gelesen` wird als Eingabe angenommen und als `Vorhanden` plus Lese-Eintrag gespeichert (`convertLegacyRead`, auch vor einer Besitzänderung), nie als Status. Hat ein Altband schon Lese-Einträge, bleiben genau diese und der Ersatzbesitzer wird nur Besitzer; die Regel steht allein in `convertLegacyRead` (Migration 13, `legacy_read`-Korrektur, Besitzwechsel einzeln und in der Sammelbearbeitung).
+9. **Wiederherstellung – Details (`routes/backups.js`):** Der ZIP-Leser liest Einträge über das offene Dateihandle (ein währenddessen gelöschter Snapshot stört nicht); ZIP64 nur, wenn der Locator wirklich vor dem EOCD steht. Aus `uploads/` werden nur flache Bilddateien neben der `manga.db` des Archivs übernommen (`__MACOSX`, `._*`, HTML/JS werden übersprungen). Ein Backup ist vollständig vertrauenswürdige Eingabe (es ersetzt Benutzer und Passwort-Hashes). Bei 500 senden die Backup-Routen nur feste deutsche Texte; ungültige Archive (kein ZIP, keine `manga.db`, kaputt, nicht migrierbar, zu groß, zu viele Dateien) liefern 400.
+10. **Konfiguration nur über `utils/config.js`:** auch Logger, Scheduler, Radar und Konsole lesen keine `process.env` selbst. Die Getter lesen bei jedem Zugriff (Tests dürfen Variablen zur Laufzeit setzen). `DATA_DIR` muss vor dem ersten `require('./db')` gesetzt sein. Nie `null` als Aufbewahrungswert erzeugen (`.slice(null)` löscht alles; ungültig = `KEEP_ALL`).
+11. **Express 5 & Fehlerbehandlung (`index.js`):**
+   * Die SPA-Rückfallroute ist das letzte `app.use((req, res) => …)` (Express 5 kennt kein nacktes `'*'`); andere Methoden als GET/HEAD außerhalb von `/api` liefern 404, unbekannte `/api/*`-Pfade JSON-404. `req.body` ist ohne Body `{}` (eigene Middleware); `req.query` ist nur lesbar, Strings immer über `qstr()`.
+   * Routen haben kein eigenes `try/catch` für den 500-Fall: geworfene Fehler gehen an den letzten Error-Handler, der als einziger die Antwort baut. Erwartbare Fehler: `throw badRequest('…')`, `notFound('Band')`, `conflict('…', 'CODE', { extra })` (`core/errors.js`, Server: `utils/httpError.js`); wer selbst antworten muss (Stream schon offen), nutzt `sendError(res, status, meldung, CODE)`. Nie `res.status(4xx/5xx).json(...)` direkt (statischer Test in `test/hardening.test.js`). Ein echter 500 wird „Interner Serverfehler“ mit `ref`; englische Texte von body-parser, serve-static und multer werden übersetzt (`uploadErrorMessage` mitziehen, wenn sich ein Upload-Limit ändert). `throw` nie in einem Callback außerhalb des Request-Ablaufs (`res.on`, Timer).
+   * Jede Fehlerantwort (≥ 400, jeder Pfad) bekommt `Cache-Control: no-store` und verliert ETag/Last-Modified (`uncachedErrors`). Der 10-MB-Parser für `POST /api/import/csv` läuft erst nach `requireEditor`; `cookieParser()` steht dafür vor den Body-Parsern. Die Sicherheits-Header stehen direkt nach `compression()`, damit auch 400/413 sie tragen.
+   * **Sicherheits-Header:** `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, CSP (`CONTENT_SECURITY_POLICY`: Skripte, Styles und Schriften nur vom eigenen Ursprung, Bilder auch `http(s)`, Inline-Styles erlaubt), `Permissions-Policy` (Kamera nur `self`), `Cross-Origin-Opener-Policy: same-origin`, `X-Request-Id`; `X-Powered-By` aus. Neue externe Skript-/API-Hosts müssen in die CSP.
+12. **Offline-Kopie, Service Worker, Sitzungsende (Frontend):**
+   * Offline-Kopie (`utils/offlineStore.js`, IndexedDB `mangashelf-offline`, Version 2 mit `kv` und `outbox`): letzter Benutzer, Reihenliste, alle Details aus `/api/offline-snapshot` und der ISBN-Index (`isbn-index`). Sync beim Start (3 s nach dem Login, dann `requestIdleCallback`), im Vordergrund und per Footer-Knopf (gedrosselt auf 5 Min.), nie parallel (`force: true` = genau ein Folge-Sync), Event `mangashelf:offline-synced`. Danach Vorladen der Reihen-Cover (nicht bei Mobilfunk, 2g/3g, Datensparmodus oder > 80 % Speicher; max. 300 Cover / 50 MB). `navigator.storage.persist()` nach dem ersten Sync. `clearOfflineData()` löscht IndexedDB, Einkaufslisten-Cache und die Anime-Schlüssel (`utils/storageKeys.js`), die Outbox bleibt. Nach Änderungen in der App wird die Kopie gepatcht (`patchCachedManga`, eine Transaktion) und der ISBN-Index verworfen (`invalidateIsbnIndex`). Im Standalone-Modus tut `syncOfflineCopy()` nichts.
+   * **Service Worker (`frontend/public/sw.js`):** Precache aller Build-Dateien atomar in `mangashelf-app-<Version>-<Build-ID>` (`buildId` in `frontend/vite.config.js`: sha256 über die gehashten Dateinamen und `index.html`, 12 Hex-Zeichen; `stampServiceWorker` ersetzt `__APP_VERSION__` und `__BUILD_ID__`, ungestempelt `mangashelf-app-<Version>`; fehlt eine Datei, bleibt die alte Version); `/assets/*` cache-first; Navigationen: Netz mit 3 s Timeout, sonst die gecachte Seite unter `/`; gespeichert wird eine Navigation nur, wenn alle genannten Dateien im Cache liegen. `/uploads/*` cache-first in `mangashelf-uploads-v2` (nur echte Bilder des eigenen Ursprungs), überlebt Updates. Fremde Ursprünge und `/api/` gehen am Worker vorbei. Kein automatisches `skipWaiting`: `watchServiceWorkerUpdates()` (aus `main.jsx` direkt nach `register()`) zeigt den Toast „Neue Version verfügbar“ mit „Neu laden“ (schickt `SKIP_WAITING`); `vite:preloadError` → `reloadForStaleChunk()`; `AppErrorBoundary` lädt bei fehlendem Chunk einmal neu.
+   * **Start-Prüfung** (`App.jsx`): `/api/setup/status` und `/api/auth/me` mit 4 s Timeout; ohne Antwort, mit Fehler, mit einer Nicht-JSON-Seite (Captive Portal) oder einem 401 ohne Code läuft die App mit gespeichertem Benutzer offline weiter und prüft alle 30 s und bei `online` erneut.
+   * **Sitzungsende:** nur der API-Client meldet es (`SESSION_EXPIRED_EVENT` bei 401 mit `AUTH_REQUIRED`/`SESSION_INVALID` aus `/api/*`, außer Login/Logout/me/Passwort/Setup; `sessionEndAnnounced(res)`). Ein 401 ohne Code (Auth-Proxy) beendet die Sitzung nie. App reagiert genau einmal: Offline-Kopie, Listen-Cache (`clearMangaListCache`), Suche, Scanliste, Ansichtszustände (`utils/viewState.js`) und Cover-Cache löschen, laufende Downloads abbrechen, zurück zu `/login`.
+   * **Logout:** zuerst `runBeforeLogout()`, dann Outbox senden, dann `POST /api/auth/logout`. Kommt der Logout nicht an, bleibt `mangashelf_logout_pending` gesetzt und wird vor jedem `/api/auth/me` nachgeholt (Browser-Build; App-Build: Vormerk je Server, Fall N). Nie Daten nach dem Abmelden lesbar lassen (Grenze: Bilder im HTTP-Cache bleiben).
+   * Nicht offline verfügbar: Release-Radar, Statistik, Bearbeiten/Anlegen/Löschen.
+13. **Logging (`utils/logger.js`):** Backend loggt ausschließlich über `require('../utils/logger').child('name')` (im Kern `ctx.log.child('name')`); kein `console.*`. Ein `Error` als Argument wird mit Stack und `err.cause` (rekursiv, auch `AggregateError`) ausgegeben – immer das Objekt übergeben, nicht `err.message`. Der Logger wirft nie (zirkulär → `[Circular]`). Jede Anfrage hat eine 8-stellige `req.id`; das Zugriffs-Log (`debug`, Anfragen > 2 s immer als Warnung) enthält `reqId`, Methode, Pfad ohne Query, Status, Dauer, Benutzer-ID. **Ausnahme:** das Start-Banner in `index.js` (`Manga Shelf running on http://0.0.0.0:`, `Server listening on port`, `change this text 1`/`2`, `Server is online and ready.`) und der Einrichtungscode bleiben rohes `console.log`; das Egg erkennt „gestartet“ an den ersten beiden Zeilen, generische Eggs an `change this text`. Danach folgt eine Statuszeile (`statusLines()`).
+14. **Sonderausgaben / Lücken-Identität (`core/mangaPassion/`, `core/lib/volumeType.js`, `frontend/src/utils/volumeHelpers.js`):**
+   * Collectors-/Limited Edition und Schuber tragen dieselbe Nummer wie der normale Band. Lücken, Kalender und Autofill gleichen über **Typ + Nummer** ab, nie nur über die Nummer. `classifyOfficialVolume()` liest zuerst die API-Felder (`specialType 1` = Schuber, `type 3` = Sonderausgabe, `type 0` mit Nummer = regulär); Titelwörter zählen nur, wenn sie fehlen, und dann als ganze Wörter (nur „schuber“ als Teilwort). `isSchuberEntry()` ist das einzige Schuber-Kriterium.
+   * Autofill und Einzel-Lookup ordnen typgerecht zu (`findOfficialVolume(vols, nummer, typ, { notes, price })`): ein regulärer Band bekommt nie Daten einer Collectors Edition; ohne passenden Eintrag bleibt der Band unverändert (`matched: false`). Ein gespeicherter `manga_passion_volume_id` hat Vorrang, solange Typ und Nummer passen. `matchSchuberVolume` ordnet „Schuber N“ dem N-ten Schuber zu, unterscheidet Leer- (~12 €) und Sammelschuber (> 25 €) und liefert `null` für eine Nummer, die die Edition nicht hat.
+   * Anzeigenamen nur über `getVolumeDisplayTitle()` / `getEditionLabel()` („Band“ nur vor einer Zahl); `inferVolumeType` existiert in `core/lib/volumeType.js` und im Frontend und wird von `test/specialeditions.test.js` synchron gehalten. `mpGapMap` enthält nur reguläre Bände; Ghosts stehen in beiden Sortierrichtungen vor der gleichnamigen Sonderausgabe (`buildDisplayVolumeItems`, `getVolumeSortInfo`, `compareVolumesByNumber`) und erscheinen nur, wenn die Filter es erlauben (`filtersAllowGaps`).
+15. **Manga Passion: Client und Kalender (`core/mangaPassion/client.js`, `core/mangaPassion/releases.js`):**
+   * Nur vollständige Antworten werden 12 h gecacht. Unvollständig: Editionsabruf fehlgeschlagen, 5xx/Timeout, 404 auf einer späteren Seite, mehr als 20 Seiten (`MAX_VOLUME_PAGES`), fremder oder wiederholter `hydra:next`. Dann der letzte gespeicherte Stand (`stale: true`), sonst `incomplete: true`. Jede Suchanfrage wird einzeln gecacht (`mp_search_q_*`, 12 h, leere 1 h); nach dem ersten Netzwerkfehler (oder zwei 5xx/429) bricht die Suche ab, Budget 20 s; ohne Kandidaten `unavailable: true` → Text „Manga Passion ist gerade nicht erreichbar“ (`MP_UNREACHABLE_MESSAGE`), nicht „Keine passende Edition“. `getEditionDetailsAndVolumes` akzeptiert nur echte Editions-IDs (`toEditionId`). `is_released` wird bei jedem Lesen aus `release_date` neu berechnet. Wiederverwendete Cover (`mp-cov-*`) bekommen eine frische mtime. User-Agent der Anfragen: `MangaShelf/<package.json-Version>`. Alte Cache-Zeilen räumt der Client höchstens stündlich weg.
+   * `cleanOfficialDate()`: `2999-12-31` = `null` („Termin nicht bekannt“), nur Monat bekannt (`day: null`) = `YYYY-MM`, ungültige Formate = `null`; `isOfficialReleased()`: ein Monatsdatum gilt erst nach Monatsende als erschienen.
+   * Kalender-Seiten eindeutig sortieren (`order[date]=asc` + `order[id]=asc`, Dedupe nach `id`); Seitenzahl aus `hydra:totalItems` (max. 20 Seiten = 2000 Einträge, darüber `truncated`, nicht gecacht). Ein fehlgeschlagener Monat wird 10 Min. nicht erneut abgefragt (`resetReleaseFetchState()` für Tests), gleichzeitige Abrufe teilen sich eine Anfrage.
+   * `buildMatcher`: Präfix-Treffer („Blue Lock – Episode Nagi“, `match_kind: 'prefix'`) setzen nur das Reihen-Badge, **nie** den Band; „X – Collectors Edition“ ist `variant`; bei einer anderen verknüpften Edition kein Band (`other_edition`). Die MP-Band-ID ordnet nur bei **gleichem Typ** zu (`calendarItemType`), die reine ID nur, wenn genau eine Zeile sie trägt. Der Nummern-Rückfall liest bei Typ `volume` nur die Zahl mit einem Nummern-Präfix („14“, „Band 14“, „Bd. 14“, „Vol./Volume 14“, „Nr./No. 14“, „Teil 14“, „Tome 14“, „Ausgabe 14“, „#14“), bei `schuber` „2“, „Schuber 2“, „Box 2“, „Schuber Nr. 2“; Editionswörter („Ultimative Edition 14“) nie. Kalender-Import schreibt die MP-Band-ID nur, wenn kein anderer Eintrag der Reihe sie trägt.
+   * Terminabgleich: Fenster vom aktuellen Monat (höchstens 1 zurück) bis 6 Monate nach dem spätesten gespeicherten Termin, max. 14 Monate; ein Band gilt als unverändert, sobald irgendein Print-Eintrag den Termin hat; veraltete (`stale`) Monate werden übersprungen.
+   * „Heute“ für Radar, Monatsgrenze und Kalender kommt aus `zonedToday()` in `APP_TIMEZONE`. `countdownFor()` rechnet in Kalendertagen über UTC-Mitternächte und in Kalendermonaten; ein Monatsdatum bekommt Monatslabels („Diesen Monat“, „Nächsten Monat“, „In N Monaten“).
+16. **Fortschritt, Doppelte, Platzhalter, „Komplett“:**
+   * Fortschritt = **verschiedene nummerierte reguläre Bände ≥ 1** (`regular_owned` in `GET /api/mangas`, `getSeriesProgress()` im Frontend); Band 0, Schuber, Specials, „Starter 1“ zählen als Extra (`extras_owned`, ein doppelter Band ist kein Extra). Das Ziel wächst mit `max_regular_number`. Im Frontend zählt `regularVolumeNumber()` nur „N“ und „Band N“; `volumeNumberOf()` ist breiter und nur für den Typ-+-Nummer-Abgleich. 100 % nur bei kompletter Reihe, sonst höchstens 99 %.
+   * **Komplett** (Statistik `completed_series`, Kachel „Komplett“, `isSeriesComplete()`) nur, wenn `total_volumes > 0` und `regular_owned >= total_volumes` (Spec A2); ohne Gesamtzahl nie, der Erscheinungsstatus zählt nicht, Sammelstatus auch nicht. SQL in `COMPLETED_SERIES_SQL` mit `regularNumberedSql`; `test/stats.test.js` vergleicht.
+   * Doppelte (Reihe + Typ + Nummer, case-/whitespace-unabhängig, „Band 5“/„Bd. 5“ = „5“) → 409; ein Collectors-Band mit gleicher Nummer ist erlaubt. Die Detailseite zeigt vorhandene Doppelte als Banner (`findDuplicateEntries`).
+   * Datumsfelder der Band-Endpunkte: `JJJJ`, `JJJJ-MM`, `JJJJ-MM-TT` mit Jahr 1900–2999, volles Datum muss existieren. Im Client Daten immer mit `localISODate()`/`localToday()` bzw. `formatDate()`, nie `toISOString().split('T')[0]` oder `new Date('YYYY-MM-DD')` (UTC-Versatz).
+   * Spenden-/Ausgabenstatistik: ein Kaufdatum mit nur Jahr zählt im Jahr, aber nicht im Monatsdiagramm (`year_only`); `without_date` nur ohne verwertbares Jahr.
+17. **Keine Node-API in `core/`:**
+   * `core/` lädt nur Dateien aus `core/` über feste relative Pfade (`core/*.js`: nur `./x`; tiefer: ein führendes `./` oder `../`, danach kein `..`), keine Pakete, kein `fs`/`path`/`crypto`/`zlib`/`os`/`child_process`, keine Globals `process`, `Buffer`, `setImmediate`, `fetch`, `crypto` (auch nicht über `globalThis.`), kein `module.require`, kein `require`-Alias, kein `new Function`/`eval`. ESLint (Block für `core/**/*.js`) und `test/core/noNodeApi.test.js` brechen sonst ab.
+   * **Laufzeit-Untergrenze es2020 (iOS 14/15):** kein `AbortSignal.any`/`AbortSignal.timeout`/`Object.hasOwn` (stattdessen `timeoutSignal`, `anySignal` aus `core/lib/signals.js`, `Object.prototype.hasOwnProperty.call`); auch `Array.prototype.at`, `structuredClone`, `replaceAll` meiden (kein Gate fängt sie).
+   * Was fehlt, kommt über ctx: `ctx.http.fetch` (JSON), `ctx.http.fetchText` (Kataloge), `ctx.http.fetchImage`, `ctx.files` (`ctx.files.url(name)` ist immer `/uploads/<name>`), `ctx.randomId()`, `ctx.yield()`, `ctx.config.appTimeZone`/`appVersion`, `ctx.credentials`, `ctx.undo`. Bytes sind `Uint8Array` (keine Buffer-Methoden); MD5 über `core/lib/md5.js`, SHA-256 über `core/ical.js`.
+   * Server-ctx: `require('./db').createCtx({ user, signal, limit })`; `routes/core.js` baut ihn je Anfrage mit `req.user`, einem AbortSignal (Client weg) und `limit(name)` (antwortet der Limiter 429, bricht der Handler über `ANSWERED` ab).
+18. **Start und Beenden (`index.js`, `services/lifecycle.js`):**
+   * `index.js` exportiert die App plus `createApp`, `start({ host, port, dataDir, console, banner })` und `stop()`; ohne `MANGA_SHELF_NO_LISTEN=1` startet es selbst. Programmatisch (Desktop, Binärdatei): `DATA_DIR`, `MANGA_SHELF_NO_LISTEN=1` (und ggf. `SETUP_TOKEN`) vorher setzen, dann `await start({ host: '127.0.0.1', port: 0, console: false })` → `{ server, port, url }`; ein anderes `dataDir` oder ein zweiter `start()` ohne `stop()` wird abgelehnt, ein belegter Port ist ein Promise-Fehler. `index.js` darf beim Laden nichts starten, was nicht `start()` gehört.
+   * `initScheduler()` (mit Start-Aufräumen) läuft in `start()` **vor** `listen`. Lange Vorgänge mit `trackJob(name, promise)` anmelden (Snapshots, Wiederherstellungen, täglicher Snapshot). SIGTERM/SIGINT: Timer stoppen, keine neuen Verbindungen, bis 8 s auf Jobs warten, offene Verbindungen trennen, `closeDb()`, Exit; nach 9 s hart. `uncaughtException` endet mit 1, `unhandledRejection` wird nur geloggt. Belegter Port in der CLI → Exit-Code 1.
+19. **Standalone-Modus (App ohne Server):**
+   * Neue Kern-Endpunkte laufen automatisch im Gerät; Server-Routen, die die Oberfläche dort braucht, gehören zusätzlich in `local/localServer.js`.
+   * sql.js-Statements werden je Aufruf vorbereitet und freigegeben; `export()` setzt Pragmas zurück, der Adapter schaltet `foreign_keys` danach wieder ein. Im Kern keine Node-API (Gotcha 17) – sonst bricht der App-Build zur Laufzeit im Gerät.
+   * App-Build: `vite.config.js` bündelt `../core` über `build.commonjsOptions.include`; sql.js (wasm als Asset), fflate und bcryptjs liegen nur im Lazy-Chunk von `src/local/boot.js`. Der Web-Build ersetzt per Plugin `web-build-without-local-core` `boot.js` durch einen Stub und die reinen App-Module (`APP_ONLY_MODULES`: `LocalOffer.jsx`, `LocalScreen.jsx`, `LocalSetup.jsx`, `TakeoverDialog.jsx`, `BackupExportModal.jsx`) durch eine leere Komponente (Chunk `app-only-stub`), damit weder Kern, sql.js, wasm, bcryptjs, fflate noch Übernahme-Code in `dist/` und den Precache gelangen. Ein neues Modul, das nur im App-Build gebraucht und aus gemeinsamem Code lazy geladen wird, gehört in diese Liste (`webBuildStub.test.js`).
+   * Prozessweiter Zustand des Kerns (Verlags-Aliase) wird nur über `applySchema(conn, { loadAliases: true })` geladen; unter Vitest lädt ein direkter ESM-Import aus `frontend/src` eine zweite Modul-Instanz, die die Handler nicht sehen. jsdom: `TextEncoder` liefert Uint8Arrays eines anderen Realms; Bytes für den nativen Speicher mit `Uint8Array.from` bauen. App-CSP (`src/app/csp.js`): `script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' http: https:`, keine Inline-Skripte in `index.html`.
+20. **ETag & Daten-Version (`utils/dataVersion.js`):** `conditional()` (in `core/routes.js` per `conditional: true`) baut `W/"<boot>.<generation>.<total_changes>.<data_version>.u<id>.<rolle>.<tag>.<url-hash>"`: jeder Schreibzugriff (auch Trigger und Cache-Zeilen), ein Restore, ein Neustart, ein anderer Benutzer/Rolle, ein neuer Kalendertag (App-Zeitzone, Serverzeit, UTC) und jede andere URL ergeben einen neuen Tag; mit passendem `If-None-Match` 304, bevor eine Abfrage läuft. Der Tag irrt nur Richtung „neu laden“. Endpunkte, deren Antwort von Uhrzeit oder externen Daten abhängt, bekommen **kein** `conditional`. Wer tagesabhängige Felder in ETag-Endpunkte einbaut, deckt deren Tagesdefinition dort ab.
+21. **CSV-Austausch (`core/csvExchange.js`, `core/handlers/csv.js`):**
+   * Export: Semikolon, UTF-8 mit BOM; Spalten Reihe, Reihenverlag, Verlag (nur abweichend), Autor, Typ, Bandnummer, Status, ISBN (`978-…`, damit Excel sie nicht umwandelt), Preis, Zielpreis, Priorität, Erscheinungsdatum/-jahr, Kaufdatum, Zustand, Seiten, Notizen, dann Reihenfelder (`Reihen-Wunsch`, `Reihenstatus`, `Sammelstatus`, `Gesamtbände`, `Alternativtitel`, `Sprache`, `Tags`, `Manga-Passion-ID`, `Reihen-Cover`, `Reihen-Banner`, `Beschreibung`; nur auf der ersten Zeile einer Reihe außer dem Wunsch), `Band-Cover`, `Bilder`, `MP-Band-ID`, zuletzt „Gelesen von“ und „Besitzer“ (sortiert nach `created_at, rowid`). Reihen ohne Bände als Zeile mit `Typ` = `Reihe`.
+   * Import: höchstens 20 000 Datenzeilen, 100 Spalten (Abbruch erst ab 200 000 Zeichen je Zelle); eine zu lange Zelle oder Notiz ist ein Fehler **dieser Zeile**; Cover, Bilder und Reihenspalten verwerfen nie eine Zeile (nur Hinweis). Vorhandene Einträge (Reihe + Typ + Nummer) bleiben unangetastet; Vergleich in JS (`matchKey`: NFC, klein), nicht per SQL `LOWER()`. Ohne Spalte „Typ“ leitet `inferVolumeType` den Typ ab. Status „Gelesen“ = Vorhanden + gelesen. Besitzer-/Leser-Zellen max. 50 Namen und 1000 Zeichen, Auflösung per längstem Treffer; nur Admins dürfen andere Benutzer eintragen. Daten wie in der API plus `TT.MM.JJJJ`, `MM.JJJJ`, „Mrz 25“; Preise max. zwei Nachkommastellen ≤ 99999. Eine neue Reihe übernimmt je Reihenfeld den ersten ausgefüllten Wert ihrer Zeilen.
+   * Formelschutz: ein `'` vor `= + - @ Tab CR` am Zellanfang und nach jedem Komma; `guardFormulas`/`unescapeCell` sind invers (`FORMULA_START`, nur zusammen ändern).
+   * Die CSV ist **kein Backup** (keine Bilddateien, keine Preise/Kaufdaten je Besitzer). Oberfläche: `CsvExchangeModal` (Editoren; Gäste nur Export; offline ausgeblendet) und Reiter „CSV“ im Backup-Dialog, beide über `components/modals/backup/CsvImportPanel.jsx` (UTF-8/UTF-16 per BOM, sonst Windows-1252 mit Hinweis; importiert wird genau der Text der Vorschau).
+22. **ISBN- & Metadaten-Lookup (`core/isbnLookup.js`, `core/handlers/lookup.js`):**
+   * `parseMarc21Xml` liest nur den ersten Datensatz, dekodiert Entities und entfernt die DNB-Steuerzeichen `U+0098`/`U+009C` um führende Artikel (`stripMarcControls`). Reihe und Nummer stammen aus demselben Feld: das erste Reihenfeld **mit** Nummer (800 $t/$v, dann 830, dann 490); `245$a` ist oft nur der Bandtitel. Fehlt die Nummer, ist `volume_number_known` `false`. Bandnummern normalisiert („05“ → „5“). Seiten aus „178 S.“, Jahr auch aus „[20]23“, Preis nur aus dem 020-Feld mit **der gescannten ISBN**.
+   * Google Books: Bandnummer aus „Band/Bd./Vol. N“, dann `seriesInfo`, zuletzt Zahl am Titelende; ist der ganze Titel samt Zahl der Reihenname („Kaiju No. 8“), gilt sie als unbekannt.
+   * Zeitlimits: `fetchTextHttps` mit harter Gesamtfrist; AniList, Jikan und MAL über `core/anime/request.js` (`ctx.http.fetch`, 8 s, 4-MB-Grenze); die Reihensuche wartet je Quelle höchstens 12 s. AniList-Beschreibung: erst `<br>` → Zeilenumbruch, dann Tags entfernen, dann Entities dekodieren.
+   * `normalizeIsbn` wandelt ISBN-10 nur mit gültiger Prüfziffer in ISBN-13 um; eine fehlerhafte bleibt (ohne Trennzeichen) wie eingegeben.
+23. **Frontend-API-Client (`frontend/src/utils/api.js`):**
+   * **Kein rohes `fetch(`** im Frontend; immer `apiFetch` oder `api.get/post/put/del/upload`. Plain Objects gehen als JSON, FormData unverändert. Antworten nur über `readJson(res)` (null bei HTML einer Proxy-Seite), nie `res.json()`; Fehlertexte über `errorFromResponse(res, fallback)` (Server-`error`, sonst „<fallback> (HTTP n)“, für 502/503/504 „Server nicht erreichbar“). `ApiError.ref` = Fehler-ID.
+   * Timeouts nur über `TIMEOUTS`: `read` 15 s (GET), `write` 8 s, `auth` 4 s, `lookup`/`remote` 90 s (Manga Passion, ISBN-Kette, Remote-Bilder), `long` 10 Min. (Autofill, Importe, Snapshots, Offline-Snapshot), FormData ohne eigenes `timeout` `uploadTimeout(bytes)` (mind. 120 s, 50 kB/s, max. 10 Min.), Wiederherstellungen `timeout: 0`. Timeout → `ApiError` `code: 'TIMEOUT'`, Netzfehler `code: 'NETWORK'`; Abbruch durch das eigene `signal` wirft den `AbortError` (`isAbortError`). Läuft ein nicht idempotenter Langläufer in den Timeout, den Serverstand neu laden statt erneut zu senden. Ein Aufrufer-`signal` wird nur bis zu den Antwort-Headern verknüpft.
+   * Veraltete Antworten: Ladefunktionen für wechselnde IDs/Monate holen `{ signal, isCurrent }` aus `useLatestRequest()` und prüfen vor jedem `setState` `isCurrent()`.
+   * Bearer-Token nur an den aktiven Server (Ursprung der Ziel-URL); Bilder mit Serverpfad immer `{...assetImgProps(pfad)}` (im App-Build mit `crossOrigin="anonymous"`; `api.test.jsx` schlägt bei `src={assetUrl(` in `components/` fehl).
+   * **Toasts (`components/common/Toaster.jsx`):** Info/Erfolg 5 s, Fehler 8 s (`role="alert"`), Maus/Fokus hält an; höchstens 4 ohne Aktion und 3 zeitgesteuerte mit Aktion (ein verdrängter Rückgängig-Toast gilt als bestätigt, `notify.subscribe` meldet `dismiss`); Toasts mit `duration: 0` werden nie verdrängt. Jeder Toast feuert `mangashelf:notify`. Ebene `z-[70]` (über allen Dialogen und der Statusleisten-Abdeckung); ab 640 px unten rechts bei `1rem + safe-area`, unter 640 px `var(--toast-offset, 4.5rem)` + safe-area (`OfflineBanner` setzt `--toast-offset: 7rem`). Solange `#bulk-action-bar` sichtbar ist, misst der Toaster sie und steht über ihr; auf Handy und niedrigen Bildschirmen (`(max-width: 639px), (max-height: 500px)`) ist dann nur der neueste Toast zu sehen, sonst auf niedrigen Bildschirmen die neuesten zwei. Ausgeblendete Toasts bleiben gemountet, Timer und Rückgängig-Fenster laufen weiter.
+24. **Dialoge, Fokus, Styles (Frontend):**
+   * `useDialogA11y(open, { returnFocusRef, onClose, history })`: merkt sich den Auslöser schon beim Rendern, fokussiert `[data-autofocus]`/`autoFocus`/erstes Bedienelement, gibt den Fokus zurück (nie an `body`: an den Auslöser, wenn er noch gerendert ist (`getClientRects().length > 0`) und `focus()` wirklich greift, sonst an `returnFocusRef`, sonst an die `h1` der Seite (`h1[tabindex="-1"]`, sonst `#inhalt`, mit `preventScroll`)), scrollt bei offener/geschlossener Bildschirmtastatur (visualViewport `resize`) das fokussierte Feld im Dialog zurück ins Bild, legt einen History-Eintrag an (Zurück schließt den Dialog; Tokens `${pageId}:${n}`; `dialogEntryOnTop()` → Navigation direkt nach dem Schließen mit `{ replace: true }`). Nie `history.go()` in Dialogen. Klickbare Bilder, die einen Dialog öffnen, als `<button>` mit `aria-label`.
+   * Schließen: der Hintergrund schließt nur, wenn `pointerdown` **und** `click` auf dem Overlay landen; während einer Anfrage `data-busy="true"` (Escape, Zurück und Hintergrund wirken nicht; `useDashboardKeyboard` respektiert das); ein Dialog, der Escape selbst behandelt, ruft `preventDefault()`. Asynchrone Übernahmen prüfen nach dem `await` eine Sitzungsnummer. Laufende Downloads zählen als busy, die Schließen-Knöpfe schließen trotzdem.
+   * Ebenen: Kopf `z-30`, untere Leisten `z-40`, Dialoge `z-50`, Galerie `z-60` per Portal, Werkzeug-Dialoge aus dem Statistik-Dialog `z-[60]`; die Statusleisten-Abdeckung (`body::before`, fix, Höhe `env(safe-area-inset-top)`, `#0b0f19`, `pointer-events: none`) liegt bei `z-index: 65` über allen Dialogen (gescrollte Seiten und Dialoge laufen sonst unter die Uhr); Toasts darüber `z-[70]`. Fixe Elemente im Kopf (untere Leiste, Menü-Sheet, Live-Scanner) per Portal in `body` (der Kopf hat `backdrop-filter`). Keine `overflow-*-hidden/auto` an Vorfahren eines sticky-Elements (`Dashboard` und `MangaDetail` nutzen `overflow-x-clip`).
+   * **Sticky-Kopf und Tastaturfokus:** `DashboardHeader` (`data-sticky-header`) schreibt seine Höhe per ResizeObserver als `--sticky-header-h` auf `<html>` (0, solange er nicht sticky ist; beim Unmount entfernt); `index.css` macht daraus `scroll-padding-top`, damit Tab-Fokus nie unter dem Kopf landet (WCAG 2.4.11). Unten reservieren `#bottom-nav` (nur unter 640 px) und `#detail-bottom-bar` Platz per `scroll-padding-bottom`, die Auswahlleiste setzt ihres selbst (Fall P). Auf niedrigen Bildschirmen (`short:`) ist der Kopf `short:static` und scrollt mit.
+   * **Bildschirmtastatur** (`hooks/useKeyboardOpen.js`): `useKeyboardOpen(barRef)` meldet „offen“, solange ein Textfeld außerhalb der Leiste den Fokus hat oder die Tastatur den Visual Viewport um mehr als 150 px verkleinert; `BottomNav` und `DetailBottomBar` blenden sich dann aus (`data-keyboard="open"`). Nie, solange ein Dialog (`[aria-modal="true"]`) offen ist oder die Leiste selbst den Fokus hat (eine ausgeblendete Leiste verlöre den vom Dialog zurückgegebenen Fokus). `useRevealFocusedField()` läuft einmal in `App.jsx`: ändert sich der Visual Viewport (Tastatur, Drehen), wird ein fokussiertes Feld außerhalb von Dialogen, das nicht mehr sichtbar ist, mittig ins Bild gescrollt; Dialoge macht `useDialogA11y` selbst, ein Feld, das `revealAboveKeyboard` (`DetailBottomBar.jsx`) schon sichtbar gemacht hat, bleibt unberührt.
+   * Hover-Effekte in eigenem CSS (`.manga-spine:hover`, `.manga-spine-ghost:hover`) stehen in `@media (hover: hover) and (pointer: fine)`, sonst bleibt ein angetippter Rücken auf Touch-Geräten angehoben; `styles.test.js` prüft das.
+   * Tailwind 3 erzeugt unbekannte Klassen stillschweigend nicht: Sonderwerte (`z-60`, `slate-850`, `w-13`) in `tailwind.config.js` oder als Arbitrary Value; `styles.test.js` prüft das. Randlose Selects (`.filter-chip-select`, `.seamless-select`) zeigen den Fokus am direkten Eltern-Element (`:has`). Spine-Regeln in `@layer components`, keine Spine-Regel setzt `outline`. `color-scheme: dark`; `scrollbar-color` nur für Firefox. iOS-Statusleiste `black`; `viewport-fit=cover` mit `env(safe-area-inset-*)`. `backdrop-blur` nur für Kopf, Toolbars, Modals, Toasts.
+   * **Browsertests und Texte:** `test/browser/*` sucht Buttons über `innerText`, IDs und `title`-Attribute. Kein `sr-only`-Text mit „Bearbeiten“, „Abbrechen“, „Gekauft“ o. Ä. in Buttons vor dem eigentlichen Ziel; neue `aria-label` lassen die `title`-Attribute stehen. Keine Buttons in einem `<Link>` (die Autor-Knöpfe der Rasterkarte sind Geschwister des Links, Gotcha 26).
+   * **lucide-react 1.x:** immer kanonische Namen (`CircleAlert`, `TriangleAlert`, `CircleCheck`, `Trash`, `Funnel`, `LoaderCircle`, `ChartColumn` …), keine veralteten Aliase. **`build.target`** ist auf `es2020, edge88, firefox78, chrome87, safari14` gepinnt (ältere iPhones). **`npm audit` im Frontend:** die Highs zu `braces` (Tailwind 3) betreffen nur den Build; **kein** `npm audit fix --force`.
+25. **Detailseite, Band-Editor, Band-Ansichten:**
+   * Nur ein 404 zeigt „Manga nicht gefunden“; 5xx, HTML vom Proxy oder fehlendes Netz behalten eine angezeigte Reihe (`refreshError`), sonst Offline-Kopie bzw. Fehlerseite mit „Erneut versuchen“. Neuladen ist durchnummeriert. Ist das Reihen-Formular offen, setzt ein Neuladen es nicht zurück; gespeichert werden nur geänderte Felder (`changedFormFields`; `manga_passion_id` nur bei Änderung). „Zurück zur Übersicht“ führt zu `location.state.from` (nur interne Pfade).
+   * Band-Editor (`VolumeEditModal.jsx`, `hooks/useVolumeEditForm.js`): pro Band neu gemountet (`key`), laufende Uploads/Autofill hängen an einem `AbortController`. Besitzer (`OwnersField`) werden sofort gespeichert, der Server leitet den Status ab; der PUT sendet `status` nur, wenn der Nutzer ihn danach selbst geändert hat. Kommt eine frischere Kopie des Bands, übernehmen unberührte Felder den neuen Wert (`rebaseForm`); validiert wird gegen den aktuellen Serverstand (`baseRef`). Preise wie `parsePrice` („7,50“, „1.234,56“), Fehler inline (`role="alert"`). Teil-Daten (`JJJJ`, `JJJJ-MM`) zeigt `DetailFields` als „Gespeichert: November 2026 (nur Monat)“. Beschriftungen mit Zusatzknopf sind `<label htmlFor>` neben dem Knopf, nie darum.
+   * Schnellaktionen schicken nur geänderte Felder; nur Admins schalten den Lesestatus anderer. **Gelesen am:** `readAtForDate(date)` (`useVolumeActions`) macht aus einem lokalen Tag den `read_at` des Servers (lokaler Mittag in UTC); heute, leer oder Zukunft → `null` (der Server stempelt). Der Lese-Schalter nutzt `readDate`/`setReadDate` (Feld „Gelesen am“ in `ReaderBar`, nur mit `canToggle`; nur beim Markieren als gelesen): `readDate` ist `null` (= jetzt, kein `read_at`), bis der Nutzer ein Datum wählt; die Wahl gilt nur für diese Reihe (eine andere Route setzt sie zurück), ein gewähltes „heute“ bleibt nach Mitternacht „jetzt“, und nur ein gewähltes Datum erscheint im Toast. `BatchReadModal` hat ein Feld „Gelesen am“, das bei jedem Öffnen leer (= jetzt) beginnt; bereits gelesene Bände behalten ihr Datum. Regal-Tastatur: J/K/Leertaste/E nur in der Regalansicht (Fokus auf `[data-volume-id]`), Leertaste nur für besessene Bände, der Rücken selbst behandelt nur Enter. Für Gäste sind Rücken `role="img"`. „Offizielle Lücke“ nur bei bestätigter Edition (`gapsOfficial`), sonst „Lücke (geschätzt)“. Preise über `formatEuro()`, Daten über `formatShortDate()`.
+   * Manga-Passion-Pille (`VolumeFilterBar`): offline ausgeblendet, bei Ausfall „Nicht erreichbar“, nie „Keine Edition“ (`mpPillText`). Filter „Gelesen“ zählt nur vorhandene Bände; „Ohne Zustand“ über `CONDITION_NONE`.
+   * **Regalreihen** (`hooks/useShelfLayout.js`): richten sich nach der gemessenen Breite des Regals (`shelfMeasureRef` am Reihen-Container in `VolumeShelfView`, ResizeObserver). `splitShelfRows()` teilt so, dass Mindestbreiten der Rücken plus Abstände nie breiter als das Regal sind; die Größe (S 20 / M 16 / L 12 je Reihe) ist nur die Obergrenze. Auto-Fit wird mehrzeilig, sobald die Rücken nicht in eine Reihe passen (`fitsOneFitRow`) oder es mehr als 36 sind. Ändert sich eine `min-w-[…]` in `ShelfSpine.jsx`, `ROW_MIN_WIDTH`/`FIT_MIN_WIDTH` in `useShelfLayout.js` mitziehen. Kein `overflow-x-auto` an den Reihen (die Planke muss bündig bleiben).
+   * Reihenkopf (`MangaHeroCard`): unterhalb von `xl` stehen die Aktionen unter dem Titel; lange Titel brechen mit `break-words hyphens-auto [overflow-wrap:anywhere]` und `lang`. Escape aus einem Feld schließt den Band-Editor nur, wenn der Dialog seit dem ersten Fokus unverändert ist (`useDetailKeyboard` merkt sich Werte und `aria-pressed`), den Reihen-Editor nur bei `isEditDirty === false`; außerhalb eines Feldes wie bisher.
+   * `DetailBottomBar` (unter 640 px) blendet sich bei offener Tastatur aus (Gotcha 24); „Band hinzufügen“ fokussiert die Nummer und scrollt sie nach dem Öffnen der Tastatur über die Tastatur (`revealAboveKeyboard`).
+26. **Dashboard:**
+   * Die Hauptansicht kommt allein aus `?view=` (`shelf`, `shopping`, `radar`, `anime`; `MAIN_VIEWS`); jeder Wechsel ist ein History-Eintrag, Daten einer Ansicht werden beim Betreten geladen. Ein Wechsel über `setView` (Reiter, untere Leiste, Menü) öffnet die neue Ansicht oben (`window.scrollTo(0, 0)`); die Sammlung stellt stattdessen ihre gespeicherte Position wieder her (`mangashelf_shelf_scroll`), Zurück/Vorwärts lassen die Scrollposition in Ruhe. `?view=stats` öffnet den Statistik-Dialog und wird per replace entfernt; `viewSearch` behält die Filterparameter und entfernt `add`. Neue App-Verknüpfungen in `manifest.json` nur mit Werten, die `parseInitialView` kennt.
+   * `useMangaList`: `loading` nur beim ersten Laden; spätere Abrufe im Hintergrund, nur die jüngste Antwort zählt; Modul-Cache je Benutzer (Liste + Scrollposition, `clearMangaListCache()` beim Logout); 401 leert die Liste nicht, sondern meldet das Sitzungsende; Offline-Kopie nur bei 502/503/504/Netzfehler und leerer Liste.
+   * `MangaCollectionGrid`, `MangaCard`, `MangaRow` sind `React.memo`; Rückgaben an das Raster müssen stabil sein (`useCallback`). Cover immer über `CoverImage`. Raster/Liste seitenweise (60 Karten / 100 Zeilen). Der Karten-Wrapper (`CARD_WRAPPER_CLASS`) ist selbst der Kartenrahmen mit `content-visibility:auto` und hebt sich beim Hover als Ganzes; der Link der Karte (direktes Kind) deckt per `after:absolute after:inset-0` die ganze Karte ab, die Autor-Knöpfe liegen mit `relative z-[1]` darüber (nie ein Knopf im Link). Name des Links: der Titel, ohne Autor-Knöpfe zusätzlich die Autorzeile im Link (`aria-labelledby`, Label in Name). Löschknopf (`hit-44`) und Wunsch-Badge sitzen `top-9 left-2` / `top-9 right-2`. Scrollpositionen in `mangashelf_shelf_scroll`/`mangashelf_detail_scroll`, Seitenzahl in `mangashelf_shelf_count` (`utils/viewState.js`).
+   * Suche (`utils/search.js`): Faltung (klein, ohne Akzente, ß → ss, Apostrophe weg, Punkt nur zwischen Ziffern bleibt, Dezimalkomma → Punkt, Umlaute zusätzlich als ae/oe/ue); jedes Wort der Anfrage muss vorkommen; ein Zahlwort trifft nur eine ganze Zahl; Codes ab 4 Ziffern; Tippfehler ab 5 Buchstaben (Damerau-Levenshtein); Anfrage max. 200 Zeichen/12 Wörter. Mit Suchtext sortiert das Regal erst nach Trefferart. Der Index wird je Objekt in einer WeakMap gecacht: Listeneinträge nie in place ändern. Die Regal-Suche liegt in sessionStorage `mangashelf_search` (`{ user, search }`).
+   * **Telefon-Layout (unter 640 px):** `useIsNarrow()` (`components/common/BottomNav.jsx`) schaltet die oberen Schnellschalter ab. `BottomNav` bleibt immer gemountet (ein darüber geöffneter Scanner überlebt das Drehen des Handys); ab 640 px ist sie `hidden` und ohne IDs. `#btn-mobile-shopping`, `#btn-mobile-radar`, `#btn-mobile-menu-toggle`, `#btn-bottom-scan` gibt es nur unter 640 px in der Leiste; darüber hat der Kopf `#btn-mobile-menu-toggle` (nie doppelt im DOM) und keine eigenen Ansichtsknöpfe mehr (nur „Neuer Manga“ `#btn-header-add-manga` und das Menü; die Ansichten wechselt `MainViewSwitcher`). Zugängliche Namen der Leiste beginnen mit dem sichtbaren Wort („Mehr – Menü öffnen“, „Einkauf – Einkaufsliste, 12 fehlend“, „Radar – Release-Radar, 3 Termine“); die Zähl-Badges liegen neben dem Knopf (`aria-hidden`, `pointer-events-none`), damit die Zahl nicht zum sichtbaren Label zählt. Bedienelemente im Kopf und in Karten bekommen `hit-44`. Die Leisten sind 3,5 rem + `env(safe-area-inset-bottom)`; die Reihenseite hat `DetailBottomBar` und hält Platz frei. Pull-to-Refresh (installierte PWA) reagiert nicht auf Gesten in Dialogen oder gescrollten Bereichen.
+   * Kopf-Suche `#main-search-input`: das Feld selbst trägt die vertikale Polsterung (`py-2.5`, volle Kastenhöhe), damit ein Tipp auf den Rand das Feld trifft. Ein Touch-Scroll außerhalb des Kopfes nimmt dem Feld den Fokus, solange seit dem Fokussieren bzw. „Suche zurücksetzen“ nichts getippt wurde (sonst verschiebt iPadOS den sticky Kopf unter die Statusleiste).
+27. **Release-Radar im Frontend (`hooks/useReleaseRadar.js`, `utils/radarHelpers.js`):** Ein fehlgeschlagener Abruf ist nie ein leerer Zustand (`radarViewState()` → `'error'`); ein fehlgeschlagener Monat wird vom Effekt nicht erneut geladen (`shouldAutoFetchMp`). Nur die neueste Anfrage setzt State (`createRequestSequence`). Statusgruppen: im Regal = `Vorhanden`, bestellt = `Vorbestellt`/`Bestellt`; Kalenderkarten bieten dort keine Import-Knöpfe. Import bei `match_kind === 'prefix'` ohne `manga_id`; danach wird der Monat still neu geladen; Doppelklicks fängt ein synchrones Ref-Set ab. „Geliefert“ sendet `purchase_date` nur, wenn der Band noch keins hat. Offline zeigt die Ansicht nur einen Hinweis. Der Terminabgleich (`useRadarDateChanges`) lädt einmal pro Radar-Besuch.
+28. **App-Build: Token, Heimnetz, Downloads:**
+   * `isSecureEnough(url)`: https, oder http zu Heimnetz-Zielen: Loopback, RFC 1918, CGNAT/Tailscale `100.64.0.0/10`, Link-Local, IPv6-ULA `fc00::/7`, Namen auf `.local`, `.localhost`, `.fritz.box`, `.lan`, `.home.arpa`, `.internal`. Keine Ausnahme je Server; ältere gespeicherte Server mit anderer http-Adresse bekommen beim Login `INSECURE_URL_TEXT` und keine Anmeldung.
+   * Das Token gehört zum Server und gilt nur für seine Login-Origins. In den App-Hüllen liegt es im sicheren Speicher (Capacitor Secure Storage, Electron safeStorage); ohne Hülle (App-Build im Browser, Tests) im localStorage.
+   * Downloads mit Token (`app/downloadManager.js`) laufen weiter, wenn der Dialog schließt (Toast mit Fortschritt und „Abbrechen“); Schlüssel `<Server-ID oder local:<Profil>>:<Epoche>:<Pfad>`. `cancelAllDownloads()` (Abmelden, 401, Server- oder Profilwechsel) bricht alle ab und erhöht die Epoche.
+29. **Anime-Quellen, Budget und Cache (`core/anime/`):**
+   * Budget je Server: AniList 30/min (Header `X-RateLimit-Limit` überschreibt), Jikan 60/min + 3/s; 40 % für interaktive Anfragen reserviert. 429 pausiert den Zugang bis `Retry-After`/`X-RateLimit-Reset`; 3 Netzwerk-/5xx-Fehler in Folge öffnen den Circuit für 60 s. Hat eine Quelle geantwortet, bekommt die andere nur noch 2,5 s (`SECOND_SOURCE_GRACE_MS`, Antwort `partial`, 5 min gecacht). Fehler werden nie gecacht.
+   * Sweeps (`runAnimeRefreshIfDue` in `services/scheduler.js`): stündlich fällige nächste Folgen, täglich ab `BACKUP_HOUR + 1` alle fälligen in 50er-Gruppen per `id_in`; `api_cache` wird bei jedem Lauf aufgeräumt. `next_check_at`: fertig 14 Tage, angekündigt täglich, laufend nächste Folge + 30 min (max. 24 h). Cover nur bei geänderter Quell-URL neu laden.
+   * AniList beantwortet einen ungültigen Token mit HTTP 400 `Invalid token` (nicht 401). 401/403 und „Invalid token“ schalten einen persönlichen Schlüssel sofort ab; die Anfrage geht über den Pool. Eine sonstige Ablehnung (400/401/403 mit GraphQL-Fehlerkörper; `SourceError.graphql === true` aus `core/anime/request.js`) ist nur ein Verdacht und zählt als Strike, wenn danach der Pool richtig antwortet; abgeschaltet wird beim zweiten Strike innerhalb von 10 Minuten (`SUSPECT_WINDOW_MS`); eine gute Antwort löscht den Zähler, eine leere 2xx-Antwort zählt nie. Alle Anime-Schreiber merken sich `ctx.db.generation()` und schreiben nichts nach einer Wiederherstellung (manuell: 503).
+30. **API-Schlüssel & Secrets:** Schlüssel liegen AES-256-GCM-verschlüsselt in `user_api_credentials`; der Schlüssel wird per HKDF aus `JWT_SECRET` bzw. `secret.key` abgeleitet (`utils/secretBox.js`; `node:crypto` nur dort und in `routes/`, nie in `core/`). Nach einem Wechsel des Secrets (oder einem Backup aus einer anderen Instanz) sind sie nicht mehr lesbar (`last_error = 'Schlüssel nicht mehr lesbar, bitte neu eintragen'`). Secrets erscheinen nie in Antworten, Logs oder der Konsole. Ein vom Anbieter abgelehnter Nutzerschlüssel wird deaktiviert und einmal über den Pool wiederholt; Google Books wertet den Fehlergrund aus (`googleKeyVerdict` in `core/isbnLookup.js`): ungültiger Schlüssel → `last_error`, wird nicht mehr gesendet; Kontingent erschöpft (dailyLimitExceeded, rateLimitExceeded, quotaExceeded, 429; ohne Fehlerkörper 403; den Fehlerkörper liefern `fetchTextHttps` und der Geräte-`fetchText` in `frontend/src/local/http.js` als `err.body`, die ersten 4 KB, dazu `err.status`) → bis Mitternacht pazifischer Zeit übersprungen, ohne `last_error`; jeweils ein Versuch ohne Schlüssel; ein abgelehnter Umgebungsschlüssel wird bis zum Neustart übergangen.
+31. **Systemseite, Update-Prüfung, Kalender-Abo:**
+   * Die Update-Prüfung fragt `https://api.github.com/repos/LixNix-Swap-Org/manga-shelf/releases/latest` nur, während ein Admin die Systemseite öffnet, höchstens einmal am Tag (nach Fehlern stündlich), im Hintergrund; `UPDATE_CHECK=false` schaltet sie ab.
+   * Das Kalender-Token ist ein eigenes Geheimnis (32 Zufallsbytes, base64url), nie das Sitzungs-Token; gespeichert werden nur SHA-256-Hash und Chiffrat (`app_settings` `calendar_feed:<hash>`, `{ user_id, created_at, last_used_at, sealed }`). Das Token steht in der Abo-URL (Proxy-Logs können es sehen; das Server-Log protokolliert keine Query). Google Kalender holt Abos von Google-Servern (nur bei öffentlich erreichbarem Server). Wer Abos widerruft, nutzt `revokeFeedTokens(db, userId|null)` aus `core/handlers/radar.js` (`null` = alle): „Alle Sitzungen beenden“, Passwortänderung und -Reset über die API, Benutzer löschen, neues bzw. beendetes Abo; die Konsole `passwort-reset` ebenso (`services/console.js`). Nur Bände mit genauem Tag landen im Kalender.
+32. **Papierkorb, Verlage, Tags:** Gelöschte Daten liegen nur noch in `trash.payload`. `normalizePublisher` nutzt eine prozessweite Alias-Tabelle, die nur für die Live-Datenbank geladen wird: `initDb()` ruft `loadPublisherAliases(conn)` nach `applySchema`, Zusammenführen und Alias-Löschen laden neu; `applySchema(conn)` ohne `{ loadAliases: true }` (Inspect/Staging eines Backups, Test-Harnesse, Kopien im Gerät) fasst sie nicht an. Wer eine Verbindung live schaltet, lädt die Aliase dort selbst (Gerät: `local/runtime.js` beim Start und nach `replaceDatabase`). Tests, die Aliase ändern, setzen sie zurück (`setPublisherAliases`). Genre-Übersetzungen nur in `core/lib/tags.js` und `frontend/src/utils/tags.js` gleichzeitig ändern (`test/tags.test.js`). Im Frontend nimmt `normalizePubName` zuerst die Namen des Servers (`setPublisherNames`), sonst `CANONICAL_PUBLISHERS` (identisch mit `core/lib/publishers.js`, `test/volumeHelpers.test.js`).
+33. **Sammelstatus ≠ Erscheinungsstatus:** `mangas.status` ist der Verlagsstatus, `mangas.collecting` ob der Haushalt die Reihe noch sammelt. `pausiert` blendet nur auf der Einkaufsliste (und `total_missing`) aus; `abgebrochen` zusätzlich Radar (ohne bestellte Bände), Lückenbanner (`GapNotices` Prop `collecting`), Kalender-Hervorhebung und „Mit Lücken“. Statistik und „Komplett“ ignorieren beides. Gesetzt wird er über `components/detail/CollectingControl.jsx`.
+34. **Capacitor-App:** Neue native Funktionen: Plugin in `mobile/package.json` + `mobile/src/native-bridge.mjs`, im Frontend nur über `window.mangashelfNative` (feature-detected), nie `@capacitor/*` importieren. `<a download>` und `target=_blank` fängt die Hülle ab; eigene Klick-Handler, die `openExternal` rufen, setzen `preventDefault()`. Die Android-WebView injiziert die Brücke per `addDocumentStartJavaScript` (CSP-fest). Generierte Kopien (`mobile/www`, `ios/App/App/public`, `android/app/src/main/assets/public`) nicht linten und nicht einchecken.
+   * **Downloads in den Apps:** die App-CSP (`app/csp.js`, `connect-src 'self' http: https:`) erlaubt weder `blob:` noch `data:`; ein `fetch()` solcher URLs scheitert in der WebView mit „Load failed“, auch über `window.CapacitorWebFetch` (nicht CapacitorHttp ist schuld). `installCapacitorShell` merkt sich deshalb über `installObjectUrls` den Blob hinter jeder `URL.createObjectURL`-Adresse (bis `revokeObjectURL`); `saveFile` (`app/shell/capacitor.js`) nimmt ihn von dort bzw. dekodiert `data:`-URLs selbst, nur unbekannte URLs gehen noch über fetch. Neue Downloads weiter als `<a download href="blob:…">` mit `URL.createObjectURL` bauen, Blob-URLs nie per fetch zurücklesen; `blob:`/`data:` nicht in `connect-src` aufnehmen.
+   * **Start und Systemleisten:** `capacitor.config.ts` setzt `backgroundColor: '#0b0f19'` (WebView vor dem ersten Paint dunkel) und `android.adjustMarginsForEdgeToEdge: 'auto'` (Android 15 erzwingt Edge-to-Edge; die WebView bekommt Ränder, die Insets dort sind 0). iOS: `LaunchScreen.storyboard` ist eine einfarbige Fläche #0b0f19 ohne Bild, `Info.plist` `UIStatusBarStyle` = LightContent; `index.html` behält `viewport-fit=cover` (`appShell.test.jsx`), die Statusleisten-Abdeckung steht in Gotcha 24. Android: `@color/app_background` in `mobile/android/app/src/main/res/values/colors.xml` für Start-, Splash- (12+) und Fensterhintergrund, helle Systemleisten-Symbole aus. Ausrichtungen: iPhone Hochformat + beide Querformate, iPad alle vier. Die alten Splash-Bilder (`drawable*/splash.png`, `Splash.imageset`) sind unbenutzt und dürfen nach einem nativen Build-Test weg.
+35. **Desktop-App:** `index.js` wird im Electron-Hauptprozess geladen: `DATA_DIR`, `MANGA_SHELF_NO_LISTEN=1` und `SETUP_TOKEN` vorher setzen; ein Moduswechsel ist `stop()` + `start({ host, port })`. Der Controller (`desktop/lib/server.js`) führt start/stop nacheinander aus und verweigert Neustart und Stopp (`SERVER_BUSY`; nur beim Beenden der App `stop({ force: true })`), solange `lifecycle.runningJobs()` oder eine Wiederherstellung läuft (der nächste Start würde deren Temp-Dateien wegräumen); `main.js` stellt jeden Wechsel von Betriebsart, Port, Ansicht und Tray in eine Warteschlange (`switchRun` = `createRunSwitcher`) und nimmt einen Wechsel, der den Server stoppen oder verlegen würde, mit „Wiederherstellung/Backup läuft – Betriebsart danach wechseln“ zurück; ebenso, wenn `applyRun` danach scheitert (`SERVER_BUSY` erst beim Start). Nach jeder Ablehnung werden Menü und Tray neu gebaut. Die Konsolen-Sicherung (`backup`, Desktop „Backup jetzt“) läuft als `trackJob('Snapshot', …)`. `load()` entfernt ein `FRONTEND_DIR` der Umgebung wirklich. Node-`URL` liefert für `app://`, `file:` und `data:` den Ursprung `'null'`: Ursprungsvergleiche immer über `originOf()` aus `desktop/lib/appProtocol.js`. Menütexte mit „&“ als „&&“. Beim Beenden mit Tray kommt `window-all-closed` auch während `app.quit()`; der Handler darf dann nicht abbrechen. electron-builder nimmt `node_modules` in `extraResources` nur mit eigenem Eintrag und `filter: "**/*"` mit.
+36. **Release-Pipeline, Docker, Egg:**
+   * Nie Schreibrechte in `ci.yml`, `build.yml` oder `mobile.yml` anfordern (der Aufruf aus `ci.yml` scheitert sonst schon beim Start). Neue Secrets in `build.yml`/`mobile.yml` unter `on.workflow_call.secrets` deklarieren und nur mit `if: steps.signing.outputs.<gruppe> == 'true'` nutzen.
+   * Docker: das Image startet über `docker-entrypoint.sh` als root, setzt den Besitz von `/app/data` auf `node` und startet per `su-exec node`. Kein `USER node` im Dockerfile (sonst EACCES auf frischen Linux-Hosts); Konsolenbefehle deshalb immer `docker exec -it -u node …`. Die Stufe `frontend-builder` kopiert neben `frontend/` auch `core/` nach `/app/core/` (der Web-Build löst über `src/app/shell/capacitor.js` → `src/local/*` Importe `../../../core/...` auf); `test/deploy.test.js` verlangt für jeden Ordner, den Frontend-Quellen außerhalb von `frontend/` importieren, ein `COPY <ordner>/ /app/<ordner>/` vor `RUN npm run build`. `healthcheck.js` muss dieselbe Port- und HTTPS-Logik wie `index.js` haben (`test/deploy.test.js`).
+   * Egg: Install-Container `ghcr.io/parkervcp/installers:alpine` mit `ash`, Variable `TRUST_PROXY` (Standard `loopback`), Installation wie oben. Wer das Egg schon importiert hat, muss es neu importieren (sonst laufen weiter Install-Skripte).
+   * `nginx.conf.example` enthält bewusst nur den Port-80-Block (ohne Zertifikat lehnt `nginx -t` `listen … ssl` ab); `certbot --nginx -d <domain> --redirect` ergänzt TLS (README §6). Kein `http2 on;` (erst ab nginx 1.25.1). `client_max_body_size` (512M) muss über dem Backup-Limit von `uploadBackup` (500 MB) liegen, sonst kommt 413-HTML statt der JSON-Meldung; `test/docs.test.js` prüft das. Der Proxy setzt `X-Forwarded-For` auf `$remote_addr` (nicht anhängen).
+   * TLS-Dateien (`ssl/`, `*.pem`, `*.key`, `*.crt`, `*.p12`, `*.pfx`) stehen in `.gitignore`.
+37. **Remote-Skripte (`scripts/check-remote.js`, `scripts/seed-remote.js`, `scripts/verify-remote.js`):** Ziel = Argument (`https://host[/pfad]` oder `<host> [port]`) vor `REMOTE_URL` vor `REMOTE_HOST`/`REMOTE_PORT`; Zugangsdaten `REMOTE_USER`/`REMOTE_PASS` (Rückfall `ADMIN_USER`/`ADMIN_PASS`), nie in der URL (ein `@` nach dem Schema wird abgelehnt). Passwörter nur über HTTPS oder an localhost (`localhost`, `*.localhost`, `::1`, 127.x.x.x); http zu anderen Hosts nur mit `REMOTE_ALLOW_HTTP=1`. `redactUrl()` schwärzt bis zum letzten `@`. `seed-remote.js` löscht nichts; `--wipe` legt nur die Demo-Reihen neu an (fragt nach dem Hostnamen, ohne Terminal nur mit `--yes`); `SEED_SKIP_COVERS=1` überspringt Cover. `verify-remote.js` tippt das Passwort nur, wenn die Login-Seite auf demselben Ursprung wie das Ziel liegt.
 
 ---
 
 ## 9. Deutsche Manga-Spezifika & APIs
 
-1. **Deutsche Verlage:**
-   * `Carlsen Manga`, `Egmont Manga (EMA)`, `Tokyopop`, `Altraverse`, `Manga Cult`, `Hayabusa`, `Crunchyroll / Kazé`, `Panini Manga`.
-   * Buchpreisbindung in Deutschland: Jeder deutsche Manga hat einen offiziellen festen Ladenpreis (z. B. 7,00 €, 7,50 €, 8,00 €, 10,00 €).
+1. **Deutsche Verlage:** u. a. Carlsen Manga, Egmont Manga (EMA), Tokyopop, Altraverse, Manga Cult, Hayabusa, Crunchyroll / Kazé, Panini Manga, Papertoons. Schreibweisen vereinheitlicht `core/lib/publishers.js` (eingebaute Liste + gespeicherte Aliase). Buchpreisbindung: jeder deutsche Manga hat einen festen Ladenpreis.
 2. **Metadaten-Quellen:**
-   * **AniList GraphQL API:** Perfekt für internationale Reihen-Titel, alternative Romaji-/japanische Titel, Status (Laufend/Abgeschlossen) und hochauflösende Cover.
-   * **Deutsche Nationalbibliothek (DNB) API / SRU:** Gesetzliche Pflichtablieferung in Deutschland! Jeder in DE gedruckte Manga besitzt dort einen Datensatz mit exakter ISBN-13, Bandnummer, Seitenzahl, offiziellem Preis in € und Verlag. Kostenlos und ohne API-Key abrufbar unter:
-     `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D<ISBN>&recordSchema=MARC21-xml`
-
+   * **Manga Passion API** (`https://api.manga-passion.de`): deutsche Editionen, Bände mit Preis, Datum, ISBN, Cover; Monatskalender. Kein Schlüssel nötig.
+   * **Deutsche Nationalbibliothek (DNB) SRU:** Pflichtablieferung, jeder in DE gedruckte Manga hat einen Datensatz (ISBN, Bandnummer, Seiten, Preis, Verlag). Kostenlos: `https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D<ISBN>&recordSchema=MARC21-xml`. Danach K10plus und Google Books (optional mit Instanz-Schlüssel).
+   * **AniList GraphQL** und **MyAnimeList** (über Jikan bzw. die offizielle API mit Client-ID): internationale Titel, Romaji/Japanisch, Anime-Daten. Die Daten gehören den Quellen; Nutzung nur nicht-kommerziell; gespeichert werden IDs und ein schlanker Snapshot.
+   * **Open Library Covers** (`?default=false`) für Cover beim Anlegen per Scan.

@@ -1,3 +1,4 @@
+// MangaDetail page: structure, cached copy, scroll, back link and offline toggles.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -248,7 +249,7 @@ describe('MangaDetail offline toggles', () => {
     const view = renderPage({ user: { id: 2, username: 'ed', role: 'visitor', realRole: 'editor', offline: true } });
     const toggle = await screen.findByRole('button', { name: /^Status: Fehlt/ });
     expect(toggle.disabled).toBe(false);
-    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /löschen$/ })).toBeNull();
     view.unmount();
 
     renderPage({ user: { id: 3, username: 'gast', role: 'visitor', realRole: 'visitor', offline: true } });

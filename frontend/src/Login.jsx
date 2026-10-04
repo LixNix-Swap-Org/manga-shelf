@@ -58,24 +58,31 @@ function ServerInfo({ onRetry }) {
   );
 }
 
+// the input fills the whole box (the icon lets taps through), so a tap anywhere in it focuses the field
+const FIELD_ICON_CLASS = 'absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none';
+
 export default function Login({ onLogin, notice, onRetry }) {
   useDocumentTitle('Anmelden');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldsInvalid, setFieldsInvalid] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const usernameId = useId();
   const passwordId = useId();
+  const errorId = useId();
 
-  const fail = (message) => {
+  const fail = (message, invalid = false) => {
     setError(message);
+    setFieldsInvalid(invalid);
     setAttempt((n) => n + 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setFieldsInvalid(false);
     // the token of this login would never be sent to this address: do not ask the server for one
     if (isAppMode() && insecureAddress()) {
       fail(INSECURE_URL_TEXT);
@@ -97,7 +104,7 @@ export default function Login({ onLogin, notice, onRetry }) {
           fail(outcome.status === 'unauthorized' ? MESSAGES.cookieRejected : MESSAGES.loginUnconfirmed);
         }
       } else {
-        fail(data?.error || (res.status === 401 ? 'Ungültige Anmeldedaten' : 'Anmeldung fehlgeschlagen'));
+        fail(data?.error || (res.status === 401 ? 'Ungültige Anmeldedaten' : 'Anmeldung fehlgeschlagen'), res.status === 400 || res.status === 401);
       }
     } catch (err) {
       fail('Verbindungsfehler zum Server');
@@ -127,7 +134,7 @@ export default function Login({ onLogin, notice, onRetry }) {
         )}
 
         {error && (
-          <div key={attempt} role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3.5 rounded-xl mb-6 text-sm text-center">
+          <div key={attempt} id={errorId} role="alert" className="bg-red-500/15 border border-red-500/40 text-red-300 p-3.5 rounded-xl mb-6 text-sm text-center">
             {error}
           </div>
         )}
@@ -137,8 +144,8 @@ export default function Login({ onLogin, notice, onRetry }) {
             <label htmlFor={usernameId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
               Benutzername
             </label>
-            <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
-              <User className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
+            <div className="relative bg-slate-950/70 border border-slate-700/80 rounded-xl focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
+              <User className={FIELD_ICON_CLASS} aria-hidden="true" />
               <input
                 id={usernameId}
                 name="username"
@@ -146,7 +153,9 @@ export default function Login({ onLogin, notice, onRetry }) {
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm"
+                className="block w-full bg-transparent border-0 rounded-xl pl-11 pr-4 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm"
+                aria-invalid={fieldsInvalid || undefined}
+                aria-describedby={fieldsInvalid && error ? errorId : undefined}
                 required
                 autoFocus
                 placeholder="Dein Benutzername"
@@ -160,14 +169,16 @@ export default function Login({ onLogin, notice, onRetry }) {
             <label htmlFor={passwordId} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
               Passwort
             </label>
-            <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-700/80 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
-              <Lock className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
+            <div className="relative bg-slate-950/70 border border-slate-700/80 rounded-xl focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all">
+              <Lock className={FIELD_ICON_CLASS} aria-hidden="true" />
               <input
                 id={passwordId}
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                className="w-full bg-transparent border-0 p-0 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm"
+                className="block w-full bg-transparent border-0 rounded-xl pl-11 pr-4 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm"
+                aria-invalid={fieldsInvalid || undefined}
+                aria-describedby={fieldsInvalid && error ? errorId : undefined}
                 required
                 placeholder="Dein Passwort"
                 value={password}

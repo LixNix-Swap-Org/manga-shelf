@@ -57,11 +57,9 @@ function errorBody(req, status, message, code, extra) {
 // Own codes are upper-case words joined by "_" (SCHEMA_NEWER); errno (ENOENT) and Node's ERR_* codes stay internal
 const isAppCode = (code) => typeof code === 'string' && /^[A-Z]+(?:_[A-Z]+)*$/.test(code) && !code.startsWith('ERR_') && !/^E[A-Z]+$/.test(code);
 
-/**
- * Status and JSON body for an error a handler threw, by the rules of the server's error handler: 4xx keep their text,
- * a 5xx only when the status was set on purpose (503 restore, 507 disk full), else "Interner Serverfehler".
- * `ref` (the request id) is only known to the server.
- */
+// Status and JSON body for an error a handler threw, by the server's error-handler rules: 4xx keep their text, 5xx
+// only when the status was set on purpose (503 restore, 507 disk full), else "Interner Serverfehler".
+// `ref` (the request id) is only known to the server.
 function errorAnswer(err, ref) {
     const status = err && err.status >= 400 && err.status < 600 ? err.status : 500;
     const isHttpError = err && err.name === 'HttpError';

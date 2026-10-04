@@ -1,3 +1,4 @@
+// public/sw.js run against fake globals: precache per release, runtime caching and cleanup of old caches.
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';

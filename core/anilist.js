@@ -34,7 +34,7 @@ function mapAniListMedia(m) {
         id: 'al_' + m.id,
         manga_passion_id: null,
         source: 'anilist',
-        source_label: '🌐 AniList',
+        source_label: 'AniList',
         title: m.title?.english || m.title?.romaji,
         alt_title: m.title?.native || m.title?.romaji,
         author: author || null,

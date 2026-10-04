@@ -1,3 +1,4 @@
+// Covers accessibility behaviour across shared components, dialogs, titles and keyboard handling.
 import { useState } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
@@ -15,6 +16,7 @@ import AddVolumeBar from '../components/detail/AddVolumeBar';
 import ReaderBar from '../components/detail/ReaderBar';
 import VolumeFilterBar from '../components/detail/VolumeFilterBar';
 import VolumeGridView from '../components/detail/VolumeGridView';
+import VolumeListView from '../components/detail/VolumeListView';
 import LightboxGallery from '../components/detail/LightboxGallery';
 import VolumeEditModal from '../components/detail/VolumeEditModal';
 import GapNotices from '../components/detail/GapNotices';
@@ -263,9 +265,10 @@ describe('collection grid and toolbar', () => {
   });
   const renderGrid = (over) => render(<MemoryRouter><MangaCollectionGrid {...gridProps(over)} /></MemoryRouter>);
 
-  it('a card link is named by the title and described by one status sentence; badges are hidden', () => {
+  it('a card link is named by the title and author line and described by one status sentence; badges are hidden', () => {
     renderGrid();
-    const link = screen.getByRole('link', { name: 'Frieren' });
+    const link = screen.getByRole('link', { name: /^Frieren\b/ });
+    expect(link.getAttribute('aria-labelledby').split(' ')).toHaveLength(2);
     const summary = document.getElementById(link.getAttribute('aria-describedby'));
     expect(summary.textContent).toBe('Laufend, 4 von 12 Bänden, 2 von 4 gelesen');
     expect(summary.className).toMatch(/sr-only/);
@@ -400,9 +403,41 @@ describe('detail page controls', () => {
     expect(toggle.className).toMatch(/\bw-6 h-6\b/);
     fireEvent.click(screen.getByRole('button', { name: 'Fotogalerie öffnen: Band 4' }));
     expect(openVolumeGallery).toHaveBeenCalledTimes(1);
-    for (const name of ['Band-Details & Fotos bearbeiten', 'Band löschen']) {
+    for (const name of ['Band 4 bearbeiten', 'Band 4 löschen']) {
       expect(screen.getByRole('button', { name }).className).toMatch(/\bp-1\.5\b/);
     }
+  });
+
+  it('grid and list: card actions and gap buttons carry the volume in their names, no name repeats', () => {
+    const volume = (id, number, extra = {}) => ({ id, volume_number: String(number), type: 'volume', status: 'Vorhanden', read_users: [], images: [], ...extra });
+    const props = {
+      canEdit: true, handleDeleteVolume: vi.fn(), handleOpenEditVolume: vi.fn(), handleToggleVolume: vi.fn(), handleToggleVolumeRead: vi.fn(),
+      manga: { id: 1, publisher: '' }, mpGapMap: new Map(), openVolumeGallery: vi.fn(), readers: [], selectedReaderId: 1,
+      setFillingGapNumber: vi.fn(), user: { id: 1, role: 'editor' },
+      displayVolumeItems: [
+        { volume: volume(1, 1) },
+        { volume: volume(2, 2, { cover_image: '/uploads/a.jpg', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }) },
+        { isGap: true, gapNumber: 3 },
+        { isGap: true, gapNumber: 4 }
+      ]
+    };
+    const names = () => screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') || b.textContent.trim());
+    const { unmount } = render(<VolumeGridView {...props} />);
+    for (const name of ['Foto für Band 1 hochladen', 'Band 1 bearbeiten', 'Band 1 löschen', 'Band 2 bearbeiten', 'Band 2 löschen',
+      '2 Fotos von Band 2 öffnen', 'Band 3 erfassen', 'Band 3 zu Sammlung hinzufügen', 'Band 4 erfassen', 'Band 4 zu Sammlung hinzufügen']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+    const grid = names();
+    expect(new Set(grid).size).toBe(grid.length);
+    unmount();
+
+    render(<VolumeListView {...props} />);
+    for (const name of ['Band 1 bearbeiten', 'Band 2 löschen', 'Band 3: Fehlt (Lücke) – erfassen', 'Band 4 erfassen', 'Status: Im Besitz – Band 1', 'Ungelesen – Band 2']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+    const list = names();
+    expect(new Set(list).size).toBe(list.length);
   });
 
   it('gap notices count with German plurals', () => {
@@ -463,7 +498,7 @@ describe('lightbox', () => {
     expect(onSetCover).toHaveBeenCalledWith(images[1]);
   });
 
-  // review fix C3: on the detail page the arrow keys must move exactly one image (no second handler)
+  // on the detail page the arrow keys must move exactly one image (no second handler)
   it('one arrow key press on the detail page moves exactly one image', () => {
     function DetailHarness() {
       const [lightboxData, setLightboxData] = useState(base);
@@ -487,7 +522,7 @@ describe('lightbox', () => {
   });
 });
 
-// review fix C10: photo results that arrive late are merged into the current form, never into a stale copy
+// photo results that arrive late are merged into the current form, never into a stale copy
 describe('volume editor photos (C10)', () => {
   const volume = { id: 7, manga_id: 1, type: 'volume', volume_number: '3', status: 'Vorhanden', owners: [], images: ['/uploads/old.jpg'], cover_image: '/uploads/old.jpg', isbn: '', release_date: '' };
 

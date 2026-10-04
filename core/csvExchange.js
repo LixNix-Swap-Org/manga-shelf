@@ -1,4 +1,4 @@
-// CSV-Austausch: Export der Sammlung und Import aus einer solchen Datei. Reine Funktionen, keine DB.
+// CSV export of the collection and import from such a file. Pure functions, no database.
 const { normalizeIsbn, isValidIsbn } = require('./lib/isbn');
 const { inferVolumeType } = require('./lib/volumeType');
 const { isLegacyReadStatus, OWNED_STATUS } = require('./lib/owners');
@@ -7,14 +7,14 @@ const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES } = requi
 
 const DELIMITER = ';';
 const MAX_AMOUNT = 99999;
-// Typ einer Reihen-Zeile (Reihe ohne Band)
+// Type of a series row (a series without a volume)
 const SERIES_ROW_TYPE = 'Reihe';
-// wie COLLECTING_STATUSES in core/handlers/mangas.js; leer = aktiv
+// same as COLLECTING_STATUSES in core/handlers/mangas.js; empty = active
 const COLLECTING_STATUSES = ['aktiv', 'pausiert', 'abgebrochen'];
 
-// Reihenverlag = Verlag der Reihe, Verlag = abweichender Verlag des Bandes (leer = wie die Reihe).
-// Reihen-Wunsch steht auf jeder Zeile der Reihe, die übrigen Reihenfelder nur auf ihrer ersten Zeile.
-// "Gelesen von" und Besitzer bleiben die letzten Spalten.
+// "Reihenverlag" is the series publisher, "Verlag" a volume's differing publisher (empty = the series').
+// The series wish is on every row of the series, the other series fields only on its first row.
+// "Gelesen von" and the owners stay the last columns.
 const COLUMNS = [
     ['series', 'Reihe'], ['series_publisher', 'Reihenverlag'], ['publisher', 'Verlag'], ['author', 'Autor'], ['type', 'Typ'],
     ['volume_number', 'Bandnummer'], ['status', 'Status'], ['isbn', 'ISBN'], ['price', 'Preis'],
@@ -27,17 +27,17 @@ const COLUMNS = [
     ['series_description', 'Beschreibung'], ['cover_image', 'Band-Cover'], ['images', 'Bilder'], ['mp_volume_id', 'MP-Band-ID'],
     ['readers', 'Gelesen von'], ['owners', 'Besitzer']
 ];
-// Reihenfelder, die der Export nur auf die erste Zeile einer Reihe schreibt
+// Series fields that the export writes only on the first row of a series
 const SERIES_DETAIL_KEYS = [
     'series_status', 'series_collecting', 'series_total', 'series_alt_title', 'series_language', 'series_tags', 'series_mp_id', 'series_cover',
     'series_banner', 'series_description'
 ];
 
-// Grenzen für Benutzernamen-Zellen (Besitzer, Gelesen von)
+// Limits for user-name cells (owners, read by)
 const MAX_NAMES_CELL_LENGTH = 1000;
 const MAX_NAMES_PER_CELL = 50;
-// Wie POST/PUT /volumes. Der Formelschutz des Exports kann eine Zelle um bis zur Hälfte verlängern: Zellen bis
-// 2 * MAX_NOTES_LENGTH + 2 sind daher noch kein Fehler der ganzen Datei, längere ein Fehler der Zeile.
+// Same as POST/PUT /volumes. The export's formula guard can lengthen a cell by up to half, so cells up to
+// 2 * MAX_NOTES_LENGTH + 2 are not yet a file-level error; longer ones are a row error.
 const MAX_NOTES_LENGTH = 10000;
 const MAX_CELL_LENGTH = 2 * MAX_NOTES_LENGTH + 2;
 
@@ -50,21 +50,21 @@ class CsvFormatError extends Error {
     }
 }
 
-/** Vergleichsschlüssel für Titel, Nummern und Namen: Unicode-sicher (NFC, volle Kleinschreibung), ohne Rand-Leerzeichen. */
+/** Comparison key for titles, numbers and names: Unicode-safe (NFC, full case folding), trimmed. */
 const matchKey = (s) => String(s ?? '').trim().normalize('NFC').toLowerCase();
 
 
-// Tabellenprogramme werten Zellen, die mit = + - @ (auch nach Tab/CR) beginnen, als Formel aus
+// Spreadsheet programs evaluate cells starting with = + - @ (also after tab/CR) as formulas
 const FORMULA_START = /^(?:[=+@\t\r]|-(?![\d.,]+$))/;
 const needsFormulaGuard = (s) => FORMULA_START.test(s.replace(/^'+/, ''));
-// Excel mit Komma als Listentrenner (en-US) teilt die Zeile an jedem Komma: dort beginnt dann eine eigene Zelle
+// Excel with a comma list separator (en-US) splits the line at every comma, so a formula can start mid-cell
 const EMBEDDED_FORMULA = /,(\s*)('*)(?=[=+@\t\r]|-(?![\d.]+(?:,|$)))/g;
 const EMBEDDED_GUARDED = /,(\s*)'('*)(?=[=+@\t\r]|-(?![\d.]+(?:,|$)))/g;
 
-/** Setzt ein ' vor Formelzeichen am Zellanfang und nach jedem Komma; unescapeCell nimmt genau diese wieder heraus. */
+/** Prefixes a ' to formula characters at the cell start and after each comma; unescapeCell removes exactly these. */
 function guardFormulas(value) {
     let s = value.replace(EMBEDDED_FORMULA, ",$1'$2");
-    // Auch schon mit ' beginnende Werte bekommen eines dazu, damit der Import genau eines entfernen kann
+    // Values already starting with ' get one more, so the import can strip exactly one
     if (needsFormulaGuard(s)) s = "'" + s;
     return s;
 }
@@ -74,7 +74,7 @@ function escapeCell(value) {
     return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-/** Gegenstück zu guardFormulas: entfernt genau die vom Export eingefügten '. */
+/** Counterpart of guardFormulas: removes exactly the ' that the export inserted. */
 function unescapeCell(s) {
     const head = s.startsWith("'") && needsFormulaGuard(s.slice(1)) ? s.slice(1) : s;
     return head.replace(EMBEDDED_GUARDED, ',$1$2');
@@ -84,10 +84,10 @@ const formatAmount = (v) => (v === null || v === undefined || v === '' || !Numbe
     ? v
     : String(Math.round(Number(v) * 100) / 100).replace('.', ','));
 
-// Excel macht aus einer 13-stelligen Zahl 9,78355E+12; mit Bindestrich bleibt sie Text (der Import entfernt ihn wieder)
+// Excel turns a 13-digit number into 9,78355E+12; with hyphens it stays text (the import removes them again)
 const formatIsbn = (v) => (typeof v === 'string' && /^\d{13}$/.test(v) ? `${v.slice(0, 3)}-${v.slice(3)}` : v);
 
-// Bilder: JSON-Liste in der Datenbank, in der CSV durch " | " getrennt
+// Images: a JSON list in the database, joined by " | " in the CSV
 const formatImages = (v) => {
     if (!v) return v;
     try {
@@ -100,19 +100,25 @@ const formatImages = (v) => {
 
 const EXPORT_FORMATTERS = { price: formatAmount, target_price: formatAmount, isbn: formatIsbn, images: formatImages };
 
-/** rows: Objekte mit den Schlüsseln aus COLUMNS. Mit BOM, damit Excel UTF-8 erkennt. */
-function toCsv(rows) {
-    const lines = [COLUMNS.map(c => c[1]).join(DELIMITER)];
-    for (const row of rows) {
-        lines.push(COLUMNS.map(([key]) => {
-            const format = EXPORT_FORMATTERS[key];
-            return escapeCell(format ? format(row[key]) : row[key]);
-        }).join(DELIMITER));
-    }
-    return '\uFEFF' + lines.join('\r\n') + '\r\n';
+/** rows: objects keyed by COLUMNS. With a BOM so that Excel detects UTF-8. */
+const csvHeader = () => COLUMNS.map(c => c[1]).join(DELIMITER);
+
+/** The data lines of `rows`, without header and line breaks at the ends (toCsv in blocks). */
+function csvLines(rows) {
+    return rows.map(row => COLUMNS.map(([key]) => {
+        const format = EXPORT_FORMATTERS[key];
+        return escapeCell(format ? format(row[key]) : row[key]);
+    }).join(DELIMITER));
 }
 
-/** Trennzeichen aus der ersten nicht leeren Zeile, ohne den ganzen Text zu zerlegen. */
+/** The export file of `blocks` (arrays of lines): BOM, header, CRLF line ends. */
+const joinCsv = (blocks) => '\uFEFF' + [csvHeader(), ...blocks.flat()].join('\r\n') + '\r\n';
+
+function toCsv(rows) {
+    return joinCsv([csvLines(rows)]);
+}
+
+/** Delimiter from the first non-empty line, without splitting the whole text. */
 function detectDelimiter(src) {
     for (let start = 0; start < src.length;) {
         let semicolons = 0;
@@ -131,13 +137,9 @@ function detectDelimiter(src) {
     return ';';
 }
 
-/**
- * Zerlegt CSV-Text in Zeilen von Zellen (Anführungszeichen, "" als Escape, ; oder , als Trenner).
- * Jede Zeile trägt in `row.line` (nicht aufzählbar) die Textzeile, in der sie beginnt; Leerzeilen und
- * Zeilenumbrüche in Zellen zählen mit. Ein nicht geschlossenes Anführungszeichen wirft CsvFormatError.
- * limits: { maxRows (Datenzeilen nach der Kopfzeile), maxCells (pro Zeile), maxCellLength }; wer eine Grenze
- * überschreitet, bekommt CsvFormatError, bevor der Rest der Datei in den Speicher gelesen wird.
- */
+// Splits CSV text into rows of cells (quotes, "" as escape, ; or , as delimiter). `row.line` (non-enumerable) is the
+// text line a row starts on; blank lines and line breaks inside cells count. An unclosed quote throws CsvFormatError.
+// limits: { maxRows, maxCells, maxCellLength }; exceeding one throws before the rest of the file is read into memory.
 function parseCsv(text, limits = {}) {
     const { maxRows = Infinity, maxCells = Infinity, maxCellLength = Infinity } = limits;
     const src = String(text || '').replace(/^\uFEFF/, '');
@@ -188,7 +190,7 @@ function parseCsv(text, limits = {}) {
 }
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-zäöüß0-9]/g, '');
-// Reihenfolge der Aliasse = Vorrang: spezifische Namen vor allgemeinen ("Titel" ist oft der Bandtitel)
+// Alias order = precedence: specific names before general ones ("Titel" is often the volume title)
 const HEADER_ALIASES = {
     series: ['reihe', 'serie', 'series', 'titel', 'title'],
     series_publisher: ['reihenverlag', 'seriespublisher'],
@@ -243,8 +245,8 @@ function buildDate(y, m, d) {
 }
 
 /**
- * Datum aus einer CSV-Zelle: JJJJ, JJJJ-M(M), JJJJ-MM-TT, TT.MM.JJJJ, MM.JJJJ, MM/JJJJ und Excels Monatsform
- * ("Mrz 25", "März 2025"). Ergebnis ist JJJJ, JJJJ-MM oder JJJJ-MM-TT mit Bereichsprüfung, sonst { error }.
+ * Date from a CSV cell: YYYY, YYYY-M(M), YYYY-MM-DD, DD.MM.YYYY, MM.YYYY, MM/YYYY and Excel's month form ("Mrz 25").
+ * Returns YYYY, YYYY-MM or YYYY-MM-DD with a range check, else { error }.
  */
 function normalizeDate(v) {
     const s = String(v ?? '').trim();
@@ -264,7 +266,7 @@ function normalizeDate(v) {
     return { error: true };
 }
 
-/** Betrag in Euro: "6,95", "6.95", "€ 7" (höchstens zwei Nachkommastellen, bis 99999), leer = null. */
+/** Amount in euros: "6,95", "6.95", "€ 7" (at most two decimals, up to 99999), empty = null. */
 function parseAmount(v) {
     const s = String(v ?? '').replace(/[€\s]/g, '');
     if (!s) return { value: null };
@@ -273,7 +275,7 @@ function parseAmount(v) {
     return value > MAX_AMOUNT ? { error: true } : { value };
 }
 
-/** Ganze Zahl 0..max ohne Vorzeichen, Exponent oder Anhängsel; leer = null. */
+/** Whole number 0..max without sign, exponent or suffix; empty = null. */
 function parseCount(v, max = MAX_AMOUNT) {
     const s = String(v ?? '').trim();
     if (!s) return { value: null };
@@ -282,7 +284,7 @@ function parseCount(v, max = MAX_AMOUNT) {
     return value > max ? { error: true } : { value };
 }
 
-/** Positive ganze Zahl (ID), leer = null. */
+/** Positive whole number (ID), empty = null. */
 function parseId(v) {
     const s = String(v ?? '').trim();
     if (!s) return { value: null };
@@ -291,8 +293,8 @@ function parseId(v) {
 }
 
 /**
- * Reihenfelder einer Zeile; nur ausgefüllte Zellen erscheinen im Ergebnis. Ungültige Werte werden mit Hinweis ignoriert,
- * damit ein Tippfehler in einer Reihenspalte keine Bandzeile verwirft.
+ * Series fields of a row; only filled cells appear. Invalid values are ignored with a warning, so a typo in a
+ * series column never discards the volume row.
  */
 const ignoredValue = (line, label, raw, hint) => ({ line, message: `Ungültiger Wert „${raw}“ in „${label}“${hint ? ` (${hint})` : ''} wird ignoriert` });
 const shorten = (value) => (value.length > 20 ? `${value.slice(0, 20)}…` : value);
@@ -355,16 +357,10 @@ function resolveColumns(headers) {
     return index;
 }
 
-/**
- * Wandelt geparste CSV-Zeilen in geprüfte Datensätze um.
- * Liefert { records, errors, warnings: [{ line, message }], columns }. `line` ist die Textzeile aus parseCsv
- * (Kopfzeile meist 1); bei Zeilen ohne diese Angabe zählt die Position, Kopfzeile = 1.
- * Eine Zeile mit Reihe, aber ohne Bandnummer und ohne Banddaten legt nur die Reihe an (series_only).
- * Fehler, deren Band sich schon bestimmen ließ, tragen ihn in `error.record` (nicht aufzählbar), damit der Import
- * Zeilen, die ohnehin übersprungen würden, nicht als Fehler meldet. Fehler mit Reihentitel tragen in `error.series_source`
- * (nicht aufzählbar) { line, series, series_publisher, series_meta }: die Reihenfelder gelten auch aus verworfenen Zeilen.
- * Band-Cover, Bilder und Reihenspalten verwerfen nie die Zeile: ungültige oder zu lange Werte werden mit Hinweis ignoriert.
- */
+// Turns parsed CSV rows into validated records: { records, errors, warnings: [{ line, message }], columns }.
+// `line` is parseCsv's text line (the header usually 1). A row with a series but no volume number or data only
+// creates the series (series_only). Errors carry non-enumerable `record` (the volume, if known) and `series_source`
+// (series fields still apply from rejected rows). Covers, images and series columns never reject a row.
 function mapCsvRows(rows) {
     if (!rows.length) return { records: [], errors: [{ line: 1, message: 'Datei ist leer' }], warnings: [], columns: [] };
     const index = resolveColumns(rows[0].map(norm));
@@ -479,7 +475,7 @@ function mapCsvRows(rows) {
         }
         records.push({
             line, ...seriesFields,
-            type, type_inferred: typeInferred, volume_number: identity.volume_number, status: status, mark_read: markRead, isbn,
+            type, type_inferred: typeInferred, volume_number: identity.volume_number, label: volumeNumber, status: status, mark_read: markRead, isbn,
             price: price.value, target_price: targetPrice.value, priority: priority.value ?? 0,
             release_date: release.value, release_year: releaseYear.value, purchase_date: purchase.value,
             condition: get(row, 'condition') || null, pages: pages.value, notes,
@@ -494,6 +490,6 @@ function mapCsvRows(rows) {
 }
 
 module.exports = {
-    COLUMNS, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE, COLLECTING_STATUSES, CsvFormatError, toCsv, parseCsv, mapCsvRows, matchKey, canonicalVolumeNumber, escapeCell, unescapeCell,
+    COLUMNS, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE, COLLECTING_STATUSES, CsvFormatError, toCsv, csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, canonicalVolumeNumber, escapeCell, unescapeCell,
     guardFormulas, normalizeDate, parseAmount, parseCount, MAX_NOTES_LENGTH, MAX_CELL_LENGTH
 };

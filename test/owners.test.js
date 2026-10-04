@@ -1,3 +1,4 @@
+// Volume owners and reads: ownership toggling, permissions, CSV import and undo.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -45,17 +46,17 @@ test('owners: zweiter Besitzer, Entfernen des letzten setzt auf Fehlt', async ()
     assert.deepEqual(adm.body.owners.map(o => o.username).sort(), ['admin', 'ed']);
     assert.equal(adm.body.status, 'Vorhanden');
 
-    // ed gibt seinen Besitz auf: admin bleibt Besitzer, Band bleibt Vorhanden
+    // ed gives up ownership: admin stays owner, the volume stays Vorhanden
     let res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: false });
     assert.equal(res.body.status, 'Vorhanden');
     assert.equal(res.body.owned_by_me, false);
 
-    // admin gibt auf: niemand besitzt ihn mehr
+    // admin gives up: nobody owns it any more
     res = await admin('POST', `/volumes/${vol.id}/owners`, { owned: false });
     assert.equal(res.body.status, 'Fehlt');
     assert.equal((await detail(editor, id)).owned_volumes, 0);
 
-    // wieder besitzen setzt auf Vorhanden
+    // owning again sets it back to Vorhanden
     res = await editor('POST', `/volumes/${vol.id}/owners`, {});
     assert.equal(res.body.status, 'Vorhanden');
     assert.equal((await detail(editor, id)).owned_volumes, 1);
@@ -69,11 +70,11 @@ test('owners: Berechtigungen (Besucher 403, Editor nur für sich, Admin für and
 
     const users = (await admin('GET', '/users')).body;
     const adminId = users.find(u => u.username === 'admin').id;
-    // Editoren ändern nur den eigenen Besitz: eine fremde user_id ist 403
+    // editors change only their own ownership: a foreign user_id is 403
     assert.equal((await editor('POST', `/volumes/${vol.id}/owners`, { owned: true, user_id: adminId })).status, 403);
     const res = await editor('POST', `/volumes/${vol.id}/owners`, { owned: true });
     assert.deepEqual(res.body.owners.map(o => o.username), ['ed']);
-    // Admin darf für andere eintragen
+    // an admin may record ownership for others
     const visId = users.find(u => u.username === 'vis').id;
     const res2 = await admin('POST', `/volumes/${vol.id}/owners`, { owned: true, user_id: visId });
     assert.deepEqual(res2.body.owners.map(o => o.username).sort(), ['ed', 'vis']);
@@ -95,7 +96,7 @@ test('owners: Einkaufsliste zeigt mit include_others Bände, die nur andere besi
     const id = (await editor('POST', '/mangas', { title: 'Owners E' })).body.id;
     await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 });
     const vols = (await detail(editor, id)).volumes;
-    // admin gibt Band 1 ab, besitzt aber Band 2 zusätzlich -> sammelt die Reihe; Band 3 gehört nur ed
+    // admin gives up volume 1 but also owns volume 2 -> still collects the series; volume 3 belongs only to ed
     await admin('POST', `/volumes/${vols[1].id}/owners`, { owned: true });
 
     const plain = (await admin('GET', '/shopping-list')).body;
@@ -106,7 +107,7 @@ test('owners: Einkaufsliste zeigt mit include_others Bände, die nur andere besi
     assert.deepEqual(mine, ['1', '3']);
     assert.equal(withOthers.others[0].owned_by_others, 'ed');
 
-    // Reihen, die der Aufrufer nicht sammelt, erscheinen nicht
+    // series the caller does not collect do not appear
     const other = (await visitor('GET', '/shopping-list?include_others=1')).body;
     assert.equal(other.others.filter(o => o.manga_id === id).length, 0);
 });
@@ -144,10 +145,25 @@ test('owners: CSV-Export enthält Besitzer, Import ordnet sie zu', async () => {
     const list = (await editor('GET', '/mangas')).body;
     const mid = list.find(m => m.title === 'Import Owners').id;
     const vols = (await detail(editor, mid)).volumes;
-    // Editoren dürfen per CSV nur sich selbst als Besitzer eintragen; fremde Namen werden ignoriert
+    // editors may only register themselves as owner via CSV; foreign names are ignored
     assert.deepEqual(vols[0].owners.map(o => o.username).sort(), ['ed']);
     assert.deepEqual(vols[1].owners.map(o => o.username), ['ed']);
     assert.equal(vols[2].owners.length, 0);
+});
+
+test('owners: Detail, CSV-Spalte Besitzer und owned_by_others nennen die Besitzer in Kaufreihenfolge', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Owners Reihenfolge' })).body.id;
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2 });
+    const [vol, second] = (await detail(editor, id)).volumes;
+    await admin('POST', `/volumes/${vol.id}/owners`, { owned: true });
+    const visId = (await admin('GET', '/users')).body.find(u => u.username === 'vis').id;
+    await admin('POST', `/volumes/${second.id}/owners`, { owned: true, user_id: visId });
+
+    assert.deepEqual((await detail(admin, id)).volumes[0].owners.map(o => o.username), ['ed', 'admin']);
+    const csv = await (await fetch(`${ctx.base}/export/csv`, { headers: { Cookie: admin.cookie } })).text();
+    assert.match(csv.split('\r\n').find(l => l.startsWith('Owners Reihenfolge;') && l.endsWith('admin')), /;ed, admin$/);
+    const others = (await visitor('GET', '/shopping-list?include_others=1')).body.others;
+    assert.equal(others.find(o => o.id === vol.id).owned_by_others, 'ed, admin');
 });
 
 test('owners: Statistik liefert Bände und Wert pro Besitzer', async () => {
@@ -453,4 +469,32 @@ test('owners: Löschen eines Mitbesitzers setzt das Kaufdatum auf das früheste 
     const v = (await detail(admin, id)).volumes[0];
     assert.deepEqual(v.owners.map(o => o.username), ['ed']);
     assert.equal(v.purchase_date, '2024-06-06');
+});
+
+test('owners: Altstatus Gelesen mit Lese-Einträgen behält genau diese (Datenqualität, Besitzwechsel, Migration 13 gleich)', async () => {
+    const { db } = require('../db');
+    const users = (await admin('GET', '/users')).body;
+    const adminId = users.find(u => u.username === 'admin').id;
+    const edId = users.find(u => u.username === 'ed').id;
+    const visId = users.find(u => u.username === 'vis').id;
+    const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Leser' })).body.id;
+    const readers = (vol) => db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(vol).map(r => r.user_id);
+    const owners = (vol) => db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vol).map(r => r.user_id);
+    const status = (vol) => db.prepare('SELECT status FROM volumes WHERE id = ?').get(vol).status;
+
+    const viaFix = seedVolume(id, '1', 'Gelesen');
+    db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaFix, edId);
+    const fix = await editor('POST', '/maintenance/fix', { check: 'legacy_read' });
+    assert.equal(fix.status, 200, JSON.stringify(fix.body));
+    assert.deepEqual([status(viaFix), owners(viaFix), readers(viaFix)], ['Vorhanden', [adminId], [edId]]);
+
+    const viaOwner = seedVolume(id, '2', 'Gelesen');
+    db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaOwner, edId);
+    assert.equal((await admin('POST', `/volumes/${viaOwner}/owners`, { user_id: visId, owned: true })).status, 200);
+    assert.deepEqual([status(viaOwner), owners(viaOwner), readers(viaOwner)], ['Vorhanden', [visId], [edId]]);
+
+    // without reads the owners still become readers
+    const unread = seedVolume(id, '3', 'Gelesen');
+    assert.equal((await admin('POST', `/volumes/${unread}/owners`, { user_id: visId, owned: true })).status, 200);
+    assert.deepEqual([owners(unread), readers(unread)], [[visId], [visId]]);
 });

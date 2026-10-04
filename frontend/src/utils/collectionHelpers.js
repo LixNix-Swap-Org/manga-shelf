@@ -106,17 +106,17 @@ export const getStatusTabs = (filterCounts, statusFilter) =>
 
 /** Sort choices of the collection toolbar ('progress' = reading progress, 'completion' = collection progress of the card). */
 export const SORT_OPTIONS = [
-  { value: 'newest_first', label: '✨ Zuletzt hinzugefügt' },
-  { value: 'title_asc', label: '🔤 Titel (A → Z)' },
-  { value: 'title_desc', label: '🔤 Titel (Z → A)' },
-  { value: 'progress_desc', label: '📖 Lesefortschritt (höchster %)' },
-  { value: 'progress_asc', label: '📖 Ungelesen zuerst' },
-  { value: 'completion_desc', label: '📈 Sammlung komplett (höchster %)' },
-  { value: 'completion_asc', label: '📉 Sammlung komplett (niedrigster %)' },
-  { value: 'volumes_desc', label: '📚 Meiste Bände' },
-  { value: 'value_desc', label: '💰 Höchster Wert (€)' },
-  { value: 'publisher_asc', label: '🏢 Verlag (A → Z)' },
-  { value: 'oldest_first', label: '⏳ Zuerst hinzugefügt' }
+  { value: 'newest_first', label: 'Zuletzt hinzugefügt' },
+  { value: 'title_asc', label: 'Titel (A → Z)' },
+  { value: 'title_desc', label: 'Titel (Z → A)' },
+  { value: 'progress_desc', label: 'Lesefortschritt (höchster %)' },
+  { value: 'progress_asc', label: 'Ungelesen zuerst' },
+  { value: 'completion_desc', label: 'Sammlung komplett (höchster %)' },
+  { value: 'completion_asc', label: 'Sammlung komplett (niedrigster %)' },
+  { value: 'volumes_desc', label: 'Meiste Bände' },
+  { value: 'value_desc', label: 'Höchster Wert (€)' },
+  { value: 'publisher_asc', label: 'Verlag (A → Z)' },
+  { value: 'oldest_first', label: 'Zuerst hinzugefügt' }
 ];
 
 export const isSortOption = (value) => SORT_OPTIONS.some(o => o.value === value);
@@ -159,13 +159,25 @@ const compareBy = (sortBy) => (a, b) => {
   }
 };
 
-// volume_search (ISBNs, notes, named volumes of the series) is used when the list response carries it
+// volume_search: ISBNs, named volumes and notes of the series (offline copy rows, or merged by withVolumeSearch)
 const volumeTerms = (value) => (Array.isArray(value) ? value : typeof value === 'string' ? value.split('\n') : []);
 
 export const seriesSearch = createSearch(m => ({
   primary: [m.title, m.alt_title],
   secondary: [m.author, m.publisher, m.publisher ? normalizePubName(m.publisher) : null, m.tags, ...splitTags(m.tags), ...volumeTerms(m.volume_search)]
 }));
+
+/**
+ * The list with the search index of GET /api/mangas/volume-search (id -> text, see volumeSearchMap) merged in as
+ * volume_search. Rows without an entry stay the same object, so their search index is reused.
+ */
+export const withVolumeSearch = (mangas, index) => {
+  if (!index?.size || !Array.isArray(mangas)) return mangas;
+  return mangas.map((m) => {
+    const text = index.get(String(m.id));
+    return text === undefined || text === m.volume_search ? m : { ...m, volume_search: text };
+  });
+};
 
 export { COLLECTING_OPTIONS, collectingOf, splitAuthors, authorShelfPath };
 
@@ -225,11 +237,8 @@ export const getAvailableTags = (mangas) => collectTags(mangas);
 export const parseTagFilter = (value) => (Array.isArray(value) ? splitTags(value) : splitTags(String(value || '').split(',')));
 export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
 
-/**
- * Search, status/publisher/collect/author/tag filter and sort of the series list (tags: every chosen tag, AND). With a
- * search, title-prefix hits come first, then title hits, then hits in other fields, then typo hits; the chosen sort
- * orders each of these groups.
- */
+// Search, filters and sort of the series list (tags: AND). A search ranks title-prefix, title, other-field and typo
+// hits in that order; the chosen sort orders each group.
 export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [] }) => {
   const query = prepareQuery(search);
   const tags = parseTagFilter(tagFilter);
@@ -289,11 +298,8 @@ const groupLabelOf = (m, groupBy) => {
   return '';
 };
 
-/**
- * Sections of an already filtered and sorted list: [{ key, label, items }]. The order inside a section is the list's;
- * sections are alphabetical (status in the order of the status chips), the one without a value last.
- * 'none' gives one section with an empty label.
- */
+// Sections [{ key, label, items }] of a sorted list, keeping its order inside; sections are alphabetical (status:
+// chip order), the one without a value last; 'none' gives a single unlabeled section.
 export const groupMangas = (list, groupBy) => {
   if (!isGroupOption(groupBy) || groupBy === 'none') return [{ key: 'all', label: '', items: list }];
   const sections = new Map();

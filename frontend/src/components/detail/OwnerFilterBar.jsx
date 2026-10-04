@@ -2,7 +2,7 @@ import { Users } from 'lucide-react';
 import { ownerColor } from './OwnerBadges';
 import { isCollectibleVolume } from './volumeViewHelpers';
 
-/** Besitz pro Person: wie viele Bände jede Person besitzt, Filter „hat“ / „fehlt noch“. Nur ab zwei Nutzern. */
+/** Ownership per person: how many volumes each person owns, filter "hat" / "fehlt noch". Only with two or more users. */
 export default function OwnerFilterBar({ users, volumes, ownerFilter, setOwnerFilter, ownerMissing, setOwnerMissing }) {
   const collectible = (volumes || []).filter(isCollectibleVolume);
   const ownedBy = (userId) => collectible.filter(v => (v.owners || []).some(o => String(o.user_id) === String(userId))).length;

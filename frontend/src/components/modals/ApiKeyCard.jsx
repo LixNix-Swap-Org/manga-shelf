@@ -1,6 +1,13 @@
 import { useId, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, KeyRound } from 'lucide-react';
 import { formatRelative } from '../../utils/format';
+import { openExternal } from '../../app/openExternal';
+
+// through openExternal, so the shells open the system browser instead of a web view
+const openOutside = (e) => {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (openExternal(e.currentTarget.href)) e.preventDefault();
+};
 
 /** Format check of core/sources/guides.js on the client: null when fine, else the message (nothing is sent). */
 export function keyFormatError(guide, secret) {
@@ -51,12 +58,12 @@ function CopyButton({ text }) {
 }
 
 /**
- * One provider: state, step-by-step guide (links open in a new tab, copy buttons, the AniList client id that builds
- * the sign-in link), the key field with a format check before sending, "Prüfen & speichern" and "Entfernen".
- * `onSave(secret, { allowBackground })` resolves true when stored; the field is emptied then.
+ * One provider: guide, key field with format check, "Prüfen & speichern" and "Entfernen". `onSave(secret,
+ * { allowBackground })` resolves true when stored. `headingLevel`: 3 below a dialog's h2, 4 below an h3.
  */
-export default function ApiKeyCard({ guide, state, scope = 'user', onSave, onRemove, onToggleBackground, busy }) {
+export default function ApiKeyCard({ guide, state, scope = 'user', headingLevel, onSave, onRemove, onToggleBackground, busy }) {
   const ids = useId();
+  const Heading = `h${headingLevel || (scope === 'instance' ? 4 : 3)}`;
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState({});
   const [secret, setSecret] = useState('');
@@ -78,12 +85,12 @@ export default function ApiKeyCard({ guide, state, scope = 'user', onSave, onRem
   };
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4" aria-labelledby={`${ids}-title`} data-provider={guide.id}>
+    <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4" aria-label={`${guide.name} (${scope === 'instance' ? 'für alle' : 'persönlich'})`} data-provider={guide.id} data-scope={scope}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 id={`${ids}-title`} className="text-sm font-bold text-white flex items-center gap-2">
+          <Heading id={`${ids}-title`} className="text-sm font-bold text-white flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-brand-400" aria-hidden="true" /> {guide.name}
-          </h4>
+          </Heading>
           <p className={`text-xs mt-0.5 ${state?.last_error ? 'text-rose-300' : state?.configured ? 'text-emerald-300' : 'text-slate-400'}`} data-testid="key-state">{stateText(state)}</p>
         </div>
         {state?.configured && !fromEnv && onRemove && (
@@ -102,7 +109,7 @@ export default function ApiKeyCard({ guide, state, scope = 'user', onSave, onRem
             return (
               <li key={i} className="space-y-1">
                 <p>{step.text}</p>
-                {step.link && <a href={step.link} target="_blank" rel="noreferrer noopener" className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1 break-all">{step.link} <ExternalLink className="w-3 h-3 shrink-0" aria-hidden="true" /></a>}
+                {step.link && <a href={step.link} target="_blank" rel="noreferrer noopener" onClick={openOutside} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1 break-all">{step.link} <ExternalLink className="w-3 h-3 shrink-0" aria-hidden="true" /></a>}
                 {step.copy && (
                   <span className="flex items-center gap-2 flex-wrap">
                     <code className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 break-all select-all">{step.copy}</code>
@@ -123,7 +130,7 @@ export default function ApiKeyCard({ guide, state, scope = 'user', onSave, onRem
                   </span>
                 )}
                 {step.linkTemplate && (link
-                  ? <a href={link} target="_blank" rel="noreferrer noopener" className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1 break-all" data-testid="authorize-link">Anmeldelink öffnen <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>
+                  ? <a href={link} target="_blank" rel="noreferrer noopener" onClick={openOutside} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1 break-all" data-testid="authorize-link">Anmeldelink öffnen <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>
                   : <span className="text-slate-400">(der Anmeldelink entsteht aus der Client-ID)</span>)}
               </li>
             );

@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useSyncExternalStore, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { WifiOff } from 'lucide-react';
-import { saveUser, loadUser, loadMeta, clearOfflineData, syncOfflineCopy, formatAge } from './utils/offlineStore';
+import { saveUser, loadUser, loadMeta, clearOfflineData, syncOfflineCopy } from './utils/offlineStore';
 import { SESSION_EXPIRED_EVENT, clearMangaListCache } from './hooks/useMangaList';
 import { apiFetch, isAppMode, isLocalMode } from './utils/api';
 import {
@@ -13,14 +12,18 @@ import { useActiveServer } from './app/useConnection';
 import { cancelAllDownloads } from './app/downloadManager';
 import { getLocalRuntime, resetLocalRuntime, onSourceBlocked } from './local/localTransport';
 import { enterLocalMode, leaveLocalMode, subscribeMode, getLocalProfile } from './local/profile';
+import { LOCAL_STORE_EVENT, SAVE_FAILED_TEXT, LOCKED_TEXT, CONFLICT_TEXT } from './local/store';
 import { notify } from './utils/notify';
 import AppErrorBoundary from './AppErrorBoundary';
 import { clearViewState, endViewSession, startViewSession } from './utils/viewState';
 import Toaster from './components/common/Toaster';
+import OfflineBanner from './components/common/OfflineBanner';
 import {
   MESSAGES, STARTUP_TIMEOUT_MS, readJson, isLogoutPending, markLogoutPending,
   clearLogoutPending, postLogout, flushPendingLogout, clearUploadsCache, clearSearchState, safeRedirectTarget, runBeforeLogout
 } from './appShell';
+import { dialogEntryOnTop } from './hooks/useDialogA11y';
+import { useRevealFocusedField } from './hooks/useKeyboardOpen';
 
 /** Starts loading a route chunk now; the lazy() factory reuses the request and retries once if it failed. */
 function preloadable(load, startNow) {
@@ -67,29 +70,6 @@ function LoadingScreen() {
   );
 }
 
-const SAFE_AREA_BOTTOM = {
-  paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
-  paddingLeft: 'calc(1rem + env(safe-area-inset-left, 0px))',
-  paddingRight: 'calc(1rem + env(safe-area-inset-right, 0px))'
-};
-
-// phones: the bottom navigation of the dashboard and the context bar of a series page (3.5rem + inset) sit below it
-const ABOVE_BOTTOM_NAV = 'max-sm:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-sm:!pb-2';
-
-function OfflineBanner({ lastSync }) {
-  const { pathname } = useLocation();
-  const aboveNav = pathname === '/' || pathname.startsWith('/manga/');
-  return (
-    <div role="status" style={SAFE_AREA_BOTTOM} className={`fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 pt-2 bg-amber-500/95 text-slate-950 text-xs font-semibold shadow-lg ${aboveNav ? ABOVE_BOTTOM_NAV : ''}`}>
-      <WifiOff className="w-4 h-4 shrink-0" aria-hidden="true" />
-      <span>
-        Offline – Stand der Sammlung: {lastSync ? formatAge(lastSync) : 'unbekannt'}.
-        <span className="hidden sm:inline"> Nur Ansicht, Änderungen sind erst mit Verbindung möglich.</span>
-      </span>
-    </div>
-  );
-}
-
 function RouteBoundary({ children }) {
   const location = useLocation();
   return <AppErrorBoundary resetKey={location.pathname}>{children}</AppErrorBoundary>;
@@ -122,6 +102,51 @@ function DeepLinkListener() {
   return null;
 }
 
+// the setup screens are long: the shelf they lead to opens at the top, not at their scroll offset
+const SETUP_PATHS = new Set(['/lokal', '/server']);
+function ScrollTopAfterSetup() {
+  const { pathname } = useLocation();
+  const previous = useRef(pathname);
+  useLayoutEffect(() => {
+    if (pathname === '/' && SETUP_PATHS.has(previous.current) && window.scrollY > 0) window.scrollTo(0, 0);
+    previous.current = pathname;
+  }, [pathname]);
+  return null;
+}
+
+// desktop menu "Quellen & Schlüssel…" (desktop/preload.js): handled on every route of a signed-in user; left alone
+// without a user, so the desktop asks to sign in first
+const OPEN_API_KEYS_EVENT = 'mangashelf:open-api-keys';
+// the mounted shelf opens the dialog in place, so the history entries of its open dialogs stay as they are
+const OPEN_ACCOUNT_EVENT = 'mangashelf:open-account';
+const KEYS_OFFLINE = 'Quellen & Schlüssel lassen sich nur mit Verbindung zum Server bearbeiten.';
+
+function ApiKeysMenuListener({ user }) {
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const signedIn = Boolean(user);
+  const offline = Boolean(user?.offline);
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const onKeys = (event) => {
+      event.preventDefault();
+      if (offline) {
+        notify.info(KEYS_OFFLINE);
+        return;
+      }
+      const onShelf = pathname === '/';
+      if (onShelf && !window.dispatchEvent(new CustomEvent(OPEN_ACCOUNT_EVENT, { detail: 'keys', cancelable: true }))) return;
+      navigate(
+        { pathname: '/', search: onShelf ? search : '' },
+        { replace: onShelf || dialogEntryOnTop(), state: { openAccount: 'keys' } }
+      );
+    };
+    window.addEventListener(OPEN_API_KEYS_EVENT, onKeys);
+    return () => window.removeEventListener(OPEN_API_KEYS_EVENT, onKeys);
+  }, [signedIn, offline, pathname, search, navigate]);
+  return null;
+}
+
 const OUTBOX_QUEUED = 'Vorgemerkte Änderungen werden bei deiner nächsten Anmeldung auf diesem Gerät übertragen.';
 
 const sameUser = (a, b) => Boolean(a && b) && a.id === b.id && a.username === b.username
@@ -133,7 +158,7 @@ const LOCAL_FAILED = 'Die Sammlung auf diesem Gerät konnte nicht geöffnet werd
 async function resolveLocal() {
   try {
     const rt = await getLocalRuntime();
-    return { status: 'local', user: { ...rt.getProfile(), local: true } };
+    return { status: 'local', user: { ...rt.getProfile(), local: true }, storeStatus: rt.status?.() ?? null };
   } catch (e) {
     return { status: 'localFailed', user: null, error: `${LOCAL_FAILED}: ${e?.message || e}` };
   }
@@ -155,9 +180,8 @@ async function offlineFallback() {
 }
 
 /**
- * Startup / re-check decision: 'setup', 'online', 'unauthorized' (the app's own 401), 'logoutPending' /
- * 'loggedOut' (a logout that had not reached the server), 'offline' (cached user) or 'unreachable'.
- * Network errors, timeouts and non-JSON answers (captive portal, proxy page) count as "server unreachable".
+ * Startup / re-check decision: 'setup', 'online', 'unauthorized', 'logoutPending' / 'loggedOut' (a logout that never
+ * reached the server), 'offline' (cached user) or 'unreachable' (network error, timeout or non-JSON answer).
  */
 async function resolveStatus() {
   if (isLocalMode()) return resolveLocal();
@@ -208,6 +232,28 @@ async function clearSessionData() {
   await Promise.all([clearOfflineData(), clearUploadsCache()]);
 }
 
+const reloadPage = () => window.location.reload();
+
+/** Lasting notices of the device database: saving fails, another window holds it, or another window saved newer data. */
+function useLocalStoreNotices() {
+  const shown = useRef({ save: null, lock: null });
+  return useCallback((status) => {
+    if (!status) return;
+    const toggle = (slot, wanted, show) => {
+      if (wanted && shown.current[slot] === null) shown.current[slot] = show();
+      else if (!wanted && shown.current[slot] !== null) {
+        notify.dismiss(shown.current[slot]);
+        shown.current[slot] = null;
+      }
+    };
+    const reload = { label: 'Neu laden', onClick: reloadPage };
+    toggle('save', Boolean(status.saveError) && !status.conflict, () => notify.error(SAVE_FAILED_TEXT, { duration: 0 }));
+    toggle('lock', Boolean(status.follower || status.conflict), () => (status.conflict
+      ? notify.error(CONFLICT_TEXT, { duration: 0, action: reload })
+      : notify.info(LOCKED_TEXT, { duration: 0, action: reload })));
+  }, []);
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -221,6 +267,9 @@ function App() {
   const checking = useRef(0);
   const loggingOut = useRef(false);
   const expiring = useRef(null);
+  const replacing = useRef(null);
+  const showStoreStatus = useLocalStoreNotices();
+  useRevealFocusedField();
 
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -289,6 +338,7 @@ function App() {
           setNeedsSetup(false);
           setLastSync(null);
           applyUser(outcome.user);
+          showStoreStatus(outcome.storeStatus);
           break;
         case 'localFailed':
           setNeedsSetup(false);
@@ -303,7 +353,7 @@ function App() {
       checking.current--;
       setLoading(false);
     }
-  }, [applyUser]);
+  }, [applyUser, showStoreStatus]);
 
   useEffect(() => {
     checkStatus();
@@ -388,8 +438,9 @@ function App() {
     };
   }, [user?.offline, checkStatus]);
 
-  // Outbox: queued changes go out after the login, on reconnect and on return to the foreground
-  const sessionUserId = user && !user.offline ? user.id : null;
+  // Outbox: queued changes go out after the login, on reconnect and on return to the foreground. The device core of the
+  // standalone mode answers directly: no outbox there, so no server's queued change can reach it.
+  const sessionUserId = user && !user.offline && !user.local ? user.id : null;
   useEffect(() => {
     if (sessionUserId === null || sessionUserId === undefined) return undefined;
     let stop = null;
@@ -510,11 +561,29 @@ function App() {
   const handleOpenLocal = useCallback(() => openLocal(), [openLocal]);
   const handleSwitchProfile = useCallback((profile) => openLocal(profile), [openLocal]);
 
-  // a restore replaced the local collection: drop the list caches, read the profile again
-  const handleLocalReplaced = useCallback(async () => {
-    await clearSessionData();
-    return checkStatus();
+  // a restore replaced the local collection: drop the list caches, read the profile again (one run per restore, whether
+  // the device screen or the runtime's event asks first)
+  const handleLocalReplaced = useCallback(() => {
+    if (!replacing.current) {
+      replacing.current = (async () => {
+        await clearSessionData();
+        return checkStatus();
+      })().finally(() => { replacing.current = null; });
+    }
+    return replacing.current;
   }, [checkStatus]);
+
+  // the device database reports saving problems, another window and restores (also those started from the dashboard)
+  useEffect(() => {
+    if (!isAppMode()) return undefined;
+    const onStore = (event) => {
+      const { type, status } = event.detail || {};
+      showStoreStatus(status);
+      if (type === 'replaced' && isLocalMode() && userRef.current?.local) handleLocalReplaced();
+    };
+    window.addEventListener(LOCAL_STORE_EVENT, onStore);
+    return () => window.removeEventListener(LOCAL_STORE_EVENT, onStore);
+  }, [handleLocalReplaced, showStoreStatus]);
 
   const handleLeaveLocal = useCallback(async () => {
     runSeq.current++;
@@ -584,6 +653,8 @@ function App() {
     content = (
       <Router>
         {app && <DeepLinkListener />}
+        {app && <ScrollTopAfterSetup />}
+        <ApiKeysMenuListener user={user} />
         {user?.offline && <OfflineBanner lastSync={lastSync} />}
         <RouteBoundary>
           <Suspense fallback={<LoadingScreen />}>
@@ -598,7 +669,7 @@ function App() {
                 />
               )}
               {app && <Route path="/lokal" element={<LocalSetup user={localMode ? user : null} onStart={handleStartLocal} />} />}
-              <Route path="/" element={<RequireAuth user={user}><div className={user?.offline ? 'max-sm:pb-[calc(env(safe-area-inset-bottom)+3rem)]' : 'max-sm:pb-[calc(env(safe-area-inset-bottom)+0.5rem)]'}><Dashboard user={user} onLogout={handleLogout} /></div></RequireAuth>} />
+              <Route path="/" element={<RequireAuth user={user}><div className={user?.offline ? 'max-sm:pb-[calc(env(safe-area-inset-bottom)+4rem)]' : 'max-sm:pb-[calc(env(safe-area-inset-bottom)+0.5rem)]'}><Dashboard user={user} onLogout={handleLogout} onLocalReplaced={handleLocalReplaced} /></div></RequireAuth>} />
               <Route path="/manga/:id" element={<RequireAuth user={user}><MangaDetail user={user} onUnauthorized={handleUnauthorized} /></RequireAuth>} />
               <Route path="*" element={<Navigate to={user ? '/' : (app && (localMode || !activeServer) ? '/server' : '/login')} replace />} />
             </Routes>

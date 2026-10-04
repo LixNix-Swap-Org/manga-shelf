@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Coins, Calendar, ShoppingCart, CircleCheck, Clock, PackageCheck, CircleAlert } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { readApiError } from '../../hooks/useVolumeActions';
+import { readApiError, notifyTrashed } from '../../hooks/useVolumeActions';
 import { getRegularGapMeta } from '../../utils/volumeHelpers';
 import { ApiError, apiFetch, readJson, TIMEOUTS, assetImgProps } from '../../utils/api';
 import { notify, UNEXPECTED_ERROR } from '../../utils/notify';
@@ -51,14 +51,15 @@ export function gapFillOptions(meta) {
 /** 'YYYY-MM-DD' -> '01.02.2027', 'YYYY-MM' -> '02/2027'. */
 export const formatGermanDate = (value) => formatDate(value);
 
-/** Removes the volume a gap fill created ('Rückgängig' in the success toast). */
-export async function undoGapFill(volumeId, onSuccess) {
+/** Removes the volume a gap fill created ('Rückgängig' in the success toast); it goes to the trash like any delete. */
+export async function undoGapFill(volumeId, onSuccess, label = 'Band') {
   const result = await deleteVolumeRequest(volumeId);
   if (!result.ok) {
     if (!result.aborted) notify.error(result.error);
     return false;
   }
   if (onSuccess) await onSuccess();
+  notifyTrashed(label, result.trash_id, onSuccess);
   return true;
 }
 
@@ -138,7 +139,7 @@ export default function GapFillModal({
         if (stillOpen()) onClose();
         if (onSuccess) await onSuccess();
         notify.success(`Band ${requested} als „${targetStatus}“ erfasst`, created?.id ? {
-          action: { label: 'Rückgängig', onClick: () => undoGapFill(created.id, onSuccess) }
+          action: { label: 'Rückgängig', onClick: () => undoGapFill(created.id, onSuccess, `„Band ${requested}“`) }
         } : undefined);
       } else {
         const message = await readApiError(res, 'Fehler beim Erfassen des Bands');
@@ -161,21 +162,21 @@ export default function GapFillModal({
       aria-busy={loading || undefined}
       data-busy={loading ? 'true' : undefined}
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
+      className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
       onClick={() => !loading && onClose()}
     >
       <div
-        className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl relative my-3 sm:my-8"
+        className="dialog-box bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md p-4 sm:p-6 short:p-4 shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-800 mb-4">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black" aria-hidden="true">
               +
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-bold text-white text-base">Lücke erfassen: Band {gapNumber}</h2>
-              <p className="text-xs text-slate-400">{manga?.title}</p>
+              <p className="text-xs text-slate-400 break-words [overflow-wrap:anywhere]">{manga?.title}</p>
             </div>
           </div>
           <button
@@ -184,7 +185,7 @@ export default function GapFillModal({
             disabled={loading}
             aria-label="Schließen"
             title="Schließen"
-            className="text-slate-400 hover:text-white p-1 rounded-lg disabled:opacity-50"
+            className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-lg disabled:opacity-50"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>

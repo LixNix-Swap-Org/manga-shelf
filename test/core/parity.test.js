@@ -24,23 +24,29 @@ const month = (offset) => {
 };
 
 const TIME_KEY = /(^|_)at$/;
-/** Row timestamps (created_at, updated_at, read_at, generated_at) differ between the two databases. */
+/** Row timestamps (created_at, updated_at, read_at, generated_at) and random undo tokens differ between the two. */
 function normalize(value) {
     if (Array.isArray(value)) return value.map(normalize);
     if (value && typeof value === 'object') {
-        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, TIME_KEY.test(k) && v !== null ? '<time>' : normalize(v)]));
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => {
+            if (k === 'undo_token' && typeof v === 'string') return [k, '<token>'];
+            return [k, TIME_KEY.test(k) && v !== null ? '<time>' : normalize(v)];
+        }));
     }
     return value;
 }
 
-/** Runs one request on both and checks that the answers agree; returns the body. */
-async function both(user, method, url, body) {
-    const [a, b] = await Promise.all([express.client(user).raw(method, url, body), memory.client(user).raw(method, url, body)]);
+/** One request on each side (bodies may differ, e.g. their own undo token); checks that the answers agree. */
+async function pair(user, method, url, expressBody, memoryBody) {
+    const [a, b] = await Promise.all([express.client(user).raw(method, url, expressBody), memory.client(user).raw(method, url, memoryBody)]);
     assert.equal(a.status, b.status, `${user} ${method} ${url}: status ${a.status} vs ${b.status} ${a.text} | ${b.text}`);
     if (a.body === null || b.body === null) assert.equal(a.text, b.text, `${user} ${method} ${url}`);
     else assert.deepEqual(normalize(a.body), normalize(b.body), `${user} ${method} ${url}`);
-    return a.body;
+    return [a.body, b.body];
 }
+
+/** Runs one request on both and checks that the answers agree; returns the body. */
+const both = async (user, method, url, body) => (await pair(user, method, url, body, body))[0];
 
 test('a seeded collection reads the same through Express and the in-memory core', async () => {
     const naruto = (await both('ed', 'POST', '/mangas', { title: 'Naruto', publisher: 'carlsen manga', total_volumes: 72, author: 'Kishimoto' })).id;
@@ -72,11 +78,18 @@ test('a seeded collection reads the same through Express and the in-memory core'
     await both('ed', 'POST', '/manga-passion/import', { title: 'Kalenderreihe', volume_number: '4', target_status: 'Vorbestellt', release_date: month(1) });
     await both('ed', 'POST', '/mangas/999/batch-import-gaps', { volume_numbers: ['1'] });
     await both('vis', 'PUT', `/mangas/${naruto}`, { title: 'Nein' });
+    const [bulkA, bulkB] = await pair('ed', 'POST', '/volumes/bulk', ...Array(2).fill({ ids: [vol('7'), vol('8')], set: { priority: 2, target_price: 4 } }));
+    await pair('ed', 'POST', '/volumes/bulk', { revert: bulkA.undo_token }, { revert: bulkB.undo_token });
+    const [dropA, dropB] = await pair('ed', 'POST', '/volumes/bulk', ...Array(2).fill({ ids: [vol('1'), vol('2')], delete: true }));
+    await both('ed', 'GET', `/mangas/${naruto}`);
+    await pair('ed', 'POST', '/volumes/bulk', { revert: dropA.undo_token }, { revert: dropB.undo_token });
+    await both('admin', 'POST', '/volumes/bulk', { ids: [vol('5')], owners: { add: [1] }, set: { purchase_date: '2024-09-09' } });
 
     const reads = [
-        '/mangas', `/mangas/${naruto}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
+        '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
         '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
-        '/lookup/isbn?isbn=9783551023452', '/export/csv'
+        '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
+        '/maintenance/quality'
     ];
     for (const user of ['admin', 'ed', 'vis']) {
         for (const url of reads) await both(user, 'GET', url);

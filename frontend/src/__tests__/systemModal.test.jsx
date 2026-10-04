@@ -1,3 +1,4 @@
+// SystemModal: server info, source API keys and guides, formatBytes and formatUptime.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'module';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -148,6 +149,27 @@ describe('SystemModal', () => {
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
     await screen.findByText('v2.19.1');
+  });
+
+  it('opens on "Schließen"; "Neu laden" keeps the focus while it loads and ignores repeated presses', async () => {
+    let release;
+    const fetchMock = serve({ extra: (url) => (url === '/api/system?refresh=1' ? new Promise((r) => { release = () => r(fakeResponse(200, systemInfo())); }) : undefined) });
+    render(<SystemModal isOpen onClose={vi.fn()} />);
+    await screen.findByText('v2.19.1');
+    const close = screen.getByRole('button', { name: 'Schließen' });
+    expect(close.hasAttribute('data-autofocus')).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(close));
+    const reload = screen.getByRole('button', { name: 'Neu laden' });
+    reload.focus();
+    fireEvent.click(reload);
+    await waitFor(() => expect(reload.getAttribute('aria-disabled')).toBe('true'));
+    expect(reload.disabled).toBe(false);
+    expect(document.activeElement).toBe(reload);
+    fireEvent.click(reload);
+    expect(fetchMock.mock.calls.filter(([u]) => u === '/api/system?refresh=1')).toHaveLength(1);
+    release();
+    await waitFor(() => expect(reload.getAttribute('aria-disabled')).toBeNull());
+    expect(document.activeElement).toBe(reload);
   });
 
   it('formats bytes and uptime', () => {

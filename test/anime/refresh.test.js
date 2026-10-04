@@ -1,3 +1,4 @@
+// Background refresh of anime entries: sweeps, stale-while-revalidate, locks and abort on db reopen.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const gateway = require('../../core/anime/gateway');

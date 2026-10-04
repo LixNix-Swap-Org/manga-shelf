@@ -1,14 +1,6 @@
 /**
- * Refuses state-changing requests a browser sent from another origin (the same approach as Go's
- * CrossOriginProtection). SameSite=Lax still sends the auth cookie from sibling subdomains, so a page on another
- * origin of the same site could otherwise upload files or restore a backup with an admin's cookie.
- * - GET, HEAD and OPTIONS always pass.
- * - Origins listed in CORS_ORIGIN pass.
- * - Requests without the session cookie pass when they carry a bearer token or come from one of the app origins: with
- *   no cookie there is no session to ride. With the cookie the checks below apply, since the cookie wins over a bearer.
- * - With Sec-Fetch-Site (every current browser) only same-origin and none (typed URL, bookmark) pass.
- * - Without it, an Origin header must name this host; requests with neither header (curl, scripts, tests) pass.
- * Behind a reverse proxy the Host header must reach the app unchanged for the Origin fallback (older browsers).
+ * Refuses browser-sent state-changing requests from another origin (SameSite=Lax allows sibling subdomains). Safe
+ * methods, CORS_ORIGIN and bearer requests pass; else Sec-Fetch-Site or Origin must match. Proxy: keep Host unchanged.
  */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const MESSAGE = 'Anfrage von einer fremden Seite abgelehnt. Bitte Manga Shelf direkt über seine eigene Adresse öffnen.';

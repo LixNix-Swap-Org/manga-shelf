@@ -35,7 +35,8 @@
     "test:anime": "node test/browser/run.js test/browser/anime.js",
     "test:perf": "node test/browser/run.js test/browser/performance-suite.js",
     "test:deep": "node test/browser/run.js test/browser/deep-e2e.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:server": "node scripts/server-bin/build-sea.js"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
@@ -55,6 +56,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
+    "js-yaml": "^4.3.2",
     "puppeteer-core": "^25.12.0"
   }
 }

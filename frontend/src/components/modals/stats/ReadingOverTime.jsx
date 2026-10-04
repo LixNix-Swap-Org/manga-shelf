@@ -44,7 +44,7 @@ function MonthBars({ months, value, label, color, activeColor, describe }) {
 }
 
 /**
- * Lesen über die Zeit (GET /api/stats/reading): reads per month, backlog (owned minus read), this vs last year, streaks
+ * Reading over time (GET /api/stats/reading): reads per month, backlog (owned minus read), this vs last year, streaks
  * and the "Weiterlesen" list. `readers` are the users of /api/stats (user_reading_stats) for the reader select.
  */
 export default function ReadingOverTime({ readers = [], user, onNavigate }) {

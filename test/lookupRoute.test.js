@@ -1,3 +1,4 @@
+// Lookup routes: AniList and Manga Passion failure modes and description cleaning.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
@@ -105,6 +106,7 @@ test('lookup/manga: a stuck Manga Passion search does not block the AniList resu
     assert.equal(res.status, 200);
     assert.equal(res.body.length, 1);
     assert.equal(res.body[0].source, 'anilist');
+    assert.equal(res.body[0].source_label, 'AniList', 'plain text: the badge icon is drawn by the frontend');
     assert.equal(res.body[0].description, 'The spy <Twilight> & co.\n\nNext ’line’ x');
 });
 

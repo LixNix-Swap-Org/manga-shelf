@@ -1,3 +1,4 @@
+// Rate budget: token refill, per-user and shared buckets, circuit breaker.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createBudget, OPEN_MS } = require('../../core/anime/budget');

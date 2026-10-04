@@ -1,3 +1,4 @@
+// Dialog to inspect, confirm, refresh or switch the Manga Passion edition linked to a series.
 import { useState, useEffect, useRef } from 'react';
 import { Globe, X, Check, RefreshCw, Sparkles, Search, CircleAlert } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -86,7 +87,7 @@ export default function MpEditionModal({
     setSearchError('');
     // the gap check no longer ships alternatives for an already linked edition: look them up when the dialog opens
     if (!isOffline && !mpGapData?.candidate_editions?.length) searchEditions(manga?.title);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Öffnen
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open
   }, [isOpen]);
 
   const dialogRef = useDialogA11y(isOpen);
@@ -113,11 +114,11 @@ export default function MpEditionModal({
       aria-modal="true"
       aria-label="Manga-Passion-Edition wählen"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="glass-panel w-full max-w-lg rounded-2xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-auto max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col"
+        className="dialog-box glass-panel max-w-lg rounded-2xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
@@ -130,13 +131,13 @@ export default function MpEditionModal({
             onClick={onClose}
             aria-label="Schließen"
             title="Schließen"
-            className="text-slate-400 hover:text-white p-1 rounded-lg"
+            className="hit-44 text-slate-400 hover:text-white p-1 rounded-lg"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="overflow-y-auto custom-scrollbar flex-1 py-4 pr-1 space-y-4">
+        <div className="overflow-y-auto short:overflow-visible custom-scrollbar flex-1 py-4 pr-1 space-y-4">
           <p className="text-xs text-slate-300 leading-relaxed">
             {readOnly
               ? 'Die offizielle deutsche Edition auf Manga Passion liefert Bandzahlen, Lücken, Veröffentlichungsdaten und Preise dieser Reihe.'
@@ -224,7 +225,9 @@ export default function MpEditionModal({
                       title="Füllt fehlende Erscheinungsdaten, Jahr, Seiten und Preise für alle Bände dieser Reihe aus"
                     >
                       <Sparkles className={`w-3.5 h-3.5 ${batchAutofilling ? 'animate-spin' : ''}`} aria-hidden="true" />
-                      <span>{batchAutofilling ? 'Fülle Bände aus...' : '⚡ Alle Bände mit Erscheinungsdaten anreichern'}</span>
+                      {batchAutofilling ? <span>Fülle Bände aus...</span> : (
+                        <span>Alle Bände mit Erscheinungsdaten anreichern</span>
+                      )}
                     </button>
                   )}
                 </div>

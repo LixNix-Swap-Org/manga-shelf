@@ -1,3 +1,4 @@
+// Frontend scan helpers (prefill, shopping rows, scan results), loaded as ESM.
 const test = require('node:test');
 const assert = require('node:assert');
 

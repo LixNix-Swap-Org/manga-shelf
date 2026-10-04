@@ -1,3 +1,4 @@
+// Radar services (month labels, time zones, edition matching) against an isolated database.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -393,6 +394,28 @@ test('enrichReleases: "Band 14" in the collection is the calendar\'s "14"; a Col
         { id: 4, edition_id: 5, title: 'Kingdom', volume_number: '2' }
     ], mangas, volumes);
     assert.deepEqual(items.map(i => [i.type, i.user_volume_id]), [['volume', 51], ['special_edition', 50], ['schuber', 52], ['volume', null]]);
+});
+
+test('buildMatcher: only the canonical label of a volume or Schuber matches a bare calendar number', () => {
+    const mangas = [{ id: 1, title: 'Berserk' }];
+    const match = (volume_number, type, calendar = { id: 900, title: 'Berserk', volume_number: '14' }) =>
+        buildMatcher(mangas, [{ id: 10, manga_id: 1, volume_number, type, status: 'Vorhanden' }]).enrich([calendar])[0].user_volume_id;
+    const prefixed = ['14', 'Band 14', 'band14', 'Bd. 14', 'Bd 14', 'Vol. 14', 'vol 14', 'Volume 14', 'Nr. 14', 'nr 14', 'No. 14',
+        'Teil 14', 'Tome 14', 'Ausgabe 14', '#14', '# 14'];
+    for (const label of prefixed) assert.equal(match(label, 'volume'), 10, label);
+    for (const label of ['Ultimative Edition 14', 'Perfect Edition 14', 'Collectors Edition 14', 'Deluxe Ausgabe 14', 'Band 140', 'Box 14']) {
+        assert.equal(match(label, 'volume'), null, label);
+    }
+    const schuber = { id: 901, title: 'Berserk', volume_number: '2', type: 'schuber' };
+    assert.equal(match('Schuber 2', 'schuber', schuber), 10);
+    for (const label of ['schuber2', 'Box 2', 'box2', 'Schuber Nr. 2', 'Box Nr 2', '2']) assert.equal(match(label, 'schuber', schuber), 10, label);
+    assert.equal(match('Band 2', 'schuber', schuber), null);
+    assert.equal(match('Vollschuber 2', 'schuber', schuber), null);
+    const edition = { id: 902, title: 'Berserk', volume_number: '3', type: 'special_edition' };
+    assert.equal(match('Collectors Edition 3', 'special_edition', edition), 10, 'a special edition keeps its own type');
+    const ultimate = buildMatcher(mangas, [{ id: 10, manga_id: 1, volume_number: 'Ultimative Edition 14', type: 'volume', status: 'Vorhanden' }])
+        .enrich([{ id: 900, title: 'Berserk', volume_number: '14' }])[0];
+    assert.deepEqual([ultimate.in_collection, ultimate.user_volume_status], [true, null]);
 });
 
 test('enrichReleases: user_manga_collecting tells a dropped series apart; prefix matches carry none', () => {

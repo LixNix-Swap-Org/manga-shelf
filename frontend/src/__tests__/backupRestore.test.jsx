@@ -1,3 +1,4 @@
+// Covers backup creation and restore in the backup modal.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 
@@ -6,7 +7,7 @@ vi.mock('../utils/offlineStore', () => ({
 }));
 
 import { clearOfflineData } from '../utils/offlineStore';
-import BackupRestoreModal from '../components/modals/BackupRestoreModal';
+import BackupRestoreModal, { withPasswordWarnings } from '../components/modals/BackupRestoreModal';
 import {
   UNDO_KEY, UNDO_TTL_MS, manifestSummary, readRestoreUndo, saveRestoreUndo, versionSummary
 } from '../components/modals/backup/backupHelpers';
@@ -420,6 +421,47 @@ describe('BackupRestoreModal two-step restore', () => {
     expect(line.parentElement.className).toMatch(/font-semibold/);
     expect(within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' })).queryByText(userLine)).toBeNull();
     expect(screen.getByRole('button', { name: 'Wiederherstellen' }).disabled).toBe(false);
+  });
+
+  it('accounts without a password: the server line shows once in the confirmation, the own account gets its own line', async () => {
+    const serverLine = '2 Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): Admin, anna.';
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection({
+        accounts_without_password: ['Admin', 'anna'],
+        warnings: ['Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.', serverLine]
+      }))
+    });
+    renderBackup();
+    await openConfirmation();
+    const list = within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' }));
+    expect(list.getAllByText(serverLine)).toHaveLength(1);
+    expect(list.getByText('Auch dein Konto „admin“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Wiederherstellen' }).disabled).toBe(false);
+  });
+
+  it('accounts without a password: the line comes from the field when the server sends no text; nobody left to sign in is said', async () => {
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection({
+        counts: { mangas: 1, volumes: 2, users: 1, admins: 1, uploads: 0 },
+        relogin: true,
+        current_user: { username: 'admin', exists: false, role: null },
+        accounts_without_password: ['kim'],
+        warnings: ['Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.']
+      }))
+    });
+    renderBackup();
+    await openConfirmation();
+    const list = within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' }));
+    expect(list.getByText('1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): kim.')).toBeTruthy();
+    expect(list.getByText(/Danach kann sich niemand anmelden: ein neues Passwort setzt dann nur der Konsolenbefehl „passwort-reset <name>“/)).toBeTruthy();
+  });
+
+  it('no password lines without such accounts', () => {
+    const plain = inspection({ accounts_without_password: [] });
+    expect(withPasswordWarnings(plain)).toBe(plain);
+    expect(withPasswordWarnings(inspection()).warnings).toEqual(['Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.']);
   });
 
   it('newer schema: red box, restore disabled until the override is ticked, then allow_newer_schema is sent', async () => {

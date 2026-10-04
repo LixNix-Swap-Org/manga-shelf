@@ -1,3 +1,4 @@
+// Demo data seeder (scripts/seed.js) and the benchmark runner (scripts/bench/run.js).
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

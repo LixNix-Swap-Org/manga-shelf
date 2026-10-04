@@ -15,8 +15,9 @@ const scheduler = require('../services/scheduler');
 const lifecycle = require('../services/lifecycle');
 const { cleanOrphanUploads } = require('../services/uploadCleanup');
 const { appliedSchemaVersion, LATEST_SCHEMA_VERSION } = require('../core/schema');
-const { FEED_KEY_PREFIX } = require('../core/handlers/radar');
+const { FEED_KEY_PREFIX, revokeFeedTokens } = require('../core/handlers/radar');
 const backupsRoutes = require('./backups');
+const { config } = require('../utils/config');
 const log = require('../utils/logger').child('system');
 
 const ORPHAN_CACHE_MS = 10 * 60 * 1000;
@@ -121,7 +122,7 @@ function databaseStats() {
 
 // ----- update check (GitHub releases, once a day, only while an admin looks at the page; never awaited) -----
 
-const updateCheckEnabled = () => !/^(0|false|off|no|nein)$/i.test(String(process.env.UPDATE_CHECK || '').trim());
+const updateCheckEnabled = () => config.updateCheck;
 const update = { result: null, nextAt: 0, running: null };
 
 function versionParts(value) {
@@ -204,8 +205,9 @@ router.get('/system', requireAdmin, (req, res) => {
 
 router.post('/system/orphans/clean', requireAdmin, (req, res) => {
     if (backupsRoutes.isRestoreRunning()) throw new HttpError(409, 'Während einer Wiederherstellung nicht möglich', 'RESTORE_RUNNING');
-    // a snapshot reads the upload folder while it runs
-    if (lifecycle.runningJobs().length) throw new HttpError(409, 'Gerade läuft ein Snapshot – bitte gleich noch einmal versuchen', 'JOB_RUNNING');
+    // snapshots and restores read or replace the upload folder while they run
+    const blocking = lifecycle.runningJobs().find(name => /Snapshot|Wiederherstellung/.test(name));
+    if (blocking) throw new HttpError(409, `Gerade läuft „${blocking}“ – bitte gleich noch einmal versuchen`, 'JOB_RUNNING');
     const candidates = orphanCandidates();
     const result = { removed: 0, bytes: 0, skipped: candidates.skipped };
     if (!candidates.skipped) {
@@ -229,11 +231,13 @@ router.post('/system/orphans/clean', requireAdmin, (req, res) => {
 
 const wantsTokenInBody = (req) => String(req.get('X-Client') || '').trim().toLowerCase() === 'app' || req.authScheme === 'bearer';
 
-// every session of every user ends; the caller gets a fresh one so the admin page stays usable
+// every session and every calendar feed address of every user ends; the caller gets a fresh session so the admin
+// page stays usable
 router.post('/system/sessions/end-all', requireAdmin, (req, res) => {
     const me = runTransaction(() => {
         const ids = db.prepare('SELECT id FROM users').all().map(r => r.id);
         for (const id of ids) bumpSessionVersion(id);
+        revokeFeedTokens(db);
         return { users: ids.length, row: db.prepare('SELECT id, username, role, password_changed_at FROM users WHERE id = ?').get(req.user.id) };
     });
     if (!me.row) throw new HttpError(401, 'Sitzung abgelaufen oder ungültig – bitte neu anmelden', 'SESSION_INVALID');
@@ -274,11 +278,7 @@ function feedState(req) {
     };
 }
 
-function removeFeeds(userId) {
-    let removed = 0;
-    for (const row of feedRows(userId)) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
-    return removed;
-}
+const removeFeeds = (userId) => revokeFeedTokens(db, userId);
 
 router.get('/radar/feed.ics', feedLimiter, (req, res, next) => next());
 

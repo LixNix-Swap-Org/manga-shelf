@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// useDialogA11y: focus trap, Escape, history entries and the on-screen keyboard.
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { useRef, useState } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import useDialogA11y, { HISTORY_STATE_KEY, dialogEntryOnTop } from '../hooks/useDialogA11y';
@@ -52,6 +53,8 @@ const openFrom = (name) => {
 };
 
 describe('useDialogA11y', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('returns focus to the opener when the dialog has an autoFocus field', () => {
     render(<Page autoFocusField />);
     const opener = openFrom('Öffnen');
@@ -91,6 +94,37 @@ describe('useDialogA11y', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement === document.body || document.activeElement === null).toBe(true);
+  });
+
+  it('skips an opener that is no longer rendered (display:none) and falls back to returnFocusRef', () => {
+    render(<Page withFallback autoFocusField />);
+    const opener = openFrom('Öffnen');
+    const rect = [{ top: 0, left: 0, width: 10, height: 10 }];
+    vi.spyOn(document.documentElement, 'getClientRects').mockReturnValue(rect);
+    vi.spyOn(opener, 'getClientRects').mockReturnValue([]);
+    vi.spyOn(screen.getByRole('button', { name: 'Menü' }), 'getClientRects').mockReturnValue(rect);
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Menü' }));
+  });
+
+  it('moves on when focus() on the opener fails silently', () => {
+    render(<Page withFallback autoFocusField />);
+    const opener = openFrom('Öffnen');
+    opener.focus = () => {};
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Menü' }));
+  });
+
+  it('without a usable opener or fallback focus goes to the page heading, never to body', () => {
+    render(
+      <>
+        <h1 tabIndex={-1}>Sammlung</h1>
+        <Page openerInMenu autoFocusField />
+      </>
+    );
+    openFrom('Öffnen');
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sammlung' }));
   });
 
   it('leaves focus alone when something outside already took it on close', () => {
@@ -166,5 +200,47 @@ describe('useDialogA11y: history across a reload', () => {
     act(() => { window.history.back(); });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(dialogEntryOnTop()).toBe(false);
+  });
+});
+
+describe('useDialogA11y: on-screen keyboard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const stubViewport = () => {
+    const viewport = new EventTarget();
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 1; });
+    return viewport;
+  };
+
+  it('scrolls the focused field back into view when the keyboard changes the visual viewport', () => {
+    const viewport = stubViewport();
+    render(<Page autoFocusField />);
+    openFrom('Öffnen');
+    const field = screen.getByLabelText('Titel');
+    expect(document.activeElement).toBe(field);
+    field.scrollIntoView = vi.fn();
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    expect(field.scrollIntoView).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' });
+  });
+
+  it('leaves buttons alone and stops listening once the dialog closes', () => {
+    const viewport = stubViewport();
+    render(<Page />);
+    openFrom('Öffnen');
+    const first = screen.getByRole('button', { name: 'Erster' });
+    first.focus();
+    first.scrollIntoView = vi.fn();
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    expect(first.scrollIntoView).not.toHaveBeenCalled();
+
+    const field = screen.getByLabelText('Titel');
+    field.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    expect(field.scrollIntoView).not.toHaveBeenCalled();
   });
 });

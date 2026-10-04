@@ -1,7 +1,10 @@
-// __APP_VERSION__ and the list of build files are stamped in at build time (vite.config.js), so every release starts a
-// fresh app cache holding all of its chunks. Covers live in their own cache because their file names never change
-// content: they stay across releases (the offline copy would otherwise have to download them all again).
-const CACHE_NAME = 'mangashelf-app-__APP_VERSION__';
+// __APP_VERSION__, __BUILD_ID__ and the list of build files are stamped in at build time (vite.config.js), so every build
+// starts a fresh app cache holding all of its chunks; a waiting worker never writes into the cache open tabs still use.
+// Covers live in their own cache because their file names never change content: they stay across releases (the offline
+// copy would otherwise have to download them all again).
+const BUILD_ID = '__BUILD_ID__';
+// unstamped (tests): the version alone
+const CACHE_NAME = BUILD_ID && !BUILD_ID.startsWith('__') ? `mangashelf-app-__APP_VERSION__-${BUILD_ID}` : 'mangashelf-app-__APP_VERSION__';
 // Same name as UPLOADS_CACHE in src/appShell.js (cleared on logout). v2 dropped v1 entries that held index.html.
 const UPLOADS_CACHE = 'mangashelf-uploads-v2';
 const STATIC_ASSETS = [

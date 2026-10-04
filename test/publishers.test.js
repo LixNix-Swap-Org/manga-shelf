@@ -1,3 +1,4 @@
+// Publisher name canonicalisation and aliases (core/lib/publishers.js).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
@@ -41,6 +42,16 @@ test('normalizePublisher: stored aliases first, legal suffixes only as a fallbac
     assert.equal(resolvePublisher('  ', merged), null);
 });
 
+test('normalizePublisher: names like Object.prototype keys never throw and pass through; publisherKey guards non-strings', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'valueOf GmbH']) {
+        assert.equal(publishers.resolvePublisher(name, new Map()), name);
+        assert.equal(publishers.normalizePublisher(name), name);
+    }
+    assert.equal(publishers.resolvePublisher('Constructor', new Map([['constructor', 'Constructor Verlag']])), 'Constructor Verlag');
+    assert.equal(publishers.isKnownPublisher('constructor'), false);
+    for (const value of [null, undefined, 42, {}, ['x']]) assert.equal(publishers.publisherKey(value), '');
+});
+
 test('migration 22 seeds the measured spellings and rewrites stored rows', () => {
     const conn = new DatabaseSync(':memory:');
     applySchema(conn);
@@ -51,6 +62,29 @@ test('migration 22 seeds the measured spellings and rewrites stored rows', () =>
     assert.equal(conn.prepare('SELECT publisher FROM mangas').get().publisher, 'Egmont Manga');
     assert.equal(conn.prepare('SELECT publisher FROM volumes').get().publisher, 'Carlsen Manga');
     assert.equal(conn.prepare("SELECT canonical FROM publisher_aliases WHERE alias = 'ema'").get().canonical, 'Egmont Manga');
+    conn.close();
+});
+
+test('migration 23 keeps earlier merges into a respelled built-in name with an identity alias', () => {
+    const conn = new DatabaseSync(':memory:');
+    applySchema(conn);
+    const insert = conn.prepare('INSERT INTO publisher_aliases (alias, canonical) VALUES (?, ?)');
+    insert.run('tokyopop germany', 'Tokyopop');
+    insert.run('kaze', 'Kaze Manga');
+    insert.run('crunchyroll manga', 'Crunchyroll');
+    insert.run('panini', 'Panini Comics');
+    insert.run('panini comics', 'Panini Verlags GmbH');
+    conn.exec('DELETE FROM schema_migrations WHERE version = 23;');
+    const report = applySchema(conn);
+    assert.deepEqual(report.map(r => [r.version, r.changes]), [[23, 2]]);
+    const aliases = new Map(conn.prepare('SELECT alias, canonical FROM publisher_aliases').all().map(r => [r.alias, r.canonical]));
+    assert.equal(aliases.get('tokyopop'), 'Tokyopop');
+    assert.equal(aliases.get('kaze manga'), 'Kaze Manga');
+    assert.equal(aliases.has('crunchyroll'), false, 'a target the built-in map spells the same needs no identity row');
+    assert.equal(aliases.get('panini comics'), 'Panini Verlags GmbH', 'an existing alias is never overwritten');
+    assert.equal(aliases.get('tokyopop gmbh'), 'TOKYOPOP', 'the seed stays');
+    assert.equal(publishers.resolvePublisher('Tokyopop Germany', aliases), 'Tokyopop');
+    assert.equal(publishers.resolvePublisher('Kaze', aliases), 'Kaze Manga');
     conn.close();
 });
 
@@ -101,4 +135,38 @@ test('a rename is a merge into a new name; differently cased rows of the target 
     assert.equal(res.status, 200);
     assert.deepEqual(db.prepare("SELECT DISTINCT publisher FROM mangas WHERE title LIKE 'Umbenennen%'").all().map(r => r.publisher), ['Hayabusa (Carlsen)']);
     assert.equal(res.body.updated_series, 2);
+});
+
+test('a case or spelling rename of a built-in name sticks: identity alias, followed results and the quality fix', async () => {
+    const { resolvePublisher } = publishers;
+    assert.equal(resolvePublisher('Foo', new Map([['foo', 'tokyopop']])), 'TOKYOPOP', 'a followed result uses the built-in map after the stored aliases');
+    assert.equal(resolvePublisher('Foo', new Map([['foo', 'tokyopop'], ['tokyopop', 'Tokyopop']])), 'Tokyopop');
+
+    const insert = db.prepare('INSERT INTO mangas (title, publisher) VALUES (?, ?)');
+    const a = Number(insert.run('Umbenannt Groß', 'TOKYOPOP').lastInsertRowid);
+    const res = await admin('POST', '/publishers/merge', { from: ['TOKYOPOP'], to: 'Tokyopop' });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(db.prepare('SELECT publisher FROM mangas WHERE id = ?').get(a).publisher, 'Tokyopop');
+    const aliases = Object.fromEntries((await editor('GET', '/publishers')).body.aliases.map(x => [x.alias, x.canonical]));
+    assert.equal(aliases.tokyopop, 'Tokyopop', 'identity alias against the built-in spelling');
+    assert.equal(aliases['tokyopop gmbh'], 'Tokyopop', 'the seeded alias follows');
+    for (const spelling of ['TOKYOPOP', 'Tokyopop', 'TOKYOPOP GmbH']) assert.equal(publishers.normalizePublisher(spelling), 'Tokyopop', spelling);
+
+    const created = await editor('POST', '/mangas', { title: 'Neu nach Umbenennung', publisher: 'TOKYOPOP' });
+    assert.equal(db.prepare('SELECT publisher FROM mangas WHERE id = ?').get(created.body.id).publisher, 'Tokyopop');
+    const quality = (await editor('GET', '/maintenance/quality')).body;
+    const outdated = quality.checks.find(c => c.id === 'publishers_outdated');
+    assert.equal(outdated.items.some(i => /tokyopop/i.test(i.name)), false);
+    const fixed = await editor('POST', '/maintenance/fix', { check: 'normalize_publishers' });
+    assert.equal(fixed.status, 200);
+    assert.equal(db.prepare('SELECT publisher FROM mangas WHERE id = ?').get(a).publisher, 'Tokyopop');
+
+    const spelled = await admin('POST', '/publishers/merge', { from: ['Kazé Manga'], to: 'Kaze Manga' });
+    assert.equal(spelled.status, 200);
+    assert.equal(publishers.normalizePublisher('kaze manga'), 'Kaze Manga');
+    assert.equal(publishers.normalizePublisher('Kazé Manga'), 'Kaze Manga');
+    assert.equal(Object.fromEntries((await editor('GET', '/publishers')).body.aliases.map(x => [x.alias, x.canonical]))['kaze manga'], 'Kaze Manga');
+
+    for (const alias of ['tokyopop', 'kaze%20manga']) assert.equal((await admin('DELETE', `/publishers/aliases/${alias}`)).status, 200);
+    assert.equal(publishers.normalizePublisher('Tokyopop'), 'TOKYOPOP', 'without the identity alias the built-in spelling is back');
 });

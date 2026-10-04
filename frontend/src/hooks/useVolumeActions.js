@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react';
 import { hasUserRead, getVolumeDisplayTitle } from '../utils/volumeHelpers';
-import { deleteVolumeRequest } from '../components/detail/volumeEdit/editorUtils';
 import { apiFetch, errorFromResponse, readJson, sessionEndAnnounced, isAbortError } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
-import { formatCount } from '../utils/format';
+import { formatCount, formatDate } from '../utils/format';
 import { prepareImageForUpload } from '../utils/imageResize';
 import { submitChange, applyChangeToCaches } from '../utils/outbox';
 import { applyVolumeChange } from '../utils/volumePatch';
@@ -21,7 +20,7 @@ export function localDateString(d = new Date()) {
 
 export function volumeDeleteConfirmText(vol) {
   const name = vol ? `"${getVolumeDisplayTitle(vol)}"` : 'Diesen Band';
-  return `${name} wirklich entfernen? Der Lesestatus aller Benutzer für diesen Band wird ebenfalls gelöscht.`;
+  return `${name} wirklich entfernen? Der Band kommt mit Besitz und Lesestatus aller Benutzer in den Papierkorb (30 Tage wiederherstellbar).`;
 }
 
 export const READ_OTHERS_ADMIN_ONLY = 'Nur Admins können den Lesestatus anderer Benutzer ändern.';
@@ -43,32 +42,46 @@ export const previousReadAt = (data) => (typeof data?.previous_read_at === 'stri
   : null);
 
 export const BULK_UNDO_MS = 10000;
-// below the server's 100 kB JSON limit: a large undo (deleted volumes with notes and photos) goes in several requests
-const REVERT_CHUNK_CHARS = 90000;
+export const TRASH_UNDO_MS = 10000;
 
-/** Splits the `previous` list of a bulk answer into requests whose JSON stays below `maxChars`. */
-export function chunkRevert(previous, maxChars = REVERT_CHUNK_CHARS) {
-  const chunks = [];
-  let current = [];
-  let size = 0;
-  for (const entry of previous || []) {
-    const length = JSON.stringify(entry).length + 1;
-    if (current.length && size + length > maxChars) {
-      chunks.push(current);
-      current = [];
-      size = 0;
-    }
-    current.push(entry);
-    size += length;
+/**
+ * read_at for a 'Gelesen am' date (YYYY-MM-DD, local): null for today, an empty or a future date (the server stamps
+ * the current time), else local noon of that day as the server's UTC 'YYYY-MM-DD HH:MM:SS'.
+ */
+export function readAtForDate(date, today = localDateString()) {
+  const value = String(date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value >= today) return null;
+  const noon = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(noon.getTime())) return null;
+  return noon.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** POST /api/trash/:id/restore; `onDone(ok)` runs afterwards either way (refresh). Resolves to ok. */
+export async function restoreTrashed(trashId, onDone) {
+  let ok = false;
+  try {
+    const res = await apiFetch(`/api/trash/${trashId}/restore`, { method: 'POST' });
+    if (res.ok) ok = true;
+    else await notifyResponseError(res, 'Wiederherstellen fehlgeschlagen');
+  } catch (err) {
+    notify.error(err);
   }
-  if (current.length) chunks.push(current);
-  return chunks;
+  if (onDone) await onDone(ok);
+  return ok;
+}
+
+/** "<label> in den Papierkorb gelegt" with "Rückgängig"; nothing without a trash id (older server, already gone). */
+export function notifyTrashed(label, trashId, onDone) {
+  if (!trashId) return null;
+  return notify.success(`${label} in den Papierkorb gelegt`, {
+    duration: TRASH_UNDO_MS,
+    action: { label: 'Rückgängig', onClick: () => restoreTrashed(trashId, onDone) }
+  });
 }
 
 /**
- * The outbox change of a click on the owned toggle: { kind, value, purchase_date? }.
- * With owners it switches the user's own ownership; without, a missing volume becomes the user's own and an owned one
- * without owners (old data) goes back to 'Fehlt'.
+ * The outbox change of an owned-toggle click: { kind, value, purchase_date? }. With owners it switches the user's own
+ * ownership; without, a missing volume becomes the user's and an owned one (old data) goes back to 'Fehlt'.
  */
 export function ownedToggleChange(vol, user, today = localDateString()) {
   const owners = Array.isArray(vol.owners) ? vol.owners : [];
@@ -84,9 +97,8 @@ export function ownedToggleChange(vol, user, today = localDateString()) {
 }
 
 /**
- * Per-volume actions: add a single volume, toggle owned/read, open the editor, delete. Toggles go through the outbox:
- * applied at once (patchManga, when the page passes it, and the cached copies), sent now or replayed later.
- * `canToggle` (default canEdit) gates only the owned/read toggles: an editor in offline mode may queue them.
+ * Per-volume actions: add, toggle owned/read, open the editor, delete. Toggles go through the outbox: applied at once
+ * (patchManga and cached copies), sent now or replayed later. `canToggle` (default canEdit) gates only the toggles.
  */
 export default function useVolumeActions({
   id, user, canEdit, canToggle = canEdit, selectedReaderId, fetchManga, volumes, onUnauthorized, patchManga
@@ -97,7 +109,13 @@ export default function useVolumeActions({
   const [newVolumeReleaseDate, setNewVolumeReleaseDate] = useState('');
   const [newVolumePrice, setNewVolumePrice] = useState('');
   const [newVolumeCover, setNewVolumeCover] = useState('');
+  const [newVolumeIsbn, setNewVolumeIsbn] = useState(''); // a scanned ISBN the new volume is stored with
   const [uploadingNewCover, setUploadingNewCover] = useState(false);
+  // 'Gelesen am' of the read toggle: only a date the user picked for this series (null = now); `on` is the day of the pick
+  const [readPick, setReadPick] = useState(null);
+  if (readPick && readPick.id !== id) setReadPick(null);
+  const readDate = readPick && readPick.id === id ? readPick.date : null;
+  const setReadDate = (value) => setReadPick(value ? { id, date: value, on: localDateString() } : null);
 
   const [activeVolume, setActiveVolume] = useState(null);
 
@@ -199,11 +217,13 @@ export default function useVolumeActions({
           release_date: newVolumeReleaseDate ? newVolumeReleaseDate.trim() : null,
           price: newVolumePrice ? newVolumePrice.trim() : null,
           cover_image: newVolumeCover || null,
-          images: newVolumeCover ? [newVolumeCover] : []
+          images: newVolumeCover ? [newVolumeCover] : [],
+          ...(newVolumeIsbn ? { isbn: newVolumeIsbn } : {})
         }
       });
       if (res.ok) {
         setNewVolumeNum('');
+        setNewVolumeIsbn('');
         setNewVolumePrice('');
         setNewVolumeReleaseDate('');
         setNewVolumeCoverValue('');
@@ -307,11 +327,14 @@ export default function useVolumeActions({
     const setRead = (read, readAt) => withVolumeLock(vol.id, () => submitToggle({
       kind: 'read', volumeId: vol.id, mangaId: id, targetUserId: effUserId, value: read, ...(read && readAt ? { read_at: readAt } : {})
     }, READ_FAILED));
-    return setRead(!hasRead).then((data) => {
+    // a pick of "today" stays "now" after midnight
+    const pickedReadAt = hasRead || !readDate ? null : readAtForDate(readDate, readPick.on);
+    return setRead(!hasRead, pickedReadAt).then((data) => {
       if (!data) return;
       const restoreAt = hasRead ? previousReadAt(data) : null;
       const undoable = !hasRead || restoreAt;
-      notify.success(`„${getVolumeDisplayTitle(vol)}“ als ${hasRead ? 'ungelesen' : 'gelesen'} markiert`, undoable ? {
+      const on = pickedReadAt ? ` (gelesen am ${formatDate(readDate)})` : '';
+      notify.success(`„${getVolumeDisplayTitle(vol)}“ als ${hasRead ? 'ungelesen' : 'gelesen'} markiert${on}`, undoable ? {
         action: { label: 'Rückgängig', onClick: () => setRead(hasRead, restoreAt) }
       } : undefined);
     });
@@ -319,31 +342,31 @@ export default function useVolumeActions({
 
   const bulkRef = useRef(false);
 
-  /** Puts back what a bulk edit changed (its `previous`); deleted volumes whose number was taken again are reported. */
-  const revertBulk = async (previous) => {
-    const conflicts = [];
+  /** Puts back what a bulk edit changed: the server keeps the old values under `undo_token`, one request sends it back. */
+  const revertBulk = async (token) => {
     try {
-      for (const chunk of chunkRevert(previous)) {
-        const res = await apiFetch('/api/volumes/bulk', { method: 'POST', body: { revert: chunk } });
-        const data = await readJson(res);
-        if (Array.isArray(data?.conflicts)) conflicts.push(...data.conflicts);
-        if (!res.ok && res.status !== 409) {
-          await reportFailure(res, 'Rückgängig fehlgeschlagen');
-          break;
+      const res = await apiFetch('/api/volumes/bulk', { method: 'POST', body: { revert: token } });
+      if (!res.ok && res.status !== 409) {
+        await reportFailure(res, 'Rückgängig fehlgeschlagen');
+      } else {
+        const data = (await readJson(res)) ?? {};
+        const conflicts = Array.isArray(data.conflicts) ? data.conflicts : [];
+        const gone = Array.isArray(data.not_found) ? data.not_found.length : 0;
+        if (conflicts.length) {
+          notify.error(`${formatCount(conflicts.length, 'Band konnte', 'Bände konnten')} nicht wiederhergestellt werden: ${conflicts[0].error}`);
+        } else if (gone) {
+          notify.info(`${formatCount(gone, 'Band wurde', 'Bände wurden')} inzwischen gelöscht und ${gone === 1 ? 'bleibt' : 'bleiben'} unverändert.`);
         }
       }
     } catch (err) {
       notify.error(err);
-    }
-    if (conflicts.length) {
-      notify.error(`${formatCount(conflicts.length, 'Band konnte', 'Bände konnten')} nicht wiederhergestellt werden: ${conflicts[0].error}`);
     }
     await fetchManga();
   };
 
   /**
    * One request for many volumes (POST /api/volumes/bulk): `change` is { set } | { owners } | { read } | { delete: true }.
-   * One refetch afterwards and a 10 s "Rückgängig" toast that sends the previous values back. Resolves to true on success.
+   * One refetch afterwards and a 10 s "Rückgängig" toast that sends the undo token back. Resolves to true on success.
    */
   const handleBulkEdit = async (ids, change, doneText) => {
     if (!canEdit || !ids?.length || bulkRef.current) return false;
@@ -357,11 +380,15 @@ export default function useVolumeActions({
       const data = (await readJson(res)) ?? {};
       if (change.delete && data.ids?.some((volId) => String(volId) === String(activeVolume?.id))) setActiveVolume(null);
       await fetchManga();
-      const previous = Array.isArray(data.previous) ? data.previous : [];
-      const skipped = data.read_skipped?.length ? ` (${formatCount(data.read_skipped.length, 'Band', 'Bände')} nicht im Besitz übersprungen)` : '';
-      notify.success(`${formatCount(data.updated ?? ids.length, 'Band', 'Bände')} ${doneText}${skipped}`, previous.length ? {
+      const token = typeof data.undo_token === 'string' && data.undo_token ? data.undo_token : null;
+      const skippedCount = data.read_skipped?.length || 0;
+      const skipped = skippedCount ? ` (${formatCount(skippedCount, 'Band', 'Bände')} nicht im Besitz übersprungen)` : '';
+      // `updated` counts every matched volume; a pure read change did nothing to the skipped ones
+      const readOnly = change.read && !change.set && !change.owners;
+      const changed = Math.max(0, (data.updated ?? ids.length) - (readOnly ? skippedCount : 0));
+      notify.success(`${formatCount(changed, 'Band', 'Bände')} ${doneText}${skipped}`, token ? {
         duration: BULK_UNDO_MS,
-        action: { label: 'Rückgängig', onClick: () => revertBulk(previous) }
+        action: { label: 'Rückgängig', onClick: () => revertBulk(token) }
       } : undefined);
       return true;
     } catch (err) {
@@ -388,20 +415,29 @@ export default function useVolumeActions({
         || (activeVolume && String(activeVolume.id) === String(volOrId) ? activeVolume : null);
     const volId = typeof volOrId === 'object' ? volOrId.id : volOrId;
     if (!confirm(volumeDeleteConfirmText(vol))) return;
-    // 404 counts as done: the volume was already removed in another tab
-    const result = await deleteVolumeRequest(volId);
-    if (result.ok) {
-      if (String(activeVolume?.id) === String(volId)) setActiveVolume(null);
-      await fetchManga();
-    } else if (!result.aborted) {
-      notify.error(result.error);
+    let res;
+    try {
+      res = await apiFetch(`/api/volumes/${volId}`, { method: 'DELETE' });
+    } catch (err) {
+      notify.error(err, { fallback: 'Netzwerkfehler beim Löschen des Bands' });
+      return;
     }
+    // 404 counts as done: the volume was already removed in another tab
+    if (!res.ok && res.status !== 404) {
+      await reportFailure(res, 'Fehler beim Löschen des Bands');
+      return;
+    }
+    if (String(activeVolume?.id) === String(volId)) setActiveVolume(null);
+    await fetchManga();
+    const trashId = res.ok ? (await readJson(res))?.trash_id : null;
+    notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : 'Band', trashId, () => fetchManga());
   };
 
   return {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
-    newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover,
+    newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn,
+    readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit

@@ -1,9 +1,10 @@
 // @vitest-environment node
+// Build-time stamping of the service worker (version and precache list).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { precacheList, stampServiceWorker } from '../../vite.config.js';
+import { buildId, precacheList, stampServiceWorker } from '../../vite.config.js';
 
 const swSource = fs.readFileSync(path.resolve(import.meta.dirname, '../../public/sw.js'), 'utf8');
 
@@ -21,11 +22,35 @@ describe('service worker build stamping', () => {
     expect(precacheList(path.join(dir, 'missing'))).toEqual([]);
   });
 
-  it('stamps the version and the file list; the unstamped worker still parses', () => {
-    const source = stampServiceWorker(swSource, { version: '9.9.9', files: ['/assets/a.js', '/assets/b.css'] });
-    expect(source).toContain("const CACHE_NAME = 'mangashelf-app-9.9.9'");
+  const cacheNameOf = (source) => {
+    let opened = null;
+    const listeners = {};
+    const caches = { open: async (name) => { opened = name; return { addAll: async () => {}, match: async () => undefined }; } };
+    new Function('self', 'caches', source)({ addEventListener: (type, fn) => { listeners[type] = fn; } }, caches);
+    let pending;
+    listeners.install({ waitUntil: (p) => { pending = p; } });
+    return pending.then(() => opened);
+  };
+
+  it('stamps the version, the build id and the file list; the unstamped worker still parses', async () => {
+    const source = stampServiceWorker(swSource, { version: '9.9.9', files: ['/assets/a.js', '/assets/b.css'], build: 'abc123def456' });
+    expect(source).not.toContain('__APP_VERSION__');
+    expect(source).not.toContain('__BUILD_ID__');
     expect(source).toContain('const BUILD_FILES = ["/assets/a.js", "/assets/b.css"];');
-    expect(() => new Function('self', source)({ addEventListener: () => {} })).not.toThrow();
+    expect(await cacheNameOf(source)).toBe('mangashelf-app-9.9.9-abc123def456');
+    expect(await cacheNameOf(stampServiceWorker(swSource, { version: '9.9.9', files: [] }))).toBe('mangashelf-app-9.9.9');
     expect(() => new Function('self', swSource)({ addEventListener: () => {} })).not.toThrow();
+  });
+
+  it('two builds of the same version get different caches; the same build keeps its name', async () => {
+    const one = ['/assets/index-A.js', '/assets/index-A.css'];
+    const two = ['/assets/index-B.js', '/assets/index-A.css'];
+    expect(buildId(one, '<html>A</html>')).toMatch(/^[0-9a-f]{12}$/);
+    expect(buildId(one, '<html>A</html>')).toBe(buildId([...one], '<html>A</html>'));
+    expect(buildId(one, '<html>A</html>')).not.toBe(buildId(two, '<html>A</html>'));
+    expect(buildId(one, '<html>A</html>')).not.toBe(buildId(one, '<html>B</html>'));
+    const name = (files, shell) => cacheNameOf(stampServiceWorker(swSource, { version: '2.19.1', files, build: buildId(files, shell) }));
+    expect(await name(one, 'x')).not.toBe(await name(two, 'x'));
+    expect(await name(one, 'x')).toMatch(/^mangashelf-app-2\.19\.1-[0-9a-f]{12}$/);
   });
 });

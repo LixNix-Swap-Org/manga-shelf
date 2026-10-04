@@ -1,9 +1,10 @@
-// Outbox (P20): read / owned / status toggles and purchases, applied optimistically by the caller and sent now when the
-// server answers, otherwise kept (IndexedDB, per user and server) and replayed on reconnect, on return to the
-// foreground and after the login. Only idempotent set operations, coalesced per (kind, volume, target user), so a
-// replay can never toggle twice. 401 keeps an entry, other 4xx drop it with a toast, 5xx / network retry with backoff.
-import { apiFetch, isAppMode, readJson, TIMEOUTS } from './api.js';
+// Outbox: read / owned / status toggles and purchases, applied optimistically and sent now or kept (IndexedDB, per
+// user and server) and replayed later. Only idempotent set operations, coalesced per (kind, volume, target user), so a
+// replay never toggles twice. 401 keeps an entry, other 4xx drop it with a toast, 5xx / network retry with backoff.
+// The serverless device core answers finally at once: its entries are never kept.
+import { apiFetch, isAppMode, isLocalMode, readJson, TIMEOUTS } from './api.js';
 import { getActiveServerId } from '../app/serverStore.js';
+import { getLocalProfile } from '../local/profile.js';
 import {
   loadOutboxEntries, putOutboxEntries, deleteOutboxEntries, updateOutboxEntriesById, deleteOutboxEntriesById, patchCachedManga
 } from './offlineStore.js';
@@ -16,6 +17,7 @@ import { formatCount } from './format.js';
 export const OUTBOX_KINDS = ['read', 'owned', 'status', 'purchase'];
 export const OUTBOX_SYNCED_EVENT = 'mangashelf:outbox-synced';
 export const WEB_SERVER_ID = 'web';
+export const LOCAL_SERVER_ID = 'local';
 export const FALLBACK_KEY = 'mangashelf_outbox';
 export const OUTBOX_LOCK = 'mangashelf-outbox';
 const MAX_RETRY_MS = 5 * 60 * 1000;
@@ -26,8 +28,19 @@ const READ_AT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 const hasValue = (v) => v !== null && v !== undefined && v !== '';
 const group = (kind) => (kind === 'purchase' ? 'owned' : kind);
 
-/** The server the entries of this session belong to: the active server in the app build, 'web' in the browser. */
-export const currentServerId = () => (isAppMode() ? getActiveServerId() : WEB_SERVER_ID);
+/** The scope of a local profile: 'local:<profile id>' (profiles switch, their entries never mix). */
+export const localServerId = (profileId = getLocalProfile()?.id) => `${LOCAL_SERVER_ID}:${profileId ?? ''}`;
+
+export const isLocalServerId = (serverId) => String(serverId).startsWith(`${LOCAL_SERVER_ID}:`);
+
+/**
+ * The server the entries of this session belong to: the active server in the app build, the local profile in its
+ * mode without a server (never mixed with the server that was active before), 'web' in the browser.
+ */
+export const currentServerId = () => {
+  if (isLocalMode()) return localServerId();
+  return isAppMode() ? getActiveServerId() : WEB_SERVER_ID;
+};
 
 /** Where the entries of a removed server wait until a server with the same instance id is added again. */
 export const retiredServerId = (instanceId) => `removed:${instanceId}`;
@@ -96,8 +109,12 @@ export function outboxRequest(entry) {
   return { path: `${base}/owners`, method: 'POST', body };
 }
 
-/** 'done' (2xx, or 404: the volume is gone), 'auth' (401: kept for the next login), 'retry' (no answer, 408, 429, 5xx) or 'drop'. */
-export function classifyOutboxResponse(res) {
+/**
+ * 'done' (2xx, or 404: the volume is gone), 'auth' (401: kept for the next login), 'retry' (no answer, 408, 429, 5xx)
+ * or 'drop'. An entry of the local mode is never retried: the device core's 507/423/409 are final (no replay runs there).
+ */
+export function classifyOutboxResponse(res, entry = null) {
+  if (entry && isLocalServerId(entry.serverId)) return res && (res.ok || res.status === 404) ? 'done' : 'drop';
   if (!res) return 'retry';
   if (res.ok || res.status === 404) return 'done';
   if (res.status === 401) return 'auth';
@@ -198,13 +215,9 @@ function defaultLock(name, fn) {
   }
 }
 
-/**
- * The outbox over a storage { load, put, delete } and a sender (entry -> Response, rejects when unreachable).
- * flush(scope) sends the scope's entries in time order; one flush per scope runs at a time and also sends entries
- * added while it runs. It stops when the server is not usable (no answer, gateway, 429, 401); a change that waits
- * (backoff, 500) holds back the later changes of its volume only. Resolves to
- * { items: [{ entry, outcome, res }], synced, dropped, kept, unauthorized }.
- */
+// Outbox over a storage { load, put, delete } and a sender (entry -> Response, rejects when unreachable). flush(scope)
+// sends in time order, one at a time per scope; it stops when the server is unusable (no answer, gateway, 429, 401),
+// and a waiting change (backoff, 500) holds back only later changes of its volume.
 export function createOutbox({ storage, send, now = () => Date.now(), onFlushed, lock = defaultLock } = {}) {
   let entries = [];
   let ready = null;
@@ -319,11 +332,8 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
     emit();
   }
 
-  /**
-   * A replay holds no lock against forced flushes of other tabs. Null while the stored row still holds this entry;
-   * otherwise { newer } (the stored newer change or null when another tab already sent it), so an older value never
-   * reaches the server after a newer one.
-   */
+  // Null while the stored row still holds this entry, else { newer } (newer stored change, or null if another tab sent
+  // it), so an older value never follows a newer one; a replay holds no lock against other tabs' forced flushes.
   async function superseded(entry) {
     if (unsaved.has(entry.id)) return null;
     let rows;
@@ -368,7 +378,7 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
         }
         let res = null;
         try { res = await send(entry); } catch (_) { res = null; }
-        const outcome = classifyOutboxResponse(res);
+        const outcome = classifyOutboxResponse(res, entry);
         const item = { entry, outcome, res };
         result.items.push(item);
         if (outcome === 'done') {
@@ -376,7 +386,7 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
           result.synced.push(entry);
         } else if (outcome === 'drop') {
           settle(entry, null);
-          result.dropped.push({ ...entry, status: res.status });
+          result.dropped.push({ ...entry, status: res?.status ?? null });
         } else {
           const attempts = entry.attempts + 1;
           settle(entry, outcome === 'retry'
@@ -491,7 +501,8 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
   };
 }
 
-function sendEntry(entry) {
+/** Only an entry of the current mode and server is sent: a server's entry never reaches the device core, nor the reverse. */
+export function sendEntry(entry) {
   if (entry.serverId !== String(currentServerId())) return Promise.resolve(null);
   const { path, method, body } = outboxRequest(entry);
   return apiFetch(path, { method, body, timeout: TIMEOUTS.write });
@@ -552,13 +563,12 @@ export function resetOutbox() {
 
 export const outboxScope = (userId) => ({ userId, serverId: currentServerId() });
 
-/**
- * Records a change for the logged-in user and sends it now unless `offline`. Resolves to
- * { status: 'sent' | 'queued' | 'failed' | 'auth', res, entry }; 'failed' (4xx) means the change was refused and
- * left the outbox, the caller reverts its optimistic state and shows the error.
- */
-export async function submitChange(change, { userId, offline = false, outbox = getOutbox() } = {}) {
+// Records a change and sends it now unless `offline`; resolves to { status: 'sent'|'queued'|'failed'|'auth', res, entry }.
+// 'failed' (4xx or device-core refusal) left the outbox: the caller reverts its optimistic state.
+export async function submitChange(change, { userId, offline: wantsQueue = false, outbox = getOutbox() } = {}) {
   const scope = outboxScope(userId);
+  // the device core needs no network: a change of the local mode is never queued
+  const offline = wantsQueue && !isLocalServerId(scope.serverId);
   const raw = { ...change, userId, serverId: scope.serverId, deferred: offline };
   let entry;
   let persisted;
@@ -608,11 +618,8 @@ export async function sessionUserId() {
   }
 }
 
-/**
- * Replays the user's outbox on start, on `online`, when the page becomes visible, when `subscribe` reports a
- * reconnect and when the earliest backoff ends. Except for the start (right after the login) a replay first asks the
- * server whose session this is: after a user switch in another tab the entries stay untouched. Returns a stop function.
- */
+// Replays the outbox on start, `online`, page visible, `subscribe` reconnects and backoff end; returns a stop function.
+// Except at start a replay first asks whose session this is, so entries survive a user switch in another tab.
 export function startOutboxSync({
   userId, isOnline = () => true, subscribe, outbox = getOutbox(), win = globalThis.window, doc = globalThis.document,
   legacyStorage = globalThis.localStorage, confirmUser = sessionUserId

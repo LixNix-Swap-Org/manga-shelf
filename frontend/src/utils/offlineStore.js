@@ -1,14 +1,9 @@
-// Read-only offline copy of the collection (IndexedDB, no dependencies).
-//
-// Stored per browser: the last known user, the series list and every series detail as served by
-// GET /api/offline-snapshot. It is wiped on logout and when the server says the session is invalid,
-// so data does not stay readable on a shared device. Nothing here ever writes back to the server.
-// The shopping-list cache (localStorage) is kept here too, so its keys sit next to clearOfflineData.
-// The same database holds the outbox store (utils/outbox.js): changes made offline, per user and server. A logout
-// keeps them; they are only ever sent with the session of the user who made them.
+// Read-only offline copy of the collection (IndexedDB): last user, series list and details from
+// GET /api/offline-snapshot. Wiped on logout and invalid session so nothing stays readable on a shared device.
+// The same database holds the outbox store (utils/outbox.js), which a logout keeps.
 
 import { LEGACY_QUEUE_KEY } from './shoppingQueue.js';
-import { apiFetch, assetUrl, TIMEOUTS } from './api.js';
+import { apiFetch, assetUrl, isLocalMode, TIMEOUTS } from './api.js';
 import { formatRelative } from './format.js';
 import { clearDataCache } from './dataCache.js';
 import { ANIME_CACHE_KEY, ANIME_META_KEY } from './storageKeys.js';
@@ -99,6 +94,10 @@ export const loadUser = () => safe(async () => (await get('user')) ?? null);
 export const loadMangaList = () => safe(async () => (await get('mangas')) ?? [], []);
 export const loadMangaDetail = (id) => safe(async () => (await get(`manga:${id}`)) ?? null);
 export const loadMeta = () => safe(async () => (await get('meta')) ?? null);
+/** { id, volume_search } of every series in the offline copy that has one (the snapshot keeps the field). */
+export const loadOfflineVolumeSearch = () => safe(async () => ((await get('mangas')) ?? [])
+  .filter((m) => m && typeof m.volume_search === 'string' && m.volume_search)
+  .map((m) => ({ id: m.id, volume_search: m.volume_search })), []);
 
 let localIndex = null;
 // volumes bought in this session (quick buy): the stored copy only learns them with the next full sync
@@ -291,11 +290,8 @@ function notifySynced(syncedAt) {
   window.dispatchEvent(new CustomEvent(OFFLINE_SYNCED_EVENT, { detail: { synced_at: syncedAt } }));
 }
 
-/**
- * Called on logout / invalid session and after a restore. Also drops the in-memory data cache, the shopping-list and
- * anime-list caches (same privacy rule) and the old queue format without a user. The outbox stays: its entries are only ever sent
- * by their own user.
- */
+// On logout / invalid session / restore: also drops the in-memory data cache, the shopping-list and anime-list
+// caches and the old user-less queue. The outbox stays: its entries only go out with their own user.
 export async function clearOfflineData() {
   clearGeneration++;
   syncInFlight = null;
@@ -377,13 +373,11 @@ export function updateShoppingCache(change) {
   }
 }
 
-/**
- * Downloads a fresh snapshot (throttled) and warms the service-worker cache with the app code and covers,
- * so the app can start and show the collection without network. Resolves to true if a snapshot was stored.
- * Only one download runs at a time. A plain call during a running sync gets its result; a forced call (data just
- * changed) gets one follow-up sync after it, shared by all forced calls that arrive meanwhile.
- */
+// Downloads a fresh snapshot (throttled) and warms the service-worker cache; resolves to true if one was stored. One
+// sync runs at a time: a plain call joins it, forced calls (data just changed) share one follow-up sync.
 export function syncOfflineCopy({ force = false } = {}) {
+  // the local mode reads its own database on the device; a copy of it would only take space
+  if (isLocalMode()) return Promise.resolve(false);
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(false);
   if (!syncInFlight) return startSync(force);
   if (!force) return (followUp ?? syncInFlight).promise;

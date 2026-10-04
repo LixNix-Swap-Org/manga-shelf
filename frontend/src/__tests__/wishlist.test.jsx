@@ -1,3 +1,4 @@
+// Wishlist: priority helpers, form fields, Manga Passion timeline and the shelf chip and badge.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

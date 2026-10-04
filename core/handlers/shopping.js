@@ -25,7 +25,7 @@ function shoppingList(ctx, { query }) {
             ${volumeOrderSql('v')}
     `).all();
 
-    // ?include_others=1: Bände, die andere besitzen und der Aufrufer noch nicht, in Reihen, die er schon sammelt
+    // ?include_others=1: volumes others own and the caller does not yet, in series the caller already collects
     if (qstr(query.include_others) === '1') {
         const others = ctx.db.prepare(`
             SELECT
@@ -35,7 +35,7 @@ function shoppingList(ctx, { query }) {
                 m.title as manga_title,
                 m.cover_image as manga_cover,
                 COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher,
-                (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id) as owned_by_others
+                (SELECT GROUP_CONCAT(username, ', ') FROM (SELECT u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id ORDER BY vo.created_at, vo.rowid)) as owned_by_others
             FROM volumes v
             JOIN mangas m ON v.manga_id = m.id
             WHERE v.status = 'Vorhanden'

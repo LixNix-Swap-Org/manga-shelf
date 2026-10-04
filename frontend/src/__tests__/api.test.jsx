@@ -1,3 +1,4 @@
+// Covers the API client: requests, timeouts, errors, server switching, uploads and downloads.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, render, screen, act } from '@testing-library/react';
 import api, {

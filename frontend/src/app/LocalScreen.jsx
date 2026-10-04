@@ -13,9 +13,8 @@ const BackupExportModal = lazy(() => import('../components/modals/BackupExportMo
 const ICONS = { push: CloudUpload, merge: GitMerge, pull: CloudDownload };
 
 /**
- * The device screen of the standalone mode (route /server while the local mode is on): profile, "Quellen & Schlüssel",
- * "Sicherung", the three takeover dialogs and "Modus wechseln". onOpen() opens the collection again (after "Abmelden"),
- * onReplaced() reloads it after a restore, onTakeover(action) and onLeave() switch the mode.
+ * Device screen of the standalone mode (route /server while local): profile, keys, backup, takeover dialogs, mode switch.
+ * onOpen() reopens the collection after sign-out, onReplaced() reloads it after a restore.
  */
 export default function LocalScreen({ user, notice, onOpen, onReplaced, onTakeover, onLeave, onSwitchProfile }) {
   useDocumentTitle('Auf diesem Gerät');
@@ -107,7 +106,7 @@ export default function LocalScreen({ user, notice, onOpen, onReplaced, onTakeov
             <span className="inline-flex items-center gap-2"><KeyRound className="w-4 h-4 text-brand-400" aria-hidden="true" /> Quellen &amp; Schlüssel</span>
             {sourcesOpen ? <ChevronDown className="w-4 h-4" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" aria-hidden="true" />}
           </button>
-          {sourcesOpen && (user ? <SourcesPanel /> : <p className="text-xs text-slate-400">Erst die Sammlung öffnen.</p>)}
+          {sourcesOpen && (user ? <SourcesPanel headingLevel={2} /> : <p className="text-xs text-slate-400">Erst die Sammlung öffnen.</p>)}
         </section>
 
         <section className="glass-panel rounded-2xl p-4 border border-slate-700/70 space-y-2" aria-label="Sicherung und Server">

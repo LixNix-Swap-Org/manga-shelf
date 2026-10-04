@@ -1,8 +1,6 @@
 /**
- * Removes metadata (camera data, GPS position, comments, XMP) from uploaded images in pure JS, without re-encoding.
- * JPEG keeps JFIF, the ICC profile and Adobe APP14 (colour transform), plus the EXIF orientation as a minimal EXIF
- * block; PNG drops eXIf/tEXt/iTXt/zTXt; WebP drops EXIF/XMP. Anything it cannot parse, and files with more than
- * MAX_SEGMENTS segments or chunks, are returned unchanged.
+ * Strips metadata (camera data, GPS, comments, XMP) from uploaded JPEG/PNG/WebP in pure JS, without re-encoding;
+ * JPEG keeps ICC, Adobe APP14 and the EXIF orientation. Unparseable files and ones over MAX_SEGMENTS come back unchanged.
  */
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

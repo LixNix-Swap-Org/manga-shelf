@@ -1,3 +1,4 @@
+// useOfflineStatus: offline copy metadata, sync trigger and the synced event.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 

@@ -1,3 +1,4 @@
+// Covers the collection statistics tiles and their interactions.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CollectionStats from '../components/dashboard/CollectionStats';
@@ -46,5 +47,23 @@ describe('CollectionStats', () => {
     fireEvent.click(button);
     expect(handleOpenStats).not.toHaveBeenCalled();
     expect(screen.getByText('7,00 €')).toBeTruthy();
+  });
+
+  it('labels wrap instead of truncating, the details hint only shows from xl and the icon tiles leave the narrow columns', () => {
+    render(<CollectionStats totalSeries={1} totalOwnedVolumes={1} totalCollectionValue={6488.5} completedSeries={0} handleOpenStats={vi.fn()} />);
+    for (const label of ['Reihen', 'Bände im Besitz', 'Sammlungswert', 'Komplett']) {
+      const el = screen.getByText(label);
+      expect(el.className).not.toMatch(/(^|\s)truncate(\s|$)/);
+      expect(el.className).toContain('break-words');
+      expect(el.className).toContain('hyphens-auto');
+    }
+    const hint = screen.getByText('Details ↗');
+    expect(hint.className).toContain('hidden xl:inline');
+    expect(hint.className).toContain('shrink-0');
+    expect(screen.getByText('Sammlungswert').className).toContain('min-w-0');
+    const tiles = document.querySelectorAll('section > * > div:first-child');
+    expect(tiles).toHaveLength(4);
+    for (const tile of tiles) expect(tile.className).toContain('md:hidden xl:flex');
+    expect(screen.getByText('6.488,50 €').className).toContain('whitespace-nowrap');
   });
 });

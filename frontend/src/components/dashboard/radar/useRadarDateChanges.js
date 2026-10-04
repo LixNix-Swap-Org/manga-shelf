@@ -4,9 +4,8 @@ import { apiFetch, readJson, TIMEOUTS } from '../../../utils/api';
 import { notify, notifyResponseError } from '../../../utils/notify';
 
 /**
- * Pre-orders whose Manga-Passion date changed. Loaded once per radar visit, the first time `enabled` is true
- * (the server walks several calendar months, so sub-tab switches must not repeat it); `invalidate()` reloads it
- * the next time it is enabled.
+ * Pre-orders whose Manga-Passion date changed; loaded once per radar visit (the server walks several months).
+ * `invalidate()` reloads it the next time `enabled` is true.
  */
 export default function useRadarDateChanges({ enabled, onApplied }) {
   const [changes, setChanges] = useState([]);

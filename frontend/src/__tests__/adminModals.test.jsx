@@ -1,3 +1,4 @@
+// Covers the admin modals: users, backups, sessions and offline-data clearing.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 
@@ -13,6 +14,8 @@ import UserManagementModal from '../components/modals/UserManagementModal';
 import { getToken, setActiveBase, setToken } from '../app/connection';
 import { formatDay } from '../utils/format';
 import { recordToasts } from './toastLog';
+import fs from 'node:fs';
+import path from 'node:path';
 
 let toasts;
 beforeEach(() => { toasts = recordToasts(); });
@@ -292,6 +295,18 @@ describe('UserManagementModal', () => {
     expect(await screen.findByText('Registrierte Benutzer (2)', { exact: false })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Gast (Nur Lesezugriff)' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Besucher/);
+  });
+
+  it('the own-password hint names the lock control and tab that exist in the header and the account dialog', async () => {
+    mockFetch({ 'GET /api/users': () => json(200, USERS) });
+    renderUsers();
+    await screen.findByText('Registrierte Benutzer (2)', { exact: false });
+    const hint = screen.getByText(/Dein eigenes Passwort/).textContent;
+    expect(hint).not.toMatch(/„Passwort ändern“/);
+    const [, control, tab] = hint.match(/„([^“]+)“, Reiter „([^“]+)“/);
+    const read = (file) => fs.readFileSync(path.resolve(import.meta.dirname, file), 'utf8');
+    expect(read('../components/dashboard/DashboardHeader.jsx')).toContain(`'${control}'`);
+    expect(read('../components/modals/AccountModal.jsx')).toContain(`label: '${tab}'`);
   });
 
   it('create: validation errors go to an alert region and replace an older success banner', async () => {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BookOpen, Clock, Plus, Tv } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import { ownerColor } from '../detail/OwnerBadges';
+import { langFor } from '../common/lang';
 import {
   PROGRESS_STATUSES, displayTitle, formatYearLine, progressText, progressPercent, plusOneDisabled, countdownText, staleText,
   initials, sourceBadges
@@ -14,6 +15,8 @@ const COVER_FALLBACK = (
     <span className="text-xs text-slate-400">Kein Cover</span>
   </div>
 );
+
+const ANIME_TITLE_CLASS = 'line-clamp-2 break-words hyphens-auto [overflow-wrap:anywhere]';
 
 /**
  * One anime in the grid: cover, title, my progress (bar, +1, status), next episode and who else watches it. Clicking
@@ -53,8 +56,10 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
 
       <div className="p-3 flex flex-col gap-2 flex-1 min-w-0">
         <div className="min-w-0">
-          <h3 id={titleId} className="text-sm font-bold text-white leading-snug line-clamp-2">
-            <button type="button" onClick={() => onOpen(anime)} className="text-left hover:text-brand-300">{title}</button>
+          <h3 id={titleId} lang={langFor(title) || 'de'} className="text-sm font-bold text-white leading-snug">
+            <button type="button" onClick={() => onOpen(anime)} className="block max-w-full text-left hover:text-brand-300">
+              <span className={ANIME_TITLE_CLASS}>{title}</span>
+            </button>
           </h3>
           <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 min-w-0">
             <span className="truncate">{formatYearLine(anime) || '–'}</span>
@@ -68,8 +73,8 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
 
         <div>
           <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
-            <span>{mine ? mine.status : 'Nicht auf meiner Liste'}</span>
-            <span className="font-mono" aria-label={`${watched} von ${anime.episodes > 0 ? anime.episodes : 'unbekannt vielen'} Folgen gesehen`}>
+            <span className="min-w-0">{mine ? mine.status : 'Nicht auf meiner Liste'}</span>
+            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={`${watched} von ${anime.episodes > 0 ? anime.episodes : 'unbekannt vielen'} Folgen gesehen`}>
               {progressText(watched, anime.episodes)}
             </span>
           </div>

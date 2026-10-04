@@ -1,3 +1,4 @@
+// Image upload endpoints: type, magic byte and size checks and EXIF handling.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

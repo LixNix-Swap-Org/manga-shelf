@@ -4,7 +4,7 @@ import { fmtEuro, countLabel, monthLabel, monthShort } from './statsFormat';
 const hasPurchases = (m) => Boolean(m && (m.total > 0 || m.volumes > 0));
 const monthSummary = (m, sep = ' · ') => `${monthLabel(m.month)}: ${fmtEuro(m.total)}${sep}${countLabel(m.volumes, 'Band', 'Bände')}`;
 
-/** Ausgaben nach Kaufdatum: letzte 12 Monate als Balken, Jahressummen, Bände nur mit Kaufjahr und ohne Kaufdatum. */
+/** Spending by purchase date: last 12 months as bars, yearly totals, volumes with a purchase year only and without a purchase date. */
 export default function SpendingCard({ spending }) {
   const [selectedMonth, setSelectedMonth] = useState(null);
   if (!spending) return null;

@@ -1,3 +1,4 @@
+// Finds and deletes files in uploads/ that no database row (or retained undo snapshot) references any more.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -51,10 +52,8 @@ function lowerBound(sorted, value) {
 }
 
 /**
- * A file counts as used when its name appears anywhere in those values (plain substring semantics). A name made of
- * [A-Za-z0-9._-] can only occur inside one such token, ending where the token has the same image extension, so it is
- * answered from the token set or a sorted list of reversed token prefixes that end in an image extension (binary
- * search for the reversed name as a prefix). Other names fall back to the substring search over all values.
+ * A file counts as used when its name appears anywhere in the values (substring semantics). Plain image names use
+ * a token set or binary search over reversed prefixes; any other name falls back to a substring search.
  */
 function buildReferenceIndex(conn = db) {
     const values = referenceValues(conn);
@@ -129,9 +128,8 @@ function listFromSnapshot(zipName) {
 }
 
 /**
- * Upload names that retained undo snapshots (pre-restore, pre-update) still reference: restoring one must find its
- * covers. Snapshots written before the list existed get it computed once and stored in their sidecar.
- * `missing` names snapshots whose list could not be determined.
+ * Upload names that retained undo snapshots still reference, so a restore finds its covers. Older snapshots get
+ * the list computed once into their sidecar; `missing` names snapshots whose list could not be determined.
  */
 function undoSnapshotReferences() {
     const names = new Set();
@@ -162,10 +160,8 @@ function undoSnapshotReferences() {
 }
 
 /**
- * Deletes files in uploads/ that no series or volume references any more (left behind by deleted entries and
- * replaced covers). Files younger than 7 days stay: an upload happens before the form is saved. Files a retained
- * undo snapshot references stay too; when such a snapshot's list cannot be read, nothing is deleted.
- * With dryRun the files are only counted. Returns { removed, bytes, files, skipped }.
+ * Deletes uploads/ files no series or volume references. Files under 7 days stay (upload precedes form save), as
+ * do files of retained undo snapshots; an unreadable snapshot list deletes nothing. Returns { removed, bytes, files, skipped }.
  */
 function cleanOrphanUploads({ dryRun = false, minAgeMs = MIN_AGE_MS } = {}) {
     const result = { removed: 0, bytes: 0, files: [], skipped: false };

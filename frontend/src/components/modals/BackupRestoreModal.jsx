@@ -33,6 +33,30 @@ const TABS = [
   { key: 'csv', Icon: FileSpreadsheet, label: 'CSV' }
 ];
 
+const PASSWORD_RESET_LINE = /Passwort-Reset/;
+const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+/** The confirmation lines about accounts the backup holds without a password (`accounts_without_password`). */
+export function withPasswordWarnings(inspection) {
+  const names = (Array.isArray(inspection.accounts_without_password) ? inspection.accounts_without_password : [])
+    .filter((n) => typeof n === 'string' && n);
+  if (!names.length) return inspection;
+  const warnings = Array.isArray(inspection.warnings) ? [...inspection.warnings] : [];
+  if (!warnings.some((w) => PASSWORD_RESET_LINE.test(w))) {
+    warnings.push(names.length === 1
+      ? `1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${names[0]}.`
+      : `${names.length} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${names.join(', ')}.`);
+  }
+  const me = inspection.current_user?.username;
+  const users = Number(inspection.counts?.users);
+  if (inspection.relogin && Number.isFinite(users) && names.length >= users) {
+    warnings.push('Danach kann sich niemand anmelden: ein neues Passwort setzt dann nur der Konsolenbefehl „passwort-reset <name>“ auf dem Server.');
+  } else if (!inspection.relogin && me && names.some((n) => sameName(n, me))) {
+    warnings.push(`Auch dein Konto „${me}“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.`);
+  }
+  return { ...inspection, warnings };
+}
+
 const discardStaging = (stagingId) => {
   apiFetch(`/api/backup/restore/${encodeURIComponent(stagingId)}`, { method: 'DELETE' }).catch(() => {});
 };
@@ -119,7 +143,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       setCsvImporting(false);
       fetchServerBackups();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Öffnen
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open
   }, [isOpen]);
 
   // The dialog is mounted only while open, so unmounting is the close: a late inspect answer must be discarded.
@@ -216,7 +240,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       if (res.ok && data.staging_id) {
         stagingRef.current = data.staging_id;
         setAllowNewer(false);
-        setInspection(data);
+        setInspection(withPasswordWarnings(data));
       } else {
         setRestoreError(httpErrorMessage(res.status, data, 'Backup konnte nicht geprüft werden', INSPECT_HTTP));
         if (res.status === 404 && source.filename) fetchServerBackups();
@@ -340,27 +364,27 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       aria-label="Backup und Wiederherstellung"
       data-busy={closeBlocked ? 'true' : undefined}
       tabIndex={-1}
-      className="outline-none fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto"
+      className="outline-none dialog-overlay bg-black/80 backdrop-blur-sm z-50 animate-fade-in"
     >
-      <div className="glass-panel p-6 sm:p-7 rounded-3xl w-full max-w-2xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col border border-slate-700/80 shadow-2xl relative overflow-hidden">
+      <div className="dialog-box glass-panel p-6 sm:p-7 short:p-4 rounded-3xl max-w-2xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none flex flex-col border border-slate-700/80 shadow-2xl relative overflow-hidden">
         <button
           id="btn-close-restore-modal-x"
           type="button"
           onClick={() => !busy && onClose()}
           aria-label="Schließen"
-          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
+          className="absolute top-3 right-3 short:top-1.5 short:right-1.5 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
           disabled={busy}
         >
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
 
-        <div className="flex items-center gap-3 pb-4 border-b border-slate-800 shrink-0">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
+        <div className="flex items-center gap-3 pb-4 short:pb-2 pr-10 border-b border-slate-800 shrink-0">
+          <div className="w-10 h-10 short:hidden shrink-0 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
             <CloudUpload className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Backups & Snapshots</h2>
-            <p className="text-xs text-slate-400">Automatische Tagessicherungen und Snapshot-Wiederherstellung</p>
+            <p className="text-xs text-slate-400 short:hidden">Automatische Tagessicherungen und Snapshot-Wiederherstellung</p>
           </div>
         </div>
 

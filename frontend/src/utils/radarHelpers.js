@@ -34,9 +34,9 @@ export const mpCardActions = (status) => {
 /** Status chips of the personal radar; every radar item belongs to exactly one non-ALL chip. */
 export const RADAR_STATUS_CHIPS = [
   { id: 'ALL', label: 'Alle Status' },
-  { id: 'Vorbestellt', label: '📦 Vorbestellt' },
-  { id: 'Erscheint bald', label: '⏳ Erscheint bald' },
-  { id: 'Geplant', label: '🛒 Noch nicht bestellt' }
+  { id: 'Vorbestellt', label: 'Vorbestellt' },
+  { id: 'Erscheint bald', label: 'Erscheint bald' },
+  { id: 'Geplant', label: 'Noch nicht bestellt' }
 ];
 
 export const radarStatusChipOf = (status) => {
@@ -142,8 +142,10 @@ export const publisherOptions = (publishers, key, filter) => {
 };
 
 // the range GET /manga-passion/releases accepts
-export const RADAR_MIN_YEAR = 2000;
-export const RADAR_MAX_YEAR = 2100;
+// same window as the server (GET /manga-passion/releases answers 400 outside it)
+const THIS_YEAR = new Date().getFullYear();
+export const RADAR_MIN_YEAR = THIS_YEAR - 5;
+export const RADAR_MAX_YEAR = THIS_YEAR + 3;
 
 /** Year options around the current year, always including the selected one, without gaps. */
 export const buildYearOptions = (currentYear, selectedYear) => {

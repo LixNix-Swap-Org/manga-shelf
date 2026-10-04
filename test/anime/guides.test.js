@@ -1,3 +1,4 @@
+// Provider key guides: steps, links, error formatting and the guides handler.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { GUIDES, formatError, guideLines, fillTemplate, userProviders, instanceProviders, guidesHandler } = require('../../core/sources/guides');

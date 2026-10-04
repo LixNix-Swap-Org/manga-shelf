@@ -1,3 +1,4 @@
+// Covers the volume filter bar controls and their callbacks.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import VolumeFilterBar from '../components/detail/VolumeFilterBar';
@@ -46,8 +47,8 @@ describe('VolumeFilterBar', () => {
   it('status chips carry their counts, empty optional chips stay hidden', () => {
     render(<VolumeFilterBar {...props()} />);
     expect(screen.getByRole('button', { name: 'Alle (6)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '✓ Im Besitz (3)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '✕ Fehlt noch (1)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Im Besitz (3)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fehlt noch (1)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Ungelesen \/ SuB \(1\)/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Vorbestellt/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Erscheint bald/ })).toBeNull();
@@ -57,20 +58,20 @@ describe('VolumeFilterBar', () => {
 
   it('visible gaps are added to the missing chip and the toggle shows their number', () => {
     render(<VolumeFilterBar {...props({ detectedGaps: ['4', '5'], showGaps: true, preorderedCount: 2 })} />);
-    expect(screen.getByRole('button', { name: '✕ Fehlt noch (1 + 2 Lücken)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fehlt noch (1 + 2 Lücken)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Lücken: 2 fehlend\s*AN/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '📦 Vorbestellt (2)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Vorbestellt (2)' })).toBeTruthy();
   });
 
   it('chips call their setters', () => {
     const p = props({ schuberCount: 1, specialEditionCount: 2, hasActiveFilters: true });
     render(<VolumeFilterBar {...p} />);
-    fireEvent.click(screen.getByRole('button', { name: '✓ Im Besitz (3)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Im Besitz (3)' }));
     expect(p.setVolumeFilter).toHaveBeenCalledWith('Vorhanden');
 
     expect(screen.getByRole('button', { name: 'Nur Bände (5)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '✨ Special Editions (2)' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '📦 Nur Schuber (1)' }));
+    expect(screen.getByRole('button', { name: 'Special Editions (2)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nur Schuber (1)' }));
     expect(p.setVolumeTypeFilter).toHaveBeenCalledWith('schuber');
 
     fireEvent.click(screen.getByRole('button', { name: /Filter zurücksetzen/ }));
@@ -84,7 +85,7 @@ describe('VolumeFilterBar', () => {
     const p = props({ volumeTypeFilter: 'schuber', hasActiveFilters: true });
     render(<VolumeFilterBar {...p} />);
     expect(screen.getByText('Typ:')).toBeTruthy();
-    const active = screen.getByRole('button', { name: '📦 Nur Schuber (0)' });
+    const active = screen.getByRole('button', { name: 'Nur Schuber (0)' });
     expect(active.getAttribute('aria-pressed')).toBe('true');
     expect(screen.queryByRole('button', { name: /Special Editions/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Alle (6)', pressed: false }));
@@ -109,7 +110,7 @@ describe('VolumeFilterBar', () => {
 
   it('adds gaps to the missing chip only when the filters let ghosts show', () => {
     render(<VolumeFilterBar {...props({ detectedGaps: ['4'], showGaps: true, gapsAllowedByFilters: false })} />);
-    expect(screen.getByRole('button', { name: '✕ Fehlt noch (1)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fehlt noch (1)' })).toBeTruthy();
   });
 
   it('pill says why there is no edition', () => {

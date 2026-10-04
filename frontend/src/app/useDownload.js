@@ -5,10 +5,8 @@ import {
 } from './downloadManager';
 
 /**
- * Token-carrying download of `path` (or of the path passed to `start`) for the app build (app/downloadManager.js):
- * `progress` is null or { loaded, total }; `start(path, { filename })` resolves to true when the file was saved. The
- * download outlives the component.
- * In the browser build a plain <a href download> stays the better choice; `needed` tells the two apart.
+ * Token-carrying download for the app build (outlives the component): `progress` is null or { loaded, total };
+ * `start(path, { filename })` resolves to true once saved. The browser build keeps a plain <a download>; see `needed`.
  */
 export default function useDownload(path) {
   // without a `path` the hook follows the path it last started

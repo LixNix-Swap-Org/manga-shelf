@@ -11,7 +11,7 @@ export { seriesSummary } from './MangaCard';
 
 // Visible on touch screens; on hover-capable screens only on hover or keyboard focus, and never clickable while hidden.
 export const GRID_DELETE_BUTTON_CLASS =
-  'absolute top-11 left-4 z-10 bg-red-950/90 hover:bg-red-900 text-red-300 p-1.5 rounded-lg border border-red-700/50 transition-all shadow-lg hover:scale-105 ' +
+  'hit-44 absolute top-9 left-2 z-10 bg-red-950/90 hover:bg-red-900 text-red-300 p-1.5 rounded-lg border border-red-700/50 transition-all shadow-lg hover:scale-105 ' +
   '[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto ' +
   'group-focus-within:opacity-100 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400';
 
@@ -21,16 +21,18 @@ const GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-
 /** "Wunsch" on the card of a wished series (no volume owned, so the read badge never takes this corner). */
 function WishBadge({ manga }) {
   return (
-    <span className="absolute top-11 right-4 z-10 pointer-events-none rounded-md bg-slate-950/90" title={wishLabel(manga)}>
+    <span className="absolute top-9 right-2 z-10 pointer-events-none rounded-md bg-slate-950/90" title={wishLabel(manga)}>
       <span className={`block text-[10px] font-bold px-1.5 py-0.5 rounded-md border shadow-sm ${priorityBadgeClass(manga.wish_priority)}`}>
         Wunsch<span className="sr-only">: {wishLabel(manga)}</span>
       </span>
     </span>
   );
 }
-// content-visibility skips layout and paint of off-screen cards; the padding keeps the hover lift inside the paint clip
+// the card frame (author buttons inside it, next to the link); content-visibility skips layout and paint of
+// off-screen cards
 export const CARD_WRAPPER_CLASS =
-  'group relative flex flex-col -m-2 p-2 [content-visibility:auto] [contain-intrinsic-block-size:auto_360px]';
+  'group relative flex flex-col glass-card rounded-2xl border border-slate-800 hover:shadow-2xl hover:shadow-brand-500/10 hover:-translate-y-1.5 ' +
+  '[content-visibility:auto] [contain-intrinsic-block-size:auto_360px]';
 
 export const PAGE_SIZE = { grid: 60, list: 100 };
 export const SHELF_COUNT_KEY = 'mangashelf_shelf_count';
@@ -162,9 +164,8 @@ function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleO
 }
 
 /**
- * Loading / empty state / grid / list of the shelf. Memoised with memoised cards: pass stable callbacks so a Dashboard
- * state change (dialog, toast) does not re-render the cards. Long lists render in pages (Zeige N von M); the page count
- * per search/filter/sort and the scroll position survive a visit to a series (sessionStorage).
+ * Loading / empty / grid / list states of the shelf; memoised, so pass stable callbacks. Long lists render in pages;
+ * page count and scroll position survive a visit to a series (sessionStorage).
  */
 function MangaCollectionGrid({
   canEdit,
@@ -298,7 +299,7 @@ function MangaCollectionGrid({
                   <th scope="col" className="py-3 px-4">Titel & Autor</th>
                   <th scope="col" className="py-3 px-4 hidden sm:table-cell">Verlag</th>
                   <th scope="col" className="py-3 px-4">Status</th>
-                  <th scope="col" className="py-3 px-4">Bände / Fortschritt</th>
+                  <th scope="col" className="py-3 px-4 whitespace-nowrap">Bände / Fortschritt</th>
                   <th scope="col" className="py-3 px-4 text-right hidden md:table-cell">Wert</th>
                   <th scope="col" className="py-3 px-4 text-right w-24">Aktion</th>
                 </tr>

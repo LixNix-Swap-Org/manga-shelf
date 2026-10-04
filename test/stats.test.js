@@ -1,3 +1,4 @@
+// GET /stats: summary, spending buckets and completed series counts.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -77,6 +78,25 @@ test('spending: year-only purchase dates count in by_year, not in by_month or wi
     const owned = (await getStats()).summary.total_owned_volumes;
     const byYearCount = sp.by_year.reduce((n, r) => n + r.volumes, 0);
     assert.equal(byYearCount + sp.without_date.volumes, owned, 'every owned volume is in exactly one bucket');
+});
+
+test('spending: one pass over the volumes gives the same buckets as separate filters', async () => {
+    const { buildSpending } = require('../core/handlers/stats');
+    const statements = [];
+    const counting = { db: { prepare: (sql) => { statements.push(sql); return db.prepare(sql); } } };
+    const now = new Date();
+    const sp = buildSpending(counting, now);
+    assert.equal(statements.length, 1, 'a single statement');
+    assert.equal((statements[0].match(/FROM volumes/g) || []).length, 1, 'one scan of volumes');
+    const owned = db.prepare("SELECT count(*) AS n, sum(COALESCE(price, 0)) AS t FROM volumes WHERE status = 'Vorhanden'").get();
+    const years = sp.by_year.reduce((a, r) => ({ n: a.n + r.volumes, t: a.t + r.total }), { n: 0, t: 0 });
+    assert.equal(years.n + sp.without_date.volumes, owned.n);
+    assert.equal(Math.round((years.t + sp.without_date.total) * 100), Math.round(owned.t * 100));
+    const yearOnly = db.prepare(`SELECT count(*) AS n FROM volumes WHERE status = 'Vorhanden' AND TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]*'
+        AND SUBSTR(TRIM(purchase_date), 1, 4) >= '1900' AND NOT TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`).get().n;
+    assert.equal(sp.year_only.volumes, yearOnly);
+    assert.deepEqual(sp.by_year.map(r => r.year), [...sp.by_year.map(r => r.year)].sort((a, b) => a - b));
+    assert.equal(sp.by_month.length, 12);
 });
 
 test('spending: a full YYYY-MM date inside the last 12 months still lands in by_month', async () => {
@@ -181,19 +201,17 @@ test('avg_price_per_volume ignores volumes without a price but keeps a price of 
     assert.equal(s.avg_price_per_volume, 20);
 });
 
-test('PUT /stats/settings rejects missing, empty, non-string, pre-1900 and future dates', async () => {
+test('PUT /stats/settings rejects missing, non-string, pre-1900 and future dates', async () => {
     assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
     const bad = [
         {},
-        { collection_start_date: '' },
-        { collection_start_date: '   ' },
         { collection_start_date: 0 },
         { collection_start_date: ['2020-01-01'] },
         { collection_start_date: { toString: 1 } },
         { collection_start_date: '0000-01-01' },
         { collection_start_date: '1899-12-31' },
         { collection_start_date: '2023-02-30' },
-        { collection_start_date: '', start_date: '2020-01-01' }
+        { start_date: false }
     ];
     for (const body of bad) {
         assert.equal((await admin('PUT', '/stats/settings', body)).status, 400, JSON.stringify(body));
@@ -209,12 +227,70 @@ test('PUT /stats/settings rejects missing, empty, non-string, pre-1900 and futur
     assert.equal((await getStats()).summary.collection_start_date, '1900-01-01');
 });
 
-test('a stored start date that is invalid or before 1900 falls back to the default', async () => {
+test('PUT /stats/settings with null or an empty date removes the setting: the start is derived again', async () => {
+    const { derivedStartDate } = require('../core/handlers/stats');
+    const stored = () => db.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get()?.value ?? null;
+    for (const body of [{ collection_start_date: null }, { collection_start_date: '' }, { start_date: '   ' }, { collection_start_date: null, start_date: '2020-01-01' }]) {
+        assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
+        assert.equal(stored(), '2022-01-05');
+        const res = await admin('PUT', '/stats/settings', body);
+        assert.deepEqual([res.status, res.body.success], [200, true], JSON.stringify(body));
+        assert.equal(stored(), null, JSON.stringify(body));
+        assert.equal((await getStats()).summary.collection_start_date, derivedStartDate({ db }, new Date()));
+    }
+    assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
+});
+
+test('a stored start date that is invalid or before 1900 falls back to the derived date', async () => {
     db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('collection_start_date', '0000-01-01')").run();
     const s = (await getStats()).summary;
-    assert.equal(s.collection_start_date, '2021-04-09');
+    const { derivedStartDate } = require('../core/handlers/stats');
+    assert.equal(s.collection_start_date, derivedStartDate({ db }, new Date()));
+    assert.notEqual(s.collection_start_date, '2021-04-09');
     assert.ok(s.collection_days < 365 * 200);
     assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
+});
+
+test('without a stored start date the collection starts at the earliest purchase or entry, never a fixed date', async () => {
+    const { derivedStartDate } = require('../core/handlers/stats');
+    const stored = db.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get();
+    const backup = db.prepare('SELECT id, purchase_date FROM volumes').all();
+    const at = (y, m, d) => new Date(y, m - 1, d, 12);
+    try {
+        db.prepare("DELETE FROM app_settings WHERE key = 'collection_start_date'").run();
+        db.prepare('UPDATE volumes SET purchase_date = NULL').run();
+        const added = db.prepare('SELECT MIN(d) AS d FROM (SELECT SUBSTR(MIN(created_at), 1, 10) AS d FROM volumes UNION ALL SELECT SUBSTR(MIN(created_at), 1, 10) FROM mangas)').get().d;
+        assert.equal((await getStats()).summary.collection_start_date, added, 'only entries: the first one counts');
+
+        const id = await newSeries('Startdatum Reihe');
+        const vol = await addVolume(id, '1', { price: 10 });
+        db.prepare("UPDATE volumes SET purchase_date = '2019' WHERE id = ?").run(vol);
+        assert.equal(derivedStartDate({ db }, at(2026, 10, 4)), '2019-01-01', 'a year starts on January 1st');
+        db.prepare("UPDATE volumes SET purchase_date = '2018-06' WHERE id = ?").run(vol);
+        assert.equal(derivedStartDate({ db }, at(2026, 10, 4)), '2018-06-01');
+        db.prepare("UPDATE volumes SET purchase_date = ' 2017-03-15 ' WHERE id = ?").run(vol);
+        const s = (await getStats()).summary;
+        assert.equal(s.collection_start_date, '2017-03-15');
+        assert.ok(s.collection_days > 365 * 8);
+        db.prepare("UPDATE volumes SET purchase_date = '1850-01-01' WHERE id = ?").run(vol);
+        assert.notEqual(derivedStartDate({ db }, at(2026, 10, 4)), '1850-01-01', 'dates before 1900 are ignored');
+
+        const empty = { db: { prepare: () => ({ get: () => ({ purchased: null, volume_added: null, series_added: null }) }) } };
+        assert.equal(derivedStartDate(empty, at(2026, 10, 4)), '2026-10-04', 'nothing collected yet: today');
+        const future = { db: { prepare: () => ({ get: () => ({ purchased: '2030-01-01', volume_added: null, series_added: null }) }) } };
+        assert.equal(derivedStartDate(future, at(2026, 10, 4)), '2026-10-04', 'never after today');
+    } finally {
+        for (const row of backup) db.prepare('UPDATE volumes SET purchase_date = ? WHERE id = ?').run(row.purchase_date, row.id);
+        if (stored) db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('collection_start_date', ?)").run(stored.value);
+    }
+});
+
+test('a fresh database stores no start date', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const conn = new DatabaseSync(':memory:');
+    require('../core/schema').applySchema(conn);
+    assert.equal(conn.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get(), undefined);
+    conn.close();
 });
 
 test('completed_series reads number_sort: "Band 2" is volume 2, half volumes and duplicates do not count', async () => {

@@ -1,3 +1,4 @@
+// api_cache: TTL, stale reads, pruning and use by the gateway.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const cache = require('../../core/anime/cache');

@@ -5,6 +5,7 @@
 export const PREFETCH_MANGAS = 'GET /api/mangas';
 export const LIST_KEY = 'mangas';
 export const detailKey = (id) => `manga:${id}`;
+export const VOLUME_SEARCH_KEY = 'volume-search';
 export const cacheOwner = (user) => user?.id ?? user?.username ?? null;
 
 const MAX_ENTRIES = 60;
@@ -41,6 +42,17 @@ export function dropCache(owner, key) {
 export function clearDataCache() {
   entries.clear();
   prefetches.clear();
+}
+
+/** id -> volume_search text from GET /api/mangas/volume-search rows or rows of the offline copy (empty values dropped). */
+export function volumeSearchMap(rows) {
+  const map = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row && row.id !== null && row.id !== undefined && typeof row.volume_search === 'string' && row.volume_search) {
+      map.set(String(row.id), row.volume_search);
+    }
+  }
+  return map;
 }
 
 /** Request headers that let the server answer 304 for the copy. */

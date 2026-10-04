@@ -1,3 +1,5 @@
+// Backups (snapshots with retention and restore test), startup cleanup and the timers for daily jobs: backup,
+// trash purge, metadata stripping and anime refresh. Snapshots are ZIPs in data/backups with a JSON sidecar.
 const fs = require('fs');
 const path = require('path');
 const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb } = require('../db');
@@ -130,9 +132,8 @@ function lastVerifiedSnapshot() {
 }
 
 /**
- * Which snapshots of one category to delete: the newest `keep` good ones stay (verified or from before
- * verification existed). A failed one is only kept while it is the newest snapshot, so hourly retries of a
- * failing daily run cannot pile up or push out good snapshots.
+ * Which snapshots of one category to delete: the newest `keep` good ones stay. A failed one is kept only while it is
+ * the newest, so hourly retries of a failing daily run cannot push out good snapshots.
  */
 function selectForPruning(entries, keep) {
     const sorted = [...entries].sort((a, b) => b.time - a.time || (a.filename < b.filename ? 1 : -1));
@@ -189,10 +190,8 @@ function sqlString(value) {
 }
 
 /**
- * Writes a consistent copy of the live database to a temp file (VACUUM INTO) and returns its path.
- * Zipping manga.db directly could read it while a write is in progress. The caller deletes the file afterwards.
- * A jwt_secret row that older versions kept in app_settings is removed from the copy (secure_delete overwrites the
- * freed bytes): whoever holds a backup must not be able to sign tokens. The live secret is a file outside the database.
+ * Writes a consistent copy of the live database to a temp file (VACUUM INTO) and returns its path; the caller deletes it.
+ * A legacy jwt_secret row in app_settings is removed from the copy (secure_delete), so a backup cannot sign tokens.
  */
 function copyDatabaseToTemp() {
     fs.mkdirSync(tempDir, { recursive: true });
@@ -263,10 +262,7 @@ function uploadNamesOf(dbFile) {
 
 /**
  * Creates a ZIP snapshot of manga.db (and uploads/ unless `includeUploads` is false) with a manifest.json.
- * The archive is written as `<name>.zip.part`, restore-tested (verifyArchive) and only then renamed, after the
- * sidecar `<name>.json` with the result; a running or failed write is never listed, restored or counted.
- * A snapshot that fails its test is kept but marked (verified: false) and never counts as today's daily one.
- * Resolves to { filename, size, created_at, category, verified, verify_error, manifest }.
+ * Written as `<name>.zip.part`, restore-tested, then renamed after the sidecar; a failed test keeps verified: false.
  */
 async function createBackupSnapshot(prefix = 'manga-shelf-backup', { includeUploads = true } = {}) {
     fs.mkdirSync(backupsDir, { recursive: true });
@@ -364,11 +360,8 @@ function runDailyBackupIfDue(now = new Date(), schedule = backupSchedule()) {
 }
 
 /**
- * Removes what a crash or kill can leave behind: database copies, uploaded or staged restore ZIPs, restore and
- * inspection copies in data/temp, a staged restore database, a half-written safety copy (manga.db.bak.tmp),
- * half-written snapshots and sidecars, and sidecars whose snapshot is gone. Run it only at startup, before any
- * backup or restore can be in flight. manga.db.bak is kept on purpose: after a failed restore it can be the only
- * good copy.
+ * Removes what a crash can leave behind: database copies, staged restores, temp copies, half-written snapshots and
+ * orphan sidecars. Startup only. manga.db.bak stays: after a failed restore it can be the only good copy.
  */
 function sweepTempArtefacts() {
     const candidates = [];
@@ -421,9 +414,8 @@ const STRIP_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const STRIP_CHUNK = 20;
 
 /**
- * One-time pass over uploads stored before metadata stripping existed: removes EXIF/GPS and similar in place and
- * records completion in app_settings, so it never runs again. Yields to the event loop between chunks; `shouldStop`
- * ends it early without recording completion. Resolves to { done, files, stripped }.
+ * One-time pass over uploads stored before metadata stripping existed: removes EXIF/GPS in place and records
+ * completion in app_settings. Yields between chunks; `shouldStop` ends it early. Resolves { done, files, stripped }.
  */
 async function stripExistingUploadsOnce({ shouldStop = () => false } = {}) {
     const { stripImageFile } = require('../middleware/upload');
@@ -488,9 +480,8 @@ function runAnimeRefreshIfDue(now = new Date(), schedule = backupSchedule(), { s
 }
 
 /**
- * Starts the daily backup: a check 10 s after boot and then every hour creates a daily-auto snapshot once the
- * local time has reached BACKUP_HOUR and there is no verified one for the local day, so restarts cannot skip a
- * day and the time does not drift with the boot time. Returns a stop function that clears the timers.
+ * Starts the daily backup: a check 10 s after boot, then hourly, snapshots once BACKUP_HOUR has passed with no
+ * verified one for the local day (so restarts cannot skip a day). Returns a stop function that clears the timers.
  */
 function initScheduler() {
     sweepTempArtefacts();

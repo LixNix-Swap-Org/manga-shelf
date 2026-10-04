@@ -7,11 +7,13 @@ const MAX_BYTES = 4 * 1024 * 1024;
 
 class SourceError extends Error {
     /** kind: rate | auth | server | network | complexity | notfound | bad */
-    constructor(kind, message, { status = 0, retryAfterSec = null, resetAt = null } = {}) {
+    /** graphql: the answer carried GraphQL error messages (a refused-like answer, see gateway refusedLike). */
+    constructor(kind, message, { status = 0, retryAfterSec = null, resetAt = null, graphql = false } = {}) {
         super(message);
         this.name = 'SourceError';
         this.kind = kind;
         this.status = status;
+        this.graphql = graphql;
         this.retryAfterSec = retryAfterSec;
         this.resetAt = resetAt;
     }
@@ -101,7 +103,7 @@ async function requestJson(ctx, url, init = {}, { label, timeoutMs = DEFAULT_TIM
     if (res.status >= 400 || json === null) {
         const detail = graphqlErrors.map((e) => e && e.message).filter(Boolean).join('; ');
         throw new SourceError(res.status === 400 && graphqlErrors.some((e) => e && e.status === 404) ? 'notfound' : 'bad',
-            `${label}: ungültige Antwort (HTTP ${res.status}${detail ? `: ${detail}` : ''})`, { status: res.status });
+            `${label}: ungültige Antwort (HTTP ${res.status}${detail ? `: ${detail}` : ''})`, { status: res.status, graphql: Boolean(detail) });
     }
     return { status: res.status, headers: res.headers, rate, json };
 }

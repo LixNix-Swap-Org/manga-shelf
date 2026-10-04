@@ -1,3 +1,4 @@
+// JWT auth: sessions are cookie or bearer tokens bound to users.password_changed_at; the signing secret lives in a file.
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -82,9 +83,8 @@ function resolveJwtSecret() {
 const JWT_SECRET = resolveJwtSecret();
 
 /**
- * Hook for routes/backups.js after a restore has swapped the database (call it before signing the admin's new token).
- * Ends every session issued before the restore (the restored users table may hold another person under an id or a
- * username that a live token points at) and removes a signing secret that an old backup may still carry.
+ * Hook for routes/backups.js after a restore (call before signing the admin's new token): ends every older session,
+ * since the restored users table may hold another person under a live token's id, and drops a legacy signing secret.
  */
 function persistJwtSecret() {
     dropLegacySecret();
@@ -92,17 +92,15 @@ function persistJwtSecret() {
 }
 
 /**
- * `users.password_changed_at` doubles as the session version: every token carries the value it was issued against
- * (claim `pv`) and stops working once it changes. New values are strictly increasing, so two changes in the same
- * millisecond still differ.
+ * `users.password_changed_at` doubles as the session version: tokens carry it (claim `pv`) and stop working once it
+ * changes. New values are strictly increasing, so two changes in one millisecond still differ.
  */
 const sessionVersion = (user) => user.password_changed_at || 0;
 const NEXT_SESSION_VERSION = 'max(?, coalesce(password_changed_at, 0) + 1)';
 
 /**
- * Sets a new password hash (or only a new session version) and returns the new version, or null if no row matched.
- * With `expected` ({ username, passwordHash }) the write only happens while the row still belongs to that user and
- * still has that hash, so a restore or a parallel change during a bcrypt await cannot redirect it.
+ * Sets a new password hash (or only a new session version); returns the new version or null. With `expected`
+ * it writes only while the row still matches, so a restore during a bcrypt await cannot redirect it.
  */
 function bumpSessionVersion(userId, passwordHash, expected) {
     const sets = passwordHash === undefined ? '' : 'password_hash = ?, ';

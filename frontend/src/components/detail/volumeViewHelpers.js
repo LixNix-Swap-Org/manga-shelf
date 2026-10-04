@@ -6,9 +6,8 @@ export { formatEuro };
 const EDITION_NAME_WORDS = /collector'?s?\s*edition|limited\s*edition|limitierte?\s*edition|special\s*edition|spezial\s*edition|sonderausgabe|premium\s*edition|deluxe(\s*edition)?|variant(\s*cover)?/gi;
 
 /**
- * What the card, spine and list badges show for a volume. `type` is always inferVolumeType(vol), so badges agree
- * with the type chips, counts and progress; the edition label is only read for real special editions.
- * Returns { type, label, short, text }: label/short name the badge, text is the number or name shown next to it.
+ * Badge for card, spine and list. `type` is always inferVolumeType(vol), so badges agree with chips and counts.
+ * Returns { type, label, short, text }.
  */
 export function getVolumeBadge(vol) {
   const type = inferVolumeType(vol);

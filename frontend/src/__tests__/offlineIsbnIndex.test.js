@@ -1,3 +1,4 @@
+// Offline ISBN index follows changes made in the app.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { PURCHASE_RECORDED_EVENT } from '../appShell';

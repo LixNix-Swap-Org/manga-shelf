@@ -1,3 +1,4 @@
+// useMpGaps gap autofill: confirm text, request body and result handling.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import useMpGaps, { gapFillConfirmText, LONG_JOB_TIMEOUT_TEXT } from '../hooks/useMpGaps';

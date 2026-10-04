@@ -1,3 +1,4 @@
+// Graceful shutdown and the readiness report: tracked jobs finish before the database closes, with a hard deadline.
 const fs = require('fs');
 const log = require('../utils/logger').child('lifecycle');
 
@@ -32,9 +33,8 @@ function waitForJobs(ms) {
 const isShuttingDown = () => shutdownPromise !== null;
 
 /**
- * Idempotent shutdown: stops the timers and the console, stops accepting connections, waits up to `jobDeadlineMs`
- * for tracked jobs, then cuts the remaining connections (a stalled download) and closes the database. Every
- * further call returns the same promise. `parts`: { server, stopScheduler, closeConsole, closeDb }.
+ * Idempotent shutdown: stops timers and console, stops accepting connections, waits up to `jobDeadlineMs` for tracked
+ * jobs, cuts remaining connections, closes the database. `parts`: { server, stopScheduler, closeConsole, closeDb }.
  */
 function shutdown(parts = {}, { jobDeadlineMs = JOB_DEADLINE_MS } = {}) {
     if (shutdownPromise) return shutdownPromise;
@@ -88,10 +88,8 @@ function lastVerifiedBackup(lastVerifiedSnapshot, now) {
 }
 
 /**
- * Public readiness report without paths or counts. error (HTTP 503): database unreachable, data directory not
- * writable or shutting down. degraded (HTTP 200, no restart loop): little free space (< max(500 MB, 2 x last
- * verified snapshot)) or no verified backup for 48 h (once the server has run that long).
- * deps: { db, dataDir, freeBytes, lastVerifiedSnapshot, isRestoreRunning, now, uptimeMs }
+ * Public readiness report without paths or counts. error (503): database unreachable, data dir not writable or
+ * shutting down; degraded (200): low free space or no verified backup for 48 h. `deps` are injected for tests.
  */
 function healthReport(deps) {
     const now = deps.now ?? Date.now();

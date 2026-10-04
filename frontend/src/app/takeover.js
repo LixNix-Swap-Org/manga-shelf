@@ -1,9 +1,12 @@
-// The three ways between the standalone mode and a server (spec-standalone §4), all on the existing backup format:
+// The three ways between the standalone mode and a server, all on the existing backup format:
 // "Auf Server übertragen" (app ZIP -> inspect/restore on a fresh server), "Zusammenführen" (CSV -> dry run -> import)
 // and "Vom Server holen" (backup ZIP as admin, the offline snapshot otherwise). Requests go to the given server
 // address directly with the bearer token of a sign-in made here, never through the local transport.
 import { normalizeBase, isSecureEnough, INSECURE_URL_TEXT } from './serverStore.js';
-import { buildBackupZip, readBackupZip } from '../local/backupZip.js';
+import { buildBackupZip, readBackupZip, restorableUploadName } from '../local/backupZip.js';
+import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
+import imageCheck from '../../../core/lib/imageCheck.js';
+import owners from '../../../core/lib/owners.js';
 
 export class TakeoverError extends Error {
   constructor(message, { status = 0, code = null, data = null } = {}) {
@@ -136,30 +139,52 @@ function insertRow(conn, table, columns, row) {
     .run(...keys.map((k) => (row[k] === undefined ? null : row[k])));
 }
 
+// computed by buildMangaDetail or the triggers, never copied: owned_volumes is counted again by the volume inserts
+const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value']);
+const SKIP_VOLUME = new Set(['number_sort', 'owners', 'owned_by_me', 'read_users', 'read_by', 'is_read']);
+const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));
+const hasText = (v) => typeof v === 'string' && v.trim() !== '';
+
 /**
- * A database built from the offline snapshot of a non-admin: series and volumes as they are, ownership and reads of
- * the snapshot's user (the profile, same id and name). Other users' ownership is not part of it.
+ * Fills a database from a non-admin's offline snapshot: series, volumes, and the snapshot user's ownership, reads and
+ * profile. Other users' ownership is absent, so a volume only they own counts as missing.
  */
 export function fillFromSnapshot(conn, snapshot) {
   const me = snapshot.user;
   conn.prepare('DELETE FROM users').run();
-  conn.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, '!local-profile', 'admin')").run(me.id, me.username);
+  conn.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'admin')").run(me.id, me.username, LOCAL_PASSWORD_HASH);
   const mangaCols = columnsOf(conn, 'mangas');
   const volumeCols = columnsOf(conn, 'volumes');
-  const skipManga = new Set(['volumes', 'reader_stats', 'updated_by']);
+  const insertOwner = conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
+  const insertRead = conn.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
   for (const manga of Object.values(snapshot.details || {})) {
-    const row = Object.fromEntries(Object.entries(manga).filter(([k, v]) => !skipManga.has(k) && (v === null || typeof v !== 'object')));
-    insertRow(conn, 'mangas', mangaCols, row);
+    insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
     for (const v of manga.volumes || []) {
-      const vol = Object.fromEntries(Object.entries(v).filter(([k, val]) => k !== 'number_sort' && (val === null || typeof val !== 'object')));
-      if (Array.isArray(v.images)) vol.images = v.images.length ? JSON.stringify(v.images) : null;
+      const vol = scalars(v, SKIP_VOLUME);
+      // buildMangaDetail fills images from the cover (and the cover from the images): only real lists are stored
+      const images = Array.isArray(v.images) ? v.images : [];
+      const derived = images.length === 1 && images[0] === v.cover_image;
+      vol.images = images.length && !derived ? JSON.stringify(images) : null;
       insertRow(conn, 'volumes', volumeCols, vol);
       for (const o of v.owners || []) {
-        if (o.user_id === me.id) conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date) VALUES (?, ?, ?, ?)').run(v.id, me.id, o.price ?? null, o.purchase_date ?? null);
+        if (o.user_id !== me.id) continue;
+        insertOwner.run(v.id, me.id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, hasText(o.created_at) ? o.created_at : null);
       }
-      if ((v.read_by || []).includes(me.id)) conn.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(v.id, me.id);
+      if ((v.read_by || []).includes(me.id)) {
+        const read = (v.read_users || []).find((r) => (r.user_id ?? r.id) === me.id);
+        insertRead.run(v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
+      }
+      owners.syncStatusWithOwners(conn, v.id);
     }
   }
+}
+
+/** The name of a pulled upload under the server's restore rule (flat image file name), else null. */
+export function pulledUploadName(path) {
+  if (typeof path !== 'string' || !path.startsWith('/uploads/')) return null;
+  let name;
+  try { name = decodeURIComponent(path.slice('/uploads/'.length)); } catch (_) { return null; }
+  return restorableUploadName(name);
 }
 
 async function downloadUploads(session, paths, onProgress) {
@@ -169,9 +194,13 @@ async function downloadUploads(session, paths, onProgress) {
   const worker = async () => {
     while (queue.length) {
       const path = queue.shift();
+      const name = pulledUploadName(path);
       try {
-        const res = await call(session, path, { raw: true });
-        uploads.set(decodeURIComponent(path.slice('/uploads/'.length)), new Uint8Array(await res.arrayBuffer()));
+        if (name) {
+          const res = await call(session, path, { raw: true });
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          if (imageCheck.detectImageExt(bytes)) uploads.set(name, bytes);
+        }
       } catch (_) { /* a missing cover stays missing */ }
       onProgress?.(++done, paths.length);
     }
@@ -181,8 +210,8 @@ async function downloadUploads(session, paths, onProgress) {
 }
 
 /**
- * "Vom Server holen": as admin the full backup ZIP (with covers), otherwise the offline snapshot (covers loaded one by
- * one). Replaces the local collection; resolves with { kind: 'backup' | 'snapshot', profile, counts }.
+ * "Vom Server holen": admin gets the backup ZIP (replaceDatabase drops server secrets), others the snapshot plus covers.
+ * Replaces the local collection; resolves with { kind: 'backup' | 'snapshot', profile, counts }.
  */
 export async function pullFromServer(session, runtime, { onProgress } = {}) {
   if (session.user.role === 'admin') {

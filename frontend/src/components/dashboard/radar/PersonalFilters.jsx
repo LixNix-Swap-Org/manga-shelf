@@ -1,5 +1,7 @@
-import { ChevronDown, Search, X, BuildingComplex } from 'lucide-react';
+import { ChevronDown, Search, X, BuildingComplex, Package, Clock, ShoppingCart } from 'lucide-react';
 import { RADAR_STATUS_CHIPS, publisherOptions } from '../../../utils/radarHelpers';
+
+const CHIP_ICONS = { Vorbestellt: Package, 'Erscheint bald': Clock, Geplant: ShoppingCart };
 
 /** Search, status and publisher filters of the personal radar. */
 export default function PersonalFilters({
@@ -35,21 +37,25 @@ export default function PersonalFilters({
 
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Status-Filter" className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
-          {RADAR_STATUS_CHIPS.map(st => (
-            <button
-              type="button"
-              key={st.id}
-              aria-pressed={radarStatusFilter === st.id}
-              onClick={() => setRadarStatusFilter(st.id)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 ${
-                radarStatusFilter === st.id
-                  ? 'bg-sky-700 text-white shadow-sm font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {st.label}
-            </button>
-          ))}
+          {RADAR_STATUS_CHIPS.map(st => {
+            const Icon = CHIP_ICONS[st.id];
+            return (
+              <button
+                type="button"
+                key={st.id}
+                aria-pressed={radarStatusFilter === st.id}
+                onClick={() => setRadarStatusFilter(st.id)}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 ${
+                  radarStatusFilter === st.id
+                    ? 'bg-sky-700 text-white shadow-sm font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
+                {st.label}
+              </button>
+            );
+          })}
         </div>
 
         {(options.length > 0 || radarPublisherFilter !== 'ALL') && (

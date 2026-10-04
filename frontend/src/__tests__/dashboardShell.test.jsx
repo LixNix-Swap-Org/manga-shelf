@@ -1,18 +1,49 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+// Covers the dashboard shell layout, navigation and view switching.
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+
+const mode = vi.hoisted(() => ({ local: false, app: false, connection: null }));
+vi.mock('../utils/api', async (importOriginal) => {
+  const orig = await importOriginal();
+  return { ...orig, isLocalMode: () => mode.local, isAppMode: () => mode.app || orig.isAppMode() };
+});
+vi.mock('../app/useConnection', async (importOriginal) => {
+  const orig = await importOriginal();
+  return { ...orig, default: () => mode.connection || orig.default() };
+});
+const shelfHooks = vi.hoisted(() => ({}));
+vi.mock('../hooks/useMangaList', async (importOriginal) => ({ ...(await importOriginal()), default: () => shelfHooks.mangaList }));
+vi.mock('../hooks/useOfflineStatus', async (importOriginal) => ({ ...(await importOriginal()), default: () => shelfHooks.offline }));
+vi.mock('../hooks/useShoppingList', async (importOriginal) => ({ ...(await importOriginal()), default: () => shelfHooks.shopping }));
+vi.mock('../hooks/useReleaseRadar', async (importOriginal) => ({ ...(await importOriginal()), default: () => shelfHooks.radar }));
+vi.mock('../components/modals/AccountModal', () => ({
+  default: ({ isOpen, initialTab }) => (isOpen ? <div role="dialog" aria-label="Konto">Konto-Tab {initialTab}</div> : null)
+}));
+vi.mock('../components/modals/BackupExportModal', () => ({
+  default: ({ onClose, onReplaced }) => (
+    <div role="dialog" aria-label="Sicherung">
+      <button type="button" onClick={onClose}>Sicherung schließen</button>
+      <button type="button" onClick={() => onReplaced({ id: 1, username: 'Ich' })}>Eingespielt</button>
+    </div>
+  )
+}));
+afterEach(() => { mode.local = false; mode.app = false; mode.connection = null; });
 import fs from 'node:fs';
 import path from 'node:path';
 import {
   APP_VERSION, parseInitialView, viewSearch, nextQuickView, formatBadgeCount, roleLabel, scanDashboardAction,
   SCAN_FAILED_MESSAGE
 } from '../components/dashboard/dashboardShell';
-import DashboardHeader from '../components/dashboard/DashboardHeader';
+import DashboardHeader, { opensCollection } from '../components/dashboard/DashboardHeader';
 import DashboardFooter from '../components/dashboard/DashboardFooter';
 import MangaCollectionGrid, { visibleSections } from '../components/dashboard/MangaCollectionGrid';
 import CollectionToolbar from '../components/dashboard/CollectionToolbar';
 import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
 import { SORT_OPTIONS, getStatusBadge } from '../utils/collectionHelpers';
+import Dashboard from '../Dashboard';
+import { fakeResponse } from './fakeResponse';
+import { LOCAL_STORE_EVENT } from '../local/store';
 
 describe('view parameter', () => {
   it('maps ?view= to a main view or the statistics dialog', () => {
@@ -183,33 +214,136 @@ describe('DashboardHeader', () => {
     expect(document.getElementById('btn-open-csv')).toBeNull();
   });
 
-  it('the cart button opens the shopping list from the radar and goes back to the shelf from the shopping list', () => {
-    const { props, rerender } = renderHeader({ activeMainView: 'radar' });
-    fireEvent.click(document.getElementById('btn-mobile-shopping'));
-    expect(props.setView).toHaveBeenLastCalledWith('shopping');
+  it('without a server (local mode) users and system are hidden, "Backups" opens the device backup and logout closes the collection', async () => {
+    mode.local = true;
+    const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true, mobileMenuOpen: true });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<DashboardHeader {...props} />} />
+          <Route path="/server" element={<p>Geräteseite</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    for (const id of ['btn-open-users', 'btn-open-system', 'btn-mobile-menu-users', 'btn-mobile-menu-system']) {
+      expect(document.getElementById(id)).toBeNull();
+    }
+    expect(document.getElementById('btn-mobile-menu-backups')).toBeTruthy();
+    fireEvent.click(document.getElementById('btn-open-backups'));
+    expect(await screen.findByRole('dialog', { name: 'Sicherung' })).toBeTruthy();
+    expect(props.handleOpenRestoreModal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sicherung schließen' }));
+    expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
+    expect(document.getElementById('btn-logout').getAttribute('aria-label')).toBe('Sammlung schließen');
+    expect(document.getElementById('btn-mobile-menu-logout').textContent).toContain('Sammlung schließen');
+    expect(document.getElementById('btn-change-password').getAttribute('aria-label')).toBe('Konto: API-Schlüssel');
 
-    rerender(<DashboardHeader {...props} activeMainView="shopping" />);
-    fireEvent.click(document.getElementById('btn-mobile-shopping'));
-    expect(props.setView).toHaveBeenLastCalledWith('shelf');
+    fireEvent.click(document.getElementById('btn-open-backups'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
+    expect(await screen.findByText('Geräteseite')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
   });
 
-  it('the radar entries go through setView', () => {
+  it('local mode: a restore from "Backups" runs App\'s reload, then shows the shelf or, without a collection, the device screen', async () => {
+    mode.local = true;
+    for (const [outcome, page] of [[{ status: 'local', user: { id: 4, local: true } }, 'Regal'], [{ status: 'localFailed', user: null }, 'Geräteseite']]) {
+      const onLocalReplaced = vi.fn(async () => outcome);
+      const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true, onLocalReplaced });
+      const view = render(
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<><DashboardHeader {...props} /><p>Regal</p></>} />
+            <Route path="/server" element={<p>Geräteseite</p>} />
+          </Routes>
+        </MemoryRouter>
+      );
+      fireEvent.click(document.getElementById('btn-open-backups'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
+      expect(await screen.findByText(page)).toBeTruthy();
+      expect(onLocalReplaced).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
+      if (page === 'Regal') expect(screen.queryByText('Geräteseite')).toBeNull();
+      view.unmount();
+    }
+    expect(opensCollection({ status: 'online' })).toBe(true);
+    expect(opensCollection({ status: 'offline' })).toBe(true);
+    expect(opensCollection({ status: 'unauthorized' })).toBe(false);
+    expect(opensCollection(undefined)).toBe(false);
+  });
+
+  it('with a server the admin keeps users, system and the server backups', () => {
+    const { props } = renderHeader({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true, mobileMenuOpen: true });
+    for (const id of ['btn-open-users', 'btn-open-system', 'btn-mobile-menu-users', 'btn-mobile-menu-system']) {
+      expect(document.getElementById(id)).toBeTruthy();
+    }
+    fireEvent.click(document.getElementById('btn-open-backups'));
+    expect(props.handleOpenRestoreModal).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('btn-logout').getAttribute('aria-label')).toBe('Abmelden');
+  });
+
+  it('tablets keep only add and menu in the header: the views are the tabs below it, not a second set of buttons', () => {
+    renderHeader({ canEdit: true, shoppingData: { total_missing: 120 }, radarData: { total_releases: 7 } });
+    for (const id of ['btn-mobile-shopping', 'btn-mobile-radar', 'btn-mobile-anime']) expect(document.getElementById(id)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Einkaufsliste|Release-Radar/ })).toBeNull();
+    expect(document.getElementById('btn-header-add-manga').className).toContain('hit-44');
+    expect(document.getElementById('btn-mobile-menu-toggle').className).toContain('hit-44');
+    expect(screen.getByRole('button', { name: 'Barcode scannen' }).className).toContain('hit-44');
+  });
+
+  it('"Neuer Manga": the accessible name is the visible label in both header variants', () => {
+    renderHeader({ canEdit: true });
+    const buttons = screen.getAllByRole('button', { name: 'Neuer Manga' });
+    expect(buttons.map((b) => b.id).sort()).toEqual(['btn-header-add-manga', 'btn-open-add-manga']);
+    for (const b of buttons) {
+      expect(b.getAttribute('aria-label')).toBeNull();
+      expect(b.textContent.trim()).toBe('Neuer Manga');
+    }
+  });
+
+  it('the admin row fits 1280 px with the install button: users and backups are icons with names below 2xl', () => {
+    renderHeader({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true, isInstallable: true });
+    for (const [id, name] of [['btn-open-users', 'Benutzer'], ['btn-open-backups', 'Backups'], ['btn-install-pwa', 'App installieren']]) {
+      const button = document.getElementById(id);
+      expect(button.getAttribute('aria-label')).toBe(name);
+      expect(within(button).getByText(name).className).toContain('hidden 2xl:inline');
+    }
+    expect(document.getElementById('btn-logout')).toBeTruthy();
+  });
+
+  it('the version badge shrinks with the title instead of running into the controls', () => {
+    renderHeader();
+    const badge = document.getElementById('app-version-badge');
+    expect(badge.className).toContain('min-w-0');
+    expect(badge.className).toContain('truncate');
+    expect(badge.className).not.toContain('shrink-0');
+    expect(badge.parentElement.className).toContain('min-w-0');
+  });
+
+  it('the menu is a named navigation landmark and its radar entry goes through setView', () => {
     const { props } = renderHeader({ mobileMenuOpen: true });
-    fireEvent.click(document.getElementById('btn-mobile-radar'));
-    expect(props.setView).toHaveBeenLastCalledWith('radar');
+    const menu = screen.getByRole('navigation', { name: 'Menü' });
+    expect(menu.id).toBe('mobile-menu-drawer');
     fireEvent.click(document.getElementById('btn-mobile-menu-radar'));
     expect(props.setView).toHaveBeenLastCalledWith('radar');
     expect(props.setMobileMenuOpen).toHaveBeenCalledWith(false);
   });
 
-  it('caps the quick badges and keeps the full number in the accessible name', () => {
-    renderHeader({ shoppingData: { total_missing: 120 }, radarData: { total_releases: 7 } });
-    const cart = document.getElementById('btn-mobile-shopping');
-    expect(cart.textContent).toContain('99+');
-    expect(cart.getAttribute('aria-label')).toContain('120');
-    const badge = within(cart).getByText('99+');
-    expect(badge.className).toContain('min-w-4');
-    expect(badge.className).not.toMatch(/(^|\s)w-4(\s|$)/);
+  it('app build: the connection pill reports the state of a server, the device collection only names device and profile', () => {
+    mode.app = true;
+    mode.connection = { state: 'online', server: { id: 's1', name: 'Zuhause' } };
+    const { unmount } = render(<MemoryRouter><DashboardHeader {...headerProps()} /></MemoryRouter>);
+    const pill = document.getElementById('btn-connection-pill');
+    expect(pill.getAttribute('aria-label')).toBe('Server Zuhause, verbunden. Server wechseln');
+    expect(pill.textContent).toContain('verbunden');
+    unmount();
+
+    mode.local = true;
+    mode.connection = { state: 'online', server: { id: 'local', name: 'Auf diesem Gerät · Felix', local: true } };
+    render(<MemoryRouter><DashboardHeader {...headerProps()} /></MemoryRouter>);
+    const local = document.getElementById('btn-connection-pill');
+    expect(local.textContent).toBe('Auf diesem Gerät · Felix');
+    expect(local.getAttribute('aria-label')).toBe('Auf diesem Gerät · Felix. Server wechseln');
+    expect(within(local).getByText('Auf diesem Gerät · Felix').className).toContain('min-w-0 truncate');
   });
 
   it('names the search field and reports the menu state', () => {
@@ -222,7 +356,6 @@ describe('DashboardHeader', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(toggle.getAttribute('aria-label')).toBe('Menü schließen');
     expect(document.getElementById(toggle.getAttribute('aria-controls'))).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Einkaufsliste/, pressed: false })).toBeTruthy();
   });
 
   it('the scanner button does not focus the search field, the empty area of the box does', () => {
@@ -284,6 +417,29 @@ describe('DashboardFooter', () => {
 
   it('hides the refresh button in offline mode', () => {
     render(<DashboardFooter {...base} user={{ id: 1, role: 'visitor', offline: true }} isOfflineMode offlineCopyAt={Date.now()} />);
+    expect(screen.queryByRole('button', { name: /Offline-Kopie/ })).toBeNull();
+  });
+
+  it('shows the device state instead of sync and offline copy in standalone mode', () => {
+    const user = { id: 1, username: 'Felix', role: 'admin', local: true };
+    render(<DashboardFooter {...base} user={user} offlineCopyAt={null} refreshError="Aktualisierung fehlgeschlagen" />);
+    expect(screen.getByText('Auf diesem Gerät · Felix')).toBeTruthy();
+    expect(screen.queryByText(/Online & abgeglichen/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Offline-Kopie/ })).toBeNull();
+    expect(screen.queryByText('Aktualisierung fehlgeschlagen')).toBeNull();
+
+    act(() => { window.dispatchEvent(new CustomEvent(LOCAL_STORE_EVENT, { detail: { type: 'saved', status: { saveError: null, savedAt: Date.now() } } })); });
+    expect(screen.getByText('Gespeichert gerade eben')).toBeTruthy();
+    act(() => { window.dispatchEvent(new CustomEvent(LOCAL_STORE_EVENT, { detail: { type: 'status', status: { saveError: 'voll' } } })); });
+    expect(screen.getByRole('status').textContent).toContain('Nicht gespeichert');
+    expect(screen.queryByText(/Gespeichert gerade eben/)).toBeNull();
+  });
+
+  it('treats the stored standalone mode as device state even before /auth/me says local', () => {
+    mode.local = true;
+    render(<DashboardFooter {...base} user={{ id: 2, username: 'Ich', role: 'admin' }} offlineCopyAt={Date.now()} />);
+    expect(screen.getByText('Auf diesem Gerät · Ich')).toBeTruthy();
+    expect(screen.queryByText(/Online & abgeglichen/)).toBeNull();
     expect(screen.queryByRole('button', { name: /Offline-Kopie/ })).toBeNull();
   });
 });
@@ -422,7 +578,7 @@ describe('MangaCollectionGrid: groups', () => {
 describe('MangaCollectionGrid: author links', () => {
   const twoAuthors = series(1, { author: 'Tsugumi Ohba, Takeshi Obata' });
 
-  it('grid cards put one button per author below the card link, not inside it', () => {
+  it('grid cards put one button per author inside the card frame, next to the card link, not inside it', () => {
     const onAuthorClick = vi.fn();
     renderGrid({ filtered: [twoAuthors], onAuthorClick });
     const link = screen.getByRole('link', { name: 'Reihe 1' });
@@ -432,8 +588,58 @@ describe('MangaCollectionGrid: author links', () => {
     expect(link.contains(ohba)).toBe(false);
     expect(link.querySelector('button')).toBeNull();
     expect(link.textContent).not.toContain('Ohba');
+    const card = link.parentElement;
+    expect(card.className).toContain('rounded-2xl');
+    expect(card.className).toContain('border');
+    expect(card.contains(ohba) && card.contains(obata)).toBe(true);
+    // the link's ::after covers the card; the author row lies above it, wraps and never clips a name
+    expect(link.className).toContain('after:absolute after:inset-0');
+    const row = ohba.closest('p');
+    expect(row.className).toContain('relative z-[1]');
+    expect(row.className).toContain('flex flex-wrap');
+    expect(row.className).not.toMatch(/(^|\s)truncate(\s|$)/);
+    for (const b of [ohba, obata]) {
+      expect(b.className).toContain('hit-44');
+      expect(b.className).toContain('pointer-events-auto');
+    }
+    expect(ohba.lastElementChild.textContent).toBe(',');
+    expect(ohba.lastElementChild.getAttribute('aria-hidden')).toBe('true');
+    expect(row.textContent).toBe('Tsugumi Ohba, Takeshi Obata');
     fireEvent.click(obata);
     expect(onAuthorClick).toHaveBeenCalledWith('Takeshi Obata');
+  });
+
+  it('long titles wrap with hyphens; the status badge gives way before the count badge', () => {
+    renderGrid({ filtered: [series(1, { title: 'Donaudampfschifffahrtsgesellschaftskapitänsmütze', status: 'Abgeschlossen', total_volumes: 28, owned_volumes: 27, extras_count: 1 })] });
+    const title = screen.getByRole('heading', { name: 'Donaudampfschifffahrtsgesellschaftskapitänsmütze' });
+    expect(title.className).toContain('break-words');
+    expect(title.className).toContain('hyphens-auto');
+    expect(title.className).toContain('[overflow-wrap:anywhere]');
+    expect(title.className).toContain('line-clamp-2');
+    const status = screen.getByText('Abgeschlossen').parentElement;
+    expect(status.className).toContain('min-w-0');
+    expect(status.className).not.toContain('shrink-0');
+    expect(status.className).not.toMatch(/max-w-\[/);
+    const count = status.nextElementSibling;
+    expect(count.className).toContain('shrink-0');
+    expect(count.className).toContain('whitespace-nowrap');
+  });
+
+  it('the grid delete button and the wish badge sit on the card frame; touch gets a 44 px hit area', () => {
+    renderGrid({ canEdit: true });
+    const button = screen.getByRole('button', { name: 'Reihe 1 löschen' });
+    expect(button.className).toContain('top-9 left-2');
+    expect(button.className).toContain('hit-44');
+  });
+
+  it('list rows keep the volume count and the read share on one line each', () => {
+    renderGrid({ filtered: [series(1)], viewMode: 'list' });
+    const count = screen.getByText('4 / 10');
+    expect(count.className).toContain('whitespace-nowrap');
+    expect(count.parentElement.className).toContain('flex-col');
+    expect(count.closest('td').className).toContain('min-w-[9rem]');
+    expect(screen.getByText(/gelesen •/).className).toContain('whitespace-nowrap');
+    expect(screen.getByRole('columnheader', { name: 'Bände / Fortschritt' }).className).toContain('whitespace-nowrap');
   });
 
   it('list rows render each author as a button', () => {
@@ -449,7 +655,7 @@ describe('MangaCollectionGrid: author links', () => {
   it('without the handler or an author the text stays plain', () => {
     const { unmount } = renderGrid({ filtered: [twoAuthors] });
     expect(screen.queryByRole('button', { name: 'Tsugumi Ohba' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Reihe 1' }).textContent).toContain('Tsugumi Ohba, Takeshi Obata');
+    expect(screen.getByRole('link', { name: 'Reihe 1 Tsugumi Ohba, Takeshi Obata' }).textContent).toContain('Tsugumi Ohba, Takeshi Obata');
     unmount();
     renderGrid({ filtered: [series(2, { author: '' })], onAuthorClick: vi.fn(), viewMode: 'list' });
     expect(screen.getByText('Kein Autor')).toBeTruthy();
@@ -477,6 +683,24 @@ describe('CollectionToolbar', () => {
     expect(screen.getByRole('combobox', { name: 'Verlag filtern' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Rasteransicht', pressed: true })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Listenansicht', pressed: false })).toBeTruthy();
+  });
+  it('the select chips sit in columns below xl (two per row, four from lg) and each select truncates inside its chip', () => {
+    render(<CollectionToolbar {...toolbarProps} setCollectFilter={vi.fn()} setGroupBy={vi.fn()} setTagFilter={vi.fn()}
+      availableTags={[{ tag: 'Action', count: 2 }]} />);
+    const selects = screen.getAllByRole('combobox');
+    expect(selects.map((s) => s.getAttribute('aria-label'))).toEqual(['Verlag filtern', 'Sammelstand filtern', 'Genre filtern', 'Sortierung', 'Gruppieren']);
+    for (const select of selects) {
+      const chip = select.closest('label').className.split(/\s+/);
+      expect(chip).toEqual(expect.arrayContaining(['basis-[calc(50%-0.25rem)]', 'grow', 'sm:grow-0', 'lg:basis-[calc(25%-0.375rem)]', 'xl:basis-auto', 'min-w-0']));
+      expect(chip).not.toContain('flex-1');
+      expect(chip).not.toContain('sm:basis-auto');
+      const own = select.className.split(/\s+/);
+      expect(own).toEqual(expect.arrayContaining(['filter-chip-select', 'min-w-0', 'w-full', 'xl:w-auto', 'truncate']));
+      expect(select.className).not.toMatch(/max-w-\[/);
+    }
+    const views = screen.getByRole('group', { name: 'Ansicht' });
+    expect(views.parentElement.className).toContain('basis-full xl:basis-auto');
+    for (const b of within(views).getAllByRole('button')) expect(b.className).toContain('[@media(pointer:coarse)]:p-2.5');
   });
 });
 
@@ -526,5 +750,79 @@ describe('MainViewSwitcher', () => {
     expect(onSelectView).toHaveBeenCalledWith('radar');
     fireEvent.click(document.getElementById('btn-nav-shelf'));
     expect(onSelectView).toHaveBeenCalledWith('shelf');
+  });
+  it('the tabs keep their labels: the mode hint only shows next to them from lg, phones drop the count pills', () => {
+    render(<MainViewSwitcher activeMainView="radar" onSelectView={vi.fn()} mangaCount={4} animeCount={2}
+      shoppingData={{ total_missing: 170 }} radarData={{ total_releases: 36 }} />);
+    const nav = screen.getByRole('navigation', { name: 'Hauptansicht' });
+    expect(nav.className).toContain('overflow-x-auto');
+    expect(nav.className).toContain('shrink-0');
+    expect(nav.parentElement.className).toContain('lg:flex-row');
+    const hint = screen.getByText(/Kalender-Modus/).parentElement;
+    expect(hint.className).toContain('hidden lg:flex');
+    for (const n of ['170', '36', '2']) expect(within(nav).getByText(n).className).toContain('hidden sm:inline');
+    for (const b of within(nav).getAllByRole('button')) expect(b.className).toContain('whitespace-nowrap');
+  });
+});
+
+describe('Dashboard: desktop menu "Quellen & Schlüssel…" while the shelf is mounted', () => {
+  const OPEN_ACCOUNT = 'mangashelf:open-account';
+  const fire = (detail) => {
+    let unhandled;
+    act(() => { unhandled = window.dispatchEvent(new CustomEvent(OPEN_ACCOUNT, { detail, cancelable: true })); });
+    return unhandled;
+  };
+
+  function LocationProbe() {
+    const location = useLocation();
+    return <output data-testid="location">{`${location.key} ${location.search} ${JSON.stringify(location.state)}`}</output>;
+  }
+
+  const renderShelf = () => render(
+    <MemoryRouter initialEntries={['/?view=shopping']}>
+      <Routes>
+        <Route path="/" element={<Dashboard user={{ id: 1, username: 'anna', role: 'editor' }} onLogout={vi.fn()} />} />
+      </Routes>
+      <LocationProbe />
+    </MemoryRouter>
+  );
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('opens the keys tab in place without a navigation; other details and an unmounted shelf leave the event alone', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(404, { error: 'Nicht gefunden' })));
+    shelfHooks.mangaList = { mangas: [], loading: false, refreshing: false, error: null, fetchMangas: vi.fn(), handleDeleteManga: vi.fn(async () => true) };
+    shelfHooks.offline = {
+      networkOffline: false, setNetworkOffline: vi.fn(), isOfflineMode: false, offlineCopyAt: null,
+      refreshingCopy: false, refreshError: null, handleRefreshOfflineCopy: vi.fn()
+    };
+    shelfHooks.shopping = {
+      shoppingData: null, loadingShopping: false, shoppingPublisherFilter: 'ALL', setShoppingPublisherFilter: vi.fn(),
+      shoppingSearch: '', setShoppingSearch: vi.fn(), buyingId: null, offlineLastUpdated: null, cacheWriteFailed: false,
+      pendingPurchases: 0, failedPurchases: [], fetchShoppingList: vi.fn(), handleQuickBuy: vi.fn(), syncPendingPurchases: vi.fn()
+    };
+    shelfHooks.radar = {
+      radarData: null, loadingRadar: false, radarError: null, radarPublisherFilter: 'ALL', setRadarPublisherFilter: vi.fn(),
+      radarStatusFilter: 'ALL', setRadarStatusFilter: vi.fn(), radarSearch: '', setRadarSearch: vi.fn(),
+      markingDeliveredIds: new Set(), radarSubView: 'passion', setRadarSubView: vi.fn(), mpYear: 2026, setMpYear: vi.fn(),
+      mpMonth: 10, setMpMonth: vi.fn(), mpData: null, loadingMp: false, mpError: null, mpSearch: '', setMpSearch: vi.fn(),
+      mpPublisherFilter: 'ALL', setMpPublisherFilter: vi.fn(), mpPrintOnly: true, setMpPrintOnly: vi.fn(), mpMySeriesOnly: false,
+      setMpMySeriesOnly: vi.fn(), importingMpIds: new Set(), fetchReleaseRadar: vi.fn(), handleMarkDelivered: vi.fn(),
+      fetchMangaPassionReleases: vi.fn(), handlePrevMonth: vi.fn(), handleNextMonth: vi.fn(), handleCurrentMonth: vi.fn(),
+      handleImportMangaPassion: vi.fn()
+    };
+    const view = renderShelf();
+    const before = screen.getByTestId('location').textContent;
+    expect(before).toMatch(/ \?view=shopping null$/);
+
+    expect(fire('password')).toBe(true);
+    expect(screen.queryByRole('dialog', { name: 'Konto' })).toBeNull();
+
+    expect(fire('keys')).toBe(false);
+    expect((await screen.findByRole('dialog', { name: 'Konto' })).textContent).toBe('Konto-Tab keys');
+    expect(screen.getByTestId('location').textContent).toBe(before);
+
+    view.unmount();
+    expect(fire('keys')).toBe(true);
   });
 });

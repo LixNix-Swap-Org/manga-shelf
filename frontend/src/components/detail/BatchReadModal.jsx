@@ -1,10 +1,10 @@
 import { useEffect, useId, useState } from 'react';
 import { BookCheck, X, CheckCheck } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { readApiError } from '../../hooks/useVolumeActions';
+import { readApiError, readAtForDate, localDateString } from '../../hooks/useVolumeActions';
 import { apiFetch, errorFromResponse, readJson, TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
-import { formatCount } from '../../utils/format';
+import { formatCount, formatDate } from '../../utils/format';
 
 const READ_FAILED = 'Fehler beim Aktualisieren des Lesestatus';
 
@@ -59,6 +59,7 @@ export default function BatchReadModal({
 }) {
   const [batchReadUpTo, setBatchReadUpTo] = useState('');
   const [batchReadAction, setBatchReadAction] = useState(true);
+  const [readDate, setReadDate] = useState(''); // empty = now; only a picked day is sent
   const [pickedReaderId, setPickedReaderId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -71,6 +72,7 @@ export default function BatchReadModal({
     if (!isOpen) return;
     setPickedReaderId(null);
     setMessage('');
+    setReadDate('');
   }, [isOpen]);
 
   const dialogRef = useDialogA11y(isOpen);
@@ -89,6 +91,7 @@ export default function BatchReadModal({
     setLoading(true);
     const upTo = parseFloat(batchReadUpTo);
     const read = batchReadAction;
+    const readAt = read ? readAtForDate(readDate) : null;
     try {
       const res = await apiFetch('/api/volumes/batch-read', {
         method: 'POST',
@@ -97,7 +100,8 @@ export default function BatchReadModal({
           up_to_volume: upTo,
           read,
           is_read: read,
-          user_id: targetUserId
+          user_id: targetUserId,
+          ...(readAt ? { read_at: readAt } : {})
         },
         timeout: TIMEOUTS.long
       });
@@ -111,7 +115,8 @@ export default function BatchReadModal({
         onClose();
         if (onSuccess) await onSuccess();
         const undo = batchReadUndo(data, read);
-        notify.success(`${formatCount(data.count, 'Band', 'Bände')} als ${read ? 'gelesen' : 'ungelesen'} markiert`, undo ? {
+        const on = readAt ? ` (gelesen am ${formatDate(readDate)})` : '';
+        notify.success(`${formatCount(data.count, 'Band', 'Bände')} als ${read ? 'gelesen' : 'ungelesen'} markiert${on}`, undo ? {
           action: {
             label: 'Rückgängig',
             onClick: async () => {
@@ -139,16 +144,16 @@ export default function BatchReadModal({
       aria-modal="true"
       aria-label="Lesestatus setzen"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 animate-fade-in overflow-y-auto"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
     >
-      <div className="glass-panel w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-700/80 shadow-2xl relative my-3 sm:my-8" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <BookCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" /> Lesestatus für mehrere Bände festlegen
+      <div className="dialog-box glass-panel max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 short:p-4 border border-slate-700/80 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 mb-4 pb-3 short:mb-3 short:pb-2 border-b border-slate-800">
+          <h2 className="min-w-0 pt-1.5 text-base font-bold text-white flex items-start gap-2 break-words">
+            <BookCheck className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" /> <span className="min-w-0">Lesestatus für mehrere Bände festlegen</span>
           </h2>
-          <button type="button" onClick={onClose} disabled={loading} aria-label="Schließen" title="Schließen" className="p-1 -m-1 rounded-lg text-slate-400 hover:text-white disabled:opacity-50">
-            <X className="w-4 h-4" aria-hidden="true" />
+          <button type="button" onClick={onClose} disabled={loading} aria-label="Schließen" title="Schließen" className="hit-44 shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -214,6 +219,7 @@ export default function BatchReadModal({
             <input
               id={`${ids}-upto`}
               type="number"
+              inputMode="decimal"
               step="any"
               min="1"
               required
@@ -227,6 +233,24 @@ export default function BatchReadModal({
               Alle Bände im Besitz von Band 1 bis zu dieser Nummer erhalten den gewählten Status.
             </span>
           </div>
+
+          {batchReadAction && (
+            <div>
+              <label htmlFor={`${ids}-read-date`} className="block text-xs font-semibold text-slate-300 mb-1">Gelesen am</label>
+              <input
+                id={`${ids}-read-date`}
+                type="date"
+                max={localDateString()}
+                aria-describedby={`${ids}-read-date-hint`}
+                className="input-field bg-slate-950 font-mono"
+                value={readDate}
+                onChange={e => setReadDate(e.target.value)}
+              />
+              <span id={`${ids}-read-date-hint`} className="text-[11px] text-slate-400 mt-1 block">
+                Für nachgetragene Bände ein früheres Datum wählen; bereits gelesene Bände behalten ihr Datum.
+              </span>
+            </div>
+          )}
 
           {message && (
             <p role="alert" className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5">{message}</p>

@@ -1,5 +1,6 @@
+// Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
 import { useState, useEffect, useRef, useId } from 'react';
-import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode } from 'lucide-react';
+import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
 import { buildScanVolumePayload, prefillTotalVolumes } from '../../utils/scanHelpers';
 import { MANGA_STATUSES, normalizeLookupStatus } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
@@ -25,13 +26,13 @@ const EMPTY_FORM = {
 };
 const MAX_COVER_BYTES = 15 * 1024 * 1024;
 const NETWORK_ERROR = 'Netzwerkfehler – bitte Verbindung prüfen und erneut versuchen.';
-const LOOKUP_SOURCES_HINT = 'Sucht in Manga Passion (deutsche Ausgaben) und AniList';
+const LOOKUP_SOURCES_HINT = 'Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList';
 
 const isRemoteUrl = (url) => /^https?:\/\//i.test(url || '');
 const isBlobUrl = (url) => typeof url === 'string' && url.startsWith('blob:');
 const knownValue = (value) => (value && value !== 'Unbekannt' ? value : '');
 const lookupKey = (item) => item.id ?? item.title;
-const SOURCE_LABELS = { anilist: '🌐 AniList', mal: '🌐 MyAnimeList' };
+const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList' };
 
 /** Badges of a non-Manga-Passion lookup hit: its own source, then the sources the server merged into it (also_on). */
 export function lookupSourceLabels(item) {
@@ -129,7 +130,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       cancelled = true;
       setCoverCaching(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Öffnen
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open
   }, [isOpen]);
 
   const handleClose = () => {
@@ -374,19 +375,19 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       aria-label="Neuen Manga anlegen"
       data-busy={submitting ? 'true' : undefined}
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-700/80 shadow-2xl my-3 sm:my-8 relative">
+      <div className="dialog-box glass-panel max-w-xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 short:p-4 border border-slate-700/80 shadow-2xl relative">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center">
+        <div className="flex items-center justify-between gap-3 mb-6 pb-4 short:mb-3 short:pb-2 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center">
               <Plus className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Neuen Manga anlegen</h2>
-              <p className="text-xs text-slate-400">Erfasse eine neue Reihe in deiner Sammlung</p>
+              <p className="text-xs text-slate-400 short:hidden">Erfasse eine neue Reihe in deiner Sammlung</p>
             </div>
           </div>
           <button
@@ -395,7 +396,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             onClick={handleClose}
             disabled={submitting}
             aria-label="Schließen"
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
+            className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -514,12 +515,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         {item.source === 'manga_passion' ? (
-                          <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                            🇩🇪 Manga Passion
+                          <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
+                            <Library className="w-3 h-3" aria-hidden="true" />Manga Passion
                           </span>
                         ) : lookupSourceLabels(item).map((label) => (
-                          <span key={label} className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                            {label}
+                          <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
+                            <Globe className="w-3 h-3" aria-hidden="true" />{label}
                           </span>
                         ))}
                         {isApplying && (
@@ -609,6 +610,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               <input
                 id={`${ids}-total`}
                 type="number"
+                inputMode="numeric"
                 min="1"
                 max="5000"
                 step="1"

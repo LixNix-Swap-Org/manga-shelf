@@ -19,11 +19,21 @@ if (!appBuild && window.location.pathname === '/' && navigator.onLine !== false 
 // manga-shelf://connect links the shells receive before the app has mounted
 if (appBuild) installDeepLinkBridge(window)
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+// the shells (Capacitor: mobile/, Electron: desktop/) plug in storage, links and native adapters before the first render
+const shellReady = import.meta.env.VITE_APP_MODE === 'app'
+  ? Promise.all([
+      import('./app/shell/electron.js').then((m) => m.installElectronShell(window)),
+      import('./app/shell/capacitor.js').then((m) => m.installCapacitorShell())
+    ]).catch((err) => console.warn('[App] Hülle nicht geladen:', err?.message || err))
+  : Promise.resolve()
+
+shellReady.then(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  )
+})
 
 // Service worker (offline start, install prompt): production builds on a secure origin only (HTTPS or localhost), never
 // in the app build (the shells bundle the files). Browsers have no navigator.serviceWorker on plain http://LAN-IP, so the

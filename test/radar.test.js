@@ -1,3 +1,4 @@
+// Radar API: Manga Passion releases, calendar entries, shopping list and the calendar feed, with the upstream faked.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -23,6 +24,8 @@ function fakeMp(impl) {
 }
 const backdateCache = (key, ageMs) => require('../db').db.prepare('UPDATE manga_passion_cache SET created_at = ? WHERE cache_key = ?').run(Date.now() - ageMs, key);
 const pad2 = (n) => String(n).padStart(2, '0');
+// GET /manga-passion/releases accepts today - 5 .. today + 3
+const Y = new Date().getFullYear();
 
 const importBody = (o = {}) => ({ title: 'Neue Reihe', volume_number: '1', publisher: 'carlsen manga', release_date: '2026-11-05', price: 7.5, ...o });
 
@@ -119,40 +122,88 @@ test('releases: an incomplete month (later page failed) is not cached, an outage
         const urls = [];
         const inner = global.fetch;
         global.fetch = (url, opts) => { urls.push(String(url)); return inner(url, opts); };
-        const partial = await editor('GET', '/manga-passion/releases?year=2031&month=3');
+        const partial = await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=3`);
         global.fetch = inner;
         assert.ok(urls.some(u => u.includes('order[date]=asc&order[id]=asc')), 'the id breaks ties so pages are stable');
         assert.equal(partial.status, 200);
         assert.equal(partial.body.total_items, 100);
 
         calls = 0;
-        const again = await editor('GET', '/manga-passion/releases?year=2031&month=3');
+        const again = await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=3`);
         assert.ok(calls > 0, 'the partial answer was not served from the cache');
         assert.equal(again.body.total_items, 100);
 
         // complete answer gets cached
         fake(async () => ({ ok: true, status: 200, json: async () => ({ 'hydra:member': [member(1), member(2)], 'hydra:totalItems': 2 }) }));
-        assert.equal((await editor('GET', '/manga-passion/releases?year=2031&month=4')).body.total_items, 2);
+        assert.equal((await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=4`)).body.total_items, 2);
 
         // a forced refresh right after a fetch is answered from the cache (cooldown)
         calls = 0;
         fake(async () => { calls++; throw new Error('network down'); });
-        const cooled = await editor('GET', '/manga-passion/releases?year=2031&month=4&force_refresh=true');
+        const cooled = await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=4&force_refresh=true`);
         assert.equal(cooled.body.stale, false);
         assert.equal(calls, 0);
 
         // outage: no network, forced refresh after the cooldown -> last cached month, marked as stale
-        backdateCache('mp_releases_2031_4', 2 * 60 * 1000);
-        const stale = await editor('GET', '/manga-passion/releases?year=2031&month=4&force_refresh=true');
+        backdateCache(`mp_releases_${Y - 1}_4`, 2 * 60 * 1000);
+        const stale = await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=4&force_refresh=true`);
         assert.equal(stale.status, 200);
         assert.equal(stale.body.total_items, 2);
         assert.equal(stale.body.stale, true);
         assert.equal(calls, 1);
 
-        // outage and nothing cached: error
-        assert.equal((await editor('GET', '/manga-passion/releases?year=2031&month=5')).status, 500);
+        // outage and nothing cached: 503 with the specific message (never the generic 500), also while the failure is remembered
+        for (let i = 0; i < 2; i++) {
+            const down = await editor('GET', `/manga-passion/releases?year=${Y - 1}&month=5`);
+            assert.equal(down.status, 503);
+            assert.equal(down.body.error, 'Fehler beim Abrufen der Manga-Passion-Neuerscheinungen');
+            assert.equal(down.body.code, 'MP_UNAVAILABLE');
+        }
         assert.equal((await editor('GET', '/manga-passion/releases?year=1999&month=5')).status, 400);
     } finally { global.fetch = realFetch; }
+});
+
+test('releases: uncached months cost lookup budget, force_refresh only for editors, years only around today', async () => {
+    const { lookupLimiter, USER_LOOKUPS_PER_MINUTE } = require('../middleware/userLimits');
+    const { writeCache } = require('../services/mangaPassion/client');
+    const { resetReleaseFetchState } = require('../services/mangaPassionReleases');
+    lookupLimiter.reset();
+    assert.equal((await admin('POST', '/users', { username: 'gast-kalender', password: 'password123', role: 'guest' })).status, 200);
+    const guest = ctx.client();
+    assert.equal((await guest('POST', '/auth/login', { username: 'gast-kalender', password: 'password123' })).status, 200);
+    writeCache(`mp_releases_${Y - 4}_6`, [{ id: 1, title: 'Budget Reihe', volume_number: '1' }]);
+    backdateCache(`mp_releases_${Y - 4}_6`, 2 * 60 * 1000);
+    let calls = 0;
+    const restore = fakeMp(async () => { calls++; throw new Error('offline'); });
+    try {
+        for (let i = 0; i < USER_LOOKUPS_PER_MINUTE + 5; i++) {
+            const res = await guest('GET', `/manga-passion/releases?year=${Y - 4}&month=6&force_refresh=true`);
+            assert.deepEqual([res.status, res.body.stale], [200, false], 'cached month, force_refresh ignored for guests');
+        }
+        assert.equal(calls, 0);
+
+        const statuses = [];
+        for (let i = 0; i <= USER_LOOKUPS_PER_MINUTE; i++) {
+            statuses.push((await guest('GET', `/manga-passion/releases?year=${Y - 4}&month=7`)).status);
+        }
+        assert.deepEqual(statuses.slice(0, USER_LOOKUPS_PER_MINUTE).filter(s => s !== 503), []);
+        assert.equal(statuses.at(-1), 429);
+        assert.equal((await guest('GET', `/manga-passion/releases?year=${Y - 4}&month=6`)).status, 200, 'the cache still answers');
+
+        const before = calls;
+        const forced = await editor('GET', `/manga-passion/releases?year=${Y - 4}&month=6&force_refresh=true`);
+        assert.deepEqual([forced.status, forced.body.stale], [200, true]);
+        assert.ok(calls > before, 'editors may bypass the cache');
+
+        for (const year of [Y - 6, Y + 4, 2100]) {
+            assert.equal((await editor('GET', `/manga-passion/releases?year=${year}&month=1`)).status, 400, String(year));
+        }
+        assert.equal((await editor('GET', `/manga-passion/releases?year=${Y + 3}&month=12`)).status, 503);
+    } finally {
+        restore();
+        resetReleaseFetchState();
+        lookupLimiter.reset();
+    }
 });
 
 test('releases: an entry the API repeats is shown once', async () => {
@@ -162,7 +213,7 @@ test('releases: an entry the API repeats is shown once', async () => {
         global.fetch = (url, opts) => (String(url).startsWith(ctx.base)
             ? realFetch(url, opts)
             : Promise.resolve({ ok: true, status: 200, json: async () => ({ 'hydra:member': [member(1), member(2), member(2), member(3)], 'hydra:totalItems': 4 }) }));
-        const res = await editor('GET', '/manga-passion/releases?year=2032&month=1');
+        const res = await editor('GET', `/manga-passion/releases?year=${Y - 2}&month=1`);
         assert.equal(res.status, 200);
         assert.deepEqual(res.body.items.map(i => i.id), [1, 2, 3]);
     } finally { global.fetch = realFetch; }
@@ -381,18 +432,66 @@ test('import: edition link and local covers', async () => {
     assert.equal(db.prepare('SELECT cover_image FROM mangas WHERE id = ?').get(kept.body.manga_id).cover_image, '/uploads/abc.jpg');
 });
 
+test('import: a client-supplied cover is stored under its detected type without metadata and counts against the image budget', async (t) => {
+    const crypto = require('crypto');
+    const fs = require('fs');
+    const path = require('path');
+    const { uploadsDir } = require('../db');
+    const safeFetch = require('../utils/safeFetch');
+    const { remoteImageLimiter, USER_LOOKUPS_PER_MINUTE } = require('../middleware/userLimits');
+    const seg = (marker, payload) => {
+        const head = Buffer.from([0xff, marker, 0, 0]);
+        head.writeUInt16BE(payload.length + 2, 2);
+        return Buffer.concat([head, payload]);
+    };
+    const jpeg = Buffer.concat([
+        Buffer.from([0xff, 0xd8]),
+        seg(0xe1, Buffer.concat([Buffer.from('Exif\0\0MM\0*\0\0\0\x08\0\0', 'latin1'), Buffer.from('GPS-SECRET-52.5200N-13.4050E')])),
+        seg(0xdb, Buffer.alloc(600, 1)),
+        seg(0xda, Buffer.from([1, 1, 0, 0, 63, 0])),
+        Buffer.from([0x12, 0x34, 0xff, 0xd9])
+    ]);
+    let downloads = 0;
+    t.mock.method(safeFetch, 'fetchRemoteImage', async () => { downloads++; return { buffer: jpeg, ext: '.jpg', contentType: 'image/jpeg' }; });
+    remoteImageLimiter.reset();
+    t.after(() => remoteImageLimiter.reset());
+
+    const remote = 'https://images.example.org/photo.png';
+    const res = await editor('POST', '/manga-passion/import', importBody({ title: 'Exif Reihe', cover_image: remote }));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const name = `mp-cov-${crypto.createHash('md5').update(remote).digest('hex').slice(0, 16)}.jpg`;
+    const db = require('../db').db;
+    assert.equal(db.prepare('SELECT cover_image FROM volumes WHERE id = ?').get(res.body.volume_id).cover_image, `/uploads/${name}`);
+    const stored = fs.readFileSync(path.join(uploadsDir, name));
+    assert.deepEqual([...stored.subarray(0, 2)], [0xff, 0xd8]);
+    assert.ok(!stored.includes('GPS-SECRET'), 'metadata is stripped');
+    assert.equal(fs.existsSync(path.join(uploadsDir, name.replace(/\.jpg$/, '.png'))), false, 'the extension follows the bytes, not the URL');
+
+    for (let i = 1; i < USER_LOOKUPS_PER_MINUTE; i++) {
+        const r = await editor('POST', '/manga-passion/import', importBody({ title: 'Exif Reihe', volume_number: String(100 + i), cover_image: `https://images.example.org/p${i}.jpg` }));
+        assert.equal(r.status, 200, String(i));
+    }
+    const limited = await editor('POST', '/manga-passion/import', importBody({ title: 'Exif Reihe', volume_number: '200', cover_image: 'https://images.example.org/zu-viel.jpg' }));
+    assert.equal(limited.status, 429);
+    assert.match(limited.body.error, /Bild-Downloads/);
+    const before = downloads;
+    const reused = await editor('POST', '/manga-passion/import', importBody({ title: 'Exif Reihe', volume_number: '201', cover_image: remote }));
+    assert.equal(reused.status, 200, 'a stored cover needs no download and no budget');
+    assert.equal(downloads, before);
+});
+
 test('releases: the calendar matches type + number and counts print entries of my series separately', async () => {
     const { writeCache } = require('../services/mangaPassion/client');
     const m = await editor('POST', '/mangas', { title: 'Spy x Family' });
     const se = (await editor('POST', '/volumes', { manga_id: m.body.id, volume_number: '5', type: 'special_edition', status: 'Vorhanden' })).body.id;
     const reg = (await editor('POST', '/volumes', { manga_id: m.body.id, volume_number: '5', type: 'volume', status: 'Vorbestellt' })).body.id;
     const entry = (id, title, extra = {}) => ({ id, edition_id: 50, title, raw_title: title, volume_number: '5', publisher: 'Carlsen Manga', date: '2033-02-10', is_digital: false, ...extra });
-    writeCache('mp_releases_2033_2', [
+    writeCache(`mp_releases_${Y - 3}_2`, [
         entry(1, 'Spy x Family'),
         entry(2, 'Spy x Family', { raw_title: 'Spy x Family (eBook)', is_digital: true, edition_id: 51 }),
         entry(3, 'Spy x Family – Collectors Edition', { edition_id: 52 })
     ]);
-    const res = await editor('GET', '/manga-passion/releases?year=2033&month=2');
+    const res = await editor('GET', `/manga-passion/releases?year=${Y - 3}&month=2`);
     assert.equal(res.status, 200);
     const [regular, , collectors] = res.body.items;
     assert.deepEqual([regular.user_volume_id, regular.user_volume_status], [reg, 'Vorbestellt']);
@@ -412,22 +511,22 @@ test('releases: a month with more than 500 entries is loaded in full; beyond the
     let calls = 0;
     let restore = fakeMp(async (url) => { calls++; return pageOf(url, 640); });
     try {
-        const full = await editor('GET', '/manga-passion/releases?year=2034&month=1');
+        const full = await editor('GET', `/manga-passion/releases?year=${Y - 4}&month=1`);
         assert.equal(full.body.total_items, 640);
         assert.equal(calls, 7);
         calls = 0;
-        assert.equal((await editor('GET', '/manga-passion/releases?year=2034&month=1')).body.total_items, 640);
+        assert.equal((await editor('GET', `/manga-passion/releases?year=${Y - 4}&month=1`)).body.total_items, 640);
         assert.equal(calls, 0);
     } finally { restore(); }
 
     calls = 0;
     restore = fakeMp(async (url) => { calls++; return pageOf(url, 2500); });
     try {
-        const capped = await editor('GET', '/manga-passion/releases?year=2034&month=2');
+        const capped = await editor('GET', `/manga-passion/releases?year=${Y - 4}&month=2`);
         assert.equal(capped.body.total_items, 2000);
         assert.equal(capped.body.truncated, true);
         assert.equal(calls, 20);
-        await editor('GET', '/manga-passion/releases?year=2034&month=2');
+        await editor('GET', `/manga-passion/releases?year=${Y - 4}&month=2`);
         assert.ok(calls > 20, 'a truncated month is not served from the cache');
     } finally { restore(); }
 });
@@ -729,8 +828,8 @@ test('releases: a calendar entry of a wished series carries user_manga_wished', 
     const shelf = (await editor('POST', '/mangas', { title: 'Kalender Regal', wish_priority: 2 })).body.id;
     await editor('POST', '/volumes', { manga_id: shelf, volume_number: '1', status: 'Vorhanden' });
     const entry = (id, title) => ({ id, edition_id: 900 + id, title, raw_title: title, volume_number: '2', publisher: 'Carlsen Manga', date: '2035-03-10', is_digital: false });
-    writeCache('mp_releases_2035_3', [entry(1, 'Kalender Wunsch'), entry(2, 'Kalender Regal'), entry(3, 'Fremd')]);
-    const items = (await editor('GET', '/manga-passion/releases?year=2035&month=3')).body.items;
+    writeCache(`mp_releases_${Y - 2}_3`, [entry(1, 'Kalender Wunsch'), entry(2, 'Kalender Regal'), entry(3, 'Fremd')]);
+    const items = (await editor('GET', `/manga-passion/releases?year=${Y - 2}&month=3`)).body.items;
     assert.deepEqual(items.map(i => [i.user_manga_id, i.user_manga_wished]), [[wished, true], [shelf, false], [null, false]]);
 });
 
@@ -771,8 +870,8 @@ test('releases: a calendar entry of a dropped series carries user_manga_collecti
     const dropped = (await editor('POST', '/mangas', { title: 'Kalender Abgebrochen', collecting: 'abgebrochen' })).body.id;
     const active = (await editor('POST', '/mangas', { title: 'Kalender Aktiv' })).body.id;
     const entry = (id, title) => ({ id, edition_id: 950 + id, title, raw_title: title, volume_number: '3', publisher: 'Carlsen Manga', date: '2036-04-10', is_digital: false });
-    writeCache('mp_releases_2036_4', [entry(1, 'Kalender Abgebrochen'), entry(2, 'Kalender Aktiv'), entry(3, 'Fremd Reihe')]);
-    const items = (await editor('GET', '/manga-passion/releases?year=2036&month=4')).body.items;
+    writeCache(`mp_releases_${Y - 3}_4`, [entry(1, 'Kalender Abgebrochen'), entry(2, 'Kalender Aktiv'), entry(3, 'Fremd Reihe')]);
+    const items = (await editor('GET', `/manga-passion/releases?year=${Y - 3}&month=4`)).body.items;
     assert.deepEqual(items.map(i => [i.user_manga_id, i.user_manga_collecting]), [[dropped, 'abgebrochen'], [active, 'aktiv'], [null, null]]);
 });
 
@@ -889,4 +988,35 @@ test('feed token: a deleted user\'s feed stops working', async () => {
     const id = (await admin('GET', '/users')).body.find(u => u.username === 'kalender').id;
     assert.equal((await admin('DELETE', `/users/${id}`)).status, 200);
     assert.equal((await fetchFeed(`?token=${token}`)).status, 404);
+});
+
+test('feed token: a password change, an admin password reset and "Alle Sitzungen beenden" revoke feed addresses', async () => {
+    const login = async (username) => {
+        assert.equal((await admin('POST', '/users', { username, password: 'password123', role: 'editor' })).status, 200);
+        const client = ctx.client();
+        assert.equal((await client('POST', '/auth/login', { username, password: 'password123' })).status, 200);
+        const token = new URL((await client('POST', '/radar/feed-token')).body.url).searchParams.get('token');
+        assert.equal((await fetchFeed(`?token=${token}`)).status, 200);
+        return { client, token };
+    };
+    const kim = await login('kim-feed');
+    const other = await login('lea-feed');
+    assert.equal((await kim.client('PUT', '/auth/password', { current_password: 'password123', new_password: 'password456' })).status, 200);
+    assert.equal((await fetchFeed(`?token=${kim.token}`)).status, 404, 'own password change');
+    assert.equal((await fetchFeed(`?token=${other.token}`)).status, 200, 'other users keep theirs');
+    assert.equal((await kim.client('GET', '/radar/feed-token')).body.active, false);
+
+    const leaId = (await admin('GET', '/users')).body.find(u => u.username === 'lea-feed').id;
+    assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'editor' })).status, 200);
+    assert.equal((await fetchFeed(`?token=${other.token}`)).status, 200, 'a role change alone keeps it');
+    assert.equal((await admin('PUT', `/users/${leaId}`, { password: 'password789' })).status, 200);
+    assert.equal((await fetchFeed(`?token=${other.token}`)).status, 404, 'admin password reset');
+
+    const third = await login('max-feed');
+    const adminFeed = new URL((await admin('POST', '/radar/feed-token')).body.url).searchParams.get('token');
+    assert.equal((await admin('POST', '/system/sessions/end-all')).status, 200);
+    assert.equal((await fetchFeed(`?token=${third.token}`)).status, 404, 'end-all');
+    assert.equal((await fetchFeed(`?token=${adminFeed}`)).status, 404);
+    await editor('POST', '/auth/login', { username: 'ed', password: 'password123' });
+    await visitor('POST', '/auth/login', { username: 'vis', password: 'password123' });
 });

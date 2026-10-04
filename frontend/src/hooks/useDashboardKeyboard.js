@@ -7,10 +7,8 @@ const isEditable = (el) => Boolean(el) && (
 );
 
 /**
- * '/' focuses the search, Escape closes the open dialog / menu or clears the search.
- * Dialogs are closed through their close callbacks (closeAddModal etc., falling back to the setters). A dialog that
- * marks itself data-busy="true" (running restore, submit) is not closed, and an Escape a dialog already handled
- * (preventDefault) is ignored. While any dialog is open, Escape never clears the search and '/' does nothing.
+ * '/' focuses the search, Escape closes the open dialog / menu or clears the search. A dialog with data-busy="true"
+ * is not closed, a handled Escape (preventDefault) is ignored; while a dialog is open '/' does nothing.
  */
 export default function useDashboardKeyboard(options) {
   const latest = useRef(options);

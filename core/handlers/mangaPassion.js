@@ -12,6 +12,7 @@ const client = require('../mangaPassion/client');
 const gapsLib = require('../mangaPassion/gaps');
 const autofill = require('../mangaPassion/autofill');
 const releases = require('../mangaPassion/releases');
+const { fillTagsFromEdition } = require('../mangaPassion/tags');
 const { loadUserMangas, loadUserVolumes } = require('./radar');
 
 const { toEditionId } = client;
@@ -24,7 +25,8 @@ function mangaExists(ctx, params) {
     return mangaId;
 }
 
-// Every role may run the check; only editors and admins store an automatically found edition link.
+// Every role may run the check; only editors and admins store an automatically found edition link or bypass the
+// cache. A check that has to ask Manga Passion counts against the caller's lookup budget.
 async function gaps(ctx, { params, query }) {
     const mangaId = mangaExists(ctx, params);
     const rawEdition = qstr(query.edition_id);
@@ -33,19 +35,27 @@ async function gaps(ctx, { params, query }) {
         editionId = toEditionId(rawEdition);
         if (!editionId) throw badRequest('Ungültige edition_id');
     }
-    const forceRefresh = qstr(query.force_refresh) === 'true';
+    const canEdit = ['admin', 'editor'].includes(ctx.user.role);
+    const forceRefresh = canEdit && qstr(query.force_refresh) === 'true';
+    const target = editionId || ctx.db.prepare('SELECT manga_passion_id FROM mangas WHERE id = ?').get(mangaId).manga_passion_id;
+    if (forceRefresh || !target || !client.editionCached(ctx, target)) await ctx.limit('lookup');
     const result = await gapsLib.reconcileMangaGaps(ctx, mangaId, {
         edition_id: editionId,
         force_refresh: forceRefresh,
-        persist: ['admin', 'editor'].includes(ctx.user.role),
+        persist: canEdit,
         signal: ctx.signal
     });
     return { body: result };
 }
 
+// { tags_only: true } fills empty genres from the linked edition only ("Genres nachladen"); edition_id is not needed
 async function syncEdition(ctx, { params, body }) {
     const mangaId = mangaExists(ctx, params);
     const { edition_id, update_total_volumes, update_status, update_publisher } = body;
+    if (parseFlag(body.tags_only, false)) {
+        const { manga, ...result } = await fillTagsFromEdition(ctx, mangaId);
+        return { body: { ...result, manga } };
+    }
     if (edition_id === undefined || edition_id === null || edition_id === '') {
         throw badRequest('edition_id ist erforderlich');
     }
@@ -64,6 +74,7 @@ async function syncEdition(ctx, { params, body }) {
 const MAX_GAP_ENTRIES = 500;
 // raw UI labels such as "26 (Titel)"; the stored number is limited separately in batchImportGaps
 const MAX_GAP_LABEL_LENGTH = 200;
+// Creates the listed volume numbers of a series (at most MAX_GAP_ENTRIES), optionally tied to an edition.
 async function batchImportGaps(ctx, { params, body }) {
     const mangaId = mangaExists(ctx, params);
     const { volume_numbers, target_status, edition_id, confirm_edition } = body;
@@ -104,6 +115,7 @@ async function batchImportGaps(ctx, { params, body }) {
     return { body: result };
 }
 
+// Fills the volumes of a series from its Manga Passion edition; `overwrite` replaces existing values.
 async function autofillVolumes(ctx, { params, body }) {
     const mangaId = mangaExists(ctx, params);
     const { overwrite, edition_id } = body;
@@ -148,15 +160,22 @@ async function volumeLookup(ctx, { query }) {
     return { body: result };
 }
 
+// The year selection of the release radar offers today - 2 .. today + 3; older months stay reachable for a while.
+const RELEASE_YEARS_BACK = 5;
+const RELEASE_YEARS_AHEAD = 3;
+
+// Like gaps: only editors and admins bypass the cache, and an answer that may ask Manga Passion costs lookup budget.
 async function monthlyReleases(ctx, { query }) {
     const today = zonedToday(ctx.now(), ctx.config.appTimeZone);
-    const year = parseInt(qstr(query.year), 10) || today.getFullYear();
+    const thisYear = today.getFullYear();
+    const year = parseInt(qstr(query.year), 10) || thisYear;
     const month = parseInt(qstr(query.month), 10) || (today.getMonth() + 1);
-    const forceRefresh = qstr(query.force_refresh) === 'true';
+    const forceRefresh = ['admin', 'editor'].includes(ctx.user.role) && qstr(query.force_refresh) === 'true';
 
-    if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+    if (month < 1 || month > 12 || year < thisYear - RELEASE_YEARS_BACK || year > thisYear + RELEASE_YEARS_AHEAD) {
         throw badRequest('Ungültiges Jahr oder Monat');
     }
+    if (forceRefresh || !releases.monthCached(ctx, year, month)) await ctx.limit('lookup');
 
     const { items: rawItems, stale, truncated } = await releases.getMonthlyReleases(ctx, year, month, forceRefresh);
 
@@ -283,6 +302,7 @@ function parseImportBody(body) {
     };
 }
 
+// 1-click import of a calendar entry: the series (if new) and its volume are created in one transaction.
 async function importRelease(ctx, { body }) {
     const parsed = parseImportBody(body || {});
     if (parsed.error) throw badRequest(parsed.error);
@@ -301,9 +321,9 @@ async function importRelease(ctx, { body }) {
     }
 
     // cover stored locally like every other Manga Passion cover (falls back to the URL when the download fails);
-    // network I/O stays outside the transaction
+    // the client chose the URL, so a real download counts like POST /upload-remote; network I/O stays outside the transaction
     const coverImage = parsed.coverImage && /^https?:/i.test(parsed.coverImage)
-        ? await client.downloadRemoteImageToUploads(ctx, parsed.coverImage)
+        ? await client.downloadRemoteImageToUploads(ctx, parsed.coverImage, { beforeDownload: () => ctx.limit('remoteImage') })
         : parsed.coverImage;
     const notes = type === 'volume' ? null : volumeTitle;
     const editionMeta = mangaId ? {} : cachedEditionMeta(ctx, editionId);
@@ -403,6 +423,7 @@ async function importRelease(ctx, { body }) {
     };
 }
 
+// Searches Manga Passion editions by title (503 MP_UNAVAILABLE when the source is down).
 async function editions(ctx, { query }) {
     const title = qstr(query.title) || '';
     const publisher = qstr(query.publisher) || '';

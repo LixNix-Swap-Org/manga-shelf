@@ -1,3 +1,4 @@
+// Covers the accessible naming of the barcode scanner button.
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import BarcodeScannerButton from '../components/common/BarcodeScannerButton';

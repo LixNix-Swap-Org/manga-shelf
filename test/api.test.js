@@ -1,3 +1,4 @@
+// HTTP API integration tests: setup, auth, roles, series and volumes, stats, users, imports and restore, against a real test server.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -595,6 +596,36 @@ test('volumes: unread answers previous_read_at and an undo restores the read wit
     assert.equal('previous_read_at' in batchRead.body, false);
 });
 
+test('volumes: batch-read takes read_at for the newly read volumes; the toggle answer lists read_users with read_at', async () => {
+    const { db } = require('../db');
+    const readAt = (volumeId) => db.prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)')
+        .get(volumeId, 'ed')?.read_at ?? null;
+    const id = await newSeries('Lesen Datum');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 });
+    const vols = (await detailOf(id)).volumes;
+    const idOf = (number) => vols.find(v => v.volume_number === number).id;
+    await editor('POST', `/volumes/${idOf('1')}/read`, { read: true, read_at: '2025-01-01 09:00:00' });
+
+    for (const bad of ['gestern', '2026-09-01', '2026-02-30 10:00:00', 5]) {
+        const res = await editor('POST', '/volumes/batch-read', { manga_id: id, up_to_volume: 3, read: true, read_at: bad });
+        assert.equal(res.status, 400, String(bad));
+    }
+    assert.deepEqual([readAt(idOf('2')), readAt(idOf('3'))], [null, null], 'a rejected read_at writes nothing');
+
+    const res = await editor('POST', '/volumes/batch-read', { manga_id: id, up_to_volume: 2, read: true, read_at: ' 2026-09-01 10:00:00 ' });
+    assert.deepEqual([res.status, res.body.changed_ids], [200, [idOf('2')]]);
+    assert.equal(readAt(idOf('2')), '2026-09-01 10:00:00');
+    assert.equal(readAt(idOf('1')), '2025-01-01 09:00:00', 'an already read volume keeps its date');
+    assert.equal(readAt(idOf('3')), null);
+    await editor('POST', '/volumes/batch-read', { manga_id: id, up_to_volume: 3, read: true, read_at: '' });
+    assert.match(readAt(idOf('3')), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, 'without read_at the read is dated now');
+
+    await admin('POST', `/volumes/${idOf('2')}/read`, { read: true, read_at: '2024-04-04 04:04:04' });
+    const toggle = await editor('POST', `/volumes/${idOf('2')}/read`, { read: true });
+    const byName = Object.fromEntries(toggle.body.read_users.map(u => [u.username, u.read_at]));
+    assert.deepEqual(byName, { ed: '2026-09-01 10:00:00', admin: '2024-04-04 04:04:04' });
+});
+
 const ownerIdsOf = (vid) => rawDb().prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => r.user_id);
 const volumeRow = (vid) => ({ ...rawDb().prepare('SELECT status, price, purchase_date, condition, priority FROM volumes WHERE id = ?').get(vid) });
 
@@ -634,7 +665,8 @@ test('bulk: set fields in one transaction, owners follow the status, unknown ids
     assert.equal(res.status, 200);
     assert.equal(res.body.updated, 3);
     assert.deepEqual(res.body.not_found, [999999]);
-    assert.deepEqual(res.body.previous.map(p => [p.id, p.volume.status, p.owners.length]), ids.map(v => [v, 'Fehlt', 0]));
+    assert.match(res.body.undo_token, /^[0-9a-f-]{36}$/);
+    assert.equal('previous' in res.body, false, 'the undo data stays on the server');
     for (const vid of ids) {
         assert.deepEqual(volumeRow(vid), { status: 'Vorhanden', price: 7.5, purchase_date: '2024-06-01', condition: 'Neu', priority: 0 });
         assert.deepEqual(ownerIdsOf(vid), [userList.ed], 'the editing user became the owner');
@@ -681,8 +713,9 @@ test('bulk: owners add/remove keep status and purchase date in sync; read only m
     const reads = (vid) => rawDb().prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vid).map(r => r.user_id);
     assert.deepEqual(reads(ids[0]), []);
     assert.deepEqual(reads(ids[1]), [userList.ed]);
-    assert.deepEqual(res.body.previous.find(p => p.id === ids[1]).reads, []);
-    assert.equal(res.body.previous.find(p => p.id === ids[1]).read_user, userList.ed);
+    res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual(res.body.restored, ids);
+    assert.deepEqual(reads(ids[1]), [], 'the undo removed the new read again');
 });
 
 test('bulk: revert restores fields, owners and reads; a deleted volume comes back with its id unless taken (409)', async () => {
@@ -693,47 +726,178 @@ test('bulk: revert restores fields, owners and reads; a deleted volume comes bac
     await admin('POST', `/volumes/${ids[0]}/owners`, { owned: true, price: 6, purchase_date: '2022-02-02' });
     await editor('POST', `/volumes/${ids[0]}/owners`, { owned: true });
     await editor('POST', `/volumes/${ids[0]}/read`, { read: true, read_at: '2022-03-03 10:00:00' });
+    await admin('POST', `/volumes/${ids[0]}/read`, { read: true, read_at: '2021-01-01 08:00:00' });
     const before = volumeRow(ids[0]);
-    const ownersBefore = rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(ids[0]);
+    const ownersOf = (vid) => rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => ({ ...r }));
+    const readsOf = (vid) => rawDb().prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => ({ ...r }));
+    const ownersBefore = ownersOf(ids[0]);
+    const readsBefore = readsOf(ids[0]);
 
     let res = await editor('POST', '/volumes/bulk', { ids, set: { status: 'Fehlt', price: 9, priority: 2 } });
     assert.equal(res.status, 200);
     assert.deepEqual(ownerIdsOf(ids[0]), []);
-    res = await editor('POST', '/volumes/bulk', { revert: res.body.previous });
+    const token = res.body.undo_token;
+    res = await editor('POST', '/volumes/bulk', { revert: token });
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.restored, ids);
     assert.deepEqual(volumeRow(ids[0]), before);
-    assert.deepEqual(rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(ids[0]).map(r => ({ ...r })), ownersBefore.map(r => ({ ...r })));
+    assert.deepEqual(ownersOf(ids[0]), ownersBefore);
     assert.equal(volumeRow(ids[1]).status, 'Fehlt');
+    res = await editor('POST', '/volumes/bulk', { revert: token });
+    assert.deepEqual([res.status, res.body.code], [410, 'BULK_UNDO_EXPIRED'], 'a token works once');
 
     res = await editor('POST', '/volumes/bulk', { ids: [ids[0]], read: { read: false } });
-    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_reads WHERE volume_id = ?').get(ids[0]).c, 0);
-    await editor('POST', '/volumes/bulk', { revert: res.body.previous });
-    assert.equal(rawDb().prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').get(ids[0], userList.ed).read_at, '2022-03-03 10:00:00');
+    assert.deepEqual(readsOf(ids[0]).map(r => r.user_id), [userList.admin]);
+    await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual(readsOf(ids[0]), readsBefore);
 
     res = await editor('POST', '/volumes/bulk', { ids, delete: true });
     assert.equal(res.status, 200);
     assert.equal(res.body.deleted, true);
     assert.equal((await detailOf(id)).volumes.length, 0);
-    const previous = res.body.previous;
+    const deleteToken = res.body.undo_token;
     const retaken = (await editor('POST', '/volumes', { manga_id: id, volume_number: '2', status: 'Fehlt' })).body.id;
 
-    res = await editor('POST', '/volumes/bulk', { revert: previous });
+    res = await editor('POST', '/volumes/bulk', { revert: deleteToken });
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.restored, [ids[0], ids[2]]);
     assert.deepEqual(res.body.conflicts.map(c => [c.id, c.status, c.code, c.existing_id]), [[ids[1], 409, 'VOLUME_DUPLICATE', retaken]]);
     assert.deepEqual(volumeRow(ids[0]), before);
-    assert.deepEqual(ownerIdsOf(ids[0]), [userList.admin, userList.ed].sort((a, b) => a - b));
-    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_reads WHERE volume_id = ?').get(ids[0]).c, 1);
+    assert.deepEqual(ownersOf(ids[0]), ownersBefore, 'owners of every user come back with price, date and created_at');
+    assert.deepEqual(readsOf(ids[0]), readsBefore, 'reads of every user come back with their dates');
+    assert.equal(rawDb().prepare("SELECT count(*) AS c FROM trash WHERE kind = 'volume' AND ref_id IN (?, ?)").get(ids[0], ids[2]).c, 0);
     const detail = await detailOf(id);
     assert.equal(detail.owned_volumes, 1);
     assert.deepEqual(detail.volumes.map(v => v.volume_number).sort(), ['1', '2', '3']);
 
-    res = await editor('POST', '/volumes/bulk', { revert: [previous[1]] });
-    assert.equal(res.status, 409);
-    assert.equal(res.body.code, 'VOLUME_DUPLICATE');
-    assert.equal((await editor('POST', '/volumes/bulk', { revert: [{ id: 5, volume: { manga_id: id, volume_number: '', status: 'Fehlt' } }] })).status, 400);
-    assert.equal((await editor('POST', '/volumes/bulk', { revert: 'x' })).body.code, 'BULK_REVERT');
+    await editor('DELETE', `/volumes/${retaken}`);
+    res = await editor('POST', '/volumes/bulk', { ids: [ids[2]], delete: true });
+    const conflictToken = res.body.undo_token;
+    await editor('POST', '/volumes', { manga_id: id, volume_number: '3', status: 'Fehlt' });
+    res = await editor('POST', '/volumes/bulk', { revert: conflictToken });
+    assert.deepEqual([res.status, res.body.code, res.body.restored], [409, 'VOLUME_DUPLICATE', []]);
+});
+
+test('bulk: the undo takes only a server token; other users 403, unknown or used tokens 410, forged snapshots 400', async () => {
+    const userList = await userIds();
+    const id = await newSeries('Bulk Token');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    const sequenceBefore = rawDb().prepare("SELECT seq FROM sqlite_sequence WHERE name = 'volumes'").get().seq;
+
+    const forged = [{ id: 9007199254740991, volume: { manga_id: id, volume_number: '10', status: 'Fehlt' } }];
+    for (const revert of [forged, [{ id: ids[0], volume: { status: 'Vorhanden' }, owners: [{ user_id: userList.admin, price: 99999 }] }], 'x'.repeat(101), '', 5, { token: 'x' }]) {
+        const res = await editor('POST', '/volumes/bulk', { revert });
+        assert.deepEqual([res.status, res.body.code], [400, 'BULK_REVERT'], JSON.stringify(revert).slice(0, 60));
+    }
+    assert.equal(rawDb().prepare("SELECT seq FROM sqlite_sequence WHERE name = 'volumes'").get().seq, sequenceBefore, 'no forged id reached the table');
+    assert.deepEqual(ownerIdsOf(ids[0]), []);
+    assert.equal((await editor('POST', '/volumes', { manga_id: id, volume_number: '11', status: 'Fehlt' })).status, 200);
+
+    const unknown = await editor('POST', '/volumes/bulk', { revert: '00000000-0000-4000-8000-000000000000' });
+    assert.deepEqual([unknown.status, unknown.body.code], [410, 'BULK_UNDO_EXPIRED']);
+
+    const res = await editor('POST', '/volumes/bulk', { ids, set: { priority: 3 } });
+    const other = await admin('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual([other.status, other.body.code], [403, 'BULK_UNDO_FORBIDDEN'], 'not even an admin takes another user\'s undo');
+    assert.equal((await visitor('POST', '/volumes/bulk', { revert: res.body.undo_token })).status, 403);
+    assert.deepEqual(ids.map(v => volumeRow(v).priority), [3, 3]);
+    const own = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.equal(own.status, 200, 'a refused attempt by someone else leaves the token usable');
+    assert.deepEqual(ids.map(v => volumeRow(v).priority), [0, 0]);
+});
+
+test('bulk: an undo restores stored values the input rules would refuse (long condition, legacy notes and dates)', async () => {
+    const id = await newSeries('Bulk Altwerte');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3, status: 'Vorhanden' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    const condition = 'leichte Gebrauchsspuren '.repeat(10).trim();
+    assert.equal((await editor('PUT', `/volumes/${ids[0]}`, { condition })).status, 200);
+    rawDb().prepare('UPDATE volumes SET notes = ? WHERE id = ?').run('ä'.repeat(12000), ids[1]);
+    rawDb().prepare("UPDATE volume_owners SET purchase_date = '09.04.2021' WHERE volume_id = ?").run(ids[2]);
+
+    let res = await editor('POST', '/volumes/bulk', { ids, set: { priority: 3 } });
+    res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.equal(res.status, 200);
+    assert.deepEqual(ids.map(v => volumeRow(v).priority), [0, 0, 0]);
+
+    res = await editor('POST', '/volumes/bulk', { ids, delete: true });
+    res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual([res.status, res.body.restored], [200, ids]);
+    assert.equal(volumeRow(ids[0]).condition, condition);
+    assert.equal(rawDb().prepare('SELECT length(notes) AS n FROM volumes WHERE id = ?').get(ids[1]).n, 12000);
+    assert.equal(rawDb().prepare('SELECT purchase_date FROM volume_owners WHERE volume_id = ?').get(ids[2]).purchase_date, '09.04.2021');
+});
+
+test('bulk: an undo of a field edit skips volumes deleted meanwhile; one restored through the trash stays as it is', async () => {
+    const id = await newSeries('Bulk Zwischendurch');
+    await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt' });
+    const ids = (await detailOf(id)).volumes.map(v => v.id);
+    let res = await editor('POST', '/volumes/bulk', { ids, set: { priority: 2 } });
+    await editor('DELETE', `/volumes/${ids[1]}`);
+    res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual([res.status, res.body.restored, res.body.not_found], [200, [ids[0]], [ids[1]]]);
+    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volumes WHERE id = ?').get(ids[1]).c, 0, 'a field undo never re-creates a volume');
+
+    res = await editor('POST', '/volumes/bulk', { ids: [ids[0]], delete: true });
+    const token = res.body.undo_token;
+    const trashId = rawDb().prepare("SELECT id FROM trash WHERE kind = 'volume' AND ref_id = ?").get(ids[0]).id;
+    assert.equal((await editor('POST', `/trash/${trashId}/restore`)).status, 200);
+    await editor('PUT', `/volumes/${ids[0]}`, { priority: 1 });
+    res = await editor('POST', '/volumes/bulk', { revert: token });
+    assert.deepEqual([res.status, res.body.restored], [200, [ids[0]]]);
+    assert.equal(volumeRow(ids[0]).priority, 1, 'the volume that came back through the trash is left alone');
+});
+
+test('bulk: a delete undo keeps only the trash ids; with the trash entry emptied meanwhile nothing comes back', async () => {
+    const { createMemoryCore } = require('./core/harness');
+    const core = createMemoryCore();
+    const ed = core.client('ed');
+    const series = (await ed('POST', '/mangas', { title: 'Undo Papierkorb' })).body.id;
+    await ed('POST', '/volumes/batch', { manga_id: series, from: 1, to: 3, status: 'Fehlt' });
+    const ids = (await ed('GET', `/mangas/${series}`)).body.volumes.map(v => v.id);
+    for (const vid of ids) assert.equal((await ed('PUT', `/volumes/${vid}`, { notes: 'n'.repeat(10000) })).status, 200);
+
+    let res = await ed('POST', '/volumes/bulk', { ids, delete: true });
+    const entry = core.ctx.undo.get(res.body.undo_token);
+    assert.ok(entry.bytes < 500, `the snapshot holds no rows (${entry.bytes} bytes)`);
+    assert.equal(entry.bytes, JSON.stringify(entry.previous).length);
+    assert.ok(entry.previous.every(p => p.deleted && Number.isInteger(p.trash_id) && !('volume' in p)));
+
+    const trashOf = (vid) => core.conn.prepare("SELECT id FROM trash WHERE kind = 'volume' AND ref_id = ?").get(vid).id;
+    assert.equal((await core.client('admin')('DELETE', `/trash/${trashOf(ids[1])}`)).status, 200);
+    res = await ed('POST', '/volumes/bulk', { revert: res.body.undo_token });
+    assert.deepEqual([res.status, res.body.restored, res.body.not_found], [200, [ids[0], ids[2]], [ids[1]]]);
+    const notes = core.conn.prepare('SELECT length(notes) AS n FROM volumes WHERE id = ?');
+    assert.deepEqual([notes.get(ids[0]).n, notes.get(ids[2]).n], [10000, 10000], 'the rows came back from the trash');
+    await core.close();
+});
+
+test('bulk: the undo store evicts oldest first against 8 MB per user and 32 MB in total', async () => {
+    const { createMemoryCore } = require('./core/harness');
+    const { UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL } = require('../core/handlers/volumes');
+    assert.deepEqual([UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL], [8 * 1024 * 1024, 32 * 1024 * 1024]);
+    const core = createMemoryCore();
+    const ed = core.client('ed');
+    const series = (await ed('POST', '/mangas', { title: 'Undo Budget' })).body.id;
+    const vid = (await ed('POST', '/volumes', { manga_id: series, volume_number: '1', status: 'Fehlt' })).body.id;
+    const edit = async () => (await ed('POST', '/volumes/bulk', { ids: [vid], set: { priority: 1 } })).body;
+    const MB = 1024 * 1024;
+    const fake = (userId, bytes) => ({ userId, expires: Date.now() + 60000, generation: core.ctx.db.generation(), previous: [], bytes });
+
+    core.ctx.undo.set('ed-old', fake(2, 5 * MB));
+    core.ctx.undo.set('admin-a', fake(1, 3 * MB));
+    core.ctx.undo.set('ed-new', fake(2, 3 * MB - 100));
+    let done = await edit();
+    assert.equal(typeof done.undo_token, 'string');
+    assert.deepEqual([...core.ctx.undo.keys()], ['admin-a', 'ed-new', done.undo_token], 'the oldest entry of that user made room');
+
+    core.ctx.undo.clear();
+    for (let i = 0; i < 4; i++) core.ctx.undo.set(`other-${i}`, fake(10 + i, 8 * MB - 10));
+    done = await edit();
+    assert.deepEqual([...core.ctx.undo.keys()], ['other-1', 'other-2', 'other-3', done.undo_token], 'the total budget evicts the oldest of anyone');
+    assert.equal((await ed('POST', '/volumes/bulk', { revert: done.undo_token })).status, 200);
+    await core.close();
 });
 
 test('volume lookup is editor-only; lookup, sync-edition and autofill work from cached Manga Passion data', async () => {
@@ -894,6 +1058,63 @@ test('lookups that ask external services share the per-account limit (volume loo
     assert.ok(handlers(require('../routes/radar'), '/manga-passion/editions').includes(lookupLimiter));
 });
 
+test('lookup/manga: no hits is 200 [], every source unreachable is 503 SOURCES_UNAVAILABLE', async () => {
+    const realFetch = global.fetch;
+    const json = (body) => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => body, text: async () => JSON.stringify(body) });
+    try {
+        global.fetch = (url, opts) => {
+            const u = String(url);
+            if (u.startsWith(ctx.base)) return realFetch(url, opts);
+            if (u.includes('manga-passion')) return Promise.resolve(json({ 'hydra:member': [], 'hydra:totalItems': 0 }));
+            if (u.includes('anilist')) return Promise.resolve(json({ data: { Page: { media: [] } } }));
+            return Promise.resolve(json({ data: [] }));
+        };
+        const empty = await editor('GET', '/lookup/manga?q=Gibt%20es%20nicht%20xyz');
+        assert.equal(empty.status, 200, JSON.stringify(empty.body));
+        assert.deepEqual(empty.body, []);
+
+        global.fetch = (url, opts) => (String(url).startsWith(ctx.base) ? realFetch(url, opts) : Promise.reject(new Error('ERR_INTERNET_DISCONNECTED')));
+        const down = await editor('GET', '/lookup/manga?q=One%20Piece%20Offline');
+        assert.equal(down.status, 503);
+        assert.equal(down.body.code, 'SOURCES_UNAVAILABLE');
+        assert.match(down.body.error, /nicht erreichbar/);
+    } finally { global.fetch = realFetch; }
+});
+
+test('lookup/manga: two identical searches at once while every source is down both answer 503', async () => {
+    const gateway = require('../core/anime/gateway');
+    gateway.resetGatewayState();
+    const realFetch = global.fetch;
+    let external = 0;
+    try {
+        global.fetch = (url, opts) => {
+            if (String(url).startsWith(ctx.base)) return realFetch(url, opts);
+            external++;
+            return new Promise((resolve, reject) => setTimeout(() => reject(Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' })), 30));
+        };
+        const q = '/lookup/manga?q=Gemeinsam%20Offline%20Titel';
+        const answers = await Promise.all([editor('GET', q), admin('GET', q)]);
+        assert.deepEqual(answers.map(a => [a.status, a.body.code]), [[503, 'SOURCES_UNAVAILABLE'], [503, 'SOURCES_UNAVAILABLE']]);
+        assert.ok(external > 0);
+    } finally {
+        global.fetch = realFetch;
+        gateway.resetGatewayState();
+    }
+});
+
+test('volumes/bulk: set keys named like Object.prototype members are a 400 BULK_FIELD, not a 500', async () => {
+    const id = (await editor('POST', '/mangas', { title: 'Prototyp Reihe' })).body.id;
+    const vol = (await editor('POST', '/volumes', { manga_id: id, volume_number: '1' })).body.id;
+    for (const set of [{ constructor: { value: 1 } }, { toString: 1 }, { hasOwnProperty: 1 }, JSON.parse('{"__proto__":5}')]) {
+        const res = await editor('POST', '/volumes/bulk', { ids: [vol], set });
+        assert.equal(res.status, 400, JSON.stringify(set));
+        assert.equal(res.body.code, 'BULK_FIELD');
+    }
+    const { parseBulkSet } = require('../core/lib/validate');
+    assert.deepEqual(parseBulkSet(JSON.parse('{"__proto__":5}')), { error: '__proto__' });
+    assert.deepEqual(parseBulkSet({ priority: 2 }), { value: { priority: 2 } });
+});
+
 test('restore: admin stays signed in with a new token and the live JWT secret survives a backup with another secret', async () => {
     const { res, body } = await uploadModifiedBackup(admin, (d) => {
         d.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('jwt_secret', 'secret-of-the-old-installation')").run();
@@ -918,4 +1139,3 @@ test('restore: backup without the current user ends the session cleanly instead 
     const fresh = ctx.client();
     assert.equal((await fresh('POST', '/auth/login', { username: 'someone-else', password: 'password123' })).status, 200);
 });
-

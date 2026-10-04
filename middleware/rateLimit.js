@@ -25,10 +25,8 @@ const prefixOf = (key) => {
 };
 
 /**
- * Fixed-window counters. An entry whose count reached `lockAt` is locked (limited). When the cap is reached, the
- * oldest unlocked entry makes room; a live lock is never evicted (junk keys must not lift a real lock). One IPv6 /48
- * holds at most `maxPerPrefix` keys; further /64s of it share one entry for the whole /48. If every entry is locked
- * the store is saturated: unknown keys then count as locked (`failOpen` false) or are not counted at all (`failOpen`).
+ * Fixed-window counters; an entry that reached `lockAt` is locked. At the cap the oldest unlocked entry goes (never
+ * a live lock); an IPv6 /48 holds at most `maxPerPrefix` keys. All locked: unknown keys count as locked unless `failOpen`.
  */
 function createWindowStore({ windowMs, lockAt, maxEntries = DEFAULT_MAX_ENTRIES, maxPerPrefix = DEFAULT_MAX_PER_PREFIX, failOpen = false, name }) {
     const entries = new Map();
@@ -172,9 +170,8 @@ function noteIgnoredForwardedFor(req) {
 const allLimiters = new Set();
 
 /**
- * Per-client request limiter (by client address unless `keyFn` is given). Usable as middleware, or inside a handler
- * with `consume(req, res)` (true when it already answered 429) and `refund(req)` for requests that should not count.
- * `consume(req, res, { exempt: true })` counts the request without refusing it. A saturated store fails open.
+ * Per-client request limiter (by address unless `keyFn`). Middleware, or in a handler `consume(req, res)` (true when
+ * it answered 429; `{ exempt: true }` counts without refusing) and `refund(req)`. A saturated store fails open.
  */
 function createRateLimiter({ windowMs, max, message, keyFn, maxEntries, maxPerPrefix }) {
     const store = createWindowStore({ windowMs, lockAt: max + 1, maxEntries, maxPerPrefix, failOpen: true, name: 'Rate-Limit' });
@@ -223,11 +220,8 @@ function createFailureTracker({ windowMs, max, maxEntries, name }) {
 const accountKey = (username) => boundedKey(String(username).trim().toLowerCase(), 128);
 
 /**
- * Guards password checks (login, own password change).
- * - Hard lock per account + client IP after `maxPerClient` failures: one source cannot keep guessing.
- * - Lock per account after `maxPerAccount` failures from any IPs, which rotating addresses cannot avoid. This one does
- *   not apply to IPs that logged in to that account successfully before, so an attacker cannot lock the owner out.
- * Attempts are reserved before the (async) bcrypt check, so parallel requests cannot pass the check together.
+ * Guards password checks: a lock per account + IP after `maxPerClient` failures, one per account after
+ * `maxPerAccount` (not for IPs that logged in before). Attempts are reserved before the async bcrypt check.
  */
 function createLoginGuard({ windowMs, maxPerClient, maxPerAccount, knownClientsPerAccount = 10 }) {
     const perClient = createFailureTracker({ windowMs, max: maxPerClient, name: 'Fehlversuche je Client' });

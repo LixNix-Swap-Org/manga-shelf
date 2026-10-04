@@ -1,3 +1,4 @@
+// Autofill of a series' volumes from its linked Manga Passion edition (metadata and covers).
 const { normalizePublisher } = require('../lib/publishers');
 const { normalizeIsbn } = require('../lib/isbn');
 const { inferVolumeType } = require('../lib/volumeType');
@@ -190,18 +191,15 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
   return {
     success: false,
     matched: false,
-    message: `Keine Daten für "${volumeNumber}" auf Manga Passion gefunden.`
+    message: `Keine Daten für "${(volumeNumber && String(volumeNumber).trim()) || options.isbn || options.url || 'diesen Band'}" auf Manga Passion gefunden.`
   };
 }
 
 const AUTOFILL_COLUMNS = ['release_date', 'release_year', 'pages', 'price', 'publisher', 'cover_image', 'notes'];
 
-/**
- * Writes autofill results in one transaction. `pendingUpdates` is [{ uv, next }]: the volume row as it was read and the
- * new values computed from it. Those were computed before the (async) cover downloads, so a field somebody edited in
- * the meantime keeps its current value instead of being overwritten with the stale snapshot.
- * Returns the number of rows written.
- */
+// Writes autofill results in one transaction; `pendingUpdates` is [{ uv, next }]: the volume row as read and the values
+// computed from it before the async cover downloads, so a field edited meanwhile keeps its current value.
+// Returns the number of rows written.
 function applyAutofillUpdates(ctx, pendingUpdates) {
   const updateStmt = ctx.db.prepare(`UPDATE volumes SET ${AUTOFILL_COLUMNS.map(c => `${c} = ?`).join(', ')} WHERE id = ?`);
   let written = 0;

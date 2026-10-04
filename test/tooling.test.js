@@ -1,3 +1,4 @@
+// Build tooling: bundle size budget check and build-time precompression.
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

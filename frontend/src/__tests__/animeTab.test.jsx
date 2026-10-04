@@ -1,9 +1,11 @@
+// Covers the anime tab: card, view, detail modal and add modal.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act, renderHook } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, renderHook, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { fakeResponse } from './fakeResponse';
 import AnimeCard from '../components/dashboard/AnimeCard';
 import AnimeView from '../components/dashboard/AnimeView';
+import AnimeDetailModal from '../components/modals/AnimeDetailModal';
 import AddAnimeModal, { sourcesNote } from '../components/modals/AddAnimeModal';
 import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
 import AnimeStatsCard, { watchTime } from '../components/modals/stats/AnimeStatsCard';
@@ -55,6 +57,23 @@ describe('AnimeCard', () => {
     expect(screen.getByText('geschätzt')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Schauen auch: kim' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Zur verknüpften Reihe' }).getAttribute('href')).toBe('/manga/9');
+  });
+});
+
+describe('AnimeCard long titles', () => {
+  it('wraps and hyphenates the title in two lines with the title language; the counter stays on one line', () => {
+    const { unmount } = inRouter(<AnimeCard anime={entry({ title: 'Donaudampfschifffahrtskapitänsabenteuer', my_progress: null })} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
+    const heading = screen.getByRole('heading', { name: 'Donaudampfschifffahrtskapitänsabenteuer' });
+    expect(heading.getAttribute('lang')).toBe('de');
+    const text = within(heading).getByText('Donaudampfschifffahrtskapitänsabenteuer');
+    for (const c of ['line-clamp-2', 'break-words', 'hyphens-auto', '[overflow-wrap:anywhere]']) expect(text.className.split(' ')).toContain(c);
+    expect(text.closest('button').className.split(' ')).toEqual(expect.arrayContaining(['block', 'max-w-full']));
+    expect(screen.getByText('Nicht auf meiner Liste').className).toContain('min-w-0');
+    const counter = screen.getByLabelText(/0 von 12 Folgen gesehen/);
+    expect(counter.className.split(' ')).toEqual(expect.arrayContaining(['font-mono', 'whitespace-nowrap', 'shrink-0']));
+    unmount();
+    inRouter(<AnimeCard anime={entry({ title: '葬送のフリーレン' })} canEdit={false} onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
+    expect(screen.getByRole('heading', { name: '葬送のフリーレン' }).getAttribute('lang')).toBe('ja');
   });
 });
 
@@ -194,6 +213,18 @@ describe('AnimeView', () => {
     expect(screen.queryByRole('button', { name: /eine Folge mehr gesehen/ })).toBeNull();
   });
 
+  it('empty state keeps its text off the dashed border; the toolbar button stays on one line', () => {
+    inRouter(<AnimeView {...base} list={[]} canEdit sources={null} />);
+    const empty = document.getElementById('anime-empty');
+    expect(empty.className).toContain('px-6');
+    expect(empty.className).toContain('border-dashed');
+    const add = document.getElementById('btn-add-anime');
+    expect(add.className).toContain('whitespace-nowrap');
+    expect(add.className).toContain('shrink-0');
+    expect(screen.getByText('Sortierung').className).toContain('sr-only sm:not-sr-only');
+    expect(screen.getByLabelText('Sortierung').className).toContain('min-w-0');
+  });
+
   it('source hints: paused source, own key, refused key, slow pool once per session', () => {
     const onOpenAccount = vi.fn();
     const sources = {
@@ -275,3 +306,35 @@ describe('tab and statistics', () => {
     expect(container.innerHTML).toBe('');
   });
 });
+
+describe('AnimeDetailModal', () => {
+  const open = (anime) => render(
+    <MemoryRouter>
+      <AnimeDetailModal isOpen animeId={anime.id} fallback={anime} onClose={vi.fn()} canEdit={false}
+        fetchDetail={vi.fn(async () => anime)} updateProgress={vi.fn()} removeFromMyList={vi.fn()} update={vi.fn()}
+        refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} />
+    </MemoryRouter>
+  );
+
+  it('has no "Nächste Folge" row without airing data, and shows it (with the estimate) when there is one', async () => {
+    const { unmount } = open(entry({ manual: true, next_airing: null }));
+    await act(async () => {});
+    expect(screen.getByText('Folgen')).toBeTruthy();
+    expect(screen.queryByText('Nächste Folge')).toBeNull();
+    unmount();
+
+    const at = Math.floor((Date.now() + 3 * 86400000) / 1000);
+    open(entry({ next_airing: { episode: 8, at, estimated: true } }));
+    await act(async () => {});
+    expect(screen.getByText('Nächste Folge').nextElementSibling.textContent).toMatch(/^Folge 8 · in 3 Tagen \(geschätzt\)$/);
+  });
+
+  it('the title wraps with hyphens in its language; the close button has a 44 px hit area', async () => {
+    open(entry({ title: 'Donaudampfschifffahrtskapitänsabenteuer' }));
+    const heading = await screen.findByRole('heading', { name: 'Donaudampfschifffahrtskapitänsabenteuer' });
+    expect(heading.getAttribute('lang')).toBe('de');
+    expect(heading.className.split(' ')).toEqual(expect.arrayContaining(['break-words', 'hyphens-auto', '[overflow-wrap:anywhere]']));
+    expect(screen.getByRole('button', { name: 'Schließen' }).className.split(' ')).toContain('hit-44');
+  });
+});
+

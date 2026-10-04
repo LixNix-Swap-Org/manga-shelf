@@ -1,3 +1,4 @@
+// GET /api/health: public status, instance id and the disk/backup/database checks.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

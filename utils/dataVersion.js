@@ -1,3 +1,4 @@
+// Data version and ETag helpers: a cheap change marker for read endpoints so unchanged data answers 304.
 const crypto = require('crypto');
 const { db, getConnectionGeneration } = require('../db');
 const { zonedToday } = require('../services/radar');
@@ -6,10 +7,8 @@ const { zonedToday } = require('../services/radar');
 const BOOT_ID = crypto.randomBytes(4).toString('hex');
 
 /**
- * State of the data behind every read endpoint, cheap enough (one tiny statement) to check before any real query.
- * changes: rows written through this connection (cascades and trigger writes included); dataVersion: bumped by
- * commits of other connections to the same file; generation: bumped when db.js reopens the file (restore).
- * Any write changes the key; it may also change without a visible difference (e.g. a cache row), never the reverse.
+ * State of the data behind every read endpoint, cheap to check before any query: rows written here, commits of
+ * other connections, and the reopen generation (restore). A change may be invisible, never the reverse.
  */
 function readDataVersion() {
     const row = db.prepare('SELECT total_changes() AS changes, (SELECT data_version FROM pragma_data_version) AS dv').get();
@@ -26,9 +25,8 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const dayKey = (d) => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
 
 /**
- * Weak ETag of a read endpoint: data version, the caller (id and role decide what the body contains), today's date
- * in the app time zone (radar countdowns), in the server's (stats months) and in UTC (stats collection_days counts
- * from UTC midnight), and the path with its query.
+ * Weak ETag of a read endpoint: data version, caller (id and role), today's date in the app, server and UTC time
+ * zones (radar countdowns, stats months, collection_days), and the path with its query.
  */
 function dataEtag(req, now = new Date()) {
     const url = crypto.createHash('sha1').update(req.originalUrl || req.url || '').digest('hex').slice(0, 10);
@@ -49,8 +47,7 @@ function etagMatches(header, etag) {
 
 /**
  * Mounted after requireAuth on GET endpoints: sets the ETag and answers 304 before the handler builds the body.
- * `cacheControl`: 'private, no-cache' (revalidate every time), the offline snapshot uses 'private, no-store' so the
- * 30 MB copy never lands in the HTTP cache; the client sends If-None-Match by hand there.
+ * The offline snapshot passes 'private, no-store' so the 30 MB copy stays out of the HTTP cache.
  */
 function conditional({ cacheControl = 'private, no-cache' } = {}) {
     return function conditionalGet(req, res, next) {

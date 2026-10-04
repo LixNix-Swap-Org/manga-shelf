@@ -10,7 +10,7 @@ const log = (ctx) => ctx.log.child('manga-passion');
 const API_BASE = 'https://api.manga-passion.de';
 const API_ORIGIN = new URL(API_BASE).origin;
 const mpHeaders = (ctx) => ({
-  'User-Agent': `MangaShelf/${ctx.config.appVersion || '2.11.0'}`,
+  'User-Agent': ctx.config.appVersion ? `MangaShelf/${ctx.config.appVersion}` : 'MangaShelf',
   'Accept': 'application/ld+json'
 });
 
@@ -53,36 +53,42 @@ function extensionOf(pathname) {
   return dot > 0 ? base.slice(dot).toLowerCase() : '';
 }
 
-/**
- * Downloads a remote image (e.g. from Manga Passion) and saves it permanently in the uploads.
- * Uses a deterministic hash based on the remote URL to prevent duplicate downloads and identical files.
- * Returns the local URL (/uploads/{filename}) or the original URL on failure.
- */
-async function downloadRemoteImageToUploads(ctx, url) {
+const COVER_EXTS = ['.jpg', '.png', '.webp', '.gif', '.avif'];
+
+// Downloads a remote image into the uploads as mp-cov-<hash of URL><ext of detected type>, metadata stripped; a cover
+// stored before is reused without a request. opts.beforeDownload runs right before a real download.
+// Returns the local URL (/uploads/{filename}) or the original URL on failure.
+async function downloadRemoteImageToUploads(ctx, url, opts = {}) {
   if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
+  let urlHash;
   try {
-    const parsed = new URL(url);
-    const ext = extensionOf(parsed.pathname) || '.jpg';
-    const cleanExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
-
-    const urlHash = md5Hex(url.trim()).slice(0, 16);
-    const filename = `mp-cov-${urlHash}${cleanExt}`;
-
-    const stored = await ctx.files.stat(filename);
-    if (stored && stored.size > 500) {
+    urlHash = md5Hex(url.trim()).slice(0, 16);
+    const guess = extensionOf(new URL(url).pathname).replace(/^\.jpeg$/, '.jpg');
+    for (const ext of new Set([guess, ...COVER_EXTS])) {
+      if (!COVER_EXTS.includes(ext)) continue;
+      const name = `mp-cov-${urlHash}${ext}`;
+      const stored = await ctx.files.stat(name);
+      if (!stored || stored.size <= 500) continue;
       // the orphan cleanup keeps young files only: a reused cover must look new until the form is saved
       try {
-        await ctx.files.touch(filename);
-        return ctx.files.url(filename);
+        await ctx.files.touch(name);
+        return ctx.files.url(name);
       } catch (e) {
         log(ctx).debug('Refreshing a reused Manga Passion cover failed, downloading it again:', e);
+        break;
       }
     }
+  } catch (err) {
+    log(ctx).warn('Failed to download image locally:', err);
+    return url;
+  }
 
-    const { buffer } = await fetchImage(ctx, url);
+  if (opts.beforeDownload) await opts.beforeDownload();
+  try {
+    const { buffer, ext } = await fetchImage(ctx, url);
     if (buffer.length < 500) return url; // Invalid image or empty
-
-    await ctx.files.write(filename, buffer);
+    const filename = `mp-cov-${urlHash}${ext}`;
+    await ctx.files.write(filename, buffer, { image: ext });
     return ctx.files.url(filename);
   } catch (err) {
     log(ctx).warn('Failed to download image locally:', err);
@@ -146,13 +152,9 @@ const slimSearchItem = (e) => ({
 
 const isNetworkError = (err) => err?.name === 'TimeoutError' || err?.name === 'AbortError' || err instanceof TypeError;
 
-/**
- * Searches the German editions for a title in up to three query rounds. Every query answer is cached on its own
- * (scoring stays local, so publisher or volume count changes never hit a stale score); failed queries are never cached.
- * `unavailable: true` means the API could not be asked: no candidates and every query failed, or the search was cut
- * short by a network error or the overall deadline.
- * opts: { signal, forceRefresh, deadlineMs, requestTimeoutMs }
- */
+// Searches German editions for a title in up to three query rounds; each query answer is cached on its own (scoring
+// stays local), failed ones never. `unavailable: true` = the API could not be asked (all queries failed, or cut
+// short by network error or deadline). opts: { signal, forceRefresh, deadlineMs, requestTimeoutMs }
 async function searchMangaPassionEditions(ctx, title, publisher = '', totalVolumes = null, opts = {}) {
   if (!title || !title.trim()) return { candidates: [], recommended: null };
 
@@ -297,6 +299,14 @@ function resolveApiUrl(link) {
   } catch {
     return null;
   }
+}
+
+/** true when getEditionDetailsAndVolumes(ctx, editionId) would answer from the cache without a request. */
+function editionCached(ctx, editionId) {
+  const id = toEditionId(editionId);
+  if (!id) return true;
+  const cached = readCache(ctx, `mp_edition_vols_${id}`, EDITION_CACHE_TTL_MS);
+  return Boolean(cached?.notFound || (cached?.edition && cached.edition.author !== undefined));
 }
 
 async function getEditionDetailsAndVolumes(ctx, editionId, forceRefresh = false) {
@@ -454,6 +464,7 @@ const known = (v) => (v && v !== UNKNOWN ? v : null);
 async function searchMangaPassionForLookup(ctx, queryTerm, opts = {}) {
   if (!queryTerm || !queryTerm.trim()) return [];
   const searchRes = await searchMangaPassionEditions(ctx, queryTerm.trim(), '', null, opts);
+  if (searchRes.unavailable) throw Object.assign(new Error('Manga Passion nicht erreichbar'), { unavailable: true });
   if (!searchRes.candidates || searchRes.candidates.length === 0) return [];
 
   const top = searchRes.candidates.filter(c => c.score >= 0).slice(0, 5);
@@ -465,7 +476,7 @@ async function searchMangaPassionForLookup(ctx, queryTerm, opts = {}) {
       id: `mp_${cand.id}`,
       manga_passion_id: cand.id,
       source: 'manga_passion',
-      source_label: '🇩🇪 Manga Passion',
+      source_label: 'Manga Passion',
       title: ed.title || cand.title,
       alt_title: ed.alt_title || null,
       author: ed.author || null,
@@ -499,12 +510,9 @@ function saveEditionLink(ctx, manga, editionId) {
   return false;
 }
 
-/**
- * Picks the recommended edition of a search result and links it to the manga only when the match is unambiguous.
- * An uncertain pick is still returned (so a single request can use it) but not stored: the user has to confirm it.
- * An edition stored while the search ran (the user picked one) replaces the guess: { superseded: true }.
- * options.persist = false never writes (read-only roles).
- */
+// Picks the recommended edition of a search result and links it to the manga only when the match is unambiguous.
+// An uncertain pick is returned but not stored; an edition stored meanwhile replaces it ({ superseded: true }).
+// options.persist = false never writes (read-only roles).
 function linkRecommendedEdition(ctx, manga, searchRes, options = {}) {
   const persist = options.persist !== false;
   const superseded = () => {
@@ -528,6 +536,7 @@ function linkRecommendedEdition(ctx, manga, searchRes, options = {}) {
 }
 
 module.exports = {
+  EDITION_CACHE_TTL_MS,
   API_BASE,
   mpHeaders,
   UNKNOWN,
@@ -538,6 +547,7 @@ module.exports = {
   downloadRemoteImageToUploads,
   searchMangaPassionEditions,
   getEditionDetailsAndVolumes,
+  editionCached,
   getEditionInfo,
   searchMangaPassionForLookup,
   saveEditionLink,

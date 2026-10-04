@@ -1,3 +1,4 @@
+// The stdin admin console (hilfe, status, passwort-reset, admin, API keys): output, password handling and what is logged.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -106,6 +107,19 @@ test('passwort-reset without a terminal writes the password to a 0600 file and p
     assert.ok(await bcrypt.compare(password, db.prepare("SELECT password_hash FROM users WHERE username = 'kim'").get().password_hash));
 });
 
+test('passwort-reset ends the calendar feed of that user only', async (t) => {
+    const idOf = (name) => db.prepare('SELECT id FROM users WHERE username = ?').get(name).id;
+    const feed = (key, userId) => db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)')
+        .run(`calendar_feed:${key}`, JSON.stringify({ user_id: userId, created_at: Date.now(), last_used_at: null, sealed: null }));
+    feed('kim-feed', idOf('kim'));
+    feed('gast-feed', idOf('gast'));
+    const { result } = await captureLogs(t, () => runCommand('passwort-reset kim', () => {}, { revealSecrets: true }));
+    assert.equal(result.ok, true);
+    const feeds = db.prepare("SELECT key FROM app_settings WHERE key LIKE 'calendar_feed:%' ORDER BY key").all().map(r => r.key);
+    assert.deepEqual(feeds, ['calendar_feed:gast-feed']);
+    db.prepare("DELETE FROM app_settings WHERE key LIKE 'calendar_feed:%'").run();
+});
+
 test('the stdin console never prints a password, even when stdout is a terminal', async (t) => {
     const hadTty = Object.prototype.hasOwnProperty.call(process.stdout, 'isTTY');
     const tty = process.stdout.isTTY;
@@ -156,7 +170,12 @@ test('admin <name> only promotes while no administrator exists', async () => {
 });
 
 test('backup creates a verified manual snapshot', async () => {
-    const res = await run('backup');
+    const lifecycle = require('../services/lifecycle');
+    const pending = run('backup');
+    assert.deepEqual(lifecycle.runningJobs(), ['Snapshot'], 'the restart guard sees the console snapshot');
+    const res = await pending;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(lifecycle.runningJobs(), []);
     assert.equal(res.ok, true, res.text);
     assert.match(res.text, /Snapshot manual-.*\.zip erstellt .*geprüft/);
     assert.match((await run('status')).text, /Letztes geprüftes Backup: manual-/);

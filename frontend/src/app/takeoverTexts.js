@@ -1,4 +1,4 @@
-// Titles and explanations of the three takeover dialogs (spec-standalone §4), without the dialog code.
+// Titles and explanations of the three takeover dialogs, without the dialog code.
 export const TAKEOVER = {
   push: {
     title: 'Auf Server übertragen',

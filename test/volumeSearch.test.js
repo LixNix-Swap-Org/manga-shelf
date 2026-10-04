@@ -1,3 +1,4 @@
+// Volume search endpoint.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -37,7 +38,7 @@ test('volume_search: ISBNs, then named volumes, then notes, so the 4000 cap only
     const isbns = [isbn13('978355174001'), isbn13('978355174002')];
     for (const [i, isbn] of isbns.entries()) await addVolume({ manga_id: id, volume_number: String(26 + i), isbn });
 
-    const row = (await editor('GET', '/mangas')).body.find(m => m.id === id);
+    const row = (await editor('GET', '/mangas/volume-search')).body.find(m => m.id === id);
     const search = row.volume_search;
     assert.equal(search.length, 4000);
     const lines = search.split('\n');
@@ -56,6 +57,6 @@ test('volume_search: short series keep every entry in the same order', async () 
     await addVolume({ manga_id: id, volume_number: 'Special 2', type: 'special' });
     const isbn = isbn13('978355174003');
     await addVolume({ manga_id: id, volume_number: '2', isbn, notes: 'Erstauflage' });
-    const row = (await editor('GET', '/mangas')).body.find(m => m.id === id);
+    const row = (await editor('GET', '/mangas/volume-search')).body.find(m => m.id === id);
     assert.deepEqual(row.volume_search.split('\n'), [isbn, 'Special 2', 'Signiert', 'Erstauflage']);
 });

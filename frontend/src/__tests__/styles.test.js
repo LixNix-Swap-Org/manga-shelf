@@ -1,4 +1,5 @@
 // @vitest-environment node
+// Static checks of index.css, index.html and the Tailwind output: 16px inputs, touch targets, z-index layers.
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -121,6 +122,17 @@ describe('shelf spines', () => {
     expect(shelf).toMatch(/isFocused \? 'ring-2 ring-brand-400/);
   });
 
+  it('spine and gap hover lifts only apply with a fine pointer (a tapped spine would stay raised on touch)', () => {
+    const guard = /@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*([^{}]*)\{[^}]*\}\s*\}/g;
+    const guarded = [...css.matchAll(guard)].map((m) => m[1].trim());
+    expect(guarded).toContain('.manga-spine:hover');
+    expect(guarded).toContain('.manga-spine-ghost:hover');
+    const rest = css.replace(guard, '');
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.manga-spine:hover,\s*\.manga-spine-ghost:hover\s*\{[^}]*\}\s*\}/;
+    expect(rest).toMatch(reduced);
+    expect(rest.replace(reduced, '')).not.toMatch(/\.manga-spine(-ghost)?:hover/);
+  });
+
   it('the Schuber frame does not use outline, so a focused box spine keeps the focus outline', () => {
     expect(css).not.toMatch(/\.manga-spine[\w-]*(?::[\w-]+)?\s*\{[^}]*outline/);
     expect(css).toMatch(/\.manga-spine-box::before\s*\{[^}]*border:\s*1px dashed/);
@@ -200,6 +212,98 @@ describe('index.html and fonts', () => {
     if (style === 'black-translucent') {
       expect(html).toMatch(/viewport-fit=cover/);
       expect(sourceFiles(srcDir).some((f) => fs.readFileSync(f, 'utf8').includes('safe-area-inset-top'))).toBe(true);
+    }
+  });
+});
+
+describe('dialog overlays', () => {
+  const OVERLAY_FILES = [
+    'components/modals/AddMangaModal.jsx', 'components/modals/StatsModal.jsx', 'components/modals/BackupRestoreModal.jsx',
+    'components/modals/ToolDialog.jsx', 'components/modals/UserManagementModal.jsx', 'components/modals/AccountModal.jsx',
+    'components/modals/SystemModal.jsx', 'components/modals/AddAnimeModal.jsx', 'components/detail/VolumeEditModal.jsx',
+    'components/detail/GapFillModal.jsx', 'components/detail/BatchAddModal.jsx', 'components/detail/BatchReadModal.jsx',
+    'components/detail/MpEditionModal.jsx', 'components/modals/AnimeDetailModal.jsx',
+    'components/dashboard/ScanCandidatesDialog.jsx', 'components/dashboard/CsvExchangeModal.jsx',
+    'components/common/ConnectQr.jsx'
+  ];
+  const rule = (selector) => css.match(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] || '';
+
+  it('.dialog-overlay is a full-viewport scroll container that keeps clear of the safe areas', () => {
+    const overlay = rule('.dialog-overlay');
+    expect(overlay).toMatch(/position:\s*fixed/);
+    expect(overlay).toMatch(/inset:\s*0/);
+    expect(overlay).toMatch(/overflow-y:\s*auto/);
+    expect(overlay).toMatch(/align-items:\s*flex-start/);
+    for (const side of ['top', 'right', 'bottom', 'left']) expect(overlay).toContain(`max(0.5rem, env(safe-area-inset-${side}))`);
+    expect(css).toMatch(/@media \(min-width: 640px\)\s*\{[^@]*\.dialog-overlay\s*\{[^}]*max\(1rem, env\(safe-area-inset-top\)\)/);
+  });
+
+  it('.dialog-box centres with auto margins, so a box taller than the viewport starts at the scroll top', () => {
+    const box = rule('.dialog-box');
+    expect(box).toMatch(/margin-top:\s*auto/);
+    expect(box).toMatch(/margin-bottom:\s*auto/);
+    expect(box).toMatch(/flex-shrink:\s*0/);
+  });
+
+  it('the short: variant targets landscape phones and outranks the dvh cap and sm: utilities by specificity', () => {
+    expect(css).toMatch(/@media \(max-height: 500px\)\s*\{[^@]*:root \.short\\:max-h-none\s*\{\s*max-height:\s*none/);
+    expect(css).toMatch(/:root \.short\\:p-4\s*\{\s*padding:\s*1rem/);
+    expect(css).toMatch(/:root \.short\\:hidden\s*\{\s*display:\s*none/);
+  });
+
+  it('every dialog uses the shared overlay and box instead of a centred flex overlay', () => {
+    for (const rel of OVERLAY_FILES) {
+      const text = fs.readFileSync(path.join(srcDir, rel), 'utf8');
+      expect(text, rel).toMatch(/className="outline-none dialog-overlay /);
+      expect(text, rel).toMatch(/className="dialog-box /);
+      expect(text, rel).not.toMatch(/fixed inset-0[^"]*(items-center|p-2 sm:p-4|overflow-hidden)/);
+      expect(text, rel).not.toMatch(/dialog-box[^"]*\bmy-(3|8|auto)\b/);
+    }
+  });
+
+  it('.hit-44 keeps an absolutely positioned control where it is (the hit area needs a containing block only)', () => {
+    expect(css).toMatch(/@media \(pointer: coarse\)\s*\{[^@]*\.hit-44:not\(\.absolute\):not\(\.fixed\):not\(\.sticky\)\s*\{\s*position:\s*relative/);
+    expect(css).not.toMatch(/\.hit-44\s*\{\s*position:\s*relative/);
+  });
+
+  it('the gallery pads for the safe areas', () => {
+    expect(rule('.dialog-safe-area')).toContain('max(0.75rem, env(safe-area-inset-left))');
+    const lightbox = fs.readFileSync(path.join(srcDir, 'components/detail/LightboxGallery.jsx'), 'utf8');
+    expect(lightbox).toMatch(/fixed inset-0 z-60[^"]*dialog-safe-area/);
+  });
+
+  it('a fixed scrim covers the status bar above the bars and the scrolled dialogs, below the toasts', () => {
+    const scrim = rule('body::before');
+    expect(scrim).toMatch(/position:\s*fixed/);
+    expect(scrim).toMatch(/height:\s*env\(safe-area-inset-top\)/);
+    expect(scrim).toMatch(/pointer-events:\s*none/);
+    const z = Number(scrim.match(/z-index:\s*(\d+)/)?.[1]);
+    expect(z).toBe(65);
+    // dialogs z-50 / z-[60] / z-60, toasts z-[70]
+    expect(z).toBeGreaterThan(60);
+    expect(z).toBeLessThan(70);
+    const toaster = fs.readFileSync(path.join(srcDir, 'components/common/Toaster.jsx'), 'utf8');
+    expect(toaster).toMatch(/z-\[70\]/);
+  });
+
+  it('the sticky dashboard header reserves its height at the top for keyboard focus, and scrolls away on short screens', () => {
+    expect(css).toMatch(/html:has\(header\[data-sticky-header\]\)\s*\{\s*scroll-padding-top:\s*calc\(var\(--sticky-header-h, 0px\) \+ 0\.5rem\)/);
+    expect(css).toMatch(/@media \(max-height: 500px\)\s*\{\s*:root \.short\\:static\s*\{\s*position:\s*static/);
+    const header = fs.readFileSync(path.join(srcDir, 'components/dashboard/DashboardHeader.jsx'), 'utf8');
+    expect(header).toMatch(/<header ref=\{headerRef\} data-sticky-header="" className="sticky short:static /);
+  });
+
+  it('the bottom navigation reserves space only on phones (it stays mounted, hidden, above 640 px)', () => {
+    expect(css).toMatch(/@media \(max-width: 639\.98px\)\s*\{\s*html:has\(#bottom-nav\)\s*\{\s*scroll-padding-bottom/);
+    const unguarded = css.replace(/@media \(max-width: 639\.98px\)\s*\{[^{}]*\{[^}]*\}\s*\}/g, '');
+    expect(unguarded).not.toMatch(/#bottom-nav/);
+    expect(unguarded).toMatch(/html:has\(#detail-bottom-bar\)\s*\{\s*scroll-padding-bottom/);
+  });
+
+  it('dialogs with a capped height let the whole dialog scroll on short screens', () => {
+    for (const rel of ['components/modals/ToolDialog.jsx', 'components/modals/StatsModal.jsx', 'components/modals/BackupRestoreModal.jsx', 'components/detail/VolumeEditModal.jsx', 'components/detail/MpEditionModal.jsx']) {
+      const text = fs.readFileSync(path.join(srcDir, rel), 'utf8');
+      expect(text, rel).toMatch(/dialog-box[^"]*max-h-\[9\ddvh\] short:max-h-none/);
     }
   });
 });

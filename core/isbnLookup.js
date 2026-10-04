@@ -278,35 +278,77 @@ async function reportKey(ctx, ok, message) {
     }
 }
 
+const KEY_INVALID_REASONS = new Set(['keyinvalid', 'api_key_invalid']);
+const KEY_QUOTA_REASONS = new Set(['dailylimitexceeded', 'userratelimitexceeded', 'ratelimitexceeded', 'quotaexceeded', 'rate_limit_exceeded', 'resource_exhausted']);
+
 /**
- * With the instance key when one is set; a key Google refuses (400/403) is marked as failed (last_error, so it is not
- * sent again) and the request is repeated once without it.
+ * What a refused keyed request says about the key: 'invalid' (switch it off), 'quota' (skip it for the day) or 'other'.
+ * Google's error body (passed as err.body) decides; without it a 400 means an invalid key, 403/429 a quota or rate limit.
+ */
+function googleKeyVerdict(status, body) {
+    let error = null;
+    try { error = body ? JSON.parse(body).error : null; } catch (e) { /* not JSON */ }
+    if (!error || typeof error !== 'object') return status === 400 ? 'invalid' : 'quota';
+    const reasons = [...(Array.isArray(error.errors) ? error.errors : []), ...(Array.isArray(error.details) ? error.details : [])]
+        .map(e => String((e && e.reason) || '').toLowerCase());
+    if (typeof error.status === 'string') reasons.push(error.status.toLowerCase());
+    if (reasons.some(r => KEY_INVALID_REASONS.has(r)) || /api key not valid/i.test(String(error.message || ''))) return 'invalid';
+    if (reasons.some(r => KEY_QUOTA_REASONS.has(r)) || status === 429) return 'quota';
+    return 'other';
+}
+
+// instance keys over quota until the next Pacific midnight, when Google resets the daily quota (process memory only)
+const skippedKeys = new Map();
+
+function nextPacificMidnight(now) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: 'numeric', minute: 'numeric', second: 'numeric'
+    }).formatToParts(now).map(p => [p.type, Number(p.value)]));
+    const elapsed = ((parts.hour * 60 + parts.minute) * 60 + parts.second) * 1000 + now.getMilliseconds();
+    return now.getTime() - elapsed + 24 * 60 * 60 * 1000;
+}
+
+function keySkipped(ctx, key) {
+    const until = skippedKeys.get(key);
+    if (until === undefined) return false;
+    if (ctx.now().getTime() < until) return true;
+    skippedKeys.delete(key);
+    return false;
+}
+
+/**
+ * With the instance key when one is set. A refused key gets one retry without it: an invalid key is marked as failed
+ * (last_error, so it is not sent again), a key over its quota or rate limit is skipped until Google's daily reset.
  */
 async function fetchGoogleBooks(ctx, fetchText, isbn) {
     const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
     const key = await googleBooksKey(ctx);
-    if (!key) return fetchText(url, 6000);
+    if (!key || keySkipped(ctx, key)) return fetchText(url, 6000);
     let text;
     try {
         text = await fetchText(`${url}&key=${encodeURIComponent(key)}`, 6000);
     } catch (err) {
         const status = httpStatusOf(err);
-        if (status !== 400 && status !== 403) throw withoutKey(err, key);
-        log(ctx).warn(`Google Books refused the instance key (HTTP ${status}); it is switched off, retrying without it`);
-        await reportKey(ctx, false, `Google Books lehnt den Schlüssel ab (HTTP ${status})`);
+        if (status !== 400 && status !== 403 && status !== 429) throw withoutKey(err, key);
+        const verdict = googleKeyVerdict(status, typeof err.body === 'string' ? err.body : null);
+        if (verdict === 'invalid') {
+            log(ctx).warn(`Google Books refused the instance key (HTTP ${status}); it is switched off, retrying without it`);
+            await reportKey(ctx, false, `Google Books lehnt den Schlüssel ab (HTTP ${status})`);
+        } else if (verdict === 'quota') {
+            log(ctx).warn(`Google Books: the instance key is over its quota or rate limit (HTTP ${status}); skipped until the daily reset`);
+            skippedKeys.set(key, nextPacificMidnight(ctx.now()));
+        } else {
+            log(ctx).warn(`Google Books answered HTTP ${status} to the keyed request; retrying without the key`);
+        }
         return fetchText(url, 6000);
     }
     await reportKey(ctx, true);
     return text;
 }
 
-/**
- * How well a catalogue title (or the catalogue's series name, e.g. "One piece" for the volume "Mein kleiner Bruder!") fits a
- * series (0 - 100): 100 = same words, otherwise the shorter title must appear in the
- * longer one on word boundaries (and be at least 4 letters), weighted by how much of the longer title it covers; as a
- * weaker fallback all (at least two) words of the shorter title appear somewhere in the longer one.
- * "Berserk" fits "Berserk Deluxe", "One" does not fit "One Piece" by accident.
- */
+// How well a catalogue title (or series name) fits a series (0 - 100): 100 = same words, otherwise the shorter title
+// (at least 4 letters) must appear in the longer on word boundaries, weighted by coverage; weaker fallback: all
+// (at least two) words of the shorter appear in the longer. "Berserk" fits "Berserk Deluxe", "One" not "One Piece".
 function titleMatchScore(bookTitles, manga) {
     let best = 0;
     for (const bookTitle of [].concat(bookTitles)) {
@@ -351,15 +393,10 @@ function exactMatchRank(book, manga) {
 const MIN_LEAD = 15;
 const VOLUME_COLUMNS = 'id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year';
 
-/**
- * Finds the series / volume of the collection a book belongs to.
- *  1. the same ISBN on a stored volume (certain),
- *  2. otherwise the best title match, only if it clearly stands out; exact hits are ranked (own title before alternative
- *     title, then the publisher) and a remaining tie gives candidates instead of a guess; then the volume by number,
- *     but only when the catalogue really knew the number (a placeholder "1" must not report "you already own volume 1").
- * Returns { manga, volume, reason: 'isbn' | 'title' | null, candidates, number_in_title }; number_in_title = the
- * Google Books number is part of the series name ("Eyeshield 21"), so the volume number is in fact unknown.
- */
+// Finds the series / volume of the collection a book belongs to: the same ISBN on a stored volume (certain), else the
+// best clearly standing-out title match (exact hits ranked own title, alt title, publisher; a tie gives candidates),
+// then the volume by number, only when the catalogue really knew it. Returns { manga, volume, reason, candidates,
+// number_in_title }; number_in_title = the number is part of the series name ("Eyeshield 21"), so the volume is unknown.
 function matchCollection(db, book, isbn13) {
     const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS} FROM volumes WHERE isbn = ? ORDER BY id LIMIT 1`).get(isbn13) : null;
     if (byIsbn) {
@@ -406,5 +443,5 @@ function matchCollection(db, book, isbn13) {
 
 module.exports = {
     stripMarcControls, parseMarc21Xml, lookupBookByIsbn, matchCollection, titleMatchScore,
-    decodeXmlEntities, decodeHtmlEntities, normalizeVolumeNumber
+    decodeXmlEntities, decodeHtmlEntities, normalizeVolumeNumber, googleKeyVerdict
 };

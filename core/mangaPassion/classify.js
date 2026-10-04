@@ -26,11 +26,9 @@ function wordOverlap(a, b) {
   return shared / (wa.size + wb.size - shared);
 }
 
-/**
- * How the title of an edition relates to the series title: 'exact' (same words, also "Eyeshield21" = "Eyeshield 21"),
- * 'candidate-longer' (an official subtitle was added), 'target-longer' (the series title has extra words such as
- * "max", "Extream" or "Anthology": probably a different edition than the plain series), or 'fuzzy'.
- */
+// How an edition's title relates to the series title: 'exact' (same words, also "Eyeshield21" = "Eyeshield 21"),
+// 'candidate-longer' (official subtitle added), 'target-longer' (extra words such as "max" or "Anthology": probably
+// another edition), or 'fuzzy'.
 function titleRelation(editionTitle, targetTitle) {
   const e = titleKey(editionTitle);
   const t = titleKey(targetTitle);
@@ -113,11 +111,9 @@ function validYearMonth(year, month) {
   return Number.isInteger(year) && year >= MIN_YEAR && year < PLACEHOLDER_YEAR && Number.isInteger(month) && month >= 1 && month <= 12;
 }
 
-/**
- * Release date of an official entry: "YYYY-MM-DD", or "YYYY-MM" when Manga Passion only knows the month (it then sends
- * day: null and the last day of the month as date). Accepts the raw date string or the whole API volume.
- * Manga Passion marks "not announced yet" with 2999-12-31: that, invalid and malformed input give null.
- */
+// Release date of an official entry: "YYYY-MM-DD", or "YYYY-MM" when only the month is known (day: null and the
+// month's last day as date). Accepts the date string or the whole API volume; "not announced" (2999-12-31) and
+// invalid input give null.
 function cleanOfficialDate(raw) {
   if (raw && typeof raw === 'object') {
     const full = cleanOfficialDate(raw.date);
@@ -182,12 +178,9 @@ function isSchuberEntry(v) {
   return SCHUBER_TITLE.test(v.title || '');
 }
 
-/**
- * Entry type of an official Manga Passion volume: 'volume' | 'special_edition' | 'schuber' | 'special'.
- * A Collectors/Limited Edition has the same number as the regular volume, so the type is part of its identity.
- * Live data: type 3 + specialType 1 = Schuber, type 3 otherwise = Collectors/Limited/Variant edition,
- * type 0 = regular volume whatever its title says. Titles are only read when those fields do not decide.
- */
+// Entry type of an official volume: 'volume' | 'special_edition' | 'schuber' | 'special'. A Collectors/Limited
+// Edition shares the regular volume's number, so type is part of the identity. Live data: type 3 + specialType 1 =
+// Schuber, other type 3 = special edition, type 0 = regular volume; titles only decide when those fields do not.
 function classifyOfficialVolume(ov) {
   if (isSchuberEntry(ov)) return 'schuber';
   const key = String(ov.volume_number || '').trim().toLowerCase();
@@ -209,9 +202,8 @@ function officialVolumeNumber(ov) {
 }
 
 /**
- * Resolves one gap entry sent by the client to an official Manga Passion volume. Accepts what the UI shows:
- * a plain number ("14" -> the regular volume), a labelled entry ("26 (Abenteuer auf der Insel des Gottes)",
- * "5 (Collectors Edition)") or a title ("East Blue Leerschuber").
+ * Resolves one gap entry sent by the client to an official volume. Accepts what the UI shows: a plain number
+ * ("14" -> the regular volume), a labelled entry ("5 (Collectors Edition)") or a title ("East Blue Leerschuber").
  */
 function resolveOfficialGap(entry, officialVolumes) {
   const raw = String(entry).trim();
@@ -252,11 +244,9 @@ function isConfidentMatch(candidates) {
 
 const SEARCH_STOP_WORDS = new Set(['edition', 'deluxe', 'ultimate', 'ultimative', 'collectors', 'manga', 'premium', 'special', 'limited', 'master', 'perfect', 'complete', 'anthology', 'magazin']);
 
-/**
- * Queries for the Manga Passion title search, which only finds a title when the spelling matches closely
- * ("One Punch Man" finds nothing, "One-Punch Man" does). `primary` are the cheap spellings, `variants` guess
- * hyphens, apostrophes and glued numbers, `words` are single rare words used as a last resort.
- */
+// Queries for the title search, which needs a close spelling ("One Punch Man" finds nothing, "One-Punch Man" does).
+// `primary` are the cheap spellings, `variants` guess hyphens, apostrophes and glued numbers, `words` single rare
+// words as a last resort.
 function buildSearchQueries(title) {
   const clean = String(title || '').replace(/\s+/g, ' ').trim();
   const unique = (list) => [...new Set(list.map(q => q.replace(/\s+/g, ' ').trim()).filter(q => q.length >= 2))];
@@ -324,12 +314,9 @@ function pickSpecialEdition(candidates, volumeNumber, hint) {
   return candidates[0];
 }
 
-/**
- * The official entry for a user volume of a given type ('volume' | 'special_edition' | 'special'; Schubers go through
- * matchSchuberVolume). Never crosses types: a regular volume never gets Collectors Edition data and the other way round,
- * and a number without an entry of that type gives null instead of another entry. `hint` = { notes, price } of the
- * user volume, used to tell several special editions with the same number apart.
- */
+// The official entry for a user volume of a type ('volume' | 'special_edition' | 'special'; Schubers use
+// matchSchuberVolume). Never crosses types and gives null instead of another entry. `hint` = { notes, price }
+// of the user volume tells several special editions with the same number apart.
 function findOfficialVolume(officialVolumes, volumeNumber, type = 'volume', hint = {}) {
   const vols = officialVolumes || [];
   const key = lower(volumeNumber);

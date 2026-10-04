@@ -1,5 +1,4 @@
-// Step-by-step guides to the API keys (reports/spec-user-api-keys.md §7.1). Pure data: the server console renders it
-// directly, the web dialog, the setup assistant and the apps get the same objects as JSON from GET /sources/guides.
+// Step-by-step guides to the API keys. Pure data: the server console renders it, everything else gets it as JSON from GET /sources/guides.
 const ANILIST_PIN_URL = 'https://anilist.co/api/v2/oauth/pin';
 
 const AUTHORIZE_TEMPLATE = 'https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token';

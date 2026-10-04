@@ -1,9 +1,11 @@
 import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleAlert, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
-import OwnerBadges from './OwnerBadges';
+import OwnerBadges, { ownerColor, readerInitials } from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
 import { assetImgProps } from '../../utils/api';
+
+export { readerInitials };
 
 /** Card grid view of a series' volumes (incl. official gaps). Purely presentational; all state and handlers come in via props. */
 export default function VolumeGridView({
@@ -63,8 +65,9 @@ export default function VolumeGridView({
                             e.stopPropagation();
                             setFillingGapNumber(item.gapNumber);
                           }}
-                          className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+                          className="hit-44 px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
                           title="Band in Sammlung erfassen"
+                          aria-label={`Band ${item.gapNumber} erfassen`}
                         >
                           <Plus className="w-3 h-3" /> Erfassen
                         </button>
@@ -89,9 +92,9 @@ export default function VolumeGridView({
                         </div>
                       </div>
                     ) : (
-                      <div className="w-12 h-16 sm:w-13 sm:h-18 rounded-xl border border-dashed border-amber-500/30 bg-amber-950/20 shrink-0 flex flex-col items-center justify-center text-amber-500/60 p-1">
-                        <BookOpen className="w-4 h-4 mb-1 opacity-50" />
-                        <span className="text-[9px] font-bold text-center leading-tight">Band {item.gapNumber}</span>
+                      <div className="w-12 h-16 sm:w-13 sm:h-18 rounded-xl border border-dashed border-amber-500/30 bg-amber-950/20 shrink-0 flex flex-col items-center justify-center p-1">
+                        <BookOpen className="w-4 h-4 mb-1 text-amber-500/60" aria-hidden="true" />
+                        <span data-testid="gap-ghost-label" className="text-[10px] font-bold text-center leading-tight text-amber-300">Band {item.gapNumber}</span>
                       </div>
                     )}
 
@@ -137,7 +140,8 @@ export default function VolumeGridView({
                           e.stopPropagation();
                           setFillingGapNumber(item.gapNumber);
                         }}
-                        className="text-amber-400 hover:text-amber-300 font-semibold text-xs flex items-center gap-1 hover:underline cursor-pointer"
+                        className="hit-44 text-amber-400 hover:text-amber-300 font-semibold text-xs flex items-center gap-1 hover:underline cursor-pointer"
+                        aria-label={`Band ${item.gapNumber} zu Sammlung hinzufügen`}
                       >
                         <span>+ Zu Sammlung</span>
                       </button>
@@ -184,14 +188,16 @@ export default function VolumeGridView({
             <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-slate-800/70 w-full shrink-0">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 {selectionMode && (
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
-                    aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
-                    className="w-5 h-5 shrink-0 accent-brand-500 cursor-pointer"
-                  />
+                  <label className="hit-44 inline-flex shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
+                      aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                      className="w-6 h-6 m-0 accent-brand-500 cursor-pointer"
+                    />
+                  </label>
                 )}
                 <button
                   type="button"
@@ -261,14 +267,14 @@ export default function VolumeGridView({
               </div>
 
               {canEdit && !selectionMode && (
-                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
+                <div className="flex items-center gap-1 [@media(pointer:coarse)]:gap-2.5 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
                   {!hasCover && (
                     <button
                       type="button"
                       onClick={(e) => handleOpenEditVolume(vol, e)}
-                      className={`p-1.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all`}
+                      className="hit-44 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
                       title="Foto für Band hochladen"
-                      aria-label="Foto für Band hochladen"
+                      aria-label={`Foto für ${getVolumeDisplayTitle(vol)} hochladen`}
                     >
                       <Camera className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
@@ -276,18 +282,18 @@ export default function VolumeGridView({
                   <button
                     type="button"
                     onClick={(e) => handleOpenEditVolume(vol, e)}
-                    className={`p-1.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all`}
+                    className="hit-44 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-brand-300 hover:bg-slate-800 rounded-md transition-all"
                     title="Band-Details & Fotos bearbeiten"
-                    aria-label="Band-Details & Fotos bearbeiten"
+                    aria-label={`${getVolumeDisplayTitle(vol)} bearbeiten`}
                   >
                     <PenLine className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     onClick={(e) => handleDeleteVolume(e, vol)}
-                    className={`ml-1.5 p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-md transition-all`}
+                    className="hit-44 ml-1.5 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded-md transition-all"
                     title="Band löschen"
-                    aria-label="Band löschen"
+                    aria-label={`${getVolumeDisplayTitle(vol)} löschen`}
                   >
                     <X className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -401,8 +407,9 @@ export default function VolumeGridView({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openVolumeGallery(vol); }}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-brand-300 bg-brand-950/60 border border-brand-500/30 text-[10px] hover:bg-brand-900/80 transition-colors font-medium cursor-pointer"
+                    className="hit-44 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-brand-300 bg-brand-950/60 border border-brand-500/30 text-[10px] hover:bg-brand-900/80 transition-colors font-medium cursor-pointer"
                     title="Fotogalerie öffnen"
+                    aria-label={`${vol.images.length} Fotos von ${getVolumeDisplayTitle(vol)} öffnen`}
                   >
                     <Camera className="w-3 h-3 text-brand-400" />
                     <span>{vol.images.length} Fotos</span>
@@ -425,7 +432,7 @@ export default function VolumeGridView({
                       onClick={(e) => {
                         if (canToggleStatus) handleToggleVolumeRead(vol, effUserId, e);
                       }}
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                      className={`hit-44 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                         !canToggleStatus ? 'cursor-default opacity-80' : 'cursor-pointer'
                       } ${
                         isRead
@@ -435,6 +442,7 @@ export default function VolumeGridView({
                       title={canToggleStatus
                         ? 'Lesestatus umschalten (Gelesen / Ungelesen)'
                         : canToggle ? READ_OTHERS_ADMIN_ONLY : `Lesestatus: ${isRead ? 'Gelesen' : 'Ungelesen'} (Nur Leseansicht)`}
+                      aria-label={`${isRead ? 'Gelesen' : 'Ungelesen'} – ${getVolumeDisplayTitle(vol)}`}
                     >
                       <BookCheck className={`w-3.5 h-3.5 ${isRead ? 'text-emerald-400' : 'text-slate-400'}`} aria-hidden="true" />
                       <span>{isRead ? 'Gelesen' : 'Ungelesen'}</span>
@@ -443,21 +451,24 @@ export default function VolumeGridView({
                 })()}
 
                 {readers.length > 0 && (
-                  <div role="group" aria-label="Lesestatus der Leser" className="flex items-center gap-1 flex-wrap justify-end">
+                  <div role="group" aria-label={`Lesestatus der Leser – ${getVolumeDisplayTitle(vol)}`} className="flex items-center gap-1 flex-wrap justify-end">
                     {readers.map(r => {
                       const isReaderDone = hasUserRead(vol, r.user_id, user?.id);
                       const name = r.display_name || r.username || 'Unbekannt';
-                      const initial = name.charAt(0).toUpperCase();
+                      const initials = readerInitials(name);
+                      const color = ownerColor(r.user_id);
                       const canToggleReader = canToggle && (mayToggleOthers || String(r.user_id) === String(user?.id));
                       const stateText = isReaderDone ? 'gelesen' : 'ungelesen';
-                      const look = `relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                        isReaderDone
-                          ? 'bg-emerald-500/25 border border-emerald-400/70 text-emerald-300 shadow-sm shadow-emerald-950/40'
-                          : 'bg-slate-900 border border-slate-800 text-slate-400'
+                      // the reader's own colour (same as the owner badges): filled when read, outlined when not
+                      const look = `relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold tracking-tight transition-all border ${
+                        isReaderDone ? 'text-slate-950 shadow-sm shadow-slate-950/40' : 'bg-slate-900 border-dashed'
                       }`;
+                      const lookStyle = isReaderDone
+                        ? { backgroundColor: color, borderColor: color }
+                        : { color, borderColor: color };
                       const content = (
                         <>
-                          <span aria-hidden="true">{initial}</span>
+                          <span aria-hidden="true" data-testid="reader-initials">{initials}</span>
                           {isReaderDone ? (
                             <span aria-hidden="true" className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border border-slate-900 flex items-center justify-center">
                               <Check className="w-2 h-2 text-slate-950 stroke-[3]" />
@@ -470,7 +481,7 @@ export default function VolumeGridView({
 
                       if (!canToggleReader) {
                         return (
-                          <span key={r.user_id} role="img" aria-label={`${name}: ${stateText}`} title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'}`} className={`${look} cursor-default`}>
+                          <span key={r.user_id} role="img" aria-label={`${name}: ${stateText}`} title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'}`} className={`${look} cursor-default`} style={lookStyle}>
                             {content}
                           </span>
                         );
@@ -480,9 +491,10 @@ export default function VolumeGridView({
                           key={r.user_id}
                           type="button"
                           aria-pressed={isReaderDone}
-                          aria-label={`Gelesen: ${name}`}
+                          aria-label={`Gelesen: ${name} – ${getVolumeDisplayTitle(vol)}`}
                           onClick={(e) => handleToggleVolumeRead(vol, r.user_id, e)}
                           className={`${look} cursor-pointer hover:scale-110`}
+                          style={lookStyle}
                           title={`${name}: ${isReaderDone ? 'Gelesen' : 'Noch ungelesen'} (Klicken zum Umschalten)`}
                         >
                           {content}

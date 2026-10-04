@@ -1,6 +1,17 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import useCollectionFilters from '../hooks/useCollectionFilters';
+// useCollectionFilters: search, tag, publisher and status filters with URL sync and offline volume search.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+
+const offlineCopy = vi.hoisted(() => ({ rows: [] }));
+vi.mock('../utils/offlineStore', async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadOfflineVolumeSearch: vi.fn(async () => offlineCopy.rows)
+}));
+
+import useCollectionFilters, { loadPublisherNames, loadVolumeSearch } from '../hooks/useCollectionFilters';
+import { clearDataCache } from '../utils/dataCache';
+import { setPublisherNames } from '../utils/volumeHelpers';
+import { fakeResponse } from './fakeResponse';
 
 const mangas = [
   { id: 1, title: 'Berserk', publisher: 'Panini', status: 'Laufend', owned_volumes: 10, total_value: 80 },
@@ -222,5 +233,185 @@ describe('useCollectionFilters: collect, author, grouping and the URL', () => {
     rerender({ search: '?author=Masashi%20Kishimoto' });
     expect(result.current.authorFilter).toBe('Masashi Kishimoto');
     expect(titles(result)).toEqual(['Naruto']);
+  });
+
+  describe('genre filter', () => {
+    const tagged = [
+      { id: 1, title: 'Berserk', status: 'Laufend', tags: 'Action, Fantasy' },
+      { id: 2, title: 'Akira', status: 'Abgeschlossen', tags: 'Action, Science-Fiction' },
+      { id: 3, title: 'Yotsuba', status: 'Laufend', tags: 'Alltag' }
+    ];
+
+    it('offers the collection tags, filters with every chosen tag and remembers the choice', () => {
+      const { result, unmount } = renderHook(() => useCollectionFilters(tagged));
+      expect(result.current.availableTags.map(t => [t.tag, t.count])).toEqual([['Action', 2], ['Alltag', 1], ['Fantasy', 1], ['Science-Fiction', 1]]);
+      expect(result.current.tagFilter).toEqual([]);
+      act(() => result.current.setTagFilter(['Action']));
+      expect(titles(result)).toEqual(['Akira', 'Berserk']);
+      act(() => result.current.setTagFilter(['Action', 'fantasy']));
+      expect(titles(result)).toEqual(['Berserk']);
+      expect(localStorage.getItem('mangashelf_tag_filter')).toBe('Action,Fantasy');
+      unmount();
+      const again = renderHook(() => useCollectionFilters(tagged));
+      expect(again.result.current.tagFilter).toEqual(['Action', 'Fantasy']);
+      expect(titles(again.result)).toEqual(['Berserk']);
+    });
+
+    it('?tags= wins over the remembered choice, a later link sets it and a change is written back to the URL', () => {
+      localStorage.setItem('mangashelf_tag_filter', 'Alltag');
+      const replace = vi.fn();
+      const { result, rerender } = renderHook(({ search }) => useCollectionFilters(tagged, { url: { search, replace } }),
+        { initialProps: { search: '?tags=Science-Fiction' } });
+      expect(result.current.tagFilter).toEqual(['Science-Fiction']);
+      expect(titles(result)).toEqual(['Akira']);
+      expect(replace).not.toHaveBeenCalled();
+      rerender({ search: '?tags=Fantasy' });
+      expect(titles(result)).toEqual(['Berserk']);
+      act(() => result.current.setTagFilter([...result.current.tagFilter, 'Action']));
+      expect(replace).toHaveBeenLastCalledWith('?tags=Fantasy%2CAction');
+      act(() => result.current.setTagFilter([]));
+      expect(replace).toHaveBeenLastCalledWith('');
+      expect(titles(result)).toEqual(['Akira', 'Berserk', 'Yotsuba']);
+    });
+  });
+});
+
+describe('publisher names from the server', () => {
+  const shelf = [
+    { id: 1, title: 'A', publisher: 'Carlsen Verlag GmbH', status: 'Laufend' },
+    { id: 2, title: 'B', publisher: 'Carlsen Manga', status: 'Laufend' },
+    { id: 3, title: 'C', publisher: 'Panini', status: 'Laufend' }
+  ];
+  const ANSWER = {
+    publishers: [{ name: 'Carlsen Verlag GmbH', canonical: 'Carlsen Manga' }, { name: 'Carlsen Manga', canonical: 'Carlsen Manga' }],
+    aliases: [{ alias: 'panini verlags gmbh', canonical: 'Panini' }]
+  };
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    setPublisherNames(null);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setPublisherNames(null);
+  });
+
+  it('a signed-in shelf loads them once and merges the publisher list; a failure keeps the built-in names', async () => {
+    const fetchMock = vi.fn(async () => fakeResponse(200, ANSWER));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, unmount } = renderHook(() => useCollectionFilters(shelf, { userId: 71 }));
+    expect(result.current.availablePublishers).toHaveLength(3);
+    expect(result.current.availablePublishers).toContain('Panini Verlags GmbH');
+    await waitFor(() => expect(result.current.availablePublishers).toHaveLength(2));
+    expect(result.current.availablePublishers).toEqual(expect.arrayContaining(['Carlsen Manga', 'Panini']));
+    act(() => result.current.setPublisherFilter('Carlsen Manga'));
+    expect(result.current.filtered.map((m) => m.title)).toEqual(['A', 'B']);
+    unmount();
+    renderHook(() => useCollectionFilters(shelf, { userId: 71 }));
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/publishers')).toHaveLength(1);
+
+    fetchMock.mockImplementation(async () => fakeResponse(500, { error: 'kaputt' }));
+    expect(await loadPublisherNames({ scope: '|72' })).toBe(false);
+    const other = renderHook(() => useCollectionFilters(shelf, { userId: 72 }));
+    expect(other.result.current.availablePublishers).toEqual(expect.arrayContaining(['Carlsen Verlag GmbH', 'Panini Verlags GmbH']));
+  });
+
+  it('force reloads after a merge; without a user nothing is requested', async () => {
+    const fetchMock = vi.fn(async () => fakeResponse(200, { publishers: [], aliases: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useCollectionFilters(shelf));
+    expect(fetchMock).not.toHaveBeenCalled();
+    await loadPublisherNames({ scope: '|80' });
+    fetchMock.mockImplementation(async () => fakeResponse(200, ANSWER));
+    await loadPublisherNames({ scope: '|80' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const { result } = renderHook(() => useCollectionFilters(shelf));
+    expect(result.current.availablePublishers).toHaveLength(3);
+    await act(async () => { await loadPublisherNames({ force: true }); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.availablePublishers).toHaveLength(2);
+  });
+});
+
+describe('volume search index (GET /api/mangas/volume-search)', () => {
+  const shelf = [
+    { id: 1, title: 'Berserk', publisher: 'Panini', status: 'Laufend' },
+    { id: 2, title: 'Akira', publisher: 'Carlsen Manga', status: 'Laufend' },
+    { id: 3, title: 'Monster', publisher: 'Carlsen Manga', status: 'Laufend' }
+  ];
+  const INDEX = [
+    { id: 1, volume_search: '978-3-89921-123-4\nErstauflage, signiert' },
+    { id: 2, volume_search: '9783551000001\nArtbook Collectors Edition' }
+  ];
+  const withEtag = (status, body, etag) => {
+    const res = fakeResponse(status, body);
+    if (etag) res.headers.set('ETag', etag);
+    return res;
+  };
+  const searchCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => url === '/api/mangas/volume-search');
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    clearDataCache();
+    offlineCopy.rows = [];
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('loads on the first search keystroke, not with the list; ISBN, note and named-volume searches find the series', async () => {
+    const fetchMock = vi.fn(async (url) => (url === '/api/mangas/volume-search' ? withEtag(200, INDEX, '"v1"') : fakeResponse(200, { publishers: [], aliases: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useCollectionFilters(shelf, { userId: 90 }));
+    await act(async () => {});
+    expect(searchCalls(fetchMock)).toHaveLength(0);
+    expect(shelf.every((m) => !('volume_search' in m))).toBe(true);
+
+    act(() => result.current.setSearch('9783899211234'));
+    await waitFor(() => expect(titles(result)).toEqual(['Berserk']));
+    expect(searchCalls(fetchMock)).toHaveLength(1);
+    act(() => result.current.setSearch('signiert'));
+    await waitFor(() => expect(titles(result)).toEqual(['Berserk']));
+    act(() => result.current.setSearch('artbook'));
+    await waitFor(() => expect(titles(result)).toEqual(['Akira']));
+    act(() => result.current.setSearch('3551000'));
+    await waitFor(() => expect(titles(result)).toEqual(['Akira']));
+    act(() => result.current.setSearch('monster'));
+    await waitFor(() => expect(titles(result)).toEqual(['Monster']));
+    expect(searchCalls(fetchMock)).toHaveLength(1);
+    expect(result.current.filtered[0]).toBe(shelf[2]);
+  });
+
+  it('revalidates with the ETag of the in-memory copy; a 304 keeps the index without parsing', async () => {
+    let answer = () => withEtag(200, INDEX, '"v1"');
+    const fetchMock = vi.fn(async (url) => (url === '/api/mangas/volume-search' ? answer() : fakeResponse(200, { publishers: [], aliases: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = await loadVolumeSearch(91);
+    expect(first.get('1')).toContain('Erstauflage');
+    answer = () => withEtag(304, undefined);
+    const again = await loadVolumeSearch(91);
+    expect(again).toBe(first);
+    const [, init] = searchCalls(fetchMock)[1];
+    expect(new Headers(init.headers).get('If-None-Match')).toBe('"v1"');
+
+    sessionStorage.setItem('mangashelf_search', JSON.stringify({ user: '91', search: 'erstauflage' }));
+    const { result } = renderHook(() => useCollectionFilters(shelf, { userId: 91 }));
+    expect(titles(result)).toEqual(['Berserk']);
+  });
+
+  it('without a server answer the offline copy is searched; a server without the endpoint keeps the list rows', async () => {
+    offlineCopy.rows = [{ id: 3, volume_search: 'Perfect Edition' }];
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url === '/api/mangas/volume-search') throw new TypeError('Failed to fetch');
+      return fakeResponse(200, { publishers: [], aliases: [] });
+    }));
+    const { result } = renderHook(() => useCollectionFilters(shelf, { userId: 92 }));
+    act(() => result.current.setSearch('perfect edition'));
+    await waitFor(() => expect(titles(result)).toEqual(['Monster']));
+
+    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(404, { error: 'Nicht gefunden' })));
+    expect(await loadVolumeSearch(93)).toBeNull();
+    const rows = [{ id: 7, title: 'Pluto', volume_search: '9783551000099' }];
+    const old = renderHook(() => useCollectionFilters(rows, { userId: 93 }));
+    act(() => old.result.current.setSearch('9783551000099'));
+    expect(titles(old.result)).toEqual(['Pluto']);
   });
 });

@@ -1,0 +1,8 @@
+{
+  "main": "server.cjs",
+  "mainFormat": "commonjs",
+  "disableExperimentalSEAWarning": true,
+  "useSnapshot": false,
+  "useCodeCache": false,
+  "assets": {}
+}

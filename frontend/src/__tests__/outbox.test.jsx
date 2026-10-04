@@ -1,3 +1,4 @@
+// Outbox: volume patches, cache updates, storage and pending counter.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -25,8 +26,14 @@ vi.mock('../utils/offlineStore', async (importOriginal) => ({
 }));
 
 import {
-  defaultOutboxStorage, applyChangeToCaches, getOutbox, resetOutbox, outboxScope, FALLBACK_KEY, normalizeOutboxEntry
+  defaultOutboxStorage, applyChangeToCaches, getOutbox, resetOutbox, outboxScope, FALLBACK_KEY, normalizeOutboxEntry,
+  currentServerId, LOCAL_SERVER_ID, WEB_SERVER_ID, localServerId, sendEntry, submitChange, classifyOutboxResponse
 } from '../utils/outbox';
+import { useLocalRuntime } from '../local/localTransport';
+import useVolumeActions from '../hooks/useVolumeActions';
+import { enterLocalMode, leaveLocalMode } from '../local/profile';
+import { setServer } from '../utils/api';
+import { getActiveServerId } from '../app/serverStore';
 import { applyVolumeChange, applyDetailToList, patchVolume, recomputeDetail } from '../utils/volumePatch';
 import { writeCache, readCache, clearDataCache, detailKey, LIST_KEY } from '../utils/dataCache';
 import { useOutboxPending } from '../app/useOutbox';
@@ -185,5 +192,94 @@ describe('useOutboxPending', () => {
     expect(result.current.purchases).toBe(1);
     expect([...result.current.purchaseIds]).toEqual([5]);
     expect(getOutbox().list(outboxScope(2))).toHaveLength(1);
+  });
+});
+
+describe('outbox scope of the local mode', () => {
+  it("entries of the mode without a server belong to 'local:<profile>', never to the server that was active before", () => {
+    expect(currentServerId()).toBe(WEB_SERVER_ID);
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    try {
+      setServer({ base: 'https://shelf.example.org', token: 'tok' });
+      const serverId = getActiveServerId();
+      expect(serverId).toBeTruthy();
+      expect(outboxScope(1)).toEqual({ userId: 1, serverId });
+      enterLocalMode({ id: 1, name: 'Felix' });
+      expect(currentServerId()).toBe(`${LOCAL_SERVER_ID}:1`);
+      expect(outboxScope(1)).toEqual({ userId: 1, serverId: 'local:1' });
+      enterLocalMode({ id: 2, name: 'Kim' });
+      expect(currentServerId()).toBe(localServerId(2));
+      leaveLocalMode();
+      expect(currentServerId()).toBe(serverId);
+    } finally {
+      leaveLocalMode();
+      localStorage.removeItem('mangashelf_local_profile');
+      setServer({ base: '', token: '' });
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('a server change queued before the local mode is never sent to the device core, nor a local one to the server', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      setServer({ base: 'https://shelf.example.org', token: 'tok' });
+      const serverId = getActiveServerId();
+      const outbox = getOutbox();
+      await outbox.add({ kind: 'read', volumeId: 3, userId: 1, serverId, value: true, deferred: true });
+      enterLocalMode({ id: 1, name: 'Felix' });
+      const [queued] = outbox.list({ userId: 1, serverId });
+      expect(await sendEntry(queued)).toBeNull();
+      expect((await outbox.flush(outboxScope(1))).items).toEqual([]);
+      expect(outbox.list({ userId: 1, serverId })).toHaveLength(1);
+      leaveLocalMode();
+      expect(await sendEntry({ ...queued, serverId: localServerId(1) })).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      leaveLocalMode();
+      localStorage.removeItem('mangashelf_local_profile');
+      setServer({ base: '', token: '' });
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('the device core answers finally: its refusals (507/423/409) are dropped and reverted, never queued or retried', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    const refusal = (status, code) => ({ status, headers: {}, body: { error: 'abgelehnt', code } });
+    const answers = [refusal(507, 'LOCAL_SAVE_FAILED'), refusal(423, 'LOCAL_BUSY')];
+    const request = vi.fn(async () => answers.shift() ?? { status: 200, headers: {}, body: { success: true, is_read: true } });
+    useLocalRuntime({ request, getProfile: () => ({ id: 1, username: 'Felix' }) });
+    try {
+      enterLocalMode({ id: 1, name: 'Felix' });
+      const outbox = getOutbox();
+      const failed = await submitChange({ kind: 'read', volumeId: 4, value: true }, { userId: 1, outbox });
+      expect([failed.status, failed.res.status]).toEqual(['failed', 507]);
+      expect(outbox.list(outboxScope(1))).toEqual([]);
+
+      const fetchManga = vi.fn(async () => {});
+      const patchManga = vi.fn();
+      const user = { id: 1, username: 'Felix', role: 'admin', local: true };
+      const { result } = renderHook(() => useVolumeActions({ id: '7', user, canEdit: true, fetchManga, patchManga }));
+      await act(() => result.current.handleToggleVolumeRead({ id: 4, volume_number: '4', read_users: [] }));
+      expect(patchManga).toHaveBeenCalled();
+      expect(fetchManga).toHaveBeenCalledTimes(1);
+      expect(outbox.list(outboxScope(1))).toEqual([]);
+
+      // offline in the browser: the device core still answers at once
+      const sent = await submitChange({ kind: 'read', volumeId: 4, value: true }, { userId: 1, offline: true, outbox });
+      expect(sent.status).toBe('sent');
+      expect(request).toHaveBeenCalledTimes(3);
+      const local = { serverId: localServerId(1) };
+      for (const status of [507, 423, 409, 500]) expect(classifyOutboxResponse({ ok: false, status }, local)).toBe('drop');
+      expect(classifyOutboxResponse(null, local)).toBe('drop');
+      expect(classifyOutboxResponse({ ok: false, status: 404 }, local)).toBe('done');
+      expect(classifyOutboxResponse({ ok: false, status: 507 }, { serverId: WEB_SERVER_ID })).toBe('retry');
+    } finally {
+      useLocalRuntime(null);
+      leaveLocalMode();
+      localStorage.removeItem('mangashelf_local_profile');
+      vi.unstubAllEnvs();
+    }
   });
 });

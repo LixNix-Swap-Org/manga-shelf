@@ -1,7 +1,17 @@
+// Anime gateway: credentials, request budgets, error mapping and fallbacks between sources.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const gateway = require('../../core/anime/gateway');
 const { fakeFetch, aniListFixtures, jikanFixtures, memoryWith, ctxAs, json, fixture } = require('./helpers');
+
+const { requestJson, SourceError } = require('../../core/anime/request');
+
+/** One AniList Media request through requestJson with the access's credential (as the adapters send it). */
+const aniListExec = (ctx, credential) => requestJson(ctx, 'https://graphql.anilist.co', {
+    method: 'POST',
+    headers: credential ? { Authorization: `Bearer ${credential.secret}` } : {},
+    body: JSON.stringify({ query: 'query { Media(id: 154587) { id } }' })
+}, { label: 'AniList' });
 
 const rateLimited = () => json({ errors: [{ message: 'Too Many Requests.', status: 429 }], data: null }, { status: 429, headers: { 'retry-after': '60', 'x-ratelimit-remaining': '0' } });
 
@@ -133,13 +143,75 @@ test('an odd answer for an own key: the pool is asked; the key is disabled only 
     const ctx = ctxAs(memoryWith(http.fetch, { credentials }), 'ed');
     const meta = await gateway.getAnime(ctx, { anilist_id: 154587 });
     assert.equal(meta.anilist_id, 154587);
-    assert.equal(failed.length, 1);
+    assert.equal(failed.length, 0, 'one odd answer is only a strike');
+    await gateway.call(ctx, 'anilist', { userId: 2 }, (credential) => aniListExec(ctx, credential));
+    assert.equal(failed.length, 1, 'the second strike within ten minutes disables the key');
     assert.match(failed[0][2], /AniList lehnt den Schlüssel ab \(400\)/);
 
     failed.length = 0;
     poolBroken = true;
     await assert.rejects(gateway.getAnime(ctx, { anilist_id: 154587 }), (err) => err.kind === 'bad');
     assert.equal(failed.length, 0, 'the pool fails the same way: the key stays');
+});
+
+test('suspect keys: an empty 2xx answer never counts; two refused answers more than ten minutes apart do not disable', async () => {
+    let keyAnswer = () => new Response('', { status: 200 });
+    const http = fakeFetch({ anilist: (body, init) => (init.headers.Authorization ? keyAnswer(body) : aniListFixtures(body)), jikan: () => undefined });
+    const failed = [];
+    const credentials = {
+        get: (userId, provider) => (provider === 'anilist' ? { secret: 'eigener-token' } : null),
+        failed: (...args) => failed.push(args),
+        used: () => {}
+    };
+    const core = memoryWith(http.fetch, { credentials });
+    let now = Date.parse('2026-10-04T10:00:00Z');
+    const ctx = { ...ctxAs(core, 'ed'), now: () => new Date(now) };
+    const ask = () => gateway.call(ctx, 'anilist', { userId: 2 }, (credential) => aniListExec(ctx, credential));
+
+    for (let i = 0; i < 3; i++) assert.equal((await ask()).credential_used, 'shared');
+    assert.equal(failed.length, 0, 'a CDN page or truncated body is a glitch, not a refused key');
+
+    keyAnswer = () => json({ data: null, errors: [{ message: 'Something odd', status: 400 }] }, { status: 400 });
+    await ask();
+    now += 11 * 60 * 1000;
+    await ask();
+    assert.equal(failed.length, 0, 'the first strike expired');
+
+    keyAnswer = (body) => aniListFixtures(body);
+    assert.equal((await ask()).credential_used, 'own');
+    keyAnswer = () => json({ data: null, errors: [{ message: 'Something odd', status: 400 }] }, { status: 400 });
+    now += 60 * 1000;
+    await ask();
+    assert.equal(failed.length, 0, 'a proper answer of the key clears its strike');
+    now += 60 * 1000;
+    await ask();
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0][0], 2);
+});
+
+test('suspect keys: only answers flagged as GraphQL errors count, not a message that merely looks like one', async () => {
+    const failed = [];
+    const credentials = {
+        get: (userId, provider) => (provider === 'anilist' ? { secret: 'eigener-token' } : null),
+        failed: (...args) => failed.push(args),
+        used: () => {}
+    };
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: () => undefined });
+    const ctx = ctxAs(memoryWith(http.fetch, { credentials }), 'ed');
+    let graphql = false;
+    const ask = () => gateway.call(ctx, 'anilist', { userId: 2 }, (credential) => {
+        if (credential) throw new SourceError('bad', 'AniList: ungültige Antwort (HTTP 400: kaputt)', { status: 400, graphql });
+        return aniListExec(ctx, credential);
+    });
+
+    for (let i = 0; i < 3; i++) assert.equal((await ask()).credential_used, 'shared');
+    assert.equal(failed.length, 0, 'the message shape alone is no refusal');
+
+    graphql = true;
+    await ask();
+    await ask();
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0][0], 2);
 });
 
 test('MyAnimeList API only with a client id, Jikan otherwise', async () => {

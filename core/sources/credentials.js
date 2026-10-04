@@ -1,15 +1,7 @@
-// Where the core gets API keys from. The host plugs in a provider: the server keeps them encrypted in
-// user_api_credentials (routes/apiKeys.js), the apps later in the device's secure storage. ctx.credentials wins over
-// the registered provider; without either every request goes through the shared pool without a key.
-//
-// provider = {
-//   get(userId, provider)      -> { secret, allowBackground } | null   personal key, readable and not disabled
-//   instance(provider)         -> { secret, fromEnv } | null           instance key (environment or database)
-//   background(provider)       -> [{ userId, secret }]                 personal keys released for background work
-//   failed(userId, provider, message)                                   key refused by the provider: disable it
-//   used(userId, provider, ok)                                          last use (the host throttles the writes)
-//   status(userId, provider)   -> { configured, last_error } | null   for the "key disabled" hint
-// }
+// Where the core gets API keys from: the host plugs in a provider (server: encrypted in the database; apps: secure storage).
+// ctx.credentials wins over the registered provider; with neither, requests use the shared pool without a key.
+// provider = { get(userId, p) -> {secret, allowBackground}|null, instance(p) -> {secret, fromEnv}|null,
+//   background(p) -> [{userId, secret}], failed(userId, p, message), used(userId, p, ok), status(userId, p) -> {configured, last_error}|null }
 const NONE = {
     get: () => null,
     instance: () => null,

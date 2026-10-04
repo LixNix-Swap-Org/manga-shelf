@@ -5,7 +5,7 @@
 export const SERVERS_KEY = 'mangashelf_servers';
 export const ACTIVE_KEY = 'mangashelf_active_server';
 export const PENDING_LOGOUTS_KEY = 'mangashelf_pending_logouts';
-// single-server format of the first app builds (r3): migrated once
+// single-server format of the first app builds: migrated once
 export const LEGACY_BASE_KEY = 'mangashelf_server_base';
 export const LEGACY_TOKEN_KEY = 'mangashelf_server_token';
 

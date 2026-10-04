@@ -1,3 +1,5 @@
+// ZIP reading and writing for backups: a streaming reader (only the central directory is held in memory), manifests
+// and the restore test of a fresh archive. Server-only: needs fs, zlib and the database.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');

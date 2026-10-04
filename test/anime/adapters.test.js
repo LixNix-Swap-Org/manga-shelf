@@ -1,3 +1,4 @@
+// AniList, Jikan and MyAnimeList adapters and the shared normalize helpers.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const anilist = require('../../core/anime/anilist');

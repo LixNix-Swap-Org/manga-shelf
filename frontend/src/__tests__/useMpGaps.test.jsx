@@ -1,3 +1,4 @@
+// useMpGaps: Manga Passion gap lookup, long-job timeouts and error toasts.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import useMpGaps, { LONG_JOB_TIMEOUT_TEXT } from '../hooks/useMpGaps';

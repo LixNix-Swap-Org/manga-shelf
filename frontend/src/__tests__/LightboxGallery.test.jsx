@@ -1,3 +1,4 @@
+// Covers the lightbox gallery and the volume photo manager, including focus and Escape handling.
 import { describe, it, expect, vi } from 'vitest';
 import { useEffect, useState } from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';

@@ -11,7 +11,7 @@ function toggleOwner(ctx, { params, body }) {
     const volumeId = parseInt(params.id, 10);
     const vol = ctx.db.prepare('SELECT id, manga_id, status, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     if (!vol) throw notFound('Band');
-    // Jeder ändert nur den eigenen Besitz; Admins dürfen für andere eintragen
+    // Everyone changes only their own ownership; admins may enter it for others
     const targetUserId = resolveTargetUser(ctx, body.user_id);
     const ownerPrice = parsePrice(body.price);
     if (ownerPrice.error) throw badRequest(FIELD_ERRORS.price);

@@ -1,3 +1,4 @@
+// PublishersModal and its suggested merge target.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PublishersModal, { suggestedTarget } from '../components/modals/PublishersModal';

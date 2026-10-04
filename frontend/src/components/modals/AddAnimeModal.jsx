@@ -42,7 +42,7 @@ export default function AddAnimeModal({ isOpen, onClose, search, loadAdaptations
   const linkedManga = useMemo(() => mangas.find((m) => String(m.id) === String(initialMangaId)), [mangas, initialMangaId]);
   useEffect(() => {
     if (isOpen && linkedManga && !query) setQuery(linkedManga.alt_title || linkedManga.title || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Öffnen mit ?add=
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open with ?add=
   }, [isOpen, linkedManga]);
 
   // opened from a series ("Anime-Adaption"): its adaptations are the first suggestions
@@ -146,14 +146,14 @@ export default function AddAnimeModal({ isOpen, onClose, search, loadAdaptations
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-7 border border-slate-700/80 shadow-2xl my-3 sm:my-8">
+      <div className="dialog-box glass-panel max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-7 short:p-4 border border-slate-700/80 shadow-2xl">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
           <h2 id={titleId} className="text-xl font-bold text-white flex items-center gap-2">
             <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> Anime hinzufügen
           </h2>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+          <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>

@@ -1,4 +1,4 @@
-// Anime metadata gateway (reports/design-anime-sources.md): AniList and MyAnimeList (official API with a client id,
+// Anime metadata gateway: AniList and MyAnimeList (official API with a client id,
 // Jikan without) behind one budget, one queue and one cache. Personal keys go first for their owner, then the shared
 // pool; a paused or broken source is replaced by the other one, then by the cache.
 const { HttpError } = require('../errors');
@@ -21,6 +21,8 @@ const MANUAL_REFRESH_MS = 60 * 1000;
 const SECOND_SOURCE_GRACE_MS = 2500;
 const SEARCH_GROUP_MAX = 3;
 const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList', jikan: 'MyAnimeList (Jikan)' };
+// a personal key is disabled after its second refused-looking answer within this window that the pool answered properly
+const SUSPECT_WINDOW_MS = 10 * 60 * 1000;
 
 let state = null;
 
@@ -37,6 +39,7 @@ function freshState() {
         groupers: new Map(),
         batchers: new Map(),
         manualRefresh: new Map(),
+        suspects: new Map(),
         refreshIds: new Set(),
         refreshOpen: null,
         refreshSeq: 0,
@@ -124,6 +127,9 @@ function accessesFor(ctx, provider, { userId, priority }) {
     return out;
 }
 
+// an HTTP 400/401/403 that carries a GraphQL error body; an empty or non-JSON 2xx answer is a glitch, not the key
+const refusedLike = (err) => err.kind === 'bad' && [400, 401, 403].includes(err.status) && err.graphql === true;
+
 const unavailable = (provider, reason = 'unavailable') => new SourceError(reason, `${SOURCE_LABELS[provider] || provider} ist gerade nicht verfügbar`);
 
 /**
@@ -147,12 +153,19 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
     const shared = accesses.find((a) => a.kind === 'shared');
     if (priority !== 'interactive' && !probe && shared) plan.push({ access: shared, deadlineMs: Infinity });
     let lastError = null;
-    // a personal key that got an odd answer: disabled only when a later access gets a proper one
+    // a personal key that got a refused-looking answer: a strike only when a later shared access gets a proper one
     let suspect = null;
     const disable = (access, err) => {
+        s.suspects.delete(access.bucket);
         creds.failed(access.userId, provider, `${SOURCE_LABELS[provider]} lehnt den Schlüssel ab (${err.status || 401})`);
         s.budget.drop(access.bucket);
         logger().info(`${SOURCE_LABELS[provider]}: Schlüssel von Benutzer ${access.userId} abgelehnt und deaktiviert`);
+    };
+    const strike = (access, err) => {
+        const now = nowMs(ctx);
+        const first = s.suspects.get(access.bucket);
+        if (first !== undefined && now - first <= SUSPECT_WINDOW_MS) disable(access, err);
+        else s.suspects.set(access.bucket, now);
     };
     for (const { access, deadlineMs } of plan) {
         if (!probe && !s.budget.available(access.bucket, options, nowMs(ctx))) {
@@ -168,8 +181,11 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
             const result = await exec(access.credential);
             s.budget.success(access.bucket);
             if (result && result.rate) s.budget.observe(access.bucket, result.rate, nowMs(ctx));
-            if (access.kind !== 'shared') creds.used(access.userId, provider, true);
-            if (suspect && access.kind === 'shared') disable(suspect.access, suspect.err);
+            if (access.kind !== 'shared') {
+                creds.used(access.userId, provider, true);
+                s.suspects.delete(access.bucket);
+            }
+            if (suspect && access.kind === 'shared') strike(suspect.access, suspect.err);
             return { ...result, provider, credential_used: access.kind === 'own' ? 'own' : 'shared' };
         } catch (err) {
             if (!(err instanceof SourceError)) {
@@ -193,7 +209,7 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
             }
             s.budget.success(access.bucket);
             if (personal) {
-                if (!suspect) suspect = { access, err };
+                if (!suspect && refusedLike(err)) suspect = { access, err };
                 continue;
             }
             throw err;
@@ -390,9 +406,12 @@ async function probeAniListSearch(ctx, terms) {
 
 const probeMalSearch = (ctx, term, limit) => malSideSearch(ctx, term, null, limit, true);
 
+/** Rejection of searchManga when no enabled source answered; every coalesced caller gets it. */
+const searchUnavailable = () => Object.assign(new Error('AniList und MyAnimeList haben nicht geantwortet'), { unavailable: true });
+
 /**
- * Manga search for the series lookup (AniList type MANGA + Jikan /manga) in the lookup shape. Never rejects: failures
- * are logged and give [] for that source. `timeoutMs` bounds each source request.
+ * Manga search for the series lookup (AniList + Jikan) in the lookup shape. A failing source gives [] for itself;
+ * when no enabled source answered it rejects with `err.unavailable`, so "no hits" stays distinguishable.
  */
 async function searchManga(ctx, q, { timeoutMs, limit = 5 } = {}) {
     remember(ctx);
@@ -407,7 +426,7 @@ async function searchManga(ctx, q, { timeoutMs, limit = 5 } = {}) {
         leave = enterInteractive(ctx);
     } catch (err) {
         logger().info('Manga lookup: too many waiting requests of this user, answering without AniList/MyAnimeList');
-        return [];
+        throw searchUnavailable();
     }
     const userId = ctx.user ? ctx.user.id : null;
     try {
@@ -434,12 +453,14 @@ async function searchManga(ctx, q, { timeoutMs, limit = 5 } = {}) {
             for (const err of errors) logger().warn('Manga lookup source failed:', err && err.message);
             const results = joinMangaHits(lists.anilist || [], lists.jikan || []);
             const answered = Object.keys(lists).length;
+            if (attempts.length && !answered) throw searchUnavailable();
             if (answered) cache.write(ctx, key, results, answered < attempts.length ? cache.TTL.partial : (results.length ? cache.TTL.search : cache.TTL.notFound));
             return results;
         });
     } catch (err) {
+        if (err && err.unavailable) throw err;
         logger().warn('Manga lookup failed:', err && err.message);
-        return [];
+        throw searchUnavailable();
     } finally {
         leave();
     }
@@ -481,10 +502,8 @@ function batcherFor(kind) {
 }
 
 /**
- * One entry by AniList and/or MAL id, merged from both sources when both answer: AnimeMeta or null (unknown to every
- * source that answered). interactive: AniList Media with relations plus the MAL side in parallel; background: the
- * AniList batcher (relations stay as stored), the MAL side only when AniList cannot serve or does not know the entry.
- * skipAniList: straight to the MAL side (rows AniList's id batch did not return).
+ * One entry by AniList and/or MAL id, merged when both answer: AnimeMeta or null. interactive: AniList plus MAL in
+ * parallel; background: the AniList batcher, MAL only when AniList cannot serve. skipAniList: MAL side only.
  */
 async function getAnime(ctx, ref, { priority = 'interactive', skipAniList = false } = {}) {
     remember(ctx);
@@ -563,9 +582,8 @@ function idGroups(rows) {
 }
 
 /**
- * Refreshes `rows` from the background share: AniList id batches (partial snapshots), or entry by entry over the MAL
- * side when AniList is switched off. MAL-only rows AniList does not know go to `onMalOnlyMissing(id)`. Counts into
- * `report`; stops (report.stopped) when AniList cannot serve, `shouldStop()` says so or the database was reopened.
+ * Refreshes `rows` from the background share: AniList id batches, or one by one over MAL when AniList is off.
+ * Stops (report.stopped) when AniList cannot serve, `shouldStop()` says so or the database was reopened.
  */
 async function refreshRows(ctx, rows, report, { generation, maxGroups = Infinity, pauseMs = 0, shouldStop = () => false, onMalOnlyMissing = () => {} } = {}) {
     if (!settings(ctx).anilist) {
@@ -730,10 +748,8 @@ async function manualRefresh(ctx, id) {
 }
 
 /**
- * Due entries (next_check_at reached) in groups of 50 over AniList's id_in, from the background share of the budget.
- * onlyAiring: just the entries waiting for an episode (the hourly run). Stops when AniList cannot serve: sweeps wait
- * for AniList instead of spending MyAnimeList one by one; MAL-only entries AniList does not know are queued for one
- * MAL-side refresh each. Prunes api_cache on every run. Resolves with { due, updated, missing, stopped }.
+ * Refreshes due entries (next_check_at reached) in groups of 50 over AniList's id_in; `onlyAiring` is the hourly run.
+ * Stops when AniList cannot serve (sweeps wait instead of spending MAL); MAL-only entries are queued for one MAL refresh.
  */
 async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pauseMs = 0, shouldStop = () => false } = {}) {
     remember(ctx);

@@ -24,7 +24,7 @@ function toggleRead(ctx, { params, body }) {
         previousReadAt = existing.read_at;
     }
 
-    const readRows = ctx.db.prepare('SELECT vr.user_id, u.username FROM volume_reads vr JOIN users u ON vr.user_id = u.id WHERE vr.volume_id = ?').all(volumeId);
+    const readRows = ctx.db.prepare('SELECT vr.user_id, u.username, vr.read_at FROM volume_reads vr JOIN users u ON vr.user_id = u.id WHERE vr.volume_id = ?').all(volumeId);
     const readBy = readRows.map(r => r.user_id);
 
     const answer = { success: true, is_read: isRead, read_by: readBy, read_users: readRows };
@@ -42,6 +42,8 @@ function batchRead(ctx, { body }) {
     if (!mId || isNaN(maxVol)) {
         throw badRequest('Ungültige Parameter');
     }
+    const readAt = body.read_at;
+    if (!isBlank(readAt) && !isValidReadAt(readAt)) throw badRequest('Ungültiger Lesezeitpunkt (erwartet: JJJJ-MM-TT HH:MM:SS, UTC)');
     const targetUserId = resolveTargetUser(ctx, user_id);
     if (!ctx.db.prepare('SELECT 1 FROM mangas WHERE id = ?').get(mId)) throw notFound('Manga');
 
@@ -52,7 +54,8 @@ function batchRead(ctx, { body }) {
         return !isNaN(num) && num <= maxVol;
     });
 
-    const insertStmt = ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
+    const insertStmt = ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
+    const readAtValue = isBlank(readAt) ? null : readAt.trim();
     const deleteStmt = ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ? RETURNING read_at');
 
     // changed_ids: the entries whose read state this request flipped, so a client can undo exactly those;
@@ -62,7 +65,7 @@ function batchRead(ctx, { body }) {
     ctx.db.transaction(() => {
         for (const v of targetVols) {
             if (read) {
-                if (insertStmt.run(v.id, targetUserId).changes > 0) changedIds.push(v.id);
+                if (insertStmt.run(v.id, targetUserId, readAtValue).changes > 0) changedIds.push(v.id);
                 continue;
             }
             const removed = deleteStmt.get(v.id, targetUserId);

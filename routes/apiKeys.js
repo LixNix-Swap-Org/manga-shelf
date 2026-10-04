@@ -1,4 +1,4 @@
-// Personal and instance API keys (reports/spec-user-api-keys.md): stored encrypted in user_api_credentials, checked
+// Personal and instance API keys: stored encrypted in user_api_credentials, checked
 // live before saving, never returned. Also the server's credential provider for the core gateway.
 const express = require('express');
 const { db, runTransaction, createCtx } = require('../db');
@@ -7,6 +7,7 @@ const { createRateLimiter, clientIp } = require('../middleware/rateLimit');
 const { HttpError, badRequest, notFound } = require('../utils/httpError');
 const { sealForServer, openForServer, UNREADABLE } = require('../utils/secretBox');
 const log = require('../utils/logger').child('api-keys');
+const { config } = require('../utils/config');
 const { setCredentialProvider } = require('../core/sources/credentials');
 const { guideFor, formatError, userProviders, instanceProviders } = require('../core/sources/guides');
 const animeSettings = require('../core/anime/settings');
@@ -16,12 +17,12 @@ const { SourceError } = require('../core/anime/request');
 const MIN_SECRET = 10;
 const MAX_SECRET = 4096;
 const USED_WRITE_GAP_MS = 60 * 1000;
-const ENV_KEYS = { mal: 'MAL_CLIENT_ID', google_books: 'GOOGLE_BOOKS_KEY' };
+// MAL_CLIENT_ID and GOOGLE_BOOKS_KEY (utils/config.js)
+const ENV_KEYS = { mal: 'malClientId', google_books: 'googleBooksKey' };
 
 const envSecret = (provider) => {
-    const name = ENV_KEYS[provider];
-    const value = name ? String(process.env[name] || '').trim() : '';
-    return value || null;
+    const key = ENV_KEYS[provider];
+    return (key && config[key]) || null;
 };
 
 // an environment key the provider refused: { secret, message } by provider, until the variable changes
@@ -116,9 +117,9 @@ const serverProvider = {
 function registerServerSources() {
     setCredentialProvider(serverProvider);
     animeSettings.configure({
-        anilistRpm: process.env.ANIME_ANILIST_RPM,
-        jikanRpm: process.env.ANIME_JIKAN_RPM,
-        sources: process.env.ANIME_SOURCES || undefined
+        anilistRpm: config.animeAnilistRpm,
+        jikanRpm: config.animeJikanRpm,
+        sources: config.animeSources
     });
 }
 

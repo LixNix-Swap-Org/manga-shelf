@@ -26,11 +26,8 @@ function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
-/**
- * Photo for an upload: downscaled to `maxEdge` and re-encoded as JPEG, which also drops EXIF data such as the GPS
- * position. The original comes back for GIF and other types, files under `minBytes`, when the browser cannot decode
- * the file, and when the result would not be smaller.
- */
+// Downscales to `maxEdge` and re-encodes as JPEG (which drops EXIF such as GPS). Returns the original for GIF and
+// other types, files under `minBytes`, undecodable files and when the result would not be smaller.
 export async function prepareImageForUpload(file, options = {}) {
   const { maxEdge, quality, minBytes } = { ...RESIZE_DEFAULTS, ...options };
   const decode = options.createImageBitmap ?? globalThis.createImageBitmap;

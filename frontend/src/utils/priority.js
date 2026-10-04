@@ -1,4 +1,4 @@
-// Wish priority of volumes (volumes.priority) and series (mangas.wish_priority): 0 keine, 1 niedrig, 2 mittel, 3 hoch.
+// Wish priority of volumes (volumes.priority) and series (mangas.wish_priority): 0 none, 1 low, 2 medium, 3 high.
 // No React imports: the node:test suites load this module directly.
 
 export const PRIORITY_OPTIONS = [

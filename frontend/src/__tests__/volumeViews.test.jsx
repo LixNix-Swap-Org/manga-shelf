@@ -1,3 +1,4 @@
+// Volume views (shelf, grid, list), spines, filter bar and detail keyboard shortcuts.
 import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -302,8 +303,8 @@ describe('VolumeGridView', () => {
   it('reader badges carry name and pressed state; non-admins cannot toggle others', () => {
     const p = viewProps({ readers, canToggleOthers: false, displayVolumeItems: [{ isGap: false, volume: vol({ read_users: [{ user_id: 1 }] }) }] });
     render(<VolumeGridView {...p} />);
-    const group = screen.getByRole('group', { name: 'Lesestatus der Leser' });
-    const alex = within(group).getByRole('button', { name: 'Gelesen: Alex' });
+    const group = screen.getByRole('group', { name: 'Lesestatus der Leser – Band 5' });
+    const alex = within(group).getByRole('button', { name: 'Gelesen: Alex – Band 5' });
     expect(alex.getAttribute('aria-pressed')).toBe('true');
     expect(within(group).queryByRole('button', { name: /mia/ })).toBeNull();
     expect(within(group).getByRole('img', { name: 'mia: ungelesen' })).toBeTruthy();
@@ -313,7 +314,7 @@ describe('VolumeGridView', () => {
 
   it('admins toggle every reader', () => {
     render(<VolumeGridView {...viewProps({ readers, canToggleOthers: true, displayVolumeItems: [{ isGap: false, volume: vol() }] })} />);
-    expect(screen.getByRole('button', { name: 'Gelesen: mia' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Gelesen: mia – Band 5' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('the main read button is disabled when a non-admin views another reader', () => {
@@ -324,7 +325,7 @@ describe('VolumeGridView', () => {
   it('delete hands over the volume object', () => {
     const p = viewProps({ displayVolumeItems: [{ isGap: false, volume: vol({ id: 9 }) }] });
     render(<VolumeGridView {...p} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Band löschen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Band 5 löschen' }));
     expect(p.handleDeleteVolume).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 9 }));
   });
 
@@ -337,7 +338,7 @@ describe('VolumeGridView', () => {
     expect(p.handleToggleVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 4 }));
     fireEvent.click(screen.getByRole('button', { name: /Ungelesen/ }));
     expect(p.handleToggleVolumeRead).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /löschen$/ })).toBeNull();
   });
 
   it('gives "Bestellt" its own label', () => {
@@ -439,7 +440,7 @@ describe('selection mode of the volume views', () => {
     expect(screen.getByRole('checkbox', { name: 'Band 6 auswählen' }).checked).toBe(true);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Band 5 auswählen' }));
     expect(p.onSelectVolume).toHaveBeenCalledTimes(2);
-    expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /löschen$/ })).toBeNull();
   });
 
   it('grid without selection mode keeps the editor click and has no checkboxes', () => {

@@ -1,3 +1,4 @@
+// Origin/CSRF middleware (middleware/originCheck.js) and bearerToken parsing.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');

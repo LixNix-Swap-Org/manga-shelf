@@ -2,7 +2,7 @@ import { CalendarClock, Check } from 'lucide-react';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { formatReleaseDate } from '../../../utils/radarHelpers';
 
-/** Hinweis auf Vorbestellungen, deren Termin im Manga-Passion-Kalender inzwischen anders lautet; mit 1-Klick-Übernahme. */
+/** Notice of preorders whose date in the Manga Passion calendar has changed since; with one-click adoption. */
 export default function PersonalDateChanges({ changes, canEdit, onApply, applyingIds }) {
   if (!changes || changes.length === 0) return null;
   return (

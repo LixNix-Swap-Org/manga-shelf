@@ -1,3 +1,4 @@
+// Free-space checks run before large writes (restore, backup) so a full disk fails early with a clear message.
 const fs = require('fs');
 
 const MB = 1024 * 1024;

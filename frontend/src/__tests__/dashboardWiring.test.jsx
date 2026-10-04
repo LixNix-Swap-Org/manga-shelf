@@ -1,3 +1,4 @@
+// Covers how the dashboard wires its hooks into the shopping and radar views.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';

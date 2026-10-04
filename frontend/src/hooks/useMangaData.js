@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadMangaDetail, updateCachedManga, syncOfflineCopy } from '../utils/offlineStore';
 import { prefillTotalVolumes } from '../utils/scanHelpers';
-import { readApiError, UPLOAD_CANCELLED } from './useVolumeActions';
+import { readApiError, UPLOAD_CANCELLED, notifyTrashed } from './useVolumeActions';
 import { apiFetch, errorFromResponse, isAbortError, readJson, TIMEOUTS } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import {
@@ -81,7 +81,10 @@ export function changedFormFields(base, current) {
 }
 
 export const seriesDeleteConfirmText = (title) =>
-  `Möchtest du "${title}" wirklich löschen? Alle zugehörigen Bände werden ebenfalls entfernt.`;
+  `Möchtest du "${title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).`;
+
+/** "Genres nachladen": only for a series linked to Manga Passion that has no tags yet. */
+export const canFillTags = (manga) => Boolean(manga?.manga_passion_id) && !String(manga?.tags ?? '').trim();
 
 const REFRESH_FAILED = 'Aktualisierung fehlgeschlagen: Der Server ist gerade nicht erreichbar. Angezeigt wird der letzte Stand.';
 const SHOWING_OFFLINE_COPY = 'Server nicht erreichbar: Angezeigt wird die Offline-Kopie.';
@@ -360,14 +363,23 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const handleDeleteManga = async () => {
     if (!canEdit || !manga) return;
     if (!confirm(seriesDeleteConfirmText(manga.title))) return;
+    const { title } = manga;
+    const seriesId = id;
     try {
       const res = await apiFetch(`/api/mangas/${id}`, { method: 'DELETE' });
       if (res.ok || res.status === 404) {
         if (res.status === 404) notify.info((await errorFromResponse(res, 'Die Reihe wurde bereits gelöscht')).message);
+        const trashId = res.ok ? (await readJson(res))?.trash_id : null;
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
         syncOfflineCopy({ force: true });
         navigate('/');
+        // the page is gone by then: a restored series opens again
+        notifyTrashed(`„${title}“`, trashId, (ok) => {
+          if (!ok) return;
+          syncOfflineCopy({ force: true });
+          navigate(`/manga/${seriesId}`);
+        });
       } else if (res.status === 401) {
         handleUnauthorized();
       } else {
@@ -440,6 +452,33 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     }
   };
 
+  const [fillingTags, setFillingTags] = useState(false);
+  const fillingTagsRef = useRef(false);
+  /** "Genres nachladen": POST sync-edition { tags_only } fills empty tags from the linked edition (cache first). */
+  const handleFillTags = async () => {
+    if (!canEdit || fillingTagsRef.current || !canFillTags(mangaRef.current)) return;
+    fillingTagsRef.current = true;
+    setFillingTags(true);
+    try {
+      const res = await apiFetch(`/api/mangas/${id}/sync-edition`, { method: 'POST', body: { tags_only: true }, timeout: TIMEOUTS.lookup });
+      if (res.ok) {
+        const data = (await readJson(res)) ?? {};
+        if (data.updated) notify.success(`Genres übernommen: ${data.tags}`);
+        else if (!data.tags) notify.info('Manga Passion nennt für diese Ausgabe keine Genres.');
+        await fetchManga();
+      } else if (res.status === 401) {
+        handleUnauthorized();
+      } else {
+        await notifyResponseError(res, 'Genres konnten nicht geladen werden');
+      }
+    } catch (err) {
+      notify.error(err, { fallback: 'Genres konnten nicht geladen werden' });
+    } finally {
+      fillingTagsRef.current = false;
+      setFillingTags(false);
+    }
+  };
+
   return {
     manga, loading, notFound, loadError, refreshError, clearRefreshError: () => setRefreshError(null),
     editing, setEditing, startEditing, cancelEditing, isEditDirty, saving, formData, setFormData,
@@ -448,6 +487,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     applyEditLookupResult, handleEditLookup,
     patchManga: (fn) => setManga((prev) => (prev ? fn(prev) : prev)),
     fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload,
+    canFillTags: Boolean(canEdit) && !user?.offline && canFillTags(manga), fillingTags, handleFillTags,
     cancelCoverUpload: coverCancellable ? cancelCoverUpload : undefined
   };
 }

@@ -1,9 +1,12 @@
+// SQLite connection of the server: opens the database, runs migrations (with a safety snapshot first) and exposes a
+// reopenable proxy so a restore can swap the file under running code.
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const log = require('./utils/logger').child('db');
 const { config } = require('./utils/config');
 const schema = require('./core/schema');
+const { loadPublisherAliases } = require('./core/lib/publishers');
 
 // DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
 const dataDir = config.dataDir;
@@ -33,9 +36,8 @@ const safetySnapshotKeep = () => config.backupKeepPreUpdate;
 const SAFETY_SNAPSHOT_TIME = /-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.zip$/;
 
 /**
- * DB-only ZIP of the database as it is before pending migrations run (backups/vor-update-v<from>-auf-v<to>-<ts>.zip),
- * restorable like any snapshot. Synchronous: it runs during initDb, before anything else uses the connection.
- * The generated JWT secret is removed from the copy, as in services/scheduler.js copyDatabaseToTemp().
+ * DB-only ZIP of the database before pending migrations run (backups/vor-update-v<from>-auf-v<to>-<ts>.zip).
+ * Synchronous: it runs during initDb, before anything else uses the connection. The JWT secret is removed from the copy.
  */
 function writePreMigrationSnapshot(conn, fromVersion, toVersion) {
     const AdmZip = require('adm-zip');
@@ -77,7 +79,10 @@ function writePreMigrationSnapshot(conn, fromVersion, toVersion) {
     }
     return filename;
 }
-/** The safety snapshot before pending migrations run, only for a database that already has users. */
+/**
+ * The safety snapshot before pending migrations run, only for a database that already has users. Without it the
+ * start stops before the first migration (the database stays as it is) unless MIGRATE_WITHOUT_SNAPSHOT is set.
+ */
 function safetySnapshotBeforeMigrations(database, pending) {
     if (database.prepare('SELECT count(*) AS n FROM users').get().n === 0) return;
     const from = schema.appliedSchemaVersion(database);
@@ -87,7 +92,16 @@ function safetySnapshotBeforeMigrations(database, pending) {
         const name = writePreMigrationSnapshot(database, from, to);
         log.info(`[Database Migration] Sicherung vor dem Update: backups/${name} (${Math.round(Number(process.hrtime.bigint() - started) / 1e6)} ms)`);
     } catch (err) {
-        log.error('[Database Migration] Sicherung vor dem Update fehlgeschlagen, die Migrationen laufen trotzdem (letzter täglicher Snapshot in backups/):', err);
+        if (config.migrateWithoutSnapshot) {
+            log.error('[Database Migration] Sicherung vor dem Update fehlgeschlagen; MIGRATE_WITHOUT_SNAPSHOT ist gesetzt, die Migrationen laufen ohne diese Sicherung:', err);
+            return;
+        }
+        const abort = new Error(`Die Sicherung vor dem Update (backups/${SAFETY_SNAPSHOT_PREFIX}-v${from}-auf-v${to}-….zip) ließ sich nicht schreiben (${err.message}). `
+            + 'Die Datenbank wurde nicht verändert. Freien Speicher und Schreibrechte des Ordners backups/ prüfen und neu starten; '
+            + 'wer bewusst ohne diese Sicherung aktualisieren will, startet einmal mit MIGRATE_WITHOUT_SNAPSHOT=1.');
+        abort.code = 'PRE_UPDATE_SNAPSHOT_FAILED';
+        abort.cause = err;
+        throw abort;
     }
 }
 
@@ -165,10 +179,6 @@ function migrateDbFile(file) {
 }
 
 /**
- * (Re)opens the live database. currentDb is only assigned once schema and migrations succeeded, so a failed
- * init never leaves a half-migrated or closed handle behind: the proxy simply tries again on the next access.
- */
-/**
  * A failed restore rollback leaves the previous database as manga.db.bak. If manga.db is then missing or empty,
  * opening it would create an empty database and offer the setup again instead of pointing at the copy.
  */
@@ -199,6 +209,7 @@ function ensureInstanceId(conn) {
     }
 }
 
+// (Re)opens the live database; currentDb is only assigned once schema and migrations succeeded, so a failed init is retried on next access.
 function initDb() {
     closeDb();
     assertNoPendingRollbackCopy();
@@ -217,6 +228,7 @@ function initDb() {
         throw err;
     }
     ensureInstanceId(conn);
+    loadPublisherAliases(conn);
     currentDb = conn;
     connectionGeneration++;
     return currentDb;
@@ -237,9 +249,8 @@ function closeDb() {
 initDb();
 
 /**
- * Runs fn inside one SQLite transaction (BEGIN IMMEDIATE; commit on success, rollback on error).
- * fn MUST be synchronous: there is only one connection, so awaiting inside a transaction would let unrelated
- * requests run inside it. Do network I/O before calling this helper.
+ * Runs fn inside one SQLite transaction (BEGIN IMMEDIATE; rollback on error). fn MUST be synchronous:
+ * with a single connection, awaiting inside would let unrelated requests run in the transaction.
  */
 function runTransaction(fn) {
     if (!currentDb) initDb();

@@ -1,3 +1,4 @@
+// Server-side MangaPassion API: re-exports the client, gap reconciliation and autofill bindings.
 const client = require('./client');
 const classify = require('./classify');
 const gaps = require('./gaps');

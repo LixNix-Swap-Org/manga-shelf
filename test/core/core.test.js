@@ -86,7 +86,7 @@ test('schema: a fresh database gets every migration once; beforeMigrations sees 
     assert.equal(seen[0].at(-1), schema.LATEST_SCHEMA_VERSION);
     assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION);
     assert.deepEqual(schema.applySchema(conn, { beforeMigrations: () => assert.fail('nothing pending') }), []);
-    assert.equal(conn.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get().value, '2021-04-09');
+    assert.equal(conn.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get(), undefined, 'derived from the data, never seeded');
 });
 
 test('route table: known roles, a handler per row, no method + path twice', () => {
@@ -189,4 +189,39 @@ test('a client timeout still works where AbortSignal.any and AbortSignal.timeout
     assert.equal(result.unavailable, true);
     assert.ok(Date.now() - started < 2000);
     conn.close();
+});
+
+test('bulk undo store: 10 minutes, 20 per user, one store per database, gone after a restore', async () => {
+    const { createMemoryCore } = require('./harness');
+    let clock = Date.parse('2026-10-04T10:00:00Z');
+    const core = createMemoryCore({ now: () => new Date(clock) });
+    const ed = core.client('ed');
+    const series = (await ed('POST', '/mangas', { title: 'Undo Uhr' })).body.id;
+    const vid = (await ed('POST', '/volumes', { manga_id: series, volume_number: '1', status: 'Fehlt' })).body.id;
+    const edit = async () => (await ed('POST', '/volumes/bulk', { ids: [vid], set: { priority: 1 } })).body;
+    const revert = (token) => ed('POST', '/volumes/bulk', { revert: token });
+
+    const first = await edit();
+    assert.equal(first.undo_expires_at, '2026-10-04T10:10:00.000Z');
+    clock += 10 * 60 * 1000 - 1;
+    const late = await edit();
+    clock += 1;
+    assert.deepEqual([(await revert(first.undo_token)).status, (await revert(first.undo_token)).body.code], [410, 'BULK_UNDO_EXPIRED']);
+    assert.equal((await revert(late.undo_token)).status, 200);
+
+    const tokens = [];
+    for (let i = 0; i < 21; i++) tokens.push((await edit()).undo_token);
+    assert.equal((await revert(tokens[0])).status, 410, 'the 21st undo pushes out the oldest of that user');
+    assert.equal((await revert(tokens[1])).status, 200);
+    assert.equal(core.ctx.undo.size, 19);
+
+    const other = createMemoryCore();
+    assert.equal((await other.client('ed')('POST', '/volumes/bulk', { revert: tokens[2] })).status, 410, 'another database knows no token');
+    await other.close();
+
+    const generation = core.ctx.db.generation;
+    core.ctx.db.generation = () => 2;
+    assert.equal((await revert(tokens[2])).status, 410, 'a restored database drops the undo data');
+    core.ctx.db.generation = generation;
+    await core.close();
 });

@@ -9,11 +9,9 @@ function isbn13CheckDigit(first12) {
     return String((10 - (sum % 10)) % 10);
 }
 
-/**
- * Returns 13-digit input as is, converts an ISBN-10 to ISBN-13 only when its check digit is correct, and otherwise
- * returns the input stripped of hyphens/spaces (never throws away what the user typed), or null for empty input.
- * An ISBN-10 with a typo is kept as typed: converting it would mint a valid ISBN-13 of a different book.
- */
+// Returns 13-digit input as is, converts an ISBN-10 only when its check digit is correct, otherwise returns the input
+// stripped of hyphens/spaces (null for empty). A typo'd ISBN-10 stays as typed: converting it would mint the ISBN-13
+// of a different book.
 function normalizeIsbn(value) {
     if (value === undefined || value === null) return null;
     const raw = String(value).trim();

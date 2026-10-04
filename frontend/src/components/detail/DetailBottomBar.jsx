@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Plus, ScanBarcode } from 'lucide-react';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import { useIsNarrow } from '../common/BottomNav';
+import { isTypingTarget, useKeyboardOpen } from '../../hooks/useKeyboardOpen';
 import { apiFetch, readJson, TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { scanSeriesTitle, toIsbn13 } from '../../utils/scanHelpers';
@@ -21,9 +22,8 @@ export function findScannedVolume(volumes, code) {
 }
 
 /**
- * What a scan on a series page does with the answer of /api/lookup/isbn:
- * open (a volume of this series), other (the ISBN belongs to another series), prefill (a book this series may lack:
- * number and price for the add form, editors only), notice, notFound, error.
+ * Series-page action for an /api/lookup/isbn answer: open (volume of this series), other (another series),
+ * prefill (possibly missing book, editors only), notice, notFound, error.
  */
 export function detailScanAction({ ok, data, mangaId, canEdit }) {
   if (!ok || !data) {
@@ -45,10 +45,43 @@ export function detailScanAction({ ok, data, mangaId, canEdit }) {
       type: 'prefill',
       number: book.volume_number_known ? String(book.volume_number ?? '').trim() : '',
       price: Number(book.price) > 0 ? String(book.price) : '',
-      title: matched ? '' : scanSeriesTitle(book)
+      title: matched ? '' : scanSeriesTitle(book),
+      isbn: (typeof data.isbn === 'string' && data.isbn) || (typeof book.isbn === 'string' && book.isbn) || ''
     };
   }
   return { type: 'notFound', message: (typeof data.message === 'string' && data.message) || 'Keine Daten zu dieser ISBN gefunden.' };
+}
+
+export { isTypingTarget, useKeyboardOpen };
+
+/**
+ * After focusing a field, once the keyboard has shrunk the visual viewport: centre the field and lift the submit
+ * button 16 px above the keyboard if the field stays in view. Returns a function that stops waiting.
+ */
+export function revealAboveKeyboard(field, { timeout = 1500 } = {}) {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  if (!field || !vv || typeof vv.addEventListener !== 'function') return () => {};
+  let timer = null;
+  const stop = () => {
+    vv.removeEventListener('resize', onResize);
+    clearTimeout(timer);
+  };
+  function onResize() {
+    stop();
+    if (document.activeElement !== field) return;
+    const rect = field.getBoundingClientRect();
+    const top = vv.offsetTop || 0;
+    const bottom = top + vv.height;
+    const submit = field.form?.querySelector('[type="submit"]')?.getBoundingClientRect();
+    let delta = rect.top >= top + 16 && rect.bottom <= bottom - 16 ? 0 : rect.top - top - Math.max(0, (vv.height - rect.height) / 2);
+    if (submit?.height > 0 && submit.bottom - delta > bottom - 16) {
+      delta = Math.max(delta, Math.min(submit.bottom - (bottom - 16), rect.top - top - 16));
+    }
+    if (delta !== 0) window.scrollBy({ top: delta });
+  }
+  vv.addEventListener('resize', onResize);
+  timer = setTimeout(stop, timeout);
+  return stop;
 }
 
 const itemClass = 'relative flex-1 min-w-0 min-h-[56px] flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors';
@@ -61,6 +94,8 @@ export default function DetailBottomBar({
   backTo = '/', mangaId, volumes, canEdit = false, isOffline = false, onOpenVolume, onPrefill, onOtherSeries, onAddVolume
 }) {
   const narrow = useIsNarrow();
+  const barRef = useRef(null);
+  const keyboardOpen = useKeyboardOpen(barRef);
   const requestRef = useRef(0);
   const toastRef = useRef(null);
 
@@ -110,7 +145,7 @@ export default function DetailBottomBar({
         toast('info', action.number
           ? `Band ${action.number}${action.title ? ` (${action.title})` : ''} übernommen – bitte prüfen und hinzufügen.`
           : 'Bandnummer unbekannt – bitte eintragen und hinzufügen.', { duration: 8000 });
-        onPrefill?.(action);
+        onPrefill?.({ ...action, isbn: action.isbn || toIsbn13(code) || '' });
         break;
       case 'notice':
       case 'notFound':
@@ -124,9 +159,11 @@ export default function DetailBottomBar({
   if (!narrow || typeof document === 'undefined') return null;
   return createPortal(
     <nav
+      ref={barRef}
       id="detail-bottom-bar"
       aria-label="Reihe"
-      className="fixed inset-x-0 bottom-0 z-40 sm:hidden border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.35)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      data-keyboard={keyboardOpen ? 'open' : undefined}
+      className={`${keyboardOpen ? 'hidden' : ''} fixed inset-x-0 bottom-0 z-40 sm:hidden border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.35)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]`}
     >
       <div className="flex items-stretch justify-around max-w-lg mx-auto">
         <Link id="btn-detail-back" to={backTo} className={itemClass}>

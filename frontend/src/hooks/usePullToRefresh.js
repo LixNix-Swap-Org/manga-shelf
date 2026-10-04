@@ -19,9 +19,8 @@ export function touchScrollsContent(target) {
 }
 
 /**
- * Pull-to-refresh for the installed app (a browser tab has its own): a downward drag of at least `threshold` px that
- * starts at the very top of the page, outside dialogs and scrolled content, calls `onRefresh`. Returns
- * { pullDistance, refreshing } for the indicator.
+ * Pull-to-refresh for the installed app (a browser tab has its own): a downward drag of `threshold` px from the very
+ * top, outside dialogs and scrolled content, calls `onRefresh`. Returns { pullDistance, refreshing }.
  */
 export default function usePullToRefresh(onRefresh, { threshold = PULL_THRESHOLD_PX, enabled = true, win = globalThis.window } = {}) {
   const [pullDistance, setPullDistance] = useState(0);

@@ -1,18 +1,18 @@
 // Schema of the database: base tables, settings seed and the sequential migrations. Runs on any connection with
 // prepare(sql).get/all/run and exec(sql) (node:sqlite on the server, an in-memory database in tests, a device database
 // in the apps). Server-only steps (the safety snapshot before an update) are passed in as options.
-const { normalizePublisher, resolvePublisher, loadPublisherAliases, PUBLISHER_ALIAS_SEED } = require('./lib/publishers');
+const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases, PUBLISHER_ALIAS_SEED } = require('./lib/publishers');
 const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
 const USERNAME_INDEX_MIGRATION = 14;
+const SEEDED_START_DATE = '2021-04-09';
 
 /**
- * Login and user management compare usernames case-insensitively; this index enforces it in the schema.
- * Existing case duplicates (old or restored databases) are reported, never renamed: the index is skipped and
- * retried on every start until an admin has resolved them.
+ * Enforces case-insensitive usernames with an index. Existing case duplicates are reported, never renamed:
+ * the index is skipped and retried on every start until an admin has resolved them.
  */
 function ensureUsernameNocaseIndex(d, log = silentLog) {
     if (d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_username_nocase'").get()) return true;
@@ -212,7 +212,7 @@ function migrationList(log = silentLog) {
             version: 10,
             name: 'add_volumes_priority_target_price',
             up: (d) => {
-                // Wunschliste: Priorität (0 keine, 1 niedrig, 2 mittel, 3 hoch) und Zielpreis für Käufe im Laden
+                // Wishlist: priority (0 none, 1 low, 2 medium, 3 high) and target price for in-store purchases
                 const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
                 if (!cols.has('priority')) d.exec('ALTER TABLE volumes ADD COLUMN priority INTEGER DEFAULT 0;');
                 if (!cols.has('target_price')) d.exec('ALTER TABLE volumes ADD COLUMN target_price REAL DEFAULT NULL;');
@@ -222,8 +222,8 @@ function migrationList(log = silentLog) {
             version: 11,
             name: 'add_volume_owners',
             up: (d) => {
-                // Besitz pro Benutzer: mehrere Personen können denselben Band besitzen. volumes.status = 'Vorhanden' bleibt
-                // "mindestens ein Besitzer"; bestehende Bände werden dem ältesten Admin zugeordnet.
+                // Ownership per user: several people can own the same volume. volumes.status = 'Vorhanden' stays
+                // "at least one owner"; existing volumes are assigned to the oldest admin.
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS volume_owners (
                         volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
@@ -311,7 +311,7 @@ function migrationList(log = silentLog) {
             version: 17,
             name: 'add_mangas_wish_priority',
             up: (d) => {
-                // Wunschreihe: NULL = nicht gewünscht, sonst 0 bis 3 wie volumes.priority; zählt nur ohne vorhandenen Band
+                // Wished series: NULL = not wished, otherwise 0 to 3 like volumes.priority; counts only without an owned volume
                 const cols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
                 if (!cols.has('wish_priority')) d.exec('ALTER TABLE mangas ADD COLUMN wish_priority INTEGER DEFAULT NULL;');
             }
@@ -320,7 +320,7 @@ function migrationList(log = silentLog) {
             version: 18,
             name: 'add_animes',
             up: (d) => {
-                // Anime-Reiter: ein Eintrag je AniList-/MAL-Medium für alle, Fortschritt je Benutzer; api_cache für Suchantworten
+                // Anime tab: one entry per AniList/MAL medium for everyone, progress per user; api_cache for search responses
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS animes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -371,7 +371,7 @@ function migrationList(log = silentLog) {
             version: 19,
             name: 'add_user_api_credentials',
             up: (d) => {
-                // Eigene API-Schlüssel (AES-256-GCM, utils/secretBox.js); user_id NULL = Instanz-Schlüssel (nur Admins)
+                // Own API keys (AES-256-GCM, utils/secretBox.js); user_id NULL = instance key (admins only)
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS user_api_credentials (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -392,7 +392,7 @@ function migrationList(log = silentLog) {
             version: 20,
             name: 'add_mangas_collecting',
             up: (d) => {
-                // Sammelstatus des Haushalts, getrennt vom Erscheinungsstatus: aktiv | pausiert | abgebrochen
+                // Collecting status of the household, separate from the release status: aktiv | pausiert | abgebrochen
                 const cols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
                 if (!cols.has('collecting')) d.exec("ALTER TABLE mangas ADD COLUMN collecting TEXT NOT NULL DEFAULT 'aktiv';");
             }
@@ -401,8 +401,8 @@ function migrationList(log = silentLog) {
             version: 21,
             name: 'add_trash',
             up: (d) => {
-                // Papierkorb: gelöschte Reihen und Bände (mit Besitzern und Lesestand als JSON) für 30 Tage wiederherstellbar.
-                // Die Zeilen verlassen ihre Tabellen, damit keine Liste, Statistik oder Export sie je sieht.
+                // Trash: deleted series and volumes (with owners and reading state as JSON) restorable for 30 days.
+                // The rows leave their tables so that no list, statistic or export ever sees them.
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS trash (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -423,7 +423,7 @@ function migrationList(log = silentLog) {
             version: 22,
             name: 'add_publisher_aliases',
             up: (d) => {
-                // Verlags-Schreibweisen -> kanonischer Name, zusätzlich zur eingebauten Liste (core/lib/publishers.js)
+                // Publisher spellings -> canonical name, in addition to the built-in list (core/lib/publishers.js)
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS publisher_aliases (
                         alias TEXT PRIMARY KEY,
@@ -442,6 +442,37 @@ function migrationList(log = silentLog) {
                         if (normalized && normalized !== publisher) update.run(normalized, publisher);
                     }
                 }
+            }
+        },
+        {
+            version: 23,
+            name: 'add_publisher_identity_aliases',
+            up: (d) => {
+                // older merges into a spelling that the built-in list writes differently ("Tokyopop") keep that spelling
+                const insert = d.prepare('INSERT OR IGNORE INTO publisher_aliases (alias, canonical) VALUES (?, ?)');
+                const builtIn = new Map();
+                for (const { canonical } of d.prepare('SELECT DISTINCT canonical FROM publisher_aliases ORDER BY canonical').all()) {
+                    const key = publisherKey(canonical);
+                    if (key && resolvePublisher(canonical, builtIn) !== canonical) insert.run(key, canonical);
+                }
+            }
+        },
+        {
+            version: 24,
+            name: 'clear_seeded_start_date',
+            up: (d) => {
+                // up to v2.19.1 every database got 2021-04-09 as start date; without an earlier purchase or entry the
+                // date is that seed, and the stats derive the start from the data again
+                const stored = d.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get();
+                if (!stored || stored.value !== SEEDED_START_DATE) return;
+                const earlier = d.prepare(`
+                    SELECT 1 FROM volumes
+                    WHERE (TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]*' AND SUBSTR(TRIM(purchase_date), 1, 4) >= '1900'
+                           AND SUBSTR(TRIM(purchase_date), 1, 10) < ?)
+                       OR SUBSTR(created_at, 1, 10) < ?
+                    LIMIT 1
+                `).get(SEEDED_START_DATE, SEEDED_START_DATE);
+                if (!earlier) d.prepare("DELETE FROM app_settings WHERE key = 'collection_start_date'").run();
             }
         }
     ];
@@ -473,8 +504,7 @@ function appliedSchemaVersion(database) {
 
 /**
  * Applies pending migrations, each in its own transaction, and returns what ran: [{ version, name, changes, ms }].
- * options.log: logger ({ info, warn, error }); options.beforeMigrations(database, pending): called once before the
- * first pending migration runs (the server writes its safety snapshot there).
+ * options.beforeMigrations(database, pending) runs once before the first one (the server snapshots there).
  */
 function runSequentialMigrations(database, options = {}) {
     const log = options.log || silentLog;
@@ -507,7 +537,10 @@ function runSequentialMigrations(database, options = {}) {
     return report;
 }
 
-/** Base tables, default settings and all pending migrations on an open connection (live DB or a staged restore). */
+/**
+ * Base tables, default settings and all pending migrations on an open connection (live DB or a staged restore).
+ * loadAliases: also make its publisher_aliases the process-wide map of normalizePublisher (only for the live connection).
+ */
 function applySchema(conn, options = {}) {
     const log = options.log || silentLog;
     conn.exec(`
@@ -588,14 +621,10 @@ function applySchema(conn, options = {}) {
         );
     `);
 
-    try {
-        conn.exec("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('collection_start_date', '2021-04-09');");
-    } catch (e) { log.warn('Seeding collection_start_date failed:', e.message); }
-
     // before the migrations, so a first run that skips the index does not warn twice
     retryUsernameNocaseIndex(conn, log);
     const report = runSequentialMigrations(conn, options);
-    loadPublisherAliases(conn);
+    if (options.loadAliases) loadPublisherAliases(conn);
     return report;
 }
 

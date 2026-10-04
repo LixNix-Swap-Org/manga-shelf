@@ -1,4 +1,4 @@
-// Adapter conformance (spec-standalone §6): node:sqlite and sql.js run the same schema, migrations, triggers and core
+// Adapter conformance: node:sqlite and sql.js run the same schema, migrations, triggers and core
 // operations, and answer the handler scenarios and a seeded collection identically.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -67,7 +67,8 @@ async function createCore(kind) {
         api.raw = (method, url, body) => request(user, method, url, body);
         return api;
     };
-    return { kind, conn, ctx, client, users: USERS, close: async () => conn.close() };
+    const run = (sql, ...params) => conn.prepare(sql).run(...params);
+    return { kind, conn, ctx, client, run, users: USERS, close: async () => conn.close() };
 }
 
 const kinds = SQL_JS ? Object.keys(ADAPTERS) : ['node:sqlite'];

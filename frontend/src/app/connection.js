@@ -56,9 +56,8 @@ export function getActiveBase() {
 }
 
 /**
- * Makes this address the active one. An address of another saved server activates that server; an unknown address
- * becomes a new server entry (without a token: a base switch never carries a token to another server). '' clears it.
- * An invalid address throws. Returns the stored value.
+ * Makes this address the active one: a known server is activated, an unknown address becomes a new entry without
+ * a token (a base switch never carries a token over). '' clears it; an invalid address throws. Returns the stored value.
  */
 export function setActiveBase(url) {
   const base = normalizeBase(url);
@@ -96,18 +95,20 @@ export function getToken() {
 }
 
 /**
- * Stores the token of a sign-in at the active address (that origin is trusted with it from now on); null or '' removes
- * it (the server entry stays).
+ * Stores the sign-in token at the active address (that origin is trusted with it from now on); null or '' removes it.
+ * `rotate`: the same session got a new token, so the other addresses it was trusted at stay trusted.
  */
-export function setToken(token) {
+export function setToken(token, { rotate = false } = {}) {
   const server = getActiveServer();
   if (!server) return;
   if (typeof token !== 'string' || !token) {
     updateServer(server.id, { token: undefined });
   } else {
+    const base = getActiveBase();
+    const origin = originOf(base);
     // a new session is trusted only where it was signed in, not at the addresses of an earlier one
-    const origin = originOf(getActiveBase());
-    updateServer(server.id, { token, tokenOrigins: origin ? [origin] : [] });
+    const kept = rotate && tokenAllowedAt(server, base) ? server.tokenOrigins : [];
+    updateServer(server.id, { token, tokenOrigins: [...new Set([...kept, ...(origin ? [origin] : [])])] });
   }
   setConn({});
 }

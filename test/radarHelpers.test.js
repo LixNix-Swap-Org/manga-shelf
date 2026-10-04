@@ -162,20 +162,23 @@ test('reconcilePublisherFilter and publisherOptions: a stale publisher resets, a
     assert.equal(publisherOptions(pubs, 'name', 'PANINI').length, 2);
 });
 
-test('buildYearOptions and shiftMonth: the selected year is always an option, navigation stays in 2000-2100', async () => {
-    const { buildYearOptions, shiftMonth, isCurrentMonth } = await load();
+test('buildYearOptions and shiftMonth: a selected year inside the window is always an option, navigation stays in the server window', async () => {
+    const { buildYearOptions, shiftMonth, isCurrentMonth, RADAR_MIN_YEAR, RADAR_MAX_YEAR } = await load();
+    const thisYear = new Date().getFullYear();
+    assert.deepEqual([RADAR_MIN_YEAR, RADAR_MAX_YEAR], [thisYear - 5, thisYear + 3], 'same window as GET /manga-passion/releases');
     const gapless = (ys) => ys.every((y, i) => i === 0 || y === ys[i - 1] + 1);
-    for (const [cur, sel] of [[2026, 2023], [2026, 2030], [2026, 2026], [2031, 2026], [2026, 2012]]) {
+    const cur = thisYear;
+    for (const sel of [cur - 3, cur + 3, cur, cur - 5]) {
         const ys = buildYearOptions(cur, sel);
         assert.ok(ys.includes(sel) && ys.includes(cur), `${cur}/${sel}`);
         assert.ok(gapless(ys), `${cur}/${sel}`);
     }
-    assert.deepEqual(buildYearOptions(2026, 2026), [2024, 2025, 2026, 2027, 2028, 2029]);
-    assert.equal(buildYearOptions(2001, 2000)[0], 2000);
-    assert.deepEqual(shiftMonth(2024, 1, -1), { year: 2023, month: 12 });
-    assert.deepEqual(shiftMonth(2029, 12, 1), { year: 2030, month: 1 });
-    assert.equal(shiftMonth(2000, 1, -1), null);
-    assert.equal(shiftMonth(2100, 12, 1), null);
+    assert.deepEqual(buildYearOptions(cur, cur), [cur - 2, cur - 1, cur, cur + 1, cur + 2, cur + 3]);
+    assert.equal(buildYearOptions(RADAR_MIN_YEAR + 1, RADAR_MIN_YEAR)[0], RADAR_MIN_YEAR);
+    assert.deepEqual(shiftMonth(cur, 1, -1), { year: cur - 1, month: 12 });
+    assert.deepEqual(shiftMonth(cur + 1, 12, 1), { year: cur + 2, month: 1 });
+    assert.equal(shiftMonth(RADAR_MIN_YEAR, 1, -1), null);
+    assert.equal(shiftMonth(RADAR_MAX_YEAR, 12, 1), null);
     assert.ok(isCurrentMonth(2026, 10, new Date(2026, 9, 3)));
     assert.ok(!isCurrentMonth(2026, 11, new Date(2026, 9, 3)));
 });

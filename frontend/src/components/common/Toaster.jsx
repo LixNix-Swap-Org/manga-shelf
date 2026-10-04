@@ -4,6 +4,13 @@ import { dismiss, subscribe } from '../../utils/notify';
 
 const MAX_TOASTS = 4;
 const MAX_UNDO_TOASTS = 3;
+// landscape phones: the newest two stay visible, the others wait hidden (their timers and undo windows keep running)
+const SHORT_SCREEN = '(max-height: 500px)';
+const MAX_VISIBLE_SHORT = 2;
+// phones and short screens with the selection bar on screen: only the newest toast, so the selection stays visible
+const COMPACT_SCREEN = '(max-width: 639px), (max-height: 500px)';
+const MAX_VISIBLE_WITH_BAR = 1;
+const BULK_BAR_ID = 'bulk-action-bar';
 // time left after the pointer or focus leaves a toast whose timer had nearly run out
 const MIN_RESUME_MS = 1500;
 
@@ -29,7 +36,64 @@ export function trimToasts(list, max = MAX_TOASTS, maxUndo = MAX_UNDO_TOASTS) {
   return evicted.size ? list.filter((t) => !evicted.has(t.id)) : list;
 }
 
-function Toast({ toast, onClose }) {
+const mediaQuery = (query) => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(query) : null);
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => Boolean(mediaQuery(query)?.matches));
+  useEffect(() => {
+    const mql = mediaQuery(query);
+    if (!mql) return undefined;
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener?.('change', onChange);
+    return () => mql.removeEventListener?.('change', onChange);
+  }, [query]);
+  return matches;
+}
+
+/** Distance from the viewport bottom to the top of the series page's selection bar while it is on screen, else 0. */
+function useBulkBarOffset(active) {
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    if (!active || typeof document === 'undefined') {
+      setOffset(0);
+      return undefined;
+    }
+    let observed = null;
+    let frame = 0;
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => schedule()) : null;
+    function measure() {
+      const bar = document.getElementById(BULK_BAR_ID);
+      if (bar !== observed) {
+        if (observed) resize?.unobserve(observed);
+        if (bar) resize?.observe(bar);
+        observed = bar;
+      }
+      const rect = bar?.getBoundingClientRect();
+      const visible = rect && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
+      setOffset(visible ? Math.ceil(window.innerHeight - rect.top) : 0);
+    }
+    function schedule() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    }
+    measure();
+    const mutations = typeof MutationObserver === 'function' ? new MutationObserver(schedule) : null;
+    mutations?.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('scroll', schedule, { passive: true, capture: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      mutations?.disconnect();
+      resize?.disconnect();
+      window.removeEventListener('scroll', schedule, { capture: true });
+      window.removeEventListener('resize', schedule);
+    };
+  }, [active]);
+  return offset;
+}
+
+function Toast({ toast, onClose, hidden = false }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const remaining = useRef(toast.duration);
@@ -64,7 +128,7 @@ function Toast({ toast, onClose }) {
         e.stopPropagation();
         onClose(toast.id);
       }}
-      className={`pointer-events-auto flex w-full items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm shadow-2xl backdrop-blur-md animate-fade-in ${box}`}
+      className={`pointer-events-auto flex w-full items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm shadow-2xl backdrop-blur-md animate-fade-in ${box}${hidden ? ' hidden' : ''}`}
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${icon}`} aria-hidden="true" />
       <div className="min-w-0 flex-1">
@@ -72,7 +136,7 @@ function Toast({ toast, onClose }) {
         {toast.ref && <p className="mt-0.5 text-[11px] opacity-75">Fehler-ID: <span className="font-mono">{toast.ref}</span></p>}
       </div>
       {toast.action && (
-        <button type="button" onClick={runAction} className={`shrink-0 font-semibold underline hover:text-white ${action}`}>
+        <button type="button" onClick={runAction} className={`hit-44 shrink-0 font-semibold underline hover:text-white ${action}`}>
           {toast.action.label}
         </button>
       )}
@@ -81,7 +145,7 @@ function Toast({ toast, onClose }) {
         onClick={() => onClose(toast.id)}
         aria-label="Meldung schließen"
         title="Schließen (Esc)"
-        className="-m-1 shrink-0 rounded p-1 text-slate-400 hover:text-white"
+        className="hit-44 -m-1 shrink-0 rounded p-1 text-slate-400 hover:text-white"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>
@@ -90,9 +154,8 @@ function Toast({ toast, onClose }) {
 }
 
 /**
- * Toasts of utils/notify.js; mounted once in App. Info and success go to a polite live region, errors are role=alert.
- * A toast evicted by the caps is announced with notify's dismiss event, so a caller that defers its change until the
- * undo window ends can commit it at once.
+ * Toasts of utils/notify.js, mounted once in App; info/success use a polite live region, errors role=alert. An evicted
+ * toast fires notify's dismiss event so a deferred change (undo) commits at once.
  */
 export default function Toaster() {
   const [toasts, setToasts] = useState([]);
@@ -125,19 +188,26 @@ export default function Toaster() {
     for (const t of kept) if (!next.includes(t)) dismiss(t.id);
   }), [apply, close]);
 
+  const short = useMediaQuery(SHORT_SCREEN);
+  const compact = useMediaQuery(COMPACT_SCREEN);
+  const barOffset = useBulkBarOffset(toasts.length > 0);
+  const maxVisible = barOffset && compact ? MAX_VISIBLE_WITH_BAR : short ? MAX_VISIBLE_SHORT : 0;
+  const shown = maxVisible ? new Set(toasts.slice(-maxVisible)) : null;
+  const toastOf = (t) => <Toast key={t.id} toast={t} onClose={close} hidden={Boolean(shown) && !shown.has(t)} />;
   const polite = toasts.filter((t) => t.kind !== 'error');
   const errors = toasts.filter((t) => t.kind === 'error');
 
+  // z-[70]: above the tool dialogs (z-[60]); the stack sits above the selection bar while one is shown
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4 sm:items-end"
-      style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
+      style={barOffset ? { bottom: `calc(${barOffset}px + 0.5rem)` } : undefined}
+      className="pointer-events-none fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-[max(1rem,env(safe-area-inset-right))] sm:bottom-[calc(1rem+env(safe-area-inset-bottom))] max-sm:bottom-[calc(var(--toast-offset,4.5rem)+env(safe-area-inset-bottom))]"
     >
-      <div className="flex w-full max-w-md flex-col gap-2 sm:w-96">
-        {errors.map((t) => <Toast key={t.id} toast={t} onClose={close} />)}
+      <div className="flex w-full max-w-md flex-col gap-2 sm:max-w-sm">
+        {errors.map(toastOf)}
       </div>
-      <div role="status" aria-live="polite" className="flex max-h-[40vh] w-full max-w-md flex-col justify-end gap-2 overflow-y-clip sm:w-96">
-        {polite.map((t) => <Toast key={t.id} toast={t} onClose={close} />)}
+      <div role="status" aria-live="polite" className="flex max-h-[40vh] w-full max-w-md flex-col justify-end gap-2 overflow-y-clip sm:max-w-sm">
+        {polite.map(toastOf)}
       </div>
     </div>
   );

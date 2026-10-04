@@ -1,8 +1,27 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { MAIN_ID } from '../components/common/PageChrome';
 
 const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-const canTakeFocus = (el) => Boolean(el) && el !== document.body && el.isConnected && typeof el.focus === 'function';
+const TEXT_ENTRY = 'input, textarea, select, [contenteditable="true"]';
+
+// without a layout engine (jsdom) nothing has client rects; a real browser has none for a display:none element
+const isRendered = (el) => el.getClientRects().length > 0 || document.documentElement.getClientRects().length === 0;
+
+const canTakeFocus = (el) => Boolean(el) && el !== document.body && el.isConnected && typeof el.focus === 'function' && isRendered(el);
+
+const pageHeading = () => document.querySelector('h1[tabindex="-1"]') || document.getElementById(MAIN_ID);
+
+/** Focuses the first candidate that really takes it (focus() on a hidden element fails silently), else the page's h1. */
+function returnFocus(candidates, dialog) {
+  for (const el of candidates) {
+    if (!canTakeFocus(el) || dialog.contains(el)) continue;
+    el.focus();
+    if (document.activeElement === el) return;
+  }
+  const heading = pageHeading();
+  if (heading && !dialog.contains(heading) && heading.isConnected) heading.focus({ preventScroll: true });
+}
 
 // History entries of open dialogs: the Android back gesture (and the browser's Back) closes the top dialog instead of
 // leaving the page or the installed app. Each open dialog adds its token to a copy of the current history state (the
@@ -58,13 +77,8 @@ function pressEscape(node) {
 }
 
 /**
- * Keyboard/screen-reader basics for a modal: puts focus inside when it opens (a `[data-autofocus]` element, else an
- * autoFocus field, else the first control or the dialog itself), keeps Tab inside, and gives focus back to the element
- * that opened it. `returnFocusRef` is the fallback when that element is gone by the time the dialog closes (e.g. a
- * menu item whose menu closed). Attach the returned ref to the dialog's outer element (with role="dialog").
- * While open the dialog also owns a history entry: Back closes it through `onClose`, or without one through the
- * dialog's Escape handling; a dialog that stays open (busy, unsaved input kept) gets its entry back. `history: false`
- * opts out.
+ * Modal basics: focus in on open, Tab stays inside, focus returns to the opener. Attach the returned ref to the dialog
+ * root. The dialog owns a history entry (Back closes it; `history: false` opts out); a viewport resize keeps the field visible.
  */
 export default function useDialogA11y(open, { returnFocusRef, onClose, history = true } = {}) {
   const ref = useRef(null);
@@ -106,13 +120,27 @@ export default function useDialogA11y(open, { returnFocusRef, onClose, history =
       }
     };
     node.addEventListener('keydown', onKeyDown);
+
+    const viewport = window.visualViewport;
+    let frame = 0;
+    const keepFieldVisible = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const field = document.activeElement;
+        if (field && node.contains(field) && field.matches(TEXT_ENTRY) && typeof field.scrollIntoView === 'function') {
+          field.scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
+      });
+    };
+    viewport?.addEventListener('resize', keepFieldVisible);
     return () => {
       node.removeEventListener('keydown', onKeyDown);
+      viewport?.removeEventListener('resize', keepFieldVisible);
+      cancelAnimationFrame(frame);
       // leave focus alone if something outside the dialog already took it on purpose
       const current = document.activeElement;
       if (current && current !== document.body && current.isConnected && !node.contains(current)) return;
-      const target = [opener, fallbackRef?.current].find((el) => canTakeFocus(el) && !node.contains(el));
-      if (target) target.focus();
+      returnFocus([opener, fallbackRef?.current], node);
     };
   }, [open, returnFocusRef]);
 

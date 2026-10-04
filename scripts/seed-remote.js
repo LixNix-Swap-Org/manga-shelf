@@ -1,9 +1,6 @@
-// Seeds three demo series (with covers and volumes) into a running instance.
-//   node scripts/seed-remote.js https://manga.example.com [--wipe] [--yes]
-//   node scripts/seed-remote.js <host> [port]   (plain http, only for this machine unless REMOTE_ALLOW_HTTP=1)
-// Without arguments: REMOTE_URL, then REMOTE_HOST/REMOTE_PORT. Credentials: REMOTE_USER/REMOTE_PASS (or ADMIN_USER/ADMIN_PASS).
-// Existing series are never touched: a demo series whose title already exists is skipped. --wipe deletes and
-// recreates only the demo series (asks for the host name; --yes skips that). SEED_SKIP_COVERS=1 skips the cover downloads.
+// Seeds three demo series (with covers and volumes) into a running instance; existing titles are skipped.
+//   node scripts/seed-remote.js <url | host [port]> [--wipe] [--yes]   (--wipe recreates only the demo series)
+// Target and credentials as in scripts/lib/remote.js (REMOTE_*, ADMIN_USER/ADMIN_PASS); SEED_SKIP_COVERS=1 skips covers.
 require('dotenv').config({ quiet: true });
 const readline = require('readline');
 const { resolveTarget, assertSecureTarget, credentials, RemoteClient } = require('./lib/remote');

@@ -1,3 +1,4 @@
+// Test harness: boots the app against a temporary data dir and offers a cookie-aware HTTP client.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -17,10 +18,8 @@ const HERMETIC_ENV = {
 let started = false;
 
 /**
- * Creates an isolated data dir, loads the app against it and starts it on an ephemeral port.
- * Only once per process: db.js, auth and the rate limiters keep their state from the first require, so a second
- * server would silently keep using the first (deleted) data dir. Tests in one file share one ctx via before/after.
- * `options.env` sets further variables (undefined removes one) before the app is loaded.
+ * Starts the app on an ephemeral port against an isolated data dir. Once per process: db.js, auth and the rate
+ * limiters keep state from the first require. `options.env` sets variables (undefined removes) before loading.
  */
 async function startTestServer(options = {}) {
     if (started) {

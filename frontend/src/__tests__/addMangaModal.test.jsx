@@ -1,3 +1,4 @@
+// Covers the add-manga modal: lookup, source labels and creation.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import AddMangaModal, { lookupSourceLabels } from '../components/modals/AddMangaModal';
@@ -75,9 +76,9 @@ describe('AddMangaModal: lookup status and publisher', () => {
     expect(body.manga_passion_id).toBe(12);
   });
 
-  it('describes both lookup sources in the Auto-Fill tooltip', () => {
+  it('names every lookup source in the Auto-Fill tooltip', () => {
     renderModal();
-    expect(screen.getByRole('button', { name: /Auto-Fill/ }).title).toBe('Sucht in Manga Passion (deutsche Ausgaben) und AniList');
+    expect(screen.getByRole('button', { name: /Auto-Fill/ }).title).toBe('Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList');
   });
 });
 
@@ -202,9 +203,10 @@ describe('AddMangaModal: closing', () => {
   it('badges each lookup hit with its own source; a hit found on both sources shows both', async () => {
     mockFetch({
       'GET /api/lookup/manga': () => json(200, [
-        { id: 'mal_2', source: 'mal', source_label: '🌐 MyAnimeList', title: 'Berserk (MAL)', status: 'Laufend' },
+        { id: 'mp_7', source: 'manga_passion', source_label: 'Manga Passion', title: 'Berserk (MP)', status: 'Laufend' },
+        { id: 'mal_2', source: 'mal', source_label: 'MyAnimeList', title: 'Berserk (MAL)', status: 'Laufend' },
         { id: 'al_30002', source: 'anilist', title: 'Berserk', status: 'Laufend', also_on: ['mal'] },
-        { id: 'al_9', source: 'anilist', source_label: '🌐 AniList', title: 'Berserk: Prototype', status: 'Abgeschlossen' }
+        { id: 'al_9', source: 'anilist', source_label: 'AniList', title: 'Berserk: Prototype', status: 'Abgeschlossen' }
       ])
     });
     renderModal();
@@ -212,18 +214,26 @@ describe('AddMangaModal: closing', () => {
     fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
     const badges = async (title) => {
       const hit = (await screen.findByText(title)).closest('button');
-      return [...hit.querySelectorAll('span')].map((el) => el.textContent.trim()).filter((t) => t.startsWith('🌐'));
+      return [...hit.querySelectorAll('span')]
+        .filter((el) => el.querySelector(':scope > svg[aria-hidden="true"].w-3.h-3'))
+        .map((el) => el.textContent.trim());
     };
-    expect(await badges('Berserk (MAL)')).toEqual(['🌐 MyAnimeList']);
-    expect(await badges('Berserk')).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
-    expect(await badges('Berserk: Prototype')).toEqual(['🌐 AniList']);
+    expect(await badges('Berserk (MP)')).toEqual(['Manga Passion']);
+    expect(await badges('Berserk (MAL)')).toEqual(['MyAnimeList']);
+    expect(await badges('Berserk')).toEqual(['AniList', 'MyAnimeList']);
+    expect(await badges('Berserk: Prototype')).toEqual(['AniList']);
+    const mp = (await screen.findByText('Berserk (MP)')).closest('button');
+    expect(mp.querySelector('svg.lucide-library')).toBeTruthy();
+    expect(mp.querySelector('svg.lucide-globe')).toBeNull();
+    const mal = (await screen.findByText('Berserk (MAL)')).closest('button');
+    expect(mal.querySelector('svg.lucide-globe')).toBeTruthy();
   });
 
   it('lookupSourceLabels falls back to AniList only for AniList hits', () => {
-    expect(lookupSourceLabels({ source: 'anilist' })).toEqual(['🌐 AniList']);
-    expect(lookupSourceLabels({ source: 'mal' })).toEqual(['🌐 MyAnimeList']);
+    expect(lookupSourceLabels({ source: 'anilist' })).toEqual(['AniList']);
+    expect(lookupSourceLabels({ source: 'mal' })).toEqual(['MyAnimeList']);
     expect(lookupSourceLabels({ source: 'other' })).toEqual([]);
-    expect(lookupSourceLabels({ source: 'anilist', source_label: '🌐 AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['🌐 AniList', '🌐 MyAnimeList']);
+    expect(lookupSourceLabels({ source: 'anilist', source_label: 'AniList', also_on: ['mal', 'mal', 'x'] })).toEqual(['AniList', 'MyAnimeList']);
   });
 
   it('Escape closes the result list first, then the dialog', async () => {
@@ -407,5 +417,21 @@ describe('AddMangaModal: cover upload cancel', () => {
     } finally {
       Object.assign(URL, { createObjectURL, revokeObjectURL });
     }
+  });
+});
+
+describe('AddMangaModal: phones', () => {
+  it('uses the shared scrolling overlay, a compact header on short screens and a number pad for the volume count', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog', { name: 'Neuen Manga anlegen' });
+    expect(dialog.className).toMatch(/(^|\s)dialog-overlay(\s|$)/);
+    expect(dialog.className).not.toMatch(/items-center|p-2|overflow-y-auto/);
+    const box = dialog.firstElementChild;
+    expect(box.className).toMatch(/(^|\s)dialog-box(\s|$)/);
+    expect(box.className).toContain('short:p-4');
+    expect(box.className).not.toMatch(/\bmy-/);
+    expect(screen.getByText('Erfasse eine neue Reihe in deiner Sammlung').className).toContain('short:hidden');
+    expect(screen.getByLabelText('Geplante / Gesamtbände').getAttribute('inputmode')).toBe('numeric');
+    expect(document.getElementById('btn-close-add-modal-x').className).toContain('hit-44');
   });
 });

@@ -401,6 +401,27 @@ test('saveSnapshot writes a compact ISBN index that lookupLocalIsbn answers from
     }
 });
 
+test('loadOfflineVolumeSearch: the search text of the snapshot rows, for the shelf search without a server', async () => {
+    const withSearch = {
+        ...snapshot,
+        mangas: [
+            { id: 3, title: 'Berserk', volume_search: '9783899211234\nErstauflage' },
+            { id: 4, title: 'Akira', volume_search: null },
+            { id: 5, title: 'Monster', volume_search: '' }
+        ]
+    };
+    const ctx = await setup(async () => okResponse(withSearch));
+    try {
+        assert.deepEqual(await ctx.store.loadOfflineVolumeSearch(), []);
+        assert.equal(await ctx.store.syncOfflineCopy(), true);
+        assert.deepEqual(await ctx.store.loadOfflineVolumeSearch(), [{ id: 3, volume_search: '9783899211234\nErstauflage' }]);
+        await ctx.store.clearOfflineData();
+        assert.deepEqual(await ctx.store.loadOfflineVolumeSearch(), []);
+    } finally {
+        ctx.restore();
+    }
+});
+
 test('the ISBN index is read once, renewed after a sync and gone after a logout', async () => {
     let body = isbnSnapshot;
     const ctx = await setup(async () => okResponse(body));

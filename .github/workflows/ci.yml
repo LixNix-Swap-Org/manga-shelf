@@ -1,8 +1,11 @@
 name: CI
 
+# Every push builds the artifacts (build.yml, nothing is published); the desktop installers and the mobile smoke
+# builds only run on main and in pull requests (Actions → Release → action build covers other branches).
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
+    tags-ignore: ['**']
   pull_request:
 
 permissions:
@@ -28,7 +31,19 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
       - run: npm ci
+      # sql.js, fflate and bcryptjs for test/core/adapters.test.js and takeover.test.js
+      - run: npm ci
+        working-directory: frontend
+      - name: Core tests must not skip (sql.js, fflate, bcryptjs resolvable)
+        run: |
+          node -e 'for (const m of ["sql.js", "fflate", "bcryptjs"]) require.resolve(m, { paths: ["frontend"] })'
+          out="$(node --test --test-reporter=tap test/core/adapters.test.js test/core/takeover.test.js)"
+          echo "$out" | tail -n 9
+          echo "$out" | grep -Eqx '# skip(ped)? 0' || { echo "core adapter/takeover tests were skipped"; exit 1; }
       - run: npm run lint
       - run: npm test
       - name: Audit runtime dependencies
@@ -193,3 +208,52 @@ jobs:
         with:
           name: browser-test-screenshots
           path: test/browser/screenshots
+
+  desktop-smoke:
+    # electron-builder --dir on Linux: the packaged app with the staged server, no installer, no signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Desktop-Projekt vorhanden?
+        id: project
+        run: |
+          if [ -f desktop/package.json ] && node -e 'const s = require("./desktop/package.json").scripts || {}; process.exit(s["build:dir"] && s.test ? 0 : 1)'; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::desktop/package.json hat keine Skripte build:dir/test, Desktop-Smoke übersprungen"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install, test, electron-builder --dir
+        if: steps.project.outputs.present == 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm ci --ignore-scripts
+          (cd frontend && npm ci)
+          cd desktop
+          npm ci
+          npm test
+          npm run build:dir
+          npm run smoke
+
+  build:
+    name: Artefakte
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build.yml
+    with:
+      publish: false
+      installers: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
+
+  mobile:
+    name: Handy-Apps (Smoke)
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mobile.yml
+    with:
+      mode: smoke

@@ -16,7 +16,7 @@ export default function ShelfSpine({
   const isVeryCompact = isFitSingleRow && totalCount > 24;
   const isUltraCompact = isFitSingleRow && totalCount > 34;
 
-  // Proportional spine height based on scale + mode:
+  // spine height by scale and layout mode
   let spineHeightPx;
   if (shelfScale === 's') {
     spineHeightPx = isFitSingleRow && isUltraCompact ? '150px' : '170px';
@@ -32,18 +32,14 @@ export default function ShelfSpine({
     const gapDate = formatShortDate(gapMeta?.release_date);
     const gapDetails = [gapPrice, gapDate].filter(Boolean).join(' • ');
     const gapTitle = `${gapLabel(gapsOfficial)}: Band ${item.gapNumber}${gapDetails ? ` (${gapDetails})` : ''}`;
-    // Width class depends on layout mode:
-    // KEY MATH: max-width must satisfy (targetPerRow × max-width > ~950px container)
-    //   so flex-1 is forced to shrink items in full rows → row fills entire width.
-    //   For partial rows (few items), max-width caps growth → books look normal.
+    // max-width x books per row must exceed the ~950px container so full rows fill it; partial rows stay capped
     let ghostWidthClass;
     if (isFitSingleRow) {
       ghostWidthClass = 'flex-1 min-w-[18px] max-w-[56px]';
     } else if (isScrollFixed) {
       ghostWidthClass = shelfScale === 's' ? 'w-[36px]' : shelfScale === 'l' ? 'w-[56px]' : 'w-[46px]';
     } else {
-      // Rows / fit-multirow: flex-1 with generous max-width
-      // S(20/row): 20×56=1120>950 ✓  M(16/row): 16×70=1120>950 ✓  L(12/row): 12×92=1104>950 ✓
+      // S 20/row x 56, M 16/row x 70, L 12/row x 92 all exceed 950
       ghostWidthClass = shelfScale === 's' ? 'flex-1 min-w-[20px] max-w-[56px]'
         : shelfScale === 'l' ? 'flex-1 min-w-[20px] max-w-[92px]'
         : 'flex-1 min-w-[20px] max-w-[70px]';
@@ -112,7 +108,7 @@ export default function ShelfSpine({
   const isSpecialEd = badge.type === 'special_edition';
   const isSpecial = badge.type === 'special';
 
-  // Page-count realistic spine thickness factor (Standard manga ~192p = 1.0, Double-vol ~380p = 1.5)
+  // spine thickness from the page count (a standard volume of ~192 pages is 1.0)
   const pageFactor = (vol.pages && Number(vol.pages) > 40)
     ? Math.max(0.85, Math.min(1.75, Number(vol.pages) / 192))
     : 1.0;
@@ -120,17 +116,17 @@ export default function ShelfSpine({
   let spineWidth = '';
   let customWidthStyle = {};
   if (isFitSingleRow) {
-    // Single-row auto-fit: flex-1 WITH max-width to prevent overflow on one line
+    // single row: max-width keeps the row from overflowing
     spineWidth = isSchuber ? 'flex-[1.8] min-w-[32px] max-w-[95px]' : isSpecialEd ? 'flex-[1.2] min-w-[24px] max-w-[65px]' : 'flex-1 min-w-[18px] max-w-[56px]';
   } else if (isScrollFixed) {
-    // Scroll mode: fixed pixel widths for predictable horizontal scrolling with page factor
+    // scroll mode: fixed widths scaled by the page factor
     const isS = shelfScale === 's';
     const isL = shelfScale === 'l';
     const baseW = isSchuber ? (isS ? 68 : isL ? 100 : 84) : isSpecialEd ? (isS ? 42 : isL ? 62 : 52) : (isS ? 36 : isL ? 56 : 46);
     const calculatedW = Math.round(baseW * pageFactor);
     customWidthStyle = { width: `${calculatedW}px` };
   } else {
-    // Rows / fit-multirow: flex-1 with CALCULATED max-width
+    // rows / multi-row: flex-1 capped per scale
     const isS = shelfScale === 's';
     const isL = shelfScale === 'l';
     if (isSchuber) {
@@ -142,7 +138,7 @@ export default function ShelfSpine({
     }
   }
 
-  // In flex-fill modes, don't use shrink-0 so flex distributes space properly
+  // flex-fill modes must stay shrinkable so the row fills evenly
   const shrinkClass = isFlexFill ? '' : 'shrink-0';
   const isFocused = vol.id === focusedVolumeId;
 
@@ -188,11 +184,16 @@ export default function ShelfSpine({
       }}
       className={`manga-spine ${isSpecialEd ? 'manga-spine-special' : ''} ${isSchuber ? 'manga-spine-box' : ''} ${spineWidth} bg-gradient-to-b ${theme.bg} ${theme.border} ${shrinkClass} flex flex-col justify-between items-center py-2 sm:py-2.5 px-0.5 sm:px-1 relative transition-all duration-200 ${
         isFocused ? 'ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-950 scale-[1.04] z-20 shadow-xl shadow-brand-500/30' : ''
-      } ${selected ? 'outline outline-2 outline-offset-2 outline-emerald-400 -translate-y-2' : ''} ${canEdit || selectionMode ? 'cursor-pointer' : 'cursor-default'} ${!isOwned && !selected ? 'opacity-70 saturate-50 hover:opacity-100 hover:saturate-100' : ''}`}
+      } ${selected ? 'outline outline-2 outline-offset-2 outline-emerald-400 -translate-y-2' : ''} ${canEdit || selectionMode ? 'cursor-pointer' : 'cursor-default'} group/spine`}
+      data-missing={!isOwned || undefined}
       title={`${getVolumeDisplayTitle(vol)}${vol.publisher ? ` • ${vol.publisher}` : ''}${formatEuro(vol.price) ? ` • ${formatEuro(vol.price)}` : ''}${isOwned && isRead ? ' • Gelesen ✓' : ''}`}
     >
+      {/* a missing volume dims its background only; badges and numbers keep their contrast */}
+      {!isOwned && !selected && (
+        <span aria-hidden="true" data-testid="spine-dim" className="absolute inset-0 rounded-[inherit] bg-slate-950/45 pointer-events-none transition-opacity group-hover/spine:opacity-0" />
+      )}
       {/* Spine Top: Publisher Logo / Accent */}
-      <div className="w-full flex justify-center shrink-0">
+      <div className="relative w-full flex justify-center shrink-0">
         <span className={`px-0.5 sm:px-1 py-0.5 rounded truncate max-w-full leading-tight text-center ${
           isUltraCompact ? 'text-[7px] max-w-[32px]' : 'text-[8px] sm:text-[9px] max-w-[42px] sm:max-w-[48px]'
         } ${theme.accentBadge}`}>
@@ -201,7 +202,7 @@ export default function ShelfSpine({
       </div>
 
       {/* Spine Center: Vertical Manga Title */}
-      <div className="flex-1 flex items-center justify-center my-1 overflow-hidden pointer-events-none w-full">
+      <div className="relative flex-1 flex items-center justify-center my-1 overflow-hidden pointer-events-none w-full">
         <span className={`spine-vertical-text font-bold select-none truncate ${
           isUltraCompact ? 'text-[8px] sm:text-[9px] max-h-[70px]' : isVeryCompact ? 'text-[9px] sm:text-[10px] max-h-[85px]' : 'text-[11px] sm:text-xs tracking-wider max-h-[110px]'
         } ${theme.text} opacity-90 drop-shadow-sm`}>
@@ -210,7 +211,7 @@ export default function ShelfSpine({
       </div>
 
       {/* Spine Bottom: Volume Number & Status Badges */}
-      <div className="w-full flex flex-col items-center gap-0.5 sm:gap-1 shrink-0 pt-1 border-t border-white/10">
+      <div className="relative w-full flex flex-col items-center gap-0.5 sm:gap-1 shrink-0 pt-1 border-t border-white/10">
         {isSchuber ? (
           <div className="text-[9px] sm:text-[10px] font-black text-indigo-300 flex items-center gap-0.5 bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-500/30 truncate max-w-full">
             <Package className="w-2.5 h-2.5 text-indigo-400 shrink-0" />

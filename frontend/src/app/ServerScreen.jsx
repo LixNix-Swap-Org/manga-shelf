@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, Check, ClipboardPaste, Pencil, Plug, Plus, Server, ShieldAlert, Trash, Wifi, WifiOff, X } from 'lucide-react';
 import { useDocumentTitle } from '../components/common/PageChrome';
@@ -96,25 +96,35 @@ function ProbeResults({ results }) {
   );
 }
 
+const NO_URL_ERROR = 'Bitte mindestens eine Adresse mit http:// oder https:// eingeben.';
+
 function ServerForm({ initial, onSaved, onCancel }) {
   const ids = useId();
   const [form, setForm] = useState(initial);
   const [results, setResults] = useState([]);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { setForm(initial); setResults([]); setError(''); }, [initial]);
+  const [urlsInvalid, setUrlsInvalid] = useState(false);
+  const urlsRef = useRef(null);
+  useEffect(() => { setForm(initial); setResults([]); setError(''); setUrlsInvalid(false); }, [initial]);
 
   const urls = normalizeUrls(form.urls);
+  const fail = (message, field = false) => {
+    setError(message);
+    setUrlsInvalid(field);
+    if (field) urlsRef.current?.focus();
+  };
 
   const test = async () => {
-    setError('');
+    if (testing) return null;
+    fail('');
     if (!urls.length) {
-      setError('Bitte mindestens eine Adresse mit http:// oder https:// eingeben.');
+      fail(NO_URL_ERROR, true);
       return [];
     }
     const insecure = insecureError(urls);
     if (insecure) {
-      setError(insecure);
+      fail(insecure, true);
       return null;
     }
     setTesting(true);
@@ -131,9 +141,10 @@ function ServerForm({ initial, onSaved, onCancel }) {
 
   const save = async (e) => {
     e.preventDefault();
-    setError('');
+    if (testing) return;
+    fail('');
     if (!urls.length) {
-      setError('Bitte mindestens eine Adresse mit http:// oder https:// eingeben.');
+      fail(NO_URL_ERROR, true);
       return;
     }
     const checked = results.length ? results : await test();
@@ -148,14 +159,14 @@ function ServerForm({ initial, onSaved, onCancel }) {
       });
       onSaved(saved, checked.some((r) => r.ok));
     } catch (err) {
-      setError(err.message);
+      fail(err.message);
     }
   };
 
   return (
     <form onSubmit={save} className="space-y-4" aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`} className="text-lg font-bold text-white">{form.id ? 'Server bearbeiten' : 'Server hinzufügen'}</h2>
-      {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+      {error && <p id={`${ids}-error`} role="alert" className="text-sm text-red-300">{error}</p>}
       <div>
         <label htmlFor={`${ids}-name`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Name</label>
         <input
@@ -172,6 +183,9 @@ function ServerForm({ initial, onSaved, onCancel }) {
         <label htmlFor={`${ids}-urls`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Adressen (eine pro Zeile)</label>
         <textarea
           id={`${ids}-urls`}
+          ref={urlsRef}
+          aria-invalid={urlsInvalid || undefined}
+          aria-describedby={urlsInvalid && error ? `${ids}-urls-hint ${ids}-error` : `${ids}-urls-hint`}
           className="input-field font-mono min-h-[5.5rem]"
           placeholder={'https://manga.example.org\nhttp://192.168.1.10:3000'}
           autoCapitalize="none"
@@ -180,15 +194,17 @@ function ServerForm({ initial, onSaved, onCancel }) {
           value={form.urls}
           onChange={(e) => { setForm((f) => ({ ...f, urls: e.target.value })); setResults([]); }}
         />
-        <p className="text-xs text-slate-400 mt-1">Die App nimmt die erste Adresse, die antwortet – zum Beispiel die LAN-Adresse zu Hause und die öffentliche unterwegs.</p>
+        <p id={`${ids}-urls-hint`} className="text-xs text-slate-400 mt-1">Die App nimmt die erste Adresse, die antwortet – zum Beispiel die LAN-Adresse zu Hause und die öffentliche unterwegs.</p>
       </div>
-      <ProbeResults results={results} />
+      <div role="status" aria-live="polite" className="empty:!mt-0">
+        <ProbeResults results={results} />
+      </div>
       <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-800">
         {onCancel && <button type="button" onClick={onCancel} className="btn-secondary text-sm">Abbrechen</button>}
-        <button type="button" onClick={test} disabled={testing} className="btn-secondary text-sm inline-flex items-center gap-1.5" aria-busy={testing || undefined}>
+        <button type="button" onClick={test} aria-disabled={testing || undefined} className="btn-secondary text-sm inline-flex items-center gap-1.5 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed" aria-busy={testing || undefined}>
           <Plug className="w-4 h-4" aria-hidden="true" /> {testing ? 'Prüfe…' : 'Verbindung testen'}
         </button>
-        <button type="submit" disabled={testing} className="btn-primary text-sm inline-flex items-center gap-1.5">
+        <button type="submit" aria-disabled={testing || undefined} className="btn-primary text-sm inline-flex items-center gap-1.5 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed">
           <Check className="w-4 h-4" aria-hidden="true" /> Speichern und verbinden
         </button>
       </div>
@@ -218,6 +234,8 @@ function PasteLink({ onLink }) {
         <input
           id={`${ids}-link`}
           type="text"
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={error ? `${ids}-link-error` : undefined}
           className="input-field font-mono flex-1 min-w-0"
           placeholder="manga-shelf://connect?url=…"
           autoCapitalize="none"
@@ -230,19 +248,16 @@ function PasteLink({ onLink }) {
           <ClipboardPaste className="w-4 h-4" aria-hidden="true" /> Übernehmen
         </button>
       </div>
-      {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
+      {error && <p id={`${ids}-link-error`} role="alert" className="text-xs text-red-300">{error}</p>}
       <p className="text-xs text-slate-400">Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.</p>
     </form>
   );
 }
 
-/**
- * App build: saved servers, adding and editing them, the connection test and connect links. `onSelect(id)` switches
- * to a server and resolves once App checked its session; then the page shows the login or the collection.
- */
-/** Addresses of a saved server where a sign-in is refused (plain http outside the home network, saved before wave 3). */
+/** Addresses of a saved server where a sign-in is refused (plain http outside the home network, saved earlier). */
 export const insecureUrls = (server) => server.urls.filter((u) => !isSecureEnough(u));
 
+/** App build: saved servers, adding and editing them, the connection test; `onSelect(id)` resolves once App checked the session. */
 export default function ServerScreen({ user, onSelect, onUseLocal, onTakeover }) {
   useDocumentTitle('Server');
   const servers = useServers();

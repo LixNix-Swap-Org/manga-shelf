@@ -212,7 +212,7 @@ export default function SystemModal({ isOpen, onClose }) {
 
   const endSessions = () => run('sessions', async () => {
     const result = await api.post('/api/system/sessions/end-all', {}, { fallback: 'Sitzungen konnten nicht beendet werden' });
-    rememberToken(result);
+    rememberToken(result, { rotate: true });
     notify.success(`Alle Sitzungen beendet (${formatCount(result?.users || 0, 'Benutzer', 'Benutzer')}). Du bleibst auf diesem Gerät angemeldet.`);
   });
 
@@ -242,9 +242,9 @@ export default function SystemModal({ isOpen, onClose }) {
         e.preventDefault();
         requestClose();
       }}
-      className="outline-none fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-7 border border-slate-700/80 shadow-2xl my-3 sm:my-8 space-y-4">
+      <div className="dialog-box glass-panel max-w-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-7 short:p-4 border border-slate-700/80 shadow-2xl space-y-4">
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/40 text-brand-300 flex items-center justify-center">
@@ -255,11 +255,11 @@ export default function SystemModal({ isOpen, onClose }) {
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => load({ refresh: true })}
-              disabled={loading}
+              onClick={() => { if (!loading) load({ refresh: true }); }}
+              aria-disabled={loading || undefined}
               aria-label="Neu laden"
               title="Neu laden (zählt verwaiste Bilder neu)"
-              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors aria-disabled:opacity-40 aria-disabled:cursor-default"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
@@ -267,8 +267,9 @@ export default function SystemModal({ isOpen, onClose }) {
               type="button"
               onClick={requestClose}
               disabled={Boolean(busy)}
+              data-autofocus
               aria-label="Schließen"
-              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+              className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
             >
               <X className="w-5 h-5" aria-hidden="true" />
             </button>

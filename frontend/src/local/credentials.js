@@ -1,4 +1,4 @@
-// API keys of the standalone mode, outside manga.db (spec-user-api-keys §7.2). The browser build keeps them in
+// API keys of the standalone mode, outside manga.db. The browser build keeps them in
 // IndexedDB, readable by anyone with access to this browser profile: flagged as "nicht sicher, nur für Tests". The apps
 // replace the store with the device's secure storage (Capacitor Secure Storage, Electron safeStorage).
 // provider() is the core/sources/credentials.js interface; reads are synchronous from memory after load().

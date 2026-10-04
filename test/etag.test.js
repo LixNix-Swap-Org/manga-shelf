@@ -1,3 +1,4 @@
+// Weak ETag / 304 handling of the data endpoints and when the tag changes.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');

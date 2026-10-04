@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Link as LinkIcon, Plus, Star, Trash, Upload, X } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Lightbulb, Link as LinkIcon, Plus, Sparkles, Star, Trash, Upload, X } from 'lucide-react';
 import LightboxGallery from './LightboxGallery';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import { assetImgProps } from '../../utils/api';
@@ -19,9 +19,8 @@ export const editorGalleryImages = (form) => {
 };
 
 /**
- * Cover and photo gallery manager for a volume (upload, URL, reorder, delete, set cover). Form state and handlers come
- * in via props. The enlarged view works on the unsaved form: "Als Cover festlegen" there only changes the form, the
- * editor's Save stores it.
+ * Cover and photo gallery manager for a volume; form state comes in via props. In the enlarged view
+ * "Als Cover festlegen" only changes the form, the editor's Save stores it.
  */
 export default function VolumePhotoManager({
   editVolForm,
@@ -126,13 +125,16 @@ export default function VolumePhotoManager({
             <button
               type="button"
               onClick={handleAddImageUrl}
-              className="btn-primary text-xs py-1.5 px-3 shrink-0"
+              className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1.5"
             >
-              {manualImageUrl.includes('manga-passion.de') ? '✨ Importieren' : 'Hinzufügen'}
+              {manualImageUrl.includes('manga-passion.de')
+                ? <><Sparkles className="w-3.5 h-3.5" aria-hidden="true" />Importieren</>
+                : 'Hinzufügen'}
             </button>
           </div>
-          <p className="text-[10px] text-slate-400">
-            💡 Unterstützt direkte Bild-Links sowie offizielle <span className="text-sky-400 font-medium">Manga Passion Bände- & Schuber-URLs</span> (lädt Cover, Titel & Datum automatisch herunter).
+          <p className="text-[10px] text-slate-400 flex items-start gap-1">
+            <Lightbulb className="w-3 h-3 shrink-0 mt-px text-amber-300" aria-hidden="true" />
+            <span>Unterstützt direkte Bild-Links sowie offizielle <span className="text-sky-400 font-medium">Manga Passion Bände- & Schuber-URLs</span> (lädt Cover, Titel & Datum automatisch herunter).</span>
           </p>
         </div>
       )}
@@ -165,33 +167,33 @@ export default function VolumePhotoManager({
                 </button>
 
                 {/* Quick Actions (Move & Delete): Accessible on mobile and desktop */}
-                <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                <div className="absolute top-1.5 right-1.5 flex items-center gap-1 [@media(pointer:coarse)]:gap-2 z-10">
                   {idx > 0 && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx - 1); }}
-                      className="w-6 h-6 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
+                      className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
                       title="Nach links verschieben"
                       aria-label={`Foto ${idx + 1} nach links verschieben`}
                     >
-                      ◀
+                      <ChevronLeft className="w-3 h-3" aria-hidden="true" />
                     </button>
                   )}
                   {idx < editVolForm.images.length - 1 && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleMoveVolumeImage(idx, idx + 1); }}
-                      className="w-6 h-6 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
+                      className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-black/80 hover:bg-slate-700 text-white text-xs flex items-center justify-center transition-colors shadow border border-white/10"
                       title="Nach rechts verschieben"
                       aria-label={`Foto ${idx + 1} nach rechts verschieben`}
                     >
-                      ▶
+                      <ChevronRight className="w-3 h-3" aria-hidden="true" />
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleRemoveVolumeImage(imgUrl); }}
-                    className="w-6 h-6 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow flex items-center justify-center transition-colors"
+                    className="hit-44 w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow flex items-center justify-center transition-colors"
                     title="Bild löschen"
                     aria-label={`Foto ${idx + 1} löschen`}
                   >

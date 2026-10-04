@@ -9,6 +9,36 @@ const IMAGE_TIMEOUT_MS = 20000;
 
 export const corsText = (host) => `${host} lässt Anfragen aus dem Browser nicht zu (CORS). In der App oder mit einem Server funktioniert diese Quelle.`;
 
+// an error answer's first bytes let the caller tell a refused key from a quota (Google Books error reasons)
+export const ERROR_BODY_BYTES = 4096;
+
+async function readErrorBody(res) {
+  try {
+    const reader = res.body?.getReader?.();
+    if (!reader) return (await res.text()).slice(0, ERROR_BODY_BYTES);
+    const chunks = [];
+    let size = 0;
+    while (size < ERROR_BODY_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      size += value.length;
+    }
+    reader.cancel().catch(() => {});
+    const bytes = new Uint8Array(Math.min(size, ERROR_BODY_BYTES));
+    let offset = 0;
+    for (const chunk of chunks) {
+      const part = chunk.subarray(0, bytes.length - offset);
+      bytes.set(part, offset);
+      offset += part.length;
+      if (offset >= bytes.length) break;
+    }
+    return new TextDecoder().decode(bytes);
+  } catch (_) {
+    return '';
+  }
+}
+
 const hostOf = (url) => {
   try { return new URL(url).host; } catch (_) { return String(url); }
 };
@@ -29,12 +59,16 @@ export function createBrowserHttp({ fetchImpl = (...args) => globalThis.fetch(..
     }
   };
 
-  const withTimeout = async (url, timeoutMs, read) => {
+  const withTimeout = async (url, timeoutMs, read, { errorBody = false } = {}) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await call(url, { signal: controller.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const err = Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+        if (errorBody && res.status >= 300) err.body = await readErrorBody(res);
+        throw err;
+      }
       return await read(res);
     } catch (err) {
       if (controller.signal.aborted) throw new Error('Timeout');
@@ -51,7 +85,7 @@ export function createBrowserHttp({ fetchImpl = (...args) => globalThis.fetch(..
       const text = await res.text();
       if (text.length > TEXT_LIMIT_BYTES) throw new Error('Antwort zu groß');
       return text;
-    }),
+    }, { errorBody: true }),
     async fetchImage(url) {
       let parsed;
       try { parsed = new URL(url); } catch (_) { throw new Error('Ungültige Bild-URL'); }

@@ -7,12 +7,12 @@ const {
 } = require('../lib/owners');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { resolveTargetUser } = require('../lib/access');
-const { badRequest, notFound, conflict } = require('../errors');
+const { HttpError, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseYear, parsePriority, isValidDate, parseDate,
-    parseWholeNumber, parsePositiveInt, parseIdList, parseBulkSet, parseCondition, parseFlag, isValidReadAt
+    parseWholeNumber, parseIdList, parseBulkSet, parseFlag, isValidReadAt
 } = require('../lib/validate');
 
 const MAX_BATCH_VOLUMES = 300;
@@ -429,15 +429,11 @@ const ownerRows = (ctx, volumeId) => ctx.db.prepare(
 
 const BULK_SNAPSHOT_COLUMNS = ['manga_id', ...BULK_SET_FIELDS];
 
-/** What an undo needs: the fields a bulk edit may change, the owner rows and (for read/delete) the read rows. */
-function bulkSnapshot(ctx, vol, { full, readUser }) {
-    const volume = full
-        ? Object.fromEntries(Object.entries(vol).filter(([key]) => key !== 'number_sort'))
-        : Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null]));
-    const entry = { id: vol.id, volume, owners: ownerRows(ctx, vol.id) };
-    if (full) {
-        entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(vol.id);
-    } else if (readUser) {
+/** What the undo of a field edit needs: the fields a bulk edit may change, the owner rows and the reader's read row. */
+function bulkSnapshot(ctx, vol, { readUser }) {
+    const volume = Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null]));
+    const entry = { id: vol.id, deleted: false, volume, owners: ownerRows(ctx, vol.id) };
+    if (readUser) {
         entry.read_user = readUser;
         entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
     }
@@ -493,19 +489,52 @@ function applyReadOp(ctx, volumeId, { userId, read, readAt }) {
     return true;
 }
 
-/**
- * POST /volumes/bulk: one change for up to 500 volumes in one transaction.
- * { ids, set?: { status, price, purchase_date, condition, priority, target_price, release_date },
- *   owners?: { add, remove }, read?: { user_id, read, read_at }, delete?: true } or { revert: previous }.
- * With owners.add, price/purchase_date/condition of `set` describe that purchase (see applyOwnerOps).
- * The answer lists the ids it changed, the unknown ones (not_found) and `previous`, which a later { revert } restores.
- */
+// The undo data of a bulk edit stays on the host (ctx.undo); the client only gets a token bound to its user. The store
+// is bounded by entries and by the approximate JSON size of the snapshots, oldest first.
+const UNDO_TTL_MS = 10 * 60 * 1000;
+const UNDO_PER_USER = 20;
+const UNDO_TOTAL = 200;
+const UNDO_BYTES_PER_USER = 8 * 1024 * 1024;
+const UNDO_BYTES_TOTAL = 32 * 1024 * 1024;
+
+function rememberUndo(ctx, previous) {
+    const store = ctx.undo;
+    const now = ctx.now().getTime();
+    const bytes = JSON.stringify(previous).length;
+    if (bytes > UNDO_BYTES_PER_USER) return {};
+    for (const [token, entry] of store) {
+        if (entry.expires <= now) store.delete(token);
+    }
+    const mine = [...store].filter(([, entry]) => entry.userId === ctx.user.id);
+    let mineBytes = mine.reduce((sum, [, entry]) => sum + (entry.bytes || 0), 0);
+    while (mine.length && (mine.length >= UNDO_PER_USER || mineBytes + bytes > UNDO_BYTES_PER_USER)) {
+        const [token, entry] = mine.shift();
+        mineBytes -= entry.bytes || 0;
+        store.delete(token);
+    }
+    let totalBytes = 0;
+    for (const entry of store.values()) totalBytes += entry.bytes || 0;
+    while (store.size && (store.size >= UNDO_TOTAL || totalBytes + bytes > UNDO_BYTES_TOTAL)) {
+        const [token, entry] = store.entries().next().value;
+        totalBytes -= entry.bytes || 0;
+        store.delete(token);
+    }
+    const token = ctx.randomId();
+    const expires = now + UNDO_TTL_MS;
+    store.set(token, { userId: ctx.user.id, expires, generation: ctx.db.generation(), previous, bytes });
+    return { undo_token: token, undo_expires_at: new Date(expires).toISOString() };
+}
+
+// POST /volumes/bulk: one change for up to 500 volumes in one transaction.
+// { ids, set?, owners?: { add, remove }, read?: { user_id, read, read_at }, delete?: true } or { revert: undo_token }.
+// With owners.add, price/purchase_date/condition of `set` describe that purchase (see applyOwnerOps).
+// Answers with the changed ids, the unknown ones (not_found) and `undo_token`, which a later { revert } takes.
 function bulk(ctx, { body }) {
     if (body.revert !== undefined) return revertBulk(ctx, body.revert);
     const ids = parseIdList(body.ids, MAX_BULK_IDS);
     if (ids.error) throw badRequest(`Ungültige Auswahl (1 bis ${MAX_BULK_IDS} Band-IDs)`, 'BULK_IDS');
     const set = parseBulkSet(body.set);
-    if (set.error) throw badRequest(BULK_FIELD_ERRORS[set.error] || `Unbekanntes Feld: ${set.error}`, 'BULK_FIELD', { field: set.error });
+    if (set.error) throw badRequest(Object.prototype.hasOwnProperty.call(BULK_FIELD_ERRORS, set.error) ? BULK_FIELD_ERRORS[set.error] : `Unbekanntes Feld: ${set.error}`, 'BULK_FIELD', { field: set.error });
     const owners = parseOwnerOps(ctx, body.owners);
     const read = parseReadOp(ctx, body.read);
     const remove = body.delete === true || body.delete === 'true';
@@ -524,11 +553,12 @@ function bulk(ctx, { body }) {
     const readSkipped = [];
     ctx.db.transaction(() => {
         for (const vol of rows) {
-            previous.push(bulkSnapshot(ctx, vol, { full: remove, readUser: read?.userId }));
             if (remove) {
-                moveVolumeToTrash(ctx, vol.id);
+                // the trash keeps the row, owners and reads; the undo only remembers where
+                previous.push({ id: vol.id, deleted: true, trash_id: moveVolumeToTrash(ctx, vol.id) });
                 continue;
             }
+            previous.push(bulkSnapshot(ctx, vol, { readUser: read?.userId }));
             if (owners?.add.length) {
                 const purchase = Object.fromEntries(OWNER_COLUMNS.filter((c) => c in set.value).map((c) => [c, set.value[c]]));
                 const rest = Object.fromEntries(Object.entries(set.value).filter(([c]) => !(c in purchase)));
@@ -542,99 +572,24 @@ function bulk(ctx, { body }) {
         }
     });
 
-    const answer = { success: true, updated: rows.length, ids: rows.map((v) => v.id), not_found: missing, previous };
+    const answer = { success: true, updated: rows.length, ids: rows.map((v) => v.id), not_found: missing, ...rememberUndo(ctx, previous) };
     if (remove) answer.deleted = true;
     if (readSkipped.length) answer.read_skipped = readSkipped;
     return { body: answer };
 }
 
-const snapshotError = () => badRequest('Ungültige Rückgängig-Daten', 'BULK_REVERT');
-const checked = (parsed) => {
-    if (parsed.error) throw snapshotError();
-    return parsed.value;
-};
-const optionalTimestamp = (val) => {
-    if (isBlank(val)) return null;
-    if (!isValidReadAt(val)) throw snapshotError();
-    return val.trim();
-};
-
-function parseSnapshotOwners(ctx, list) {
-    if (list === undefined || list === null) return [];
-    if (!Array.isArray(list) || list.length > 50) throw snapshotError();
-    const userExists = ctx.db.prepare('SELECT 1 FROM users WHERE id = ?');
-    return list.map((o) => {
-        const userId = parsePositiveInt(o?.user_id);
-        if (!userId) throw snapshotError();
-        return {
-            user_id: userId,
-            price: checked(parsePrice(o.price)),
-            purchase_date: checked(parseDate(o.purchase_date)),
-            condition: checked(parseCondition(o.condition)),
-            created_at: optionalTimestamp(o.created_at)
-        };
-    }).filter((o) => userExists.get(o.user_id));
-}
-
-function parseSnapshotReads(ctx, list) {
-    if (list === undefined || list === null) return [];
-    if (!Array.isArray(list) || list.length > 1000) throw snapshotError();
-    const userExists = ctx.db.prepare('SELECT 1 FROM users WHERE id = ?');
-    return list.map((r) => {
-        const userId = parsePositiveInt(r?.user_id);
-        if (!userId) throw snapshotError();
-        return { user_id: userId, read_at: optionalTimestamp(r.read_at) };
-    }).filter((r) => userExists.get(r.user_id));
-}
-
-/**
- * The bulk-editable fields of a snapshot that differ from `current` (the stored row; null for a deleted volume),
- * validated like a bulk edit. A legacy 'Gelesen' counts as 'Vorhanden'; an empty status of old rows stays empty.
- */
-function parseSnapshotFields(volume, current = null) {
-    const input = {};
-    for (const key of BULK_SET_FIELDS) {
-        const value = volume[key] ?? null;
-        if (current && value === (current[key] ?? null)) continue;
-        input[key] = key === 'status' && isLegacyReadStatus(value) ? OWNED_STATUS : value;
+/** The stored undo of this caller; a client-made snapshot is refused, an unknown, used or expired token is gone (410). */
+function takeUndo(ctx, token) {
+    if (typeof token !== 'string' || token.trim() === '' || token.length > 100) {
+        throw badRequest('Ungültige Rückgängig-Daten (erwartet: undo_token der Sammelbearbeitung)', 'BULK_REVERT');
     }
-    const emptyStatus = 'status' in input && isBlank(input.status);
-    if (emptyStatus) delete input.status;
-    const fields = checked(parseBulkSet(input));
-    if (emptyStatus) fields.status = null;
-    return fields;
-}
-
-/** Full row of a deleted volume, validated like POST /volumes. */
-function parseDeletedVolume(volume) {
-    const ty = parseType(volume.type);
-    if (ty.error) throw snapshotError();
-    const type = ty.value || 'volume';
-    const num = parseVolumeNumber(volume.volume_number, type);
-    if (num.error) throw snapshotError();
-    const images = parseImagesInput(volume.images);
-    if (images.error) throw snapshotError();
-    const mangaId = parsePositiveInt(volume.manga_id);
-    if (!mangaId) throw snapshotError();
-    const mpId = volume.manga_passion_volume_id === null || volume.manga_passion_volume_id === undefined
-        ? null : parsePositiveInt(volume.manga_passion_volume_id);
-    if (mpId === null && !isBlank(volume.manga_passion_volume_id)) throw snapshotError();
-    const text = (val) => (isBlank(val) ? null : String(val).trim());
-    return {
-        ...parseSnapshotFields(volume),
-        manga_id: mangaId,
-        volume_number: num.value,
-        type,
-        isbn: normalizeIsbn(volume.isbn),
-        release_year: checked(parseYear(volume.release_year)),
-        pages: checked(parsePages(volume.pages)),
-        publisher: isBlank(volume.publisher) ? null : normalizePublisher(volume.publisher),
-        notes: cleanNotes(volume.notes),
-        cover_image: text(volume.cover_image),
-        images: images.value,
-        manga_passion_volume_id: mpId,
-        created_at: optionalTimestamp(volume.created_at)
-    };
+    const entry = ctx.undo.get(token);
+    if (!entry || entry.expires <= ctx.now().getTime() || entry.generation !== ctx.db.generation()) {
+        if (entry) ctx.undo.delete(token);
+        throw new HttpError(410, 'Rückgängig ist nicht mehr möglich (abgelaufen oder schon ausgeführt)', 'BULK_UNDO_EXPIRED');
+    }
+    if (entry.userId !== ctx.user.id) throw forbidden('Nur wer die Sammelbearbeitung gemacht hat, kann sie rückgängig machen', 'BULK_UNDO_FORBIDDEN');
+    return entry;
 }
 
 function restoreOwners(ctx, volumeId, owners) {
@@ -651,75 +606,83 @@ function restoreReads(ctx, volumeId, reads) {
     for (const r of reads) insert.run(volumeId, r.user_id, r.read_at);
 }
 
-/**
- * { revert: previous } puts back what a bulk edit changed: the fields, owner rows and the reader's state of existing
- * volumes, deleted volumes with their id, owners and reads. A deleted volume whose type and number were taken again
- * meanwhile is not restored (conflicts, 409 per entry); the answer is 409 when nothing could be restored for that reason.
- */
-function revertBulk(ctx, revert) {
-    if (!Array.isArray(revert) || revert.length === 0 || revert.length > MAX_BULK_IDS) throw snapshotError();
-    const entries = revert.map((entry) => {
-        const id = parsePositiveInt(entry?.id);
-        if (!id || !entry.volume || typeof entry.volume !== 'object') throw snapshotError();
-        return { id, raw: entry };
-    });
-
-    const exists = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?');
+// { revert: undo_token } restores exactly what that bulk edit changed: fields, owner rows, reads, and deleted volumes
+// (from their trash entry). Volumes gone meanwhile or without trash entry are in not_found; a deleted volume whose
+// type and number were taken again is a per-entry conflict, and the answer is 409 when nothing could be restored.
+function revertBulk(ctx, token) {
+    const { previous } = takeUndo(ctx, token);
+    const current = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?');
     const mangaExists = ctx.db.prepare('SELECT 1 FROM mangas WHERE id = ?');
-    const plans = entries.map(({ id, raw }) => {
-        const owners = parseSnapshotOwners(ctx, raw.owners);
-        const current = exists.get(id);
-        if (current) {
-            const readUser = raw.read_user === undefined || raw.read_user === null ? null : resolveTargetUser(ctx, raw.read_user);
-            const reads = readUser ? parseSnapshotReads(ctx, raw.reads).filter((r) => r.user_id === readUser) : [];
-            return { id, kind: 'update', fields: parseSnapshotFields(raw.volume, current), owners, readUser, reads };
+    const userExists = ctx.db.prepare('SELECT 1 FROM users WHERE id = ?');
+    const knownUsers = (rows) => (Array.isArray(rows) ? rows : []).filter((row) => userExists.get(row.user_id));
+    const trashEntry = ctx.db.prepare("SELECT payload FROM trash WHERE id = ? AND kind = 'volume' AND ref_id = ?");
+    // a deleted volume comes back from its trash entry; emptied or restored meanwhile means nothing to restore
+    const trashedVolume = (snap) => {
+        const entry = snap.trash_id ? trashEntry.get(snap.trash_id, snap.id) : null;
+        if (!entry) return null;
+        try {
+            const payload = JSON.parse(entry.payload);
+            return payload?.volume?.id === snap.id ? payload : null;
+        } catch {
+            return null;
         }
-        return { id, kind: 'insert', row: parseDeletedVolume(raw.volume), owners, reads: parseSnapshotReads(ctx, raw.reads) };
-    });
+    };
+    const volumeColumns = new Set(ctx.db.prepare('PRAGMA table_info(volumes)').all().map((c) => c.name));
+    volumeColumns.delete('number_sort');
 
     const restored = [];
     const conflicts = [];
     const missing = [];
     ctx.db.transaction(() => {
-        for (const plan of plans) {
-            if (plan.kind === 'update') {
-                const keys = Object.keys(plan.fields);
-                if (keys.length) {
-                    ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => plan.fields[k]), plan.id);
+        // a deleted volume only comes back with an id the table really handed out
+        const sequence = Number(ctx.db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'volumes'").get()?.seq ?? 0);
+        for (const snap of previous) {
+            const stored = current.get(snap.id);
+            if (stored) {
+                // a deleted volume that is back already (trash restore) stays as it is
+                if (!snap.deleted) {
+                    const keys = BULK_SET_FIELDS.filter((k) => (snap.volume[k] ?? null) !== (stored[k] ?? null));
+                    if (keys.length) {
+                        ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
+                    }
+                    restoreOwners(ctx, snap.id, knownUsers(snap.owners));
+                    if (snap.read_user) {
+                        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(snap.id, snap.read_user);
+                        restoreReads(ctx, snap.id, knownUsers(snap.reads).filter((r) => r.user_id === snap.read_user));
+                    }
                 }
-                restoreOwners(ctx, plan.id, plan.owners);
-                if (plan.readUser) {
-                    ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(plan.id, plan.readUser);
-                    restoreReads(ctx, plan.id, plan.reads);
-                }
-                restored.push(plan.id);
+                restored.push(snap.id);
                 continue;
             }
-            const { row } = plan;
-            if (!mangaExists.get(row.manga_id)) {
-                missing.push(plan.id);
+            const trashed = snap.deleted ? trashedVolume(snap) : null;
+            const row = trashed?.volume;
+            if (!row || snap.id > sequence || !mangaExists.get(row.manga_id)) {
+                missing.push(snap.id);
                 continue;
             }
-            const duplicate = findDuplicate(ctx, row.manga_id, row.volume_number, row.type);
+            const type = row.type || 'volume';
+            const duplicate = findDuplicate(ctx, row.manga_id, row.volume_number, type);
             if (duplicate) {
-                const err = duplicateError(row.type, row.volume_number, duplicate);
-                conflicts.push({ id: plan.id, status: 409, code: err.code, error: err.message, existing_id: duplicate.id });
+                const err = duplicateError(type, row.volume_number, duplicate);
+                conflicts.push({ id: snap.id, status: 409, code: err.code, error: err.message, existing_id: duplicate.id });
                 continue;
             }
-            const columns = ['id', ...Object.keys(row).filter((k) => k !== 'created_at')];
-            const values = columns.map((k) => (k === 'id' ? plan.id : row[k]));
-            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}, created_at) VALUES (${columns.map(() => '?').join(', ')}, COALESCE(?, CURRENT_TIMESTAMP))`)
-                .run(...values, row.created_at);
-            restoreOwners(ctx, plan.id, plan.owners);
-            restoreReads(ctx, plan.id, plan.reads);
-            forgetTrashedVolume(ctx, plan.id);
-            restored.push(plan.id);
+            const columns = Object.keys(row).filter((k) => volumeColumns.has(k));
+            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map((k) => row[k]));
+            restoreOwners(ctx, snap.id, knownUsers(trashed.owners));
+            restoreReads(ctx, snap.id, knownUsers(trashed.reads));
+            forgetTrashedVolume(ctx, snap.id);
+            restored.push(snap.id);
         }
     });
+    ctx.undo.delete(token);
 
     const answer = { success: restored.length > 0, restored, conflicts, not_found: missing };
     if (restored.length === 0 && conflicts.length > 0) return { status: 409, body: { ...answer, error: conflicts[0].error, code: 'VOLUME_DUPLICATE' } };
     return { body: answer };
 }
 
-module.exports = { create, createBatch, update, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS };
+module.exports = {
+    create, createBatch, update, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
+    UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL
+};

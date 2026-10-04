@@ -1,4 +1,4 @@
-import { Plus, Truck, Calendar, BookCheck, PenLine, ShoppingCart, Trash } from 'lucide-react';
+import { BookOpen, Plus, Truck, Calendar, BookCheck, PenLine, ShoppingCart, Trash } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges from './OwnerBadges';
@@ -100,8 +100,9 @@ export default function VolumeListView({
                           e.stopPropagation();
                           setFillingGapNumber(item.gapNumber);
                         }}
-                        className="px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 cursor-pointer"
+                        className="hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 cursor-pointer"
                         title="Band erfassen"
+                        aria-label={`Band ${item.gapNumber}: Fehlt (Lücke) – erfassen`}
                       >
                         ✕ Fehlt (Lücke)
                       </button>
@@ -130,8 +131,9 @@ export default function VolumeListView({
                           e.stopPropagation();
                           setFillingGapNumber(item.gapNumber);
                         }}
-                        className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all ml-auto cursor-pointer"
+                        className="hit-44 px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1 transition-all ml-auto cursor-pointer"
                         title="Band in Sammlung aufnehmen"
+                        aria-label={`Band ${item.gapNumber} erfassen`}
                       >
                         <Plus className="w-3.5 h-3.5" /> Erfassen
                       </button>
@@ -157,19 +159,22 @@ export default function VolumeListView({
                 key={vol.id} 
                 data-volume-id={vol.id}
                 onClick={selectionMode ? (e) => {
-                  if (!(e.target instanceof Element) || !e.target.closest('button, a, input')) onSelectVolume?.(vol, e);
+                  if (!(e.target instanceof Element) || !e.target.closest('button, a, input, label')) onSelectVolume?.(vol, e);
                 } : undefined}
-                className={`hover:bg-slate-900/60 transition-colors ${!isOwned && !selected ? 'opacity-75' : ''} ${selected ? 'bg-brand-950/50' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+                data-missing={!isOwned || undefined}
+                className={`hover:bg-slate-900/60 transition-colors ${!isOwned && !selected ? 'bg-slate-950/40' : ''} ${selected ? 'bg-brand-950/50' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
               >
                 {selectionMode && (
                   <td className="py-2 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
-                      aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
-                      className="w-5 h-5 accent-brand-500 cursor-pointer align-middle"
-                    />
+                    <label className="hit-44 inline-flex align-middle cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) => onSelectVolume?.(vol, e.nativeEvent)}
+                        aria-label={`${getVolumeDisplayTitle(vol)} auswählen`}
+                        className="w-6 h-6 m-0 accent-brand-500 cursor-pointer"
+                      />
+                    </label>
                   </td>
                 )}
                 {/* Cover thumbnail */}
@@ -177,7 +182,7 @@ export default function VolumeListView({
                   {vol.cover_image ? (
                     <button
                       type="button"
-                      className="relative inline-block cursor-pointer group/thumb rounded"
+                      className="hit-44 relative inline-block cursor-pointer group/thumb rounded"
                       onClick={() => openVolumeGallery(vol)}
                       title="Fotogalerie öffnen"
                       aria-label={`Fotogalerie öffnen: ${getVolumeDisplayTitle(vol)}`}
@@ -185,7 +190,7 @@ export default function VolumeListView({
                       <img loading="lazy" decoding="async"
                         {...assetImgProps(vol.cover_image)} 
                         alt="" 
-                        className="w-8 h-12 object-cover rounded shadow border border-slate-800 group-hover/thumb:scale-110 transition-transform"
+                        className={`w-8 h-12 object-cover rounded shadow border border-slate-800 group-hover/thumb:scale-110 transition-transform ${isOwned ? '' : 'opacity-60 saturate-50'}`}
                         onError={(e) => {
                           e.currentTarget.onerror = null;
                           e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150" fill="%231e293b"><rect width="100" height="150" fill="%230f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-size="12" font-family="sans-serif">?</text></svg>';
@@ -198,13 +203,13 @@ export default function VolumeListView({
                       )}
                     </button>
                   ) : (
-                    <div aria-hidden="true" className="w-8 h-12 rounded bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 text-[10px]">
-                      📖
+                    <div aria-hidden="true" className={`w-8 h-12 rounded bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 ${isOwned ? '' : 'opacity-60'}`}>
+                      <BookOpen className="w-3.5 h-3.5" />
                     </div>
                   )}
                 </td>
 
-                {/* Band / Title */}
+                {/* Volume / title */}
                 <td className="py-2 px-3 font-bold text-white text-sm">
                   {getVolumeDisplayTitle(vol)}
                   <span className="ml-1.5 align-middle">
@@ -230,7 +235,7 @@ export default function VolumeListView({
                     type="button"
                     disabled={!canToggle}
                     onClick={() => canToggle && handleToggleVolume(vol)}
-                    className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    className={`hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                       canToggle ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                     } ${
                       isOwned
@@ -244,6 +249,7 @@ export default function VolumeListView({
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     }`}
                     title={canToggle ? 'Klicken zum Status umschalten' : ''}
+                    aria-label={`Status: ${isOwned ? 'Im Besitz' : statusKind === 'preordered' ? 'Vorbestellt' : statusKind === 'ordered' ? 'Bestellt' : statusKind === 'upcoming' ? 'Erscheint bald' : 'Fehlt'} – ${getVolumeDisplayTitle(vol)}`}
                   >
                     {isOwned ? (
                       '✓ Im Besitz'
@@ -267,7 +273,8 @@ export default function VolumeListView({
                       disabled={!canToggleRead}
                       onClick={(e) => canToggleRead && handleToggleVolumeRead(vol, effUserId, e)}
                       title={canToggle && !canToggleRead ? READ_OTHERS_ADMIN_ONLY : undefined}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                      aria-label={`${isRead ? 'Gelesen' : 'Ungelesen'} – ${getVolumeDisplayTitle(vol)}`}
+                      className={`hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                         canToggleRead ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                       } ${
                         isRead
@@ -298,12 +305,12 @@ export default function VolumeListView({
 
                 {/* Actions */}
                 <td className="py-2 px-3 text-right">
-                  <div className="flex items-center justify-end gap-1.5">
+                  <div className="flex items-center justify-end gap-1.5 [@media(pointer:coarse)]:gap-5">
                     {canEdit && !selectionMode && (
                       <button
                         type="button"
                         onClick={() => handleOpenEditVolume(vol)}
-                        className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                        className="hit-44 p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                         title="Bearbeiten"
                         aria-label={`${getVolumeDisplayTitle(vol)} bearbeiten`}
                       >
@@ -314,7 +321,7 @@ export default function VolumeListView({
                       <button
                         type="button"
                         onClick={(e) => handleDeleteVolume(e, vol)}
-                        className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition-colors"
+                        className="hit-44 p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition-colors"
                         title="Löschen"
                         aria-label={`${getVolumeDisplayTitle(vol)} löschen`}
                       >

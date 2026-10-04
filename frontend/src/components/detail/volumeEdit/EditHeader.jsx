@@ -15,7 +15,7 @@ export default function EditHeader({
   onClose
 }) {
   return (
-    <div className="shrink-0 bg-slate-900/95 px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-800 flex items-center justify-between">
+    <div className="shrink-0 bg-slate-900/95 px-4 py-3.5 sm:px-6 sm:py-4 short:py-2 border-b border-slate-800 flex items-center justify-between">
       <div className="min-w-0 flex-1 pr-2">
         <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
           {editVolForm.type === 'schuber' ? <Package className="w-5 h-5 text-indigo-400 shrink-0" /> :
@@ -26,14 +26,14 @@ export default function EditHeader({
             {getVolumeDisplayTitle(headerVolume(activeVolume, editVolForm))} bearbeiten
           </span>
         </h2>
-        <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
+        <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate short:hidden">
           Typ, Details, Preis und Sammlerangaben für diesen Eintrag
         </p>
       </div>
       <button 
         type="button" 
         onClick={() => onClose()} 
-        className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0 bg-slate-800/40"
+        className="hit-44 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0 bg-slate-800/40"
         aria-label="Schließen"
       >
         <X className="w-5 h-5" aria-hidden="true" />

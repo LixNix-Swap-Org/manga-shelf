@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { request } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { COLLECTING_OPTIONS, collectingOf } from '../../utils/seriesMeta';
@@ -14,9 +15,8 @@ const HINT = {
 };
 
 /**
- * Collecting status of a series ("Sammelstatus", mangas.collecting), separate from the publication status. Editors
- * change it with a select that saves at once (PUT /api/mangas/:id { collecting }); everyone else sees a pill when the
- * series is paused or dropped. onSaved(value) lets the page update its copy of the series.
+ * Collecting status of a series (mangas.collecting, separate from the publication status): editors get a select that
+ * saves at once, everyone else a pill when paused or dropped. onSaved(value) updates the page's copy.
  */
 export default function CollectingControl({ manga, canEdit = false, isOffline = false, onSaved }) {
   const id = useId();
@@ -54,18 +54,21 @@ export default function CollectingControl({ manga, canEdit = false, isOffline = 
   };
 
   return (
-    <label htmlFor={`${id}-collecting`} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border font-medium ${PILL[value]}`} title={HINT[value] || 'Wird die Reihe noch gesammelt?'}>
-      <span className="sr-only">Sammelstatus</span>
+    <div className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border font-medium cursor-pointer ${PILL[value]}`} title={HINT[value] || 'Wird die Reihe noch gesammelt?'}>
+      <label htmlFor={`${id}-collecting`} className="sr-only">Sammelstatus</label>
+      {/* the select lies transparent over the chip: the chip is as wide as the chosen label, not the longest option */}
+      <span aria-hidden="true" data-testid="collecting-label" className="font-semibold whitespace-nowrap">{label}</span>
+      <ChevronDown className="w-3 h-3 opacity-70 shrink-0 pointer-events-none" aria-hidden="true" />
       <select
         id={`${id}-collecting`}
         data-testid="collecting-select"
-        className="filter-chip-select bg-transparent font-semibold"
+        className="filter-chip-select absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-wait"
         value={value}
         disabled={saving}
         onChange={(e) => change(e.target.value)}
       >
         {COLLECTING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-    </label>
+    </div>
   );
 }

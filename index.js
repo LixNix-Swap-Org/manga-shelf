@@ -1,3 +1,4 @@
+// Express app and server entry: middleware order, static frontend, API routers; start()/stop() are exported for tests.
 // Suppress Node.js 25+ fs.Stats constructor deprecation warning from internal dependencies
 const origEmitWarning = process.emitWarning;
 process.emitWarning = (warning, ...args) => {
@@ -132,9 +133,8 @@ const realPath = (p) => {
 };
 
 /**
- * Where the built frontend is served from. FRONTEND_DIR overrides the build location (frontend/dist, then dist/).
- * Besides these two build folders nothing inside the app directory is served, and nothing inside or around data/:
- * the app directory holds the source code, data/ the database, uploads and backups.
+ * Where the built frontend is served from (FRONTEND_DIR overrides frontend/dist, then dist/). Nothing else in the
+ * app directory and nothing in or around data/ is served: it holds source code, database, uploads and backups.
  */
 function resolveFrontend(frontendDir = config.frontendDir) {
     const appDir = realPath(__dirname);
@@ -219,8 +219,7 @@ function healthHandler(req, res) {
 }
 
 /**
- * Error answers are never cached or revalidated: conditional() sets the ETag before the handler runs, Express adds
- * its own to any body, and send() sets the static cache headers before it checks Range and preconditions (416/412).
+ * Error answers are never cached or revalidated (ETag and static cache headers are set before the status is known).
  * Hooked into writeHead so direct responses of routes and middleware are covered too.
  */
 function uncachedErrors(req, res, next) {
@@ -295,11 +294,9 @@ function createApp() {
         next();
     });
 
-    // The bundled frontend calls the API with relative URLs and same-origin cookies, so it must come from the same
-    // origin as the API (this server, a reverse proxy, or the Vite dev proxy); it never needs CORS_ORIGIN. CORS_ORIGIN
-    // (comma separated) only serves external clients on other origins, which must send credentials: 'include'; the
-    // SameSite=Lax auth cookie still only reaches them within the same site. The app origins get CORS without
-    // credentials (they send a bearer token). Only listed origins are echoed back.
+    // The bundled frontend is same-origin and never needs CORS_ORIGIN; that list only serves external clients, which
+    // must send credentials: 'include'. The app origins get CORS without credentials (bearer token).
+    // Only listed origins are echoed back.
     const corsOrigins = config.corsOrigins;
     const credentialedOrigins = new Set(corsOrigins.map(normalizeOrigin));
     const appOriginList = config.appOrigins;
@@ -324,11 +321,9 @@ function createApp() {
         next();
     });
 
-    // Uploaded covers and volume images (unique, never rewritten names). A missing file is a 404, never index.html,
-    // which the service worker would otherwise keep as the image.
-    // CORP same-origin only blocks no-cors loads: the app shells request images in CORS mode (crossorigin="anonymous")
-    // and are let through by the CORS answer above. A no-cors image request carries no Origin, so CORP cannot depend
-    // on it. Vary keeps a cached copy without CORS headers from being reused for an app's CORS request.
+    // Uploaded covers and volume images. A missing file is a 404, never index.html (the service worker would keep it).
+    // CORP same-origin only blocks no-cors loads; app shells load in CORS mode and pass via the CORS answer above.
+    // Vary keeps a copy without CORS headers from being reused for an app's CORS request.
     app.use('/uploads', (req, res, next) => {
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
         res.vary('Origin');
@@ -409,10 +404,8 @@ const app = createApp();
 let running = null;
 
 /**
- * Starts the HTTP(S) server on `port` (default PORT/SERVER_PORT) and `host` (default 0.0.0.0) with the daily
- * scheduler and, unless `console: false` or ADMIN_CONSOLE is off, the admin console on stdin. Resolves with { server, port, url } once it
- * listens. DATA_DIR must be set before index.js is loaded (db.js opens the database at load); a different `dataDir`
- * is refused. Use stop() to end it.
+ * Starts the HTTP(S) server with the daily scheduler and, unless disabled, the admin console. Resolves with
+ * { server, port, url }. DATA_DIR must be set before index.js loads (db.js opens at load); another `dataDir` is refused.
  */
 async function start({ host = '0.0.0.0', port = config.port, dataDir: wantedDataDir, console: withConsole = config.adminConsole, banner = false } = {}) {
     if (running) throw new Error('Server läuft bereits');
@@ -481,7 +474,7 @@ function printSetupNotice() {
     if (notice) console.log(notice);
 }
 
-// once per database: without an instance key every search shares the anonymous limit (spec-user-api-keys.md §7.2)
+// once per database: without an instance key every search shares the anonymous limit
 function printSourcesNotice() {
     try {
         const notice = require('./services/console').sourcesNoticeOnce();
@@ -508,8 +501,8 @@ function printBanner(port, isNativeHttps) {
 }
 
 // --- START SERVER --- (tests set MANGA_SHELF_NO_LISTEN=1 to import the app without listening).
-// Bewusst kein `require.main === module`: Startet ein Loader (z. B. `ts-node --esm index.js` im generischen
-// Pterodactyl-Egg) die Datei, ist require.main ein anderes Modul und der Server würde sofort mit Exit-Code 0 enden.
+// Deliberately not `require.main === module`: under a loader (e.g. `ts-node --esm index.js` in a generic Pterodactyl
+// egg) require.main is another module and the server would exit at once with code 0.
 if (!config.noListen) {
     const port = config.port;
     start({ port, banner: true, console: config.adminConsole }).catch((err) => {

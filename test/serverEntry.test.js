@@ -1,3 +1,4 @@
+// Server entry point (index.js): configuration, static serving and startup, one child process per case.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

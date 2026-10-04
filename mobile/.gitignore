@@ -1,0 +1,10 @@
+node_modules/
+www/
+build/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+*.ipa
+*.apk
+*.aab

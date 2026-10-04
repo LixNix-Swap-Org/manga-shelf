@@ -27,12 +27,14 @@ const VOLUME_SELECT = `
     FROM volumes v JOIN mangas m ON m.id = v.manga_id`;
 const VOLUME_ORDER = 'ORDER BY m.title COLLATE NOCASE, v.number_sort, v.id';
 
+// One quality check over series: { id, count, items (first ITEM_LIMIT) }.
 function seriesCheck(ctx, { id, where }) {
     const count = ctx.db.prepare(`SELECT count(*) AS n FROM mangas m WHERE ${where}`).get().n;
     const items = count ? ctx.db.prepare(`SELECT m.id, m.title, m.publisher, m.cover_image FROM mangas m WHERE ${where} ORDER BY m.title COLLATE NOCASE LIMIT ${ITEM_LIMIT}`).all() : [];
     return { id, count, items };
 }
 
+// Same for volumes joined to their series; `fix` names the offered fix action.
 function volumeCheck(ctx, { id, where, fix }, params = []) {
     const count = ctx.db.prepare(`SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE ${where}`).get(...params).n;
     const items = count ? ctx.db.prepare(`${VOLUME_SELECT} WHERE ${where} ${VOLUME_ORDER} LIMIT ${ITEM_LIMIT}`).all(...params) : [];
@@ -103,6 +105,7 @@ function quality(ctx) {
     return { body: { generated_at: ctx.now().toISOString(), today, limit: ITEM_LIMIT, checks } };
 }
 
+// Rewrites stored publisher names to their canonical spelling; returns the number of changed rows.
 function normalizeStoredPublishers(ctx) {
     let changed = 0;
     for (const table of ['mangas', 'volumes']) {

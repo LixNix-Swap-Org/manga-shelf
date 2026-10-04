@@ -1,3 +1,4 @@
+// Release radar hook and views: month nav, tabs, timelines, filters and summary.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -224,13 +225,14 @@ describe('useReleaseRadar', () => {
 
   it('prev / next stop at the supported years', async () => {
     fetchMock.mockResolvedValue(json({ items: [], publishers: [] }));
+    const minYear = new Date().getFullYear() - 5; // RADAR_MIN_YEAR: the server window
     const { result } = renderHook(() => useReleaseRadar(hookProps()));
-    act(() => { result.current.setMpYear(2000); result.current.setMpMonth(1); });
+    act(() => { result.current.setMpYear(minYear); result.current.setMpMonth(1); });
     act(() => result.current.handlePrevMonth());
-    expect(result.current.mpYear).toBe(2000);
+    expect(result.current.mpYear).toBe(minYear);
     expect(fetchMock).not.toHaveBeenCalled();
     act(() => result.current.handleNextMonth());
-    expect([result.current.mpYear, result.current.mpMonth]).toEqual([2000, 2]);
+    expect([result.current.mpYear, result.current.mpMonth]).toEqual([minYear, 2]);
     await flush();
   });
 });
@@ -256,6 +258,19 @@ describe('MpMonthNav', () => {
     expect(screen.getByLabelText('Jahr').value).toBe('2023');
     fireEvent.click(screen.getByText('Aktueller Monat'));
     expect(props.handleCurrentMonth).toHaveBeenCalled();
+  });
+
+  it('keeps previous, month picker and next on one row; the arrows are icon buttons with names on phones', () => {
+    render(<MpMonthNav {...monthNavProps({ mpYear: 2023, mpMonth: 12, mpData: null, mpCurrent: false })} />);
+    const row = document.getElementById('mp-month-nav');
+    expect(row.className).toContain('flex-nowrap');
+    const prev = screen.getByRole('button', { name: 'Vorheriger Monat' });
+    const next = screen.getByRole('button', { name: 'Nächster Monat' });
+    expect(row.contains(prev) && row.contains(next) && row.contains(screen.getByLabelText('Monat'))).toBe(true);
+    expect(row.contains(screen.getByText('Aktueller Monat'))).toBe(false);
+    expect(prev.querySelector('span').className).toContain('hidden sm:inline');
+    expect(prev.textContent).toBe('Vorheriger Monat');
+    expect(screen.getByLabelText('Monat').closest('div').className).toMatch(/flex-1 .*min-w-0/);
   });
 
   it('hides the current-month button on the current month and counts print entries of my series', () => {
@@ -316,7 +331,28 @@ describe('MpTimeline', () => {
     expect(screen.getByText('Erscheint bald')).toBeTruthy();
     expect(screen.getByText('Gelesen')).toBeTruthy();
     expect(screen.getAllByText('Vorbestellen')).toHaveLength(1);
-    expect(screen.getAllByLabelText('Auf die Einkaufsliste setzen')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Band 43 von Berserk auf die Einkaufsliste')).toHaveLength(1);
+  });
+
+  it('every action names its volume and series; titles take two lines and keep the full title', () => {
+    const long = 'Vom Landei zum Schwertheiligen – Ich bin nur ein alter Bauer';
+    renderTimeline({ mpData: { items: [
+      card({ id: 1, title: 'Frieren', volume_number: '12', in_collection: false, user_manga_id: null }),
+      card({ id: 2, title: long, volume_number: '3', in_collection: false, user_manga_id: null }),
+      card({ id: 3, volume_number: '41', user_volume_status: 'Vorhanden' }),
+      card({ id: 4, volume_number: '44', match_kind: 'prefix' })
+    ] } });
+    const cart = screen.getByRole('button', { name: 'Band 12 von Frieren auf die Einkaufsliste' });
+    expect(cart.className).toContain('hit-44');
+    expect(screen.getByRole('button', { name: 'Band 12 von Frieren vorbestellen' }).textContent).toContain('Vorbestellen');
+    expect(screen.getByRole('button', { name: `Band 3 von ${long} vorbestellen` })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Im Besitz: Band 41 von Berserk' }).textContent).toContain('Im Besitz');
+    expect(screen.getByRole('link', { name: 'Zur ähnlichen Reihe in deiner Sammlung: Berserk' })).toBeTruthy();
+    const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label')).filter(Boolean);
+    expect(new Set(names).size).toBe(names.length);
+    const title = screen.getByTitle(long);
+    expect(title.className).toContain('line-clamp-2');
+    expect(title.className).not.toMatch(/(^|\s)truncate(\s|$)/);
   });
 
   it('month-only and unknown dates, busy card and truncated hint', () => {
@@ -398,6 +434,16 @@ describe('PersonalTimeline', () => {
     expect(screen.getByText('20.11.2026')).toBeTruthy();
     expect(screen.getByText('Geliefert').closest('button').disabled).toBe(true);
     expect(screen.getByText('Gekauft').closest('button').disabled).toBe(false);
+  });
+
+  it('actions and details links name volume and series, titles wrap to two lines', () => {
+    renderPersonal({ radarData: data });
+    expect(screen.getByRole('button', { name: 'Geliefert: Band 42 von Berserk' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gekauft: Band 43 von Berserk' }).className).toContain('hit-44');
+    expect(screen.getByRole('link', { name: 'Details: Band 42 von Berserk' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Details: Band 43 von Berserk' })).toBeTruthy();
+    const titles = screen.getAllByTitle('Berserk').filter((el) => el.tagName === 'A');
+    for (const el of titles) expect(el.className).toContain('line-clamp-2');
   });
 
   it('a broken volume cover falls back to the series cover, without a shared failure map', () => {

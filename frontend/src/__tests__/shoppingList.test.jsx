@@ -1,7 +1,8 @@
+// ShoppingListView: list, purchases, ISBN scan flow, offline outbox and session expiry.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
-import ShoppingListView from '../components/dashboard/ShoppingListView';
+import ShoppingListView, { keepNumberWithWord } from '../components/dashboard/ShoppingListView';
 import { SCAN_LIST_KEY } from '../utils/scanHelpers';
 import { normalizePubName } from '../utils/volumeHelpers';
 import { SESSION_EXPIRED_EVENT } from '../hooks/useMangaList';
@@ -365,6 +366,19 @@ describe('ShoppingListView app shortcut and foreground', () => {
 });
 
 describe('ShoppingListView states and filters', () => {
+  it('the filter input fills the height of its box, the search icon lets taps through', () => {
+    renderView();
+    const input = screen.getByRole('textbox', { name: 'Einkaufsliste filtern' });
+    expect(input.className.split(' ')).toEqual(expect.arrayContaining(['py-2', 'w-full']));
+    expect(input.className.split(' ')).not.toContain('p-0');
+    const box = input.parentElement;
+    expect(box.className.split(' ')).toContain('relative');
+    expect(box.className).not.toMatch(/\bpy-/);
+    const icon = box.querySelector('svg');
+    expect(icon.getAttribute('aria-hidden')).toBe('true');
+    expect(icon.getAttribute('class').split(' ')).toEqual(expect.arrayContaining(['absolute', 'pointer-events-none']));
+  });
+
   it('shows an error card, not "Alles komplett", when the first load failed', () => {
     const p = props({ shoppingData: null, shoppingError: 'server' });
     renderView(p);
@@ -637,6 +651,15 @@ describe('ShoppingListView wished series', () => {
     expect(within(document.getElementById('shop-wished-series')).getAllByRole('listitem').map((c) => c.querySelector('p').textContent)).toEqual(['Vinland Saga']);
   });
 
+  it('"Alle Verlage" counts what the publisher chips count (missing volumes plus wished series)', () => {
+    renderView(props({ shoppingData: withWished([wished()], []) }));
+    expect(screen.getByRole('button', { name: /^Alle Verlage/ }).textContent).toBe('Alle Verlage (1)');
+    expect(screen.getByRole('button', { name: /^Carlsen Manga/ }).textContent).toContain('1');
+    cleanup();
+    renderView(props({ shoppingData: withWished([wished(), wished({ id: 41, title: 'Akira', publisher: 'Panini Verlags GmbH' })]) }));
+    expect(screen.getByRole('button', { name: /^Alle Verlage/ }).textContent).toBe('Alle Verlage (4)');
+  });
+
   it('only wished series: no "Alles komplett", the section is shown', () => {
     renderView(props({ shoppingData: withWished([wished()], []) }));
     expect(screen.queryByText('Alles komplett im Regal!')).toBeNull();
@@ -841,3 +864,53 @@ describe('ShoppingListView share and print', () => {
     expect(screen.getByRole('button', { name: 'Liste drucken' }).disabled).toBe(true);
   });
 });
+
+describe('ShoppingListView layout', () => {
+  it('item cards: the pills wrap as a whole, "Band 14" never splits and the title takes two lines first', () => {
+    const long = 'Vom Landei zum Schwertheiligen – Ich bin nur ein alter Bauer';
+    renderView(props({ shoppingData: list([row({ id: 1, manga_title: long, volume_number: '14', price: 13.5, priority: 2 })]) }));
+    const volume = screen.getByText('Band 14');
+    expect(volume.textContent).toBe('Band\u00a014');
+    const pills = volume.parentElement;
+    expect(pills.className).toContain('flex flex-wrap');
+    expect(volume.className).toContain('max-w-full');
+    const price = within(pills).getByText(/13,50/);
+    expect(price.className).toContain('whitespace-nowrap');
+    expect(within(pills).getByTitle('Wunsch-Priorität').className).toContain('whitespace-nowrap');
+    const title = screen.getByRole('link', { name: long });
+    expect(title.className).toContain('line-clamp-2');
+    expect(title.className).not.toMatch(/(^|\s)truncate(\s|$)/);
+  });
+
+  it('keeps a number with the word before it and nothing else', () => {
+    expect(keepNumberWithWord('Band 14')).toBe('Band\u00a014');
+    expect(keepNumberWithWord('Band 1 (Special Edition)')).toBe('Band\u00a01 (Special Edition)');
+    expect(keepNumberWithWord('Special Fanbook')).toBe('Special Fanbook');
+    expect(keepNumberWithWord(null)).toBe('');
+  });
+
+  it('summary: the count pill never wraps, the actions show labels from sm on and keep their names below', () => {
+    renderView(props({ shoppingData: list([row()], { total_missing: 170 }) }));
+    const pill = document.getElementById('shop-total-pill');
+    expect(pill.textContent).toBe('170 Bände');
+    expect(pill.className).toContain('whitespace-nowrap');
+    expect(pill.parentElement.className).toContain('flex-wrap');
+    const expected = [['btn-shop-copy', 'Liste als Text kopieren', 'Kopieren'], ['btn-shop-print', 'Liste drucken', 'Drucken']];
+    for (const [id, name, label] of expected) {
+      const button = document.getElementById(id);
+      expect(button.getAttribute('aria-label')).toBe(name);
+      expect(name.toLowerCase()).toContain(label.toLowerCase());
+      expect(within(button).getByText(label).className).toBe('hidden sm:inline');
+    }
+    const refresh = screen.getByRole('button', { name: 'Liste aktualisieren' });
+    expect(within(refresh).getByText('Aktualisieren').className).toBe('hidden sm:inline');
+    // refresh stays in one row with share, copy and print instead of wrapping on its own
+    expect(refresh.parentElement).toBe(document.getElementById('btn-shop-copy').parentElement.parentElement);
+  });
+
+  it('the filter search keeps its width next to the publisher chips', () => {
+    renderView();
+    expect(screen.getByLabelText('Einkaufsliste filtern').parentElement.className).toContain('sm:w-72 sm:shrink-0');
+  });
+});
+

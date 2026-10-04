@@ -1,3 +1,4 @@
+// Orphaned upload cleanup against an isolated data directory.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

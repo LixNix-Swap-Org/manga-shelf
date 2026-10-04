@@ -1,3 +1,4 @@
+// Tag filter of the collection: tag parsing, filtering, URL params and the toolbar chips.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CollectionToolbar from '../components/dashboard/CollectionToolbar';

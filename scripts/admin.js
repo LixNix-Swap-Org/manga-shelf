@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Console commands without the interactive console, e.g. `docker exec manga-shelf node scripts/admin.js passwort-reset Kim`.
+// Console commands without the interactive console, e.g. `docker exec -u node manga-shelf node scripts/admin.js passwort-reset Kim`.
 const path = require('path');
 
 if (process.env.MANGA_SHELF_NO_LISTEN !== '1') require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });

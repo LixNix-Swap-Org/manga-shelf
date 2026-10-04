@@ -24,9 +24,8 @@ function parsePort(raw) {
 const PLAIN_AUTHORITY_WITH_PATH = /^[A-Za-z0-9.-]+\/[^?#@]*[?#]/;
 
 /**
- * Hides everything between the scheme and the last "@", so no message or log line can show a user:password part,
- * even one with "#", "/" or "?" in the password that the URL parser would cut elsewhere. Only when a plain host
- * (no port) and path come before a "?" or "#" is an "@" behind it left alone, so the host stays readable.
+ * Hides everything between the scheme and the last "@" so no user:password part shows in messages, even one with
+ * "#", "/" or "?" in the password. An "@" after a plain host (no port) and path before a "?" or "#" stays.
  */
 function redactUrl(value) {
     const text = String(value);

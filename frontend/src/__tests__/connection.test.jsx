@@ -1,3 +1,4 @@
+// Covers server connection management, tokens, probing and stored server entries.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   normalizeBase, getActiveBase, setActiveBase, getToken, setToken, activateServer, probeUrl, probeServer, checkConnection,
@@ -155,6 +156,24 @@ describe('active base and token', () => {
     expect(getToken()).toBe('');
     expect(getActiveServer()).toMatchObject({ id: s.id, name: 'Home' });
     expect(getActiveServer().tokenOrigins).toBeUndefined();
+  });
+
+  it('a rotated token of the same session keeps the trusted addresses; only a new sign-in starts over', () => {
+    const s = saveServer({ name: 'Home', urls: ['https://home.example', 'http://192.168.1.10:3000', 'https://third.example'], token: 'first', tokenOrigins: ['https://home.example', 'http://192.168.1.10:3000'] });
+    activateServer(s.id);
+    setActiveBase('https://home.example');
+    // password change, "Alle Sitzungen beenden", user management: the session goes on with a new token
+    setToken('rotated', { rotate: true });
+    expect(getServer(s.id)).toMatchObject({ token: 'rotated', tokenOrigins: ['https://home.example', 'http://192.168.1.10:3000'] });
+    setActiveBase('http://192.168.1.10:3000');
+    expect(getToken()).toBe('rotated');
+    // a rotation at an address the session was never trusted at is a new start there
+    setActiveBase('https://third.example');
+    setToken('elsewhere', { rotate: true });
+    expect(getServer(s.id).tokenOrigins).toEqual(['https://third.example']);
+    setActiveBase('https://home.example');
+    setToken('relogin');
+    expect(getServer(s.id).tokenOrigins).toEqual(['https://home.example']);
   });
 
   it('the sign-in origins leave together with the token: logout, then a login at the other address', () => {

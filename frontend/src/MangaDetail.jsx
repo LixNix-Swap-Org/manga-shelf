@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
-import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleAlert, Library } from 'lucide-react';
 import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
@@ -12,7 +12,7 @@ import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import ShelfSpine from './components/detail/ShelfSpine';
 import BulkActionBar from './components/detail/BulkActionBar';
-import DetailBottomBar from './components/detail/DetailBottomBar';
+import DetailBottomBar, { revealAboveKeyboard } from './components/detail/DetailBottomBar';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
 import useMangaData from './hooks/useMangaData';
 import useVolumeFilters from './hooks/useVolumeFilters';
@@ -102,7 +102,7 @@ export function backLinkTarget(state) {
 }
 
 // phones: room for the context bar (3.5rem + inset) and, offline, the banner; a selection's bar sits above it
-const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-hidden max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]';
+const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-clip max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]';
 const PHONE_PADDING = 'max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]';
 const PHONE_PADDING_OFFLINE = 'max-sm:pb-[calc(8rem+env(safe-area-inset-bottom))]';
 
@@ -132,7 +132,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
     uploadingCover,
     editLookingUp, editLookupResults, setEditLookupResults, editLookupError,
     applyEditLookupResult, handleEditLookup,
-    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload, cancelCoverUpload, patchManga
+    fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload, cancelCoverUpload, patchManga,
+    canFillTags, fillingTags, handleFillTags
   } = useMangaData({ id, user, canEdit, onUnauthorized });
 
   const volumes = useMemo(() => manga?.volumes || [], [manga?.volumes]);
@@ -144,7 +145,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     if (user?.id && (selectedReaderId === 'ALL' || !selectedReaderId)) {
       setSelectedReaderId(user.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Benutzerwechsel, 'Alle' bleibt wählbar
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a user change, 'Alle' stays selectable
   }, [user?.id]);
 
   // Dialog visibility
@@ -175,7 +176,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
-    newVolumeCover, setNewVolumeCover, uploadingNewCover,
+    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
@@ -191,7 +192,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   useEffect(() => {
     fetchManga();
     if (!user?.offline) fetchMpGaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei Reihen- oder Offline-Wechsel
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a series or offline change
   }, [id, user?.offline]);
 
   // A quick buy from the shopping list can land after this page loaded (sent when the list view closed)
@@ -246,7 +247,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
 
   const {
     shelfMode, shelfScale, focusedVolumeId, setFocusedVolumeId, shelfScrollRef,
-    handleSetShelfMode, handleSetShelfScale, scrollShelf, shelfRows, isFitMultiRow
+    handleSetShelfMode, handleSetShelfScale, scrollShelf, shelfRows, isFitMultiRow, shelfMeasureRef
   } = useShelfLayout(displayVolumeItems);
 
   const selection = useVolumeSelection({ volumes });
@@ -295,6 +296,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     if (!field) return;
     field.scrollIntoView?.({ block: 'center' });
     field.focus({ preventScroll: true });
+    revealAboveKeyboard(field);
   };
   const openScannedVolume = (vol) => {
     if (canEdit) {
@@ -303,12 +305,13 @@ export default function MangaDetail({ user, onUnauthorized }) {
     }
     document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' });
   };
-  const prefillScannedVolume = ({ number, price }) => {
+  const prefillScannedVolume = ({ number, price, isbn }) => {
     if (number) {
       setNewVolumeType('volume');
       setNewVolumeNum(number);
     }
     if (price) setNewVolumePrice(price);
+    setNewVolumeIsbn(isbn || '');
     focusAddVolume();
   };
 
@@ -350,8 +353,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
   if (notFound) {
     return (
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
-        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl" aria-hidden="true">
-          📚
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center" aria-hidden="true">
+          <Library className="w-10 h-10 text-slate-500" />
         </div>
         <div className="text-center">
           <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">Manga nicht gefunden</h1>
@@ -372,8 +375,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
     const info = LOAD_ERRORS[loadError] || LOAD_ERRORS.server;
     return (
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
-        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-5xl" aria-hidden="true">
-          📚
+        <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center" aria-hidden="true">
+          <Library className="w-10 h-10 text-slate-500" />
         </div>
         <div className="text-center" role="alert">
           <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{info.title}</h1>
@@ -463,6 +466,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
           totalTarget={totalTarget}
           uploadingCover={uploadingCover}
           onCollectingSaved={(collecting) => patchManga((m) => ({ ...m, collecting }))}
+          canFillTags={canFillTags}
+          fillingTags={fillingTags}
+          handleFillTags={handleFillTags}
         />
 
         {/* VOLUMES CHECKLIST SECTION */}
@@ -509,9 +515,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
             ownedCount={ownedCount}
             currentReaderReadCount={currentReaderReadCount}
             currentReaderUnreadCount={currentReaderUnreadCount}
+            canToggle={canToggle}
+            readDate={readDate}
+            setReadDate={setReadDate}
           />
 
-          {/* Besitz pro Person (nur bei mehreren Nutzern) */}
+          {/* Ownership per person (only with several users) */}
           <OwnerFilterBar
             users={readers}
             volumes={volumes}
@@ -626,6 +635,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   shelfRows={shelfRows}
                   shelfScale={shelfScale}
                   shelfScrollRef={shelfScrollRef}
+                  shelfMeasureRef={shelfMeasureRef}
                   spineShelfItems={displayVolumeItems}
                   canEdit={Boolean(canEdit)}
                 />
@@ -701,6 +711,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
               handleUploadNewSingleCover={handleUploadNewSingleCover}
               onCancelUpload={cancelNewCoverUpload}
               newVolumeCover={newVolumeCover}
+              newVolumeIsbn={newVolumeIsbn}
+              setNewVolumeIsbn={setNewVolumeIsbn}
               newVolumeNum={newVolumeNum}
               newVolumePrice={newVolumePrice}
               newVolumeReleaseDate={newVolumeReleaseDate}

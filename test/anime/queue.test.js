@@ -1,3 +1,4 @@
+// Anime request queue: coalescing, batching, grouping, per-user limit and the background queue.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {

@@ -1,9 +1,6 @@
 /**
- * Shared text search of all search fields: folding (case, accents, ß, apostrophes, punctuation), every query token must
- * occur in the item, tokens of 5+ letters tolerate one typo. A number token ('2', '1.5') matches only a whole number
- * ('Band 2', never 'Band 12' or a digit inside an ISBN). Codes (ISBNs) are not words: they match only a query of 4+
- * digits typed as one run. Indexes are cached per item object, so a list builds its index once and every further
- * keystroke only scans it.
+ * Shared folded text search: every query token must occur, tokens of 5+ letters tolerate one typo; number tokens
+ * match whole numbers, codes (ISBNs) need 4+ digits. Indexes are cached per item object.
  */
 
 const LIGATURES = { æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', þ: 'th' };
@@ -63,9 +60,8 @@ const addTerms = (set, folded) => {
 };
 
 /**
- * Index of one item. fields = { primary: title-like values (ranked first), secondary: everything else, codes: ISBNs and
- * other identifiers }; each entry may be a value or an array of values. A secondary value shaped like an ISBN counts as
- * a code.
+ * Index of one item: { primary: title-like values (ranked first), secondary: the rest, codes: ISBNs and identifiers },
+ * each a value or an array. A secondary value shaped like an ISBN counts as a code.
  */
 export const buildSearchIndex = ({ primary = [], secondary = [], codes = [] } = {}) => {
   const folded = [];

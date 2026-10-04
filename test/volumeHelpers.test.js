@@ -15,6 +15,20 @@ test('normalizePubName: canonicalizes known publishers case-insensitively, passe
     assert.equal(normalizePubName(42), '');
 });
 
+test('normalizePubName: names like Object.prototype keys are ordinary publishers, also with server names loaded', async () => {
+    const { normalizePubName, setPublisherNames } = await load();
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) assert.equal(normalizePubName(` ${name} `), name);
+    setPublisherNames({ publishers: [{ name: 'constructor', canonical: 'Constructor Verlag' }], aliases: [{ alias: '__proto__', canonical: 'Proto' }, { alias: 7, canonical: 'X' }] });
+    try {
+        assert.equal(normalizePubName('constructor'), 'Constructor Verlag');
+        assert.equal(normalizePubName('__proto__'), 'Proto');
+        assert.equal(normalizePubName('valueOf'), 'valueOf');
+        assert.equal(normalizePubName('tokyopop'), 'TOKYOPOP');
+    } finally {
+        setPublisherNames(null);
+    }
+});
+
 test('inferVolumeType: explicit type wins, otherwise keywords in number/notes', async () => {
     const { inferVolumeType } = await load();
     assert.equal(inferVolumeType({ type: 'schuber', volume_number: '1' }), 'schuber');
@@ -354,4 +368,44 @@ test('gap edition guards and status text', async () => {
     assert.match(gapStatusText({ ...linked, stale: true }, null), /veraltet/);
     assert.match(gapStatusText({ ...linked, incomplete: true }, null), /unvollständig/);
     assert.equal(gapStatusText(linked, null), null);
+});
+
+test('normalizePubName: the offline fallback map matches the built-in names of core/lib/publishers.js', async () => {
+    const { CANONICAL_PUBLISHERS: frontend } = await load();
+    const { CANONICAL_PUBLISHERS: core } = require('../core/lib/publishers');
+    assert.deepEqual(frontend, core);
+});
+
+test('normalizePubName: the server names (setPublisherNames) win, follow a merged built-in name, null forgets them', async () => {
+    const { normalizePubName, setPublisherNames, publisherNamesVersion, subscribePublisherNames } = await load();
+    let calls = 0;
+    const stop = subscribePublisherNames(() => { calls++; });
+    const before = publisherNamesVersion();
+    try {
+        setPublisherNames({
+            publishers: [
+                { name: 'Carlsen Verlag GmbH', canonical: 'Carlsen Manga' },
+                { name: 'TOKYOPOP GmbH', canonical: 'TOKYOPOP' },
+                { name: 'Mein Verlag', canonical: 'Mein Verlag' }
+            ],
+            aliases: [{ alias: 'panini verlags gmbh', canonical: 'Panini' }, { alias: 'ema', canonical: 'Egmont Manga' }, { alias: 42 }]
+        });
+        assert.equal(calls, 1);
+        assert.equal(publisherNamesVersion(), before + 1);
+        assert.equal(normalizePubName('carlsen verlag gmbh'), 'Carlsen Manga');
+        assert.equal(normalizePubName(' TOKYOPOP GmbH! '), 'TOKYOPOP');
+        assert.equal(normalizePubName('EMA'), 'Egmont Manga');
+        assert.equal(normalizePubName('panini'), 'Panini');
+        assert.equal(normalizePubName('Panini Manga'), 'Panini');
+        assert.equal(normalizePubName('Kaze Manga'), 'Kazé Manga');
+        assert.equal(normalizePubName('Unbekannt'), 'Unbekannt');
+
+        setPublisherNames(null);
+        assert.equal(normalizePubName('panini'), 'Panini Verlags GmbH');
+        assert.equal(normalizePubName('Carlsen Verlag GmbH'), 'Carlsen Verlag GmbH');
+        assert.equal(calls, 2);
+    } finally {
+        stop();
+        setPublisherNames(null);
+    }
 });

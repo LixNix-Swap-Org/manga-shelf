@@ -1,3 +1,4 @@
+// GET /system and the admin actions: update check, orphan cleanup, session end, feed limits.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -149,6 +150,28 @@ test('orphans: counted by a dry run, removed by POST /system/orphans/clean (edit
         await system.updateRun();
     } finally {
         gh.restore();
+    }
+});
+
+test('orphan cleanup waits only for jobs that touch uploads and names the running one', async () => {
+    const lifecycle = require('../services/lifecycle');
+    let finishAnime;
+    lifecycle.trackJob('Anime-Tageslauf', new Promise((resolve) => { finishAnime = resolve; }));
+    try {
+        const during = await admin('POST', '/system/orphans/clean');
+        assert.equal(during.status, 200, JSON.stringify(during.body));
+        let finishSnapshot;
+        const snapshot = lifecycle.trackJob('Täglicher Snapshot', new Promise((resolve) => { finishSnapshot = resolve; }));
+        const blocked = await admin('POST', '/system/orphans/clean');
+        assert.equal(blocked.status, 409);
+        assert.equal(blocked.body.code, 'JOB_RUNNING');
+        assert.match(blocked.body.error, /„Täglicher Snapshot“/);
+        finishSnapshot();
+        await snapshot;
+        await new Promise((r) => setImmediate(r));
+        assert.equal((await admin('POST', '/system/orphans/clean')).status, 200);
+    } finally {
+        finishAnime();
     }
 });
 

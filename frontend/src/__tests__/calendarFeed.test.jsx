@@ -1,3 +1,4 @@
+// Covers the personal calendar feed address and token handling in the radar summary.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { fakeResponse } from './fakeResponse';

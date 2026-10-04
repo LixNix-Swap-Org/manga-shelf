@@ -1,3 +1,4 @@
+// Quick buy ordering, 401 handling in useMangaList and detail refresh after a quick buy.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';

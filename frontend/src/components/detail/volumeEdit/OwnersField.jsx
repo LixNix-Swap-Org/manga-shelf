@@ -24,10 +24,8 @@ export function ownersUndoBody(data, wasOwned, target = {}) {
 }
 
 /**
- * Besitzer eines Bandes (Mehrbenutzer). Jeder schaltet seinen eigenen Besitz um, Admins auch den der anderen.
- * Änderungen gehen sofort an POST /api/volumes/:id/owners, unabhängig vom Speichern-Knopf des Formulars.
- * onChanged bekommt die Antwort ({ status, owners }): der Server leitet daraus den Status des Bandes ab.
- * Jede Änderung bietet im Toast 'Rückgängig' an.
+ * Owners of a volume (multi-user): everyone toggles their own, admins also others. Changes go straight to
+ * POST /api/volumes/:id/owners; `onChanged` gets { status, owners } (the server derives the status), the toast offers undo.
  */
 export default function OwnersField({ volumeId, owners: initialOwners, users, currentUser, onChanged }) {
   const [owners, setOwners] = useState(initialOwners || []);

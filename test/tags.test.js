@@ -1,3 +1,4 @@
+// Tag normalisation on the backend and its frontend counterpart, plus the tag endpoints.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');

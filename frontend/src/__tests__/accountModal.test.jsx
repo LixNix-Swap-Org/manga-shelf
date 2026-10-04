@@ -1,8 +1,14 @@
+// Covers the account modal, including local mode and source guides.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createRequire } from 'module';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { fakeResponse } from './fakeResponse';
+
+const mode = vi.hoisted(() => ({ local: false }));
+vi.mock('../utils/api', async (importOriginal) => ({ ...(await importOriginal()), isLocalMode: () => mode.local }));
+
 import AccountModal from '../components/modals/AccountModal';
+import { setOpenExternal } from '../app/openExternal';
 import { keyFormatError, stepLink } from '../components/modals/ApiKeyCard';
 
 // the real guides as the server sends them (GET /api/sources/guides)
@@ -29,7 +35,10 @@ const openKeys = async (user) => {
   return (await screen.findByRole('heading', { name: 'AniList' })).closest('section');
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  mode.local = false;
+});
 
 describe('AccountModal: API keys', () => {
   it('sends the secret only to PUT /api/auth/api-keys/:provider and empties the field after success', async () => {
@@ -74,6 +83,18 @@ describe('AccountModal: API keys', () => {
     expect(within(instance).getByRole('heading', { name: 'Für alle (Instanz)' })).toBeTruthy();
     expect(within(instance).getByText('aus der Umgebung gesetzt')).toBeTruthy();
     expect(within(instance).getByRole('heading', { name: 'Google Books' })).toBeTruthy();
+  });
+
+  it('card headings follow the outline (h3 under the dialog h2, h4 under the instance h3) and regions have unique names', async () => {
+    serve();
+    await openKeys({ id: 1, role: 'admin' });
+    const instance = await screen.findByTestId('instance-keys');
+    expect(screen.getByRole('heading', { name: 'Konto' }).tagName).toBe('H2');
+    expect(screen.getByRole('heading', { name: 'AniList' }).tagName).toBe('H3');
+    expect(within(instance).getByRole('heading', { name: 'Google Books' }).tagName).toBe('H4');
+    const names = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label')).filter(Boolean);
+    expect(names).toEqual(expect.arrayContaining(['MyAnimeList (persönlich)', 'MyAnimeList (für alle)']));
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('visitors keep their own keys but get no instance section', async () => {
@@ -131,5 +152,47 @@ describe('AccountModal: tabs', () => {
     expect(document.activeElement).toBe(keys);
     fireEvent.keyDown(keys, { key: 'Enter' });
     expect(keys.getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+describe('AccountModal without a server (local mode)', () => {
+  it('has no password tab, opens on the keys even when asked for the password', async () => {
+    mode.local = true;
+    serve();
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'admin' }} initialTab="password" />);
+    expect(await screen.findByRole('heading', { name: 'AniList' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /Passwort/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: /API-Schlüssel/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByLabelText('Aktuelles Passwort')).toBeNull();
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('API-Schlüssel');
+  });
+
+  it('with a server the password tab stays first', () => {
+    serve();
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} />);
+    expect(screen.getByRole('tab', { name: /Passwort/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByLabelText('Aktuelles Passwort')).toBeTruthy();
+  });
+});
+
+describe('ApiKeyCard guide links', () => {
+  it('open through openExternal (the shells use the system browser); modified clicks stay with the browser', async () => {
+    serve();
+    const opened = [];
+    setOpenExternal((url) => opened.push(url));
+    try {
+      const card = await openKeys({ id: 2, role: 'editor' });
+      fireEvent.click(within(card).getByRole('button', { name: /Schritt-für-Schritt-Anleitung/ }));
+      const guide = within(card).getByRole('link', { name: /anilist\.co\/settings\/developer/ });
+      expect(fireEvent.click(guide)).toBe(false);
+      expect(opened).toEqual([guide.href]);
+      fireEvent.change(within(card).getByLabelText('Client-ID'), { target: { value: '4242' } });
+      fireEvent.click(within(card).getByTestId('authorize-link'));
+      expect(opened[1]).toBe('https://anilist.co/api/v2/oauth/authorize?client_id=4242&response_type=token');
+      expect(fireEvent.click(guide, { ctrlKey: true })).toBe(true);
+      expect(opened).toHaveLength(2);
+    } finally {
+      setOpenExternal((url) => { globalThis.window?.open?.(url, '_blank', 'noopener,noreferrer'); });
+    }
   });
 });

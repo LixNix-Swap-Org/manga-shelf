@@ -36,8 +36,8 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
         <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1">
           {manga.title}
         </Link>
-        <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">
-          {authors.length ? <AuthorButtons names={authors} onAuthorClick={onAuthorClick} /> : (manga.author || 'Kein Autor')}
+        <div className="text-slate-400 text-xs mt-0.5 [@media(pointer:coarse)]:mt-1.5 [@media(pointer:fine)]:line-clamp-1">
+          {authors.length ? <AuthorButtons names={authors} onAuthorClick={onAuthorClick} buttonClassName="hit-44" /> : (manga.author || 'Kein Autor')}
           {manga.alt_title && <span className="text-slate-400 ml-1.5">(<span lang={langFor(manga.alt_title)}>{manga.alt_title}</span>)</span>}
         </div>
       </td>
@@ -59,17 +59,17 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
           {manga.status}
         </span>
       </td>
-      <td className="py-2.5 px-4">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-white font-mono">
+      <td className="py-2.5 px-4 min-w-[9rem]">
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="font-bold text-white font-mono whitespace-nowrap">
             {owned} {total > 0 ? `/ ${total}` : 'Bde.'}{extras > 0 ? ` +${extras}` : ''}
           </span>
           {readState.read > 0 ? (
-            <span className={`text-[10px] font-mono ${readState.complete ? 'text-emerald-400 font-bold' : 'text-sky-300'}`}>
+            <span className={`text-[10px] font-mono whitespace-nowrap ${readState.complete ? 'text-emerald-400 font-bold' : 'text-sky-300'}`}>
               ({readState.read} gelesen • {readState.pct}%)
             </span>
           ) : (
-            <span className="text-[10px] text-slate-400 font-mono">(Ungelesen)</span>
+            <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">(Ungelesen)</span>
           )}
         </div>
         {pct !== null && (

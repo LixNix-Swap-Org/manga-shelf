@@ -1,8 +1,7 @@
-// Besitz pro Benutzer (volume_owners). volumes.status = 'Vorhanden' bedeutet "mindestens ein Besitzer".
-// Alle Funktionen laufen synchron und erwarten, dass der Aufrufer ggf. schon in einer Transaktion ist.
-//
-// 'Gelesen' ist kein eigener Status mehr: Lesen wird pro Benutzer in volume_reads geführt. Der alte Wert wird
-// als 'Vorhanden' plus Lese-Eintrag verstanden und beim nächsten Abgleich umgeschrieben (nie Besitzer löschen).
+// Per-user ownership (volume_owners). volumes.status = 'Vorhanden' means "at least one owner".
+// All functions are synchronous; the caller is expected to be in a transaction already if it needs one.
+// 'Gelesen' is no longer a status: reading is kept per user in volume_reads. The old value is treated as
+// 'Vorhanden' plus a read entry and rewritten on the next sync (owners are never deleted for it).
 
 const OWNED_STATUS = 'Vorhanden';
 const LEGACY_READ_STATUS = 'Gelesen';
@@ -11,7 +10,7 @@ function isLegacyReadStatus(status) {
     return typeof status === 'string' && status.trim().toLowerCase() === LEGACY_READ_STATUS.toLowerCase();
 }
 
-/** Bildet den Altstatus 'Gelesen' auf 'Vorhanden' ab; alle anderen Werte bleiben unverändert. */
+/** Maps the legacy status 'Gelesen' to 'Vorhanden'; every other value stays unchanged. */
 function normalizeVolumeStatus(status) {
     return isLegacyReadStatus(status) ? OWNED_STATUS : status;
 }
@@ -35,14 +34,9 @@ function markRead(db, volumeId, userId) {
     db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, userId);
 }
 
-/**
- * Bringt Status und Besitzer eines Bandes in Einklang, nachdem Status oder Besitzer geändert wurden.
- * - Status 'Vorhanden' ohne Besitzer: der handelnde Benutzer wird Besitzer (Band wurde direkt als vorhanden gespeichert).
- * - Altstatus 'Gelesen': wird zu 'Vorhanden', Besitzer bleiben; gelesen markiert wird der handelnde Benutzer
- *   (ohne ihn alle Besitzer).
- * - Jeder andere Status: alle Besitzer entfallen.
- * Gibt den gespeicherten Status zurück (null, wenn der Band fehlt).
- */
+// Brings a volume's status and owners in line after either changed; returns the stored status (null if missing).
+// 'Vorhanden' without owner: the acting user becomes owner. Legacy 'Gelesen': becomes 'Vorhanden', the acting user
+// (else all owners) is marked as reader. Any other status: all owners are dropped.
 function syncOwnersWithStatus(db, volumeId, actingUserId) {
     const vol = db.prepare('SELECT id, status, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     if (!vol) return null;
@@ -65,11 +59,9 @@ function fallbackOwnerId(db) {
     return db.prepare("SELECT id FROM users ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id LIMIT 1").get()?.id ?? null;
 }
 
-/**
- * Stellt einen Band mit Altstatus 'Gelesen' um: ohne Besitzer wird `fallbackUserId` (sonst der älteste Admin, wie
- * Migration v11) Besitzer, dann wie syncOwnersWithStatus ('Vorhanden', alle Besitzer bekommen einen Lese-Eintrag).
- * Gibt true zurück, wenn der Band umgestellt wurde.
- */
+// Converts a volume with the legacy status 'Gelesen'; returns true when it was converted. Without owner,
+// `fallbackUserId` (else the oldest admin, as in migration v11) becomes owner. Existing read entries are kept as they
+// are; otherwise as in syncOwnersWithStatus.
 function convertLegacyRead(db, volumeId, fallbackUserId) {
     const vol = db.prepare('SELECT id, status, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     if (!vol || !isLegacyReadStatus(vol.status)) return false;
@@ -78,16 +70,17 @@ function convertLegacyRead(db, volumeId, fallbackUserId) {
         const owner = fallbackUserId ?? fallbackOwnerId(db);
         if (owner) addOwner(db, volumeId, owner, vol);
     }
-    syncOwnersWithStatus(db, volumeId, null);
+    if (db.prepare('SELECT 1 FROM volume_reads WHERE volume_id = ? LIMIT 1').get(volumeId)) {
+        db.prepare('UPDATE volumes SET status = ? WHERE id = ?').run(OWNED_STATUS, volumeId);
+    } else {
+        syncOwnersWithStatus(db, volumeId, null);
+    }
     return true;
 }
 
-/**
- * Nach einer Besitzänderung: ohne Besitzer 'Vorhanden' -> 'Fehlt', mit Besitzer -> 'Vorhanden'. Ein Altstatus
- * 'Gelesen' wird vorher umgestellt (convertLegacyRead), damit der Lese-Eintrag nie verloren geht. Fällt der letzte
- * Besitzer weg, entfällt auch volumes.purchase_date: das Datum gehörte zu diesem Kauf, und ein späterer Kauf füllt es neu.
- * Gibt den neuen Status zurück.
- */
+// After an owner change: no owner turns 'Vorhanden' into 'Fehlt', an owner turns it into 'Vorhanden'; returns the status.
+// A legacy 'Gelesen' is converted first so its read entry is never lost. When the last owner goes, purchase_date
+// goes too: it belonged to that purchase.
 function syncStatusWithOwners(db, volumeId) {
     const vol = db.prepare('SELECT id, status FROM volumes WHERE id = ?').get(volumeId);
     if (!vol) return null;
@@ -103,8 +96,8 @@ function syncStatusWithOwners(db, volumeId) {
 }
 
 /**
- * Nachdem ein Besitzer abgegeben hat und andere bleiben: volumes.purchase_date wird das früheste Kaufdatum der
- * verbleibenden Besitzer. Hat keiner ein Datum (Altdaten), bleibt das Datum des Bands stehen.
+ * After one owner left and others remain: volumes.purchase_date becomes the earliest purchase date of the remaining
+ * owners (unchanged when none has one).
  */
 function purchaseDateFromRemainingOwners(db, volumeId) {
     const earliest = db.prepare(`
@@ -114,10 +107,7 @@ function purchaseDateFromRemainingOwners(db, volumeId) {
     if (earliest) db.prepare('UPDATE volumes SET purchase_date = ? WHERE id = ?').run(earliest, volumeId);
 }
 
-/**
- * Einmalige Umstellung für Altdaten: jeder Band mit Status 'Gelesen' wird per convertLegacyRead umgestellt.
- * Gibt die Anzahl umgestellter Bände zurück.
- */
+/** One-off migration of legacy data: converts every 'Gelesen' volume via convertLegacyRead; returns the count. */
 function migrateLegacyReadStatus(db, fallbackUserId) {
     const rows = db.prepare('SELECT id FROM volumes WHERE LOWER(TRIM(status)) = LOWER(?)').all(LEGACY_READ_STATUS);
     if (rows.length === 0) return 0;

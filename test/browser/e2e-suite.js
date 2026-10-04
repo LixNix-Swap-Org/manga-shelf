@@ -302,17 +302,34 @@ async function runTestSuite() {
     const bulkToast = await waitForToast(page, '2 Bände als vorhanden (mir) markiert', { kind: 'success' });
     const bulkUndo = waitForApi(page, 'POST', '/api/volumes/bulk');
     await clickText(page, 'Rückgängig', { within: bulkToast });
-    assert.ok((await bulkUndo).ok(), 'undoing the bulk edit failed');
+    const bulkUndoRes = await bulkUndo;
+    assert.ok(bulkUndoRes.ok(), 'undoing the bulk edit failed');
+    assert.equal(typeof JSON.parse(bulkUndoRes.request().postData() || '{}').revert, 'string', 'the undo must send the server token, not a snapshot');
     volumes = await getVolumes(page, mangaId);
     assert.deepEqual(['2', '3'].map(n => byNumber(volumes, n).status), ['Fehlt', 'Fehlt'], 'the undo did not restore "Fehlt"');
     assert.deepEqual(['2', '3'].map(n => (byNumber(volumes, n).owners || []).length), [0, 0], 'the undo left owners behind');
 
+    // owners and reads must come back with the undo of a delete
+    await apiOk(page, 'POST', `/api/volumes/${byNumber(volumes, '2').id}/owners`, { owned: true, purchase_date: '2024-05-05' });
+    await apiOk(page, 'POST', `/api/volumes/${byNumber(volumes, '2').id}/read`, { read: true, read_at: '2024-05-06 10:00:00' });
+    const ownedBefore = byNumber(await getVolumes(page, mangaId), '2');
     const bulkDelete = waitForApi(page, 'POST', '/api/volumes/bulk');
     await clickSelector(page, '#btn-bulk-delete');
     assert.ok((await bulkDelete).ok(), 'bulk delete failed');
     volumes = await getVolumes(page, mangaId);
     assert.equal(byNumber(volumes, '2'), undefined, 'Band 2 survived the bulk delete');
     assert.equal(byNumber(volumes, '3'), undefined, 'Band 3 survived the bulk delete');
+    const deleteToast = await waitForToast(page, '2 Bände gelöscht', { kind: 'success' });
+    const deleteUndo = waitForApi(page, 'POST', '/api/volumes/bulk');
+    await clickText(page, 'Rückgängig', { within: deleteToast });
+    assert.ok((await deleteUndo).ok(), 'undoing the bulk delete failed');
+    volumes = await getVolumes(page, mangaId);
+    const restoredTwo = byNumber(volumes, '2');
+    assert.ok(restoredTwo && byNumber(volumes, '3'), 'the undo did not bring Band 2/3 back');
+    assert.equal(restoredTwo.id, ownedBefore.id, 'a restored volume keeps its id');
+    assert.deepEqual((restoredTwo.owners || []).map(o => [o.username, o.purchase_date]), (ownedBefore.owners || []).map(o => [o.username, o.purchase_date]),
+      'the undo of the delete lost the owners');
+    assert.equal(restoredTwo.is_read, ownedBefore.is_read, 'the undo of the delete lost the read state');
     await clickSelector(page, '#btn-volume-select-mode');
     await page.waitForFunction(() => !document.querySelector('#bulk-action-bar'), { timeout: 5000 });
 

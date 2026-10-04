@@ -1,3 +1,4 @@
+// Trust proxy setting parser and how Express applies it.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -65,15 +66,25 @@ test('values Express cannot use stop the start with a German message', () => {
     }
 });
 
+test('the error text recommends what the docs recommend: the gateway address, no shared subnet, hop counts only behind a closed port', () => {
+    let message = '';
+    try { parseTrustProxy('loopback,,'); } catch (e) { message = e.message; }
+    assert.match(message, /"loopback, 172\.18\.0\.1"/);
+    assert.match(message, /Gateway-Adresse/);
+    assert.match(message, /ausschließlich über den Proxy/);
+    assert.doesNotMatch(message, /172\.16\.0\.0\/12|uniquelocal|z\. B\. 1\)/);
+});
+
 test('loopback alone still ignores a proxy in another container', () => {
     const trusted = trustFn(parseTrustProxy('loopback'));
     assert.equal(trusted('127.0.0.1', 0), true);
     assert.equal(trusted('172.17.0.1', 0), false);
 });
 
-test('the documented proxy subnet passes the proxy on; a direct peer cannot pick its address, unlike with a hop count', () => {
-    const recommended = parseTrustProxy('loopback, 172.18.0.0/16');
-    assert.equal(clientIpFor(recommended, '172.18.0.5', '6.6.6.6, 198.51.100.7'), '198.51.100.7');
+test('the documented proxy gateway passes the proxy on; a co-located container or a direct peer cannot pick its address, unlike with a hop count', () => {
+    const recommended = parseTrustProxy('loopback, 172.18.0.1');
+    assert.equal(clientIpFor(recommended, '172.18.0.1', '6.6.6.6, 198.51.100.7'), '198.51.100.7');
+    assert.equal(clientIpFor(recommended, '172.18.0.5', '6.6.6.6'), '172.18.0.5');
     assert.equal(clientIpFor(recommended, '203.0.113.9', '198.51.100.7'), '203.0.113.9');
     // why the docs demand a port reachable only through the proxy when a hop count is used
     assert.equal(clientIpFor(parseTrustProxy('1'), '203.0.113.9', '198.51.100.7'), '198.51.100.7');

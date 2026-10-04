@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // hover styles only where a real pointer exists (touch screens keep the pressed look otherwise)
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -51,5 +53,9 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // landscape phones (and a phone with the keyboard open): compact dialog headers, the whole dialog scrolls; `:root`
+    // lifts the specificity, so short: wins over sm:/supports-[]: utilities, which Tailwind emits after plugin variants
+    ({ addVariant }) => addVariant('short', '@media (max-height: 500px) { :root & }'),
+  ],
 }

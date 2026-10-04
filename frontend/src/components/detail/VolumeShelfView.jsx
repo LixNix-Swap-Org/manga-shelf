@@ -16,6 +16,7 @@ export default function VolumeShelfView({
   shelfRows,
   shelfScale,
   shelfScrollRef,
+  shelfMeasureRef,
   spineShelfItems
 }) {
   const counts = countShelfItems(spineShelfItems);
@@ -55,7 +56,7 @@ export default function VolumeShelfView({
               type="button"
               aria-pressed={shelfMode === 'fit'}
               onClick={() => handleSetShelfMode('fit')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`hit-44 px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                 shelfMode === 'fit'
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
@@ -70,7 +71,7 @@ export default function VolumeShelfView({
               type="button"
               aria-pressed={shelfMode === 'rows'}
               onClick={() => handleSetShelfMode('rows')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`hit-44 px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                 shelfMode === 'rows'
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
@@ -85,7 +86,7 @@ export default function VolumeShelfView({
               type="button"
               aria-pressed={shelfMode === 'scroll'}
               onClick={() => handleSetShelfMode('scroll')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`hit-44 px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
                 shelfMode === 'scroll'
                   ? 'bg-brand-700 text-white shadow-sm font-semibold'
                   : 'text-slate-400 hover:text-slate-200'
@@ -104,7 +105,7 @@ export default function VolumeShelfView({
               aria-pressed={shelfScale === 's'}
               aria-label="Kompakt"
               onClick={() => handleSetShelfScale('s')}
-              className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+              className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 's'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
@@ -118,7 +119,7 @@ export default function VolumeShelfView({
               aria-pressed={shelfScale === 'm'}
               aria-label="Standard"
               onClick={() => handleSetShelfScale('m')}
-              className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+              className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 'm'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
@@ -132,7 +133,7 @@ export default function VolumeShelfView({
               aria-pressed={shelfScale === 'l'}
               aria-label="Groß"
               onClick={() => handleSetShelfScale('l')}
-              className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+              className={`hit-44 [@media(pointer:coarse)]:min-w-11 px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
                 shelfScale === 'l'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-300'
@@ -150,7 +151,7 @@ export default function VolumeShelfView({
                 type="button"
                 onClick={() => scrollShelf(-350)}
                 aria-label="Nach links scrollen"
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="hit-44 p-1 [@media(pointer:coarse)]:p-2.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="Nach links scrollen"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -159,7 +160,7 @@ export default function VolumeShelfView({
                 type="button"
                 onClick={() => scrollShelf(350)}
                 aria-label="Nach rechts scrollen"
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="hit-44 p-1 [@media(pointer:coarse)]:p-2.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="Nach rechts scrollen"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -175,7 +176,7 @@ export default function VolumeShelfView({
         {shelfMode === 'fit' && (
           isFitMultiRow ? (
             /* Auto-multi-row: too many books for single row → display as balanced rows */
-            <div className="space-y-5 pt-2 pb-2 px-1">
+            <div ref={shelfMeasureRef} className="space-y-5 pt-2 pb-2 px-1">
               <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1.5">
                 <Layers className="w-3 h-3 text-slate-500" />
                 Auto-Fit: {shelfRows.length} Reihen für {spineShelfItems.length} Einträge
@@ -191,7 +192,7 @@ export default function VolumeShelfView({
             </div>
           ) : (
             /* Single-row auto-fit: few items, stretch to fill width */
-            <div className="pb-2 pt-2 px-1">
+            <div ref={shelfMeasureRef} className="pb-2 pt-2 px-1">
               <div className="flex items-end gap-1 sm:gap-1.5 w-full justify-between pb-1">
                 {spineShelfItems.map((item, idx) => renderShelfSpine(item, idx, 'fit'))}
               </div>
@@ -202,7 +203,7 @@ export default function VolumeShelfView({
 
         {/* MODE 2: REGALBRETTER (Multi-tier bookcase shelves) */}
         {shelfMode === 'rows' && (
-          <div className="space-y-5 pt-2 pb-2 px-1">
+          <div ref={shelfMeasureRef} className="space-y-5 pt-2 pb-2 px-1">
             {shelfRows.map((row, rIdx) => (
               <div key={rIdx} className="relative">
                 <div className="flex items-end gap-1 sm:gap-1.5 w-full pb-1">

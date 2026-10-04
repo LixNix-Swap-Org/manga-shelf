@@ -113,7 +113,7 @@ function mangaLookupResult(m) {
         id: 'mal_' + m.mal_id,
         manga_passion_id: null,
         source: 'mal',
-        source_label: '🌐 MyAnimeList',
+        source_label: 'MyAnimeList',
         title: m.title_english || m.title,
         alt_title: m.title_japanese || m.title,
         author,

@@ -1,3 +1,4 @@
+// Pterodactyl egg and deployment files: egg validity, install/startup commands and the Docker context.
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -12,6 +13,46 @@ const root = path.join(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 const engineMajor = Number(/(\d+)/.exec(pkg.engines.node)[1]);
+
+const IMPORT_RE = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g;
+
+function resolveImport(file) {
+  for (const candidate of [file, `${file}.js`, `${file}.jsx`, `${file}.json`, path.join(file, 'index.js')]) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+// top-level repository folders outside frontend/ that the frontend sources reach through relative imports (transitively)
+function frontendExternalDirs() {
+  const frontend = path.join(root, 'frontend');
+  const queue = [path.join(frontend, 'vite.config.js')];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(js|jsx|mjs|cjs)$/.test(entry.name) && !/\.test\.jsx?$/.test(entry.name) && !full.includes(`${path.sep}__tests__${path.sep}`)) queue.push(full);
+    }
+  };
+  walk(path.join(frontend, 'src'));
+  const seen = new Set();
+  const dirs = new Set();
+  while (queue.length) {
+    const file = queue.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (!/\.(js|jsx|mjs|cjs)$/.test(file)) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    for (const m of source.matchAll(IMPORT_RE)) {
+      const target = resolveImport(path.resolve(path.dirname(file), m[1]));
+      if (!target) continue;
+      const rel = path.relative(root, target).split(path.sep);
+      if (rel[0] !== 'frontend' && rel[0] !== '..') dirs.add(rel[0]);
+      queue.push(target);
+    }
+  }
+  return dirs;
+}
 
 describe('Pterodactyl egg', () => {
   const egg = JSON.parse(read('egg-manga-shelf.json'));
@@ -59,7 +100,8 @@ describe('Pterodactyl egg', () => {
 
   test('the TRUST_PROXY text recommends the proxy address and warns about a directly reachable port', () => {
     const v = egg.variables.find(x => x.env_variable === 'TRUST_PROXY');
-    assert.match(v.description, /Adresse oder Subnetz/);
+    assert.match(v.description, /dessen Adresse eintragen/);
+    assert.match(v.description, /nie das ganze Subnetz/);
     assert.match(v.description, /nur über den Proxy erreichbar/);
   });
 
@@ -75,7 +117,7 @@ describe('Docker image', () => {
   const dockerfile = read('Dockerfile');
 
   test('base images are pinned and new enough for node:sqlite', () => {
-    const froms = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map(m => m[1]);
+    const froms = [...dockerfile.matchAll(/^FROM (?:--platform=\S+ )?(\S+)/gm)].map(m => m[1]);
     assert.ok(froms.length >= 2);
     for (const image of froms) {
       const m = /^node:(\d+)\.(\d+)\.(\d+)-alpine\d+\.\d+$/.exec(image);
@@ -117,15 +159,90 @@ describe('Docker image', () => {
     assert.match(compose, /TRUST_PROXY/);
   });
 
+  test('compose pulls the published image and keeps the local build as a comment', () => {
+    const compose = read('docker-compose.yml');
+    assert.match(compose, /^\s+image: ghcr\.io\/lixnix-swap-org\/manga-shelf:latest$/m);
+    assert.match(compose, /^\s+# build: \.$/m);
+    assert.doesNotMatch(compose, /^\s+build:/m);
+  });
+
+  test('multi-arch: only the runtime stage runs per target platform; labels, data folder and port are declared', () => {
+    const stages = [...dockerfile.matchAll(/^FROM (--platform=\S+ )?\S+ AS (\S+)/gm)].map(m => ({ platform: m[1], name: m[2] }));
+    assert.deepEqual(stages.map(s => s.name), ['frontend-builder', 'backend-files', 'runner']);
+    assert.equal(stages[0].platform, '--platform=$BUILDPLATFORM ');
+    assert.equal(stages[1].platform, '--platform=$BUILDPLATFORM ');
+    assert.equal(stages[2].platform, undefined, 'the runtime stage must be built for the target platform');
+    const runner = dockerfile.slice(dockerfile.indexOf('AS runner'));
+    assert.match(runner, /npm ci --omit=dev --ignore-scripts/, 'production dependencies are installed in the target platform stage');
+    assert.match(runner, /org\.opencontainers\.image\.version="\$\{VERSION\}"/);
+    assert.match(runner, /org\.opencontainers\.image\.source="https:\/\/github\.com\/LixNix-Swap-Org\/manga-shelf"/);
+    assert.match(runner, /DATA_DIR=\/app\/data/);
+    assert.match(runner, /VOLUME \["\/app\/data"\]/);
+    assert.match(runner, /EXPOSE 3000/);
+  });
+
+  test('the build context leaves out the apps, tests and workflows', () => {
+    const ignored = read('.dockerignore').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const entry of ['desktop/', 'mobile/', 'test/', '.github/', 'frontend/dist/']) {
+      assert.ok(ignored.includes(entry), `.dockerignore misses ${entry}`);
+    }
+  });
+
+  test('the frontend stage copies every folder outside frontend/ that the web build imports', () => {
+    const stage = dockerfile.slice(dockerfile.indexOf('AS frontend-builder'), dockerfile.indexOf('AS backend-files'));
+    assert.match(stage, /^WORKDIR \/app\/frontend$/m);
+    const copies = [...stage.matchAll(/^COPY (\S+) (\S+)$/gm)].map(m => ({ from: m[1], to: m[2] }));
+    const ignored = read('.dockerignore').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const outside = frontendExternalDirs();
+    assert.ok(outside.has('core'), 'the scan should find the ../core imports of src/local');
+    for (const dir of outside) {
+      assert.ok(copies.some(c => c.from === `${dir}/` && c.to === `/app/${dir}/`), `frontend-builder misses COPY ${dir}/ /app/${dir}/`);
+      assert.ok(!ignored.includes(`${dir}/`), `.dockerignore drops ${dir}/`);
+      const build = stage.indexOf('RUN npm run build');
+      assert.ok(stage.indexOf(`COPY ${dir}/`) < build, `COPY ${dir}/ must come before the build`);
+    }
+  });
+
   test('compose and .env.example suggest a proxy address, not a hop count, and a port bound to 127.0.0.1', () => {
     const compose = read('docker-compose.yml');
     const env = read('.env.example');
     assert.match(compose, /# - "127\.0\.0\.1:3000:3000"/);
     for (const text of [compose, env]) {
       assert.doesNotMatch(text, /^\s*#\s*-?\s*TRUST_PROXY=\d+\s*$/m, 'the example value must not be a hop count');
-      assert.match(text, /TRUST_PROXY=loopback, 172\.18\.0\.0\/16/);
+      assert.match(text, /TRUST_PROXY=loopback, 172\.18\.0\.1\b/);
+      assert.doesNotMatch(text, /TRUST_PROXY=loopback, 172\.18\.0\.0\/16/);
       assert.match(text, /127\.0\.0\.1:3000:3000/);
     }
+  });
+});
+
+describe('server packages (nfpm)', () => {
+  const nfpm = read('nfpm.yaml');
+
+  test('every packaged file exists and the binary lands in /usr/bin', () => {
+    for (const m of nfpm.matchAll(/^\s+(?:- src|postinstall|preremove|postremove): (\S+)$/gm)) {
+      if (m[1].startsWith('dist/')) continue;
+      assert.ok(fs.existsSync(path.join(root, m[1])), `${m[1]} fehlt`);
+    }
+    assert.match(nfpm, /src: dist\/server\/manga-shelf-server-linux\n\s+dst: \/usr\/bin\/manga-shelf-server/);
+    assert.match(nfpm, /dst: \/usr\/lib\/systemd\/system\/manga-shelf\.service/);
+    assert.match(nfpm, /^version: \$\{VERSION\}$/m);
+    assert.match(nfpm, /^arch: \$\{ARCH\}$/m);
+  });
+
+  test('maintainer scripts are POSIX sh, create the user and never delete data', () => {
+    for (const name of ['postinstall', 'preremove', 'postremove']) {
+      const file = path.join(root, 'scripts/server-bin/packaging', `${name}.sh`);
+      const text = fs.readFileSync(file, 'utf8');
+      assert.ok(text.startsWith('#!/bin/sh\n'), name);
+      assert.doesNotMatch(text, /rm -rf?\s+\/var\/lib/, `${name} deletes data`);
+      if (process.platform !== 'win32') assert.equal(spawnSync('sh', ['-n', file]).status, 0, `${name} has a syntax error`);
+    }
+    const post = fs.readFileSync(path.join(root, 'scripts/server-bin/packaging/postinstall.sh'), 'utf8');
+    assert.match(post, /useradd --system --user-group --home-dir \/var\/lib\/manga-shelf/);
+    assert.match(post, /chown manga-shelf:manga-shelf \/var\/lib\/manga-shelf/);
+    const pre = fs.readFileSync(path.join(root, 'scripts/server-bin/packaging/preremove.sh'), 'utf8');
+    assert.match(pre, /remove\|0\)/, 'an upgrade must not stop and disable the service');
   });
 });
 

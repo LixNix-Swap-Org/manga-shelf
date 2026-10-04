@@ -1,0 +1,45 @@
+# Flatpak of the desktop app (attempt, CI step with continue-on-error). Wraps the unpacked Linux build:
+#   npm run stage -- --build-frontend && npx electron-builder --linux dir --publish never
+#   flatpak-builder --user --install-deps-from=flathub --repo=dist/flatpak-repo dist/flatpak-build flatpak/de.mangashelf.desktop.yml
+#   flatpak build-bundle dist/flatpak-repo dist/installers/manga-shelf-<version>-linux-x86_64.flatpak de.mangashelf.desktop
+app-id: de.mangashelf.desktop
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '24.08'
+command: manga-shelf
+separate-locales: false
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --device=dri
+  - --device=all
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: manga-shelf
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../dist/installers/linux-unpacked
+        dest: app
+      - type: file
+        path: de.mangashelf.desktop.desktop
+      - type: file
+        path: de.mangashelf.desktop.metainfo.xml
+      - type: file
+        path: ../build/icons/512x512.png
+      - type: script
+        dest-filename: manga-shelf.sh
+        commands:
+          - exec zypak-wrapper /app/manga-shelf/manga-shelf "$@"
+    build-commands:
+      - cp -a app /app/manga-shelf
+      - install -Dm755 manga-shelf.sh /app/bin/manga-shelf
+      - install -Dm644 de.mangashelf.desktop.desktop /app/share/applications/de.mangashelf.desktop.desktop
+      - install -Dm644 de.mangashelf.desktop.metainfo.xml /app/share/metainfo/de.mangashelf.desktop.metainfo.xml
+      - install -Dm644 512x512.png /app/share/icons/hicolor/512x512/apps/de.mangashelf.desktop.png

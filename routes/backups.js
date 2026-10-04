@@ -1,9 +1,10 @@
+// Backup list/create/download and restore routes; a restore swaps the live database file in place.
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { db, dataDir, uploadsDir, tempDir, closeDb, initDb, validateDbFile, migrateDbFile } = require('../db');
+const { db, dataDir, uploadsDir, tempDir, closeDb, initDb, validateDbFile, migrateDbFile, openRawDb } = require('../db');
 const auth = require('../middleware/auth');
 const { requireAdmin, signSessionToken, setAuthCookie, clearAuthCookie } = auth;
 const { uploadBackup, ALLOWED_IMAGE_EXTS, stripImageFileSync } = require('../middleware/upload');
@@ -70,9 +71,8 @@ function removeStagedDb() {
 }
 
 /**
- * Puts the safety copy back after the restored file was swapped in. The handle on the restored file is closed
- * BEFORE the copy goes back and its WAL is deleted: a WAL is replayed onto whatever main file sits next to it.
- * The .bak is only removed once the old database opens and answers again.
+ * Puts the safety copy back after the swap. The restored file's handle is closed BEFORE the copy goes back and its WAL
+ * is deleted (a WAL replays onto any main file next to it); the .bak goes only once the old database answers again.
  */
 function rollbackSwap(bakWritten) {
     try {
@@ -161,9 +161,8 @@ function moveRestoredUploads(stagingDir, names) {
 let restoreRunning = false;
 
 /**
- * Every successful swap and rollback deletes manga.db.bak, so a leftover file means an unresolved failed rollback
- * or a crash mid-swap. It may be the only good copy, so no restore may run (and overwrite it) until an operator
- * dealt with it; this survives restarts because it is read from disk.
+ * A leftover manga.db.bak means a failed rollback or a crash mid-swap and may be the only good copy, so no restore
+ * runs until an operator dealt with it (read from disk, so it survives restarts).
  */
 function assertNoRollbackCopy() {
     if (!fs.existsSync(bakPath)) return;
@@ -218,12 +217,8 @@ async function takePreRestoreSnapshot() {
 }
 
 /**
- * Restores a backup ZIP (file path). Everything slow happens before the live database is touched and streams to
- * disk: the database is extracted to manga.db.restore-tmp, validated and migrated on its own connection, the
- * covers go to a staging folder. Then a DB-only safety snapshot (vor-wiederherstellung-*) is taken, and only then
- * swapInStagedDb() replaces the live file; covers are moved in after the restored database answered. Other
- * requests keep working on the old database until the swap.
- * options: allowNewerSchema (restore a backup from a newer app version), preRestoreSnapshot (default true).
+ * Restores a backup ZIP. Slow work (extract, validate, migrate, stage covers) runs before the live database is
+ * touched; then a safety snapshot is taken and swapInStagedDb() replaces the file. options: allowNewerSchema, preRestoreSnapshot.
  */
 function restoreFromZip(source, options) {
     return trackJob('Wiederherstellung', runRestore(source, options));
@@ -293,6 +288,31 @@ const userWarning = (user, username) => {
     return null;
 };
 
+const NO_PASSWORD_HASH = '!local-profile';
+const MAX_NAMED_ACCOUNTS = 10;
+
+/** Accounts that cannot log in after a restore: the app marks other users of a pulled database with '!local-profile'. */
+function accountsWithoutPassword(file) {
+    const probe = openRawDb(file, { readOnly: true });
+    try {
+        if (!probe.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()) return [];
+        return probe.prepare(`
+            SELECT username FROM users
+            WHERE password_hash IS NULL OR TRIM(password_hash) = '' OR password_hash = ?
+            ORDER BY username COLLATE NOCASE
+        `).all(NO_PASSWORD_HASH).map(r => r.username);
+    } finally {
+        probe.close();
+    }
+}
+
+function noPasswordWarning(names) {
+    const shown = names.slice(0, MAX_NAMED_ACCOUNTS).join(', ');
+    const more = names.length > MAX_NAMED_ACCOUNTS ? ` und ${names.length - MAX_NAMED_ACCOUNTS} weitere` : '';
+    const subject = names.length === 1 ? '1 Konto braucht' : `${names.length} Konten brauchen`;
+    return `${subject} nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): ${shown}${more}.`;
+}
+
 /**
  * Checks a backup without touching the live database: reads its manifest, extracts manga.db to data/temp,
  * validates and test-migrates it, and reports what a restore would bring in.
@@ -318,6 +338,7 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
         const facts = readDbFacts(copy, { username });
         removeJournalFiles(copy);
         migrateDbFile(copy);
+        const withoutPassword = accountsWithoutPassword(copy);
 
         const current = latestSchemaVersion();
         const live = readLiveCounts();
@@ -331,6 +352,7 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
         } else if (facts.schema_version < current) {
             warnings.push(`Backup stammt aus einer älteren Version (Schema v${facts.schema_version}); es wird beim Einspielen auf v${current} aktualisiert.`);
         }
+        if (withoutPassword.length) warnings.push(noPasswordWarning(withoutPassword));
         warnings.push('Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.');
 
         return {
@@ -347,6 +369,7 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
             current_counts: live,
             current_user: { username, exists: Boolean(facts.user && facts.user.exists), role: facts.user ? facts.user.role : null },
             relogin: !(facts.user && facts.user.exists && facts.user.role === 'admin'),
+            accounts_without_password: withoutPassword,
             warnings
         };
     } finally {
@@ -383,10 +406,8 @@ function addStaging(entry) {
 }
 
 /**
- * A restore swaps the users table, so the admin's session may point at a user that no longer exists (other ids) or
- * at no user at all. Keep the admin signed in when the restored database has the same username (new token with the
- * restored id/role); otherwise end the session cleanly so the client sends the person to the login instead of
- * failing every following request with 401.
+ * A restore swaps the users table. Keeps the admin signed in (new token) when the restored database has the same
+ * username; otherwise ends the session so the client goes to the login instead of failing every request with 401.
  */
 function sessionAfterRestore(req, res, previousUsername) {
     // read after persistJwtSecret() ended all sessions, so the token carries the new session version

@@ -1,3 +1,4 @@
+// Sealing and opening of stored secrets.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { seal, open, SecretBoxError, UNREADABLE } = require('../utils/secretBox');

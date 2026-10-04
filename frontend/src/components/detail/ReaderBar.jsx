@@ -1,14 +1,23 @@
+import { useId } from 'react';
 import { BookOpen } from 'lucide-react';
+import { localDateString } from '../../hooks/useVolumeActions';
 
-/** Reader switcher with read / unread progress of the selected reader. */
-export default function ReaderBar({ readers, selectedReaderId, setSelectedReaderId, user, ownedCount, currentReaderReadCount, currentReaderUnreadCount }) {
+/**
+ * Reader switcher with read / unread progress of the selected reader. With setReadDate (and canToggle) a "Gelesen am"
+ * date for the next read toggles; an empty field (the default) means now.
+ */
+export default function ReaderBar({
+  readers, selectedReaderId, setSelectedReaderId, user, ownedCount, currentReaderReadCount, currentReaderUnreadCount,
+  canToggle = false, readDate = null, setReadDate
+}) {
+  const dateId = useId();
   if (readers.length === 0) return null;
   // reads of volumes that are not (or no longer) owned must not push the bar past 100 %
   const readOfOwned = Math.min(currentReaderReadCount, ownedCount);
   const pct = ownedCount > 0 ? Math.min(100, Math.round((readOfOwned / ownedCount) * 100)) : 0;
   const unread = Math.max(0, currentReaderUnreadCount);
   return (
-          <div className="mb-4 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-inner">
+          <div className="mb-4 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-inner">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4 text-emerald-400" />
@@ -41,12 +50,31 @@ export default function ReaderBar({ readers, selectedReaderId, setSelectedReader
               </div>
             </div>
 
+            {canToggle && setReadDate && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <label htmlFor={dateId} className="font-semibold text-slate-300 whitespace-nowrap">Gelesen am</label>
+                <input
+                  id={dateId}
+                  type="date"
+                  max={localDateString()}
+                  value={readDate || ''}
+                  onChange={(e) => setReadDate(e.target.value)}
+                  aria-describedby={readDate ? undefined : `${dateId}-hint`}
+                  className="input-field text-base sm:text-xs py-1 px-2 !w-auto min-w-[9rem] min-h-[2rem]"
+                  title="Datum für die nächsten Häkchen „gelesen“ (leer = jetzt)"
+                />
+                {!readDate && (
+                  <span id={`${dateId}-hint`} className="text-slate-400 whitespace-nowrap">leer = jetzt</span>
+                )}
+              </div>
+            )}
+
             {/* Reading Progress Percentage Bar for current selected reader */}
-            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              <div className="text-xs text-slate-300 font-mono flex items-center gap-2">
-                <span>Gelesen: <strong className="text-emerald-400">{readOfOwned}</strong> von {ownedCount}</span>
+            <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+              <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="whitespace-nowrap">Gelesen: <strong className="font-mono text-emerald-400">{readOfOwned}</strong> von <span className="font-mono">{ownedCount}</span></span>
                 <span className="text-slate-500" aria-hidden="true">|</span>
-                <span>SuB: <strong className="text-amber-400">{unread}</strong></span>
+                <span className="whitespace-nowrap">SuB: <strong className="font-mono text-amber-400">{unread}</strong></span>
               </div>
               <div
                 role="progressbar"

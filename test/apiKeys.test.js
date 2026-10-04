@@ -1,3 +1,4 @@
+// Per-user and instance API keys for the anime providers: live check, encryption, usage, rate limit, removal (fetch is faked).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -215,4 +216,34 @@ test('deleting a user removes their keys (ON DELETE CASCADE)', async () => {
     assert.ok(db.prepare('SELECT count(*) AS n FROM user_api_credentials WHERE user_id = ?').get(id).n > 0);
     assert.equal((await admin('DELETE', `/users/${id}`)).status, 200);
     assert.equal(db.prepare('SELECT count(*) AS n FROM user_api_credentials WHERE user_id = ?').get(id).n, 0);
+});
+
+test('ANIME_* and the instance keys go through utils/config.js: typos warn at startup, the defaults apply', () => {
+    const { readConfig } = require('../utils/config');
+    const typo = readConfig({ ANIME_SOURCES: 'anilst,jiakn', ANIME_ANILIST_RPM: 'dreißig', ANIME_JIKAN_RPM: '5000' });
+    assert.deepEqual(typo.values.animeSources, ['anilist', 'jikan']);
+    assert.equal(typo.values.animeAnilistRpm, 30);
+    assert.equal(typo.values.animeJikanRpm, 600);
+    assert.equal(typo.warnings.length, 3);
+    assert.match(typo.warnings.find(w => w.startsWith('ANIME_SOURCES')), /keine bekannte Quelle .*es gilt anilist,jikan/);
+    const partly = readConfig({ ANIME_SOURCES: 'AniList, jiakn' });
+    assert.deepEqual(partly.values.animeSources, ['anilist']);
+    assert.match(partly.warnings[0], /unbekannte Quellen \(jiakn/);
+    const clean = readConfig({ ANIME_SOURCES: 'anilist,mal', MAL_CLIENT_ID: '  abc  ', GOOGLE_BOOKS_KEY: '' });
+    assert.deepEqual([clean.warnings, clean.values.animeSources, clean.values.malClientId, clean.values.googleBooksKey], [[], ['anilist', 'mal'], 'abc', null]);
+
+    const settings = require('../core/anime/settings');
+    const { registerServerSources } = require('../routes/apiKeys');
+    const saved = { ...process.env };
+    Object.assign(process.env, { ANIME_SOURCES: 'anilst,jikan', ANIME_ANILIST_RPM: '12' });
+    try {
+        registerServerSources();
+        assert.deepEqual(settings.settings({}), { anilistRpm: 12, jikanRpm: 60, anilist: false, mal: true });
+    } finally {
+        for (const key of ['ANIME_SOURCES', 'ANIME_ANILIST_RPM']) {
+            if (saved[key] === undefined) delete process.env[key];
+            else process.env[key] = saved[key];
+        }
+        registerServerSources();
+    }
 });

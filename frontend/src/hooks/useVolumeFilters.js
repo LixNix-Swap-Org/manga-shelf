@@ -34,8 +34,8 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
   const [volumeConditionFilter, setVolumeConditionFilter] = useState('ALL');
   const [volumeSort, setVolumeSort] = useState('number_asc');
   const [volumeSearch, setVolumeSearch] = useState('');
-  const [volumeOwnerFilter, setVolumeOwnerFilter] = useState('ALL'); // 'ALL' | Benutzer-ID: nur Bände dieser Person
-  const [volumeOwnerMissing, setVolumeOwnerMissing] = useState(false); // mit Person: stattdessen Bände, die ihr (noch) fehlen
+  const [volumeOwnerFilter, setVolumeOwnerFilter] = useState('ALL'); // 'ALL' | user ID: only volumes of this person
+  const [volumeOwnerMissing, setVolumeOwnerMissing] = useState(false); // with a person: instead the volumes they (still) lack
   // View mode
   const [volumeViewMode, setVolumeViewMode] = useState(readViewMode);
 

@@ -1,15 +1,16 @@
 import ShoppingListView from './components/dashboard/ShoppingListView';
 import ReleaseRadarView from './components/dashboard/ReleaseRadarView';
 import AnimeView from './components/dashboard/AnimeView';
-import MangaCollectionGrid from './components/dashboard/MangaCollectionGrid';
+import MangaCollectionGrid, { SHELF_SCROLL_KEY } from './components/dashboard/MangaCollectionGrid';
 import CollectionToolbar from './components/dashboard/CollectionToolbar';
-import DashboardHeader from './components/dashboard/DashboardHeader';
+import DashboardHeader, { opensCollection } from './components/dashboard/DashboardHeader';
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
+import ContinueReading from './components/dashboard/ContinueReading';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { normalizePubName } from './utils/volumeHelpers';
@@ -23,7 +24,7 @@ import {
 import usePwaInstall from './hooks/usePwaInstall';
 import useOfflineStatus from './hooks/useOfflineStatus';
 import useMangaList from './hooks/useMangaList';
-import useCollectionFilters from './hooks/useCollectionFilters';
+import useCollectionFilters, { loadPublisherNames } from './hooks/useCollectionFilters';
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
 import useAnimeList from './hooks/useAnimeList';
@@ -45,6 +46,10 @@ const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeMo
 
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime' };
 const ANIME_VIEW = 'anime';
+const savedShelfScroll = () => {
+  try { return Number(window.sessionStorage.getItem(SHELF_SCROLL_KEY)) || 0; } catch (_) { return 0; }
+};
+const OPEN_ACCOUNT_EVENT = 'mangashelf:open-account';
 
 // older names of the dashboardShell helpers (animeTab.test.jsx imports them from here)
 export const mainViewOf = (search) => parseInitialView(search).mainView;
@@ -63,7 +68,7 @@ const addTargetOf = (search) => {
 export const SHARED_NO_ISBN_MESSAGE = 'Im geteilten Text wurde keine ISBN gefunden.';
 export const SHARED_MP_LINK_MESSAGE = 'Manga-Passion-Link erkannt: Lege die Reihe an und übernimm die Daten per Auto-Fill.';
 
-export default function Dashboard({ user, onLogout }) {
+export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
   const canEdit = Boolean(user) && (user.role === 'admin' || user.role === 'editor');
   // Offline (server unreachable) the user is demoted to read-only, but queued shopping purchases still work
@@ -105,7 +110,12 @@ export default function Dashboard({ user, onLogout }) {
     networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy
   } = useOfflineStatus({ user, onOnlineRef });
 
-  const { mangas, loading, refreshing, dataAt, error: mangasError, fetchMangas, handleDeleteManga } = useMangaList({ user, canEdit });
+  // the badges of the other views follow a delete and a restore from the trash toast
+  const afterDeleteRef = useRef(null);
+  const onSeriesRestored = useCallback(() => afterDeleteRef.current?.(), []);
+  const { mangas, loading, refreshing, dataAt, error: mangasError, fetchMangas, handleDeleteManga } = useMangaList({
+    user, canEdit, onRestored: onSeriesRestored
+  });
 
   // the shelf filters are mirrored into the query string (replacing the entry), next to ?view=
   const filterUrl = {
@@ -116,7 +126,7 @@ export default function Dashboard({ user, onLogout }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter
   } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
 
@@ -157,7 +167,7 @@ export default function Dashboard({ user, onLogout }) {
       anime.fetchAnime();
       anime.fetchSources();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount und beim Offline-Wechsel
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount and on an offline change
   }, [user?.offline]);
 
   // ?view=anime&add=<seriesId> (the "Anime-Adaption" button of a series) opens the add dialog linked to that series
@@ -166,7 +176,7 @@ export default function Dashboard({ user, onLogout }) {
     if (target === null) return;
     if (canEdit && !user?.offline) setAnimeAdd({ mangaId: target });
     navigate({ search: viewSearch(location.search, ANIME_VIEW) }, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reagiert nur auf die URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to the URL
   }, [location.search]);
 
   // the start URL was read once; strip ?view=stats so a reload does not reopen the dialog
@@ -174,7 +184,7 @@ export default function Dashboard({ user, onLogout }) {
     if (!initialView.openStats) return;
     if (!isOfflineMode) setShowStatsModal(true);
     navigate({ search: viewSearch(location.search, 'shelf') }, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, []);
 
   const loadViewData = (view) => {
@@ -200,11 +210,25 @@ export default function Dashboard({ user, onLogout }) {
     loadViewDataRef.current(activeMainView);
   }, [activeMainView]);
 
+  // a view chosen in the app opens at its top, not at the old view's scroll offset (under the sticky header); the shelf
+  // restores its own saved position
+  const scrollResetRef = useRef(null);
+  useLayoutEffect(() => {
+    if (scrollResetRef.current !== activeMainView) return;
+    scrollResetRef.current = null;
+    if (activeMainView === 'shelf' && savedShelfScroll() > 0) return;
+    if (window.scrollY > 0) window.scrollTo(0, 0);
+  }, [activeMainView]);
+
   /** The one way to change the main view: a ?view= history entry; choosing the open view again reloads its data. */
   const setView = (next) => {
     const nextSearch = viewSearch(location.search, next);
-    if (nextSearch !== location.search) navigate({ search: nextSearch });
-    else loadViewData(next);
+    if (nextSearch === location.search) {
+      loadViewData(next);
+      return;
+    }
+    if (next !== activeMainView) scrollResetRef.current = next;
+    navigate({ search: nextSearch });
   };
 
   const closeAddModal = useCallback(() => {
@@ -313,7 +337,7 @@ export default function Dashboard({ user, onLogout }) {
       } else showScanToast('info', SHARED_NO_ISBN_MESSAGE, { duration: 8000 });
     }, 0);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, []);
 
   const handleOpenStats = useCallback(() => {
@@ -327,8 +351,7 @@ export default function Dashboard({ user, onLogout }) {
     setShowAddModal(true);
   }, [canEdit]);
 
-  // stable for the memoised grid; the badges of the other views follow a delete
-  const afterDeleteRef = useRef(null);
+  // stable for the memoised grid
   afterDeleteRef.current = () => {
     fetchShoppingList();
     if (!user?.offline) fetchReleaseRadar();
@@ -345,6 +368,36 @@ export default function Dashboard({ user, onLogout }) {
   const openApiKeys = () => {
     setAccountTab('keys');
     setShowPasswordModal(true);
+  };
+  // App sends the desktop menu "Quellen & Schlüssel…" here: as an in-page event while the shelf is mounted (no history
+  // write, open dialogs keep their entries), else as navigation state that is used once
+  useEffect(() => {
+    const onOpenAccount = (event) => {
+      if (event.detail !== 'keys') return;
+      event.preventDefault();
+      setAccountTab('keys');
+      setShowPasswordModal(true);
+    };
+    window.addEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
+    return () => window.removeEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
+  }, []);
+  const openAccount = location.state?.openAccount;
+  useEffect(() => {
+    if (openAccount !== 'keys') return;
+    openApiKeys();
+    navigate({ search: location.search }, { replace: true, state: null });
+  }, [openAccount]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per request
+
+  // a restore from the header's local backup dialog: App reloads the profile, the shelf reloads its data
+  const handleLocalReplaced = async () => {
+    const outcome = await onLocalReplaced?.();
+    if (opensCollection(outcome)) {
+      loadPublisherNames({ force: true });
+      fetchMangas();
+      fetchShoppingList();
+      fetchReleaseRadar();
+    }
+    return outcome;
   };
 
   const animeEntry = (id) => anime.list.find((a) => a.id === id);
@@ -369,7 +422,7 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen pb-16 overflow-x-hidden">
+    <div className="min-h-screen pb-16 overflow-x-clip">
       <SkipLink />
       <DashboardHeader
         activeMainView={activeMainView}
@@ -389,6 +442,7 @@ export default function Dashboard({ user, onLogout }) {
         isVisitor={isVisitor}
         mobileMenuOpen={mobileMenuOpen}
         onLogout={onLogout}
+        onLocalReplaced={handleLocalReplaced}
         radarData={radarData}
         search={search}
         searchInputRef={searchInputRef}
@@ -433,6 +487,7 @@ export default function Dashboard({ user, onLogout }) {
               handleOpenStats={handleOpenStats}
               isOfflineMode={isOfflineMode}
             />
+            <ContinueReading userId={user?.id} enabled={!isOfflineMode} />
 
         {/* Filter & Sort Toolbar */}
         <CollectionToolbar
@@ -457,6 +512,9 @@ export default function Dashboard({ user, onLogout }) {
           setAuthorFilter={setAuthorFilter}
           groupBy={groupBy}
           setGroupBy={setGroupBy}
+          availableTags={availableTags}
+          tagFilter={tagFilter}
+          setTagFilter={setTagFilter}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
@@ -660,7 +718,19 @@ export default function Dashboard({ user, onLogout }) {
           />
         )}
 
-        {showStatsModal && <StatsModal isOpen onClose={() => setShowStatsModal(false)} user={user} />}
+        {showStatsModal && (
+          <StatsModal
+            isOpen
+            onClose={() => setShowStatsModal(false)}
+            user={user}
+            onDataChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
 
         {showCsvModal && (
           <CsvExchangeModal

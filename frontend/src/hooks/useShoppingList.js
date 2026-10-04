@@ -46,8 +46,7 @@ const pendingPurchaseIds = (id) => new Set(getOutbox().list(outboxScope(id)).fil
 
 /**
  * Shopping list (missing volumes) with offline cache and quick buy. Purchases go through the outbox: made while the
- * server is unreachable they are kept per user and sent later. `user` is the logged-in user (with `offline: true` in
- * App's offline mode).
+ * server is unreachable they are kept per user and sent later. `user` has `offline: true` in App's offline mode.
  */
 export default function useShoppingList({ user, setNetworkOffline, fetchMangas }) {
   const userId = user?.id ?? null;
@@ -104,7 +103,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     });
     if (!user?.offline) syncPendingPurchases();
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei Benutzer- oder Offline-Wechsel
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a user or offline change
   }, [userId, user?.offline]);
 
   // bought volumes leave the list as soon as they are in the outbox (also those of a replay on another view)
@@ -112,7 +111,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
   useEffect(() => {
     if (!pending.purchaseIds.size) return;
     setShoppingData((prev) => withoutVolumes(prev, pending.purchaseIds));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey steht für die Menge
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey stands for the set
   }, [pendingKey]);
 
   // a replay of queued changes (App, reconnect): the list and the shelf show the server state again
@@ -183,9 +182,8 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
   };
 
   /**
-   * A purchase that was sent or queued reaches the stored copies (in-memory detail, offline detail and with it the ISBN
-   * index) and the listeners of PURCHASE_RECORDED_EVENT (offline overlay, open detail page). Call before markBought:
-   * the series is looked up on the list.
+   * Writes a sent or queued purchase into the stored copies (memory, offline detail, ISBN index) and fires
+   * PURCHASE_RECORDED_EVENT. Call before markBought: the series is looked up on the list.
    */
   const recordPurchaseLocally = (volumeId, change, ownerId, queued) => {
     const mangaId = mangaIdIn(shoppingDataRef.current, volumeId) ?? mangaIdIn(readShoppingCache(), volumeId);
@@ -196,9 +194,8 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
   };
 
   /**
-   * Records the purchase as the user's own ownership. Resolves to 'ok', 'queued' (sent later) or 'failed' (nothing
-   * changed, the user was told why). With { batch: true } (a booking run over several scans) nothing is alerted or
-   * refetched per item and the result is { status, error, httpStatus }; a volume that no longer exists (404) leaves the list.
+   * Records the purchase as the user's ownership: 'ok', 'queued' (sent later) or 'failed' (user told why). With
+   * { batch: true } nothing is alerted or refetched and the result is { status, error, httpStatus }; a 404 drops the volume.
    */
   const handleQuickBuy = async (volumeId, { batch = false } = {}) => {
     const done = (status, error = '', httpStatus = null) => {

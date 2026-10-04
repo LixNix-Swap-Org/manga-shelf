@@ -7,7 +7,7 @@
   "exported_at": "2026-10-03T12:00:00+00:00",
   "name": "Manga Shelf App",
   "author": "antigravity@mangashelf",
-  "description": "A lightweight Node.js Manga tracking application. Requires Node.js 22.13 or newer (built-in node:sqlite).",
+  "description": "Manga Shelf (https://github.com/LixNix-Swap-Org/manga-shelf): selbst gehostete Manga-Sammlung. Braucht Node.js 22.13 oder neuer (eingebautes node:sqlite). Die pterodactyl-manga-shelf.zip aus den Releases hochladen und entpacken; der Einrichtungscode steht beim ersten Start in der Konsole.",
   "features": null,
   "docker_images": {
     "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
@@ -40,7 +40,7 @@
     },
     {
       "name": "Trust Proxy",
-      "description": "Welche Reverse-Proxys die Client-Adresse per X-Forwarded-For setzen dürfen. Standard: loopback (nur ein Proxy auf demselben Host). Hinter einem anderen Proxy dessen Adresse oder Subnetz eintragen (z. B. loopback, 172.18.0.0/16), sonst teilen sich alle Clients ein Login-Limit. Die Allocation darf dann nur über den Proxy erreichbar sein (z. B. an 127.0.0.1 gebunden), sonst kann jeder direkt eine fremde Adresse vortäuschen und deren Login sperren; das gilt erst recht für eine Hop-Zahl (1), die jedem Verbindungspartner vertraut. IPv6-Clients über docker-proxy erscheinen als Gateway-Adresse (z. B. 172.17.0.1); private Netze deshalb nicht pauschal freigeben. false = kein Proxy. Ungültige Werte verhindern den Start.",
+      "description": "Welche Reverse-Proxys die Client-Adresse per X-Forwarded-For setzen dürfen. Standard: loopback (nur ein Proxy auf demselben Host). Hinter einem anderen Proxy dessen Adresse eintragen; Proxy auf dem Host vor Pterodactyl: nur das Gateway von pterodactyl_nw (loopback, 172.18.0.1), nie das ganze Subnetz (andere Server auf dem Node könnten sonst jede Adresse vortäuschen), sonst teilen sich alle Clients ein Login-Limit. Die Allocation darf dann nur über den Proxy erreichbar sein (z. B. an 127.0.0.1 gebunden), sonst kann jeder direkt eine fremde Adresse vortäuschen und deren Login sperren; das gilt erst recht für eine Hop-Zahl (1), die jedem Verbindungspartner vertraut. IPv6-Clients über docker-proxy erscheinen als Gateway-Adresse (z. B. 172.17.0.1); private Netze deshalb nicht pauschal freigeben. false = kein Proxy. Ungültige Werte verhindern den Start.",
       "env_variable": "TRUST_PROXY",
       "default_value": "loopback",
       "user_viewable": true,

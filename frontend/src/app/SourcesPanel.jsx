@@ -4,7 +4,7 @@ import ApiKeyCard from '../components/modals/ApiKeyCard';
 import { INSECURE_STORAGE_TEXT } from '../local/credentials';
 
 /** "Quellen & Schlüssel" of the standalone mode (onboarding step 3 and the device screen): the AccountModal cards. */
-export default function SourcesPanel() {
+export default function SourcesPanel({ headingLevel = 3 }) {
   const keys = useApiKeys({ admin: true });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
   if (!keys.guides) return <p className="text-sm text-slate-400" role="status">Wird geladen…</p>;
@@ -18,6 +18,7 @@ export default function SourcesPanel() {
         guide={guide}
         state={state}
         scope={scope}
+        headingLevel={headingLevel}
         busy={keys.busy === `${scope}:${state.provider}`}
         onSave={(secret, opts) => keys.save(scope, state.provider, secret, opts)}
         onRemove={() => keys.remove(scope, state.provider)}

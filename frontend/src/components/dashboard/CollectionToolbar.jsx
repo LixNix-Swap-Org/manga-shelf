@@ -2,12 +2,15 @@ import { ArrowUpDown, BuildingComplex, ChevronDown, Layers, LayoutGrid, List, Li
 import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
 
-const CHIP_LABEL = 'flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group';
+// columns below xl: two chips per row (phones fill the row), four from lg; content-sized in one row from xl. The select
+// truncates inside its chip.
+export const CHIP_LABEL = 'basis-[calc(50%-0.25rem)] grow sm:grow-0 lg:basis-[calc(25%-0.375rem)] xl:basis-auto min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group';
+const CHIP_SELECT = 'font-medium text-slate-200 group-hover:text-white truncate min-w-0 w-full xl:w-auto';
+const VIEW_TOGGLE = 'hit-44 p-1.5 rounded-lg transition-all [@media(pointer:coarse)]:p-2.5 [@media(pointer:coarse)]:px-[15px]';
 
 /**
- * Status tabs, publisher / collect / genre / sort / grouping selects, the author and genre chips and the view-mode
- * toggle. Purely presentational; all state and handlers come in via props. The genre filter (AND over the chosen tags)
- * shows when `setTagFilter` is given; `availableTags` is getAvailableTags() ([{ tag, count }]).
+ * Status tabs, filter/sort/grouping selects, author and genre chips, view-mode toggle; presentational, state via props.
+ * The genre filter (AND over tags) shows when `setTagFilter` is given; `availableTags` is [{ tag, count }].
  */
 export default function CollectionToolbar({
   availablePublishers,
@@ -68,16 +71,16 @@ export default function CollectionToolbar({
       </div>
 
       {/* Publisher, Sort, Reset & View Mode Controls */}
-      <div className="w-full xl:w-auto flex flex-wrap items-center justify-between xl:justify-start gap-2 text-xs">
+      <div className="w-full xl:w-auto flex flex-wrap items-center xl:justify-start gap-2 text-xs">
         {/* Publisher Filter */}
-        <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
+        <label className={CHIP_LABEL}>
           <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
           <select
             id="filter-publisher-select"
             aria-label="Verlag filtern"
             value={publisherFilter}
             onChange={e => setPublisherFilter(e.target.value)}
-            className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[100px] sm:max-w-none"
+            className={`filter-chip-select ${CHIP_SELECT}`}
           >
             <option value="ALL">Alle Verlage</option>
             {availablePublishers.map(pub => (
@@ -95,7 +98,7 @@ export default function CollectionToolbar({
               aria-label="Sammelstand filtern"
               value={collectFilter}
               onChange={e => setCollectFilter(e.target.value)}
-              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+              className={`filter-chip-select ${CHIP_SELECT}`}
             >
               {COLLECT_FILTERS.map(f => (
                 <option key={f.id} value={f.id}>
@@ -115,7 +118,7 @@ export default function CollectionToolbar({
               aria-label="Genre filtern"
               value=""
               onChange={e => { if (e.target.value) setTagFilter([...chosenTags, e.target.value]); }}
-              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+              className={`filter-chip-select ${CHIP_SELECT}`}
             >
               <option value="">{chosenTags.length ? 'Weiteres Genre…' : 'Alle Genres'}</option>
               {tagOptions.map(t => <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>)}
@@ -140,13 +143,13 @@ export default function CollectionToolbar({
         ))}
 
         {/* Sort Control */}
-        <label className="flex-1 sm:flex-initial min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
+        <label className={CHIP_LABEL}>
           <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
           <select
             aria-label="Sortierung"
             value={sortBy}
             onChange={e => setSortBy(e.target.value)}
-            className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+            className={`filter-chip-select ${CHIP_SELECT}`}
           >
             {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -161,7 +164,7 @@ export default function CollectionToolbar({
               aria-label="Gruppieren"
               value={groupBy}
               onChange={e => setGroupBy(e.target.value)}
-              className="filter-chip-select font-medium text-slate-200 group-hover:text-white truncate max-w-[130px] sm:max-w-none"
+              className={`filter-chip-select ${CHIP_SELECT}`}
             >
               {GROUP_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.value === 'none' ? o.label : `Gruppieren: ${o.label}`}</option>
@@ -207,42 +210,43 @@ export default function CollectionToolbar({
           </button>
         )}
 
-        {/* View Mode Toggle: Grid vs List */}
-        <div role="group" aria-label="Ansicht" className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
-          <button
-            id="btn-view-grid"
-            type="button"
-            aria-pressed={viewMode === 'grid'}
-            aria-label="Rasteransicht"
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded-lg transition-all ${
-              viewMode === 'grid'
-                ? 'bg-brand-700 text-white shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Plakative Rasteransicht"
-          >
-            <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
-            id="btn-view-list"
-            type="button"
-            aria-pressed={viewMode === 'list'}
-            aria-label="Listenansicht"
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-lg transition-all ${
-              viewMode === 'list'
-                ? 'bg-brand-700 text-white shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Kompakte Listenansicht"
-          >
-            <List className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        </div>
+        <div className="basis-full xl:basis-auto flex items-center justify-between gap-2">
+          <div role="group" aria-label="Ansicht" className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
+            <button
+              id="btn-view-grid"
+              type="button"
+              aria-pressed={viewMode === 'grid'}
+              aria-label="Rasteransicht"
+              onClick={() => setViewMode('grid')}
+              className={`${VIEW_TOGGLE} ${
+                viewMode === 'grid'
+                  ? 'bg-brand-700 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Plakative Rasteransicht"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+            <button
+              id="btn-view-list"
+              type="button"
+              aria-pressed={viewMode === 'list'}
+              aria-label="Listenansicht"
+              onClick={() => setViewMode('list')}
+              className={`${VIEW_TOGGLE} ${
+                viewMode === 'list'
+                  ? 'bg-brand-700 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Kompakte Listenansicht"
+            >
+              <List className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
 
-        <div className="text-xs text-slate-400 ml-1 hidden sm:inline">
-          {formatCount(filtered.length, 'Manga', 'Mangas')}
+          <div className="text-xs text-slate-400 ml-1 hidden sm:inline">
+            {formatCount(filtered.length, 'Manga', 'Mangas')}
+          </div>
         </div>
       </div>
     </div>

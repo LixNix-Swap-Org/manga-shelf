@@ -3,6 +3,7 @@ const https = require('https');
 const core = require('../core/isbnLookup');
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const ERROR_BODY_BYTES = 4096;
 
 /**
  * GET a text document over HTTPS (overall deadline, size limit, HTTP errors and dropped connections rejected).
@@ -25,10 +26,26 @@ function fetchTextHttps(url, timeoutMs = 7000, { get = https.get } = {}) {
         // req.setTimeout is an idle timer: a server dripping a byte every few seconds would never trip it
         const deadline = setTimeout(() => fail(new Error('Timeout')), timeoutMs);
         try {
-            req = get(url, { headers: { 'User-Agent': 'MangaShelf/2.0' } }, (res) => {
+            req = get(url, { headers: { 'User-Agent': 'MangaShelf (+https://github.com/LixNix-Swap-Org/manga-shelf)' } }, (res) => {
                 if (res.statusCode >= 300) {
-                    res.resume();
-                    return fail(new Error(`HTTP ${res.statusCode}`));
+                    // the first bytes of an error answer tell a refused key from a quota (core/isbnLookup.js)
+                    const err = Object.assign(new Error(`HTTP ${res.statusCode}`), { status: res.statusCode });
+                    const head = [];
+                    let headSize = 0;
+                    const done = () => {
+                        err.body = Buffer.concat(head).subarray(0, ERROR_BODY_BYTES).toString('utf8');
+                        fail(err);
+                    };
+                    res.on('data', chunk => {
+                        head.push(chunk);
+                        headSize += chunk.length;
+                        if (headSize >= ERROR_BODY_BYTES) done();
+                    });
+                    res.on('end', done);
+                    res.on('error', done);
+                    res.on('aborted', done);
+                    res.on('close', done);
+                    return undefined;
                 }
                 const chunks = [];
                 let size = 0;
@@ -52,4 +69,4 @@ function fetchTextHttps(url, timeoutMs = 7000, { get = https.get } = {}) {
 
 const lookupBookByIsbn = (cleanIsbn, options) => core.lookupBookByIsbn(require('../db').createCtx(), cleanIsbn, options);
 
-module.exports = { ...core, fetchTextHttps, lookupBookByIsbn };
+module.exports = { ...core, fetchTextHttps, lookupBookByIsbn, ERROR_BODY_BYTES };

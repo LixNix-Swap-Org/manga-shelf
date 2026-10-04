@@ -1,3 +1,4 @@
+// ServerScreen: adding, testing, saving and removing servers, connect links and per-server logout.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -57,6 +58,36 @@ describe('ServerScreen', () => {
     expect(within(results).getAllByRole('listitem')).toHaveLength(2);
   });
 
+  it('the probe result is announced in a live region; the buttons keep the focus while it runs', async () => {
+    let answer;
+    const fetchMock = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onSelect = vi.fn(async () => ({ status: 'unauthorized' }));
+    renderScreen({ onSelect });
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+    fireEvent.change(screen.getByLabelText('Adressen (eine pro Zeile)'), { target: { value: 'https://manga.example' } });
+    const testButton = screen.getByRole('button', { name: /Verbindung testen/ });
+    testButton.focus();
+    fireEvent.click(testButton);
+    await waitFor(() => expect(testButton.getAttribute('aria-busy')).toBe('true'));
+    expect(testButton.disabled).toBe(false);
+    expect(testButton.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(testButton);
+    const submit = screen.getByRole('button', { name: /Speichern und verbinden/ });
+    expect(submit.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(testButton);
+    fireEvent.click(submit);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    answer(healthy());
+    await waitFor(() => expect(within(screen.getByRole('status')).getByText(/erreichbar \(Version 2\.20\.0\)/)).toBeTruthy());
+    expect(screen.getByRole('status')).toBe(status);
+    expect(document.activeElement).toBe(testButton);
+    expect(testButton.hasAttribute('aria-disabled')).toBe(false);
+  });
+
   it('saving needs an address; a saved server is selected and the page moves on to its login', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => healthy('inst-7')));
     const { onSelect } = renderScreen();
@@ -68,6 +99,33 @@ describe('ServerScreen', () => {
     const [saved] = getServers();
     expect(saved).toMatchObject({ name: 'home.example', urls: ['https://home.example'], instanceId: 'inst-7' });
     expect(onSelect).toHaveBeenCalledWith(saved.id);
+  });
+
+  it('a missing address marks the address field invalid, describes it by hint and error and focuses it', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => healthy()));
+    renderScreen();
+    const field = screen.getByLabelText('Adressen (eine pro Zeile)');
+    const hintId = field.getAttribute('aria-describedby');
+    expect(document.getElementById(hintId).textContent).toMatch(/erste Adresse, die antwortet/);
+    expect(field.getAttribute('aria-invalid')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Speichern und verbinden/ }));
+    const alert = await screen.findByRole('alert');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby').split(' ')).toEqual([hintId, alert.id]);
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: 'http://pub.example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: /Verbindung testen/ }));
+    expect((await screen.findByRole('alert')).textContent).not.toMatch(/mindestens eine Adresse/);
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('an invalid connect link marks the link field', () => {
+    renderScreen();
+    const field = screen.getByLabelText('Verbindungslink einfügen');
+    fireEvent.change(field, { target: { value: 'quatsch' } });
+    fireEvent.click(screen.getByRole('button', { name: /Übernehmen/ }));
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(field.getAttribute('aria-describedby')).textContent).toMatch(/Kein gültiger Verbindungslink/);
   });
 
   it('an unreachable server is saved anyway with a hint', async () => {

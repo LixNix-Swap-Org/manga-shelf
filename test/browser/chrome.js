@@ -1,3 +1,4 @@
+// Finds an installed Chrome-family browser for the puppeteer suites.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');

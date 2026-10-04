@@ -1,3 +1,4 @@
+// Flat ESLint config; core/ is held to browser-safe code (no Node API) because it also runs inside the apps.
 const js = require('@eslint/js');
 const globals = require('globals');
 const react = require('eslint-plugin-react');
@@ -49,7 +50,7 @@ function coreRules() {
 }
 
 module.exports = [
-    { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/dist-app/', 'dist_pack/', 'dist/', 'data/', 'data-dev/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
+    { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/dist-app/', 'desktop/dist/', 'desktop/node_modules/', 'mobile/node_modules/', 'mobile/www/', 'mobile/build/', 'mobile/ios/App/App/public/', 'mobile/android/app/src/main/assets/public/', 'mobile/android/**/build/', 'mobile/ios/App/Pods/', 'dist_pack/', 'dist/', 'data/', 'data-dev/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
     js.configs.recommended,
     {
         files: ['**/*.js'],

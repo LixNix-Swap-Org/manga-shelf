@@ -1,3 +1,4 @@
+// useDashboardKeyboard: Escape closes the topmost layer, "/" focuses the search.
 import { describe, it, expect, vi } from 'vitest';
 import { useRef, useState } from 'react';
 import { render, renderHook, screen, fireEvent, act } from '@testing-library/react';

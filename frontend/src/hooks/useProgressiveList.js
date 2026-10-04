@@ -10,10 +10,8 @@ function readSaved(storageKey) {
 }
 
 /**
- * Renders a long list in pages: the first `step` items, one more page whenever the sentinel element comes within
- * `rootMargin` of the viewport, or on showMore(). A new `resetKey` (search, filter, sort) starts at one page again.
- * With `storageKey` the count of the current resetKey is kept in sessionStorage, so coming back renders as much as
- * before and the scroll position can be restored. Without IntersectionObserver only showMore() adds pages.
+ * Renders a long list in pages of `step`; more when the sentinel nears `rootMargin` or on showMore(). A new
+ * `resetKey` starts again; `storageKey` keeps the count in sessionStorage. Without IntersectionObserver only showMore().
  */
 export default function useProgressiveList(items, { step = 60, resetKey = '', storageKey = null, rootMargin = '1200px' } = {}) {
   const [state, setState] = useState(() => {

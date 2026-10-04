@@ -1,3 +1,4 @@
+// Data quality report and its one-click fixes (permissions, counts, normalised publishers, legacy reads).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');

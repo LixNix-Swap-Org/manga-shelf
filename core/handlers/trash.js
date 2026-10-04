@@ -3,6 +3,7 @@ const { badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
+const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -83,6 +84,7 @@ function insertRow(ctx, table, columns, row, overrides = {}) {
         .run(...names.map(n => (values[n] === undefined ? null : values[n])));
 }
 
+// Re-inserts volumes with their owners and reads, keeping only columns the current schema still has.
 function restoreVolumeRows(ctx, volumes, owners, reads) {
     const volumeCols = columnsOf(ctx, 'volumes');
     volumeCols.delete('number_sort');
@@ -95,9 +97,23 @@ function restoreVolumeRows(ctx, volumes, owners, reads) {
         restoredIds.add(v.id);
     }
     // a user deleted meanwhile takes their ownership and reads along
-    for (const o of owners) if (restoredIds.has(o.volume_id) && userExists.get(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
+    const vanished = new Map();
+    for (const o of owners) {
+        if (!restoredIds.has(o.volume_id)) continue;
+        if (userExists.get(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
+        else if (!vanished.has(o.volume_id)) vanished.set(o.volume_id, o);
+    }
     for (const r of reads) if (restoredIds.has(r.volume_id) && userExists.get(r.user_id)) insertRow(ctx, 'volume_reads', readCols, r);
+    // an owned volume left without owners goes to the restoring admin (as on a user delete), otherwise it is missing
+    const hasOwner = ctx.db.prepare('SELECT 1 AS ok FROM volume_owners WHERE volume_id = ? LIMIT 1');
+    for (const v of volumes) {
+        if (v.status !== OWNED_STATUS || hasOwner.get(v.id)) continue;
+        if (ctx.user?.role === 'admin') addOwner(ctx.db, v.id, ctx.user.id, vanished.get(v.id) || v);
+        else syncStatusWithOwners(ctx.db, v.id);
+    }
 }
+
+const sequenceOf = (ctx, table) => Number(ctx.db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table)?.seq ?? 0);
 
 function restoreManga(ctx, entry, payload) {
     const manga = payload.manga;
@@ -105,9 +121,12 @@ function restoreManga(ctx, entry, payload) {
     if (ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE id = ?').get(manga.id)) {
         throw conflict('Die Reihe existiert bereits', 'TRASH_ID_TAKEN');
     }
+    // only ids the table really handed out (an entry from another database state never claims new ids)
+    if (manga.id > sequenceOf(ctx, 'mangas')) throw conflict('Der Eintrag passt nicht zu dieser Datenbank und lässt sich nicht wiederherstellen', 'TRASH_INVALID');
     const volumes = (Array.isArray(payload.volumes) ? payload.volumes : []);
     const taken = ctx.db.prepare('SELECT 1 AS ok FROM volumes WHERE id = ?');
-    const free = volumes.filter(v => !taken.get(v.id));
+    const volumeSequence = sequenceOf(ctx, 'volumes');
+    const free = volumes.filter(v => v.id <= volumeSequence && !taken.get(v.id));
     const updatedBy = manga.updated_by && ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(manga.updated_by) ? manga.updated_by : null;
     // owned_volumes is counted up again by the volume triggers
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy });
@@ -128,6 +147,7 @@ function restoreVolume(ctx, entry, payload) {
         'TRASH_SERIES_MISSING', { series_in_trash: Boolean(seriesTrashed) });
     }
     if (ctx.db.prepare('SELECT 1 AS ok FROM volumes WHERE id = ?').get(volume.id)) throw conflict('Der Band existiert bereits', 'TRASH_ID_TAKEN');
+    if (volume.id > sequenceOf(ctx, 'volumes')) throw conflict('Der Eintrag passt nicht zu dieser Datenbank und lässt sich nicht wiederherstellen', 'TRASH_INVALID');
     const type = volume.type || 'volume';
     const duplicate = findDuplicate(ctx, volume.manga_id, volume.volume_number, type);
     if (duplicate) throw duplicateError(type, volume.volume_number, duplicate);

@@ -1,0 +1,25 @@
+[Unit]
+Description=Manga Shelf Server
+Documentation=https://github.com/LixNix-Swap-Org/manga-shelf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manga-shelf
+Group=manga-shelf
+ExecStart=/usr/bin/manga-shelf-server --no-console --data-dir /var/lib/manga-shelf
+Environment=NODE_ENV=production
+CacheDirectory=manga-shelf
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/manga-shelf
+
+[Install]
+WantedBy=multi-user.target

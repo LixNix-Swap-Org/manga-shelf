@@ -1,3 +1,4 @@
+// Manga/series routes: validation, reader stats and Manga Passion integration.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
@@ -21,6 +22,7 @@ test.after(async () => { await ctx.close(); });
 
 const detail = async (id) => (await editor('GET', `/mangas/${id}`)).body;
 const listRow = async (id) => (await editor('GET', '/mangas')).body.find(m => m.id === id);
+const searchRow = async (id) => ((await editor('GET', '/mangas/volume-search')).body.find(m => m.id === id) || { volume_search: null });
 const createManga = async (body) => {
     const res = await editor('POST', '/mangas', body);
     assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -276,6 +278,40 @@ test('GET /mangas/:id/gaps: a malformed edition_id is a 400', async () => {
     } finally { fake.restore(); }
 });
 
+test('GET /mangas/:id/gaps: network checks count against the lookup budget, cached ones and force_refresh of guests do not', async () => {
+    const { lookupLimiter, USER_LOOKUPS_PER_MINUTE } = require('../middleware/userLimits');
+    lookupLimiter.reset();
+    assert.equal((await admin('POST', '/users', { username: 'gast-luecken', password: 'password123', role: 'guest' })).status, 200);
+    const guest = ctx.client();
+    assert.equal((await guest('POST', '/auth/login', { username: 'gast-luecken', password: 'password123' })).status, 200);
+    const id = await createManga({ title: 'Luecken Budget' });
+    db.prepare('INSERT INTO manga_passion_cache (cache_key, json_data, created_at) VALUES (?, ?, ?)')
+        .run('mp_edition_vols_881000', JSON.stringify({ edition: { id: 881000, title: 'Luecken Budget', author: 'X', total_volumes: 1 }, volumes: [] }), Date.now());
+    const fake = withFakeMangaPassion(() => ({ ok: false, status: 404, json: async () => ({}) }));
+    try {
+        for (let i = 0; i < USER_LOOKUPS_PER_MINUTE + 5; i++) {
+            assert.equal((await guest('GET', `/mangas/${id}/gaps?edition_id=881000&force_refresh=true`)).status, 200, 'cached edition, force_refresh ignored for guests');
+        }
+        assert.equal(fake.calls.length, 0);
+        const statuses = [];
+        for (let i = 1; i <= USER_LOOKUPS_PER_MINUTE + 1; i++) {
+            statuses.push((await guest('GET', `/mangas/${id}/gaps?edition_id=${882000 + i}`)).status);
+        }
+        assert.deepEqual(statuses.slice(0, USER_LOOKUPS_PER_MINUTE).filter(s => s !== 200), []);
+        const limited = await guest('GET', `/mangas/${id}/gaps?edition_id=883000`);
+        assert.equal(limited.status, 429);
+        assert.match(limited.body.error, /Zu viele Suchanfragen/);
+        assert.equal(statuses.at(-1), 429);
+        assert.equal((await guest('GET', `/mangas/${id}/gaps?edition_id=881000`)).status, 200, 'the cache still answers');
+        const before = fake.calls.length;
+        assert.equal((await editor('GET', `/mangas/${id}/gaps?edition_id=881000&force_refresh=true`)).status, 200);
+        assert.ok(fake.calls.length > before, 'editors may bypass the cache');
+    } finally {
+        fake.restore();
+        lookupLimiter.reset();
+    }
+});
+
 test('sync-edition: edition_id must be a positive integer; nothing is fetched otherwise', async () => {
     const id = await createManga({ title: 'Sync Validierung' });
     const fake = withFakeMangaPassion(() => { throw new Error('no network'); });
@@ -460,7 +496,7 @@ test('mangas.owned_volumes (kept by triggers) never disagrees with the live coun
     assert.equal(stored(id), 3);
 });
 
-test('GET /mangas: volume_search holds ISBNs, notes and named volumes, never plain numbers', async () => {
+test('GET /mangas/volume-search: ISBNs, notes and named volumes, never plain numbers; the list leaves it out', async () => {
     const id = await createManga({ title: 'Suchfeld' });
     const res = await editor('POST', '/volumes', { manga_id: id, volume_number: '1', isbn: '9783551000001', notes: 'Signiert auf der Messe' });
     assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -468,28 +504,53 @@ test('GET /mangas: volume_search holds ISBNs, notes and named volumes, never pla
     await addVolume(id, '2.5');
     await addVolume(id, 'Artbook');
     const isbn = db.prepare('SELECT isbn FROM volumes WHERE manga_id = ? AND volume_number = ?').get(id, '1').isbn;
-    const lines = (await listRow(id)).volume_search.split('\n');
+    assert.equal('volume_search' in (await listRow(id)), false, 'the list stays small');
+    const lines = (await searchRow(id)).volume_search.split('\n');
     assert.deepEqual(lines.sort(), [isbn, 'Artbook', 'Signiert auf der Messe'].sort());
 
     const empty = await createManga({ title: 'Suchfeld leer' });
-    assert.equal((await listRow(empty)).volume_search, null);
+    assert.equal((await searchRow(empty)).volume_search, null);
     await addVolume(empty, '3');
-    assert.equal((await listRow(empty)).volume_search, null, 'only numeric volumes: nothing to search');
+    assert.equal((await searchRow(empty)).volume_search, null, 'only numeric volumes: nothing to search');
 });
 
-test('GET /mangas: volume_search cuts each note to 200 characters and the whole field to 4000', async () => {
+test('GET /mangas/volume-search: cuts each note to 200 characters and the whole field to 4000', async () => {
     const id = await createManga({ title: 'Suchfeld lang' });
     const long = 'Lange Notiz ' + 'x'.repeat(500);
     for (let n = 1; n <= 30; n++) {
         const res = await editor('POST', '/volumes', { manga_id: id, volume_number: String(n), notes: `${n} ${long}` });
         assert.equal(res.status, 200, JSON.stringify(res.body));
     }
-    const search = (await listRow(id)).volume_search;
+    const search = (await searchRow(id)).volume_search;
     assert.equal(search.length, 4000);
     const lines = search.split('\n');
     assert.ok(lines.length > 15, 'many notes still fit');
     assert.ok(lines.slice(0, -1).every(line => line.length === 200), 'every complete note is cut to 200 characters');
     assert.ok(lines[0].startsWith('1 Lange Notiz'));
+});
+
+test('GET /mangas/volume-search: ordered by id, ETag on the data version, guests may read it', async () => {
+    const id = await createManga({ title: 'Suchfeld ETag' });
+    await addVolume(id, 'Extra');
+    const rows = (await editor('GET', '/mangas/volume-search')).body;
+    assert.deepEqual(rows.map(r => r.id), [...rows.map(r => r.id)].sort((a, b) => a - b));
+    assert.ok(rows.every(r => Object.keys(r).join() === 'id,volume_search' && r.volume_search));
+
+    const get = (headers = {}) => fetch(`${ctx.base}/mangas/volume-search`, { headers: { Cookie: editor.cookie, ...headers } });
+    const first = await get();
+    const etag = first.headers.get('etag');
+    assert.ok(etag);
+    assert.equal((await get({ 'If-None-Match': etag })).status, 304);
+    await addVolume(id, 'Noch ein Extra');
+    const changed = await get({ 'If-None-Match': etag });
+    assert.equal(changed.status, 200, 'a write changes the data version');
+    assert.ok((await changed.json()).find(r => r.id === id).volume_search.includes('Noch ein Extra'));
+
+    assert.equal((await admin('POST', '/users', { username: 'gast-suche', password: 'password123', role: 'guest' })).status, 200);
+    const guest = ctx.client();
+    assert.equal((await guest('POST', '/auth/login', { username: 'gast-suche', password: 'password123' })).status, 200);
+    assert.equal((await guest('GET', '/mangas/volume-search')).status, 200);
+    assert.equal((await ctx.client()('GET', '/mangas/volume-search')).status, 401);
 });
 
 test('wish_priority: POST and PUT take null or 0-3, other values are a 400; wished needs no owned volume', async () => {

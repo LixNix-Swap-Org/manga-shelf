@@ -15,15 +15,13 @@ export function clearMangaListCache() {
 }
 
 const GATEWAY_STATUSES = new Set([502, 503, 504]);
+export const TRASH_UNDO_MS = 10000;
 
 /**
- * The series list and deleting a series. Stale-while-revalidate: the in-memory copy of this user renders at once,
- * else the offline copy (IndexedDB) as soon as it is read, while the server is asked; an unchanged list comes back as
- * a bodiless 304. `loading` is only true while there is nothing to show; refreshes set `refreshing`. `dataAt` is when
- * the list on screen came from the server (null for the offline copy). `error` holds a German message when the last
- * refresh failed (the previous list stays).
+ * The series list and deleting a series; stale-while-revalidate (memory, else offline copy, then server).
+ * `loading` only while nothing is shown, else `refreshing`; `error` is a German message, the list stays.
  */
-export default function useMangaList({ user, canEdit }) {
+export default function useMangaList({ user, canEdit, onRestored }) {
   const owner = cacheOwner(user);
   const [initial] = useState(() => readCache(owner, LIST_KEY));
   const [mangas, setMangas] = useState(() => initial?.data ?? []);
@@ -35,6 +33,7 @@ export default function useMangaList({ user, canEdit }) {
   const beginRequest = useLatestRequest();
   const offlineRef = useRef(Boolean(user?.offline));
   const canEditRef = useRef(canEdit);
+  const onRestoredRef = useRef(onRestored);
   const ownerRef = useRef(owner);
   const mangasRef = useRef(mangas);
   const fromOfflineCopyRef = useRef(false);
@@ -43,6 +42,7 @@ export default function useMangaList({ user, canEdit }) {
   useLayoutEffect(() => {
     offlineRef.current = Boolean(user?.offline);
     canEditRef.current = canEdit;
+    onRestoredRef.current = onRestored;
     ownerRef.current = owner;
   });
 
@@ -142,12 +142,31 @@ export default function useMangaList({ user, canEdit }) {
     }
   }, [beginRequest, show]);
 
-  /** Returns true when the series was deleted, so the caller can refresh dependent views (badges). */
+  const restoreSeries = useCallback(async (trashId) => {
+    try {
+      const res = await apiFetch(`/api/trash/${trashId}/restore`, { method: 'POST' });
+      if (!res.ok) {
+        await notifyResponseError(res, 'Wiederherstellen fehlgeschlagen');
+        return;
+      }
+    } catch (err) {
+      notify.error(err);
+      return;
+    }
+    await fetchMangas();
+    syncOfflineCopy({ force: true });
+    onRestoredRef.current?.();
+  }, [fetchMangas]);
+
+  /**
+   * Returns true when the series was deleted, so the caller can refresh dependent views (badges). The series goes to
+   * the trash; the toast offers "Rückgängig" (POST /api/trash/:id/restore).
+   */
   const handleDeleteManga = useCallback(async (e, id, title) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     if (!canEditRef.current) return false;
-    if (!confirm(`Möchtest du "${title}" wirklich löschen? Alle zugehörigen Bände werden ebenfalls entfernt.`)) {
+    if (!confirm(`Möchtest du "${title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).`)) {
       return false;
     }
 
@@ -166,6 +185,13 @@ export default function useMangaList({ user, canEdit }) {
       fetchMangas();
       // the offline copy would otherwise bring the series back when the server is unreachable
       syncOfflineCopy({ force: true });
+      const trashId = (await readJson(res))?.trash_id;
+      if (trashId) {
+        notify.success(`„${title}“ in den Papierkorb gelegt`, {
+          duration: TRASH_UNDO_MS,
+          action: { label: 'Rückgängig', onClick: () => restoreSeries(trashId) }
+        });
+      }
       return true;
     }
     if (res.status === 401) {
@@ -175,7 +201,7 @@ export default function useMangaList({ user, canEdit }) {
     }
     await notifyResponseError(res, 'Fehler beim Löschen');
     return false;
-  }, [fetchMangas, show]);
+  }, [fetchMangas, restoreSeries, show]);
 
   return { mangas, loading, refreshing, error, dataAt, fetchMangas, handleDeleteManga };
 }

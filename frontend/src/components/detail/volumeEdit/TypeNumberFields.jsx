@@ -20,10 +20,10 @@ export default function TypeNumberFields({
           value={editVolForm.type || 'volume'} 
           onChange={e => setEditVolForm(prev => ({ ...prev, type: e.target.value }))}
         >
-          <option value="volume">📖 Einzelband</option>
-          <option value="special_edition">✨ Special Edition</option>
-          <option value="schuber">📦 Schuber</option>
-          <option value="special">⭐ Special / Extra</option>
+          <option value="volume">Einzelband</option>
+          <option value="special_edition">Special Edition</option>
+          <option value="schuber">Schuber</option>
+          <option value="special">Special / Extra</option>
         </select>
       </div>
 

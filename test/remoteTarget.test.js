@@ -1,5 +1,10 @@
-const test = require('node:test');
+// Remote script target resolution: secure URL checks, loopback detection, redaction.
+const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
 const { resolveTarget, assertSecureTarget, isLoopback, redactUrl } = require('../scripts/lib/remote');
 
 test('loopback: only numeric 127/8, ::1, localhost and *.localhost count as this machine', () => {
@@ -98,4 +103,41 @@ test('a user:digits part with "/" and "?" or "#" in the password never shows up 
             return true;
         });
     }
+});
+
+describe('verify-remote.js follows the same rules', () => {
+    const { prepare } = require('../scripts/verify-remote');
+
+    test('argument before REMOTE_URL before REMOTE_HOST; REMOTE_USER/REMOTE_PASS before ADMIN_USER/ADMIN_PASS', () => {
+        const env = { REMOTE_URL: 'https://shelf.example/app', REMOTE_HOST: 'nas.example', REMOTE_USER: 'kim', REMOTE_PASS: 'a', ADMIN_USER: 'admin', ADMIN_PASS: 'b' };
+        const fromUrl = prepare([], env);
+        assert.equal(fromUrl.target.baseUrl, 'https://shelf.example/app/');
+        assert.equal(fromUrl.target.source, 'REMOTE_URL');
+        assert.deepEqual([fromUrl.username, fromUrl.password], ['kim', 'a']);
+        assert.equal(prepare(['localhost', '3005'], env).target.baseUrl, 'http://localhost:3005/');
+        assert.equal(prepare(['https://other.example'], env).target.baseUrl, 'https://other.example/');
+        const fallback = prepare([], { ADMIN_USER: 'admin', ADMIN_PASS: 'b' });
+        assert.deepEqual([fallback.target.baseUrl, fallback.username, fallback.password], ['http://localhost:3000/', 'admin', 'b']);
+    });
+
+    test('plain http to another host is refused unless REMOTE_ALLOW_HTTP=1; credentials in the URL are refused', () => {
+        assert.throws(() => prepare([], { REMOTE_HOST: 'nas.example.org', REMOTE_PASS: 'geheim' }), /unverschlüsselt/);
+        assert.throws(() => prepare(['http://192.168.1.5:3000'], {}), /unverschlüsselt/);
+        assert.equal(prepare([], { REMOTE_HOST: 'nas.example.org', REMOTE_ALLOW_HTTP: '1' }).target.baseUrl, 'http://nas.example.org:3000/');
+        assert.throws(() => prepare(['https://admin:geheim@shelf.example'], {}), (err) => /Zugangsdaten/.test(err.message) && !err.message.includes('geheim'));
+    });
+
+    test('the script stops before any browser starts and never prints the password', () => {
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-verify-remote-'));
+        try {
+            const env = { ...process.env, REMOTE_HOST: 'nas.example.org', REMOTE_PASS: 'geheim-123', CHROME_BIN: path.join(cwd, 'kein-browser') };
+            for (const name of ['REMOTE_URL', 'REMOTE_ALLOW_HTTP', 'REMOTE_USER', 'ADMIN_PASS']) delete env[name];
+            const run = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'verify-remote.js')], { cwd, encoding: 'utf8', env });
+            assert.equal(run.status, 1, run.stderr);
+            assert.match(run.stderr, /unverschlüsselt/);
+            assert.doesNotMatch(run.stdout + run.stderr, /geheim-123/);
+        } finally {
+            fs.rmSync(cwd, { recursive: true, force: true });
+        }
+    });
 });

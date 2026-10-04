@@ -15,9 +15,8 @@ export function suggestedTarget(publishers, selected) {
 }
 
 /**
- * Verlage zusammenführen (admins): every stored spelling with its counts; selected spellings are merged into one name
- * (a new name renames). The server rewrites series and volumes and remembers the spellings as aliases, so new entries
- * from scans and imports land on the same name. `onChanged` runs after a merge.
+ * Verlage zusammenführen (admins): selected spellings are merged into one name. The server remembers them as
+ * aliases, so new scans and imports land on the same name. `onChanged` runs after a merge.
  */
 export default function PublishersModal({ onClose, user, onChanged }) {
   const isAdmin = user?.role === 'admin';

@@ -47,16 +47,8 @@ const samePrice = (a, b) => {
 };
 
 /**
- * Merges the data of a Manga-Passion lookup into the form. Returns the new form and the labels of the fields that
- * actually changed (an identical value is neither written nor reported).
- * - Always taken when the lookup has a value: release_date, release_year, pages, isbn, publisher.
- * - Price: only when the form has none (empty or 0) or for Schuber entries. Notes (title): only when empty, a
- *   PLACEHOLDER_NOTES entry, or for Schuber entries.
- * - Schuber entries: a bare number becomes the official "Schuber N"; pages and ISBN the lookup does not know are
- *   cleared (they usually were copied from volume 1) and reported as removed.
- * - Cover: replaced when the form has none, for Schuber entries, with `forceCover` (MP URL/ID import) or when it is a
- *   STALE_COVER_MARKERS cover. The previous cover stays in the gallery as a further image (only a stale one is
- *   dropped); a regular volume's own cover is otherwise kept.
+ * Merges a Manga-Passion lookup into the form; returns the new form and the labels of changed fields. Price and notes
+ * only fill empty values (Schuber entries too); cover replaced when missing/stale/Schuber or `forceCover`, the old one moves to the gallery.
  */
 export const applyLookupToForm = (prev, d, { forceCover = false } = {}) => {
   const updatedFields = [];

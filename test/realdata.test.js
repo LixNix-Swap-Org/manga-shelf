@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { normalizePublisher } = require('../utils/publishers');
 const { startTestServer } = require('./helpers');
 
-// Findings from testing with real Manga Passion data (publisher spelling, radar contents).
+// Regressions found with real Manga Passion data (publisher spelling, radar contents).
 let ctx;
 let admin;
 

@@ -31,9 +31,8 @@ const WEB_GLOBALS = {
 const HIDDEN = new Map([[AbortSignal, new Set(['any', 'timeout'])]]);
 
 /**
- * Host values reach the context only through proxies: every property read, call result and thrown error is wrapped
- * again, and the host's Function constructors turn into the context's own, so a constructor chain never reaches the
- * Node realm. Context functions handed to the host (listeners, timer callbacks) see wrapped arguments.
+ * Host values reach the context only through proxies (reads, call results and errors are wrapped again) and host
+ * Function constructors become the context's own, so a constructor chain never reaches the Node realm.
  */
 function membrane(context) {
     const inside = (code) => vm.runInContext(code, context);

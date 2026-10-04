@@ -16,8 +16,8 @@ function OwnerPublishers({ rows }) {
 }
 
 /**
- * Besitz pro Benutzer: Bände, Reihen, Wert (Listenpreis) und wie viele Bände mit anderen geteilt sind; je Besitzer
- * aufklappbar nach Verlag (owner_publishers). Nur ab zwei Nutzern.
+ * Ownership per user: volumes, series, value (list price) and how many volumes are shared with others; per owner
+ * expandable by publisher (owner_publishers). Only with two or more users.
  */
 export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
   const [open, setOpen] = useState(() => new Set());

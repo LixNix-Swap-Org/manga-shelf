@@ -1,3 +1,4 @@
+// Scheduler hook that runs the anime refresh when it is due.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

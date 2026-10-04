@@ -1,5 +1,5 @@
 // The server-only routes the client calls, answered on the device: session (one local profile, no login), the
-// profile list, uploads and the API keys (§7.2). Backups, users, setup and the console do not exist without a server.
+// profile list, uploads and the API keys. Backups, users, setup and the console do not exist without a server.
 import errors from '../../../core/errors.js';
 import guides from '../../../core/sources/guides.js';
 import gateway from '../../../core/anime/gateway.js';

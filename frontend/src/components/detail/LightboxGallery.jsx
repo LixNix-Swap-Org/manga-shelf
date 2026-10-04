@@ -97,7 +97,7 @@ export default function LightboxGallery({
       aria-modal="true"
       aria-label="Bildergalerie"
       tabIndex={-1}
-      className="outline-none fixed inset-0 z-60 bg-black/95 flex flex-col justify-between p-3 sm:p-6 animate-fade-in select-none"
+      className="outline-none fixed inset-0 z-60 bg-black/95 flex flex-col justify-between dialog-safe-area animate-fade-in select-none"
       onClick={onClose}
     >
       {/* Lightbox Top Header */}

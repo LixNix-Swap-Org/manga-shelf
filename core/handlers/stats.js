@@ -4,7 +4,7 @@ const { regularNumberedSql } = require('../lib/volumeNumber');
 const { animeStats } = require('../anime/stats');
 const { badRequest, notFound } = require('../errors');
 
-/** Letzte `count` Monate (JJJJ-MM) bis einschließlich `now`, älteste zuerst. */
+/** Last `count` months (YYYY-MM) up to and including `now`, oldest first. */
 function lastMonthKeys(now, count) {
     const keys = [];
     for (let i = count - 1; i >= 0; i--) {
@@ -16,9 +16,7 @@ function lastMonthKeys(now, count) {
 
 const round2 = (n) => Math.round((n || 0) * 100) / 100;
 
-const DEFAULT_START_DATE = '2021-04-09';
-
-/** JJJJ-MM-TT ab 1900 als UTC-Datum, sonst null. */
+/** YYYY-MM-DD from 1900 on as a UTC date, otherwise null. */
 function parseStartDate(value) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const parsed = new Date(value);
@@ -30,43 +28,61 @@ const PURCHASE_YEAR = "(TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]*' AND SUB
 const PURCHASE_MONTH = `(${PURCHASE_YEAR} AND TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*')`;
 
 /**
- * Ausgaben nach Kaufdatum: je Jahr (auch reine Jahresangaben), letzte 12 Monate (mit Nullen),
- * Bände nur mit Jahr (fehlen im Monatsdiagramm) und Bände ohne verwertbares Kaufdatum.
+ * Spending by purchase date: per year (also year-only entries), last 12 months (with zeros),
+ * volumes with a year only (absent from the month chart) and volumes without a usable purchase date. One pass over the volumes.
  */
 function buildSpending(ctx, now = new Date()) {
-    const monthRows = ctx.db.prepare(`
-        SELECT SUBSTR(TRIM(purchase_date), 1, 7) AS month, count(*) AS volumes, sum(COALESCE(price, 0)) AS total
+    const rows = ctx.db.prepare(`
+        SELECT CASE WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) END AS month,
+               CASE WHEN ${PURCHASE_YEAR} THEN CAST(SUBSTR(TRIM(purchase_date), 1, 4) AS INTEGER) END AS year,
+               count(*) AS volumes, sum(COALESCE(price, 0)) AS total
         FROM volumes
-        WHERE status = 'Vorhanden' AND ${PURCHASE_MONTH}
-        GROUP BY month
+        WHERE status = 'Vorhanden'
+        GROUP BY month, year
     `).all();
-    const yearRows = ctx.db.prepare(`
-        SELECT CAST(SUBSTR(TRIM(purchase_date), 1, 4) AS INTEGER) AS year, count(*) AS volumes, sum(COALESCE(price, 0)) AS total
-        FROM volumes
-        WHERE status = 'Vorhanden' AND ${PURCHASE_YEAR}
-        GROUP BY year
-        ORDER BY year
-    `).all();
-    const yearOnly = ctx.db.prepare(`
-        SELECT count(*) AS volumes, sum(COALESCE(price, 0)) AS total FROM volumes
-        WHERE status = 'Vorhanden' AND ${PURCHASE_YEAR} AND NOT ${PURCHASE_MONTH}
-    `).get();
-    const none = ctx.db.prepare(`
-        SELECT count(*) AS volumes, sum(COALESCE(price, 0)) AS total FROM volumes
-        WHERE status = 'Vorhanden' AND NOT COALESCE(${PURCHASE_YEAR}, 0)
-    `).get();
-    const byMonth = new Map(monthRows.map(r => [r.month, r]));
+    const byMonth = new Map();
+    const byYear = new Map();
+    const yearOnly = { volumes: 0, total: 0 };
+    const none = { volumes: 0, total: 0 };
+    const add = (target, row) => { target.volumes += row.volumes; target.total += row.total || 0; };
+    for (const row of rows) {
+        if (row.year === null) { add(none, row); continue; }
+        if (!byYear.has(row.year)) byYear.set(row.year, { volumes: 0, total: 0 });
+        add(byYear.get(row.year), row);
+        if (row.month === null) add(yearOnly, row);
+        else byMonth.set(row.month, row);
+    }
     return {
-        by_year: yearRows.map(y => ({ year: y.year, volumes: y.volumes, total: round2(y.total) })),
+        by_year: [...byYear.entries()].sort((a, b) => a[0] - b[0]).map(([year, y]) => ({ year, volumes: y.volumes, total: round2(y.total) })),
         by_month: lastMonthKeys(now, 12).map(k => ({ month: k, volumes: byMonth.get(k)?.volumes || 0, total: round2(byMonth.get(k)?.total) })),
-        year_only: { volumes: yearOnly?.volumes || 0, total: round2(yearOnly?.total) },
-        without_date: { volumes: none?.volumes || 0, total: round2(none?.total) }
+        year_only: { volumes: yearOnly.volumes, total: round2(yearOnly.total) },
+        without_date: { volumes: none.volumes, total: round2(none.total) }
     };
 }
 
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 /**
- * Komplett gesammelt (nicht Erscheinungsstatus), wie isSeriesComplete im Frontend: total_volumes > 0 und die Zahl der
- * verschiedenen regulären vorhandenen Nummern (regular_owned der Reihenliste) erreicht total_volumes.
+ * Collection start without a stored setting: the earliest purchase date (a year or month counts from the first) or
+ * creation date of a series or volume; today without data.
+ */
+function derivedStartDate(ctx, now) {
+    const row = ctx.db.prepare(`
+        SELECT (SELECT MIN(CASE WHEN TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' THEN SUBSTR(TRIM(purchase_date), 1, 10)
+                                WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) || '-01'
+                                ELSE SUBSTR(TRIM(purchase_date), 1, 4) || '-01-01' END)
+                FROM volumes WHERE ${PURCHASE_YEAR}) AS purchased,
+               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM volumes) AS volume_added,
+               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM mangas) AS series_added
+    `).get() || {};
+    const dates = [row.purchased, row.volume_added, row.series_added].filter(d => parseStartDate(d)).sort();
+    const today = isoDate(now);
+    return dates.length && dates[0] < today ? dates[0] : today;
+}
+
+/**
+ * Completely collected (not release status), like isSeriesComplete in the frontend: total_volumes > 0 and the number of
+ * distinct regular owned numbers (regular_owned of the series list) reaches total_volumes.
  */
 const COMPLETED_SERIES_SQL = `
     SELECT count(*) AS count FROM mangas m
@@ -110,7 +126,7 @@ const TOP_SERIES_SQL = `
     LIMIT 10
 `;
 
-// Wert je Besitzer mit dem Listenpreis (volumes.price), wie alle anderen Kennzahlen; geteilte Bände zählen bei jedem voll
+// Value per owner at list price (volumes.price), like all other figures; shared volumes count in full for each owner
 const OWNER_STATS_SQL = `
     SELECT u.id as user_id, u.username,
            count(v.id) as volume_count,
@@ -160,9 +176,9 @@ function stats(ctx) {
 
     const settingRow = ctx.db.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get();
     const storedStart = settingRow?.value;
-    const startDateStr = parseStartDate(storedStart) ? storedStart : DEFAULT_START_DATE;
-    const startDate = parseStartDate(startDateStr);
     const now = ctx.now();
+    const startDateStr = parseStartDate(storedStart) ? storedStart : derivedStartDate(ctx, now);
+    const startDate = parseStartDate(startDateStr);
     const diffMs = Math.max(1, now.getTime() - startDate.getTime());
     const totalDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
     const totalMonths = Math.max(1, Math.round(totalDays / 30.4375));
@@ -330,9 +346,8 @@ function continueReading(ctx, userId) {
 }
 
 /**
- * GET /stats/reading?user_id=: reads per month (24 months: volumes, pages, series), the backlog curve (owned volumes by
- * purchase month minus the reader's reads, cumulative), this vs last year, reading streaks in months and the
- * "Weiterlesen" list. Reads without a date count as read but stay out of every timeline (unknown_date).
+ * GET /stats/reading?user_id=: monthly reads, backlog curve, this vs last year, streaks, "Weiterlesen" list.
+ * Reads without a date count as read but stay out of every timeline (unknown_date).
  */
 function reading(ctx, { query }) {
     const raw = query.user_id;
@@ -406,4 +421,13 @@ function animeBlock(ctx) {
     return anime ? { anime } : {};
 }
 
-module.exports = { stats, reading, readingStreaks, parseStartDate, DEFAULT_START_DATE };
+/** PUT /stats/settings with null or '' as start date: removes the setting, the stats derive the start again. */
+function clearStartDate(ctx, { body }) {
+    const given = (key) => Object.prototype.hasOwnProperty.call(body || {}, key);
+    const value = given('collection_start_date') ? body.collection_start_date : (given('start_date') ? body.start_date : undefined);
+    if (value !== null && !(typeof value === 'string' && !value.trim())) return null;
+    ctx.db.prepare("DELETE FROM app_settings WHERE key = 'collection_start_date'").run();
+    return { body: { success: true } };
+}
+
+module.exports = { stats, reading, readingStreaks, parseStartDate, derivedStartDate, buildSpending, clearStartDate };

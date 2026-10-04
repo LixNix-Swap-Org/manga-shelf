@@ -71,9 +71,8 @@ function monthCountdown(y, m, today) {
 }
 
 /**
- * Days until a release date ("YYYY-MM-DD") and the label shown on the card; a month-only date ("YYYY-MM" or "YYYY-M")
- * gets month labels (see monthCountdown). `today` is a parameter so the result is testable. Unparseable or impossible
- * dates give nulls.
+ * Days until a release date ("YYYY-MM-DD") and the card label; month-only dates get month labels
+ * (see monthCountdown). Unparseable or impossible dates give nulls.
  */
 function countdownFor(releaseDate, today = new Date()) {
     const empty = { days_until: null, countdown_label: null };

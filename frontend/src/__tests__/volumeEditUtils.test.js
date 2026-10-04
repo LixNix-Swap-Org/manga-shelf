@@ -1,3 +1,4 @@
+// Volume editor helpers: price parsing, form validation, save body, image list edits and delete request.
 import { describe, it, expect, vi } from 'vitest';
 import {
   parsePriceInput, priceForQuery, validateVolumeForm, buildSaveBody, rebaseForm, partialDateLabel, isFullDate, filterUploadFiles,
@@ -121,7 +122,8 @@ describe('image reducers work on the latest state', () => {
 
 describe('deleteVolumeRequest', () => {
   it.each([
-    [reply(200, '{"success":true}'), { ok: true, gone: false }],
+    [reply(200, '{"success":true}'), { ok: true, gone: false, trash_id: null }],
+    [reply(200, '{"success":true,"trash_id":17}'), { ok: true, gone: false, trash_id: 17 }],
     [reply(404, '{"error":"Band nicht gefunden"}'), { ok: true, gone: true }],
     [reply(503, '{"error":"Wiederherstellung läuft"}'), { ok: false, error: 'Wiederherstellung läuft' }],
     [reply(502, '<html>Bad Gateway</html>', 'text/html'), { ok: false, error: 'Fehler beim Löschen des Bands (HTTP 502)' }],

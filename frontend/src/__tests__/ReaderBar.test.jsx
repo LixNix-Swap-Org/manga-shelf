@@ -1,3 +1,4 @@
+// Covers the reader bar and its read-count display.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ReaderBar from '../components/detail/ReaderBar';
@@ -51,5 +52,21 @@ describe('ReaderBar', () => {
     expect(screen.getByText(/Gelesen:/).textContent).toBe('Gelesen: 1 von 1');
     expect(screen.getByText(/SuB:/).textContent).toBe('SuB: 0');
     expect(screen.getByRole('button', { name: /^max\s*1 \/ 1$/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('"Gelesen am" starts empty (now) without a picked date and reports a pick or a cleared field', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const setReadDate = vi.fn();
+    const { rerender } = render(<ReaderBar {...props({ canToggle: true, readDate: null, setReadDate })} />);
+    const field = screen.getByLabelText('Gelesen am');
+    expect(field.value).toBe('');
+    fireEvent.change(field, { target: { value: '2026-09-01' } });
+    expect(setReadDate).toHaveBeenLastCalledWith('2026-09-01');
+    rerender(<ReaderBar {...props({ canToggle: true, readDate: '2026-09-01', setReadDate })} />);
+    expect(screen.getByLabelText('Gelesen am').value).toBe('2026-09-01');
+    rerender(<ReaderBar {...props({ canToggle: true, readDate: null, setReadDate })} />);
+    expect(screen.getByLabelText('Gelesen am').value).toBe('');
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 });

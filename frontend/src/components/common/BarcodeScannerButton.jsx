@@ -10,6 +10,8 @@ const MAX_DIM = 1600;
 const RETRY_DIM = 2400;
 const NATIVE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'];
 const LiveScanner = lazy(() => import('./LiveScanner'));
+// the iOS/Android app's ML Kit scanner (mobile/src/native-bridge.mjs); LiveScanner uses it instead of the page camera
+const nativeScanAvailable = () => typeof window !== 'undefined' && Boolean(window.mangashelfNative?.plugins?.BarcodeScanner);
 
 /** createImageBitmap, or an <img> for formats it rejects (e.g. HEIC outside Safari). */
 async function loadImage(file) {
@@ -87,13 +89,9 @@ async function decodeWithZxing(image, firstCanvas) {
   }
 }
 
-/**
- * BarcodeScannerButton
- * In a secure context (HTTPS, localhost, the apps) the live camera scanner (LiveScanner); `continuous` keeps it open
- * for scan after scan, `scannerChildren` is shown inside it. Otherwise, and as its fallback, a scan from a photo (file
- * input with capture="environment", works over plain HTTP): native BarcodeDetector first, ZXing (lazy chunk) with EAN
- * hints, both on a downscaled canvas.
- */
+// Scan button: LiveScanner (native ML Kit or live camera, secure contexts only), else/fallback a photo through a file
+// input (works over plain HTTP): BarcodeDetector, then ZXing. `continuous` keeps the scanner open; `scannerChildren`
+// renders inside it.
 export default function BarcodeScannerButton({
   onDetected, className = '', buttonText = 'Barcode scannen', compact = false, continuous = false, live = true,
   scannerTitle, scannerChildren = null, id, children
@@ -165,7 +163,7 @@ export default function BarcodeScannerButton({
         onClick={(e) => {
           // the header search box focuses its input on any click inside it, which would pop up the keyboard
           e.stopPropagation();
-          if (live && liveScanSupported()) setLiveOpen(true);
+          if (live && (nativeScanAvailable() || liveScanSupported())) setLiveOpen(true);
           else openPhoto();
         }}
         title="ISBN / EAN-Barcode per Kamera scannen (funktioniert auch ohne HTTPS)"

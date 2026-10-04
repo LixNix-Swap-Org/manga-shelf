@@ -1,3 +1,4 @@
+// Input validation helpers (prices and other fields).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const v = require('../utils/validate');

@@ -1,4 +1,4 @@
-// AnimeMeta: the one shape both sources are normalised to (reports/design-anime-sources.md §2.1), plus the freshness
+// AnimeMeta: the one shape both sources are normalised to, plus the freshness
 // rules, the merge by MAL id and the broadcast estimate for sources without an airing schedule.
 const { titleKey } = require('../mangaPassion/classify');
 

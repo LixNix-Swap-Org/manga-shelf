@@ -1,5 +1,6 @@
+// Covers the dashboard page: loading, routing, scanner and offline behaviour.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
 const state = vi.hoisted(() => ({
@@ -108,7 +109,22 @@ beforeEach(() => {
   };
 });
 
+// the bottom navigation stays mounted (hidden) above 640 px with its own scanner; the header's is the visible one
+const headerScan = () => within(document.querySelector('header[data-sticky-header]')).getByText('Scan-Test');
+
 describe('Dashboard', () => {
+  it('the header stays sticky: no ancestor clips with overflow hidden, and it pads itself below the status bar', () => {
+    renderDashboard('/');
+    const header = document.querySelector('header[data-sticky-header]');
+    expect(header.className).toMatch(/(^| )sticky( |$)/);
+    expect(header.className).toContain('top-0');
+    expect(header.className).toContain('pt-[max(0.75rem,env(safe-area-inset-top))]');
+    for (let el = header.parentElement; el && el !== document.body; el = el.parentElement) {
+      expect(el.className || '').not.toMatch(/overflow(-[xy])?-(hidden|auto|scroll)/);
+    }
+    expect(header.parentElement.className).toContain('overflow-x-clip');
+  });
+
   it('?view=stats opens the statistics over the shelf and cleans the URL', async () => {
     renderDashboard('/?view=stats');
     expect(await screen.findByText('Statistik-Dialog')).toBeTruthy();
@@ -132,18 +148,49 @@ describe('Dashboard', () => {
 
   it('every view change goes through the URL, also the back button of the shopping list', () => {
     renderDashboard('/');
-    fireEvent.click(document.getElementById('btn-mobile-shopping'));
+    fireEvent.click(document.getElementById('btn-nav-shopping'));
     expect(currentUrl()).toBe('/?view=shopping');
     expect(state.shopping.fetchShoppingList).toHaveBeenCalled();
     fireEvent.click(screen.getByText('Zurück zum Regal'));
     expect(currentUrl()).toBe('/');
 
-    fireEvent.click(document.getElementById('btn-mobile-radar'));
+    fireEvent.click(document.getElementById('btn-nav-radar'));
     expect(currentUrl()).toBe('/?view=radar');
     expect(state.radar.fetchReleaseRadar).toHaveBeenCalled();
     expect(state.radar.fetchMangaPassionReleases).toHaveBeenCalledTimes(1);
-    fireEvent.click(document.getElementById('btn-mobile-shopping'));
+    fireEvent.click(document.getElementById('btn-nav-shopping'));
     expect(currentUrl()).toBe('/?view=shopping');
+  });
+
+  it('a view chosen in the app opens at its top; the shelf returns to its saved offset and Back keeps the browser\'s', () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.stubGlobal('scrollY', 600);
+    try {
+      renderDashboard('/');
+      fireEvent.click(document.getElementById('btn-nav-shopping'));
+      expect(currentUrl()).toBe('/?view=shopping');
+      expect(scrollTo).toHaveBeenCalledWith(0, 0);
+
+      scrollTo.mockClear();
+      fireEvent.click(document.getElementById('btn-nav-shelf'));
+      expect(currentUrl()).toBe('/');
+      expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
+      expect(scrollTo).toHaveBeenCalledWith(0, 600);
+
+      scrollTo.mockClear();
+      fireEvent.click(document.getElementById('btn-nav-shelf'));
+      expect(scrollTo).not.toHaveBeenCalled();
+
+      fireEvent.click(document.getElementById('btn-nav-radar'));
+      expect(scrollTo).toHaveBeenCalledWith(0, 0);
+      scrollTo.mockClear();
+      act(() => navigateTo(-1));
+      expect(currentUrl()).toBe('/');
+      expect(scrollTo).not.toHaveBeenCalledWith(0, 0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('a scan with several similar series offers a choice instead of searching for the volume title', async () => {
@@ -152,7 +199,7 @@ describe('Dashboard', () => {
       matched_candidates: [{ id: 1, title: 'Naruto Gaiden' }, { id: 2, title: 'Naruto Shippuden' }]
     })));
     renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText('Mehrere Reihen passen – bitte auswählen')).toBeTruthy();
     expect(document.getElementById('main-search-input').value).toBe('');
     fireEvent.click(screen.getByText('Naruto Shippuden'));
@@ -175,7 +222,7 @@ describe('Dashboard', () => {
         </Routes>
       </BrowserRouter>
     );
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     await screen.findByText('Mehrere Reihen passen – bitte auswählen');
     expect(window.history.length).toBe(length + 1);
     fireEvent.click(screen.getByText('Naruto Shippuden'));
@@ -190,7 +237,7 @@ describe('Dashboard', () => {
   it('an unknown ISBN shows the server message, keeps the digits out of the search and offers to add', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, { found: false, isbn: state.scanCode, message: 'Keine Metadaten für diese ISBN gefunden.' })));
     renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText('Keine Metadaten für diese ISBN gefunden.')).toBeTruthy();
     expect(document.getElementById('main-search-input').value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Reihe manuell anlegen' }));
@@ -202,7 +249,7 @@ describe('Dashboard', () => {
     let answer;
     vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { answer = resolve; })));
     renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText(`ISBN ${state.scanCode} wird gesucht...`)).toBeTruthy();
     await act(async () => { answer(json(200, { found: false, isbn: state.scanCode, message: 'Nichts gefunden.' })); });
     expect(await screen.findByText('Nichts gefunden.')).toBeTruthy();
@@ -213,7 +260,7 @@ describe('Dashboard', () => {
   it('a gateway error page and a network failure give a readable message', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(502)));
     renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText(/ISBN-Suche fehlgeschlagen/)).toBeTruthy();
   });
 
@@ -222,7 +269,7 @@ describe('Dashboard', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     renderDashboard('/', { id: 1, username: 'anna', role: 'visitor', realRole: 'editor', offline: true });
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText(/braucht eine Verbindung/)).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -241,7 +288,7 @@ describe('Dashboard', () => {
   it('Escape closes the add dialog and drops a scan prefill; a manual open never carries one', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, { found: true, isbn: state.scanCode, book: { title: 'Neu 1', series: 'Neu' } })));
     renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     expect(await screen.findByText(`Anlegen-Dialog mit Neu ${state.scanCode}`)).toBeTruthy();
     act(() => { fireEvent.keyDown(window, { key: 'Escape' }); });
     expect(screen.queryByText(/Anlegen-Dialog/)).toBeNull();
@@ -295,14 +342,14 @@ describe('Dashboard: local scan and share target', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const { unmount } = renderDashboard('/');
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     await waitFor(() => expect(currentUrl()).toBe('/manga/4'));
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/lookup/isbn'))).toBe(false);
     unmount();
 
     state.offline = true;
     renderDashboard('/', { id: 1, username: 'anna', role: 'visitor', realRole: 'editor', offline: true });
-    fireEvent.click(screen.getByText('Scan-Test'));
+    fireEvent.click(headerScan());
     await waitFor(() => expect(currentUrl()).toBe('/manga/4'));
     expect(screen.queryByText(/braucht eine Verbindung/)).toBeNull();
   });
@@ -403,7 +450,7 @@ describe('Dashboard: shelf filters in the URL', () => {
     fireEvent.change(screen.getByLabelText('Sammelstand filtern'), { target: { value: 'abgebrochen' } });
     await waitFor(() => expect(currentUrl()).toBe('/?collect=abgebrochen'));
     expect(titlesShown()).toEqual(['Bakuman']);
-    fireEvent.click(document.getElementById('btn-mobile-shopping'));
+    fireEvent.click(document.getElementById('btn-nav-shopping'));
     expect(currentUrl()).toBe('/?collect=abgebrochen&view=shopping');
     act(() => navigateTo(-1));
     expect(currentUrl()).toBe('/?collect=abgebrochen');

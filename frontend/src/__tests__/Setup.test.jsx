@@ -1,3 +1,4 @@
+// Covers the first-run setup form and its error handling.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Setup from '../Setup';
@@ -50,6 +51,30 @@ describe('Setup', () => {
     expect(screen.getByLabelText('Einrichtungscode').value).toBe('falsch');
   });
 
+  it('ties a wrong code to the code field: invalid, described by the message, focused; typing clears it', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(403, { error: 'Einrichtungscode fehlt oder ist falsch.', code: 'SETUP_TOKEN_INVALID' })));
+    render(<Setup onComplete={vi.fn()} />);
+    fillAndSubmit({ token: 'falsch' });
+    const alert = await screen.findByRole('alert');
+    const field = screen.getByLabelText('Einrichtungscode');
+    await waitFor(() => expect(field.getAttribute('aria-invalid')).toBe('true'));
+    const described = field.getAttribute('aria-describedby').split(' ');
+    expect(described).toContain(alert.id);
+    expect(document.getElementById(described[0]).textContent).toMatch(/Server-Konsole/);
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: 'falsch2' } });
+    expect(field.getAttribute('aria-invalid')).toBeNull();
+    expect(field.getAttribute('aria-describedby')).not.toContain(alert.id);
+  });
+
+  it('other setup errors leave the code field valid', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(400, { error: 'Benutzername ungültig' })));
+    render(<Setup onComplete={vi.fn()} />);
+    fillAndSubmit({ token: 'abcd-efgh-jkmn-pqrs' });
+    await screen.findByRole('alert');
+    expect(screen.getByLabelText('Einrichtungscode').getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('offers the optional "Quellen verbinden" step after the account; instance keys go to the admin route', async () => {
     const guides = [
       { id: 'mal', name: 'MyAnimeList', scope: 'both', benefit: 'Offizielle API.', secretLabel: 'Client-ID', secretHint: '32 Zeichen', pattern: '^[0-9a-fA-F]{32}$', minLength: 32, formatError: 'Eine MyAnimeList-Client-ID besteht aus genau 32 Zeichen (0–9, a–f).', steps: [{ text: 'App anlegen', link: 'https://myanimelist.net/apiconfig' }] },
@@ -69,7 +94,9 @@ describe('Setup', () => {
     fillAndSubmit({ token: 'abcd-efgh-jkmn-pqrs' });
     expect(await screen.findByRole('heading', { name: 'Quellen verbinden (später möglich)' })).toBeTruthy();
     expect(onComplete).not.toHaveBeenCalled();
-    const malCard = (await screen.findByRole('heading', { name: 'MyAnimeList' })).closest('section');
+    const malHeading = await screen.findByRole('heading', { name: 'MyAnimeList' });
+    expect(malHeading.tagName).toBe('H2');
+    const malCard = malHeading.closest('section');
     const field = malCard.querySelector('input[type="password"]');
     fireEvent.change(field, { target: { value: 'zu-kurz' } });
     fireEvent.click(malCard.querySelector('button[type="submit"]'));
@@ -83,5 +110,15 @@ describe('Setup', () => {
     expect(field.value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: /Weiter zur Sammlung/ }));
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
+  });
+
+  it('moves the focus to the "Quellen verbinden" heading when the form goes away', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => (url === '/api/setup' ? json(200, { success: true }) : json(404, {}))));
+    render(<Setup onComplete={vi.fn(async () => {})} />);
+    fillAndSubmit({ token: 'abcd-efgh-jkmn-pqrs' });
+    const heading = await screen.findByRole('heading', { name: 'Quellen verbinden (später möglich)' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    expect(heading.className).toContain('focus:outline-none');
   });
 });

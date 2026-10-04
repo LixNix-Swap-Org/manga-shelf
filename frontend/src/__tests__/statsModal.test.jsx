@@ -1,3 +1,4 @@
+// StatsModal and its cards plus the statsFormat helpers (de-DE numbers, UTC timestamps, publisher colours).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -98,6 +99,19 @@ describe('StatsModal', () => {
     expect(screen.getByText(/Gesamtwert aller 25 erfassten Bände/)).toBeTruthy();
     expect(screen.getByText(/\(23,1%\)/)).toBeTruthy();
     expect(screen.queryByText(/5\.48/)).toBeNull();
+  });
+
+  it('below sm the whole dialog scrolls in the overlay instead of a short inner strip', async () => {
+    fetchMock.mockResolvedValue(response(statsBody()));
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    const box = screen.getByRole('dialog').querySelector('.dialog-box');
+    expect(box.className).toContain('max-sm:max-h-none');
+    expect(box.className).toContain('short:max-h-none');
+    const body = box.querySelector(':scope > .overflow-y-auto');
+    expect(body.className).toContain('max-sm:overflow-visible');
+    expect(body.className).toContain('short:overflow-visible');
+    expect(screen.getByText(/Finanzen, Monatsausgaben/).className).toContain('max-sm:hidden');
   });
 
   it('uses singular forms for one month, one year and one day', async () => {

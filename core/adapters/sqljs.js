@@ -3,6 +3,7 @@
 // sql.js statements are freed by hand and all of them die on export(), so every call prepares its own statement.
 const { dbFromConnection } = require('../ctx');
 
+// node:sqlite rejects undefined and booleans as bind values; sql.js would silently accept them, so mirror it.
 function bindable(value) {
     if (value === undefined) throw new TypeError('Provided value cannot be bound to SQLite parameter');
     if (typeof value === 'boolean') throw new TypeError('Provided value cannot be bound to SQLite parameter');

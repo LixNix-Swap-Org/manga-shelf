@@ -1,9 +1,8 @@
 import { useEffect, useId, useRef } from 'react';
 
 /**
- * ARIA tabs as in RadarTabs and BackupRestoreModal: tab ids with aria-controls, a roving tabIndex, ArrowLeft/ArrowRight/
- * Home/End on the tablist (selects and focuses), and a tabpanel labelled by the selected tab.
- * `tabs` lists the tab keys in order; `prefix` gives stable ids (`<prefix>-tab-<key>`, `<prefix>-tabpanel`).
+ * ARIA tabs: ids with aria-controls, roving tabIndex, arrow/Home/End keys (select and focus), labelled tabpanel.
+ * `tabs` lists the keys in order; `prefix` gives stable ids (`<prefix>-tab-<key>`, `<prefix>-tabpanel`).
  */
 export default function useTabList({ tabs, selected, onSelect, prefix }) {
   const autoId = useId();

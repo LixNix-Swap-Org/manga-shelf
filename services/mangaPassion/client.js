@@ -7,7 +7,7 @@ const bound = (fn) => (...args) => fn(createCtx(), ...args);
 
 module.exports = {
   API_BASE: core.API_BASE,
-  HEADERS: { 'User-Agent': `MangaShelf/${pkg.version || '2.11.0'}`, 'Accept': 'application/ld+json' },
+  HEADERS: { 'User-Agent': `MangaShelf/${pkg.version || 'dev'}`, 'Accept': 'application/ld+json' },
   UNKNOWN: core.UNKNOWN,
   MAX_VOLUME_PAGES: core.MAX_VOLUME_PAGES,
   toEditionId: core.toEditionId,

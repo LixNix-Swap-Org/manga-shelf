@@ -4,6 +4,7 @@ import { BookOpen, ExternalLink, Minus, Plus, RefreshCw, Trash, Tv, X } from 'lu
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
+import { langFor } from '../common/lang';
 import { isAbortError } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
@@ -196,12 +197,12 @@ export default function AnimeDetailModal({
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-      className="outline-none fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
     >
-      <div className="glass-panel w-full max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl my-3 sm:my-8 overflow-hidden">
+      <div className="dialog-box glass-panel max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden">
         <div className="relative h-28 sm:h-40 bg-slate-900">
           {anime?.banner_image && <CoverImage src={anime.banner_image} className="w-full h-full object-cover opacity-70" />}
-          <button type="button" onClick={onClose} aria-label="Schließen" className="absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
+          <button type="button" onClick={onClose} aria-label="Schließen" className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -215,7 +216,7 @@ export default function AnimeDetailModal({
                   <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<Tv className="w-8 h-8 m-auto mt-10 text-slate-500" aria-hidden="true" />} />
                 </div>
                 <div className="min-w-0 pb-1">
-                  <h2 id={titleId} className="text-xl sm:text-2xl font-extrabold text-white leading-tight">{displayTitle(anime)}</h2>
+                  <h2 id={titleId} lang={langFor(displayTitle(anime)) || 'de'} className="text-xl sm:text-2xl font-extrabold text-white leading-tight break-words hyphens-auto [overflow-wrap:anywhere]">{displayTitle(anime)}</h2>
                   {anime.title_romaji && anime.title_romaji !== displayTitle(anime) && <p className="text-sm text-slate-400">{anime.title_romaji}</p>}
                   {anime.title_native && <p className="text-xs text-slate-400">{anime.title_native}</p>}
                 </div>
@@ -226,7 +227,7 @@ export default function AnimeDetailModal({
                   <MetaRow label="Format">{[formatLabel(anime.format), anime.season_year].filter(Boolean).join(' · ') || null}</MetaRow>
                   <MetaRow label="Status">{airingStatusLabel(anime.status)}</MetaRow>
                   <MetaRow label="Folgen">{anime.episodes ? `${anime.episodes}${anime.duration ? ` à ${anime.duration} Min.` : ''}` : null}</MetaRow>
-                  <MetaRow label="Nächste Folge">{countdown}{anime.next_airing?.estimated ? ' (geschätzt)' : ''}</MetaRow>
+                  <MetaRow label="Nächste Folge">{countdown ? `${countdown}${anime.next_airing?.estimated ? ' (geschätzt)' : ''}` : null}</MetaRow>
                   <MetaRow label="Studio">{(anime.studios || []).join(', ') || null}</MetaRow>
                   <MetaRow label="Genres">{(anime.genres || []).join(', ') || null}</MetaRow>
                   <MetaRow label="Wertung">{anime.score ? `${anime.score} / 100` : null}</MetaRow>

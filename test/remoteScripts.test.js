@@ -1,3 +1,4 @@
+// Remote admin scripts against a fake instance that records their requests.
 const { test, describe, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');

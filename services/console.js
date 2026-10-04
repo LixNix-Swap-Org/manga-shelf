@@ -1,3 +1,5 @@
+// Admin console of the server (stdin, the headless binary, scripts/admin.js): German commands for passwords, roles,
+// sources and status. Secrets never go to the log; generated passwords only reach a terminal or a 0600 file.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -74,8 +76,10 @@ async function cmdStatus(arg, out) {
 
 async function cmdBackup(arg, out) {
     const { createBackupSnapshot } = require('./scheduler');
+    const { trackJob } = require('./lifecycle');
     out('Snapshot wird erstellt ...');
-    const snapshot = await createBackupSnapshot('manual');
+    // tracked so shutdown and the desktop restart guard wait for it
+    const snapshot = await trackJob('Snapshot', createBackupSnapshot('manual'));
     out(`Snapshot ${snapshot.filename} erstellt (${disk.formatMb(snapshot.size)}), ${snapshot.verified ? 'geprüft' : `Prüfung fehlgeschlagen: ${snapshot.verify_error}`}`);
     return snapshot.verified;
 }
@@ -113,6 +117,7 @@ async function cmdPasswordReset(name, out, { revealSecrets } = {}) {
         out('Der Benutzer wurde gerade geändert. Bitte den Befehl erneut ausführen.');
         return false;
     }
+    require('../core/handlers/radar').revokeFeedTokens(db, user.id);
     log.info(`Password of user "${user.username}" reset from the console; all of their sessions ended`);
     if (revealSecrets) {
         out(`Neues Passwort für „${user.username}“: ${password}`);
@@ -396,9 +401,8 @@ function asksForSecret(line) {
 }
 
 /**
- * Runs one console line ("passwort-reset Kim"). `out` receives the answer lines. A generated password is only
- * passed to `out` with revealSecrets (default: stdout is a terminal, e.g. `docker exec -it`); otherwise it goes to
- * a 0600 file in DATA_DIR, since console output usually ends up in the container log. Resolves to { ok, command }.
+ * Runs one console line ("passwort-reset Kim"); `out` receives the answer lines. A generated password goes to `out`
+ * only with revealSecrets (default: stdout is a terminal), else to a 0600 file in DATA_DIR. Resolves { ok, command }.
  */
 async function runCommand(line, out = (text) => process.stdout.write(text + '\n'), { revealSecrets = process.stdout.isTTY === true, readSecret, readLine, visibleInput = false } = {}) {
     const trimmed = String(line || '').trim();
@@ -424,11 +428,8 @@ async function runCommand(line, out = (text) => process.stdout.write(text + '\n'
 }
 
 /**
- * Reads commands line by line from stdin (the Pterodactyl console forwards its input there). Without a usable
- * stdin (closed, /dev/null, ADMIN_CONSOLE=false) nothing happens. terminal: false leaves Ctrl+C to the shell.
- * Lines wait in a buffer and run one after another; a prompt ("quellen setzen") takes the next buffered line, so a
- * key pasted together with the command or typed while an earlier command runs never reaches the command parser. A
- * line that arrived for a "quellen setzen" that ended without asking is dropped.
+ * Reads console commands from stdin (the Pterodactyl console forwards input there); no-op without usable stdin.
+ * Lines are buffered and run in turn; a prompt takes the next line, so a pasted key never reaches the command parser.
  */
 function startConsole({ input, output } = {}) {
     if (!config.adminConsole) return null;

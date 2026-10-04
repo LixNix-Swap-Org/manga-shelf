@@ -1,5 +1,7 @@
+// Gap check and gap import of a series against its linked Manga Passion edition.
 const { inferVolumeType, volumeNumberOf } = require('../lib/volumeType');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
+const { normalizeTags } = require('../lib/tags');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 const {
@@ -416,6 +418,13 @@ async function syncMangaWithEdition(ctx, mangaId, editionId, options = {}) {
   if (options.update_status && edition.status && edition.status !== 'Unbekannt') {
     updates.push('status = ?');
     params.push(edition.status);
+  }
+
+  // an empty genre list takes the edition's (never replaces tags the user set)
+  const editionTags = normalizeTags(edition.tags);
+  if (editionTags && !(typeof manga.tags === 'string' && manga.tags.trim())) {
+    updates.push('tags = ?');
+    params.push(editionTags);
   }
 
   if (options.update_publisher && knownPublisher(edition.publisher)) {

@@ -1,3 +1,4 @@
+// config.js parsing: flags, backup retention, bounded integers, time zones and APP_ORIGINS, with their startup warnings.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

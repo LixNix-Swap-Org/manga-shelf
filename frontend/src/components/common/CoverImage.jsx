@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { assetImgProps } from '../../utils/api';
 
 /**
- * Cover <img> that remembers its own failed URLs, so a broken image re-renders only itself. `src` may be a list of
- * candidates (volume cover, then series cover): the first one that has not failed is shown, else `fallback`.
- * Server paths get crossOrigin in the app build (see assetImgProps). `onFail(url)` reports a URL that failed.
+ * Cover <img> that tracks its own failed URLs; `src` may be a candidate list (first non-failed wins, else `fallback`).
+ * `onFail(url)` reports a failure; server paths get crossOrigin in the app build (assetImgProps).
  */
 export default function CoverImage({ src, alt = '', className, fallback = null, loading = 'lazy', onFail, ...rest }) {
   const [failed, setFailed] = useState(() => new Set());

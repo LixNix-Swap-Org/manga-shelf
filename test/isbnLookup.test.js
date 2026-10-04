@@ -1,3 +1,4 @@
+// ISBN lookup chain: catalogue clients, title matching and series matching.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -12,7 +13,7 @@ process.env.DATA_DIR = dataDir;
 const { db, closeDb } = require('../db');
 const {
     parseMarc21Xml, stripMarcControls, lookupBookByIsbn, matchCollection, titleMatchScore, decodeXmlEntities, decodeHtmlEntities,
-    fetchTextHttps, normalizeVolumeNumber
+    fetchTextHttps, normalizeVolumeNumber, googleKeyVerdict
 } = require('../services/isbnLookup');
 const { isValidIsbn } = require('../utils/isbn');
 
@@ -289,6 +290,32 @@ test('fetchTextHttps: a dropped connection, a slow drip and a normal answer all 
     assert.match(book.source, /K10plus/);
 });
 
+test('fetchTextHttps: an error answer keeps "HTTP <status>" and carries the first 4 KB of its body as err.body', async (t) => {
+    const reason = JSON.stringify({ error: { code: 403, errors: [{ reason: 'ipRefererBlocked' }], status: 'PERMISSION_DENIED' } });
+    const { server, url } = await startServer((req, res) => {
+        if (req.url === '/big') {
+            res.writeHead(429, { 'Content-Type': 'text/plain' });
+            res.end('q'.repeat(20000));
+        } else if (req.url === '/empty') {
+            res.writeHead(400);
+            res.end();
+        } else {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(reason);
+        }
+    });
+    t.after(() => closeServer(server));
+
+    const errorOf = (path) => fetchTextHttps(url + path, 2000, { get: http.get }).then(() => assert.fail('resolved'), (err) => err);
+    let err = await errorOf('key');
+    assert.deepEqual([err.message, err.status, err.body], ['HTTP 403', 403, reason]);
+    assert.equal(googleKeyVerdict(err.status, err.body), 'other', 'a referrer block is neither an invalid key nor a quota');
+    err = await errorOf('big');
+    assert.deepEqual([err.message, err.body.length], ['HTTP 429', 4096]);
+    err = await errorOf('empty');
+    assert.deepEqual([err.message, err.body], ['HTTP 400', '']);
+});
+
 test('parseMarc21Xml: pages, year and price from the common catalogue forms', () => {
     const parse = (fields, isbn = '9783551745811') => parseMarc21Xml(marc(field('245', { a: 'T' }) + fields), isbn, 'DNB');
     const pages = (a) => parse(field('300', { a })).pages;
@@ -438,8 +465,12 @@ test('Google Books: the instance key goes along, a refused key is switched off a
     assert.deepEqual(keyed.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811&key=geheim%2B1']);
     assert.deepEqual(reports, [['used', null, 'google_books', true]]);
 
-    for (const status of [400, 403]) {
-        const refused = await lookup('geheim+1', async (url) => { if (url.includes('key=')) throw new Error(`HTTP ${status}`); return answer; });
+    const invalidBody = JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', details: [{ reason: 'API_KEY_INVALID' }] } });
+    for (const [status, body] of [[400, null], [400, invalidBody], [403, JSON.stringify({ error: { errors: [{ reason: 'keyInvalid' }] } })]]) {
+        const refused = await lookup('geheim+1', async (url) => {
+            if (url.includes('key=')) throw Object.assign(new Error(`HTTP ${status}`), body ? { body } : {});
+            return answer;
+        });
         assert.equal(refused.book.title, 'Berserk 7', `HTTP ${status}`);
         assert.equal(refused.urls.length, 2);
         assert.ok(!refused.urls[1].includes('key='));
@@ -454,4 +485,112 @@ test('Google Books: the instance key goes along, a refused key is switched off a
     const none = await lookup(null, async () => answer);
     assert.deepEqual(none.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811']);
     assert.ok(lines.length > 0 && lines.every(line => !line.includes('geheim')), lines.join('\n'));
+});
+
+test('Google Books: a quota or rate answer skips the instance key until the daily reset without switching it off', async () => {
+    const core = require('../core/isbnLookup');
+    const { createCtx } = require('../db');
+    const answer = JSON.stringify({ items: [{ volumeInfo: { title: 'Berserk 7' } }] });
+    const quota = (reason) => JSON.stringify({ error: { code: 403, message: 'Quota exceeded', errors: [{ reason, domain: 'usageLimits' }] } });
+    let reports = [];
+    const lookup = async (key, now, google) => {
+        const urls = [];
+        reports = [];
+        const credentials = {
+            instance: (provider) => (provider === 'google_books' ? { secret: key } : null),
+            failed: (...args) => reports.push(['failed', ...args]),
+            used: (...args) => reports.push(['used', ...args])
+        };
+        const ctx = { ...createCtx({ credentials }), now: () => new Date(now) };
+        const book = await core.lookupBookByIsbn(ctx, '9783551745811', {
+            fetchText: async (url) => {
+                if (!url.includes('googleapis')) return '<empty/>';
+                urls.push(url);
+                return google(url);
+            }
+        });
+        return { book, urls };
+    };
+    const keyedOnce = (status, body) => async (url) => {
+        if (url.includes('key=')) throw Object.assign(new Error(`HTTP ${status}`), body ? { body } : {});
+        return answer;
+    };
+
+    let n = 0;
+    for (const [status, body] of [[403, quota('dailyLimitExceeded')], [403, quota('userRateLimitExceeded')], [429, quota('rateLimitExceeded')], [403, null]]) {
+        const key = `quota-key-${n++}`;
+        const start = Date.parse('2026-10-04T12:00:00Z');
+        const first = await lookup(key, start, keyedOnce(status, body));
+        assert.equal(first.book.title, 'Berserk 7');
+        assert.equal(first.urls.length, 2, 'one retry without the key');
+        assert.deepEqual(reports, [], `${status} ${body}: the key is not switched off`);
+        const later = await lookup(key, start + 60 * 60 * 1000, keyedOnce(status, body));
+        assert.deepEqual(later.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811'], 'skipped for the rest of the day');
+        // 2026-10-04 12:00 UTC is 05:00 in California; the quota resets at 07:00 UTC the next day
+        const nextDay = await lookup(key, Date.parse('2026-10-05T07:00:01Z'), async () => answer);
+        assert.equal(nextDay.urls.length, 1);
+        assert.ok(nextDay.urls[0].includes('key='), 'back after the reset');
+        assert.deepEqual(reports, [['used', null, 'google_books', true]]);
+    }
+
+    assert.equal(core.googleKeyVerdict(400, JSON.stringify({ error: { message: 'Invalid value at q', errors: [{ reason: 'invalid' }] } })), 'other');
+    assert.equal(core.googleKeyVerdict(403, JSON.stringify({ error: { errors: [{ reason: 'forbidden' }] } })), 'other');
+    assert.equal(core.googleKeyVerdict(403, '<html>blocked</html>'), 'quota');
+});
+
+test('Google Books end to end: the real fetchTextHttps hands the error body of a stubbed https.get to the key verdict', async (t) => {
+    const https = require('https');
+    const { PassThrough } = require('stream');
+    const { EventEmitter } = require('events');
+    const core = require('../core/isbnLookup');
+    const { createCtx } = require('../db');
+    const answer = JSON.stringify({ items: [{ volumeInfo: { title: 'Berserk 7' } }] });
+    let keyed = null;
+    const realGet = https.get;
+    https.get = (url, options, callback) => {
+        const req = new EventEmitter();
+        req.setTimeout = () => req;
+        req.destroy = () => {};
+        setImmediate(() => {
+            const res = new PassThrough();
+            const refused = String(url).includes('key=') ? keyed : null;
+            res.statusCode = refused ? refused.status : 200;
+            if (!String(url).includes('googleapis')) res.statusCode = 404;
+            res.complete = true;
+            callback(res);
+            res.end(refused ? refused.body : String(url).includes('googleapis') ? answer : '');
+        });
+        return req;
+    };
+    t.after(() => { https.get = realGet; });
+
+    const run = async (key, status, body) => {
+        keyed = { status, body };
+        const reports = [];
+        const urls = [];
+        const credentials = {
+            instance: (provider) => (provider === 'google_books' ? { secret: key } : null),
+            failed: (...args) => reports.push(['failed', ...args]),
+            used: (...args) => reports.push(['used', ...args])
+        };
+        const ctx = { ...createCtx({ credentials }), now: () => new Date('2026-10-04T12:00:00Z') };
+        const book = await core.lookupBookByIsbn(ctx, '9783551745811', {
+            fetchText: (url, ms) => { if (url.includes('googleapis')) urls.push(url); return fetchTextHttps(url, ms); }
+        });
+        return { book, reports, urls };
+    };
+
+    const invalid = await run('e2e-invalid', 403, JSON.stringify({ error: { code: 403, errors: [{ reason: 'keyInvalid' }] } }));
+    assert.equal(invalid.book.title, 'Berserk 7');
+    assert.deepEqual(invalid.reports, [['failed', null, 'google_books', 'Google Books lehnt den Schlüssel ab (HTTP 403)']], 'the body, not the status, switches the key off');
+
+    const quota = await run('e2e-quota', 403, JSON.stringify({ error: { code: 403, errors: [{ reason: 'dailyLimitExceeded' }] } }));
+    assert.deepEqual(quota.reports, []);
+    const again = await run('e2e-quota', 200, answer);
+    assert.deepEqual(again.urls, ['https://www.googleapis.com/books/v1/volumes?q=isbn:9783551745811'], 'a quota answer skips the key for the day');
+
+    const blocked = await run('e2e-blocked', 403, JSON.stringify({ error: { code: 403, errors: [{ reason: 'ipRefererBlocked' }], status: 'PERMISSION_DENIED' } }));
+    assert.deepEqual(blocked.reports, []);
+    const next = await run('e2e-blocked', 200, answer);
+    assert.ok(next.urls[0].includes('key='), 'a refusal that is neither invalid nor quota does not skip the key');
 });

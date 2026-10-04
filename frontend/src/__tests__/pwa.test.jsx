@@ -1,4 +1,5 @@
 // @vitest-environment-options { "url": "http://192.168.1.20/" }
+// PWA parts: service worker, updates, install guidance, manifest, haptics, pull to refresh.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';

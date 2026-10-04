@@ -1,3 +1,4 @@
+// Detail page hooks: keyboard, volume actions, filters, gallery, manga data, shelf layout, edit form.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useState } from 'react';
 import { renderHook, act, fireEvent, waitFor } from '@testing-library/react';
@@ -599,6 +600,26 @@ describe('useVolumeActions', () => {
     expect(fetchManga).toHaveBeenCalledTimes(1);
   });
 
+  it('delete puts the volume into the trash; the toast restores it from there', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchMock = vi.fn(async () => res(200, { success: true, trash_id: 77 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const vol = { id: 3, volume_number: '3', type: 'volume' };
+    const { result, fetchManga } = renderActions({ volumes: [vol] });
+    await act(() => result.current.handleDeleteVolume(null, 3));
+    const toast = toasts.last();
+    expect(toast).toMatchObject({ kind: 'success', message: '„Band 3“ in den Papierkorb gelegt', action: { label: 'Rückgängig' } });
+    fetchMock.mockImplementation(async () => res(200, { success: true, kind: 'volume', id: 3 }));
+    await act(async () => { await toast.action.onClick(); });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/trash/77/restore');
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+    expect(fetchManga).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockImplementation(async () => res(409, { error: 'Band 3 existiert bereits (Fehlt).', code: 'VOLUME_DUPLICATE' }));
+    await act(async () => { await toast.action.onClick(); });
+    expect(toasts.messages('error')).toEqual(['Band 3 existiert bereits (Fehlt).']);
+  });
+
   it('a new single volume is posted without the dead publisher field', async () => {
     const fetchMock = vi.fn(async () => res(200, {}));
     vi.stubGlobal('fetch', fetchMock);
@@ -1048,7 +1069,7 @@ describe('useMangaData: edit form', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fetchMock.mockImplementation(async () => res(200, { success: true }));
     await act(() => result.current.handleDeleteManga());
-    expect(confirmSpy.mock.calls[0][0]).toMatch(/Alle zugehörigen Bände werden ebenfalls entfernt/);
+    expect(confirmSpy.mock.calls[0][0]).toMatch(/Papierkorb \(30 Tage wiederherstellbar\)/);
     expect(offlineStore.syncOfflineCopy).toHaveBeenCalledWith({ force: true });
   });
 

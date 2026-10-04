@@ -1,3 +1,4 @@
+// useShoppingList: fetching, optimistic purchases, outbox replay and offline caches.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import useShoppingList from '../hooks/useShoppingList';

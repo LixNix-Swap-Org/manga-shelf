@@ -35,23 +35,26 @@ const LEGAL_SUFFIX = /(?:(?:\s*[,&]\s*|\s+)(?:gmbh|verlag|verlags|co|kg|ag|mbh)\
 
 let storedAliases = new Map();
 
+// own keys only ("constructor" is no publisher); Object.hasOwn is newer than the app build's browser targets
+const builtInPublisher = (key) => (Object.prototype.hasOwnProperty.call(CANONICAL_PUBLISHERS, key) ? CANONICAL_PUBLISHERS[key] : undefined);
+
 /** Lookup key of a publisher name: trimmed, lower case, without the trailing "!" of "Carlsen Manga!". */
 const publisherKey = (name) => (typeof name === 'string' ? name.trim().toLowerCase().replace(/\s*!+$/, '') : '');
 
-/**
- * Canonical name for `name` with the given alias map (key -> canonical). Stored aliases win over the built-in map; a
- * canonical name that was itself merged into another one follows that alias once.
- */
+// Canonical name for `name` with the given alias map (key -> canonical). Stored aliases win over the built-in map;
+// a canonical name that was itself merged into another follows that alias once (an identity row "tokyopop" ->
+// "Tokyopop" keeps a renamed built-in spelling).
 function resolvePublisher(name, aliases = storedAliases) {
     if (!name || typeof name !== 'string') return null;
     const trimmed = name.trim();
     if (!trimmed) return null;
     const key = publisherKey(trimmed);
     const stripped = key.replace(LEGAL_SUFFIX, '').trim();
-    let result = aliases.get(key) || CANONICAL_PUBLISHERS[key]
-        || (stripped && stripped !== key ? aliases.get(stripped) || CANONICAL_PUBLISHERS[stripped] : null)
+    let result = aliases.get(key) || builtInPublisher(key)
+        || (stripped && stripped !== key ? aliases.get(stripped) || builtInPublisher(stripped) : null)
         || trimmed.replace(/\s*!+$/, '');
-    const followed = aliases.get(publisherKey(result));
+    const followKey = publisherKey(result);
+    const followed = aliases.get(followKey) || builtInPublisher(followKey);
     if (followed) result = followed;
     return result;
 }

@@ -1,6 +1,7 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { Download, FileArchive, TriangleAlert, Upload } from 'lucide-react';
 import ToolDialog from './ToolDialog';
+import FilePickerButton from '../common/FilePickerButton';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDateTime, formatMegabytes } from '../../utils/format';
 import { getLocalRuntime } from '../../local/localTransport';
@@ -40,7 +41,6 @@ const readFile = (file) => (typeof file.arrayBuffer === 'function'
  */
 export default function BackupExportModal({ onClose, onReplaced }) {
   const ids = useId();
-  const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [staged, setStaged] = useState(null);
@@ -53,7 +53,7 @@ export default function BackupExportModal({ onClose, onReplaced }) {
       const rt = await getLocalRuntime();
       const bytes = await buildBackupZip(rt, { appVersion: appVersion() });
       saveFile(bytes, backupFileName());
-      notify.success(`Sicherung gespeichert (${formatMegabytes(bytes.length)})`);
+      notify.success(`Sicherung erstellt (${formatMegabytes(bytes.length)})`);
     } catch (err) {
       setError(err.message || 'Sicherung fehlgeschlagen');
     } finally {
@@ -103,7 +103,8 @@ export default function BackupExportModal({ onClose, onReplaced }) {
         {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
         <section className="space-y-2" aria-labelledby={`${ids}-export`}>
           <h3 id={`${ids}-export`} className="text-sm font-bold text-white">Sicherung exportieren</h3>
-          <p className="text-xs text-slate-400">Datenbank und alle Bilder in einer ZIP-Datei – dasselbe Format wie die Backups eines Servers. Ein Server kann sie über „Backup einspielen“ übernehmen.</p>
+          <p className="text-xs text-slate-400">Datenbank und alle Bilder in einer ZIP-Datei – dasselbe Format wie die Backups eines Servers. Ein Server übernimmt sie unter Backups → „ZIP-Datei hochladen“.</p>
+          <p className="text-xs text-slate-400">Auf diesem Gerät liegen keine Passwörter: Konten, die von einem Server stammen, brauchen nach der Wiederherstellung auf einem Server einen Passwort-Reset. In eine bestehende Server-Sammlung führt „Zusammenführen“ ohne Passwortverlust.</p>
           <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5" onClick={exportZip} disabled={busy}>
             <Download className="w-4 h-4" aria-hidden="true" /> Sicherung exportieren
           </button>
@@ -111,10 +112,9 @@ export default function BackupExportModal({ onClose, onReplaced }) {
         <section className="space-y-2 border-t border-slate-800 pt-4" aria-labelledby={`${ids}-import`}>
           <h3 id={`${ids}-import`} className="text-sm font-bold text-white">Sicherung importieren</h3>
           <p className="text-xs text-slate-400">Eine Sicherung dieser App oder ein Backup-ZIP eines Servers. Die Sammlung auf diesem Gerät wird dabei ersetzt.</p>
-          <input ref={input} id={`${ids}-file`} type="file" accept=".zip,application/zip" className="sr-only" onChange={pick} />
-          <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5" onClick={() => input.current?.click()} disabled={busy}>
+          <FilePickerButton id={`${ids}-file`} accept=".zip,application/zip" onChange={pick} disabled={busy} className="btn-secondary text-sm inline-flex items-center gap-1.5">
             <Upload className="w-4 h-4" aria-hidden="true" /> ZIP-Datei auswählen
-          </button>
+          </FilePickerButton>
           {staged && (
             <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3 space-y-2 text-sm" aria-label="Inhalt der Sicherung">
               <p className="text-slate-200 font-semibold break-all">{staged.name} · {formatMegabytes(staged.size)}</p>

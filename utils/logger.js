@@ -1,13 +1,6 @@
-// Small dependency-free logger.
-//
-//   LOG_LEVEL   debug | info (default) | warn | error | silent
-//   LOG_FORMAT  text (default, readable in the Pterodactyl console) | json (one object per line)
-//
-// Usage:  const log = require('../utils/logger').child('backup');
-//         log.warn('WAL checkpoint failed', err);          // Error -> message + stack
-//         log.info('Restored snapshot', { file, mangas }); // plain object -> context fields
-//
-// The server start banner (matched by the Pterodactyl egg's "done" strings) intentionally stays on console.log.
+// Small dependency-free logger (LOG_LEVEL, LOG_FORMAT text|json): const log = require('../utils/logger').child('x');
+// Extra args: an Error adds message + stack, a plain object adds context fields.
+// The start banner (matched by the Pterodactyl egg's "done" strings) stays on console.log.
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40, silent: 100 };
 

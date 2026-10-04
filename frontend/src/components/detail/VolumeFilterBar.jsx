@@ -1,4 +1,4 @@
-import { ArrowUpDown, BookOpen, ListChecks, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, X } from 'lucide-react';
+import { ArrowUpDown, BookCheck, BookOpen, Calendar, Check, ListChecks, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, Hourglass, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, Truck, X } from 'lucide-react';
 import { CONDITION_NONE } from '../../utils/volumeHelpers';
 import { mpPillText } from './volumeViewHelpers';
 import { formatCount } from '../../utils/format';
@@ -124,7 +124,7 @@ export default function VolumeFilterBar({
           )}
         </div>
 
-        {/* Lücken-Erkennung Toggle & Manga Passion Pill */}
+        {/* Gap detection toggle & Manga Passion pill */}
         <div className="flex items-center gap-2">
           {detectedGaps.length > 0 && (
             <button
@@ -199,38 +199,38 @@ export default function VolumeFilterBar({
             type="button"
             aria-pressed={volumeFilter === 'Vorhanden'}
             onClick={() => setVolumeFilter('Vorhanden')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Vorhanden' 
                 ? 'bg-emerald-700 text-white shadow-sm' 
                 : 'text-emerald-400 hover:text-emerald-300'
             }`}
           >
-            ✓ Im Besitz ({ownedCount})
+            <Check className="w-3 h-3" aria-hidden="true" /> Im Besitz ({ownedCount})
           </button>
           <button
             type="button"
             aria-pressed={volumeFilter === 'Fehlt'}
             onClick={() => setVolumeFilter('Fehlt')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Fehlt' 
                 ? 'bg-amber-700 text-white shadow-sm' 
                 : 'text-amber-400 hover:text-amber-300'
             }`}
           >
-            ✕ Fehlt noch ({missingCount}{visibleGapCount > 0 ? ` + ${formatCount(visibleGapCount, 'Lücke', 'Lücken')}` : ''})
+            <X className="w-3 h-3" aria-hidden="true" /> Fehlt noch ({missingCount}{visibleGapCount > 0 ? ` + ${formatCount(visibleGapCount, 'Lücke', 'Lücken')}` : ''})
           </button>
           {preorderedCount > 0 && (
             <button
               type="button"
               aria-pressed={volumeFilter === 'Vorbestellt'}
               onClick={() => setVolumeFilter('Vorbestellt')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
                 volumeFilter === 'Vorbestellt' 
                   ? 'bg-sky-700 text-white shadow-sm' 
                   : 'text-sky-400 hover:text-sky-300'
               }`}
             >
-              📦 Vorbestellt ({preorderedCount})
+              <Truck className="w-3 h-3" aria-hidden="true" /> Vorbestellt ({preorderedCount})
             </button>
           )}
           {upcomingCount > 0 && (
@@ -238,39 +238,39 @@ export default function VolumeFilterBar({
               type="button"
               aria-pressed={volumeFilter === 'Erscheint bald'}
               onClick={() => setVolumeFilter('Erscheint bald')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
                 volumeFilter === 'Erscheint bald' 
                   ? 'bg-purple-700 text-white shadow-sm' 
                   : 'text-purple-400 hover:text-purple-300'
               }`}
             >
-              📅 Erscheint bald ({upcomingCount})
+              <Calendar className="w-3 h-3" aria-hidden="true" /> Erscheint bald ({upcomingCount})
             </button>
           )}
           <button
             type="button"
             aria-pressed={volumeFilter === 'Gelesen'}
             onClick={() => setVolumeFilter('Gelesen')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Gelesen' 
                 ? 'bg-teal-700 text-white shadow-sm' 
                 : 'text-teal-400 hover:text-teal-300'
             }`}
           >
-            📖 Gelesen ({currentReaderReadCount})
+            <BookCheck className="w-3 h-3" aria-hidden="true" /> Gelesen ({currentReaderReadCount})
           </button>
           <button
             type="button"
             aria-pressed={volumeFilter === 'Ungelesen'}
             onClick={() => setVolumeFilter('Ungelesen')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium transition-all ${
               volumeFilter === 'Ungelesen' 
                 ? 'bg-rose-700 text-white shadow-sm' 
                 : 'text-rose-400 hover:text-rose-300'
             }`}
             title="Im Besitz, aber noch nicht gelesen (Stapel ungelesener Bücher)"
           >
-            ⏳ Ungelesen / SuB ({currentReaderUnreadCount})
+            <Hourglass className="w-3 h-3" aria-hidden="true" /> Ungelesen / SuB ({currentReaderUnreadCount})
           </button>
         </div>
 
@@ -415,7 +415,7 @@ export default function VolumeFilterBar({
                   : 'bg-fuchsia-950/40 text-fuchsia-300 hover:bg-fuchsia-900/50 border border-fuchsia-800/50'
               }`}
             >
-              <Sparkles className="w-3 h-3 text-fuchsia-400" /> ✨ Special Editions ({specialEditionCount})
+              <Sparkles className="w-3 h-3 text-fuchsia-400" aria-hidden="true" /> Special Editions ({specialEditionCount})
             </button>
           )}
           {showTypeChip('schuber', schuberCount) && (
@@ -429,7 +429,7 @@ export default function VolumeFilterBar({
                   : 'bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/50 border border-indigo-800/50'
               }`}
             >
-              <Package className="w-3 h-3 text-indigo-400" /> 📦 Nur Schuber ({schuberCount})
+              <Package className="w-3 h-3 text-indigo-400" aria-hidden="true" /> Nur Schuber ({schuberCount})
             </button>
           )}
           {showTypeChip('special', specialCount) && (
@@ -443,7 +443,7 @@ export default function VolumeFilterBar({
                   : 'bg-amber-950/40 text-amber-300 hover:bg-amber-900/50 border border-amber-800/50'
               }`}
             >
-              <Sparkles className="w-3 h-3 text-amber-400" /> ⭐ Specials ({specialCount})
+              <Sparkles className="w-3 h-3 text-amber-400" aria-hidden="true" /> Specials ({specialCount})
             </button>
           )}
         </div>

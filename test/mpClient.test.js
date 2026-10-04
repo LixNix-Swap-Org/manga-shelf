@@ -1,3 +1,4 @@
+// Manga Passion client: outages, search cache, edition details, auto-link and cover reuse.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

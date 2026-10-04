@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpen, Smartphone } from 'lucide-react';
 import { useDocumentTitle } from '../components/common/PageChrome';
@@ -22,6 +22,13 @@ export default function LocalSetup({ user, onStart }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const local = Boolean(user?.local);
+  const sourcesHeading = useRef(null);
+  const [created, setCreated] = useState(false);
+
+  // the profile form (and its focused button) is gone after step 2: the step-3 heading takes the focus
+  useEffect(() => {
+    if (created && local) sourcesHeading.current?.focus();
+  }, [created, local]);
 
   const start = async (e) => {
     e.preventDefault();
@@ -34,7 +41,8 @@ export default function LocalSetup({ user, onStart }) {
     setBusy(true);
     try {
       const outcome = await onStart({ name: trimmed });
-      if (outcome?.status !== 'local') setError(outcome?.error || 'Die lokale Sammlung konnte nicht angelegt werden.');
+      if (outcome?.status === 'local') setCreated(true);
+      else setError(outcome?.error || 'Die lokale Sammlung konnte nicht angelegt werden.');
     } finally {
       setBusy(false);
     }
@@ -80,7 +88,7 @@ export default function LocalSetup({ user, onStart }) {
         ) : (
           <section className="glass-panel rounded-2xl p-4 sm:p-5 border border-slate-700/70 space-y-4" aria-labelledby={`${ids}-sources`}>
             <Steps current={3} />
-            <h2 id={`${ids}-sources`} className="text-lg font-bold text-white">Quellen verbinden (optional)</h2>
+            <h2 id={`${ids}-sources`} ref={sourcesHeading} tabIndex={-1} className="text-lg font-bold text-white focus:outline-none">Quellen verbinden (optional)</h2>
             <SourcesPanel />
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
               <button type="button" className="btn-secondary text-sm" onClick={() => navigate('/', { replace: true })}>Überspringen</button>

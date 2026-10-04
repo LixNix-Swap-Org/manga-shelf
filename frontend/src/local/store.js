@@ -1,6 +1,11 @@
 // Key-value storage of the standalone mode: the database file, the uploads (Blobs) and the API keys of the browser
 // build. IndexedDB in the browser; memoryStore() for tests and as fallback when IndexedDB is missing.
 export const LOCAL_DB_NAME = 'mangashelf-local';
+// window event of the runtime: detail { type: 'status' | 'replaced' | 'reloaded', status } (App shows the notices)
+export const LOCAL_STORE_EVENT = 'mangashelf:local-store';
+export const SAVE_FAILED_TEXT = 'Daten konnten nicht gespeichert werden';
+export const LOCKED_TEXT = 'Sammlung ist in einem anderen Fenster geöffnet';
+export const CONFLICT_TEXT = 'Die Sammlung wurde in einem anderen Fenster geändert – bitte neu laden.';
 const STORES = ['db', 'files', 'secrets'];
 
 const promisify = (req) => new Promise((resolve, reject) => {
@@ -37,6 +42,8 @@ export function indexedDbStore(idb = globalThis.indexedDB, name = LOCAL_DB_NAME)
     return value;
   };
   return {
+    // one database per browser profile: the runtime takes this navigator.locks lock for its lifetime
+    lockName: name,
     get: (store, key) => run(store, 'readonly', (s) => s.get(key)),
     put: (store, key, value) => run(store, 'readwrite', (s) => s.put(value, key)),
     delete: (store, key) => run(store, 'readwrite', (s) => s.delete(key)),

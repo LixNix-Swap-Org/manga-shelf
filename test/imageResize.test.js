@@ -1,3 +1,4 @@
+// Frontend image downscaling (frontend/src/utils/imageResize.js) against stubbed canvas APIs.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 

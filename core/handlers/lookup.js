@@ -28,8 +28,11 @@ function withDeadline(ctx, promise, ms, fallback, label) {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+const FAILED = Symbol('failed');
+const SOURCES_UNAVAILABLE = 'Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.';
+
 // Manga Passion (official German editions) and the anime gateway (AniList, MyAnimeList: budget, cache) in parallel,
-// Manga Passion results first
+// Manga Passion results first. 503 SOURCES_UNAVAILABLE when no source could be asked, so "no hits" stays truthful.
 async function lookupManga(ctx, { query }) {
     const queryTerm = qstr(query.q);
     if (!queryTerm || !queryTerm.trim()) {
@@ -41,21 +44,26 @@ async function lookupManga(ctx, { query }) {
 
     // one failing source never blocks the other
     const deadline = lookupTimings.sourceDeadlineMs;
+    const failed = (label) => (err) => {
+        if (!err?.unavailable) log(ctx).warn(`${label} lookup error:`, err);
+        return FAILED;
+    };
     const [mpResults, gatewayResults] = await Promise.all([
-        withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed).catch(err => { log(ctx).warn('Manga Passion lookup error:', err); return []; }), deadline, [], 'Manga Passion'),
-        withDeadline(ctx, gateway.searchManga(ctx, trimmed, { timeoutMs: lookupTimings.aniListTimeoutMs }), deadline, [], 'AniList/MyAnimeList')
+        withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed).catch(failed('Manga Passion')), deadline, FAILED, 'Manga Passion'),
+        withDeadline(ctx, gateway.searchManga(ctx, trimmed, { timeoutMs: lookupTimings.aniListTimeoutMs }).catch(failed('AniList/MyAnimeList')),
+            deadline, FAILED, 'AniList/MyAnimeList')
     ]);
+    if (mpResults === FAILED && gatewayResults === FAILED) throw new HttpError(503, SOURCES_UNAVAILABLE, 'SOURCES_UNAVAILABLE');
 
-    // Manga Passion hat Vorrang (deutsche Verlage, korrekte deutsche Bandzahlen & Cover)
-    return { body: [...mpResults, ...gatewayResults] };
+    // Manga Passion takes precedence (German publishers, correct German volume counts & covers)
+    return { body: [...(mpResults === FAILED ? [] : mpResults), ...(gatewayResults === FAILED ? [] : gatewayResults)] };
 }
 
 const UNREACHABLE_IMAGE = 'Bild-URL nicht erreichbar oder nicht erlaubt';
 
 /**
- * Status and a fixed German text for a failed remote image download; raw network/DNS/TLS messages stay in the log.
- * A blocked address and a name that does not resolve answer alike, so the endpoint does not reveal which internal
- * host names exist (only the response time still differs a little).
+ * Status and a fixed German text for a failed remote image download; raw network errors stay in the log.
+ * A blocked address and an unresolvable name answer alike, so internal host names are not revealed.
  */
 function remoteImageError(err) {
     const message = String(err && err.message || '');

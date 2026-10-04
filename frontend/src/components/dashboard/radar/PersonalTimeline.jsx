@@ -225,7 +225,7 @@ export default function PersonalTimeline({
                             <div className="flex-1 min-w-0">
                               <Link
                                 to={`/manga/${item.manga_id}`}
-                                className="text-xs sm:text-sm font-bold text-white hover:text-brand-300 truncate block transition-colors leading-snug"
+                                className="text-xs sm:text-sm font-bold text-white hover:text-brand-300 line-clamp-2 break-words hyphens-auto transition-colors leading-snug"
                                 title={item.manga_title}
                               >
                                 {item.manga_title}
@@ -264,8 +264,9 @@ export default function PersonalTimeline({
                           <div className="flex items-center gap-1.5">
                             <Link
                               to={`/manga/${item.manga_id}`}
-                              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs"
+                              className="hit-44 p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs"
                               title="Zu den Manga-Details"
+                              aria-label={`Details: ${getVolumeDisplayTitle(item)} von ${item.manga_title}`}
                             >
                               Details <span aria-hidden="true">↗</span>
                             </Link>
@@ -275,7 +276,8 @@ export default function PersonalTimeline({
                                 type="button"
                                 onClick={() => onMarkDelivered(item)}
                                 disabled={busy}
-                                className="bg-emerald-600/20 hover:bg-emerald-700 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                                aria-label={`${actionLabel}: ${getVolumeDisplayTitle(item)} von ${item.manga_title}`}
+                                className="hit-44 bg-emerald-600/20 hover:bg-emerald-700 text-emerald-300 hover:text-white border border-emerald-500/40 hover:border-emerald-500 py-1 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-sm"
                                 title={`Band als ${actionLabel.toLowerCase()} markieren (Status wird auf „Im Besitz“ gesetzt)`}
                               >
                                 {busy ? (

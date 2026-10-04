@@ -73,7 +73,8 @@ function createMemoryCore(overrides = {}) {
         api.raw = (method, url, body) => request(user, method, url, body);
         return api;
     };
-    return { kind: 'memory', conn, ctx, files, client, users: USERS, close: async () => conn.close() };
+    const run = (sql, ...params) => conn.prepare(sql).run(...params);
+    return { kind: 'memory', conn, ctx, files, client, run, users: USERS, close: async () => conn.close() };
 }
 
 /**
@@ -118,6 +119,8 @@ async function startExpressCore() {
         kind: 'express',
         server,
         client,
+        // seeds what no endpoint of the core writes (e.g. a calendar feed token) straight into the server's database
+        run: (sql, ...params) => require('../../db').db.prepare(sql).run(...params),
         users: USERS,
         close: async () => {
             global.fetch = realFetch;

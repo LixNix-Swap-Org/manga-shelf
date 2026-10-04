@@ -1,3 +1,4 @@
+// Covers bulk editing of volumes and its supporting hook.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -11,7 +12,7 @@ vi.mock('../utils/offlineStore', () => ({
 import MangaDetail from '../MangaDetail';
 import { clearDataCache } from '../utils/dataCache';
 import useVolumeSelection, { rangeBetween } from '../hooks/useVolumeSelection';
-import useVolumeActions, { chunkRevert, BULK_UNDO_MS } from '../hooks/useVolumeActions';
+import useVolumeActions, { BULK_UNDO_MS } from '../hooks/useVolumeActions';
 import BulkActionBar, { bulkDeleteConfirmText } from '../components/detail/BulkActionBar';
 import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
@@ -129,10 +130,9 @@ describe('useVolumeActions.handleBulkEdit', () => {
   };
   const bodies = (fetchMock) => fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body));
 
-  it('sends one request, refetches once and offers a 10 s undo that sends the previous values back', async () => {
-    const previous = [{ id: 1, volume: { manga_id: 7, status: 'Fehlt' }, owners: [] }, { id: 2, volume: { manga_id: 7, status: 'Fehlt' }, owners: [] }];
+  it('sends one request, refetches once and offers a 10 s undo that sends the undo token back in one request', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 2, ids: [1, 2], not_found: [], previous }))
+      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 2, ids: [1, 2], not_found: [], undo_token: 'tok-1' }))
       .mockResolvedValueOnce(fakeResponse(200, { success: true, restored: [1, 2], conflicts: [], not_found: [] }));
     vi.stubGlobal('fetch', fetchMock);
     const { fetchManga, hook } = setup();
@@ -149,8 +149,24 @@ describe('useVolumeActions.handleBulkEdit', () => {
     expect(BULK_UNDO_MS).toBe(10000);
 
     await act(async () => { await toast.action.onClick(); });
-    expect(bodies(fetchMock)[1]).toEqual({ revert: previous });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bodies(fetchMock)[1]).toEqual({ revert: 'tok-1' });
     expect(fetchManga).toHaveBeenCalledTimes(2);
+    expect(toasts.messages('error')).toEqual([]);
+  });
+
+  it('offers no undo when the answer carries no token', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(200, { success: true, updated: 1, ids: [1], not_found: [] })));
+    const { hook } = setup();
+    await act(async () => { await hook.result.current.handleBulkEdit([1], { set: { priority: 1 } }, 'gespeichert'); });
+    expect(toasts.last().action).toBeNull();
+  });
+
+  it('counts only the volumes actually marked read and names the skipped ones', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(200, { success: true, updated: 6, ids: [1, 2, 3, 4, 5, 6], not_found: [], read_skipped: [6], undo_token: 't' })));
+    const { hook } = setup();
+    await act(async () => { await hook.result.current.handleBulkEdit([1, 2, 3, 4, 5, 6], { read: { read: true, user_id: 4 } }, 'als gelesen markiert'); });
+    expect(toasts.last().message).toBe('5 Bände als gelesen markiert (1 Band nicht im Besitz übersprungen)');
   });
 
   it('reports the server error and does not refetch on a refused request', async () => {
@@ -164,9 +180,8 @@ describe('useVolumeActions.handleBulkEdit', () => {
   });
 
   it('an undo of deleted volumes reports the ones whose number was taken again', async () => {
-    const previous = [{ id: 1, volume: { manga_id: 7 }, owners: [] }];
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 1, ids: [1], previous, deleted: true }))
+      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 1, ids: [1], undo_token: 'tok-2', deleted: true }))
       .mockResolvedValueOnce(fakeResponse(409, {
         success: false, restored: [], not_found: [], error: 'Band 1 existiert bereits (Fehlt).', code: 'VOLUME_DUPLICATE',
         conflicts: [{ id: 1, status: 409, code: 'VOLUME_DUPLICATE', error: 'Band 1 existiert bereits (Fehlt).' }]
@@ -176,16 +191,26 @@ describe('useVolumeActions.handleBulkEdit', () => {
     await act(async () => { await hook.result.current.handleBulkEdit([1], { delete: true }, 'gelöscht'); });
     expect(toasts.last().message).toBe('1 Band gelöscht');
     await act(async () => { await toasts.last().action.onClick(); });
+    expect(bodies(fetchMock)[1]).toEqual({ revert: 'tok-2' });
     expect(toasts.messages('error')).toEqual(['1 Band konnte nicht wiederhergestellt werden: Band 1 existiert bereits (Fehlt).']);
   });
 
-  it('chunkRevert keeps every request below the size limit and the order intact', () => {
-    const entries = Array.from({ length: 5 }, (_, i) => ({ id: i + 1, volume: { notes: 'x'.repeat(40) } }));
-    const chunks = chunkRevert(entries, 150);
-    expect(chunks.flat()).toEqual(entries);
-    expect(chunks.length).toBeGreaterThan(1);
-    for (const chunk of chunks) expect(JSON.stringify(chunk).length).toBeLessThanOrEqual(150);
-    expect(chunkRevert([])).toEqual([]);
+  it('an expired undo shows the server text; volumes deleted meanwhile are named', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 2, ids: [1, 2], undo_token: 'tok-3' }))
+      .mockResolvedValueOnce(fakeResponse(410, { error: 'Rückgängig ist nicht mehr möglich (abgelaufen oder schon ausgeführt)', code: 'BULK_UNDO_EXPIRED' }))
+      .mockResolvedValueOnce(fakeResponse(200, { success: true, updated: 2, ids: [1, 2], undo_token: 'tok-4' }))
+      .mockResolvedValueOnce(fakeResponse(200, { success: true, restored: [1], conflicts: [], not_found: [2] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchManga, hook } = setup();
+    await act(async () => { await hook.result.current.handleBulkEdit([1, 2], { set: { priority: 1 } }, 'gespeichert'); });
+    await act(async () => { await toasts.last().action.onClick(); });
+    expect(toasts.messages('error')).toEqual(['Rückgängig ist nicht mehr möglich (abgelaufen oder schon ausgeführt)']);
+    expect(fetchManga).toHaveBeenCalledTimes(2);
+
+    await act(async () => { await hook.result.current.handleBulkEdit([1, 2], { set: { priority: 1 } }, 'gespeichert'); });
+    await act(async () => { await toasts.last().action.onClick(); });
+    expect(toasts.messages('info')).toEqual(['1 Band wurde inzwischen gelöscht und bleibt unverändert.']);
   });
 });
 
@@ -214,7 +239,7 @@ describe('MangaDetail selection wiring', () => {
       calls.push([url, init.method || 'GET', init.body ? JSON.parse(init.body) : null]);
       if (url === '/api/mangas/5') return fakeResponse(200, MANGA);
       if (url.startsWith('/api/mangas/5/gaps')) return fakeResponse(200, { matched: false, gaps: [] });
-      if (url === '/api/volumes/bulk') return fakeResponse(200, { success: true, updated: 3, ids: [51, 52, 53], not_found: [], previous: [] });
+      if (url === '/api/volumes/bulk') return fakeResponse(200, { success: true, updated: 3, ids: [51, 52, 53], not_found: [], undo_token: 'tok' });
       return fakeResponse(404, {});
     }));
     render(
