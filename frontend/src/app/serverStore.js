@@ -78,8 +78,9 @@ const listeners = new Set();
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : '');
 
 function newId() {
-  const random = globalThis.crypto?.randomUUID?.();
-  return random || `srv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === 'function') return c.randomUUID();
+  return `srv-${Date.now().toString(36)}-${Array.from(c.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export function hostLabel(url) {

@@ -1,7 +1,7 @@
 // Rate limiter, failure tracker and client key derivation.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWindowStore, createRateLimiter, createFailureTracker, clientKey, resetRateLimits } = require('../middleware/rateLimit');
+const { createWindowStore, createRateLimiter, createLimiterStore, createFailureTracker, clientKey, resetRateLimits } = require('../middleware/rateLimit');
 
 const v6 = (n) => clientKey(`2001:db8:1:${n.toString(16)}::1`);
 
@@ -89,4 +89,42 @@ test('exempt requests are counted but never refused', () => {
     const res = { setHeader() {}, status() { throw new Error('refused'); }, json() { return this; } };
     for (let i = 0; i < 5; i++) assert.equal(limiter.consume({ key: 'k', headers: {} }, res, { exempt: true }), false);
     assert.equal(hitter(limiter)('k'), 429);
+});
+
+test('limiter store (express-rate-limit): hits and reset time, long keys hashed, get/decrement/resetKey', () => {
+    const store = createLimiterStore({ windowMs: 60000 });
+    const long = 'api\n' + 'x'.repeat(10000);
+    const first = store.increment(long);
+    assert.equal(first.totalHits, 1);
+    assert.ok(first.resetTime instanceof Date && first.resetTime.getTime() > Date.now());
+    assert.equal(store.increment(long).totalHits, 2, 'the hashed key keeps counting the same client');
+    assert.ok(store.keys().every((k) => k.length <= 300));
+    store.decrement(long);
+    assert.equal(store.get(long).totalHits, 1);
+    store.resetKey(long);
+    assert.equal(store.get(long), undefined);
+    assert.equal(store.size(), 0);
+});
+
+test('limiter store: the entry cap holds and new keys are still counted (the oldest counter gives way)', () => {
+    const store = createLimiterStore({ windowMs: 60000, maxEntries: 3 });
+    for (let i = 0; i < 3; i++) for (let n = 0; n <= i; n++) store.increment('static\nk' + i);
+    for (let i = 0; i < 10; i++) assert.equal(store.increment('static\nnew' + i).totalHits, 1);
+    assert.equal(store.size(), 3);
+    assert.equal(store.get('static\nk0'), undefined);
+});
+
+test('limiter store: bucket-prefixed IPv6 keys share one entry per /48 beyond maxPerPrefix', () => {
+    const store = createLimiterStore({ windowMs: 60000, maxPerPrefix: 2 });
+    for (let n = 0; n < 6; n++) store.increment('api\n' + v6(n));
+    assert.equal(store.size(), 3);
+    assert.equal(store.get('api\n' + v6(5)).totalHits, 4);
+    assert.equal(store.increment('static\n' + v6(5)).totalHits, 1, 'another bucket has its own entries');
+});
+
+test('resetRateLimits also clears limiter stores', () => {
+    const store = createLimiterStore({ windowMs: 60000 });
+    store.increment('api\n10.0.0.1');
+    resetRateLimits();
+    assert.equal(store.size(), 0);
 });

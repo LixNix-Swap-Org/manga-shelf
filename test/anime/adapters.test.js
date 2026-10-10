@@ -5,8 +5,9 @@ const anilist = require('../../core/anime/anilist');
 const jikan = require('../../core/anime/jikan');
 const mal = require('../../core/anime/mal');
 const {
-    mergeResults, mergeMeta, emptyMeta, foldUmlauts, estimateNextAiring, rankByTitle, nextCheckAt, DAY, HOUR, MINUTE
+    mergeResults, mergeMeta, emptyMeta, foldUmlauts, estimateNextAiring, rankByTitle, nextCheckAt, cleanDescription, DAY, HOUR, MINUTE
 } = require('../../core/anime/normalize');
+const { cleanAniListDescription } = require('../../core/anilist');
 const { fixture } = require('./helpers');
 
 const NOW = Date.parse('2026-10-04T10:00:00Z');
@@ -135,6 +136,19 @@ test('AniList: external links and streaming episodes (http upgraded, episode num
     const merged = mergeMeta(emptyMeta({ anilist_id: 154587, title: { romaji: 'F' } }), meta);
     assert.equal(merged.external_links.length, 3, 'gaps filled from the other side');
     assert.equal(mergeMeta(meta, emptyMeta({ title: { romaji: 'F' } })).streaming_episodes.length, 3);
+});
+
+test('descriptions: no tag survives, entities are decoded once and only after the tags are gone', () => {
+    for (const clean of [cleanDescription, cleanAniListDescription]) {
+        assert.equal(clean('<i>x</i><br>y<br/>z'), 'x\ny\nz', clean.name);
+        assert.equal(clean('&lt;Twilight&gt; &amp; co.'), '<Twilight> & co.', clean.name);
+        assert.equal(clean('&amp;lt;b&amp;gt;'), '&lt;b&gt;', clean.name);
+        assert.equal(clean('<scr<script>ipt>alert(1)</script>'), 'ipt>alert(1)', clean.name);
+        for (const raw of ['<<script>script>x', '<scr<b>ipt>', '<<b>i>x</<i>b>', '<a href="x"<b>>y']) {
+            assert.doesNotMatch(clean(raw) || '', /<[a-z/!]/i, `${clean.name}: ${raw}`);
+        }
+        assert.equal(clean('<b></b>'), null, clean.name);
+    }
 });
 
 test('AniList list: collection without duplicates of custom lists, a missing entry is null, the save mutation', async () => {

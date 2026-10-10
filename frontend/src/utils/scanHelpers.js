@@ -8,13 +8,22 @@ import { statusLabel } from './enumLabels.js';
 /** Series name of a catalogue hit: the catalogue's series if known, else the book title (the DNB title is often just the volume title). */
 export const scanSeriesTitle = (book) => String(book?.series || book?.title || '').trim();
 
+const isOpenLibraryUrl = (url) => {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'openlibrary.org' || hostname.endsWith('.openlibrary.org');
+  } catch (_) {
+    return false;
+  }
+};
+
 /**
  * Prefill for "Neuen Manga anlegen" from an ISBN lookup (`/api/lookup/isbn`): series fields plus the scanned volume.
  * Open Library answers an unknown ISBN with a 1x1 placeholder unless `default=false` is set, so a missing cover 404s instead.
  */
 export const buildScanPrefill = (book, isbn) => {
   const cover = book?.cover_url
-    ? (/openlibrary\.org/.test(book.cover_url) && !/default=/.test(book.cover_url) ? `${book.cover_url}?default=false` : book.cover_url)
+    ? (isOpenLibraryUrl(book.cover_url) && !/default=/.test(book.cover_url) ? `${book.cover_url}?default=false` : book.cover_url)
     : '';
   return {
     form: {

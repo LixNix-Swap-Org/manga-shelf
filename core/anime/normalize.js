@@ -70,10 +70,14 @@ const isoDay = (value) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.tes
 /** Description without HTML (keeps paragraph breaks) and without the "(Source: …)" tail. */
 function cleanDescription(raw) {
     if (!raw || typeof raw !== 'string') return null;
-    const text = raw
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]*>/g, '')
-        .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    let html = raw.replace(/<br\s*\/?>/gi, '\n');
+    let previous;
+    do {
+        previous = html;
+        html = html.replace(/<[^>]*>/g, '');
+    } while (html !== previous);
+    const text = html
+        .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
         .replace(/\r\n?/g, '\n')
         .replace(/[ \t]+\n/g, '\n')
         .replace(/\n{3,}/g, '\n\n')

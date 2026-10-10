@@ -98,6 +98,20 @@ describe('version sync', () => {
   it('the checked-in native projects carry the root version', () => {
     assert.deepEqual(syncVersion({ check: true }).changed, []);
   });
+
+  it('names a missing native project, writes the files that exist', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-sync-'));
+    try {
+      const pkg = path.join(dir, 'package.json');
+      fs.writeFileSync(pkg, '{"name":"x","version":"0.0.1"}');
+      const files = { mobilePackage: pkg, gradle: path.join(dir, 'build.gradle') };
+      assert.throws(() => syncVersion({ version: '2.19.1', files }), /build\.gradle fehlt \(npx cap add/);
+      assert.equal(JSON.parse(fs.readFileSync(pkg, 'utf-8')).version, '2.19.1');
+      assert.deepEqual(syncVersion({ version: '2.19.1', files: { mobilePackage: pkg } }), { version: '2.19.1', code: 2019001, changed: [] });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('signing', () => {

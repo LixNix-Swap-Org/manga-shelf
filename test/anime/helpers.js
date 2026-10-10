@@ -26,7 +26,7 @@ function fakeFetch(handlers = {}) {
         const headers = init.headers || {};
         let host = 'other';
         let result;
-        if (text.startsWith('https://graphql.anilist.co')) {
+        if (URL.parse(text)?.hostname === 'graphql.anilist.co') {
             host = 'anilist';
             const body = JSON.parse(init.body);
             calls.push({ host, url: text, body, headers });

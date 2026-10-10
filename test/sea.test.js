@@ -844,7 +844,7 @@ describe('esbuild bundle of the server', { skip: bundleSkip }, () => {
         const env = { ...process.env, MANGA_SHELF_CACHE_DIR: path.join(dir, 'cache') };
         const version = spawnSync(process.execPath, [bundlePath, '--version'], { encoding: 'utf8', env });
         assert.equal(version.status, 0);
-        assert.match(version.stdout, new RegExp(`^manga-shelf-server v${require('../package.json').version.replace(/\./g, '\\.')} `));
+        assert.ok(version.stdout.startsWith(`manga-shelf-server v${require('../package.json').version} `), version.stdout);
         const bad = spawnSync(process.execPath, [bundlePath, '--bogus'], { encoding: 'utf8', env });
         assert.equal(bad.status, 2);
         assert.match(bad.stderr, /Unbekannte Option/);

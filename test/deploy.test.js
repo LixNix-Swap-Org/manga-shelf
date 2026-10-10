@@ -5,14 +5,18 @@ const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const tls = require('tls');
+const https = require('https');
+const { X509Certificate } = require('crypto');
 const { spawn, spawnSync } = require('child_process');
 
-const { resolveListen, probe } = require('../healthcheck');
+const { resolveListen, serverTrust, probe, check } = require('../healthcheck');
 
 const root = path.join(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 const engineMajor = Number(/(\d+)/.exec(pkg.engines.node)[1]);
+const NO_OPENSSL = spawnSync('openssl', ['version']).error ? 'openssl not installed' : false;
 
 const IMPORT_RE = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g;
 
@@ -246,6 +250,22 @@ describe('server packages (nfpm)', () => {
   });
 });
 
+describe('server service definitions', () => {
+  const services = require('../scripts/server-bin/services');
+
+  test('Windows task arguments are quoted the way CommandLineToArgvW splits them', () => {
+    const argsFor = (dataDir) => {
+      const task = services.windowsTaskXml({ binary: 'C:\\x.exe', args: services.serverArgs({ dataDir }) });
+      return /<Arguments>(.*)<\/Arguments>/.exec(task)[1].replace(/&quot;/g, '"').replace('--no-console --data-dir ', '');
+    };
+    assert.equal(argsFor('C:\\ProgramData\\manga-shelf\\data'), 'C:\\ProgramData\\manga-shelf\\data', 'no quotes without a space');
+    assert.equal(argsFor('C:\\Program Files\\Manga'), '"C:\\Program Files\\Manga"', 'backslashes inside stay single');
+    assert.equal(argsFor('D:\\Manga Daten\\'), '"D:\\Manga Daten\\\\"', 'a trailing backslash must not escape the closing quote');
+    assert.equal(argsFor('D:\\a "b"'), '"D:\\a \\"b\\""');
+    assert.equal(argsFor('D:\\x\\"y z'), '"D:\\x\\\\\\"y z"', 'backslashes before a quote are doubled, plus one for the quote');
+  });
+});
+
 describe('healthcheck.js', () => {
   test('uses SERVER_PORT before PORT, like index.js', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-hc-'));
@@ -262,7 +282,46 @@ describe('healthcheck.js', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('trusts the certificates of the server\'s own file, checked against the name they are issued for', { skip: NO_OPENSSL }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-hc-trust-'));
+    try {
+      const cert = (file, subject, ext) => selfSignedCert(dir, file, subject, ext).cert;
+      const san = cert('san', '/CN=ignored.example', 'subjectAltName=DNS:manga.example.com,DNS:www.example.com,IP:192.168.1.5');
+      const trust = serverTrust(san);
+      assert.equal(trust.name, 'manga.example.com', 'the first DNS name wins over the CN and IP addresses');
+      assert.equal(trust.ca.length, tls.rootCertificates.length + 1);
+      assert.equal(serverTrust(cert('wild', '/CN=x', 'subjectAltName=DNS:*.example.org')).name, 'healthcheck.example.org');
+      const ip = cert('ip', '/CN=nas', 'subjectAltName=IP:192.168.1.5');
+      assert.equal(serverTrust(ip).name, '192.168.1.5');
+      assert.equal(serverTrust(cert('cn', '/CN=shelf.lan')).name, 'shelf.lan');
+      for (const [file, subject] of [['cnip', '/CN=192.168.1.5'], ['text', '/CN=Manga Shelf'], ['noname', '/O=Home'], ['tld', '/CN=*.lan']]) {
+        const pem = cert(file, subject);
+        const pinned = serverTrust(pem);
+        assert.equal(pinned.name, null, subject);
+        assert.equal(pinned.pin, new X509Certificate(fs.readFileSync(pem)).fingerprint256, subject);
+      }
+      const chain = path.join(dir, 'fullchain.pem');
+      fs.writeFileSync(chain, fs.readFileSync(san, 'utf8') + fs.readFileSync(ip, 'utf8'));
+      assert.equal(serverTrust(chain).name, 'manga.example.com', 'the leaf comes first');
+      assert.equal(serverTrust(chain).ca.length, tls.rootCertificates.length + 2);
+      fs.writeFileSync(path.join(dir, 'garbage.pem'), 'c');
+      assert.equal(serverTrust(path.join(dir, 'garbage.pem')), null);
+      assert.equal(serverTrust(path.join(dir, 'missing.pem')), null);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+
+function selfSignedCert(dir, name, subject, ext) {
+  const key = path.join(dir, `${name}.key`);
+  const cert = path.join(dir, `${name}.pem`);
+  const gen = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', subject,
+    ...(ext ? ['-addext', ext] : []), '-keyout', key, '-out', cert], { stdio: 'ignore' });
+  assert.equal(gen.status, 0, 'openssl could not create a test certificate');
+  return { key, cert };
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -323,17 +382,38 @@ describe('healthcheck.js against the real server', () => {
     assert.equal(await runHealthcheck({ ...env, SERVER_PORT: '' }), 1, 'probing PORT must fail while the app listens on SERVER_PORT');
   });
 
-  test('passes when the app serves native HTTPS with a certificate for another host', { skip: spawnSync('openssl', ['version']).error ? 'openssl not installed' : false }, async () => {
+  test('passes when the app serves native HTTPS with a certificate for another host', { skip: NO_OPENSSL }, async () => {
     const env = { ...baseEnv('tls'), SERVER_PORT: String(await freePort()) };
-    env.SSL_KEY_PATH = path.join(env.DATA_DIR, 'privkey.pem');
-    env.SSL_CERT_PATH = path.join(env.DATA_DIR, 'cert.pem');
-    const gen = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=manga.example.com',
-      '-keyout', env.SSL_KEY_PATH, '-out', env.SSL_CERT_PATH], { stdio: 'ignore' });
-    assert.equal(gen.status, 0, 'openssl could not create a test certificate');
+    const { key, cert } = selfSignedCert(env.DATA_DIR, 'server', '/CN=manga.example.com');
+    env.SSL_KEY_PATH = key;
+    env.SSL_CERT_PATH = cert;
     servers.push(await startApp(env));
     assert.equal(await runHealthcheck(env), 0);
     const port = Number(env.SERVER_PORT);
-    assert.equal(await probe(true, port), true, 'the app should answer over HTTPS');
-    assert.equal(await probe(false, port), false, 'the app should not answer plain HTTP when TLS is on');
+    const trust = serverTrust(cert);
+    assert.equal(await probe(trust, port), true, 'the app should answer over HTTPS');
+    assert.equal(await probe(null, port), false, 'the app should not answer plain HTTP when TLS is on');
+    assert.equal(await probe(serverTrust(selfSignedCert(env.DATA_DIR, 'other', '/CN=manga.example.com').cert), port), false);
+    assert.equal(await probe({ ...trust, name: 'evil.example.com' }, port), false);
+  });
+
+  test('passes with a certificate that names no checkable host, and only with that certificate', { skip: NO_OPENSSL }, async () => {
+    for (const [name, subject] of [['cnlocal', '/CN=127.0.0.1'], ['cnip', '/CN=192.168.1.5'], ['text', '/CN=Manga Shelf'], ['noname', '/O=Home']]) {
+      const dataDir = path.join(dir, name);
+      fs.mkdirSync(dataDir, { recursive: true });
+      const { key, cert } = selfSignedCert(dataDir, 'server', subject);
+      const server = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, (req, res) => {
+        res.writeHead(req.url === '/api/health' ? 200 : 404).end();
+      });
+      await new Promise(r => server.listen(0, '127.0.0.1', r));
+      const { port } = server.address();
+      try {
+        assert.equal(await check({ SERVER_PORT: String(port), SSL_KEY_PATH: key, SSL_CERT_PATH: cert }, dataDir), true, subject);
+        const other = selfSignedCert(dataDir, 'other', subject).cert;
+        assert.equal(await probe(serverTrust(other), port), false, `${subject}: another certificate with the same subject`);
+      } finally {
+        await new Promise(r => server.close(r));
+      }
+    }
   });
 });

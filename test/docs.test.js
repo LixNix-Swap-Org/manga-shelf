@@ -68,8 +68,8 @@ describe('README.md', () => {
     const anchors = new Set([...readme.matchAll(/^#{1,4} (.+)$/gm)].map((m) => slug(m[1])));
 
     test('links only to the current repository', () => {
-        assert.doesNotMatch(readme, /github\.com\/MoltresHD/i);
-        assert.match(readme, /https:\/\/github\.com\/LixNix-Swap-Org\/manga-shelf/);
+        assert.ok(!readme.toLowerCase().includes('github.com/moltreshd'), 'README links to the old repository');
+        assert.ok(readme.includes('](https://github.com/LixNix-Swap-Org/manga-shelf)'), 'README misses the repository link');
     });
 
     test('every in-page link points at a heading', () => {

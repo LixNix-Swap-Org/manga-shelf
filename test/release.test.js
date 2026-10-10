@@ -179,7 +179,7 @@ describe('signing detection and release text', () => {
     assert.match(notes(detectSigning(withoutShare), withoutShare), /iPhone \(IPA\): signed, without share extension \(iOS\)$/m);
     const text = releaseNotes('v2.20.0', {}, 'LixNix-Swap-Org/manga-shelf');
     assert.match(text, /pterodactyl-manga-shelf\.zip/);
-    assert.match(text, /ghcr\.io\/lixnix-swap-org\/manga-shelf:2\.20\.0/);
+    assert.ok(text.includes('ghcr.io/lixnix-swap-org/manga-shelf:2.20.0'), text);
     assert.match(text, /SHA256SUMS\.txt/);
     assert.match(text, /### Signing/);
     assert.match(text, /^Checksums: `SHA256SUMS\.txt`/m);

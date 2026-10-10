@@ -77,9 +77,9 @@ function loadWorker({ version, fetchImpl, caches, catalogs = null }) {
     await Promise.all(extra);
     return res;
   };
-  const message = async (data) => {
+  const message = async (data, origin = '') => {
     let pending;
-    listeners.message({ data, waitUntil: (p) => { pending = p; } });
+    listeners.message({ data, origin, waitUntil: (p) => { pending = p; } });
     return pending;
   };
   return { install: () => lifecycle('install'), activate: () => lifecycle('activate'), request, message, self };
@@ -270,5 +270,19 @@ describe('service worker', () => {
     const sw = loadWorker({ version: '3', fetchImpl: vi.fn(), caches: fakeCaches(vi.fn()) });
     expect(await sw.request('/api/auth/me')).toBeUndefined();
     expect(await sw.request('/uploads/a.jpg', { method: 'POST' })).toBeUndefined();
+  });
+
+  it('ignores messages from a foreign origin', async () => {
+    const net = vi.fn(async () => response('{}', { type: 'application/json' }));
+    const caches = fakeCaches(net);
+    const sw = loadWorker({ version: '6', fetchImpl: net, caches });
+    expect(await sw.message({ type: 'WARM_LANGUAGE', language: 'en' }, 'https://evil.test')).toBeUndefined();
+    await sw.message({ type: 'SKIP_WAITING' }, 'https://evil.test');
+    expect(sw.self.skipWaiting).not.toHaveBeenCalled();
+    expect(net).not.toHaveBeenCalled();
+    await sw.message({ type: 'SKIP_WAITING' }, ORIGIN);
+    expect(sw.self.skipWaiting).toHaveBeenCalledTimes(1);
+    await sw.message({ type: 'SKIP_WAITING' });
+    expect(sw.self.skipWaiting).toHaveBeenCalledTimes(2);
   });
 });

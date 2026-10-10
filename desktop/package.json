@@ -5,7 +5,10 @@
   "private": true,
   "description": "Manga Shelf als Desktop-App (lokaler Server, Client oder Server im Heimnetz)",
   "homepage": "https://github.com/LixNix-Swap-Org/manga-shelf",
-  "repository": { "type": "git", "url": "https://github.com/LixNix-Swap-Org/manga-shelf.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LixNix-Swap-Org/manga-shelf.git"
+  },
   "author": "Manga Shelf",
   "main": "main.js",
   "engines": {
@@ -24,6 +27,7 @@
     "electron-builder": "^26.15.3"
   },
   "overrides": {
-    "http-cache-semantics": "^4.3.0"
+    "http-cache-semantics": "^4.3.0",
+    "global-agent": "^4.1.3"
   }
 }

@@ -185,8 +185,13 @@ export default defineConfig(({ mode }) => {
         apply: 'build',
         closeBundle() {
           const swPath = path.join(outDir, 'sw.js')
-          if (!fs.existsSync(swPath)) return
-          const source = fs.readFileSync(swPath, 'utf-8')
+          let source
+          try {
+            source = fs.readFileSync(swPath, 'utf-8')
+          } catch (err) {
+            if (err.code === 'ENOENT') return
+            throw err
+          }
           const files = precacheList(outDir)
           const catalogs = catalogFiles(outDir)
           const shellPath = path.join(outDir, 'index.html')

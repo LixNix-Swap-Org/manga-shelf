@@ -62,7 +62,7 @@ function stubSources(t, mode, mpResult = async () => [MP_RESULT]) {
     const original = mangaPassion.searchMangaPassionForLookup;
     mangaPassion.searchMangaPassionForLookup = (ctx, term) => mpResult(term);
     global.fetch = (url, opts) => {
-        if (String(url).startsWith('https://graphql.anilist.co')) return realFetch(anilistUrl(mode), opts);
+        if (URL.parse(String(url))?.hostname === 'graphql.anilist.co') return realFetch(anilistUrl(mode), opts);
         if (String(url).startsWith(ctx.base)) return realFetch(url, opts);
         return Promise.reject(new Error('no network in tests: ' + url));
     };

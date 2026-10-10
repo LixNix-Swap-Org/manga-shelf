@@ -1170,3 +1170,88 @@ test('inspecting or staging a backup leaves the live publisher aliases alone; a 
     assert.equal(normalizePublisher('Kaze Manga'), 'Kazé Manga', 'the restored database has no such alias');
     assert.equal(normalizePublisher('EMA'), 'Egmont Manga', 'its seeded aliases are live');
 });
+
+test('snapshot names with traversal, absolute paths, backslashes or encodings answer 404 and touch nothing', async () => {
+    const name = await createSnapshot();
+    fs.writeFileSync(path.join(ctx.dataDir, 'decoy.zip'), fs.readFileSync(backupsPath(name)));
+    const attempts = ['..%2Fdecoy.zip', '..%2F..%2Fmanga.db', '%2Fetc%2Fpasswd.zip', encodeURIComponent(path.join(ctx.dataDir, 'decoy.zip')),
+        '..%5Cdecoy.zip', '..%5C..%5Cmanga.db', '%252e%252e%252fdecoy.zip', '%2e%2e%2fdecoy.zip'];
+    for (const attempt of attempts) {
+        for (const [method, url] of [['GET', `/backups/${attempt}/download`], ['DELETE', `/backups/${attempt}`], ['POST', `/backups/${attempt}/restore`]]) {
+            const res = await admin(method, url);
+            assert.equal(res.status, 404, `${method} ${url}`);
+            assert.equal(res.body.code, 'NOT_FOUND', `${method} ${url}`);
+        }
+    }
+    for (const filename of [...attempts.map(decodeURIComponent), '..', '.', '/', '\\', backupsPath(name), `../backups/${name}`]) {
+        const inspected = await admin('POST', '/backup/inspect', { filename });
+        assert.equal(inspected.status, 404, filename);
+    }
+    assert.ok(fs.existsSync(dbm.dbPath));
+    assert.ok(fs.existsSync(path.join(ctx.dataDir, 'decoy.zip')));
+    assert.ok(fs.existsSync(backupsPath(name)));
+    fs.unlinkSync(path.join(ctx.dataDir, 'decoy.zip'));
+});
+
+test('an uploaded backup whose stored path lies outside data/temp is refused with 400 and never read, moved or deleted', async () => {
+    const router = require('../routes/backups');
+    const handler = (routePath) => {
+        const layer = router.stack.find(l => l.route && l.route.path === routePath && l.route.methods.post);
+        return layer.route.stack[layer.route.stack.length - 1].handle;
+    };
+    const call = async (routePath, file) => {
+        const req = { file, body: {}, headers: {}, user: { id: 1, username: 'admin' } };
+        const res = {
+            req, statusCode: 200, body: null, writableFinished: false,
+            status(code) { this.statusCode = code; return this; },
+            json(body) { this.body = body; this.writableFinished = true; return this; },
+            on() { return this; }
+        };
+        await handler(routePath)(req, res);
+        return res;
+    };
+    const decoy = path.join(ctx.dataDir, 'decoy-upload.zip');
+    const tempName = path.basename(dbm.tempDir);
+    const escaping = [decoy, '../decoy-upload.zip', `${dbm.tempDir}${path.sep}..${path.sep}decoy-upload.zip`, dbm.tempDir,
+        `../${tempName}/../decoy-upload.zip`, dbm.dbPath];
+    const odd = ['..\\decoy-upload.zip', '%2e%2e%2fdecoy-upload.zip'];
+    for (const routePath of ['/backup/restore', '/restore', '/backup/inspect']) {
+        for (const p of [...escaping, ...odd]) {
+            fs.writeFileSync(decoy, 'not a zip, but it must stay where it is');
+            const res = await call(routePath, { path: p, originalname: 'backup.zip', size: 40 });
+            if (escaping.includes(p)) {
+                assert.equal(res.statusCode, 400, `${routePath} ${p}`);
+                assert.equal(res.body.code, 'NO_BACKUP_FILE', `${routePath} ${p}`);
+            } else {
+                assert.ok(res.statusCode >= 400, `${routePath} ${p}`);
+            }
+            assert.ok(fs.existsSync(decoy), `${routePath} ${p}: decoy kept`);
+            assert.ok(fs.existsSync(dbm.dbPath), `${routePath} ${p}: live database kept`);
+        }
+    }
+    fs.unlinkSync(decoy);
+    assert.deepEqual(stagedFiles(), []);
+    assert.equal(integrityOk(), true);
+});
+
+test('openZip reads archives only from the data directory', async () => {
+    const { openZip, verifyArchive } = require('../services/backupArchive');
+    const name = await createSnapshot();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-outside-'));
+    const outside = path.join(dir, 'outside.zip');
+    fs.copyFileSync(backupsPath(name), outside);
+    try {
+        const inside = await openZip(backupsPath(name));
+        assert.ok(inside.entries.some(e => e.name === 'manga.db'));
+        await inside.fh.close();
+        const relative = path.relative(ctx.dataDir, outside);
+        for (const p of [outside, relative, path.join(ctx.dataDir, '..', path.basename(dir), 'outside.zip'), ctx.dataDir]) {
+            await assert.rejects(openZip(p), (err) => err.status === 400 && /Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden/.test(err.message), p);
+        }
+        const check = await verifyArchive(outside, { db: { sha256: 'x' }, counts: {} });
+        assert.equal(check.verified, false);
+        assert.match(check.error, /Datei kann nicht gelesen werden/);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

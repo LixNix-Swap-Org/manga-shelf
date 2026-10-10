@@ -7,6 +7,7 @@ const path = require('path');
 // the developer's shell exports. TRUST_PROXY=true lets tests pick a client address via X-Forwarded-For.
 const HERMETIC_ENV = {
     TRUST_PROXY: 'true',
+    RATE_LIMIT_UMBRELLA: undefined,
     SETUP_TOKEN: 'test-setup-token',
     CORS_ORIGIN: '',
     COOKIE_SECURE: '',

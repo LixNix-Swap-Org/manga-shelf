@@ -268,6 +268,7 @@ Every variable is optional. Sources in order of priority: the command line of th
 | `PORT` | `3000` | Port of the server. `SERVER_PORT` (set by Pterodactyl) wins. |
 | `DATA_DIR` | `data/` in the app folder (Docker `/app/data`) | Database, images, backups, `secret.key`. |
 | `TRUST_PROXY` | `loopback` | Whose `X-Forwarded-For` counts: `false`, `loopback`, addresses or subnets such as `loopback, 172.18.0.1`, a hop count or `true` ([HTTPS and reverse proxy](#https-and-reverse-proxy)). |
+| `RATE_LIMIT_UMBRELLA` | `1200` | General request limit per client and minute for `/api` (web app files 2.5 times, covers under `/uploads` 20 times as many; 0 to 100000); above it 429 with `Retry-After`; `0` switches it off. The login, setup and lookup limits stay. |
 | `JWT_SECRET` | random in `<DATA_DIR>/secret.key` | Signs sessions and encrypts stored API keys; at least 32 characters (shorter values and placeholders such as `changeme` are ignored with a warning). Changing it signs everyone out and voids stored keys. |
 | `SETUP_TOKEN` | generated at startup | Fixed setup code for the first admin, at least 12 characters (spaces, hyphens and case do not count); shorter values are ignored. |
 | `COOKIE_SECURE` | `false` | Force the secure cookie and HSTS (only behind a TLS proxy without `X-Forwarded-Proto`; plain HTTP sign-in then fails). |
@@ -322,7 +323,7 @@ As an admin under **Backups**:
 * **Sessions:** a JWT in the `httpOnly` cookie `token` (browser) or as a bearer token (apps), valid 7 days, checked against the database on every request. Logout blocks the token; a password change, a password reset, "End all sessions" and a restore end sessions. The signing key is `JWT_SECRET` or `<DATA_DIR>/secret.key` (0600).
 * **First setup** only with the setup code; afterwards it has no effect.
 * **Origin check:** writing API requests a browser sends from another origin are rejected; CORS only for `CORS_ORIGIN` and the app origins. Security headers include a CSP, Permissions-Policy, COOP and HSTS over HTTPS.
-* **Rate limits** per address and per account (brute-force protection without locking out the admin) and per-account limits for external lookups. They depend on correct client addresses, hence `TRUST_PROXY`.
+* **Rate limits** per address and per account (brute-force protection without locking out the admin) and per-account limits for external lookups. They depend on correct client addresses, hence `TRUST_PROXY`. A general limit per client in front of every route (`RATE_LIMIT_UMBRELLA`, default 1200 API, 3000 web app and 24000 cover requests per minute) is a flood guard; it is set high enough that clients sharing one address behind a proxy, or an app taking over a large collection, do not reach it.
 * **Uploads:** images up to 15 MB, checked by magic bytes, EXIF/GPS stripped, random file names, a CSP of their own under `/uploads`; image downloads from URLs are SSRF-safe.
 * **Headless server:** refuses a `.env` others can change; Linux data folder 0750 and `UMask=0027`, Windows service as LOCAL SERVICE with a protected ACL.
 * **Apps:** tokens and API keys in the system keychain or keystore; plain `http://` only to home-network addresses.

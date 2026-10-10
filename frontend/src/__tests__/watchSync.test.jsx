@@ -178,7 +178,8 @@ describe('one sync run', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://shelf.example/api/anime/watch-sync');
-    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('crunchyroll.com'))).toBe(false);
+    const hosts = fetchMock.mock.calls.map(([u]) => new URL(String(u), 'https://shelf.example').hostname);
+    expect(hosts.filter((host) => host === 'crunchyroll.com' || host.endsWith('.crunchyroll.com'))).toEqual([]);
     for (const secret of [COOKIE, ACCESS, 'etp_rt']) expect(String(init.body)).not.toContain(secret);
     expect(JSON.stringify(init.headers)).not.toContain(COOKIE);
     setServer({ base: '', token: null });

@@ -134,6 +134,7 @@ const ENTRIES = [
             try { return ok(parseTrustProxy(raw)); } catch (e) { return { error: e.message }; }
         }
     },
+    { key: 'rateLimitUmbrella', name: 'RATE_LIMIT_UMBRELLA', parse: intIn(0, 100000, 1200) },
     { key: 'corsOrigins', name: 'CORS_ORIGIN', parse: (raw) => ok(String(raw || '').split(',').map(o => o.trim()).filter(Boolean)) },
     { key: 'appOrigins', name: 'APP_ORIGINS', parse: appOrigins },
     { key: 'cookieSecure', name: 'COOKIE_SECURE', parse: flag(false) },

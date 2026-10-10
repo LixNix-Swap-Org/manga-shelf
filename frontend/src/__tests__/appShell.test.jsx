@@ -885,8 +885,9 @@ describe('App in the app build', () => {
       'GET /api/setup/status': json(200, { needsSetup: false }),
       'GET /api/auth/me': (url, init) => (init.headers?.Authorization ? json(200, { user: admin }) : json(401, { error: 'Nicht angemeldet', code: 'AUTH_REQUIRED' })),
       'POST /api/auth/logout': (url, init) => {
-        logouts.push([new URL(url).host, init.headers?.Authorization]);
-        if (url.startsWith('https://a.example') && !aUp) return Promise.reject(new TypeError('Failed to fetch'));
+        const host = new URL(url).host;
+        logouts.push([host, init.headers?.Authorization]);
+        if (host === 'a.example' && !aUp) return Promise.reject(new TypeError('Failed to fetch'));
         return json(200, { success: true });
       }
     }));

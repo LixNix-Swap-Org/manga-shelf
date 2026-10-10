@@ -11,6 +11,7 @@ vi.mock('../utils/offlineStore', async (importOriginal) => ({
 import useCollectionFilters, { loadPublisherNames, loadVolumeSearch } from '../hooks/useCollectionFilters';
 import { clearDataCache } from '../utils/dataCache';
 import { setPublisherNames } from '../utils/volumeHelpers';
+import { groupMangas } from '../utils/collectionHelpers';
 import { fakeResponse } from './fakeResponse';
 
 const mangas = [
@@ -210,6 +211,19 @@ describe('useCollectionFilters: collect, author, grouping and the URL', () => {
     act(() => result.current.setGroupBy('none'));
     expect(result.current.groups).toHaveLength(1);
     expect(titles(result)).toEqual(['Bakuman', 'Boruto', 'Death Note', 'Naruto']);
+  });
+
+  it('groups by publisher, author or status; any other grouping value gives one section', () => {
+    const sections = (groupBy) => groupMangas(shelf, groupBy).map(g => [g.label, g.items.map(m => m.id)]);
+    expect(sections('publisher')).toEqual([['Carlsen Manga', [1, 4]], ['TOKYOPOP', [2, 3]]]);
+    expect(sections('author')).toEqual([
+      ['Masashi Kishimoto', [1]], ['Tsugumi Ohba, Takeshi Obata', [2, 3]], ['Ukyo Kodachi', [4]]
+    ]);
+    expect(sections('status')).toEqual([['Laufend', [1, 4]], ['Abgeschlossen', [2, 3]]]);
+    expect(groupMangas([{ id: 5, title: 'X' }], 'author').map(g => [g.key, g.label])).toEqual([['~', 'Ohne Autor']]);
+    for (const groupBy of ['none', 'bogus', 'constructor', '__proto__', undefined]) {
+      expect(groupMangas(shelf, groupBy)).toEqual([{ key: 'all', label: '', items: shelf }]);
+    }
   });
 
   it('URL values win over localStorage on mount; nothing is written until a filter changes, then only non-defaults', () => {

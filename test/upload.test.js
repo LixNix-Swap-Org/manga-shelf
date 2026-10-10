@@ -239,3 +239,43 @@ test('upload: a marker-dense 14 MB JPEG is accepted unchanged without parsing ev
     assert.equal(fs.statSync(stored).size, bomb.length);
     fs.unlinkSync(stored);
 });
+
+test('upload: traversal in the client file name never leaves data/uploads', async () => {
+    const outside = path.dirname(ctx.dataDir);
+    const before = fs.readdirSync(outside);
+    const names = ['../../evil.png', '/tmp/evil.png', '..\\..\\evil.png', '%2e%2e%2fevil.png', 'C:\\evil.png'];
+    for (const name of names) {
+        const res = await post(editor, '/upload', form('image', [{ name, type: 'image/png', data: PNG }]));
+        assert.equal(res.status, 200, name);
+        assert.match(res.body.url, UUID_PNG, name);
+        assert.ok(fs.existsSync(path.join(uploadsDir(), path.basename(res.body.url))), name);
+    }
+    assert.deepEqual(fs.readdirSync(outside).filter(n => !before.includes(n) && /evil/.test(n)), []);
+    assert.ok(!fs.existsSync(path.join(ctx.dataDir, 'evil.png')));
+});
+
+test('verifyImageUploads refuses stored paths outside data/uploads with 400 and leaves those files alone', async () => {
+    const { verifyImageUploads } = require('../middleware/upload');
+    const dir = fs.mkdtempSync(path.join(ctx.dataDir, 'outside-'));
+    const foreign = path.join(dir, 'foreign.jpg');
+    fs.writeFileSync(foreign, PNG);
+    const inside = path.join(uploadsDir(), 'guard-inside.png');
+    const run = (files) => new Promise((resolve) => verifyImageUploads({ files }, {}, resolve));
+    const relative = path.relative(uploadsDir(), foreign);
+    for (const p of [foreign, relative, `${uploadsDir()}${path.sep}..${path.sep}${path.basename(dir)}${path.sep}foreign.jpg`, uploadsDir()]) {
+        fs.writeFileSync(inside, PNG);
+        const err = await run([{ path: inside, filename: 'guard-inside.png' }, { path: p, filename: 'foreign.jpg' }]);
+        assert.equal(err && err.status, 400, p);
+        assert.match(err.message, /Ungültiger Dateityp/);
+        assert.deepEqual(fs.readFileSync(foreign), PNG, 'the foreign file is neither renamed nor rewritten');
+        assert.ok(!fs.existsSync(inside), 'the stored upload of the refused request is removed');
+    }
+    assert.deepEqual(fs.readdirSync(dir), ['foreign.jpg']);
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    fs.writeFileSync(inside, PNG);
+    const file = { path: inside, filename: 'guard-inside.png' };
+    assert.equal(await new Promise((resolve) => verifyImageUploads({ file }, {}, resolve)), undefined);
+    assert.equal(file.path, inside);
+    fs.unlinkSync(inside);
+});

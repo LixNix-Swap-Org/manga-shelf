@@ -180,7 +180,7 @@ test('Manga Passion: lookup only for German, gateway hits carry the work key, th
     const anilist = { data: { Page: { media: [{ id: 30002, idMal: 2, title: { romaji: 'Berserk', english: 'Berserk' }, status: 'FINISHED' }] } } };
     global.fetch = (url, opts) => {
         if (String(url).startsWith(ctx.base)) return realFetch(url, opts);
-        if (String(url).startsWith('https://graphql.anilist.co')) return Promise.resolve(new Response(JSON.stringify(anilist), { headers: { 'Content-Type': 'application/json' } }));
+        if (URL.parse(String(url))?.hostname === 'graphql.anilist.co') return Promise.resolve(new Response(JSON.stringify(anilist), { headers: { 'Content-Type': 'application/json' } }));
         return Promise.reject(new Error('no network in tests: ' + url));
     };
     t.after(() => {
