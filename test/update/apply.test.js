@@ -110,6 +110,15 @@ const bad = (reason) => (err) => {
     return true;
 };
 
+const readWithMode = (file) => {
+    const fd = fs.openSync(file, 'r');
+    try {
+        return { text: fs.readFileSync(fd, 'utf8'), mode: fs.fstatSync(fd).mode & 0o777 };
+    } finally {
+        fs.closeSync(fd);
+    }
+};
+
 test('unpack: zip-slip, absolute, backslash and empty segments are refused', async () => {
     for (const name of ['../evil.js', '/etc/evil', 'core/../../evil.js', 'core\\evil.js', 'core//a.js', './index.js', 'C:evil']) {
         const { codeDir, zipFile } = await staged([...NEW_ENTRIES, { name, data: 'x' }]);
@@ -237,18 +246,19 @@ test('SEA: link + one rename keeps the path present at every step; rollback rest
     const real = fs.renameSync;
     let renames = 0;
     t.mock.method(fs, 'renameSync', (a, b) => {
-        assert.equal(fs.existsSync(execPath), true);
+        fs.closeSync(fs.openSync(execPath, 'r'));
         renames++;
         return real(a, b);
     });
     swap.swapForward(state, { codeDir: null, execPath });
     t.mock.restoreAll();
     assert.equal(renames, 1);
-    assert.equal(fs.readFileSync(execPath, 'utf8'), 'new binary');
+    const after = readWithMode(execPath);
+    assert.equal(after.text, 'new binary');
+    assert.equal(after.mode, 0o750);
     assert.equal(fs.readFileSync(`${execPath}.previous`, 'utf8'), 'old binary');
-    assert.equal(fs.statSync(execPath).mode & 0o777, 0o750);
     swap.revertCode(state, { execPath });
-    assert.equal(fs.readFileSync(execPath, 'utf8'), 'old binary');
+    assert.equal(readWithMode(execPath).text, 'old binary');
     assert.throws(() => fs.statSync(`${execPath}.previous`), { code: 'ENOENT' });
 });
 
