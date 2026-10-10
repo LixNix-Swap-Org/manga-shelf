@@ -12,6 +12,7 @@ const {
     endSession,
     tokenFromRequest,
     sameUsername,
+    confirmCurrentPassword,
     setAuthCookie,
     clearAuthCookie,
     requireAuth,
@@ -172,7 +173,6 @@ router.post('/auth/login', async (req, res) => {
 
 const PASSWORD_CHANGED_MEANWHILE = 'Das Passwort wurde in der Zwischenzeit geändert. Bitte neu laden und erneut versuchen.';
 const authGone = (res) => sendError(res, 401, AUTH_ERRORS.SESSION_INVALID, 'SESSION_INVALID');
-const WRONG_PASSWORD = 'Das aktuelle Passwort stimmt nicht';
 
 // Own password: needs the current one; ends all other sessions and keeps this one logged in with a fresh token.
 // Wrong current passwords count toward the same lock as failed logins (whoever guesses here already holds a session).
@@ -184,20 +184,7 @@ router.put('/auth/password', requireAuth, passwordChangeLimiter, async (req, res
     const pwErr = passwordError(new_password);
     if (pwErr) throw badRequest(pwErr);
 
-    const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(req.user.id);
-    if (!user) throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
-    const account = accountKey(user.username);
-    const ip = clientIp(req);
-    const lock = loginGuard.check(account, ip);
-    if (lock.locked) {
-        res.setHeader('Retry-After', lock.retryAfter);
-        return sendError(res, 429, 'Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.', 'TOO_MANY_ATTEMPTS');
-    }
-    loginGuard.attempt(account, ip);
-    if (!(await bcrypt.compare(current_password, user.password_hash))) {
-        throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
-    }
-    loginGuard.succeeded(account, ip);
+    const user = await confirmCurrentPassword(req, res, current_password, { lock: 'passwordChange' });
     const hash = await bcrypt.hash(new_password, 10);
     // Only while the row is still this user with the hash just compared: a restore or another change may have
     // happened during the bcrypt awaits
@@ -248,13 +235,15 @@ router.get('/auth/connect-info', requireEditor, (req, res) => {
 });
 
 // --- USER MANAGEMENT (Admin only) ---
+const auditFields = (req) => ({ admin: req.user.username, auth_scheme: req.authScheme, ip: clientIp(req) });
+
 router.get('/users', requireAdmin, (req, res) => {
     const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
     res.json(users);
 });
 
 router.post('/users', requireAdmin, async (req, res) => {
-    const { username, password, role = 'editor' } = req.body || {};
+    const { username, password, role = 'editor', current_password: currentPassword } = req.body || {};
     if (!ROLES.includes(role)) {
         throw badRequest(ROLE_ERROR);
     }
@@ -270,6 +259,7 @@ router.post('/users', requireAdmin, async (req, res) => {
 
     const usernameTaken = () => sendError(res, 400, 'Dieser Benutzername existiert bereits', 'USERNAME_TAKEN');
     if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return usernameTaken();
+    if (cleanRole === 'admin') await confirmCurrentPassword(req, res, currentPassword);
 
     const hash = await bcrypt.hash(password, 10);
     // Check again after the await, synchronously with the insert: a parallel create of "Max"/"max" may have won.
@@ -285,6 +275,7 @@ router.post('/users', requireAdmin, async (req, res) => {
         throw err;
     }
     if (!result) return usernameTaken();
+    log.info('Benutzer angelegt', { ...auditFields(req), user: cleanUsername, role: cleanRole });
 
     res.json({
         success: true,
@@ -301,7 +292,7 @@ const USER_CHANGED_MEANWHILE = 'Der Benutzer wurde in der Zwischenzeit geändert
 
 router.put('/users/:id', requireAdmin, async (req, res) => {
     const userId = parseInt(req.params.id, 10);
-    const { role, password } = req.body || {};
+    const { role, password, current_password: currentPassword } = req.body || {};
     const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(userId);
     if (!user) throw notFound('Benutzer');
 
@@ -312,6 +303,8 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         const pwErr = passwordError(password);
         if (pwErr) throw badRequest(pwErr);
     }
+    const needsPassword = userId === req.user.id || (role || user.role) === 'admin';
+    if (needsPassword) await confirmCurrentPassword(req, res, currentPassword);
     const hash = password ? await bcrypt.hash(password, 10) : null;
 
     // Re-read and write in one synchronous step: two admins demoting each other in parallel must not both pass
@@ -324,6 +317,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         if (!current) return { status: 404 };
         if (!sameUsername(current.username, user.username) || (hash && current.password_hash !== user.password_hash)) return { status: 409 };
         const newRole = role || current.role;
+        if (newRole === 'admin' && !needsPassword) return { status: 409 };
         if (current.role === 'admin' && newRole !== 'admin') {
             const others = db.prepare("SELECT count(*) AS count FROM users WHERE role = 'admin' AND id != ?").get(userId);
             if (!others || others.count < 1) return { status: 400 };
@@ -333,7 +327,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         if (hash) revokeFeedTokens(db, userId);
         db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
         listSync.onRoleChanged(createCtx(), userId, newRole);
-        return { status: 200, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
+        return { status: 200, previousRole: current.role, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
     });
     if (outcome.status === 403) return sendError(res, 403, AUTH_ERRORS.FORBIDDEN, 'FORBIDDEN');
     if (outcome.status === 404) throw notFound('Benutzer');
@@ -341,6 +335,15 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
     if (outcome.status === 400) throw badRequest(LAST_ADMIN_DEMOTE);
 
     const updated = outcome.user;
+    if (hash || updated.role !== outcome.previousRole) {
+        log.info('Benutzer geändert', {
+            ...auditFields(req),
+            user: updated.username,
+            role: updated.role,
+            previous_role: outcome.previousRole,
+            password_reset: Boolean(hash)
+        });
+    }
     let session = {};
     if (hash) {
         loginGuard.clear(accountKey(updated.username));

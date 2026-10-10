@@ -382,8 +382,159 @@ describe('UserManagementModal', () => {
     expect(screen.getByRole('combobox', { name: 'Rolle von erika' }).value).toBe('visitor');
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Rolle von erika' }), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Passwort zur Bestätigung'), { target: { value: 'mein-passwort' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/letzte Administrator/);
+    expect(puts[1]).toEqual({ role: 'admin', current_password: 'mein-passwort' });
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
     expect(screen.getByRole('combobox', { name: 'Rolle von erika' }).value).toBe('visitor');
+  });
+
+  it('promotion to admin asks for the own password first: current-password field, inline WRONG_PASSWORD, focus stays', async () => {
+    const puts = [];
+    const replies = [
+      json(403, { error: 'Das aktuelle Passwort stimmt nicht', code: 'WRONG_PASSWORD' }),
+      json(200, { success: true, user: { id: 2, username: 'erika', role: 'admin' } })
+    ];
+    const fetchMock = mockFetch({
+      'GET /api/users': () => json(200, USERS),
+      'PUT /api/users/2': (init) => { puts.push(JSON.parse(init.body)); return replies.shift(); }
+    });
+    renderUsers();
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Rolle von erika' }), { target: { value: 'admin' } });
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+    const field = screen.getByLabelText('Passwort zur Bestätigung');
+    expect(field.getAttribute('type')).toBe('password');
+    expect(field.getAttribute('autocomplete')).toBe('current-password');
+    expect(document.activeElement).toBe(field);
+    expect(document.querySelector('input[autocomplete="username"]').value).toBe('admin');
+    expect(screen.getByText('Rolle von "erika" auf Admin ändern')).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Rolle von erika' }).value).toBe('admin');
+
+    fireEvent.submit(field.closest('form'));
+    expect(screen.getByRole('alert').textContent).toBe('Bitte das aktuelle Passwort eingeben');
+    expect(puts).toEqual([]);
+
+    fireEvent.change(field, { target: { value: 'falsch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }));
+    const alert = await screen.findByText('Das aktuelle Passwort stimmt nicht');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby').split(' ')).toContain(alert.id);
+    expect(document.activeElement).toBe(field);
+    expect(puts).toEqual([{ role: 'admin', current_password: 'falsch' }]);
+
+    fireEvent.change(field, { target: { value: 'richtig-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Rolle von "erika" ist jetzt Admin/);
+    expect(puts[1]).toEqual({ role: 'admin', current_password: 'richtig-123' });
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Rolle von erika' }).value).toBe('admin');
+  });
+
+  it('Escape or Abbrechen cancels only the promotion and returns focus to the role select', async () => {
+    const fetchMock = mockFetch({ 'GET /api/users': () => json(200, USERS) });
+    renderUsers();
+    const select = await screen.findByRole('combobox', { name: 'Rolle von erika' });
+    select.focus();
+    fireEvent.change(select, { target: { value: 'admin' } });
+    const outside = vi.fn();
+    window.addEventListener('keydown', outside);
+    try {
+      fireEvent.keyDown(screen.getByLabelText('Passwort zur Bestätigung'), { key: 'Escape' });
+    } finally {
+      window.removeEventListener('keydown', outside);
+    }
+    expect(outside).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+    expect(select.value).toBe('editor');
+    expect(document.activeElement).toBe(select);
+
+    fireEvent.change(select, { target: { value: 'admin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+    expect(document.activeElement).toBe(select);
+    expect(fetchMock.mock.calls.every(([, init]) => (init?.method || 'GET') === 'GET')).toBe(true);
+  });
+
+  it('creating an admin asks for the own password; other roles send none', async () => {
+    const posts = [];
+    const replies = [
+      json(200, { success: true, user: { id: 3 } }),
+      json(403, { error: 'Das aktuelle Passwort stimmt nicht', code: 'WRONG_PASSWORD' }),
+      json(200, { success: true, user: { id: 4 } })
+    ];
+    mockFetch({
+      'GET /api/users': () => json(200, USERS),
+      'POST /api/users': (init) => { posts.push(JSON.parse(init.body)); return replies.shift(); }
+    });
+    renderUsers();
+    await screen.findByText('erika');
+    const fill = (name) => {
+      fireEvent.change(screen.getByLabelText('Benutzername'), { target: { value: name } });
+      fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'langes-passwort' } });
+    };
+    fill('redakteur');
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
+    await screen.findByText(/Benutzer "redakteur" erfolgreich angelegt/);
+    expect(posts[0]).toEqual({ username: 'redakteur', password: 'langes-passwort', role: 'editor' });
+
+    fill('chefin');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rolle' }), { target: { value: 'admin' } });
+    const field = screen.getByLabelText('Passwort zur Bestätigung');
+    expect(field.getAttribute('autocomplete')).toBe('current-password');
+    fireEvent.submit(field.closest('form'));
+    expect(screen.getByRole('alert').textContent).toBe('Bitte das aktuelle Passwort eingeben');
+    expect(posts).toHaveLength(1);
+
+    fireEvent.change(field, { target: { value: 'falsch' } });
+    fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
+    const alert = await screen.findByText('Das aktuelle Passwort stimmt nicht');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby').split(' ')).toContain(alert.id);
+    expect(document.activeElement).toBe(field);
+
+    fireEvent.change(field, { target: { value: 'richtig-123' } });
+    fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
+    await screen.findByText(/Benutzer "chefin" erfolgreich angelegt/);
+    expect(posts[2]).toEqual({ username: 'chefin', password: 'langes-passwort', role: 'admin', current_password: 'richtig-123' });
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+  });
+
+  it('resetting another admin asks for the own password; resetting an editor does not', async () => {
+    const puts = [];
+    const replies = [
+      json(429, { error: 'Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.', code: 'TOO_MANY_ATTEMPTS' }),
+      json(200, { success: true, user: { id: 3, username: 'boss', role: 'admin' } })
+    ];
+    mockFetch({
+      'GET /api/users': () => json(200, [...USERS, { id: 3, username: 'boss', role: 'admin', created_at: '2026-03-01T00:00:00Z' }]),
+      'PUT /api/users/3': (init) => { puts.push(JSON.parse(init.body)); return replies.shift(); }
+    });
+    renderUsers();
+    fireEvent.click(await screen.findByRole('button', { name: 'Passwort von erika zurücksetzen' }));
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort von boss zurücksetzen' }));
+    fireEvent.change(screen.getByLabelText('Neues Passwort für boss'), { target: { value: 'ganz-neues-passwort' } });
+    const field = screen.getByLabelText('Passwort zur Bestätigung');
+    expect(field.getAttribute('autocomplete')).toBe('current-password');
+    fireEvent.submit(field.closest('form'));
+    expect(screen.getByRole('alert').textContent).toBe('Bitte das aktuelle Passwort eingeben');
+    expect(puts).toEqual([]);
+
+    fireEvent.change(field, { target: { value: 'mein-passwort' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Zurücksetzen' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Zu viele Versuche/);
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Zurücksetzen' }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Neues Passwort für "boss" gesetzt/);
+    expect(puts).toEqual([
+      { password: 'ganz-neues-passwort', current_password: 'mein-passwort' },
+      { password: 'ganz-neues-passwort', current_password: 'mein-passwort' }
+    ]);
+    expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
   });
 
   it('password reset: client minimum length, then PUT {password} and a logout notice', async () => {

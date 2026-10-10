@@ -3,8 +3,9 @@
 // sets up the service. Also runs unbundled (`node scripts/server-bin/main.js`) against the repository.
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, defaultDataDir, defaultCacheDir, UsageError, HELP } = require('./cli');
+const { parseArgs, dataDirFor, preludeOptions, defaultCacheDir, UsageError, HELP } = require('./cli');
 const { readEnvFile, restrictWindowsFiles } = require('./acl');
+const updatePrelude = require('../../services/update/prelude');
 
 /* global __MANGA_SHELF_BUNDLED__ */
 const BUNDLED = typeof __MANGA_SHELF_BUNDLED__ !== 'undefined';
@@ -37,7 +38,7 @@ function applySslDefaults(dataDir, env = process.env) {
  * bundle, the app folder for __dirname.
  */
 function prepareEnvironment(options, { unpackWeb }) {
-    const dataDir = options.dataDir || (process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : defaultDataDir());
+    const dataDir = dataDirFor(options);
     fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     process.env.DATA_DIR = dataDir;
     process.env.MANGA_SHELF_NO_LISTEN = '1';
@@ -103,17 +104,27 @@ async function startServer(options) {
         teeStreams(createRotatingLog(path.join(dataDir, 'logs'), process.platform === 'win32' ? { onOpen: (file) => restrict([file]) } : {}));
     }
     const server = require('../../index.js');
+    const update = require('../../services/update');
+    update.useWindowsAcl(require('./acl'));
     const log = require('../../utils/logger').child('server-bin');
-    const started = await server.start({
-        host: options.host || '0.0.0.0',
-        ...(options.port !== null ? { port: options.port } : {})
-    });
+    let started;
+    try {
+        started = await server.start({
+            host: options.host || '0.0.0.0',
+            ...(options.port !== null ? { port: options.port } : {})
+        });
+    } catch (e) {
+        updatePrelude.markListenFailed(e);
+        throw e;
+    }
+    updatePrelude.markStarted();
     out(`Manga Shelf Server v${version()} läuft auf ${started.url} (Port ${started.port}, Daten: ${dataDir})`);
     restrict();
+    update.registerRestart(() => server.stop());
 
     let stopping = false;
     const shutdown = (code) => {
-        if (stopping) return;
+        if (stopping || update.lock.currentPhase() === 'restarting') return;
         stopping = true;
         process.exitCode = code;
         setTimeout(() => process.exit(code || 1), STOP_DEADLINE_MS).unref();
@@ -132,8 +143,15 @@ async function startServer(options) {
     return null;
 }
 
+async function runRestore(file, options) {
+    prepareEnvironment(options, { unpackWeb: false });
+    return require('../../services/restoreOffline').restoreOffline(file, { allowNewerSchema: options.allowNewerSchema, out });
+}
+
 async function main(argv) {
     process.title = 'manga-shelf-server';
+    const prelude = preludeOptions(argv);
+    if (prelude) updatePrelude.run({ ...prelude, version: version() });
     const { command, args, options } = parseArgs(argv);
     if (command === 'help') {
         out(HELP);
@@ -144,6 +162,8 @@ async function main(argv) {
         return 0;
     }
     if (command === 'install-service' || command === 'uninstall-service') return runService(command, options);
+    if (command === 'db-check') return require('../../services/restoreOffline').dbCheck(args[0], { out });
+    if (command === 'restore') return runRestore(args[0], options);
     if (command === 'console') return runConsole(args, options);
     return startServer(options);
 }
@@ -158,7 +178,7 @@ function run(argv) {
             return;
         }
         err(`Fehler: ${e && e.message ? e.message : e}`);
-        process.exit(1);
+        process.exit(e && e.code === 'SCHEMA_NEWER' ? e.exitCode : 1);
     });
 }
 

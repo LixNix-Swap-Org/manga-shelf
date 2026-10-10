@@ -233,7 +233,7 @@ test('demoting a user to visitor or guest switches their AniList list sync off',
     const leaId = db.prepare("SELECT id FROM users WHERE username = 'lea'").get().id;
     db.prepare("INSERT INTO anime_sync (user_id, service, enabled, external_user_id) VALUES (?, 'anilist', 1, '5')").run(leaId);
     const enabled = () => db.prepare('SELECT enabled FROM anime_sync WHERE user_id = ?').get(leaId).enabled;
-    assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'admin' })).status, 200);
+    assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'admin', current_password: 'password123' })).status, 200);
     assert.equal(enabled(), 1);
     assert.equal((await admin('PUT', `/users/${leaId}`, { role: 'guest' })).status, 200);
     assert.equal(enabled(), 0);

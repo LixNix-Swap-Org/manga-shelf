@@ -190,4 +190,4 @@ function fetchRemoteImage(url, options = {}) {
     });
 }
 
-module.exports = { fetchRemoteImage, isPrivateAddress, detectImageExt, MAX_IMAGE_BYTES };
+module.exports = { fetchRemoteImage, isPrivateAddress, makeSafeLookup, detectImageExt, MAX_IMAGE_BYTES };

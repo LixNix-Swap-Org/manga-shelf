@@ -116,6 +116,22 @@ test('a restart is refused while a restore or snapshot runs; its files survive a
     assert.equal((await ctl.start({ host: '0.0.0.0', port: 0 })).host, '0.0.0.0');
 });
 
+test('a mode switch is refused while the server applies an update', async () => {
+    const lock = require(path.join(repo, 'services', 'update', 'lock.js'));
+    const running = await ctl.start({ host: '127.0.0.1', port: 0 });
+    lock.setPhase('ready');
+    lock.begin('applying');
+    try {
+        assert.deepEqual(ctl.busy(), ['Aktualisierung']);
+        await assert.rejects(ctl.start({ host: '0.0.0.0', port: 0 }), (err) => err.code === 'SERVER_BUSY' && err.jobs.includes('Aktualisierung'));
+        await assert.rejects(ctl.stop(), (err) => err.code === 'SERVER_BUSY');
+        assert.equal(ctl.current().url, running.url);
+    } finally {
+        lock.release();
+    }
+    assert.deepEqual(ctl.busy(), []);
+});
+
 test('quitting stops the server even while a job runs (stop with force)', async () => {
     const lifecycle = require(path.join(repo, 'services', 'lifecycle.js'));
     await ctl.start({ host: '127.0.0.1', port: 0 });

@@ -88,3 +88,12 @@ test('APP_ORIGINS: default app origins, a replacing list, none, and invalid entr
     assert.deepEqual(odd.values.appOrigins, ['capacitor://localhost']);
     assert.deepEqual(odd.warnings, ['APP_ORIGINS enthält ungültige Ursprünge (localhost, https://x.example/path; erwartet z. B. capacitor://localhost), sie werden ignoriert']);
 });
+
+test('UPDATE_INSTALL: on by default, a flag like UPDATE_CHECK, an unknown value keeps it on with a warning', () => {
+    assert.equal(readConfig({}).values.updateInstall, true);
+    assert.deepEqual([readConfig({ UPDATE_INSTALL: ' false ' }).values.updateInstall, readConfig({ UPDATE_INSTALL: 'nein' }).values.updateInstall], [false, false]);
+    const odd = readConfig({ UPDATE_INSTALL: 'manchmal' });
+    assert.equal(odd.values.updateInstall, true);
+    assert.deepEqual(odd.warnings, ['UPDATE_INSTALL="manchmal" ist unbekannt (erlaubt: true oder false), es gilt true']);
+    withEnv({ UPDATE_INSTALL: 'off' }, () => assert.equal(require('../utils/config').config.updateInstall, false));
+});

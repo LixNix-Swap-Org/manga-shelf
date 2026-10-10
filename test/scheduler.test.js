@@ -86,7 +86,7 @@ test('restoring a snapshot keeps the session and the live secret, and stores no 
     const secret = liveSecret();
     const snap = await admin('POST', '/backups/create');
     assert.equal(snap.status, 200);
-    const restored = await admin('POST', `/backups/${snap.body.snapshot.filename}/restore`);
+    const restored = await admin('POST', `/backups/${snap.body.snapshot.filename}/restore`, { current_password: 'password123' });
     assert.equal(restored.status, 200);
     assert.equal(restored.body.relogin, false);
     assert.equal((await admin('GET', '/mangas')).status, 200);
@@ -567,4 +567,64 @@ test('backupSchedule and retention read utils/config.js', () => {
         delete process.env.BACKUP_KEEP_DAILY;
         delete process.env.BACKUP_HOUR;
     }
+});
+
+function holdForUpdate(backup, phase = 'started') {
+    fs.writeFileSync(path.join(ctx.dataDir, 'update-state.json'), JSON.stringify({
+        format: 1, phase, mode: 'sea-user', restart: 'supervised', from: '3.0.0', to: '3.0.1', at: new Date().toISOString(), user: 1, pid: 1,
+        schema_before: 1, backup: { file: backup, sha256: 'a'.repeat(64) }, previous: { sha256: 'b'.repeat(64) }, attempts: 0, exec_path: '/x'
+    }));
+}
+
+test('pruning keeps the backup an unconfirmed update needs, also across restarts', () => {
+    clearBackups();
+    const updates = [1, 2, 3, 4, 5].map(d => fakeSnapshot(`vor-update-v3.0.${d}-auf-v3.0.${d + 1}`, d));
+    try {
+        holdForUpdate(updates[0]);
+        assert.equal(scheduler.updateBackup(), updates[0]);
+        scheduler.pruneBackups('vor-update', 2);
+        assert.deepEqual(zipFiles(), [updates[0], updates[3], updates[4]]);
+        holdForUpdate(updates[0], 'confirmed');
+        assert.equal(scheduler.updateBackup(), null, 'the hold ends with the confirmation');
+        scheduler.pruneBackups('vor-update', 2);
+        assert.deepEqual(zipFiles(), [updates[3], updates[4]]);
+    } finally {
+        fs.rmSync(path.join(ctx.dataDir, 'update-state.json'), { force: true });
+    }
+});
+
+test('the startup sweep removes leftover update downloads and db-check copies, but not the running download', () => {
+    const update = require('../services/update');
+    const stage = require('../services/update/stage');
+    const leftover = path.join(tempDir, 'update', 'f2b4c3d1-0000-4000-8000-000000000000');
+    fs.mkdirSync(leftover, { recursive: true });
+    fs.writeFileSync(path.join(leftover, 'manga-shelf-server-linux-x64.part'), 'halb');
+    const check = path.join(tempDir, 'manga-shelf-db-check-AbC123');
+    fs.mkdirSync(check);
+    fs.writeFileSync(path.join(check, 'manga.db'), 'kopie');
+    const running = stage.create({ dataDir: ctx.dataDir, version: '3.0.1', assetName: 'pterodactyl-manga-shelf.zip', userId: 1 });
+    try {
+        const result = scheduler.sweepTempArtefacts();
+        assert.ok(result.removed >= 2);
+        assert.ok(!fs.existsSync(leftover));
+        assert.ok(!fs.existsSync(check));
+        assert.ok(fs.existsSync(running.dir), 'the current download stays');
+    } finally {
+        update.resetForTests();
+        fs.rmSync(path.join(tempDir, 'update'), { recursive: true, force: true });
+    }
+});
+
+test('no daily snapshot and no scheduler jobs while an update is applied', async () => {
+    clearBackups();
+    const lock = require('../services/update/lock');
+    lock.setPhase('ready');
+    lock.begin('applying');
+    try {
+        assert.equal(await scheduler.runDailyBackupIfDue(new Date(), ANY_TIME), false);
+        assert.deepEqual(zipFiles(), []);
+    } finally {
+        lock.release();
+    }
+    assert.equal(await scheduler.runDailyBackupIfDue(new Date(), ANY_TIME), true);
 });

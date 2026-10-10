@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const { parseArgs, defaultDataDir, defaultCacheDir, UsageError } = require('../scripts/server-bin/cli');
+const { parseArgs, defaultDataDir, defaultCacheDir, dataDirFor, preludeOptions, UsageError } = require('../scripts/server-bin/cli');
 const services = require('../scripts/server-bin/services');
 const { webSource, prepareAppDir, portalDir, PORTAL_MARKER } = require('../scripts/server-bin/webAssets');
 const { createRotatingLog, teeStreams } = require('../scripts/server-bin/logFile');
@@ -28,7 +28,7 @@ describe('command line', () => {
     test('no arguments starts the server with defaults', () => {
         assert.deepEqual(parseArgs([]), {
             command: 'start', args: [],
-            options: { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null }
+            options: { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null, allowNewerSchema: false }
         });
     });
 
@@ -45,7 +45,7 @@ describe('command line', () => {
     test('a console command keeps its own arguments; --data-dir counts anywhere', () => {
         assert.deepEqual(parseArgs(['passwort-reset', 'Kim', '--data-dir', '/srv/ms']), {
             command: 'console', args: ['passwort-reset', 'Kim'],
-            options: { port: null, host: null, dataDir: path.resolve('/srv/ms'), user: false, noConsole: false, logFile: false, account: null }
+            options: { port: null, host: null, dataDir: path.resolve('/srv/ms'), user: false, noConsole: false, logFile: false, account: null, allowNewerSchema: false }
         });
         assert.deepEqual(parseArgs(['quellen', 'setzen', 'mal', '--instanz']).args, ['quellen', 'setzen', 'mal', '--instanz']);
         assert.deepEqual(parseArgs(['rollback-aufraeumen', '--yes']).args, ['rollback-aufraeumen', '--yes']);
@@ -59,6 +59,7 @@ describe('command line', () => {
         assert.equal(parseArgs(['uninstall-service']).command, 'uninstall-service');
         assert.equal(parseArgs(['--help']).command, 'help');
         assert.equal(parseArgs(['-v']).command, 'version');
+        assert.equal(parseArgs(['version']).command, 'version', 'the updater runs `<new binary> version`, never a console command');
         assert.equal(parseArgs(['start', '--port', '1']).command, 'start');
     });
 
@@ -70,6 +71,37 @@ describe('command line', () => {
         assert.throws(() => parseArgs(['--log-file=ja']), /hat keinen Wert/);
         assert.throws(() => parseArgs(['--account', 'x']), /nur für install-service/);
         assert.equal(parseArgs(['install-service', '--account', 'NetworkService']).options.account, 'NetworkService');
+    });
+
+    test('restore and db-check take exactly one file; --allow-newer-schema only with restore', () => {
+        const restore = parseArgs(['restore', 'vor-update.zip', '--data-dir', '/srv/ms', '--allow-newer-schema']);
+        assert.equal(restore.command, 'restore');
+        assert.deepEqual(restore.args, ['vor-update.zip']);
+        assert.equal(restore.options.allowNewerSchema, true);
+        assert.equal(restore.options.dataDir, path.resolve('/srv/ms'));
+        assert.deepEqual(parseArgs(['db-check', '/tmp/kopie.db']), {
+            command: 'db-check', args: ['/tmp/kopie.db'],
+            options: { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null, allowNewerSchema: false }
+        });
+        assert.throws(() => parseArgs(['restore']), (e) => e instanceof UsageError && /restore braucht die Backup-Datei/.test(e.message));
+        assert.throws(() => parseArgs(['db-check']), /db-check braucht eine Datenbankdatei/);
+        assert.throws(() => parseArgs(['restore', 'a.zip', 'b.zip']), /Unerwartetes Argument "b\.zip"/);
+        assert.throws(() => parseArgs(['--allow-newer-schema']), /nur für restore/);
+        assert.throws(() => parseArgs(['db-check', 'x.db', '--allow-newer-schema']), /nur für restore/);
+        assert.deepEqual(parseArgs(['wiederherstellen', 'x.zip', '--allow-newer-schema']).args, ['wiederherstellen', 'x.zip', '--allow-newer-schema'], 'the console path of scripts/admin.js');
+    });
+
+    test('the update prelude gets the data folder of the server and the server role only for start', () => {
+        const env = { HOME: '/home/kim' };
+        assert.equal(dataDirFor({ dataDir: '/srv/a' }, { DATA_DIR: '/srv/b' }, 'linux'), '/srv/a');
+        assert.equal(dataDirFor({ dataDir: null }, { DATA_DIR: '/srv/b' }, 'linux'), path.resolve('/srv/b'));
+        assert.equal(dataDirFor({ dataDir: null }, env, 'linux'), '/home/kim/.local/share/manga-shelf');
+        assert.deepEqual(preludeOptions([], env, 'linux'), { dataDir: '/home/kim/.local/share/manga-shelf', server: true });
+        assert.deepEqual(preludeOptions(['serve', '--data-dir', '/srv/ms'], env, 'linux'), { dataDir: path.resolve('/srv/ms'), server: true });
+        for (const argv of [['version'], ['--help'], ['status'], ['restore', 'x.zip'], ['db-check', 'x.db'], ['install-service', '--user']]) {
+            assert.equal(preludeOptions(argv, env, 'linux').server, false, argv.join(' '));
+        }
+        assert.equal(preludeOptions(['--bogus'], env, 'linux'), null, 'a usage error is reported by main.js, not by the prelude');
     });
 
     test('default data and cache folders per platform never nest', () => {
@@ -103,6 +135,21 @@ describe('install-service / uninstall-service', () => {
         assert.match(generated, /^UMask=0027$/m, 'new files are not readable by other users');
         assert.match(generated, /^WantedBy=multi-user\.target$/m);
         assert.doesNotMatch(generated, /MemoryDenyWriteExecute/, 'V8 needs executable memory');
+        assert.doesNotMatch(generated, /MANGA_SHELF_SUPERVISOR|RestartPreventExitStatus/, 'the package cannot update itself');
+    });
+
+    test('install-service units and the LaunchAgent name their supervisor; systemd stops after exit 78 (schema refused)', () => {
+        const system = services.installPlan({ platform: 'linux', options: { user: false }, execPath: '/home/kim/ms', uid: 0 }).find(s => s.kind === 'write').content;
+        const user = services.installPlan({ platform: 'linux', options: { user: true, dataDir: null }, execPath: '/home/kim/ms', uid: 1000, env: {}, home: '/home/kim' }).find(s => s.kind === 'write').content;
+        for (const unit of [system, user]) {
+            assert.match(unit, /^Environment=MANGA_SHELF_SUPERVISOR=systemd$/m);
+            assert.match(unit, /^Restart=on-failure$/m);
+            assert.match(unit, /^RestartPreventExitStatus=78$/m);
+            assert.doesNotMatch(unit, /RestartPreventExitStatus=.*75/, 'exit 75 (update restart) is restarted');
+        }
+        const plist = services.installPlan({ platform: 'darwin', options: { port: null }, execPath: '/Users/kim/ms', uid: 501, env: {}, home: '/Users/kim' }).find(s => s.kind === 'write').content;
+        assert.match(plist, /<key>MANGA_SHELF_SUPERVISOR<\/key>\s*<string>launchd<\/string>/);
+        assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
     });
 
     test('ExecStart quotes paths with spaces', () => {
@@ -817,7 +864,7 @@ describe('esbuild bundle of the server', { skip: bundleSkip }, () => {
         // express/lib/view.js loads template engines (no views here); db.js falls back to better-sqlite3 only without node:sqlite;
         // debug tries the optional supports-color inside try/catch (not installed since eslint 10 dropped chalk)
         const dynamic = [...new Set(buildSea.runtimeRequires(fs.readFileSync(bundlePath, 'utf8')))].sort();
-        assert.deepEqual(dynamic, ['require("better-sqlite3")', 'require("supports-color")', 'require(mod)']);
+        assert.deepEqual(dynamic, ['require("better-sqlite3")', 'require("supports-color")', 'require(candidate)', 'require(mod)']);
     });
 
     test('contains the core route table, every core handler and every server route', () => {
@@ -851,5 +898,59 @@ describe('esbuild bundle of the server', { skip: bundleSkip }, () => {
         const service = spawnSync(process.execPath, [bundlePath, 'install-service'], { encoding: 'utf8', env });
         assert.equal(service.status, 2, 'install-service only from the built binary');
         assert.match(service.stderr, /nur mit der gebauten Binärdatei/);
+    });
+
+    test('the updater preflight commands: `version` and `db-check <copy>` without a data folder', () => {
+        const env = { ...process.env, MANGA_SHELF_CACHE_DIR: path.join(dir, 'cache'), DATA_DIR: path.join(dir, 'check-data'), LOG_LEVEL: 'warn' };
+        const version = spawnSync(process.execPath, [bundlePath, 'version'], { encoding: 'utf8', env });
+        assert.equal(version.status, 0, version.stderr);
+        assert.match(version.stdout, new RegExp(`^manga-shelf-server v${require('../package.json').version.replace(/\./g, '\\.')} `));
+        const empty = path.join(dir, 'leer.db');
+        fs.writeFileSync(empty, '');
+        const check = spawnSync(process.execPath, [bundlePath, 'db-check', empty], { encoding: 'utf8', env });
+        assert.equal(check.status, 0, check.stdout + check.stderr);
+        assert.match(check.stdout, /Datenbank-Prüfung bestanden/);
+        assert.equal(fs.existsSync(path.join(dir, 'check-data')), false, 'db-check never opens a data folder');
+    });
+});
+
+describe('commands for a stopped server', () => {
+    test('restore <zip> and db-check <file> of main.js; restore only with the file, the data folder from --data-dir', { skip: process.platform === 'win32' && 'POSIX folder modes' }, () => {
+        const dir = tmpDir('ms-sea-offline-');
+        try {
+            const live = path.join(dir, 'live');
+            const source = path.join(dir, 'source');
+            for (const d of [live, source]) {
+                fs.mkdirSync(d, { mode: 0o700 });
+                spawnSync(process.execPath, ['-e', "require('./db.js').closeDb()"], { cwd: root, env: { ...process.env, DATA_DIR: d, LOG_LEVEL: 'silent' } });
+            }
+            const { DatabaseSync } = require('node:sqlite');
+            const conn = new DatabaseSync(path.join(source, 'manga.db'));
+            conn.exec("INSERT INTO users (username, password_hash, role) VALUES ('chefin', 'x', 'admin'); INSERT INTO mangas (title) VALUES ('Aus dem Backup');");
+            const copy = path.join(dir, 'backup.db');
+            conn.exec(`VACUUM INTO '${copy.replace(/'/g, "''")}'`);
+            conn.close();
+            const AdmZip = require('adm-zip');
+            const zip = new AdmZip();
+            zip.addLocalFile(copy, '', 'manga.db');
+            zip.writeZip(path.join(dir, 'backup.zip'));
+            const main = path.join(root, 'scripts/server-bin/main.js');
+            const env = { ...process.env, LOG_LEVEL: 'silent', DATA_DIR: '' };
+
+            const check = spawnSync(process.execPath, [main, 'db-check', copy], { encoding: 'utf8', env });
+            assert.equal(check.status, 0, check.stdout + check.stderr);
+            const restore = spawnSync(process.execPath, [main, 'restore', path.join(dir, 'backup.zip'), '--data-dir', live], { encoding: 'utf8', env });
+            assert.equal(restore.status, 0, restore.stdout + restore.stderr);
+            assert.match(restore.stdout, /Backup eingespielt: backup\.zip/);
+            const restored = new DatabaseSync(path.join(live, 'manga.db'), { readOnly: true });
+            try {
+                assert.ok(restored.prepare("SELECT 1 FROM mangas WHERE title = 'Aus dem Backup'").get());
+            } finally { restored.close(); }
+            const missing = spawnSync(process.execPath, [main, 'restore', '--data-dir', live], { encoding: 'utf8', env });
+            assert.equal(missing.status, 2);
+            assert.match(missing.stderr, /restore braucht die Backup-Datei/);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });

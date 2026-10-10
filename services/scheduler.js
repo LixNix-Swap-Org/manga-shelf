@@ -9,6 +9,8 @@ const lifecycle = require('./lifecycle');
 const { cleanOrphanUploads, referencedUploadNames } = require('./uploadCleanup');
 const zipTools = require('./backupArchive');
 const disk = require('../utils/disk');
+const updateLock = require('./update/lock');
+const updateState = require('./update/state');
 
 const backupsDir = path.join(dataDir, 'backups');
 if (!fs.existsSync(backupsDir)) {
@@ -69,6 +71,9 @@ function holdSnapshot(filename) {
 }
 
 const isSnapshotHeld = (filename) => heldSnapshots.has(filename);
+
+/** The backup an update still needs (update-state.json), or null; pruning and DELETE leave it alone. */
+const updateBackup = () => updateState.heldBackup(dataDir);
 
 const sidecarPath = (filename) => path.join(backupsDir, filename.replace(/\.zip$/, '.json'));
 
@@ -168,10 +173,11 @@ function pruneBackups(prefix, maxSnapshots = retentionFor(prefix)) {
     try {
         const entries = listSnapshots().filter(s => s.category === cat.category);
         const failed = new Set(entries.filter(s => s.verified === false).map(s => s.filename));
+        const forUpdate = updateBackup();
         // an invalid retention keeps every good snapshot, failed ones are still cut down to the newest
         for (const name of selectForPruning(entries, maxSnapshots).filter(n => !keepAll || failed.has(n))) {
-            if (isSnapshotHeld(name)) {
-                log.info('Keeping old snapshot while it is being restored:', name);
+            if (isSnapshotHeld(name) || name === forUpdate) {
+                log.info('Keeping old snapshot while it is being restored or an update needs it:', name);
                 continue;
             }
             try {
@@ -349,6 +355,10 @@ let dailyRun = null;
 function runDailyBackupIfDue(now = new Date(), schedule = backupSchedule()) {
     if (dailyRun) return dailyRun;
     dailyRun = (async () => {
+        if (updateLock.isUpdateRunning()) {
+            log.info('[Auto-Backup] Update läuft, der tägliche Snapshot folgt beim nächsten Durchlauf');
+            return false;
+        }
         if (!needsDailyBackup(listSnapshots(), now, schedule)) return false;
         log.info('[Auto-Backup] Creating daily automatic manga shelf backup snapshot...');
         // a shutdown waits for it (up to 8 s) instead of leaving a .zip.part behind
@@ -372,10 +382,16 @@ function sweepTempArtefacts() {
             if (pattern.test(name)) candidates.push(path.join(dir, name));
         }
     };
-    collect(tempDir, /^((backup-db|verify|inspect|vor-update-db)-.*\.db(-wal|-shm|-journal)?|restore-.*\.zip|restore-uploads-.+)$/);
+    collect(tempDir, /^((backup-db|verify|inspect|vor-update-db)-.*\.db(-wal|-shm|-journal)?|restore-.*\.zip|restore-uploads-.+|manga-shelf-db-check-.+)$/);
     collect(dataDir, /^manga\.db\.(restore-tmp(-wal|-shm|-journal)?|bak\.tmp)$/);
     collect(backupsDir, /\.(zip\.part|json\.tmp)$/);
     collect(uploadsDir, /^\.strip-.+\.tmp$/);
+    let staging = 0;
+    try {
+        staging = require('./update').sweepStaging();
+    } catch (e) {
+        log.warn('Could not remove leftover update downloads (temp/update)', e);
+    }
     try {
         for (const name of fs.readdirSync(backupsDir)) {
             if (name.endsWith('.json') && !fs.existsSync(path.join(backupsDir, name.slice(0, -5) + '.zip'))) {
@@ -384,12 +400,12 @@ function sweepTempArtefacts() {
         }
     } catch (e) { /* no backups dir */ }
 
-    let removed = 0;
+    let removed = staging;
     let bytes = 0;
     for (const file of candidates) {
         try {
             const stat = fs.lstatSync(file);
-            if (stat.isDirectory() && path.basename(file).startsWith('restore-uploads-')) {
+            if (stat.isDirectory() && /^(restore-uploads|manga-shelf-db-check)-/.test(path.basename(file))) {
                 fs.rmSync(file, { recursive: true, force: true });
             } else if (stat.isFile() || stat.isSymbolicLink()) {
                 fs.unlinkSync(file);
@@ -508,6 +524,7 @@ function initScheduler() {
     stripExistingUploadsOnce({ shouldStop: () => stopped })
         .catch(e => log.warn('Stripping metadata from existing uploads failed:', e));
     const check = async () => {
+        if (updateLock.isUpdateRunning()) return;
         try {
             await runDailyBackupIfDue();
         } catch (e) {
@@ -556,6 +573,7 @@ module.exports = {
     pruneBackups,
     holdSnapshot,
     isSnapshotHeld,
+    updateBackup,
     backupSchedule,
     localParts,
     needsDailyBackup,

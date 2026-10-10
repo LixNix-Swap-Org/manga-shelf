@@ -160,6 +160,7 @@ const ENTRIES = [
     { key: 'migrateWithoutSnapshot', name: 'MIGRATE_WITHOUT_SNAPSHOT', parse: flag(false) },
     { key: 'adminConsole', name: 'ADMIN_CONSOLE', parse: flag(true) },
     { key: 'updateCheck', name: 'UPDATE_CHECK', parse: flag(true) },
+    { key: 'updateInstall', name: 'UPDATE_INSTALL', parse: flag(true) },
     { key: 'animeAnilistRpm', name: 'ANIME_ANILIST_RPM', parse: intIn(1, 600, 30) },
     { key: 'animeJikanRpm', name: 'ANIME_JIKAN_RPM', parse: intIn(1, 600, 60) },
     { key: 'animeSources', name: 'ANIME_SOURCES', parse: animeSources },

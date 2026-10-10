@@ -26,7 +26,7 @@ test.beforeEach(() => resetRateLimits());
 
 const login = (username, password, ip) => ctx.client()('POST', '/auth/login', { username, password }, ip ? { 'X-Forwarded-For': ip } : {});
 const createUser = async (username, role = 'editor') => {
-    const created = await admin('POST', '/users', { username, password: 'password123', role });
+    const created = await admin('POST', '/users', { username, password: 'password123', role, ...(role === 'admin' ? { current_password: 'password123' } : {}) });
     assert.equal(created.status, 200);
     return created.body.user.id;
 };
@@ -244,10 +244,10 @@ test('an admin resetting their own password via user management stays signed in,
     const elsewhere = ctx.client();
     assert.equal((await here('POST', '/auth/login', { username: 'boss2', password: 'password123' })).status, 200);
     assert.equal((await elsewhere('POST', '/auth/login', { username: 'boss2', password: 'password123' })).status, 200);
-    assert.equal((await here('PUT', '/users/' + id, { password: 'newpassword123' })).status, 200);
+    assert.equal((await here('PUT', '/users/' + id, { password: 'newpassword123', current_password: 'password123' })).status, 200);
     assert.equal((await here('GET', '/auth/me')).status, 200);
     assert.equal((await elsewhere('GET', '/auth/me')).status, 401);
-    assert.equal((await here('PUT', '/users/' + id, { role: 'admin' })).status, 200);
+    assert.equal((await here('PUT', '/users/' + id, { role: 'admin', current_password: 'newpassword123' })).status, 200);
 });
 
 test('volumes: status is validated, renumbering to an existing number is a 409, read flags parse strings', async () => {

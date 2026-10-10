@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, CircleCheck, Database, ExternalLink, HardDrive, KeyRound, LogOut, RefreshCw, Server, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { Archive, CircleCheck, Database, HardDrive, KeyRound, LogOut, RefreshCw, Server, Sparkles, TriangleAlert, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import api, { TIMEOUTS, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDateTime, formatNumber, formatRelative } from '../../utils/format';
 import ApiKeyCard from './ApiKeyCard';
+import { Facts, Section } from '../system/SystemSection';
+import UpdateSection from '../system/UpdateSection';
 import { useApiKeys } from './AccountModal';
 import { t, tn } from '../../i18n/index.js';
 import { payloadText } from '../../i18n/serverText.js';
@@ -50,33 +52,6 @@ function healthNotes(health) {
   }
   if (health?.checks?.restoring) notes.push(t('Wiederherstellung läuft'));
   return notes;
-}
-
-function Section({ id, title, Icon, children, actions }) {
-  return (
-    <section aria-labelledby={id} className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 id={id} className="text-sm font-bold text-white flex items-center gap-2">
-          <Icon className="w-4 h-4 text-brand-400" aria-hidden="true" /> {title}
-        </h3>
-        {actions}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Facts({ rows }) {
-  return (
-    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-      {rows.filter(Boolean).map(([label, value]) => (
-        <div key={label} className="flex justify-between gap-3 min-w-0 border-b border-slate-800/60 pb-1">
-          <dt className="text-slate-400 shrink-0">{label}</dt>
-          <dd className="text-slate-200 text-right min-w-0 break-words">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 /** A destructive action asks once more inline (no window.confirm). */
@@ -174,15 +149,17 @@ export default function SystemModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null);
 
-  const load = useCallback(async ({ refresh = false } = {}) => {
-    setLoading(true);
-    setLoadError('');
+  const load = useCallback(async ({ refresh = false, silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+    }
     try {
       setInfo(await api.get(`/api/system${refresh ? '?refresh=1' : ''}`, { fallback: t('Systemdaten konnten nicht geladen werden') }));
     } catch (err) {
-      setLoadError(err?.message || t('Systemdaten konnten nicht geladen werden'));
+      if (!silent) setLoadError(err?.message || t('Systemdaten konnten nicht geladen werden'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -293,15 +270,15 @@ export default function SystemModal({ isOpen, onClose }) {
 
         {info && (
           <>
-            {update?.available && (
-              <div id="system-update" className="p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-200 flex flex-wrap items-center justify-between gap-2">
-                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" aria-hidden="true" /> {t('Neue Version verfügbar: v{latest} (installiert: v{current})', { latest: update.latest, current: update.current })}</span>
-                {update.url && (
-                  <a href={update.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-emerald-100 underline">
-                    {t('Versionshinweise')} <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                  </a>
-                )}
-              </div>
+            {update && update.enabled !== false && (
+              <UpdateSection
+                update={update}
+                instanceId={info.instance_id || null}
+                platform={info.platform}
+                busy={busy}
+                onBusyChange={setBusy}
+                onReload={load}
+              />
             )}
 
             <Section id="system-overview-title" title={t('Server')} Icon={Server}>

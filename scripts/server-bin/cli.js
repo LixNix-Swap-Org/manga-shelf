@@ -2,8 +2,9 @@
 const path = require('path');
 
 const SERVICE_COMMANDS = new Set(['install-service', 'uninstall-service']);
+const FILE_COMMANDS = new Set(['restore', 'db-check']);
 const VALUE_FLAGS = new Set(['--port', '--host', '--data-dir', '--account']);
-const BOOL_FLAGS = new Set(['--user', '--no-console', '--log-file']);
+const BOOL_FLAGS = new Set(['--user', '--no-console', '--log-file', '--allow-newer-schema']);
 
 const HELP = `Manga Shelf Server – Web-Portal und API ohne grafische Oberfläche
 
@@ -17,7 +18,7 @@ Optionen:
   --data-dir <pfad>    Datenordner für Datenbank, Bilder, Backups und .env
   --log-file           Logs zusätzlich nach <datenordner>/logs/manga-shelf.log (mit Rotation)
   --no-console         keine Admin-Konsole auf der Standardeingabe (für Dienste)
-  -v, --version        Version anzeigen
+  -v, --version        Version anzeigen (auch: version)
   -h, --help           diese Hilfe
 
 Befehle der Server-Konsole (wie im Pterodactyl-Panel):
@@ -29,7 +30,12 @@ Dienst einrichten:
       macOS: LaunchAgent ~/Library/LaunchAgents/de.manga-shelf.server.plist
       Windows: geplante Aufgabe „Manga Shelf Server“ beim Systemstart als LOCAL SERVICE (anderes Konto mit --account),
                Datenordner nur für dieses Konto, SYSTEM und die Administratoren (Eingabeaufforderung als Administrator)
-  uninstall-service [--user]   Dienst entfernen; der Datenordner bleibt erhalten`;
+  uninstall-service [--user]   Dienst entfernen; der Datenordner bleibt erhalten
+
+Bei gestopptem Server:
+  restore <backup.zip> [--allow-newer-schema] [--data-dir …]
+      Backup einspielen (z. B. vor-update-….zip aus <datenordner>/backups); die aktuelle Datenbank wird vorher gesichert
+  db-check <datei>     prüft an einer Kopie, ob diese Version die Datenbank öffnen und migrieren kann`;
 
 class UsageError extends Error {}
 
@@ -40,12 +46,9 @@ function parsePort(value) {
     return n;
 }
 
-/**
- * argv without node/binary -> { command, args, options }. command: start | help | version | install-service |
- * uninstall-service | console (args = the console line; it swallows every later argument).
- */
+/** argv without node/binary -> { command, args, options }; `console` swallows every later argument. */
 function parseArgs(argv) {
-    const options = { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null };
+    const options = { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null, allowNewerSchema: false };
     let command = null;
     const args = [];
     for (let i = 0; i < argv.length; i++) {
@@ -81,13 +84,18 @@ function parseArgs(argv) {
         }
         if (BOOL_FLAGS.has(flag)) {
             if (inline !== null) throw new UsageError(`${flag} hat keinen Wert`);
-            options[{ '--user': 'user', '--no-console': 'noConsole', '--log-file': 'logFile' }[flag]] = true;
+            options[{ '--user': 'user', '--no-console': 'noConsole', '--log-file': 'logFile', '--allow-newer-schema': 'allowNewerSchema' }[flag]] = true;
             continue;
         }
         if (raw.startsWith('-')) throw new UsageError(`Unbekannte Option ${raw} (Hilfe: manga-shelf-server --help)`);
+        if (FILE_COMMANDS.has(command) && args.length === 0) {
+            args.push(raw);
+            continue;
+        }
         if (command) throw new UsageError(`Unerwartetes Argument "${raw}"`);
-        if (SERVICE_COMMANDS.has(raw)) command = raw;
+        if (SERVICE_COMMANDS.has(raw) || FILE_COMMANDS.has(raw)) command = raw;
         else if (raw === 'start' || raw === 'serve') command = 'start';
+        else if (raw === 'version') command = 'version';
         else {
             command = 'console';
             args.push(raw);
@@ -95,6 +103,9 @@ function parseArgs(argv) {
     }
     if (options.user && !SERVICE_COMMANDS.has(command)) throw new UsageError('--user gilt nur für install-service und uninstall-service');
     if (options.account && command !== 'install-service') throw new UsageError('--account gilt nur für install-service');
+    if (options.allowNewerSchema && command !== 'restore') throw new UsageError('--allow-newer-schema gilt nur für restore');
+    if (command === 'restore' && args.length === 0) throw new UsageError('restore braucht die Backup-Datei (restore <backup.zip>)');
+    if (command === 'db-check' && args.length === 0) throw new UsageError('db-check braucht eine Datenbankdatei (db-check <datei>)');
     return { command: command || 'start', args, options };
 }
 
@@ -108,6 +119,23 @@ function defaultDataDir(platform = process.platform, env = process.env, home) {
     return p.join(env.XDG_DATA_HOME || p.join(homeOf(env, home), '.local', 'share'), 'manga-shelf');
 }
 
+/** The data folder of a command line: --data-dir, then DATA_DIR, then the per-user default. */
+function dataDirFor(options, env = process.env, platform = process.platform) {
+    if (options.dataDir) return options.dataDir;
+    return env.DATA_DIR ? path.resolve(env.DATA_DIR) : defaultDataDir(platform, env);
+}
+
+/** prelude.run() options for a command line ({ dataDir, server }: server only for start), or null on a usage error. */
+function preludeOptions(argv, env = process.env, platform = process.platform) {
+    let parsed;
+    try {
+        parsed = parseArgs(argv);
+    } catch (e) {
+        return null;
+    }
+    return { dataDir: dataDirFor(parsed.options, env, platform), server: parsed.command === 'start' };
+}
+
 /** Where the embedded web portal is unpacked; never inside the data folder (index.js refuses to serve from there). */
 function defaultCacheDir(platform = process.platform, env = process.env, home) {
     const p = platform === 'win32' ? path.win32 : path.posix;
@@ -119,4 +147,4 @@ function defaultCacheDir(platform = process.platform, env = process.env, home) {
     return p.join(env.XDG_CACHE_HOME || p.join(homeOf(env, home), '.cache'), 'manga-shelf');
 }
 
-module.exports = { parseArgs, parsePort, defaultDataDir, defaultCacheDir, UsageError, HELP };
+module.exports = { parseArgs, parsePort, defaultDataDir, defaultCacheDir, dataDirFor, preludeOptions, UsageError, HELP };

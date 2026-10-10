@@ -7,7 +7,7 @@ import { clearOfflineData } from '../../utils/offlineStore';
 import { apiFetch, TIMEOUTS } from '../../utils/api';
 import { formatMegabytes } from '../../utils/format';
 import {
-  clearRestoreUndo, httpErrorMessage, readJson, readRestoreUndo, saveRestoreUndo
+  clearRestoreUndo, httpErrorMessage, passwordRefusalText, readJson, readRestoreUndo, saveRestoreUndo
 } from './backup/backupHelpers';
 import SnapshotList from './backup/SnapshotList';
 import RestoreConfirm from './backup/RestoreConfirm';
@@ -64,7 +64,7 @@ export function withPasswordWarnings(inspection) {
   if (inspection.relogin && Number.isFinite(users) && names.length >= users) {
     warnings.push(tr('Danach kann sich niemand anmelden: ein neues Passwort setzt dann nur der Konsolenbefehl „passwort-reset <name>“ auf dem Server.'));
   } else if (!inspection.relogin && me && names.some((n) => sameName(n, me))) {
-    warnings.push(tr('Auch dein Konto „{name}“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.', { name: me }));
+    warnings.push(tr('Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.', { name: me, command: `passwort-reset ${me}` }));
   }
   return { ...inspection, warnings };
 }
@@ -81,6 +81,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const [restoring, setRestoring] = useState(false);
   const [reloadPending, setReloadPending] = useState(false);
   const [restoreError, setRestoreError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [restoreSuccess, setRestoreSuccess] = useState('');
   const [warning, setWarning] = useState('');
   const [undo, setUndo] = useState(null);
@@ -146,6 +147,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       setInspection(null);
       setAllowNewer(false);
       setRestoreError('');
+      setPasswordError('');
       setRestoreSuccess('');
       setWarning('');
       setUndo(null);
@@ -175,6 +177,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
 
   const clearMessages = () => {
     setRestoreError('');
+    setPasswordError('');
     setRestoreSuccess('');
     setWarning('');
   };
@@ -270,6 +273,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const leaveConfirmation = () => {
     setInspection(null);
     setAllowNewer(false);
+    setPasswordError('');
     dialogRef.current?.focus();
   };
 
@@ -280,16 +284,16 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   };
 
   /** Step 2: restore what step 1 staged. */
-  const confirmRestore = async () => {
+  const confirmRestore = async (password) => {
     const stagingId = stagingRef.current;
-    if (!stagingId || !inspection) return;
+    if (!stagingId || !inspection || !password) return;
     const fromSnapshot = inspection.source?.type === 'snapshot';
     setRestoring(true);
     clearMessages();
     try {
       const res = await apiFetch(`/api/backup/restore/${encodeURIComponent(stagingId)}`, {
         method: 'POST',
-        body: allowNewer ? { allow_newer_schema: true } : {},
+        body: allowNewer ? { current_password: password, allow_newer_schema: true } : { current_password: password },
         timeout: TIMEOUTS.upload
       });
       const data = await readJson(res);
@@ -297,6 +301,11 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         stagingRef.current = null;
         setInspection(null);
         finishRestore(data);
+        return;
+      }
+      const refused = passwordRefusalText(res, data);
+      if (refused) {
+        setPasswordError(refused);
         return;
       }
       const message = httpErrorMessage(res.status, data, tr('Fehler beim Wiederherstellen des Backups'), RESTORE_HTTP);
@@ -474,6 +483,8 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
               restoring={restoring}
               onConfirm={confirmRestore}
               onCancel={cancelRestore}
+              username={user?.username}
+              passwordError={passwordError}
             />
           </div>
         )}

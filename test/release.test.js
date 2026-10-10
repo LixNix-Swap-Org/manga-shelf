@@ -1,5 +1,5 @@
 // Release script: target version and blockers, against a scratch repository.
-const { test, describe, before, after } = require('node:test');
+const { test, describe, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
@@ -9,9 +9,14 @@ const { execFileSync, spawnSync } = require('child_process');
 const { resolveTargetVersion, getReleaseBlockers } = require('../release');
 const version = require('../scripts/release/version');
 const bump = require('../scripts/release/bump-version');
-const { writeChecksums, verifyChecksums, SUMS_FILE } = require('../scripts/release/checksums');
+const { writeChecksums, verifyChecksums, SUMS_FILE, BUNDLE_FILE } = require('../scripts/release/checksums');
 const { detectSigning, notes } = require('../scripts/release/signing');
-const { releaseNotes } = require('../scripts/release/notes');
+const { releaseNotes, beforeUpdating, verifyCommand, PTERODACTYL_UPDATE, SYSTEM_PAGE_UPDATE } = require('../scripts/release/notes');
+const { writeMarker, markerName, MARKER_PATTERN } = require('../scripts/release/marker');
+const C = require('../services/update/constants');
+
+const scriptsDir = path.join(__dirname, '..', 'scripts', 'release');
+const sha = (text) => require('crypto').createHash('sha256').update(text).digest('hex');
 
 describe('resolveTargetVersion', () => {
   test('bump keywords', () => {
@@ -138,7 +143,6 @@ describe('SHA256SUMS.txt', () => {
       fs.writeFileSync(path.join(dir, 'a.exe'), 'exe');
       fs.writeFileSync(path.join(dir, '.hidden'), 'x');
       const lines = writeChecksums(dir);
-      const sha = (text) => require('crypto').createHash('sha256').update(text).digest('hex');
       assert.deepEqual(lines, [`${sha('exe')}  a.exe`, `${sha('zip')}  b.zip`]);
       assert.equal(fs.readFileSync(path.join(dir, SUMS_FILE), 'utf8'), lines.join('\n') + '\n');
       assert.deepEqual(writeChecksums(dir), lines, 'the sums file never lists itself');
@@ -152,6 +156,122 @@ describe('SHA256SUMS.txt', () => {
         fs.writeFileSync(path.join(dir, 'b.zip'), 'zip');
         assert.equal(spawnSync('sha256sum', ['-c', SUMS_FILE], { cwd: dir }).status, 0);
       }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('never lists its own Sigstore bundle; --complete refuses files the signed sums do not name', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-sums-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'a.zip'), 'zip');
+      fs.writeFileSync(path.join(dir, BUNDLE_FILE), '{}');
+      assert.deepEqual(writeChecksums(dir), [`${sha('zip')}  a.zip`]);
+      assert.equal(BUNDLE_FILE, 'SHA256SUMS.txt.sigstore.json');
+      assert.deepEqual(verifyChecksums(dir, { complete: true }), []);
+      fs.writeFileSync(path.join(dir, 'late.exe'), 'unsigned');
+      fs.writeFileSync(path.join(dir, '.hidden'), 'x');
+      assert.deepEqual(verifyChecksums(dir), [], 'without --complete extra files are fine');
+      assert.deepEqual(verifyChecksums(dir, { complete: true }), ['nicht aufgeführt: late.exe']);
+      const cli = (...args) => spawnSync(process.execPath, [path.join(scriptsDir, 'checksums.js'), ...args], { encoding: 'utf8' });
+      const strict = cli(dir, '--verify', '--complete');
+      assert.equal(strict.status, 1);
+      assert.match(strict.stderr, /nicht aufgeführt: late\.exe/);
+      assert.equal(cli(dir, '--verify').status, 0);
+      const before = fs.readFileSync(path.join(dir, SUMS_FILE), 'utf8');
+      for (const bad of [[dir, '--verfy'], [dir, '--complete'], [dir, '--verify', '--all'], ['--verify', dir]]) {
+        assert.equal(cli(...bad).status, 2, bad.join(' '));
+      }
+      assert.equal(fs.readFileSync(path.join(dir, SUMS_FILE), 'utf8'), before, 'a mistyped flag never rewrites the sums');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('version marker (scripts/release/marker.js)', () => {
+  const commit = 'a'.repeat(40);
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-marker-')); });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test('writes manga-shelf-release-vX.Y.Z.json with version, tag, commit and build time; SHA256SUMS.txt then names it', () => {
+    fs.writeFileSync(path.join(dir, 'pterodactyl-manga-shelf.zip'), 'zip');
+    const { name, data } = writeMarker(dir, { version: '3.1.0', commit, builtAt: new Date('2026-10-10T12:00:00.123Z') });
+    assert.equal(name, 'manga-shelf-release-v3.1.0.json');
+    assert.equal(markerName('3.1.0'), name);
+    assert.deepEqual(data, { version: '3.1.0', tag: 'v3.1.0', commit, built_at: '2026-10-10T12:00:00Z' });
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    assert.deepEqual(JSON.parse(text), data);
+    const lines = writeChecksums(dir);
+    assert.deepEqual(lines.filter(line => / {2}manga-shelf-release-v/.test(line)), [`${sha(text)}  ${name}`]);
+  });
+
+  test('refuses versions and commits the updater would not accept', () => {
+    for (const version of ['3.1', 'v3.1.0', '03.1.0', '3.1.0-beta', '3.1.0\n', '', undefined]) {
+      assert.throws(() => writeMarker(dir, { version, commit }), /Ungültige Version/, String(version));
+    }
+    for (const bad of ['A'.repeat(40), 'a'.repeat(39), 'a'.repeat(41), 'HEAD', '']) {
+      assert.throws(() => writeMarker(dir, { version: '3.1.0', commit: bad }), /Ungültiger Commit/, bad);
+    }
+    assert.deepEqual(fs.readdirSync(dir), []);
+  });
+
+  test('refuses a second marker, a marker after the sums and a missing folder', () => {
+    writeMarker(dir, { version: '3.1.0', commit });
+    assert.throws(() => writeMarker(dir, { version: '3.1.0', commit }), /schon eine Versionsmarke/);
+    assert.throws(() => writeMarker(dir, { version: '3.1.1', commit }), /manga-shelf-release-v3\.1\.0\.json/);
+    const other = fs.mkdtempSync(path.join(dir, 'sums-'));
+    fs.writeFileSync(path.join(other, SUMS_FILE), '');
+    assert.throws(() => writeMarker(other, { version: '3.1.0', commit }), /vor checksums\.js/);
+    assert.throws(() => writeMarker(path.join(dir, 'missing'), { version: '3.1.0', commit }), /Ordner fehlt/);
+  });
+
+  test('the CLI prints the file name, exits 1 on a refusal and 2 without arguments', () => {
+    const cli = (...args) => spawnSync(process.execPath, [path.join(scriptsDir, 'marker.js'), ...args], { encoding: 'utf8' });
+    const ok = cli(dir, '3.1.0', commit);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(ok.stdout, 'manga-shelf-release-v3.1.0.json\n');
+    assert.equal(cli(dir, '3.1.0', commit).status, 1);
+    assert.equal(cli(dir, '3.1.0').status, 2);
+  });
+});
+
+describe('the release side uses the frozen names of services/update/constants.js', () => {
+  test('sums, bundle, marker, signer identity and state file are the constants', () => {
+    assert.equal(SUMS_FILE, C.SUMS_NAME);
+    assert.equal(BUNDLE_FILE, C.BUNDLE_NAME);
+    assert.equal(markerName, C.markerName);
+    assert.equal(MARKER_PATTERN, C.MARKER_PATTERN);
+    for (const v of ['0.0.0', '3.1.0', '10.20.30']) assert.match(C.markerName(v), MARKER_PATTERN);
+    for (const name of [C.SUMS_NAME, C.BUNDLE_NAME, C.ZIP_ASSET, `x${C.markerName('3.1.0')}`, `${C.markerName('3.1.0')}.bak`]) assert.doesNotMatch(name, MARKER_PATTERN);
+    assert.match(C.markerName(''), MARKER_PATTERN, 'a marker without a version still counts as a marker');
+    assert.equal(verifyCommand(), `cosign verify-blob ${C.SUMS_NAME} --bundle ${C.BUNDLE_NAME} --certificate-identity ${C.SIGNER_IDENTITY} --certificate-oidc-issuer ${C.OIDC_ISSUER}`);
+    assert.ok(releaseNotes('v3.1.0', {}, 'someone/fork', '').includes(`\n${verifyCommand()}\n`), 'a run in a fork still names the identity servers pin');
+    const state = require('../services/update/state');
+    assert.equal(state.STATE_FORMAT, C.STATE_FORMAT);
+    assert.equal(state.STATE_FILE, C.STATE_FILE);
+  });
+
+  test('verify-bundle.js and the updater accept exactly what marker.js and checksums.js write', async () => {
+    const verify = require('../services/update/verify');
+    const { verifyReleaseDir } = require('../scripts/release/verify-bundle');
+    const h = require('./fixtures/update/helpers');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-contract-'));
+    try {
+      fs.writeFileSync(path.join(dir, C.ZIP_ASSET), 'zip');
+      const { name } = writeMarker(dir, { version: '3.1.0', commit: 'b'.repeat(40) });
+      writeChecksums(dir);
+      const sumsBytes = fs.readFileSync(path.join(dir, C.SUMS_NAME));
+      fs.writeFileSync(path.join(dir, C.BUNDLE_NAME), JSON.stringify(h.makeBundle(sumsBytes)));
+      const verifier = verify.createVerifier({ verifyBundle: async () => h.goodSigner() });
+      const r = await verifyReleaseDir(dir, { verifier });
+      assert.deepEqual({ version: r.version, identity: r.identity, files: r.files }, { version: '3.1.0', identity: C.SIGNER_IDENTITY, files: 2 });
+      const ok = await verifier.verifyRelease({
+        sumsBytes, bundleJson: fs.readFileSync(path.join(dir, C.BUNDLE_NAME)), markerName: name, markerBytes: fs.readFileSync(path.join(dir, name)),
+        version: '3.1.0', assetName: C.ZIP_ASSET, assetSha256: sha('zip'), policy: verify.PRODUCTION_POLICY
+      });
+      assert.equal(ok.identity, C.SIGNER_IDENTITY);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -183,6 +303,41 @@ describe('signing detection and release text', () => {
     assert.match(text, /SHA256SUMS\.txt/);
     assert.match(text, /### Signing/);
     assert.match(text, /^Checksums: `SHA256SUMS\.txt`/m);
+  });
+
+  test('the release text points at the in-app update and the Sigstore check of SHA256SUMS.txt', () => {
+    const text = releaseNotes('v3.1.0', {}, 'LixNix-Swap-Org/manga-shelf', '');
+    assert.ok(text.includes(`### Downloads\n- ${SYSTEM_PAGE_UPDATE}\n- **Pterodactyl:** ${PTERODACTYL_UPDATE}\n`), text);
+    assert.equal(SYSTEM_PAGE_UPDATE, '**Update from the system page:** servers from v3.1.0 on install this release under System → Updates (Pterodactyl and self-installed headless binaries; signature checked). Docker, packages, the desktop app and older servers update as below.');
+    assert.ok(text.includes('cosign verify-blob SHA256SUMS.txt --bundle SHA256SUMS.txt.sigstore.json --certificate-identity https://github.com/LixNix-Swap-Org/manga-shelf/.github/workflows/release.yml@refs/heads/main --certificate-oidc-issuer https://token.actions.githubusercontent.com\n'), text);
+    assert.match(text, /bundle `SHA256SUMS\.txt\.sigstore\.json`, version marker `manga-shelf-release-v3\.1\.0\.json`/);
+    assert.ok(text.indexOf('cosign verify-blob') > text.indexOf('Checksums:') && text.indexOf('cosign verify-blob') < text.indexOf('### Signing'));
+    assert.doesNotMatch(text, /### Before updating/, 'no block without a CHANGELOG section');
+  });
+
+  test('a "### Before updating" block of the version in CHANGELOG opens the release text', () => {
+    const changelog = [
+      '# Changelog', '',
+      '## 3.1.10 – 2026-12-01', '### Before updating', '- not this one', '',
+      '## 3.1.0-beta', '### Before updating', '- nor this one', '',
+      '## 3.1.0 – 2026-10-12', 'Intro.', '', '### Before updating', '- **Last manual update.** Read this.', '- Second line.', '',
+      '### New features', '- x', '',
+      '## 3.0.0 – 2026-10-10', '### Before updating', '- old', ''
+    ].join('\n');
+    assert.equal(beforeUpdating(changelog, '3.1.0'), '- **Last manual update.** Read this.\n- Second line.');
+    assert.equal(beforeUpdating(changelog, '3.0.0'), '- old');
+    assert.equal(beforeUpdating(changelog, '3.0.1'), '');
+    assert.equal(beforeUpdating('## 3x1x0\n### Before updating\n- a\n', '3.1.0'), '', 'the dots are literal');
+    assert.equal(beforeUpdating('## 3.2.0\n### Before updating\n\n## 3.1.0\n', '3.2.0'), '');
+    assert.equal(beforeUpdating('## 3.2.0\n### New features\n- x\n## 3.1.0\n### Before updating\n- y\n', '3.2.0'), '', 'never borrows the block of another version');
+    assert.equal(beforeUpdating(changelog.replace(/\n/g, '\r\n'), '3.0.0'), '- old');
+    const text = releaseNotes('v3.1.0', {}, 'LixNix-Swap-Org/manga-shelf', changelog);
+    assert.ok(text.startsWith('### Before updating\n- **Last manual update.** Read this.\n- Second line.\n\n### Downloads\n'), text);
+  });
+
+  test('the release text reads the repository CHANGELOG.md by default', () => {
+    const real = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8');
+    assert.equal(releaseNotes('v9.9.9', {}), releaseNotes('v9.9.9', {}, 'LixNix-Swap-Org/manga-shelf', real));
   });
 
   test('tags have the vX.Y.Z form the update check reads (routes/system.js)', () => {

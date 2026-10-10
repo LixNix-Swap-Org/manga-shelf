@@ -192,7 +192,7 @@ test('backups: inspect warnings_msg runs parallel to warnings; restore, delete a
     assert.equal(warningsMsg.length, warnings.length);
     warnings.forEach((w, i) => assert.equal(errors.fill(warningsMsg[i].msg, warningsMsg[i].params), w));
 
-    const done = await admin('POST', `/backup/restore/${inspected.body.staging_id}`);
+    const done = await admin('POST', `/backup/restore/${inspected.body.staging_id}`, { current_password: 'password123' });
     assert.equal(done.status, 200, JSON.stringify(done.body));
     assert.match(done.body.message, /^Backup erfolgreich eingespielt! \(\d+ Manga-Reihen und 0 Bilddateien wiederhergestellt\)$/);
     assert.deepEqual(done.body.message_msg, {
@@ -200,7 +200,7 @@ test('backups: inspect warnings_msg runs parallel to warnings; restore, delete a
         params: { mangas: done.body.mangaCount, images: 0 }
     });
 
-    const snap = await admin('POST', `/backups/${name}/restore`);
+    const snap = await admin('POST', `/backups/${name}/restore`, { current_password: 'password123' });
     assert.equal(snap.status, 200, JSON.stringify(snap.body));
     assert.equal(snap.body.message, errors.fill(snap.body.message_msg.msg, snap.body.message_msg.params));
     assert.equal(snap.body.message_msg.params.filename, name);

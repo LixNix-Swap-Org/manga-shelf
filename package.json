@@ -28,7 +28,7 @@
     "seed": "node scripts/seed.js",
     "bench": "node scripts/bench/run.js",
     "check:bundle": "node scripts/check-bundle-size.js",
-    "test": "node --test test/*.test.js test/core/*.test.js test/anime/*.test.js",
+    "test": "node --test test/*.test.js test/core/*.test.js test/anime/*.test.js test/update/*.test.js",
     "test:frontend": "cd frontend && npm test",
     "test:e2e": "node test/browser/run.js test/browser/e2e-suite.js",
     "test:radar": "node test/browser/run.js test/browser/release-radar.js",
@@ -39,6 +39,7 @@
     "build:server": "node scripts/server-bin/build-sea.js"
   },
   "dependencies": {
+    "@sigstore/core": "^3.2.1",
     "adm-zip": "^0.6.1",
     "archiver": "^8.0.0",
     "bcryptjs": "^3.0.3",
@@ -49,7 +50,8 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.1",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.4.0"
+    "multer": "^2.4.0",
+    "sigstore": "^4.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -146,7 +146,7 @@ test('restore rejects invalid archives and keeps the live database', async () =>
     fs.mkdirSync(snapshotDir, { recursive: true });
     fs.writeFileSync(path.join(snapshotDir, 'broken.zip'), garbageDb.toBuffer());
 
-    const res = await admin('POST', '/backups/broken.zip/restore');
+    const res = await admin('POST', '/backups/broken.zip/restore', { current_password: 'password123' });
     assert.equal(res.status, 400);
     assert.match(res.body.error, /Ungültige Backup-Datenbank/);
 
@@ -159,6 +159,7 @@ test('uploaded backups that are not valid archives are rejected with 400 and kee
     const before = (await admin('GET', '/mangas')).body.length;
     const upload = async (name, data) => {
         const fd = new FormData();
+        fd.append('current_password', 'password123');
         fd.append('backup', new Blob([data], { type: 'application/zip' }), name);
         const res = await fetch(ctx.base + '/backup/restore', { method: 'POST', headers: { Cookie: admin.cookie }, body: fd });
         return { status: res.status, body: await res.json() };
@@ -191,7 +192,7 @@ test('snapshot create + restore round-trip', async () => {
     assert.ok(body.id);
     const withExtra = (await admin('GET', '/mangas')).body.length;
 
-    const restored = await admin('POST', `/backups/${created.body.snapshot.filename}/restore`);
+    const restored = await admin('POST', `/backups/${created.body.snapshot.filename}/restore`, { current_password: 'password123' });
     assert.equal(restored.status, 200);
     assert.equal((await admin('GET', '/mangas')).body.length, withExtra - 1);
     const leftovers = fs.readdirSync(ctx.dataDir).filter(f => f.includes('restore-tmp'));
@@ -959,6 +960,7 @@ async function uploadModifiedBackup(client, mutate) {
     zip.updateFile('manga.db', fs.readFileSync(tmpDb));
     fs.unlinkSync(tmpDb);
     const fd = new FormData();
+    fd.append('current_password', 'password123');
     fd.append('backup', new Blob([zip.toBuffer()], { type: 'application/zip' }), 'old.zip');
     const res = await fetch(ctx.base + '/backup/restore', { method: 'POST', headers: { Cookie: client.cookie }, body: fd });
     return { res, body: await res.json() };

@@ -1,4 +1,4 @@
-import { formatCount, formatMegabytes } from '../../../utils/format';
+import { formatCount, formatMegabytes, formatTime } from '../../../utils/format';
 import { t } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
 
@@ -41,6 +41,28 @@ export function httpErrorMessage(status, data, fallback, { tooLarge, timeout } =
     return timeout ? t(timeout) : t('Der Server hat nicht rechtzeitig geantwortet. Bitte später erneut versuchen.');
   }
   return t('{message} (HTTP {status})', { message: fallback, status });
+}
+
+const PASSWORD_MISSING = /^Bitte das aktuelle Passwort eingeben$/;
+
+function retryTime(res, data) {
+  const header = Number(res.headers?.get?.('retry-after'));
+  const seconds = Number.isFinite(header) && header > 0 ? header : Number(data?.retry_after);
+  return Number.isFinite(seconds) && seconds > 0 ? formatTime(Date.now() + seconds * 1000) : '';
+}
+
+/** Inline text when a restore refused the current password (wrong, missing, locked); '' for any other answer. */
+export function passwordRefusalText(res, data) {
+  if (data?.code === 'WRONG_PASSWORD') return serverText(data) || t('Das aktuelle Passwort stimmt nicht');
+  if (res.status === 400 && PASSWORD_MISSING.test(data?.error)) return serverText(data);
+  if (res.status !== 429) return '';
+  const time = retryTime(res, data);
+  if (data?.code === 'TOO_MANY_ATTEMPTS') {
+    return time
+      ? t('Zu viele Fehlversuche. Erneut möglich ab {time} Uhr; so lange ist auch die Anmeldung mit diesem Konto gesperrt.', { time })
+      : t('Zu viele Fehlversuche. Die Anmeldung mit diesem Konto ist vorübergehend gesperrt.');
+  }
+  return time ? t('Zu viele Versuche. Erneut möglich ab {time} Uhr.', { time }) : (serverText(data) || t('Zu viele Anfragen – bitte kurz warten.'));
 }
 
 /** '120 Reihen · 2.400 Bände · 35 Bilder (1,20 MB)'; 'nur Datenbank' instead of the images when the ZIP has none. */

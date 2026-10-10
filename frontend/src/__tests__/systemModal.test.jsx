@@ -32,7 +32,7 @@ const systemInfo = (over = {}) => ({
   },
   jobs: { running: [], restore_running: false },
   sources: { users_with_keys: 2 },
-  update: { enabled: true, current: '2.19.1', latest: '2.20.0', available: true, url: 'https://github.com/LixNix-Swap-Org/manga-shelf/releases/tag/v2.20.0', checked_at: '2026-10-04T08:00:00Z' },
+  update: { enabled: true, current: '2.19.1', latest: '2.20.0', available: true, url: 'https://github.com/LixNix-Swap-Org/manga-shelf/releases/tag/v2.20.0', checked_at: '2026-10-04T08:00:00Z', releases: [] },
   ...over
 });
 const pool = (used, extra = {}) => ({ enabled: true, name: 'x', limit: 30, remaining: 30, reset_at: null, paused_until: null, circuit: 'closed', used_last_hour: used, slow_recently: false, own: null, key_disabled: false, ...extra });
@@ -71,6 +71,7 @@ describe('SystemModal', () => {
     const dialog = await screen.findByRole('dialog', { name: 'System' });
     await screen.findByText('v2.19.1');
     expect(document.getElementById('system-update').textContent).toContain('Neue Version verfügbar: v2.20.0');
+    expect(within(dialog).getByRole('region', { name: 'Updates' }).contains(document.getElementById('system-update'))).toBe(true);
     expect(within(dialog).getByRole('link', { name: /Versionshinweise/ }).getAttribute('href')).toMatch(/^https:\/\/github\.com\//);
     expect(screen.getByTestId('system-health').textContent).toBe('Eingeschränkt: wenig freier Speicher');
     expect(dialog.textContent).toContain('2 Tage, 3 Std.');
