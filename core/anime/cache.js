@@ -30,6 +30,10 @@ function write(ctx, key, value, ttlMs) {
         .run(key, JSON.stringify(value), now, now + ttlMs);
 }
 
+function remove(ctx, key) {
+    ctx.db.prepare('DELETE FROM api_cache WHERE cache_key = ?').run(key);
+}
+
 /** Drops rows that expired more than a day ago and keeps the table below MAX_ROWS (oldest first). */
 function prune(ctx) {
     const now = ctx.now().getTime();
@@ -40,4 +44,4 @@ function prune(ctx) {
     }
 }
 
-module.exports = { read, write, prune, TTL };
+module.exports = { read, write, remove, prune, TTL };

@@ -130,6 +130,11 @@ test('a limit hook that answered the request stops the dispatch', async () => {
     await assert.rejects(dispatch(ctx, { method: 'GET', url: '/lookup/manga?q=x' }), (err) => err === ANSWERED);
 });
 
+test('the default limit allows everything and answers true (device runtime, memory harness)', () => {
+    const ctx = createCtx({ db: dbFromConnection(memoryDb()) });
+    assert.deepEqual([ctx.limit('lookup'), ctx.limit('lookup', { soft: true })], [true, true]);
+});
+
 test('errorAnswer follows the server error handler', () => {
     assert.deepEqual(errorAnswer(new HttpError(409, 'Doppelt', 'VOLUME_DUPLICATE', { existing_id: 4 })),
         { status: 409, body: { error: 'Doppelt', code: 'VOLUME_DUPLICATE', existing_id: 4 } });

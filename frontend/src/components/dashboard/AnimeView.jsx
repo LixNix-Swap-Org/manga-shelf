@@ -19,6 +19,19 @@ const useUnmatched = WATCH_BUILD ? useWatchUnmatched : () => NO_UNMATCHED;
 const FILTER_LABELS = { [ALL_FILTER]: 'Alle', [NO_STATUS]: 'Ohne Status' };
 const filterLabel = (f) => (Object.prototype.hasOwnProperty.call(FILTER_LABELS, f) ? t(FILTER_LABELS[f]) : animeProgressLabel(f));
 
+// i18n
+export const PLATFORM_LABELS = { macos: 'Mac', windows: 'Windows', linux: 'Linux', ios: 'iPhone/iPad', android: 'Android' };
+
+/** 'Crunchyroll-Verlauf zuletzt übernommen vor 5 Min. (Mac)'; null without a last run. */
+export function watchLastText(watch, now = Date.now()) {
+  const at = watch?.last_at ? formatRelative(watch.last_at, now) : null;
+  if (!at) return null;
+  const platform = Object.prototype.hasOwnProperty.call(PLATFORM_LABELS, watch.last_platform) ? t(PLATFORM_LABELS[watch.last_platform]) : null;
+  return platform
+    ? t('Crunchyroll-Verlauf zuletzt übernommen {relative} ({platform})', { relative: at, platform })
+    : t('Crunchyroll-Verlauf zuletzt übernommen {relative}', { relative: at });
+}
+
 /** Offline / unreachable note above the cached list, with the age of the copy when known. */
 function cachedListText(offline, age) {
   if (offline) {
@@ -95,7 +108,7 @@ function SourceHints({ sources, listSync, onOpenAccount }) {
  */
 export default function AnimeView({
   list, loaded, loading, error, fromCache, cacheAt, sources, listSync, canEdit, user, onAdd, onPasteLink, onOpen, onPlusOne, onStatusChange, onRetry,
-  onOpenAccount
+  onOpenAccount, onRefresh, watchLast, onSearchAnime
 }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState(ANIME_FILTERS[0]);
@@ -108,6 +121,17 @@ export default function AnimeView({
   const [matching, setMatching] = useState(false);
   const closeMatching = useCallback(() => setMatching(false), []);
   const canMatch = canEdit && !offline && !fromCache;
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const lastWatch = canEdit ? watchLastText(watchLast) : null;
 
   return (
     <section aria-labelledby="anime-view-heading" className="pb-6">
@@ -132,6 +156,18 @@ export default function AnimeView({
           <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5 min-w-0 flex-1 sm:flex-initial sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
             {ANIME_SORTS.map((s) => <option key={s.id} value={s.id}>{t(s.label)}</option>)}
           </select>
+          {!offline && onRefresh && (
+            <button
+              id="btn-anime-refresh"
+              type="button"
+              onClick={refresh}
+              title={t('Aktualisieren')}
+              aria-disabled={refreshing || undefined}
+              className="hit-44 btn-secondary text-xs py-2 px-2.5 sm:px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0 aria-disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4${refreshing ? ' animate-spin' : ''}`} aria-hidden="true" /> <span className="sr-only sm:not-sr-only">{t('Aktualisieren')}</span>
+            </button>
+          )}
           {canEdit && !offline && onPasteLink && (
             <button
               id="btn-anime-paste-link"
@@ -165,7 +201,9 @@ export default function AnimeView({
         ))}
       </div>
 
+      <span className="sr-only" aria-live="polite" data-testid="anime-refresh-status">{refreshing ? t('Gleiche ab…') : ''}</span>
       {!offline && <SourceHints sources={sources} listSync={listSync} onOpenAccount={onOpenAccount} />}
+      {lastWatch && <p className="text-[11px] text-slate-400 mb-4 flex items-center gap-1.5" data-testid="watch-last"><History className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> {lastWatch}</p>}
       {WATCH_BUILD && canMatch && unmatched.length > 0 && (
         <p className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-xl px-3 py-2 mb-4 flex items-start gap-2" data-testid="watch-unmatched">
           <History className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
@@ -177,7 +215,7 @@ export default function AnimeView({
       )}
       {WatchMatchDialog && matching && canMatch && (
         <Suspense fallback={null}>
-          <WatchMatchDialog list={list} onClose={closeMatching} />
+          <WatchMatchDialog list={list} onClose={closeMatching} onSearch={onSearchAnime} />
         </Suspense>
       )}
       {(offline || fromCache) && (

@@ -251,7 +251,8 @@ The interface switches between shelf, shopping list, release radar and anime tab
   * **Share links:** share a Crunchyroll episode to Manga Shelf (share sheet of the installed web app, the Android share dialog, the iOS share extension in the apps, or "Paste link"). After "Yes, watched" your progress rises, never backwards, with undo.
   * **"Continue on Crunchyroll"** opens the next episode (in the apps the Crunchyroll app when installed).
   * **AniList list sync** (optional, account → sources, needs your own AniList key): the higher episode count wins.
-  * **Crunchyroll history** (apps only, experimental): see [Crunchyroll history](#crunchyroll-history-experimental).
+  * **Refresh:** the "Refresh" button in the toolbar (browser, desktop app and apps) reloads the list. For editors it also runs the AniList list sync and, where a Crunchyroll history is connected, reads that history first. The notice says how many series changed ("Nothing new" otherwise); a run right after another one answers "Just synced – available again in N s". Editors also see when the Crunchyroll history was last imported and from which device.
+  * **Crunchyroll history** (desktop app and phone apps, experimental): see [Crunchyroll history](#crunchyroll-history-experimental). It can also add shows you start on Crunchyroll to the shared list.
 * **Statistics:** spending by purchase date, ownership per person, most valuable series, publishers, reading history over 24 months, series and volumes per language, anime figures (the status tiles count your own list). Totals add euro prices only and list other currencies beside them. The collecting time starts at the earliest purchase or creation date unless an admin sets the start date by hand; a hand-set date is marked, and the date form has a button to go back to the automatic start.
 * **CSV:** export and import of the whole collection with a dry run (owners, reading state, wishlist, editions included). The import accepts German or English headers.
 * **Backups and restore** (admins): see [section 6](#backups-and-restore).
@@ -284,6 +285,8 @@ Windows `manga-shelf-<version>-windows-x64-setup.exe` or `-portable.exe`, macOS 
 * **"Nur auf diesem Gerät"** (only this device): the collection lives in the user folder; a local server on `127.0.0.1:37210` serves the window.
 * **"Mit Server verbinden"** (connect to a server): a client of your Docker, Pterodactyl or headless server; addresses and sign-in in the system keychain.
 * **"Dieses Gerät ist Server"** (this device is the server): port 3000 in the home network, "Adresse für andere Geräte" shows the address and a QR code for the phone apps, tray icon, optional start at login.
+
+In "Dieses Gerät ist Server" the desktop web build is also what browsers in the home network load. Their service worker, like the one in the Electron window, precaches the Crunchyroll chunks. Without `window.mangashelfDesktop.watch` they stay inert: there is no card and no request. The Crunchyroll history of the desktop app is described under [Crunchyroll history](#crunchyroll-history-experimental).
 
 The app sets and shows the setup code (File → "Einrichtungscode anzeigen…"). To move from "only this device" to a server, download the backup ZIP and restore it on the server. Command line: `--server-only`, `--port <n>`, `--host <address>`, `--data-dir <folder>`, `--connect <url>`, `--hidden`, `--user-data-dir <folder>`. There are no automatic updates: under System → Updates admins see the new versions and the download link.
 
@@ -323,7 +326,14 @@ Without a public address the server at home is not reachable on the road. The ap
 
 ### Crunchyroll history (experimental)
 
-Apps only, off by default, editors and admins. The card "Crunchyroll history (experimental)" (account → keys, without a server under "Sources & keys") signs in to Crunchyroll in an embedded login after a warning. The Crunchyroll session (refresh cookie, client, device and account ID) stays only in the secure storage of the device (no iCloud, no device transfer); the password is typed into Crunchyroll's own page. The app reads the history in the foreground at most every 15 minutes and sends the server only the matched items (series ID and title, season, episode, watched state and time, next-episode link), never cookies, tokens or the raw history. It uses an unofficial interface whose terms forbid automated access, which is why store builds can switch it off: the repository variable `WATCH_CRUNCHYROLL` = `off`, or locally `VITE_WATCH_CRUNCHYROLL=off npm run build:android`. Details: [`AGENTS.md`](AGENTS.md).
+Desktop app (macOS, Windows, Linux) and phone apps only, never in a browser; off by default, editors and admins. The card "Crunchyroll history (experimental)" (account → keys, without a server under "Sources & keys") signs in to Crunchyroll after a warning; the password is typed into Crunchyroll's own page. The app reads the history only while it is open in the foreground (about every 15 minutes, and on "Sync now" or the refresh button) and sends the server only the matched items (series ID, title and slug, season, episode, watched state and time, next-episode link), the device type and the series you skipped on this device, never cookies, tokens or the raw history. It uses an unofficial interface whose terms forbid automated access, which is why store builds can switch it off (see below). Details: [`AGENTS.md`](AGENTS.md).
+
+* **Phone apps:** an embedded login sheet. The Crunchyroll session (refresh cookie, client, device and account ID) stays only in the secure storage of the device (no iCloud, no device transfer) and survives a switch of the server.
+* **Desktop app:** a sign-in window of its own that shows only `crunchyroll.com` pages (anything else is refused with a notice) and is wiped when it closes. The login is kept in its own encrypted file, `watch-secret.json` in the app's user folder (separate from `secure-store.json`, mode 0600), and its cookie never reaches the page: the main process reads the history itself, with requests that carry no browser cookies and follow no redirects. It syncs only while the window is visible and in focus and the computer is neither idle nor locked, and once after waking from sleep (macOS and Windows) when the screen is unlocked. The protection and its limits per system are listed under [Security model](#security-model).
+* **Linux:** the desktop app needs a real key store, GNOME Keyring (libsecret) or KWallet. If Chromium does not recognise your desktop environment, start Manga Shelf with `--password-store=gnome-libsecret`. Without a key store the card shows the note and offers no sign-in.
+* **Automatic adding:** a show you start on Crunchyroll is added to the shared list when it is not in it yet. "Starting" means an episode of the last seven days, including an episode 1 you have not finished. The server looks the title up at AniList (your own key first, then the shared pool, only clear matches of the right season) and adds the entry with your progress; at most three shows per sync, ten AniList requests and five new entries per hour and person, and nothing is added while the lookup limit is reached. A notice "Added to the list: …" with "Undo" (shown for 15 seconds, accepted by the server for an hour) takes it back: the entry goes when nobody else has progress on it, otherwise only your progress. With your AniList list sync on, a new entry reaches AniList only after 60 seconds, so an undo inside that minute never reaches it. The switch "Automatically add new shows from the history to the shared list" is in the card, per person and on by default; with it off (or without AniList in `ANIME_SOURCES`) the server makes no lookups, so the match dialog has no suggestions under "Not in the list yet". A show you removed with "Remove from my list", or an entry deleted for everyone (which also covers everyone it was added for), is not added again; matching it by hand in the dialog or undoing the removal lifts that.
+* **Match dialog:** series the history cannot place are offered with the matching entries of your list and, below "Not in the list yet", up to three AniList suggestions ("Create: …"); "Search for another anime…" opens the add dialog and uses what you pick. A shared Crunchyroll link whose series is not in the list offers "Create and mark as watched" in the share dialog when AniList names exactly one entry for it.
+* **Switching it off:** the repository variable `WATCH_CRUNCHYROLL` = `off` removes the card, the dialog and the sync from the app and the desktop installers; locally `VITE_WATCH_CRUNCHYROLL=off npm run build:android` (or `build:ios`, or `build:desktop` in `desktop/`).
 
 ## 5. Configuration
 
@@ -352,7 +362,7 @@ Every variable is optional. Sources in order of priority: the command line of th
 | `UPDATE_INSTALL` | `true` | Install updates from the system page (Pterodactyl, headless binary in your own folder). `false` keeps the list and the manual instructions but refuses downloading and installing (403 `UPDATE_INSTALL_OFF`). |
 | `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | `debug`/`info`/`warn`/`error`/`silent`; `json` for log tools. |
 | `ANIME_ANILIST_RPM`, `ANIME_JIKAN_RPM` | `30`, `60` | Requests per minute of the shared AniList and Jikan access (1 to 600). |
-| `ANIME_SOURCES` | `anilist,jikan` | Active anime sources (`jikan` or `mal` stands for MyAnimeList); unknown names are ignored with a warning. |
+| `ANIME_SOURCES` | `anilist,jikan` | Active anime sources (`jikan` or `mal` stands for MyAnimeList); unknown names are ignored with a warning. Without `anilist` the Crunchyroll history adds no shows by itself. |
 | `MAL_CLIENT_ID`, `GOOGLE_BOOKS_KEY` | empty | Instance API keys; win over keys stored in the interface. |
 | `MANGA_SHELF_CACHE_DIR` | system cache | Headless server only: where the web portal is unpacked. |
 
@@ -395,6 +405,7 @@ As an admin under **Backups**:
 * **Updates:** only admins, and the install asks for the current password again (cookie and bearer alike; wrong entries count toward the sign-in lock of the account). Nothing is installed that is not signed by this repository's release workflow ([Updating](#updating)); one update at a time, writes are refused while it runs. Restoring a backup, changing your own account and creating or promoting an admin in the user management ask for your current password as well (scripts send it as `current_password`).
 * **Headless server:** refuses a `.env` others can change; Linux data folder 0750 and `UMask=0027`, Windows service as LOCAL SERVICE with a protected ACL.
 * **Apps:** tokens and API keys in the system keychain or keystore; plain `http://` only to home-network addresses.
+* **Desktop app, Crunchyroll history:** the login is kept in its own encrypted file (`watch-secret.json`, separate from `secure-store.json`, mode 0600 where the system has file modes), and its cookie never reaches the page. On macOS, Windows and Linux the encryption protects against other OS users and against reading the disk offline. On Windows and Linux it does not protect against other processes of the same user. Linux needs GNOME Keyring or KWallet ([Crunchyroll history](#crunchyroll-history-experimental)).
 
 ## 7. Development
 
@@ -432,7 +443,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 
 **Browser suites** need a built frontend (`npm run build:frontend`) and Chrome, Chromium, Edge or Brave (`CHROME_BIN` or `PUPPETEER_EXECUTABLE_PATH` picks one). Each suite starts its own server on a temporary database with a throwaway admin; never point them at a real instance. They run with `--lang=de-DE`.
 
-**Desktop:** `cd desktop && npm ci && npm run build:desktop` (installers in `desktop/dist/installers/`; unsigned unless signing variables such as `CSC_LINK` or `APPLE_ID` are set), `npm start` for development, `npm test`.
+**Desktop:** `cd desktop && npm ci && npm run build:desktop` (installers in `desktop/dist/installers/`; unsigned unless signing variables such as `CSC_LINK` or `APPLE_ID` are set), `npm start` for development, `npm test`. For `npm start` with the Crunchyroll card, build the web part with `npm run build -- --mode desktop` (in `frontend/`); `npm run build:desktop` and `build:dir` do this themselves, and the stage stops when the web build has no Crunchyroll card, unless `VITE_WATCH_CRUNCHYROLL=off` is set. `npm run test:electron` runs the gate test of the Crunchyroll transport inside Electron (CI: the Linux smoke job, under `xvfb-run`).
 
 **Android/iPhone:** `cd frontend && npm ci`, then `cd mobile && npm ci && npm run build:android` (JDK 21, Android SDK 35) or `npm run build:ios` (macOS, Xcode 16+, CocoaPods). Output in `mobile/build/out/`. After changing the version by hand run `npm run version:sync` (`release.js` and the Release workflow do it themselves).
 
@@ -460,7 +471,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 | `IOS_CERT_P12_BASE64`, `IOS_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64` | iOS distribution certificate and provisioning profile (with `APPLE_TEAM_ID`) |
 | `IOS_SHARE_PROVISIONING_PROFILE_BASE64` | optional: profile of the share extension `de.mangashelf.app.ShareToMangaShelf` (App Group `group.de.mangashelf.app` on both App IDs); without it the signed IPA has no share extension |
 
-base64 of a file: `base64 -i file.p12 | pbcopy` (macOS) or `base64 -w0 file.p12` (Linux). The repository variable `WATCH_CRUNCHYROLL` = `off` removes the Crunchyroll history from the app builds.
+base64 of a file: `base64 -i file.p12 | pbcopy` (macOS) or `base64 -w0 file.p12` (Linux). The repository variable `WATCH_CRUNCHYROLL` = `off` removes the Crunchyroll history from the app and desktop builds.
 
 ### Language of tooling output
 

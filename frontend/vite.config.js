@@ -211,6 +211,7 @@ export default defineConfig(({ mode }) => {
     ],
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
+      'import.meta.env.VITE_WATCH_DESKTOP': JSON.stringify(mode === 'desktop' ? '1' : ''),
       ...(appMode ? { 'import.meta.env.VITE_APP_MODE': JSON.stringify('app') } : {})
     },
     build: {

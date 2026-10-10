@@ -9,8 +9,10 @@ const store = require('../anime/store');
 const listSync = require('../anime/listSync');
 const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
+const { settings } = require('../anime/settings');
 const links = require('../watch/links');
-const { seasonLinkOf, MAX_SEASON } = require('../watch/crunchyroll');
+const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
+const syncState = require('../watch/syncState');
 const { titleScore } = require('../anime/normalize');
 
 const MAX_TITLE = 200;
@@ -205,35 +207,13 @@ function duplicateOf(ctx, anilistId, malId) {
 }
 
 const ALREADY_THERE = 'Dieser Anime ist schon in der Liste';
+const WATCHED_PUSH_MS = 60 * 1000;
 
-/** From a search hit (anilist_id and/or mal_id, fetched interactively) or a manual entry (title, episodes). */
-async function create(ctx, { body }) {
-    const anilistId = optionalId(body.anilist_id, 'anilist_id');
-    const malId = optionalId(body.mal_id, 'mal_id');
-    const mangaId = optionalId(body.manga_id, 'manga_id');
-    if (mangaId !== null) mangaRef(ctx, mangaId);
-    const existing = duplicateOf(ctx, anilistId, malId);
-    if (existing) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: existing });
-
-    if (!anilistId && !malId) {
-        const title = cleanTitle(body.title, { required: true });
-        const episodes = cleanEpisodes(body.episodes);
-        const insert = ctx.db.prepare(`
-            INSERT INTO animes (title, episodes, manga_id, notes, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
-        const newId = ctx.db.transaction(() => {
-            const id = Number(insert.run(title, episodes ?? null, mangaId, notes, ctx.user.id, sqlNow(ctx)).lastInsertRowid);
-            writeProgress(ctx, id, ctx.user.id, { status: 'Geplant' });
-            return id;
-        });
-        listSync.schedulePush(ctx, ctx.user.id, newId);
-        return { status: 201, body: detailOf(ctx, newId) };
-    }
-
+/** AniList/MyAnimeList data of a new entry, fetched interactively: { meta, images }. */
+async function prepareExternal(ctx, ref) {
     let meta;
     try {
-        meta = await gateway.getAnime(ctx, { anilist_id: anilistId, mal_id: malId }, { priority: 'interactive' });
+        meta = await gateway.getAnime(ctx, ref, { priority: 'interactive' });
     } catch (err) {
         if (err instanceof SourceError) {
             throw new HttpError(503, 'AniList und MyAnimeList sind gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
@@ -241,19 +221,59 @@ async function create(ctx, { body }) {
         throw err;
     }
     if (!meta) throw notFound('Anime bei AniList/MyAnimeList');
-    const images = await store.freshImages(ctx, meta);
-    const title = cleanTitle(body.title);
-    const id = ctx.db.transaction(() => {
-        const again = duplicateOf(ctx, meta.anilist_id, meta.mal_id);
-        if (again) return { duplicate: again };
-        const newId = store.insertFromMeta(ctx, meta, images, { manga_id: mangaId, title });
-        writeProgress(ctx, newId, ctx.user.id, { status: 'Geplant' });
-        return { id: newId };
-    });
-    if (id.duplicate) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: id.duplicate });
-    listSync.schedulePush(ctx, ctx.user.id, id.id);
-    gateway.scheduleIdResolution(ctx, id.id);
-    return { status: 201, body: detailOf(ctx, id.id) };
+    return { meta, images: await store.freshImages(ctx, meta) };
+}
+
+/** Inserts a prepared entry with the adder's 'Geplant' row (synchronous, schedules nothing): { id, created }. */
+function insertPrepared(ctx, prepared) {
+    const { meta } = prepared;
+    const existing = duplicateOf(ctx, meta.anilist_id, meta.mal_id);
+    if (existing) return { id: existing, created: false };
+    const id = store.insertFromMeta(ctx, meta, prepared.images || {}, { manga_id: prepared.manga_id ?? null, title: prepared.title ?? null });
+    writeProgress(ctx, id, ctx.user.id, { status: 'Geplant' });
+    return { id, created: true };
+}
+
+/** From a search hit (anilist_id and/or mal_id, fetched interactively) or a manual entry (title, episodes). */
+async function create(ctx, { body }) {
+    const anilistId = optionalId(body.anilist_id, 'anilist_id');
+    const malId = optionalId(body.mal_id, 'mal_id');
+    const mangaId = optionalId(body.manga_id, 'manga_id');
+    if (mangaId !== null) mangaRef(ctx, mangaId);
+    const watched = body.watched === undefined || body.watched === null ? null : readWatched(body.watched);
+    const existing = duplicateOf(ctx, anilistId, malId);
+    if (existing) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: existing });
+    const userId = ctx.user.id;
+
+    let created;
+    if (!anilistId && !malId) {
+        const title = cleanTitle(body.title, { required: true });
+        const episodes = cleanEpisodes(body.episodes);
+        const insert = ctx.db.prepare(`
+            INSERT INTO animes (title, episodes, manga_id, notes, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
+        created = ctx.db.transaction(() => {
+            const id = Number(insert.run(title, episodes ?? null, mangaId, notes, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
+            writeProgress(ctx, id, userId, { status: 'Geplant' });
+            return { id, watched: watched ? applyWatched(ctx, id, userId, watched) : null };
+        });
+    } else {
+        const prepared = await prepareExternal(ctx, { anilist_id: anilistId, mal_id: malId });
+        const title = cleanTitle(body.title);
+        created = ctx.db.transaction(() => {
+            const inserted = insertPrepared(ctx, { ...prepared, manga_id: mangaId, title });
+            if (!inserted.created) return { duplicate: inserted.id };
+            return { id: inserted.id, watched: watched ? applyWatched(ctx, inserted.id, userId, watched) : null };
+        });
+        if (created.duplicate) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: created.duplicate });
+    }
+    listSync.schedulePush(ctx, userId, created.id, watched ? { delayMs: WATCHED_PUSH_MS } : undefined);
+    if (anilistId || malId) gateway.scheduleIdResolution(ctx, created.id);
+    const detail = detailOf(ctx, created.id);
+    if (!created.watched) return { status: 201, body: detail };
+    const done = created.watched;
+    return { status: 201, body: { ...detail, watched: { progress: store.progressOf(done.saved), previous: null, entry_episodes: done.total } } };
 }
 
 function update(ctx, { params, body }) {
@@ -313,6 +333,7 @@ function updateProgress(ctx, { params, body }) {
         if (body.status === 'Gesehen' && body.restore !== true && (anime.status === 'RELEASING' || anime.status === 'NOT_YET_RELEASED')) {
             throw badRequest(msg('Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“'), 'STILL_AIRING');
         }
+        if (body.restore === true) syncState.liftDeclines(ctx, userId, declineKeys(ctx, userId, id));
         return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes });
     });
     listSync.schedulePush(ctx, userId, id);
@@ -357,43 +378,66 @@ const episodeAboveTotal = (episode, total) => badRequest(
     'EPISODE_ABOVE_TOTAL', { episodes: total }
 );
 
+function readWatched(body) {
+    const value = body && typeof body === 'object' ? body : {};
+    const episode = cleanEpisode(value.episode);
+    let url = null;
+    if (value.url !== undefined && value.url !== null && value.url !== '') {
+        const link = typeof value.url === 'string' ? links.linkOf(value.url.trim()) : null;
+        if (!link || (link.kind !== 'episode' && link.kind !== 'legacy')) throw unsupportedLink();
+        url = link.url;
+    }
+    return { episode, url, remember: cleanRemember(value.remember), complete: value.complete === true };
+}
+
+/** "Folge N gesehen" in the caller's transaction (never lower, resume link, remembered links): { saved, previous, total }. */
+function applyWatched(ctx, id, userId, { episode, url, remember, complete }) {
+    const anime = loadRow(ctx, id);
+    if (anime.episodes > 0 && episode > anime.episodes && !complete) throw episodeAboveTotal(episode, anime.episodes);
+    const before = readProgress(ctx, id, userId) || null;
+    const change = url ? { episodes_watched: episode, resume_url: url, resume_episode: episode } : { episodes_watched: episode };
+    const row = writeProgress(ctx, id, userId, change, { monotonic: true });
+    if (remember) {
+        ctx.db.prepare(`
+            INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, ?, ?, ?)
+            ON CONFLICT (anime_id, service) DO UPDATE SET external_id = excluded.external_id, url = excluded.url
+        `).run(id, remember.service.id, remember.externalId, remember.service.seriesUrl(remember.externalId));
+        if (remember.season) {
+            rememberSeason(ctx, id, remember);
+            syncState.liftDeclines(ctx, userId, [seasonLinkOf(remember.service.id, remember.externalId, remember.season).external_id]);
+        }
+    }
+    return { saved: row, previous: before, total: anime.episodes ?? null };
+}
+
 // "Folge N gesehen" from a shared link, always for the caller: the counter never goes down, the episode link becomes the resume
 // link, `remember` stores the series link in the same transaction. An episode above a known total needs `complete: true`.
 // Answers the progress before the write as `previous` (null without a row), so the undo never depends on the client's list copy.
 function markWatched(ctx, { params, body }) {
     const id = parseId(params.id);
-    const episode = cleanEpisode(body.episode);
-    let url = null;
-    if (body.url !== undefined && body.url !== null && body.url !== '') {
-        const link = typeof body.url === 'string' ? links.linkOf(body.url.trim()) : null;
-        if (!link || (link.kind !== 'episode' && link.kind !== 'legacy')) throw unsupportedLink();
-        url = link.url;
-    }
-    const remember = cleanRemember(body.remember);
-    const complete = body.complete === true;
+    const watched = readWatched(body);
     const userId = ctx.user.id;
-    const { saved, previous, total } = ctx.db.transaction(() => {
-        const anime = loadRow(ctx, id);
-        if (anime.episodes > 0 && episode > anime.episodes && !complete) throw episodeAboveTotal(episode, anime.episodes);
-        const before = readProgress(ctx, id, userId) || null;
-        const change = url ? { episodes_watched: episode, resume_url: url, resume_episode: episode } : { episodes_watched: episode };
-        const row = writeProgress(ctx, id, userId, change, { monotonic: true });
-        if (remember) {
-            ctx.db.prepare(`
-                INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, ?, ?, ?)
-                ON CONFLICT (anime_id, service) DO UPDATE SET external_id = excluded.external_id, url = excluded.url
-            `).run(id, remember.service.id, remember.externalId, remember.service.seriesUrl(remember.externalId));
-            if (remember.season) rememberSeason(ctx, id, remember);
-        }
-        return { saved: row, previous: before, total: anime.episodes ?? null };
-    });
+    const { saved, previous, total } = ctx.db.transaction(() => applyWatched(ctx, id, userId, watched));
     listSync.schedulePush(ctx, userId, id);
     return { body: { anime_id: id, progress: store.progressOf(saved), previous: store.progressOf(previous), entry_episodes: total } };
+}
+
+function declineKeys(ctx, userId, animeId) {
+    const prefix = seasonServiceOf(SERIES_SERVICE, '');
+    const linked = ctx.db.prepare('SELECT external_id FROM anime_links WHERE anime_id = ? AND substr(service, 1, ?) = ?')
+        .all(animeId, prefix.length, prefix).map((r) => r.external_id);
+    return [...new Set([...syncState.keysFor(syncState.readWatchState(ctx, userId), animeId), ...linked])];
 }
 
 const PAGE_TIMEOUT_MS = 6000;
 const MAX_SHARE_TEXT = 4000;
 const MAX_CANDIDATES = 5;
+const LOOKUP_FORMATS = ['TV', 'TV_SHORT', 'ONA', 'OVA'];
+const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const STRONG_SCORE = 0.9;
+const MAX_HITS = 5;
+const SUGGEST_BUDGET_MS = 6000;
+const LOOKUP_TIMEOUT_MS = 8000;
 
 /** Among entries sharing a link: the one the caller is watching, else the one whose episode range fits, else none. */
 function preferred(entries, episode) {
@@ -475,6 +519,52 @@ function matchAnime(ctx, { service, seriesId, seriesSlug, seriesTitle, episode }
     return { anime_id: null, match: null, candidates };
 }
 
+/** AniList hits of a series lookup: allowed formats, a title score of at least 0.9 against a term, the best 5: [{ meta, score }]. */
+function strongHits(lists, terms) {
+    const best = new Map();
+    for (const metas of lists) {
+        for (const meta of metas || []) {
+            if (!meta || !meta.anilist_id || !LOOKUP_FORMATS.includes(meta.format)) continue;
+            const t = meta.title || {};
+            const titles = [t.romaji, t.english, t.preferred, ...(meta.synonyms || [])].filter(Boolean);
+            const score = Math.max(0, ...terms.map((term) => titleScore(term, titles)));
+            if (score < STRONG_SCORE) continue;
+            const known = best.get(meta.anilist_id);
+            if (!known || score > known.score) best.set(meta.anilist_id, { meta, score });
+        }
+    }
+    return [...best.values()].sort((a, b) => b.score - a.score).slice(0, MAX_HITS);
+}
+
+const namesSeries = (meta, seriesId) => {
+    const needle = `/series/${String(seriesId).toLowerCase()}`;
+    return (meta.external_links || []).some((l) => {
+        const path = l ? servicePath(l.url) : null;
+        return path !== null && (path === needle || path.startsWith(`${needle}/`));
+    });
+};
+
+async function suggestionFor(ctx, seriesId, terms) {
+    const userId = ctx.user.id;
+    const phase = syncState.startPhase(ctx, SUGGEST_BUDGET_MS);
+    const options = { userId, timeoutMs: LOOKUP_TIMEOUT_MS, signal: phase.signal, beforeRequest: syncState.lookupGate(ctx, userId, phase) };
+    try {
+        const hits = strongHits(await gateway.spareSearch(ctx, terms, options), terms);
+        if (!hits.length) return null;
+        const named = (await gateway.spareDetail(ctx, hits.map((h) => h.meta.anilist_id), options)).filter((meta) => namesSeries(meta, seriesId));
+        if (named.length !== 1) return null;
+        const [meta] = named;
+        const seasons = (meta.relations || []).filter((r) => (r.relation === 'PREQUEL' || r.relation === 'SEQUEL') && SEASON_FORMATS.includes(r.format));
+        if (seasons.length) return null;
+        return { anilist_id: meta.anilist_id, title: meta.title.preferred || meta.title.romaji || null, episodes: meta.episodes ?? null, format: meta.format || null };
+    } catch (err) {
+        ctx.log.child('anime').debug('Link suggestion failed:', err && err.message);
+        return null;
+    } finally {
+        phase.end();
+    }
+}
+
 // What a shared streaming link points at: service, series, episode and the caller's entry. Read-only. The page is only fetched
 // (host allowlist, no redirects) when link and share text leave episode or series open; any page failure means "unknown"
 // (page_checked false).
@@ -494,8 +584,9 @@ async function resolveLink(ctx, { body }) {
     let seriesTitle = link.kind === 'series' ? links.titleFromSlug(link.slug) : link.kind === 'legacy' ? links.titleFromSlug(link.seriesSlug) : null;
     if (!seriesTitle && text) seriesTitle = links.seriesTitleFromText(text);
     let pageChecked = false;
-    if ((link.kind !== 'series' && !episode) || !seriesTitle) {
-        await ctx.limit('lookup');
+    let pageTried = false;
+    const readPage = async () => {
+        pageTried = true;
         try {
             const html = await ctx.http.fetchText(link.url, PAGE_TIMEOUT_MS, { quiet: true });
             const title = links.parseOgTitle(html);
@@ -509,8 +600,25 @@ async function resolveLink(ctx, { body }) {
         } catch (err) {
             ctx.log.child('anime').debug(`Page of ${link.url} not readable:`, err && err.message);
         }
+    };
+    if ((link.kind !== 'series' && !episode) || !seriesTitle) {
+        await ctx.limit('lookup');
+        await readPage();
     }
-    const found = matchAnime(ctx, { service, seriesId, seriesSlug: link.seriesSlug, seriesTitle, episode });
+    const matchNow = () => matchAnime(ctx, { service, seriesId, seriesSlug: link.seriesSlug, seriesTitle, episode });
+    let found = matchNow();
+    let suggestion = null;
+    if (!found.anime_id && settings(ctx).anilist && !gateway.poolDown(ctx, 'anilist')) {
+        if (!seriesId && !pageTried && ctx.limit('lookup', { soft: true }) !== false) {
+            await readPage();
+            if (seriesId) found = matchNow();
+        }
+        if (!found.anime_id && seriesId) {
+            const slug = link.kind === 'series' ? link.slug : link.kind === 'legacy' ? link.seriesSlug : null;
+            const terms = [...new Set([seriesTitle, slug ? links.titleFromSlug(slug) : null].filter(Boolean))];
+            if (terms.length) suggestion = await suggestionFor(ctx, seriesId, terms);
+        }
+    }
     return {
         body: {
             service: link.service,
@@ -525,31 +633,55 @@ async function resolveLink(ctx, { body }) {
             match: found.match,
             candidates: found.candidates,
             url: link.url,
-            page_checked: pageChecked
+            page_checked: pageChecked,
+            ...(suggestion ? { suggestion } : {})
         }
     };
 }
 
-function syncState(ctx) {
-    return { body: { anilist: listSync.stateOf(ctx, ctx.user.id) } };
+const watchState = (ctx) => syncState.watchOf(syncState.readWatchState(ctx, ctx.user.id));
+
+function syncStateOf(ctx) {
+    return { body: { anilist: listSync.stateOf(ctx, ctx.user.id), watch: watchState(ctx) } };
 }
 
 async function syncUpdate(ctx, { body }) {
-    const wanted = body && body.anilist;
-    if (!wanted || typeof wanted !== 'object' || typeof wanted.enabled !== 'boolean') throw badRequest('Erwartet: { anilist: { enabled: true|false } }');
-    return { body: { anilist: await listSync.setEnabled(ctx, ctx.user.id, wanted.enabled) } };
+    const anilist = body && body.anilist;
+    const watch = body && body.watch;
+    const anilistValid = anilist && typeof anilist === 'object' && typeof anilist.enabled === 'boolean';
+    if ((anilist === undefined && watch === undefined) || (anilist !== undefined && !anilistValid)) {
+        throw badRequest('Erwartet: { anilist: { enabled: true|false } }');
+    }
+    if (watch !== undefined && (!watch || typeof watch !== 'object' || typeof watch.auto_add !== 'boolean')) {
+        throw badRequest('Erwartet: { watch: { auto_add: true|false } }');
+    }
+    const userId = ctx.user.id;
+    if (watch !== undefined) {
+        ctx.db.transaction(() => {
+            const state = syncState.readWatchState(ctx, userId);
+            state.auto_add = watch.auto_add;
+            syncState.writeWatchState(ctx, userId, state);
+        });
+    }
+    const result = anilist !== undefined ? await listSync.setEnabled(ctx, userId, anilist.enabled) : listSync.stateOf(ctx, userId);
+    return { body: { anilist: result, watch: watchState(ctx) } };
 }
 
 async function syncRun(ctx, { body }) {
     const result = await listSync.run(ctx, ctx.user.id, { priority: 'interactive', auto: Boolean(body && body.auto === true) });
-    return { body: { anilist: result } };
+    return { body: { anilist: result, watch: watchState(ctx) } };
 }
 
-function removeProgress(ctx, { params, body }) {
+function removeProgress(ctx, { params, query, body }) {
     const id = parseId(params.id);
     loadRow(ctx, id);
     const userId = resolveTargetUser(ctx, body && body.user_id);
-    const removed = ctx.db.prepare('DELETE FROM anime_progress WHERE anime_id = ? AND user_id = ?').run(id, userId).changes > 0;
+    const decline = qstr(query && query.decline) === '1';
+    const removed = ctx.db.transaction(() => {
+        const gone = ctx.db.prepare('DELETE FROM anime_progress WHERE anime_id = ? AND user_id = ?').run(id, userId).changes > 0;
+        if (gone && decline) syncState.recordDecline(ctx, userId, declineKeys(ctx, userId, id));
+        return gone;
+    });
     return { body: { success: true, removed } };
 }
 
@@ -563,8 +695,17 @@ async function refresh(ctx, { params }) {
 
 function remove(ctx, { params }) {
     const id = parseId(params.id);
-    const changes = ctx.db.prepare('DELETE FROM animes WHERE id = ?').run(id).changes;
-    if (!changes) throw notFound('Anime');
+    const userId = ctx.user.id;
+    ctx.db.transaction(() => {
+        if (!ctx.db.prepare('SELECT id FROM animes WHERE id = ?').get(id)) throw notFound('Anime');
+        syncState.recordDecline(ctx, userId, declineKeys(ctx, userId, id));
+        const others = ctx.db.prepare('SELECT user_id FROM anime_sync WHERE service = ? AND user_id <> ?').all(syncState.SERVICE, userId);
+        for (const { user_id: other } of others) {
+            const state = syncState.readWatchState(ctx, other);
+            syncState.recordDecline(ctx, other, state.added.filter((p) => p.anime_id === id).map((p) => p.key));
+        }
+        ctx.db.prepare('DELETE FROM animes WHERE id = ?').run(id);
+    });
     return { body: { success: true } };
 }
 
@@ -604,6 +745,7 @@ function exportCsv(ctx) {
 }
 
 module.exports = {
-    search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState, syncUpdate, syncRun, removeProgress,
-    refresh, remove, adaptations, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath
+    search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
+    removeProgress, refresh, remove, adaptations, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
+    duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

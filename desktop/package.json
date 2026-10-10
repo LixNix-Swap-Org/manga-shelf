@@ -20,7 +20,8 @@
     "build:desktop": "node scripts/stage.js --build-frontend && node scripts/builder.js --publish never",
     "build:dir": "node scripts/stage.js --build-frontend && node scripts/builder.js --dir --publish never",
     "test": "node --test test/*.test.js",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "test:electron": "node scripts/electronTest.js"
   },
   "devDependencies": {
     "electron": "^44.6.0",

@@ -32,7 +32,7 @@ const answerOf = (over = {}) => ({
  * fetch stub: GET /api/anime, resolve-link, watched, progress; `answer` may be a function returning a response. `server` is
  * the server's list when it differs from the cached one, `listGate` holds GET /api/anime back until it resolves.
  */
-function stubApi({ list = [entry()], answer = answerOf(), watched, server = null, listGate = null } = {}) {
+function stubApi({ list = [entry()], answer = answerOf(), watched, server = null, listGate = null, create, undo } = {}) {
   const calls = [];
   const fn = vi.fn(async (url, init = {}) => {
     const method = (init.method || 'GET').toUpperCase();
@@ -43,6 +43,8 @@ function stubApi({ list = [entry()], answer = answerOf(), watched, server = null
       return fakeResponse(200, server || list);
     }
     if (url === '/api/anime/resolve-link') return typeof answer === 'function' ? answer(body) : fakeResponse(200, answer);
+    if (url === '/api/anime' && method === 'POST') return create ? create(body) : fakeResponse(404, { error: 'unbekannt' });
+    if (url === '/api/anime/watch-sync/undo') return undo ? undo(body) : fakeResponse(200, { removed: 'entry' });
     const w = /^\/api\/anime\/(\d+)\/watched$/.exec(url);
     if (w) {
       if (watched) return watched(body);
@@ -89,6 +91,7 @@ function Harness({ user = { id: 1, username: 'anna', role: 'editor' }, canEdit =
           onChoose={share.choose}
           onAddToList={share.addToList}
           onConfirm={share.confirm}
+          onCreate={share.create}
         />
       )}
     </>
@@ -516,6 +519,80 @@ describe('ShareLinkDialog', () => {
     answer = answerOf({ series_title: null, series_id: null, episode: null, anime_id: null, match: null, candidates: [] });
     act(() => { harness.share.start({ text: EPISODE_URL }); });
     expect(await screen.findByRole('heading', { name: 'Welche Folge hast du gesehen?' })).toBeTruthy();
+  });
+
+  const SUGGESTION = { anilist_id: 154587, title: 'Sousou no Frieren', episodes: 28, format: 'TV' };
+  const created = (body) => fakeResponse(201, {
+    id: 7, title: 'Sousou no Frieren', title_de: null, episodes: 28, anilist_id: body.anilist_id, my_progress: { status: 'Schaue', episodes_watched: body.watched.episode },
+    progress: [], watched: { progress: { status: 'Schaue', episodes_watched: body.watched.episode }, previous: null, entry_episodes: 28 }
+  });
+
+  it('a suggestion of the server: "Anlegen und als gesehen markieren" creates the entry with the episode in one request; undo removes it', async () => {
+    const api = stubApi({ list: [], answer: answerOf({ anime_id: null, match: null, candidates: [], suggestion: SUGGESTION }), create: created });
+    await loadHarness();
+    act(() => { harness.share.start({ text: `Frieren Folge 8 ${EPISODE_URL}` }); });
+    const button = await screen.findByRole('button', { name: 'Anlegen und als gesehen markieren' });
+    expect(screen.getByText('Sousou no Frieren')).toBeTruthy();
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.calls.filter((c) => c.method === 'POST' && c.url === '/api/anime')).toEqual([{
+      method: 'POST', url: '/api/anime', body: { anilist_id: 154587, watched: { episode: 8, url: CANONICAL, remember: { service: 'crunchyroll', external_id: 'GG5H5XQX4' } } }
+    }]);
+    expect(api.calls.some((c) => /watched$/.test(c.url))).toBe(false);
+    expect(harness.anime.list.map((a) => a.id)).toEqual([7]);
+    expect(harness.anime.list[0]).not.toHaveProperty('watched');
+    const toast = toasts.last();
+    expect(toast).toMatchObject({ kind: 'success', message: 'Sousou no Frieren: Folge 8 gesehen', action: { label: 'Rückgängig' } });
+    await act(() => toast.action.onClick());
+    expect(api.calls.at(-1)).toEqual({ method: 'POST', url: '/api/anime/watch-sync/undo', body: { anime_id: 7 } });
+    expect(harness.anime.list).toEqual([]);
+  });
+
+  it('an undo too late shows the server\'s text and keeps the entry', async () => {
+    stubApi({
+      list: [], answer: answerOf({ anime_id: null, match: null, candidates: [], suggestion: SUGGESTION }), create: created,
+      undo: () => fakeResponse(409, { error: 'Rückgängig geht nicht mehr', code: 'UNDO_EXPIRED' })
+    });
+    await loadHarness();
+    act(() => { harness.share.start({ text: `Frieren Folge 8 ${EPISODE_URL}` }); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Anlegen und als gesehen markieren' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await act(() => toasts.last().action.onClick());
+    expect(toasts.messages('error')).toEqual(['Rückgängig geht nicht mehr']);
+    expect(harness.anime.list.map((a) => a.id)).toEqual([7]);
+  });
+
+  it('the suggested anime is in the collection by now: the episode goes to that entry instead', async () => {
+    const list = [entry({ id: 3, title: 'Frieren', my_progress: null })];
+    const api = stubApi({
+      list, answer: answerOf({ anime_id: null, match: null, candidates: [], suggestion: SUGGESTION }),
+      create: () => fakeResponse(409, { error: 'Dieser Anime ist schon in der Liste', code: 'DUPLICATE', id: 3 })
+    });
+    await loadHarness();
+    act(() => { harness.share.start({ text: `Frieren Folge 8 ${EPISODE_URL}` }); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Anlegen und als gesehen markieren' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.calls.find((c) => c.url === '/api/anime/3/watched').body).toEqual({
+      episode: 8, url: CANONICAL, remember: { service: 'crunchyroll', external_id: 'GG5H5XQX4' }
+    });
+    expect(toasts.last()).toMatchObject({ message: 'Frieren: Folge 8 gesehen', action: { label: 'Rückgängig' } });
+  });
+
+  it('above the suggestion\'s total the dialog says so; choosing a list entry takes the offer away', async () => {
+    stubApi({
+      list: [entry()], answer: answerOf({ anime_id: null, match: null, episode: 30, candidates: [], suggestion: SUGGESTION }),
+      create: () => fakeResponse(400, { error: 'Zu viele Folgen', code: 'EPISODE_ABOVE_TOTAL', episodes: 28 })
+    });
+    await loadHarness();
+    act(() => { harness.share.start({ text: `Frieren Folge 30 ${EPISODE_URL}` }); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Anlegen und als gesehen markieren' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Folge 30 liegt über den 28 Folgen dieses Eintrags.');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(toasts.messages('error')).toEqual([]);
+    fireEvent.change(screen.getByLabelText('Eintrag aus der Liste'), { target: { value: '1' } });
+    expect(screen.queryByRole('button', { name: 'Anlegen und als gesehen markieren' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Trotzdem als komplett markieren' })).toBeTruthy();
   });
 
   it('Escape closes the dialog and focus goes back to the button that opened it', async () => {

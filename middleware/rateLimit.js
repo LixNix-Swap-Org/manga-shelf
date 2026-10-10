@@ -171,7 +171,8 @@ const allLimiters = new Set();
 
 /**
  * Per-client request limiter (by address unless `keyFn`). Middleware, or in a handler `consume(req, res)` (true when
- * it answered 429; `{ exempt: true }` counts without refusing) and `refund(req)`. A saturated store fails open.
+ * it answered 429; `{ exempt: true }` counts without refusing), `tryConsume(req)` (counts, never answers: true while
+ * within the limit) and `refund(req)`. A saturated store fails open.
  */
 function createRateLimiter({ windowMs, max, message, keyFn, maxEntries, maxPerPrefix }) {
     const store = createWindowStore({ windowMs, lockAt: max + 1, maxEntries, maxPerPrefix, failOpen: true, name: 'Rate-Limit' });
@@ -189,6 +190,7 @@ function createRateLimiter({ windowMs, max, message, keyFn, maxEntries, maxPerPr
         if (!consume(req, res)) next();
     };
     middleware.consume = consume;
+    middleware.tryConsume = (req) => store.increment(keyOf(req)).count <= max;
     middleware.refund = (req) => store.decrement(keyOf(req));
     middleware.reset = () => store.clear();
     middleware.size = () => store.size();

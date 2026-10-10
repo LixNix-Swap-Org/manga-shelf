@@ -1,4 +1,4 @@
-// Crunchyroll history (apps only): feature detection, the Preferences state and the unmatched series. Kept small and
+// Crunchyroll history (apps and desktop): feature detection, the Preferences state and the unmatched series. Kept small and
 // free of the sync code, because the anime tab and the account dialog import it in every build.
 import { useMemo, useSyncExternalStore } from 'react';
 
@@ -10,31 +10,71 @@ export const SKIPPED_KEY = 'watch-sync:crunchyroll:skipped';
 const SKIPPED_LIMIT = 200;
 
 // the one gate of every lazy watch import: Rollup drops the chunks when the build folds it to false
-export const WATCH_BUILD = import.meta.env.VITE_APP_MODE === 'app' && import.meta.env.VITE_WATCH_CRUNCHYROLL !== 'off';
+export const WATCH_BUILD = (import.meta.env.VITE_APP_MODE === 'app' || import.meta.env.VITE_WATCH_DESKTOP === '1') && import.meta.env.VITE_WATCH_CRUNCHYROLL !== 'off';
 
-/** The native bridge when the feature exists here: app build, flag not 'off', WebLogin plugin present; else null. */
+const bridges = new WeakMap();
+const cachedBridge = (key, make) => {
+  if (!bridges.has(key)) bridges.set(key, Object.freeze(make()));
+  return bridges.get(key);
+};
+
+/** `{ kind: 'desktop', platform, watch }` or `{ kind: 'capacitor', platform, native }` (one object per bridge), or null. */
 export function watchBridge(win = globalThis.window) {
-  if (import.meta.env.VITE_APP_MODE !== 'app' || import.meta.env.VITE_WATCH_CRUNCHYROLL === 'off') return null;
-  const bridge = win?.mangashelfNative;
-  const p = bridge?.plugins;
-  return p?.WebLogin && p.SecureStorage && p.Preferences ? bridge : null;
+  const env = import.meta.env;
+  if (!((env.VITE_APP_MODE === 'app' || env.VITE_WATCH_DESKTOP === '1') && env.VITE_WATCH_CRUNCHYROLL !== 'off')) return null;
+  const watch = win?.mangashelfDesktop?.watch;
+  if (watch && typeof watch === 'object') return cachedBridge(watch, () => ({ kind: 'desktop', platform: watch.platform, watch }));
+  if (env.VITE_APP_MODE !== 'app') return null;
+  const native = win?.mangashelfNative;
+  const p = native?.plugins;
+  if (!(p?.WebLogin && p.SecureStorage && p.Preferences)) return null;
+  return cachedBridge(native, () => ({ kind: 'capacitor', platform: native.platform === 'android' ? 'android' : 'ios', native }));
 }
 
-export const watchAvailable = (win) => Boolean(watchBridge(win));
+export const watchAvailable = (win) => watchBridge(win) !== null;
+
+/** One call of the desktop watch bridge; an `{ ok: false, code }` answer or a rejection becomes an Error with `.code`. */
+export async function desktopCall(bridge, method, ...args) {
+  let answer;
+  try {
+    const [group, name] = method.split('.');
+    answer = await (name ? bridge.watch[group][name](...args) : bridge.watch[group](...args));
+  } catch (_) {
+    answer = null;
+  }
+  if (answer?.ok) return answer;
+  const code = typeof answer?.code === 'string' ? answer.code : 'failed';
+  throw Object.assign(new Error(code), { code, ...(Number.isInteger(answer?.retryIn) ? { retryIn: answer.retryIn } : {}) });
+}
 
 /** Only editors write progress (POST /api/anime/watch-sync is an editor route); offline nothing is sent. */
 export const canSync = (user) => Boolean(user) && !user.offline && (user.role === 'admin' || user.role === 'editor');
 
+async function readPref(bridge, key) {
+  if (bridge.kind === 'desktop') return (await desktopCall(bridge, 'prefs.get', key)).value;
+  return (await bridge.native.plugins.Preferences.get({ key }))?.value;
+}
+
+async function writePref(bridge, key, value) {
+  if (bridge.kind === 'desktop') await desktopCall(bridge, 'prefs.set', key, value);
+  else await bridge.native.plugins.Preferences.set({ key, value });
+}
+
+async function removePref(bridge, key) {
+  if (bridge.kind === 'desktop') await desktopCall(bridge, 'prefs.remove', key);
+  else await bridge.native.plugins.Preferences.remove({ key });
+}
+
 async function readJsonPref(bridge, key, fallback) {
   try {
-    const raw = (await bridge.plugins.Preferences.get({ key }))?.value;
+    const raw = await readPref(bridge, key);
     return raw ? JSON.parse(raw) : fallback;
   } catch (_) {
     return fallback;
   }
 }
 
-const writeJsonPref = (bridge, key, value) => bridge.plugins.Preferences.set({ key, value: JSON.stringify(value) });
+const writeJsonPref = (bridge, key, value) => writePref(bridge, key, JSON.stringify(value));
 
 const stateListeners = new Set();
 
@@ -48,7 +88,8 @@ export async function readState(bridge) {
 let stateQueue = Promise.resolve();
 export function patchState(bridge, patch) {
   const run = stateQueue.then(async () => {
-    const next = { ...(await readState(bridge)), ...patch };
+    const current = await readState(bridge);
+    const next = { ...current, ...(typeof patch === 'function' ? patch(current) : patch) };
     await writeJsonPref(bridge, STATE_KEY, next);
     for (const fn of stateListeners) fn(next);
     return next;
@@ -82,15 +123,32 @@ export async function loadUnmatched(bridge, scope) {
   emit({ scope, items: stored?.scope === scope ? cleanItems(stored.items) : [], skipped: Array.isArray(skipped) ? skipped : [] });
 }
 
+const withoutExternal = (items) => items.map((u) => (Array.isArray(u.candidates) ? { ...u, candidates: u.candidates.filter((c) => c?.kind !== 'external') } : u));
+
+/** Stores the list of this scope; a list too large for the desktop store loses external candidates, then its oldest series. */
 export async function saveUnmatched(bridge, scope, items) {
-  const clean = cleanItems(items);
-  await writeJsonPref(bridge, UNMATCHED_KEY, { scope, items: clean, at: Date.now() });
+  let clean = cleanItems(items);
+  let trimmed = false;
+  for (;;) {
+    try {
+      await writeJsonPref(bridge, UNMATCHED_KEY, { scope, items: clean, at: Date.now() });
+      break;
+    } catch (err) {
+      if (err?.code !== 'too_large' || !clean.length) throw err;
+      if (!trimmed) {
+        clean = withoutExternal(clean);
+        trimmed = true;
+      } else {
+        clean = clean.slice(0, -1);
+      }
+    }
+  }
   if (snapshot.scope === scope) emit({ ...snapshot, items: clean });
 }
 
 export async function clearUnmatched(bridge) {
   emit({ ...snapshot, items: [] });
-  if (bridge) await bridge.plugins.Preferences.remove({ key: UNMATCHED_KEY }).catch(() => {});
+  if (bridge) await removePref(bridge, UNMATCHED_KEY).catch(() => {});
 }
 
 /** Logout or server switch: the tab of another collection must not see these series. */
@@ -120,7 +178,7 @@ export async function skipUnmatched(bridge, item) {
 /** 'Trennen', the opt-out and 'Übersprungene wieder anzeigen': skipped series count again. */
 export async function clearSkipped(bridge) {
   emit({ ...snapshot, skipped: [] });
-  if (bridge) await bridge.plugins.Preferences.remove({ key: SKIPPED_KEY }).catch(() => {});
+  if (bridge) await removePref(bridge, SKIPPED_KEY).catch(() => {});
 }
 
 /** Skipped series stored on this device (read for the settings card, which may mount without the anime tab). */

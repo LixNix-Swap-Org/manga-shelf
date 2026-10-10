@@ -3,7 +3,7 @@ import { ClipboardPaste, Plus, RefreshCw, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { langFor } from '../common/lang';
 import { compareNatural } from '../../utils/search';
-import { displayTitle, progressText } from '../../utils/animeHelpers';
+import { displayTitle, formatLabel, progressText } from '../../utils/animeHelpers';
 import {
   aboveTotalText, displaySeriesTitle, knownEntry, progressBefore, raisesCounter, serviceLabel
 } from '../../utils/shareIntake';
@@ -47,7 +47,7 @@ function PasteStep({ error, onSubmit, onCancel, ids }) {
   );
 }
 
-function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, onConfirm, onCancel, ids, titleId }) {
+function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, onConfirm, onCreate, onCancel, ids, titleId }) {
   const { answer, chosenId } = state;
   const saving = state.phase === 'saving';
   const [episode, setEpisode] = useState(answer.episode ? String(answer.episode) : '');
@@ -75,6 +75,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
   // the server keeps the counter and ignores an older page, so only the current episode is worth remembering
   const older = ahead && number < (before?.episodes_watched || 0);
   const showEpisodeField = !answer.episode || above || episode !== String(answer.episode);
+  const suggestion = canAdd && onCreate && !chosenId && Number.isInteger(answer.suggestion?.anilist_id) ? answer.suggestion : null;
 
   const heading = title
     ? (answer.episode ? t('{title}, Folge {episode} gesehen?', { title, episode: answer.episode }) : t('{title}: welche Folge?', { title }))
@@ -100,6 +101,15 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
   const complete = () => {
     if (check()) onConfirm({ animeId: chosenId, episode: number, complete: true });
   };
+  const create = () => {
+    if (!valid) {
+      setError(t('Bitte die Folge eingeben.'));
+      episodeRef.current?.focus();
+      return;
+    }
+    setError('');
+    onCreate({ episode: number });
+  };
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
@@ -108,6 +118,18 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
       </h2>
       {seriesTitle && seriesTitle.toLowerCase() !== title.toLowerCase() && (
         <p className="text-xs text-slate-400 -mt-2">{serviceLabel(answer.service)}: {seriesTitle}</p>
+      )}
+
+      {suggestion && (
+        <div className="rounded-xl border border-brand-500/40 bg-brand-500/10 px-3 py-2.5 space-y-2">
+          <p className="text-sm text-slate-100 flex flex-wrap items-baseline gap-x-2">
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]" lang={langFor(suggestion.title) || 'de'}>{suggestion.title}</span>
+            {formatLabel(suggestion.format) && <span className="text-[11px] text-slate-400">{formatLabel(suggestion.format)}</span>}
+          </p>
+          <button type="button" className="hit-44 btn-primary text-xs inline-flex items-center gap-1.5" onClick={create} disabled={saving}>
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Anlegen und als gesehen markieren')}
+          </button>
+        </div>
       )}
 
       {picking ? (
@@ -186,6 +208,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
         </p>
       )}
       {error && <p id={`${ids}-confirm-error`} role="alert" className="text-xs text-rose-300">{error}</p>}
+      {!error && state.createError && <p role="alert" className="text-xs text-rose-300">{state.createError}</p>}
 
       <div className="flex flex-wrap justify-end gap-2 pt-1">
         <button type="button" className="btn-secondary text-sm" onClick={onCancel} disabled={saving} data-autofocus={older ? true : undefined}>{t('Abbrechen')}</button>
@@ -207,7 +230,9 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
  * The share flow of hooks/useShareIntake.js: paste field, "Link wird gelesen…", an error with retry, and the
  * confirmation "Frieren, Folge 7 gesehen?" with the entry picker. Lazy; mounted only while a share is open.
  */
-export default function ShareLinkDialog({ state, list = [], listLoaded = true, canAdd = false, rootRef, onClose, onSubmitPaste, onRetry, onChoose, onAddToList, onConfirm }) {
+export default function ShareLinkDialog({
+  state, list = [], listLoaded = true, canAdd = false, rootRef, onClose, onSubmitPaste, onRetry, onChoose, onAddToList, onConfirm, onCreate
+}) {
   const ids = useId();
   const titleId = `${ids}-title`;
   const busy = state.phase === 'reading' || state.phase === 'saving';
@@ -281,6 +306,7 @@ export default function ShareLinkDialog({ state, list = [], listLoaded = true, c
             onChoose={onChoose}
             onAddToList={onAddToList}
             onConfirm={onConfirm}
+            onCreate={onCreate}
             onCancel={close}
             ids={ids}
             titleId={titleId}

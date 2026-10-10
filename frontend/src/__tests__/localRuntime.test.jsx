@@ -675,6 +675,16 @@ describe('an imported server database keeps no server secrets on the device', ()
     });
   });
 
+  it('an imported database keeps the Crunchyroll history state (declines and the auto-add switch hold no key)', async () => {
+    const rt = await newRuntime();
+    rt.databaseCopy((conn) => {
+      conn.prepare('CREATE TABLE IF NOT EXISTS anime_sync (user_id INTEGER NOT NULL, service TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, service))').run();
+      conn.prepare("INSERT INTO anime_sync (user_id, service, enabled) VALUES (1, 'anilist', 1), (1, 'crunchyroll', 0)").run();
+      expect(sanitizeImportedDatabase(conn)).toBe(1);
+      expect(conn.prepare('SELECT service, enabled FROM anime_sync').all()).toEqual([{ service: 'crunchyroll', enabled: 0 }]);
+    });
+  });
+
   it('leaves a database of the app itself as it is', async () => {
     const rt = await newRuntime();
     await rt.request('POST', '/api/mangas', { title: 'Lokal' });

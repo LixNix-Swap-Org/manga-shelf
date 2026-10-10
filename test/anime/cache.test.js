@@ -22,6 +22,14 @@ test('api_cache: values expire after their TTL, stale reads only on request, pru
     assert.deepEqual(cache.TTL, { search: 3600000, partial: 300000, notFound: 600000, adaptations: 86400000 });
 });
 
+test('api_cache: remove drops one key', () => {
+    const core = memoryWith(fakeFetch().fetch);
+    cache.write(core.ctx, 'watch:outcome:2:GABCDEF:1', { outcome: 'none' }, 1000);
+    cache.write(core.ctx, 'andere', 1, 1000);
+    cache.remove(core.ctx, 'watch:outcome:2:GABCDEF:1');
+    assert.deepEqual([cache.read(core.ctx, 'watch:outcome:2:GABCDEF:1'), cache.read(core.ctx, 'andere').value], [null, 1]);
+});
+
 test('search results stay 1 h, empty results 10 min, failures not at all', async () => {
     let now = Date.now();
     let empty = false;

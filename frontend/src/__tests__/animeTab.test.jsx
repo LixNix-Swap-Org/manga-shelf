@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor, act, renderHook, within } from '@te
 import { MemoryRouter } from 'react-router-dom';
 import { fakeResponse } from './fakeResponse';
 import AnimeCard from '../components/dashboard/AnimeCard';
-import AnimeView from '../components/dashboard/AnimeView';
+import AnimeView, { watchLastText } from '../components/dashboard/AnimeView';
 import AnimeDetailModal from '../components/modals/AnimeDetailModal';
 import AddAnimeModal, { sourcesNote } from '../components/modals/AddAnimeModal';
 import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
@@ -12,7 +12,7 @@ import AnimeStatsCard, { watchTime } from '../components/modals/stats/AnimeStats
 import useAnimeList from '../hooks/useAnimeList';
 import { mainViewOf, searchForView } from '../Dashboard';
 import {
-  countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache,
+  countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache, clearAnimeCache,
   ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
   shortDescription, progressPercent, airedEpisodes, stillAiring
 } from '../utils/animeHelpers';
@@ -20,6 +20,7 @@ import { subscribe as subscribeToasts } from '../utils/notify';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
 import { setOpenExternal } from '../app/openExternal';
 import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
+import { WATCH_SYNC_EVENT } from '../app/watch/watchState';
 
 const entry = (over = {}) => ({
   id: 1, title: 'Frieren', title_de: null, format: 'TV', season_year: 2023, episodes: 12, cover_image: null, anilist_id: 154587, mal_id: 52991,
@@ -259,6 +260,24 @@ describe('animeHelpers', () => {
     expect(localStorage.getItem(ANIME_META_KEY)).toBeNull();
   });
 
+  it('the cache keeps the last watch summary until a new one comes, per user, and clearAnimeCache drops it', () => {
+    const watch = { auto_add: true, last_at: 1_000_000, last_platform: 'linux', last_applied: 2, last_added: 1 };
+    expect(writeAnimeCache(null, 5, undefined, { watch })).toBeNull();
+    const stamp = writeAnimeCache([entry()], 5, undefined, { watch });
+    expect(readAnimeCache(5)).toEqual({ list: [entry()], timestamp: stamp, watch });
+    writeAnimeCache([entry(), entry({ id: 2 })], 5);
+    expect(readAnimeCache(5).watch).toEqual(watch);
+    const next = { ...watch, last_platform: 'ios' };
+    expect(writeAnimeCache(null, 5, undefined, { watch: next })).toBe(readAnimeCache(5).timestamp);
+    expect(readAnimeCache(5)).toMatchObject({ watch: next, list: [entry(), entry({ id: 2 })] });
+    writeAnimeCache([entry()], 6);
+    expect(readAnimeCache(6).watch).toBeNull();
+    writeAnimeCache([entry()], 5, undefined, { watch: next });
+    clearAnimeCache();
+    expect(localStorage.getItem(ANIME_META_KEY)).toBeNull();
+    expect(readAnimeCache(5)).toBeNull();
+  });
+
   it('?view=anime is a main view; ?add= never survives a view change', () => {
     expect(mainViewOf('?view=anime')).toBe('anime');
     expect(mainViewOf('?view=radar')).toBe('radar');
@@ -408,6 +427,44 @@ describe('AnimeView', () => {
     expect(screen.queryByRole('button', { name: 'Schlüssel prüfen' })).toBeNull();
   });
 
+  it('"Aktualisieren" in the toolbar: busy while it runs ("Gleiche ab…" for screen readers), none offline', async () => {
+    let done;
+    const onRefresh = vi.fn(() => new Promise((resolve) => { done = resolve; }));
+    const { rerender } = inRouter(<AnimeView {...base} list={[entry()]} canEdit={false} sources={null} onRefresh={onRefresh} />);
+    const button = screen.getByRole('button', { name: 'Aktualisieren' });
+    expect(button.className.split(' ')).toEqual(expect.arrayContaining(['hit-44', 'shrink-0']));
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByTestId('anime-refresh-status').textContent).toBe('Gleiche ab…');
+    expect(screen.getByTestId('anime-refresh-status').getAttribute('aria-live')).toBe('polite');
+    fireEvent.click(button);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    await act(async () => { done(); });
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
+    expect(screen.getByTestId('anime-refresh-status').textContent).toBe('');
+    rerender(<MemoryRouter><AnimeView {...base} list={[entry()]} canEdit user={{ id: 1, role: 'visitor', offline: true }} sources={null} onRefresh={onRefresh} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Aktualisieren' })).toBeNull();
+  });
+
+  it('the last Crunchyroll run with its device, for editors only', () => {
+    const now = Date.now();
+    const watch = { auto_add: true, last_at: now - 5 * 60000, last_platform: 'ios', last_applied: 1, last_added: 0 };
+    const { rerender } = inRouter(<AnimeView {...base} list={[entry()]} canEdit sources={null} watchLast={watch} />);
+    expect(screen.getByTestId('watch-last').textContent).toMatch(/^ Crunchyroll-Verlauf zuletzt übernommen vor 5 Min.* \(iPhone\/iPad\)$/);
+    rerender(<MemoryRouter><AnimeView {...base} list={[entry()]} canEdit={false} sources={null} watchLast={watch} /></MemoryRouter>);
+    expect(screen.queryByTestId('watch-last')).toBeNull();
+    rerender(<MemoryRouter><AnimeView {...base} list={[entry()]} canEdit sources={null} watchLast={{ ...watch, last_at: null }} /></MemoryRouter>);
+    expect(screen.queryByTestId('watch-last')).toBeNull();
+    expect(['macos', 'windows', 'linux', 'ios', 'android', null, 'beos'].map((p) => watchLastText({ last_at: now - 3 * 3600000, last_platform: p }, now)))
+      .toEqual([
+        'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std. (Mac)', 'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std. (Windows)',
+        'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std. (Linux)', 'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std. (iPhone/iPad)',
+        'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std. (Android)', 'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std.',
+        'Crunchyroll-Verlauf zuletzt übernommen vor 3 Std.'
+      ]);
+    expect(watchLastText(null)).toBeNull();
+  });
+
   it('source hints: paused source, own key, refused key, slow pool once per session', () => {
     const onOpenAccount = vi.fn();
     const sources = {
@@ -540,6 +597,95 @@ describe('useAnimeList', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('"Aktualisieren" outside the apps: the AniList sync (forced) and the list for editors, one toast; visitors only reload', async () => {
+    const calls = [];
+    const watch = { auto_add: true, last_at: 1_700_000_000_000, last_platform: 'android', last_applied: 3, last_added: 0 };
+    let pulled = 2;
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      calls.push(`${init.method || 'GET'} ${url}${init.body ? ` ${init.body}` : ''}`);
+      if (url === '/api/anime') return fakeResponse(200, [entry()]);
+      if (url === '/api/anime/sync/run') return fakeResponse(200, { anilist: { ran: pulled >= 0, pulled: Math.max(pulled, 0), changed: pulled > 0 }, watch });
+      return fakeResponse(404, {});
+    }));
+    const shown = [];
+    const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push([e.toast.kind, e.toast.message]); });
+    try {
+      const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'anna', role: 'editor' } }));
+      await act(() => result.current.refreshList());
+      expect(calls).toEqual(['POST /api/anime/sync/run {}', 'GET /api/anime']);
+      expect(shown).toEqual([['success', '2 Serien aktualisiert']]);
+      expect(result.current.watchLast).toEqual(watch);
+      expect(readAnimeCache(1).watch).toEqual(watch);
+      pulled = 0;
+      await act(() => result.current.refreshList());
+      expect(shown.at(-1)).toEqual(['info', 'Nichts Neues']);
+      // a watch-sync event without a summary (undo, match dialog) keeps the last one
+      await act(async () => { window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: 'crunchyroll', applied: 1, added: 0, changed: true, watch: null } })); });
+      expect(result.current.watchLast).toEqual(watch);
+
+      calls.length = 0;
+      shown.length = 0;
+      const visitor = renderHook(() => useAnimeList({ user: { id: 2, username: 'v', role: 'visitor' } }));
+      await act(() => visitor.result.current.refreshList());
+      expect(calls).toEqual(['GET /api/anime']);
+      expect(shown).toEqual([]);
+    } finally {
+      stop();
+    }
+  });
+
+  it('"Aktualisieren" that cannot reach the server or load the list says so, never "Nichts Neues"', async () => {
+    writeAnimeCache([entry()], 1);
+    let answer = () => { throw new TypeError('Failed to fetch'); };
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => answer(url, init)));
+    const shown = [];
+    const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push([e.toast.kind, e.toast.message]); });
+    try {
+      const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'anna', role: 'editor' } }));
+      await act(() => result.current.refreshList());
+      expect(shown).toEqual([['error', 'Netzwerkfehler – Server nicht erreichbar.']]);
+      expect(result.current.fromCache).toBe(true);
+      expect(result.current.error).toBe('Netzwerkfehler – Server nicht erreichbar.');
+
+      answer = (url) => (url === '/api/anime' ? fakeResponse(200, [entry()]) : fakeResponse(500, { error: 'Interner Fehler beim Abgleich' }));
+      await act(() => result.current.refreshList());
+      expect(shown.at(-1)).toEqual(['error', 'Interner Fehler beim Abgleich']);
+      expect(result.current.error).toBeNull();
+
+      answer = (url) => (url === '/api/anime' ? fakeResponse(503, { error: 'Wartung' }) : fakeResponse(200, { anilist: { ran: true, pulled: 0, changed: false } }));
+      await act(() => result.current.refreshList());
+      expect(shown.at(-1)).toEqual(['error', 'Aktualisierung fehlgeschlagen']);
+      expect(result.current.error).toBe('Wartung');
+      expect(shown.filter(([, message]) => message === 'Nichts Neues')).toEqual([]);
+    } finally {
+      stop();
+    }
+  });
+
+  it('a stored watch summary comes back with the cached list of the same user', () => {
+    const watch = { auto_add: false, last_at: 1_700_000_000_000, last_platform: null, last_applied: 0, last_added: 0 };
+    writeAnimeCache([entry()], 1, undefined, { watch });
+    const { result } = renderHook(() => useAnimeList({ user: { id: 1, role: 'editor' } }));
+    expect(result.current.watchLast).toEqual(watch);
+    const other = renderHook(() => useAnimeList({ user: { id: 2, role: 'editor' } }));
+    expect(other.result.current.watchLast).toBeNull();
+  });
+
+  it('"Von meiner Liste entfernen" asks the server to remember the decline; the share undo never does', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      calls.push(`${init.method || 'GET'} ${url}`);
+      if (url === '/api/anime') return fakeResponse(200, [entry(), entry({ id: 2 })]);
+      if (/\/progress/.test(url)) return fakeResponse(200, { success: true });
+      return fakeResponse(404, {});
+    }));
+    const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'anna', role: 'editor' } }));
+    await act(() => result.current.fetchAnime());
+    await act(() => result.current.removeFromMyList(1, { decline: true }));
+    await act(() => result.current.undoWatched(2, null));
+    expect(calls.filter((c) => c.startsWith('DELETE'))).toEqual(['DELETE /api/anime/1/progress?decline=1', 'DELETE /api/anime/2/progress']);
+  });
+
   it('offline: the stored list, no request', async () => {
     writeAnimeCache([entry({ title: 'Gespeichert' })], 1);
     const fetchMock = vi.fn();
@@ -663,7 +809,7 @@ describe('AnimeDetailModal', () => {
         openEditable(onePiece(), { updateProgress, removeFromMyList, fetchDetail });
         await act(async () => {});
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
-        expect(removeFromMyList).toHaveBeenCalledWith(1);
+        expect(removeFromMyList).toHaveBeenCalledWith(1, { decline: true });
         expect(shown.map((toast) => [toast.kind, toast.message, toast.action?.label])).toEqual([['success', 'Von deiner Liste entfernt', 'Rückgängig']]);
         const loads = fetchDetail.mock.calls.length;
         await act(async () => { await shown[0].action.onClick(); });

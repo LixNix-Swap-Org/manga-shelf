@@ -51,7 +51,10 @@ test('switching on checks the own token (Viewer) and stores the AniList user; vi
     const { ed, core, http } = setup();
     assert.equal((await core.client('vis')('GET', '/anime/sync')).status, 403);
     let res = await ed('GET', '/anime/sync');
-    assert.deepEqual(res.body, { anilist: { enabled: false, external_user_id: null, last_synced_at: null, last_error: null, last_report: null, available: true } });
+    assert.deepEqual(res.body, {
+        anilist: { enabled: false, external_user_id: null, last_synced_at: null, last_error: null, last_report: null, available: true },
+        watch: { auto_add: true, last_at: null, last_platform: null, last_applied: 0, last_added: 0 }
+    });
     assert.equal((await ed('PUT', '/anime/sync', { anilist: {} })).status, 400);
     res = await ed('PUT', '/anime/sync', { anilist: { enabled: true } });
     assert.equal(res.status, 200, JSON.stringify(res.body));
@@ -238,4 +241,42 @@ test('a key saved while a sync runs is not overwritten with the old account', as
     await listSync.setEnabled(ctx, 2, true);
     assert.equal((await listSync.run(ctx, 2)).ran, true);
     assert.equal(listSync.stateOf(ctx, 2).external_user_id, null);
+});
+
+test('a demotion switches only the AniList list sync off; the history sync state stays', async () => {
+    const { ed, core } = setup();
+    await ed('PUT', '/anime/sync', { anilist: { enabled: true }, watch: { auto_add: true } });
+    const rows = () => core.conn.prepare('SELECT service, enabled FROM anime_sync WHERE user_id = 2 ORDER BY service').all().map((r) => [r.service, r.enabled]);
+    assert.deepEqual(rows(), [['anilist', 1], ['crunchyroll', 1]]);
+    listSync.onRoleChanged(core.ctx, 2, 'visitor');
+    assert.deepEqual(rows(), [['anilist', 0], ['crunchyroll', 1]]);
+});
+
+test('PUT /anime/sync: both parts checked first, the watch switch stays applied when AniList refuses', async () => {
+    const { core } = setup();
+    const admin = core.client('admin');
+    for (const body of [{}, { anilist: { enabled: 'ja' }, watch: { auto_add: false } }, { anilist: { enabled: true }, watch: {} }]) {
+        assert.equal((await admin('PUT', '/anime/sync', body)).status, 400, JSON.stringify(body));
+    }
+    assert.equal((await admin('GET', '/anime/sync')).body.watch.auto_add, true, 'nothing applied by a refused body');
+    const refused = await admin('PUT', '/anime/sync', { anilist: { enabled: true }, watch: { auto_add: false } });
+    assert.deepEqual([refused.status, refused.body.code], [400, 'NO_TOKEN']);
+    assert.equal((await admin('GET', '/anime/sync')).body.watch.auto_add, false);
+    const run = await admin('POST', '/anime/sync/run', {});
+    assert.deepEqual([run.body.anilist.ran, run.body.watch.auto_add], [false, false]);
+});
+
+test('schedulePush with delayMs waits that long instead of the coalescing window', async (t) => {
+    const { ed, core, http, ids } = setup();
+    await ed('PUT', '/anime/sync', { anilist: { enabled: true } });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    core.conn.prepare('UPDATE anime_progress SET episodes_watched = 9 WHERE anime_id = ? AND user_id = 2').run(ids.frieren);
+    assert.equal(listSync.schedulePush(ctxAs(core, 'ed'), 2, ids.frieren, { delayMs: 60000 }), true);
+    t.mock.timers.tick(59999);
+    await gateway.state().background.idle();
+    assert.equal(anilistCalls(http).filter((c) => c.body.query.includes('MediaList(')).length, 0);
+    t.mock.timers.tick(1);
+    t.mock.timers.reset();
+    await waitUntil(() => anilistCalls(http).some((c) => c.body.query.includes('SaveMediaListEntry')));
+    await gateway.state().background.idle();
 });

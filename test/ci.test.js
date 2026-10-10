@@ -86,6 +86,25 @@ describe('workflows', () => {
         assert.ok(!('secrets' in ci.jobs.build), 'CI builds stay unsigned');
     });
 
+    test('desktop: the installers get the Crunchyroll switch, CI checks the web build and runs the Electron gate test', () => {
+        const install = workflows['build.yml'].jobs.desktop.steps.find(s => s.name === 'Build installers');
+        assert.equal(install.env.VITE_WATCH_CRUNCHYROLL, '${{ vars.WATCH_CRUNCHYROLL }}');
+        const frontend = workflows['ci.yml'].jobs.frontend.steps;
+        const build = frontend.findIndex(s => s.run === 'npm run build' && s['working-directory'] === 'frontend');
+        const check = frontend.findIndex(s => s.run === 'WEB_BUILD_DIR=dist npx vitest run src/__tests__/webBuildStub.test.js');
+        assert.ok(build >= 0 && check > build);
+        assert.equal(frontend[check]['working-directory'], 'frontend');
+        const smoke = workflows['ci.yml'].jobs['desktop-smoke'];
+        const steps = smoke.steps;
+        const dir = steps.findIndex(s => s.name === 'Install, test, electron-builder --dir');
+        const gate = steps.findIndex(s => s.name === 'Electron gate test');
+        assert.ok(dir >= 0 && gate === dir + 1);
+        assert.equal(steps[gate].if, "steps.project.outputs.present == 'true'");
+        assert.equal(steps[gate]['working-directory'], 'desktop');
+        assert.equal(steps[gate].run, 'npm run test:electron');
+        assert.equal(smoke['runs-on'], 'ubuntu-latest');
+    });
+
     test('the backend test job installs the frontend so the core adapter tests fail instead of skipping', () => {
         const stepsText = JSON.stringify(workflows['ci.yml'].jobs.test.steps);
         assert.match(stepsText, /"working-directory":"frontend"/);
