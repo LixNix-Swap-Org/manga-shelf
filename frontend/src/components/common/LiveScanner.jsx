@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Flashlight, FlashlightOff, LoaderCircle, ScanBarcode, X } from 'lucide-react';
+import { Camera, Flashlight, FlashlightOff, LoaderCircle, ScanBarcode, ScanQrCode, X } from 'lucide-react';
 import { isIsbnBarcode, pickIsbnBarcode } from '../../utils/scanHelpers';
 import { haptic } from '../../utils/haptics';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -11,11 +11,13 @@ const NATIVE_FORMATS = ['ean_13', 'ean_8', 'upc_a'];
 const HIT_FLASH_MS = 400;
 
 /** German text for a failed camera start. */
-export function cameraErrorText(err) {
+export function cameraErrorText(err, qr = false) {
   switch (err?.name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return tr('Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen oder fotografiere den Barcode.');
+      return qr
+        ? tr('Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen.')
+        : tr('Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen oder fotografiere den Barcode.');
     case 'NotFoundError':
     case 'OverconstrainedError':
       return tr('Keine passende Kamera gefunden.');
@@ -43,12 +45,15 @@ const stopTracks = (stream) => {
   for (const track of stream?.getTracks?.() || []) track.stop();
 };
 
-async function startZxing(stream, video, onCode) {
+const firstValue = (barcodes) => (Array.isArray(barcodes) ? barcodes : []).find((b) => b?.rawValue)?.rawValue ?? '';
+
+async function startZxing(stream, video, onCode, qr) {
   const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
     import('@zxing/browser'),
     import('@zxing/library')
   ]);
-  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A]]]);
+  const formats = qr ? [BarcodeFormat.QR_CODE] : [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A];
+  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, formats]]);
   const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: SCAN_INTERVAL_MS });
   return reader.decodeFromStream(stream, video, (result) => {
     if (result) onCode(result.getText());
@@ -57,10 +62,12 @@ async function startZxing(stream, video, onCode) {
 
 /** Rear camera in the page: BarcodeDetector at about 8 frames per second, else ZXing with EAN hints on the same stream. */
 function CameraScanner({
-  onDetected, onClose, onPhotoFallback, continuous = false, title = tr('Barcode scannen'), children = null,
+  onDetected, onClose, onPhotoFallback, continuous = false, formats = 'isbn', children = null,
+  title = formats === 'qr' ? tr('QR-Code scannen') : tr('Barcode scannen'),
   mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices,
   Detector = typeof window === 'undefined' ? undefined : window.BarcodeDetector
 }) {
+  const qr = formats === 'qr';
   const videoRef = useRef(null);
   const trackRef = useRef(null);
   const [phase, setPhase] = useState('starting');
@@ -84,6 +91,14 @@ function CameraScanner({
     const accept = createScanDebounce();
 
     const onCode = (raw) => {
+      if (qr) {
+        if (cancelled || !raw) return;
+        cancelled = true;
+        const { onDetected: report, onClose: done } = handlersRef.current;
+        report?.(String(raw));
+        done?.();
+        return;
+      }
       const isbn = String(raw || '').replace(/[^0-9X]/gi, '');
       if (cancelled || !isIsbnBarcode(isbn) || !accept(isbn)) return;
       haptic('success', { sound: true });
@@ -120,11 +135,12 @@ function CameraScanner({
         if (cancelled) return;
         setPhase('scanning');
         if (typeof Detector === 'function') {
-          const detector = new Detector({ formats: NATIVE_FORMATS });
+          const detector = new Detector({ formats: qr ? ['qr_code'] : NATIVE_FORMATS });
+          const pick = qr ? firstValue : pickIsbnBarcode;
           const tick = async () => {
             if (cancelled) return;
             try {
-              if (video.readyState >= 2) onCode(pickIsbnBarcode(await detector.detect(video)));
+              if (video.readyState >= 2) onCode(pick(await detector.detect(video)));
             } catch (_) {
               // a frame the detector cannot read; the next one follows
             }
@@ -132,12 +148,12 @@ function CameraScanner({
           };
           tick();
         } else {
-          controls = await startZxing(stream, video, onCode);
+          controls = await startZxing(stream, video, onCode, qr);
           if (cancelled) controls.stop();
         }
       } catch (err) {
         if (cancelled) return;
-        setError(cameraErrorText(err));
+        setError(cameraErrorText(err, qr));
         setPhase('error');
       }
     };
@@ -152,7 +168,7 @@ function CameraScanner({
       if (videoEl) videoEl.srcObject = null;
       trackRef.current = null;
     };
-  }, [mediaDevices, Detector]);
+  }, [mediaDevices, Detector, qr]);
 
   const toggleTorch = async () => {
     const next = !torch.on;
@@ -173,8 +189,9 @@ function CameraScanner({
     <ScannerFrame
       dialogRef={dialogRef}
       title={title}
+      icon={qr ? ScanQrCode : ScanBarcode}
       onClose={close}
-      status={lastIsbn ? tr('Erkannt: {isbn}', { isbn: lastIsbn }) : (phase === 'scanning' ? tr('Barcode der Buchrückseite in den Rahmen halten') : '')}
+      status={lastIsbn ? tr('Erkannt: {isbn}', { isbn: lastIsbn }) : (phase === 'scanning' ? (qr ? tr('QR-Code in den Rahmen halten') : tr('Barcode der Buchrückseite in den Rahmen halten')) : '')}
       actions={(
         <>
           {torch.supported && (
@@ -200,7 +217,7 @@ function CameraScanner({
           <video ref={videoRef} muted playsInline autoPlay className="absolute inset-0 w-full h-full object-cover" aria-hidden="true" />
           {phase !== 'error' && (
             <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center pointer-events-none [container-type:size]">
-              <div data-scan-guide className={`w-[78%] max-w-md supports-[width:1cqw]:w-[min(78cqw,28rem,150cqh)] aspect-[2/1] rounded-2xl border-4 transition-colors shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] ${flash ? 'border-emerald-400' : 'border-white/80'}`} />
+              <div data-scan-guide className={`${qr ? 'w-[64%] max-w-xs supports-[width:1cqw]:w-[min(64cqw,20rem,75cqh)] aspect-square' : 'w-[78%] max-w-md supports-[width:1cqw]:w-[min(78cqw,28rem,150cqh)] aspect-[2/1]'} rounded-2xl border-4 transition-colors shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] ${flash ? 'border-emerald-400' : 'border-white/80'}`} />
             </div>
           )}
           {phase === 'starting' && (
@@ -232,7 +249,7 @@ function ScanError({ text, onPhoto }) {
   );
 }
 
-function ScannerFrame({ dialogRef, title, onClose, status, view, actions, children }) {
+function ScannerFrame({ dialogRef, title, icon: Icon = ScanBarcode, onClose, status, view, actions, children }) {
   return (
     <div
       ref={dialogRef}
@@ -256,7 +273,7 @@ function ScannerFrame({ dialogRef, title, onClose, status, view, actions, childr
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <p className="text-sm font-bold flex items-center gap-2">
-          <ScanBarcode className="w-5 h-5 text-indigo-300" aria-hidden="true" /> {title}
+          <Icon className="w-5 h-5 text-indigo-300" aria-hidden="true" /> {title}
         </p>
         <button
           type="button"
@@ -292,6 +309,7 @@ export const nativeScannerBridge = (win = typeof window === 'undefined' ? null :
 // i18n
 export const NATIVE_TEXTS = {
   denied: 'Kein Zugriff auf die Kamera. Erlaube sie in den Einstellungen des Geräts (Manga Shelf → Kamera) oder fotografiere den Barcode.',
+  deniedQr: 'Kein Zugriff auf die Kamera. Erlaube sie in den Einstellungen des Geräts (Manga Shelf → Kamera).',
   installing: 'Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.',
   failed: 'Der Barcode-Scanner ließ sich nicht starten.',
   noIsbn: 'Kein ISBN-Barcode erkannt – bitte den Strichcode auf der Buchrückseite scannen.'
@@ -300,7 +318,8 @@ export const NATIVE_TEXTS = {
 const isCancel = (err) => /cancel/i.test(String(err?.message || err || ''));
 
 /** One scan in the native full-screen scanner: the barcodes, [] when the user closed it. */
-export async function scanNative(bridge) {
+export async function scanNative(bridge, formats = 'isbn') {
+  const qr = formats === 'qr';
   const { BarcodeScanner } = bridge.plugins;
   const { BarcodeFormat } = bridge.constants;
   if (bridge.platform === 'android') {
@@ -311,10 +330,14 @@ export async function scanNative(bridge) {
     }
   } else {
     const { camera } = await BarcodeScanner.requestPermissions();
-    if (camera !== 'granted' && camera !== 'limited') throw Object.assign(new Error(tr(NATIVE_TEXTS.denied)), { code: 'CAMERA_DENIED' });
+    if (camera !== 'granted' && camera !== 'limited') {
+      throw Object.assign(new Error(qr ? tr(NATIVE_TEXTS.deniedQr) : tr(NATIVE_TEXTS.denied)), { code: 'CAMERA_DENIED' });
+    }
   }
   try {
-    const { barcodes = [] } = await BarcodeScanner.scan({ formats: [BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA] });
+    const { barcodes = [] } = await BarcodeScanner.scan({
+      formats: qr ? [BarcodeFormat.QrCode] : [BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA]
+    });
     return barcodes;
   } catch (err) {
     if (isCancel(err)) return [];
@@ -326,7 +349,12 @@ export async function scanNative(bridge) {
  * The app's scanner: ML Kit's native full-screen view. The dialog behind it shows the result and `children` (scan list)
  * and starts the next scan; without `continuous` it closes after the first ISBN or when the user cancels.
  */
-function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuous = false, title = tr('Barcode scannen'), children = null }) {
+function NativeScanner({
+  bridge, onDetected, onClose, onPhotoFallback, continuous = false, formats = 'isbn', children = null,
+  title = formats === 'qr' ? tr('QR-Code scannen') : tr('Barcode scannen')
+}) {
+  const qr = formats === 'qr';
+  const Icon = qr ? ScanQrCode : ScanBarcode;
   const [phase, setPhase] = useState('idle');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -342,12 +370,18 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
     setPhase('scanning');
     setMessage('');
     try {
-      const barcodes = await scanNative(bridge);
+      const barcodes = await scanNative(bridge, formats);
       if (!aliveRef.current) return;
       const { onDetected: report, continuous: keepOpen, onClose: done } = handlersRef.current;
       if (!barcodes.length) {
         setPhase('idle');
         if (!keepOpen) done?.();
+        return;
+      }
+      if (formats === 'qr') {
+        setPhase('idle');
+        report?.(firstValue(barcodes));
+        done?.();
         return;
       }
       const isbn = String(pickIsbnBarcode(barcodes) || '').replace(/[^0-9X]/gi, '');
@@ -368,7 +402,7 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
       setError(err?.code === 'SCANNER_INSTALLING' || err?.code === 'CAMERA_DENIED' ? err.message : tr(NATIVE_TEXTS.failed));
       setPhase('error');
     }
-  }, [bridge]);
+  }, [bridge, formats]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -385,12 +419,13 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
     <ScannerFrame
       dialogRef={dialogRef}
       title={title}
+      icon={Icon}
       onClose={close}
       status={message || (lastIsbn ? tr('Erkannt: {isbn}', { isbn: lastIsbn }) : (phase === 'scanning' ? tr('Scanner ist geöffnet…') : ''))}
       actions={(
         <>
           <button type="button" onClick={scan} disabled={phase === 'scanning'} className={`${ROUND_BUTTON} disabled:opacity-50`}>
-            <ScanBarcode className="w-4 h-4" aria-hidden="true" /> {lastIsbn ? tr('Nächsten Barcode scannen') : tr('Barcode scannen')}
+            <Icon className="w-4 h-4" aria-hidden="true" /> {qr ? tr('QR-Code scannen') : (lastIsbn ? tr('Nächsten Barcode scannen') : tr('Barcode scannen'))}
           </button>
           {onPhotoFallback && phase !== 'error' && (
             <button type="button" onClick={switchToPhoto} className={ROUND_BUTTON}>
@@ -405,7 +440,7 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
           <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
             {phase === 'scanning'
               ? <LoaderCircle className="w-8 h-8 animate-spin text-slate-300" />
-              : <ScanBarcode className="w-16 h-16 text-indigo-300/70" />}
+              : <Icon className="w-16 h-16 text-indigo-300/70" />}
           </div>
         )}
     >
@@ -417,6 +452,7 @@ function NativeScanner({ bridge, onDetected, onClose, onPhotoFallback, continuou
 /**
  * Full-screen barcode scanner: ML Kit in the app, else the page camera (BarcodeDetector or ZXing) with a torch toggle.
  * Each new ISBN calls onDetected; without `continuous` it closes after the first. `children` sit under the viewfinder.
+ * `formats="qr"` reads QR codes instead: the first one's text goes to onDetected once, then it closes.
  */
 export default function LiveScanner({ native = nativeScannerBridge(), ...props }) {
   return native ? <NativeScanner bridge={native} {...props} /> : <CameraScanner {...props} />;

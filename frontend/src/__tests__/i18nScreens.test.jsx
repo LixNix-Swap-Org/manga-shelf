@@ -7,6 +7,7 @@ import { SCREENS, renderScreen } from './i18nScreens.jsx';
 import { getLanguage } from '../i18n/index.js';
 
 const BASELINE = path.join(import.meta.dirname, '__snapshots__', 'i18nScreens.de.json');
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')).version;
 const update = import.meta.env.UPDATE_I18N_BASELINE === '1' || globalThis.process?.env.UPDATE_I18N_BASELINE === '1';
 const stored = fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, 'utf8')) : {};
 const fresh = {};
@@ -19,7 +20,7 @@ describe('German screen texts stay byte-identical', () => {
   for (const screen of SCREENS) {
     it(screen.name, async () => {
       expect(getLanguage()).toBe('de');
-      const lines = await renderScreen(screen);
+      const lines = (await renderScreen(screen)).map((line) => line.split(`v${APP_VERSION}`).join('vX.Y.Z'));
       expect(lines.length).toBeGreaterThan(2);
       fresh[screen.name] = lines;
       if (!update) expect(lines).toEqual(stored[screen.name]);
