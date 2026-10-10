@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import OnlineResults, { clearOnlineAnswers } from '../components/dashboard/OnlineResults';
 import MangaCollectionGrid from '../components/dashboard/MangaCollectionGrid';
 import { matchHit, retryAfterSeconds, visibleHits } from '../utils/onlineMatch';
-import { hitToForm, lookupSourceLabels } from '../utils/lookupPrefill';
+import { hitToForm, lookupSourceLabels, releasedSoFar } from '../utils/lookupPrefill';
 import { lookupSourceLabels as modalSourceLabels } from '../components/modals/AddMangaModal';
 import { setDefaultLanguage } from '../utils/editions';
 import { fakeResponse } from './fakeResponse';
@@ -159,7 +159,7 @@ describe('OnlineResults', () => {
     expect(onAdd).toHaveBeenCalledWith({
       form: {
         language: 'de', region: 'DE', currency: 'EUR', title: 'Frieren', alt_title: 'Sousou no Frieren', author: 'Kanehito Yamada',
-        publisher: 'Egmont', status: 'Laufend', total_volumes: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
+        publisher: 'Egmont', status: 'Laufend', total_volumes: '', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
       },
       volume: null
     });
@@ -349,10 +349,10 @@ describe('lookupPrefill', () => {
   it('maps a hit onto the current form exactly as the add dialog always did', () => {
     expect(hitToForm(MP_HIT, previous)).toEqual({
       ...previous, title: 'Frieren', alt_title: 'Sousou no Frieren', author: 'Kanehito Yamada', publisher: 'Egmont', status: 'Laufend',
-      total_volumes: '5', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
+      total_volumes: '5', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
     });
     expect(hitToForm({ ...AL_HIT, publisher: 'Unbekannt', status: 'Unbekannt', cover_image: '' }, previous)).toEqual({
-      ...previous, title: AL_HIT.title, author: 'Kanehito Yamada', total_volumes: '13', work_key: 'anilist:1'
+      ...previous, title: AL_HIT.title, author: 'Kanehito Yamada', total_volumes: '13', tags: '', work_key: 'anilist:1'
     });
     expect(hitToForm({ id: 'mal_5', source: 'mal', title: 'X' }, previous).work_key).toBe('mal:5');
     expect(hitToForm(MP_HIT, { ...previous, language: 'en' }).manga_passion_id).toBeNull();
@@ -360,8 +360,23 @@ describe('lookupPrefill', () => {
 
   it('without a form it only names what the hit brings, so the dialog keeps its defaults for the rest', () => {
     expect(hitToForm({ id: 'al_3', source: 'anilist', title: 'Y' }, { language: 'de' })).toEqual({
-      language: 'de', title: 'Y', total_volumes: '', manga_passion_id: null, work_key: 'anilist:3'
+      language: 'de', title: 'Y', total_volumes: '', tags: '', manga_passion_id: null, work_key: 'anilist:3'
     });
+  });
+
+  it('takes the tags of the picked hit and never keeps those of an earlier pick', () => {
+    const tags = 'Shounen, Action, Comedy';
+    expect(hitToForm({ ...MP_HIT, tags }, previous).tags).toBe(tags);
+    expect(hitToForm(AL_HIT, { ...previous, tags }).tags).toBe('');
+  });
+
+  it('names the released count only for a running series whose total stays open', () => {
+    expect(releasedSoFar(MP_HIT)).toBe(12);
+    expect(releasedSoFar({ ...MP_HIT, status: 'Releasing', total_volumes: '22' })).toBe(22);
+    expect(releasedSoFar(AL_HIT)).toBeNull();
+    expect(releasedSoFar({ ...MP_HIT, total_volumes: null })).toBeNull();
+    expect(releasedSoFar({ ...MP_HIT, total_volumes: 0 })).toBeNull();
+    expect(releasedSoFar(null)).toBeNull();
   });
 
   it('the dialog still exports the shared source badges', () => {

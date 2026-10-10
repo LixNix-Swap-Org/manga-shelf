@@ -722,6 +722,14 @@ describe('useMangaData: pure helpers', () => {
     expect(mergeEditLookup(prev, { publisher: 'Panini' }).publisher).toBe('Panini');
   });
 
+  it('mergeEditLookup fills tags only when the series has none', () => {
+    const tags = 'Shounen, Action';
+    expect(mergeEditLookup(buildFormData({ title: 'A' }), { tags }).tags).toBe(tags);
+    expect(mergeEditLookup(buildFormData({ title: 'A', tags: '  ' }), { tags }).tags).toBe(tags);
+    expect(mergeEditLookup(buildFormData({ title: 'A', tags: 'Fantasy' }), { tags }).tags).toBe('Fantasy');
+    expect(mergeEditLookup(buildFormData({ title: 'A' }), { title: 'B' }).tags).toBe('');
+  });
+
   it('normalizeLookupStatus keeps the previous value for unknown statuses', () => {
     expect(normalizeLookupStatus('Unbekannt', 'Pausiert')).toBe('Pausiert');
     expect(normalizeLookupStatus(undefined, 'Laufend')).toBe('Laufend');

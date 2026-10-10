@@ -51,7 +51,7 @@ function fakeCaches(fetchImpl) {
 }
 
 /** Runs public/sw.js against fake globals; returns its event handlers and helpers to dispatch them. */
-function loadWorker({ version, fetchImpl, caches, catalogs = null }) {
+function loadWorker({ version, fetchImpl, caches, catalogs = null, precache = null }) {
   const listeners = {};
   const self = {
     addEventListener: (type, fn) => { listeners[type] = fn; },
@@ -60,6 +60,7 @@ function loadWorker({ version, fetchImpl, caches, catalogs = null }) {
     location: { origin: ORIGIN }
   };
   let source = swSource.replaceAll('__APP_VERSION__', version);
+  if (precache) source = source.replace('/*__PRECACHE__*/', precache.map((file) => JSON.stringify(file)).join(', '));
   if (catalogs) source = source.replace('/*__CATALOGS__*/', Object.entries(catalogs).map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(', '));
   new Function('self', 'caches', 'fetch', 'Response', 'URL', 'console', source)(self, caches, fetchImpl, Response, URL, { warn: () => {} });
 
@@ -77,9 +78,9 @@ function loadWorker({ version, fetchImpl, caches, catalogs = null }) {
     await Promise.all(extra);
     return res;
   };
-  const message = async (data, origin = '') => {
+  const message = async (data, origin = '', ports = []) => {
     let pending;
-    listeners.message({ data, origin, waitUntil: (p) => { pending = p; } });
+    listeners.message({ data, origin, ports, waitUntil: (p) => { pending = p; } });
     return pending;
   };
   return { install: () => lifecycle('install'), activate: () => lifecycle('activate'), request, message, self };
@@ -270,6 +271,18 @@ describe('service worker', () => {
     const sw = loadWorker({ version: '3', fetchImpl: vi.fn(), caches: fakeCaches(vi.fn()) });
     expect(await sw.request('/api/auth/me')).toBeUndefined();
     expect(await sw.request('/uploads/a.jpg', { method: 'POST' })).toBeUndefined();
+  });
+
+  it('HAS_FILE answers on the given port whether the release precaches a file', async () => {
+    const sw = loadWorker({ version: '7', fetchImpl: vi.fn(), caches: fakeCaches(vi.fn()), precache: ['/assets/index-A.js', '/assets/index-A.css'] });
+    const port = { postMessage: vi.fn() };
+    await sw.message({ type: 'HAS_FILE', url: '/assets/index-A.js' }, '', [port]);
+    await sw.message({ type: 'HAS_FILE', url: '/assets/index-B.js' }, '', [port]);
+    await sw.message({ type: 'HAS_FILE' }, '', [port]);
+    expect(port.postMessage.mock.calls).toEqual([[true], [false], [false]]);
+    await sw.message({ type: 'HAS_FILE', url: '/assets/index-A.js' }, 'https://evil.test', [port]);
+    await sw.message({ type: 'HAS_FILE', url: '/assets/index-A.js' });
+    expect(port.postMessage).toHaveBeenCalledTimes(3);
   });
 
   it('ignores messages from a foreign origin', async () => {

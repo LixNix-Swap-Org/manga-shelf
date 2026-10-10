@@ -413,6 +413,36 @@ describe('StatsModal', () => {
     const put = fetchMock.mock.calls.find(([url, opts]) => url === '/api/stats/settings' && opts?.method === 'PUT');
     expect(JSON.parse(put[1].body)).toEqual({ collection_start_date: '2022-02-02' });
   });
+
+  it('a stored start date is marked and can be switched back to the derived one', async () => {
+    fetchMock.mockResolvedValueOnce(response(statsBody({ summary: { collection_start_date_source: 'stored' } })));
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    expect(screen.getByText('festgelegt')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Datum ändern' }));
+    fetchMock.mockResolvedValueOnce(response({ success: true }));
+    fetchMock.mockResolvedValueOnce(response(statsBody({
+      summary: { collection_start_date: '2026-10-10', collection_start_date_source: 'derived', collection_days: 1 }
+    })));
+    fireEvent.click(screen.getByRole('button', { name: 'Automatisch aus den Daten' }));
+    expect(await screen.findByText('1 Tag aktiv')).toBeTruthy();
+    const put = fetchMock.mock.calls.find(([url, opts]) => url === '/api/stats/settings' && opts?.method === 'PUT');
+    expect(JSON.parse(put[1].body)).toEqual({ collection_start_date: null });
+    expect(screen.queryByText('festgelegt')).toBeNull();
+    expect(screen.queryByLabelText(/Sammlungs-Startdatum festlegen/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Datum ändern' }));
+    expect(screen.queryByRole('button', { name: 'Automatisch aus den Daten' })).toBeNull();
+  });
+
+  it('a derived start date has no hint and no button to switch back', async () => {
+    fetchMock.mockResolvedValueOnce(response(statsBody({ summary: { collection_start_date_source: 'derived' } })));
+    render(ui());
+    await screen.findByText('1.234,50 €');
+    expect(screen.queryByText('festgelegt')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Datum ändern' }));
+    expect(screen.getByLabelText(/Sammlungs-Startdatum festlegen/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Automatisch aus den Daten' })).toBeNull();
+  });
 });
 
 describe('SpendingCard', () => {

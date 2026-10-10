@@ -11,7 +11,7 @@ import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
   PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
-  continueTarget
+  continueTarget, airedEpisodes, stillAiring
 } from '../../utils/animeHelpers';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { t } from '../../i18n/index.js';
@@ -43,12 +43,14 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     setNotes(progress?.notes || '');
   }, [progress]);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
+  const aired = airedEpisodes(anime);
+  const airing = stillAiring(anime);
   const clamp = (n) => Math.max(0, max ? Math.min(max, n) : n);
   const save = (e) => {
     e.preventDefault();
     const change = {};
     if (episodes !== (progress?.episodes_watched ?? 0)) change.episodes_watched = Number(episodes) || 0;
-    if (status !== (progress?.status || null)) change.status = status;
+    if (status !== (progress?.status || 'Geplant')) change.status = status; // i18n-ignore: stored value
     if ((score ? Number(score) : null) !== (progress?.score ?? null)) change.score = score ? Number(score) : null;
     if ((notes.trim() || null) !== (progress?.notes ?? null)) change.notes = notes.trim() || null;
     if (!progress && !Object.keys(change).length) change.status = status;
@@ -58,7 +60,7 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     <form onSubmit={save} className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : t('Gesehene Folgen')}</label>
+          <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired }) : t('Gesehene Folgen')}</label>
           <div className="flex items-center gap-1">
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => setEpisodes((n) => clamp(Number(n) - 1))}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             <input id={`${ids}-ep`} type="number" min="0" max={max} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}
@@ -69,7 +71,10 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
         <div>
           <label htmlFor={`${ids}-status`} className="block text-[11px] text-slate-400 mb-1">{t('Status')}</label>
           <select id={`${ids}-status`} className="input-field text-base sm:text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {PROGRESS_STATUSES.map((s) => <option key={s} value={s}>{animeProgressLabel(s)}</option>)}
+            {PROGRESS_STATUSES.map((s) => {
+              const locked = airing && s === 'Gesehen';
+              return <option key={s} value={s} disabled={locked} title={locked ? t('Läuft noch') : undefined}>{animeProgressLabel(s)}</option>;
+            })}
           </select>
         </div>
         <div>
@@ -110,6 +115,7 @@ export default function AnimeDetailModal({
   hasFallback.current = Boolean(fallback);
   const titleId = useId();
   const dialogRef = useDialogA11y(isOpen, { onClose });
+  const latest = useRef(null);
 
   const load = useCallback(async () => {
     if (!animeId) return;
@@ -123,6 +129,7 @@ export default function AnimeDetailModal({
       setError(hasFallback.current ? '' : (err.message || t('Anime konnte nicht geladen werden')));
     }
   }, [animeId, begin, fetchDetail]);
+  latest.current = { animeId, load };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -180,6 +187,23 @@ export default function AnimeDetailModal({
     });
   };
 
+  const onRemove = () => run(async () => {
+    const id = animeId;
+    const prev = anime.my_progress;
+    const removed = await removeFromMyList(id);
+    await load();
+    if (!removed || !prev) return;
+    notify.success(t('Von deiner Liste entfernt'), {
+      action: {
+        label: t('Rückgängig'),
+        onClick: async () => {
+          const saved = await updateProgress(id, { status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes, restore: true });
+          if (saved && latest.current?.animeId === id) latest.current.load();
+        }
+      }
+    });
+  });
+
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
   const saveTitle = (e) => {
     e.preventDefault();
@@ -192,6 +216,7 @@ export default function AnimeDetailModal({
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
   const relations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
   const next = continueTarget(anime);
+  const aired = anime ? airedEpisodes(anime) : null;
 
   return (
     <div
@@ -278,7 +303,7 @@ export default function AnimeDetailModal({
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
                   <OwnProgress anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy}
-                    onRemove={() => run(async () => { await removeFromMyList(animeId); await load(); })} />
+                    onRemove={onRemove} />
                 </section>
               )}
 
@@ -290,7 +315,7 @@ export default function AnimeDetailModal({
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
                         <span className="font-semibold text-slate-100 w-28 truncate">{p.username}</span>
                         <span>{animeProgressLabel(p.status)}</span>
-                        <span className="font-mono">{progressText(p.episodes_watched, anime.episodes)}</span>
+                        <span className="font-mono">{progressText(p.episodes_watched, anime.episodes, aired)}</span>
                         {p.score ? <span>{p.score}/10</span> : null}
                       </li>
                     ))}

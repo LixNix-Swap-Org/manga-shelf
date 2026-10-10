@@ -218,10 +218,17 @@ async function create(ctx, { body }) {
     if (!anilistId && !malId) {
         const title = cleanTitle(body.title, { required: true });
         const episodes = cleanEpisodes(body.episodes);
-        const result = ctx.db.prepare(`
+        const insert = ctx.db.prepare(`
             INSERT INTO animes (title, episodes, manga_id, notes, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-        `).run(title, episodes ?? null, mangaId, cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null, ctx.user.id, sqlNow(ctx));
-        return { status: 201, body: detailOf(ctx, Number(result.lastInsertRowid)) };
+        `);
+        const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
+        const newId = ctx.db.transaction(() => {
+            const id = Number(insert.run(title, episodes ?? null, mangaId, notes, ctx.user.id, sqlNow(ctx)).lastInsertRowid);
+            writeProgress(ctx, id, ctx.user.id, { status: 'Geplant' });
+            return id;
+        });
+        listSync.schedulePush(ctx, ctx.user.id, newId);
+        return { status: 201, body: detailOf(ctx, newId) };
     }
 
     let meta;
@@ -239,9 +246,12 @@ async function create(ctx, { body }) {
     const id = ctx.db.transaction(() => {
         const again = duplicateOf(ctx, meta.anilist_id, meta.mal_id);
         if (again) return { duplicate: again };
-        return { id: store.insertFromMeta(ctx, meta, images, { manga_id: mangaId, title }) };
+        const newId = store.insertFromMeta(ctx, meta, images, { manga_id: mangaId, title });
+        writeProgress(ctx, newId, ctx.user.id, { status: 'Geplant' });
+        return { id: newId };
     });
     if (id.duplicate) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: id.duplicate });
+    listSync.schedulePush(ctx, ctx.user.id, id.id);
     gateway.scheduleIdResolution(ctx, id.id);
     return { status: 201, body: detailOf(ctx, id.id) };
 }
@@ -299,7 +309,10 @@ function updateProgress(ctx, { params, body }) {
     const score = parseScore(body.score);
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const saved = ctx.db.transaction(() => {
-        loadRow(ctx, id);
+        const anime = loadRow(ctx, id);
+        if (body.status === 'Gesehen' && body.restore !== true && (anime.status === 'RELEASING' || anime.status === 'NOT_YET_RELEASED')) {
+            throw badRequest(msg('Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“'), 'STILL_AIRING');
+        }
         return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes });
     });
     listSync.schedulePush(ctx, userId, id);

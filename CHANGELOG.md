@@ -7,6 +7,31 @@
 - **Online hits below the shelf,** at most ten, each with a note: already in your collection (link), another edition is (language) or a similar title exists (link). Editors add a hit with "Create": the add dialog opens prefilled, as after Auto-fill, and after confirming you land on the new series. Guests can search online but not add. Not available offline.
 - **Online search without changing the setting:** in the collection-only mode, "Search online for “…”" below the shelf and in the empty panel looks up the current text once. When nothing in the collection matches, the "No matches found" panel offers the online search and, for editors, "Create new series “…”" (the add dialog opens with the title).
 
+### Collection
+- **A series without a total no longer shows "6 / 6" and 100 %;** it shows "6 Bde." (the detail page "6 / ?") and sorts last by completion. With a total, the target still grows to the highest owned volume number.
+- **Announced volumes that are not released yet no longer count as gaps or go onto the shopping list;** the gap banner shows them as "+ N angekündigt", and the shelf keeps their placeholder so they can be pre-ordered.
+- **"Alle auf Einkaufsliste" adds only regular volumes;** special editions and Schuber have their own button, "Auch N Sonderausgaben/Schuber". Each import still asks for confirmation.
+- **Gap import:** volumes that are not released yet are stored as "Erscheint bald" instead of "Fehlt" (`POST /api/mangas/:id/batch-import-gaps`, also for scripts).
+- **"Mehrere Bände anlegen"** proposes the range after your highest regular volume up to the known total (the larger of the stored total and the Manga Passion count, otherwise ten volumes), takes over the series' publisher when the field stays empty and, for series linked to Manga Passion, fills in prices and release dates of the new volumes automatically.
+- **Genres/tags:** the add dialog and the online hits take over the picked hit's genres; the edit Auto-Fill fills them only when the series has none. For a running series whose total stays open, the total field shows "bisher N erschienen" as a hint.
+- **A single new volume takes its release year from the release date** (`POST /api/volumes`).
+- **Series page:** the decorative glow no longer creates a hidden scroll area, and publisher chips in the tile view use the full row width.
+
+### Anime
+- **"Geplant" resets the episode counter.** A counter together with "Geplant" (also an AniList entry that is planned but has progress) becomes "Schaue" and is kept. The finish date is cleared when the status leaves "Gesehen", and "Geplant" clears the start date.
+- **+1 or a lowered counter on a "Gesehen" entry** switches it to "Schaue", unless the counter reaches the known episode count.
+- **"Gesehen" is refused while a series is still airing or not out yet:** the status menus disable it ("Läuft noch") and `PUT /api/anime/:id/progress` answers 400 `STILL_AIRING`. Reaching a known episode count, a share, the Crunchyroll history and the AniList pull still set it.
+- **A newly added anime is "Geplant" for the person who added it** (`POST /api/anime` answers with `my_progress`).
+- **Running series without an episode count** show the episodes aired so far ("12 / 1180+", the bar runs against them); display only.
+- **"Von meiner Liste entfernen" can be undone** from the notice; start and finish date then become the day of the undo.
+- **Anime statistics:** the status tiles ("Meine Liste") count only your own list (`anime.watching`, `completed` and `planned` of `GET /api/stats` for scripts); "Einträge" still counts all entries.
+
+### Statistics
+- **`summary.collection_start_date_source`** in `GET /api/stats` tells whether the collection start was set by hand (`stored`) or derived from the data (`derived`). Admins get "Automatisch aus den Daten" in the date form to drop a hand-set date, and the collecting-time tile says "festgelegt" while one is set.
+
+### PWA
+- **The "Neue Version verfügbar" notice no longer shows when the waiting service worker belongs to the release that is already open:** the page asks it (message `HAS_FILE`, answer within 1 s) whether it precaches the entry script it runs. Another release, no answer or no `MessageChannel` show the notice as before.
+
 ## 3.1.0
 
 ### Before updating

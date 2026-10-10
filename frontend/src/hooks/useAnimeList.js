@@ -244,7 +244,7 @@ export default function useAnimeList({ user }) {
    * Works without the entry in the list (not loaded yet or from an old cache).
    */
   const undoWatched = useCallback(async (id, previous) => {
-    const change = previous ? { status: previous.status, episodes_watched: previous.episodes_watched || 0 } : null;
+    const change = previous ? { status: previous.status, episodes_watched: previous.episodes_watched || 0, restore: true } : null;
     if (listRef.current.some((a) => a.id === id)) return change ? Boolean(await updateProgress(id, change)) : removeFromMyList(id);
     try {
       if (change) await api.put(`/api/anime/${id}/progress`, change, { fallback: t('Fortschritt konnte nicht gespeichert werden') });

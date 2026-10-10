@@ -9,6 +9,7 @@ export const IOS_HINT_TEXT = 'Für Offline im Laden: Teilen → Zum Home-Bildsch
 // i18n
 export const UPDATE_TEXT = 'Neue Version verfügbar';
 export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+export const WORKER_ANSWER_TIMEOUT_MS = 1000;
 
 const isStandalone = (win = globalThis.window) => Boolean(
   win?.matchMedia?.('(display-mode: standalone)').matches || win?.navigator?.standalone === true
@@ -59,6 +60,27 @@ export function warmLanguageCache(reg, languages = warmLanguages()) {
   }
 }
 
+/** Asks a service worker whether its precache holds `url` (public/sw.js HAS_FILE); false without an answer in time. */
+export function workerHasFile(worker, url, timeoutMs = WORKER_ANSWER_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const channel = new globalThis.MessageChannel();
+    let timer = null;
+    const finish = (value) => {
+      clearTimeout(timer);
+      channel.port1.onmessage = null;
+      channel.port1.close();
+      resolve(value);
+    };
+    timer = setTimeout(() => finish(false), timeoutMs);
+    channel.port1.onmessage = (event) => finish(event.data === true);
+    try {
+      worker.postMessage({ type: 'HAS_FILE', url }, [channel.port2]);
+    } catch (_) {
+      finish(false);
+    }
+  });
+}
+
 /**
  * Offers a waiting service worker as a toast ('Neu laden' posts SKIP_WAITING), reloads once the new worker took over
  * and checks for updates when the app returns to the foreground, at most hourly. Safe to call more than once.
@@ -89,10 +111,16 @@ export function watchServiceWorkerUpdates({
   const offer = (worker) => {
     if (!worker || offered.has(worker) || !container.controller) return;
     offered.add(worker);
-    notify.info(t(UPDATE_TEXT), {
+    const show = () => notify.info(t(UPDATE_TEXT), {
       duration: 0,
       action: { label: t('Neu laden'), onClick: () => worker.postMessage({ type: 'SKIP_WAITING' }) }
     });
+    const entry = doc?.querySelector?.('script[type="module"][src^="/assets/index-"]')?.getAttribute('src');
+    if (!entry || typeof globalThis.MessageChannel !== 'function') {
+      show();
+      return;
+    }
+    workerHasFile(worker, entry).then((has) => { if (!has) show(); });
   };
 
   const track = (worker) => {

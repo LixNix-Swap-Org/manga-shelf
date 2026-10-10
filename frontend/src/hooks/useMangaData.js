@@ -68,6 +68,7 @@ export function mergeEditLookup(prev, item, coverUrl) {
     publisher: (item.publisher && item.publisher !== 'Unbekannt') ? item.publisher : prev.publisher,
     status: normalizeLookupStatus(item.status, prev.status),
     total_volumes: prefillTotalVolumes(item, prev.total_volumes),
+    tags: String(prev.tags ?? '').trim() ? prev.tags : (item.tags || prev.tags),
     description: item.description || prev.description,
     cover_image: coverUrl || prev.cover_image,
     manga_passion_id: item.manga_passion_id || prev.manga_passion_id

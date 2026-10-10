@@ -51,20 +51,27 @@ export const displayTitle = (anime) => (anime?.title_de || anime?.title || '').t
 /** 'TV · 2023' */
 export const formatYearLine = (anime) => [formatLabel(anime?.format), anime?.season_year].filter(Boolean).join(' · ');
 
-/** '7 / 12', '7 / ?' while the episode count is unknown. */
-export function progressText(watched, total) {
-  return `${Number(watched) || 0} / ${total > 0 ? total : '?'}`;
+/** Episodes aired so far of a show without an episode count (from a confirmed next airing), else null. Display only. */
+export const airedEpisodes = (anime) => (anime?.episodes > 0 ? null
+  : (anime?.next_airing && !anime.next_airing.estimated && anime.next_airing.episode > 1 ? anime.next_airing.episode - 1 : null));
+
+/** True while the show still airs or is not out yet. */
+export const stillAiring = (anime) => anime?.status === 'RELEASING' || anime?.status === 'NOT_YET_RELEASED';
+
+/** '7 / 12', '12 / 1180+' with only the aired episodes known, '7 / ?' while the episode count is unknown. */
+export function progressText(watched, total, aired = null) {
+  return `${Number(watched) || 0} / ${total > 0 ? total : aired > 0 ? `${aired}+` : '?'}`;
 }
 
-/** 0..100 for the progress bar; null without a known episode count. */
-export function progressPercent(watched, total) {
-  if (!(total > 0)) return null;
-  return Math.max(0, Math.min(100, Math.round(((Number(watched) || 0) / total) * 100)));
+/** 0..100 for the progress bar (against the aired episodes without a total); null without either. */
+export function progressPercent(watched, total, aired = null) {
+  const of = total > 0 ? total : aired > 0 ? aired : null;
+  if (of === null) return null;
+  return Math.max(0, Math.min(100, Math.round(((Number(watched) || 0) / of) * 100)));
 }
 
-/** True when +1 makes no sense: watched, or the counter reached a known episode count. */
+/** True when +1 makes no sense: the counter reached a known episode count. */
 export function plusOneDisabled(progress, total) {
-  if (progress?.status === 'Gesehen') return true;
   return total > 0 && (progress?.episodes_watched || 0) >= total;
 }
 
@@ -154,16 +161,23 @@ export function withProgress(anime, progress, user) {
 
 /**
  * The optimistic answer of a progress change, by the server's rules: counter clamped to a known episode count,
- * reaching it means "Gesehen", "Gesehen" fills the counter, a counter above 0 moves "Geplant" to "Schaue".
+ * reaching it means "Gesehen", "Gesehen" fills the counter, a counter above 0 moves "Geplant" to "Schaue", choosing
+ * "Geplant" alone resets the counter, a counter below the total (or with none) moves "Gesehen" back to "Schaue".
  */
 export function predictProgress(current, change, total) {
   const base = current || { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
+  const watched = change.episodes_watched;
   let status = change.status ?? base.status;
-  let episodes = change.episodes_watched ?? base.episodes_watched ?? 0;
+  let episodes = watched ?? base.episodes_watched ?? 0;
   if (total > 0 && episodes > total) episodes = total;
   if (change.status === 'Gesehen' && total > 0) episodes = total;
-  if (change.episodes_watched !== undefined && change.status === undefined && total > 0 && episodes >= total) status = 'Gesehen';
-  if (change.episodes_watched !== undefined && change.status === undefined && status === 'Geplant' && episodes > 0) status = 'Schaue';
+  if (watched !== undefined && change.status === undefined && total > 0 && episodes >= total) status = 'Gesehen';
+  if (watched !== undefined && change.status === undefined && status === 'Geplant' && episodes > 0) status = 'Schaue';
+  if (status === 'Geplant' && episodes > 0) {
+    if (change.status === 'Geplant' && watched === undefined) episodes = 0;
+    else status = 'Schaue';
+  }
+  if (watched !== undefined && change.status === undefined && status === 'Gesehen' && (!(total > 0) || episodes < total)) status = 'Schaue';
   const next = {
     ...base,
     status,
@@ -171,6 +185,8 @@ export function predictProgress(current, change, total) {
     score: change.score !== undefined ? change.score : base.score,
     notes: change.notes !== undefined ? change.notes : base.notes
   };
+  if (status !== 'Gesehen') next.finished_at = null;
+  if (status === 'Geplant') next.started_at = null;
   // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
   if (episodes !== (base.episodes_watched ?? 0)) {
     next.resume_url = null;

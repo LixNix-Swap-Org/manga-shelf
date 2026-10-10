@@ -7,8 +7,8 @@ function animeStats(ctx) {
             count(DISTINCT CASE WHEN status = 'Schaue' THEN anime_id END) AS watching,
             count(DISTINCT CASE WHEN status = 'Gesehen' THEN anime_id END) AS completed,
             count(DISTINCT CASE WHEN status = 'Geplant' THEN anime_id END) AS planned
-        FROM anime_progress
-    `).get();
+        FROM anime_progress WHERE user_id = ?
+    `).get(ctx.user.id);
     const perUser = ctx.db.prepare(`
         SELECT u.id AS user_id, u.username, sum(p.episodes_watched) AS episodes_watched,
                sum(p.episodes_watched * COALESCE(a.duration, 0)) AS watch_minutes,

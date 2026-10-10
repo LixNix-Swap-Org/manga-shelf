@@ -29,6 +29,9 @@
   "+ {n} Extras|+ {n} Extras": {
     "other": "+ 他{n}件の特典"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "other": "+ 発表済み{n}件"
+  },
   "-- Keine Angabe --": "-- 指定なし --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1件のアカウントは復元後にパスワードのリセットが必要です(バックアップにパスワードがありません): {names}。",
   "32 Zeichen aus 0–9 und a–f": "0～9とa～fの32文字",
@@ -207,6 +210,9 @@
   "Art des Eintrags": "項目の種類",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "あなたのアカウント「{name}」にもパスワードがありません。その後、新しいパスワードを設定できるのは、ユーザー管理での別の管理者か、サーバー上のコンソールコマンド「{command}」だけです。",
   "Auch für automatische Aktualisierungen verwenden": "自動更新にも使う",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "other": "特別版/ボックスセットも{n}点"
+  },
   "Auf Crunchyroll suchen": "Crunchyrollで検索",
   "Auf Einkaufsliste setzen": "買い物リストに入れる",
   "Auf Server übertragen": "サーバーに転送",
@@ -250,6 +256,7 @@
     "other": "自動調整: {items}を{n}段で表示"
   },
   "Automatisch": "自動",
+  "Automatisch aus den Daten": "データから自動設定",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "毎日の自動バックアップとスナップショットからの復元",
   "Autor": "作者",
   "Autor / Mangaka": "作者 / 漫画家",
@@ -536,6 +543,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "このリンクは、Web版の「アプリと接続」(ホーム画面の下部)にQRコードとコピー用として表示されます。",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "キーをBooks APIに制限してコピーし、下に貼り付けます。",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "未所持の{volume}巻をステータス「{status}」で登録しますか？",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "未所持の{volume}巻を買い物リストに入れますか？",
   "Der Band existiert bereits": "この巻はすでに存在します",
   "Der Barcode-Scanner ließ sich nicht starten.": "バーコードスキャナーを起動できませんでした。",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "バーコードスキャナーをGoogle Playサービス経由でインストール中です。しばらくしてからもう一度お試しください。",
@@ -1013,6 +1021,7 @@
   "Geschätzter Gesamtpreis": "合計価格の目安",
   "Gesehen": "視聴済み",
   "Gesehene Folgen": "視聴済みの話数",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "視聴済みの話数(これまでに{aired}話放送)",
   "Gesehene Folgen (von {max})": "視聴済みの話数(全{max}話中)",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "視聴済みの話数は0以上の整数にしてください",
   "Gesetzte Tags": "設定済みのタグ",
@@ -1326,6 +1335,8 @@
   "Lädt… {loaded} von {total} MB": "読み込み中… {loaded}/{total} MB",
   "Läuft": "放送中",
   "Läuft gerade": "実行中",
+  "Läuft noch": "まだ放送中",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "放送中です – 「視聴済み」は最終話のあとで選べます。「視聴中」を選んでください",
   "Läuft seit": "稼働開始",
   "Löschen": "削除",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "削除は他の変更と同時に行えません",
@@ -1400,6 +1411,7 @@
   "Mehrere Reihen passen – bitte auswählen": "複数のシリーズが一致します – 選択してください",
   "Mein Fortschritt": "自分の進捗",
   "Meine": "自分",
+  "Meine Liste": "自分のリスト",
   "Meine Notiz": "自分のメモ",
   "Meine Vorbestellungen & Budget": "自分の予約と予算",
   "Meine Vorbestellungen & Lieferungen": "自分の予約と配送",
@@ -2193,6 +2205,7 @@
   "Vom Manga ({publisher}) übernehmen": "マンガから引き継ぐ({publisher})",
   "Vom Server holen": "サーバーから取得",
   "Von Band": "開始巻",
+  "Von deiner Liste entfernt": "リストから削除しました",
   "Von der Wunschliste": "ウィッシュリストから外す",
   "Von meiner Liste entfernen": "自分のリストから削除",
   "Vor Update": "更新前",
@@ -2375,6 +2388,7 @@
   "aus der Umgebung gesetzt": "環境から設定されています",
   "beginnt mit „AIza“, 39 Zeichen": "「AIza」で始まる39文字",
   "beschädigt": "破損",
+  "bisher {n} erschienen": "これまでに{n}巻発売",
   "collecting::Pausiert": "一時停止中",
   "diesen Band": "この巻",
   "drei Buchstaben, z. B. EUR": "アルファベット3文字、例: EUR",
@@ -2394,6 +2408,7 @@
   },
   "fehlt": "未所持",
   "fehlt ({count})": "未所持({count})",
+  "festgelegt": "設定済み",
   "freier Speicher unbekannt": "空き容量不明",
   "gehört zu einem anderen Manga-Shelf-Server": "別のManga Shelfサーバーのものです",
   "gelesen": "既読",
@@ -2643,11 +2658,20 @@
   "{n} Seiten|{n} Seiten": {
     "other": "{n}ページ"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "other": "特別版/ボックスセット{n}点をステータス「{status}」で登録しますか？"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "other": "特別版/ボックスセット{n}点を買い物リストに入れますか？"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n}日{hours}時間"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}日"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "other": "未所持の{n}冊を買い物リストに入れますか？"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "オンラインで{n}件見つかりました"
@@ -2726,6 +2750,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: {owners}が所持",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: まだ未所持で、買い物リストにもありません",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} 復元すると、現在のSQLiteデータベース({file})とカバー画像が、選択したZIPアーカイブの状態で上書きされます。まずバックアップを確認し、内容を見てから復元を確定します。",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "これまでに放送された{aired}話のうち{watched}話を視聴済み",
   "{watched} von unbekannt vielen Folgen gesehen": "全話数は不明で、{watched}話を視聴済み",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "other": "全{n}話中{watched}話を視聴済み"

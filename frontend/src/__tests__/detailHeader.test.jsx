@@ -1,7 +1,7 @@
 // Detail header components: hero card, batch dialogs, gap notices, edition and add-volume bars.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
-import BatchAddModal, { validateBatchRange, batchResultText } from '../components/detail/BatchAddModal';
+import BatchAddModal, { validateBatchRange, batchResultText, batchDefaults } from '../components/detail/BatchAddModal';
 import BatchReadModal, { batchReadTarget } from '../components/detail/BatchReadModal';
 import MangaHeroCard, { heroCoverUrl, shouldShowCover, authorShelfPath, tagShelfPath, lookupBadgeLabels, TagEditor } from '../components/detail/MangaHeroCard';
 import Toaster from '../components/common/Toaster';
@@ -32,6 +32,87 @@ describe('BatchAddModal', () => {
     expect(validateBatchRange('5', '3')).toMatch(/nicht größer/);
     expect(validateBatchRange('1abc', '3')).toMatch(/ganze/);
     expect(validateBatchRange('1.5', '3')).toMatch(/ganze/);
+  });
+
+  it('starts after the highest regular volume and runs to the known total, else ten volumes, at most 300', () => {
+    const owned = [1, 2, 3, 4, 5, 6].map((n) => ({ volume_number: String(n) }));
+    const extras = [{ volume_number: 'Schuber 9' }, { volume_number: '12', type: 'special_edition' }, { volume_number: 'Starter 40' }];
+    expect(batchDefaults(undefined, null, undefined)).toEqual({ from: '1', to: '10' });
+    expect(batchDefaults([], 0, null)).toEqual({ from: '1', to: '10' });
+    expect(batchDefaults([...owned, ...extras], null, null)).toEqual({ from: '7', to: '16' });
+    expect(batchDefaults(owned, null, 22)).toEqual({ from: '7', to: '22' });
+    expect(batchDefaults(owned, 24, 22)).toEqual({ from: '7', to: '24' });
+    expect(batchDefaults(owned, 5, 6)).toEqual({ from: '7', to: '16' });
+    expect(batchDefaults(owned, 7, null)).toEqual({ from: '7', to: '7' });
+    expect(batchDefaults([], 1000, null)).toEqual({ from: '1', to: '300' });
+    for (const volumes of [owned, []]) {
+      const { from, to } = batchDefaults(volumes, 5000, 5000);
+      expect(validateBatchRange(from, to)).toBeNull();
+    }
+  });
+
+  it('the dialog opens with the range of the series', () => {
+    const volumes = [1, 2, 3].map((n) => ({ volume_number: String(n) }));
+    render(<BatchAddModal isOpen onClose={vi.fn()} mangaId="1" manga={{ total_volumes: null }} volumes={volumes} officialTotal={22} />);
+    expect(screen.getByLabelText('Von Band').value).toBe('4');
+    expect(screen.getByLabelText('Bis Band').value).toBe('22');
+  });
+
+  it('saves the series publisher when the field stays empty', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ success: true, created: 10, skipped: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onClose = vi.fn();
+    render(<BatchAddModal isOpen onClose={onClose} mangaId="1" manga={{ language: 'en', publisher: 'Yen Press' }} />);
+    expect(screen.getByLabelText('Verlag (optional)').placeholder).toBe('Yen Press');
+    fireEvent.click(screen.getByRole('button', { name: /Bände generieren/ }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).publisher).toBe('Yen Press');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a series linked to Manga Passion fills the new volumes from the edition before the reload', async () => {
+    const order = [];
+    const fetchMock = vi.fn(async (url) => {
+      order.push(String(url));
+      if (String(url).endsWith('/autofill-volumes')) return jsonResponse({ success: true, updated_count: 4 });
+      return jsonResponse({ success: true, created: 4, skipped: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onSuccess = vi.fn(() => { order.push('reload'); });
+    render(<BatchAddModal isOpen onClose={vi.fn()} onSuccess={onSuccess} mangaId="5" manga={{ language: 'de', manga_passion_id: 269, publisher: 'Egmont Manga' }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Bände generieren/ }));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(order).toEqual(['/api/volumes/batch', '/api/mangas/5/autofill-volumes', 'reload']);
+    const autofill = fetchMock.mock.calls[1][1];
+    expect(autofill.method).toBe('POST');
+    expect(JSON.parse(autofill.body)).toEqual({});
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).publisher).toBe('Egmont Manga');
+  });
+
+  it('a failed or unconfirmed fill stays silent, and unlinked series or nothing created skip it', async () => {
+    const run = async (manga, batch, autofill) => {
+      const fetchMock = vi.fn(async (url) => (String(url).endsWith('/autofill-volumes') ? autofill() : jsonResponse(batch)));
+      vi.stubGlobal('fetch', fetchMock);
+      const onSuccess = vi.fn();
+      const view = render(<><Toaster /><BatchAddModal isOpen onClose={vi.fn()} onSuccess={onSuccess} mangaId="5" manga={manga} /></>);
+      fireEvent.click(screen.getByRole('button', { name: /Bände generieren/ }));
+      await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+      const urls = fetchMock.mock.calls.map(([url]) => String(url));
+      const alerts = screen.queryAllByRole('alert').length;
+      view.unmount();
+      return { urls, alerts };
+    };
+    const linked = { language: 'de', manga_passion_id: 269 };
+    const created = { success: true, created: 3, skipped: [] };
+    const rejected = await run(linked, created, () => Promise.reject(new TypeError('Failed to fetch')));
+    expect(rejected.urls).toEqual(['/api/volumes/batch', '/api/mangas/5/autofill-volumes']);
+    expect(rejected.alerts).toBe(0);
+    const unconfirmed = await run(linked, created, () => jsonResponse({ success: false, needs_confirmation: true, message: 'Edition bestätigen' }, 409));
+    expect(unconfirmed.urls).toHaveLength(2);
+    expect(unconfirmed.alerts).toBe(0);
+    expect((await run({ language: 'de', manga_passion_id: null }, created, vi.fn())).urls).toEqual(['/api/volumes/batch']);
+    expect((await run({ language: 'en', manga_passion_id: 269 }, created, vi.fn())).urls).toEqual(['/api/volumes/batch']);
+    expect((await run(linked, { success: true, created: 0, skipped: ['1'] }, vi.fn())).urls).toEqual(['/api/volumes/batch']);
   });
 
   it('reports created and skipped numbers', () => {
@@ -167,6 +248,21 @@ describe('MangaHeroCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
     expect(props.cancelEditing).toHaveBeenCalled();
     expect(props.setEditing).not.toHaveBeenCalled();
+  });
+
+  it('the decorative glow is clipped by its own wrapper, so the panel gets no scroll range', () => {
+    const { container } = render(<MangaHeroCard {...baseProps()} />);
+    const panel = container.firstElementChild;
+    expect(panel.className.split(/\s+/)).toEqual(expect.arrayContaining(['relative', 'overflow-hidden']));
+    const glow = panel.querySelector('.blur-3xl');
+    const wrapper = glow.parentElement;
+    expect(wrapper.parentElement).toBe(panel);
+    expect(wrapper.getAttribute('aria-hidden')).toBe('true');
+    expect(wrapper.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'inset-0', 'overflow-hidden', 'rounded-3xl', 'pointer-events-none']));
+    expect(glow.className.split(/\s+/)).toEqual(expect.arrayContaining(['-mr-20', '-mt-20']));
+    for (const child of panel.children) {
+      if (child !== wrapper) expect(/(^|\s)-m[rt]-/.test(child.className)).toBe(false);
+    }
   });
 
   it('the empty description hint mentions Bearbeiten only to editors', () => {

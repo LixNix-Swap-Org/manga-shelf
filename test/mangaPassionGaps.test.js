@@ -182,6 +182,23 @@ test('batchImportGaps: imported_ids lists exactly the rows it created, not updat
     assert.deepEqual([none.imported_ids, none.imported_count], [[], 0]);
 });
 
+test('batchImportGaps: an unreleased official volume is imported as Erscheint bald instead of Fehlt', async () => {
+    const edition = seedEdition([
+        ov('1', { release_date: '2020-01-01' }),
+        ov('2', { release_date: '2999-12-31', is_released: false }),
+        ov('3', { release_date: null, is_released: false }),
+        ov('4', { release_date: null, is_released: false })
+    ]);
+    const id = createManga(edition);
+    addVolume(id, '3', 'volume', null, 'Fehlt');
+    const res = await batchImportGaps(id, ['1', '2', '3']);
+    assert.deepEqual([res.imported_count, res.updated_count, res.total_processed], [2, 1, 3]);
+    const statusOf = () => Object.fromEntries(db.prepare('SELECT volume_number, status FROM volumes WHERE manga_id = ?').all(id).map(r => [r.volume_number, r.status]));
+    assert.deepEqual(statusOf(), { 1: 'Fehlt', 2: 'Erscheint bald', 3: 'Erscheint bald' });
+    await batchImportGaps(id, ['4'], 'Vorbestellt');
+    assert.equal(statusOf()['4'], 'Vorbestellt');
+});
+
 test('syncMangaWithEdition: unknown edition is 404, an outage 503, an edition without volume list still syncs', async () => {
     const id = createManga();
     const missing = nextEdition++;

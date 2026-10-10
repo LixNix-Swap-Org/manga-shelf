@@ -209,7 +209,7 @@ export default function MangaHeroCard({
     <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl flex flex-col md:flex-row gap-8 mb-8 relative overflow-hidden">
 
       {/* Subtle glow background */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+      <div aria-hidden="true" className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none"><div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl -mr-20 -mt-20" /></div>
 
       {/* Cover Column */}
       <div className="w-full md:w-64 lg:w-72 shrink-0 flex flex-col items-center">

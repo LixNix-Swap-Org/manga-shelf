@@ -16,6 +16,7 @@ export default function KpiCards({ summary, canEditStartDate, editingStartDate, 
   const unpricedVols = Math.max(0, ownedVols - (summary.priced_owned_volumes ?? ownedVols));
   const totalVolsRecorded = summary.total_volumes_recorded ?? 0;
   const wishedSeries = Number(summary.wished_series) || 0;
+  const startDateStored = summary.collection_start_date_source === 'stored';
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -50,7 +51,10 @@ export default function KpiCards({ summary, canEditStartDate, editingStartDate, 
           {tn('{n} Jahr', '{n} Jahre', collYearsText === '1' ? 1 : Number(summary.collection_years ?? 0), { n: collYearsText })}
         </div>
         <p className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-          <span>{t('{days} aktiv', { days: countLabel(collDays, 'Tag', 'Tage') })}</span>
+          <span>
+            {t('{days} aktiv', { days: countLabel(collDays, 'Tag', 'Tage') })}
+            {startDateStored && <span className="ml-1.5 text-amber-400/80">{' '}{t('festgelegt')}</span>}
+          </span>
           {canEditStartDate && (
             <button
               type="button"

@@ -31,6 +31,11 @@
     "many": "+ {n} extra",
     "other": "+ {n} extra"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} annunciato",
+    "many": "+ {n} annunciati",
+    "other": "+ {n} annunciati"
+  },
   "-- Keine Angabe --": "-- Nessuna indicazione --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 account richiede un reset della password dopo il ripristino (nessuna password nel backup): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caratteri tra 0–9 e a–f",
@@ -209,6 +214,11 @@
   "Art des Eintrags": "Tipo di voce",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Anche il tuo account “{name}” non ha una password al suo interno: dopo, una nuova può impostarla solo un altro amministratore nella gestione utenti o il comando da console “{command}” sul server.",
   "Auch für automatische Aktualisierungen verwenden": "Usa anche per gli aggiornamenti automatici",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Anche {n} edizione speciale/cofanetto",
+    "many": "Anche {n} edizioni speciali/cofanetti",
+    "other": "Anche {n} edizioni speciali/cofanetti"
+  },
   "Auf Crunchyroll suchen": "Cerca su Crunchyroll",
   "Auf Einkaufsliste setzen": "Metti nella lista della spesa",
   "Auf Server übertragen": "Trasferisci sul server",
@@ -254,6 +264,7 @@
     "other": "Auto-adatta: {n} file per {items}"
   },
   "Automatisch": "Automatico",
+  "Automatisch aus den Daten": "Automaticamente dai dati",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Backup giornalieri automatici e ripristino degli snapshot",
   "Autor": "Autore",
   "Autor / Mangaka": "Autore / Mangaka",
@@ -558,6 +569,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "Il link è mostrato dalla versione web in “Collega all’app” (in fondo alla pagina iniziale) come codice QR e da copiare.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Limita la chiave alla Books API, copiala e incollala qui sotto.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Registrare il volume mancante {volume} con lo stato “{status}”?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Mettere il volume mancante {volume} nella lista della spesa?",
   "Der Band existiert bereits": "Il volume esiste già",
   "Der Barcode-Scanner ließ sich nicht starten.": "Impossibile avviare lo scanner di codici a barre.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "Lo scanner di codici a barre viene installato in questo momento tramite i servizi Google Play. Riprova tra poco.",
@@ -1043,6 +1055,7 @@
   "Geschätzter Gesamtpreis": "Prezzo totale stimato",
   "Gesehen": "Visto",
   "Gesehene Folgen": "Episodi visti",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Episodi visti ({aired} andati in onda finora)",
   "Gesehene Folgen (von {max})": "Episodi visti (su {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Gli episodi visti devono essere un intero a partire da 0",
   "Gesetzte Tags": "Tag impostati",
@@ -1366,6 +1379,8 @@
   "Lädt… {loaded} von {total} MB": "Caricamento… {loaded} di {total} MB",
   "Läuft": "In onda",
   "Läuft gerade": "In esecuzione ora",
+  "Läuft noch": "Ancora in onda",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Ancora in onda – “Visto” è possibile solo dopo l’ultimo episodio; scegli “Sto guardando”",
   "Läuft seit": "In esecuzione da",
   "Löschen": "Elimina",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "L’eliminazione non si può combinare con altre modifiche",
@@ -1446,6 +1461,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Più serie corrispondono – scegline una",
   "Mein Fortschritt": "I miei progressi",
   "Meine": "Mie",
+  "Meine Liste": "La mia lista",
   "Meine Notiz": "La mia nota",
   "Meine Vorbestellungen & Budget": "I miei preordini e budget",
   "Meine Vorbestellungen & Lieferungen": "I miei preordini e consegne",
@@ -2259,6 +2275,7 @@
   "Vom Manga ({publisher}) übernehmen": "Acquisisci dal manga ({publisher})",
   "Vom Server holen": "Scarica dal server",
   "Von Band": "Dal volume",
+  "Von deiner Liste entfernt": "Rimosso dalla tua lista",
   "Von der Wunschliste": "Rimuovi dalla lista dei desideri",
   "Von meiner Liste entfernen": "Rimuovi dalla mia lista",
   "Vor Update": "Prima dell’aggiornamento",
@@ -2449,6 +2466,7 @@
   "aus der Umgebung gesetzt": "impostata dall’ambiente",
   "beginnt mit „AIza“, 39 Zeichen": "inizia con “AIza”, 39 caratteri",
   "beschädigt": "danneggiato",
+  "bisher {n} erschienen": "{n} usciti finora",
   "collecting::Pausiert": "In pausa",
   "diesen Band": "questo volume",
   "drei Buchstaben, z. B. EUR": "tre lettere, ad es. EUR",
@@ -2470,6 +2488,7 @@
   },
   "fehlt": "manca",
   "fehlt ({count})": "manca ({count})",
+  "festgelegt": "impostato",
   "freier Speicher unbekannt": "spazio libero sconosciuto",
   "gehört zu einem anderen Manga-Shelf-Server": "appartiene a un altro server Manga Shelf",
   "gelesen": "letto",
@@ -2763,6 +2782,16 @@
     "many": "{n} pagine",
     "other": "{n} pagine"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "Registrare {n} edizione speciale/cofanetto con lo stato “{status}”?",
+    "many": "Registrare {n} edizioni speciali/cofanetti con lo stato “{status}”?",
+    "other": "Registrare {n} edizioni speciali/cofanetti con lo stato “{status}”?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "Mettere {n} edizione speciale/cofanetto nella lista della spesa?",
+    "many": "Mettere {n} edizioni speciali/cofanetti nella lista della spesa?",
+    "other": "Mettere {n} edizioni speciali/cofanetti nella lista della spesa?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} giorno {hours} h",
     "many": "{n} giorni {hours} h",
@@ -2772,6 +2801,11 @@
     "one": "{n} giorno",
     "many": "{n} giorni",
     "other": "{n} giorni"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "Mettere {n} volume mancante nella lista della spesa?",
+    "many": "Mettere {n} volumi mancanti nella lista della spesa?",
+    "other": "Mettere {n} volumi mancanti nella lista della spesa?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} risultato trovato online",
@@ -2864,6 +2898,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: posseduto da {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: manca ancora e non è nella lista della spesa",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} Il ripristino sovrascrive il database SQLite attuale ({file}) e le copertine con lo stato dell’archivio ZIP scelto. Il backup viene prima verificato; poi vedi cosa contiene e confermi il ripristino.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "Visti {watched} dei {aired} episodi andati in onda finora",
   "{watched} von unbekannt vielen Folgen gesehen": "Visti {watched} episodi su un totale sconosciuto",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "Visti {watched} su {n} episodio",

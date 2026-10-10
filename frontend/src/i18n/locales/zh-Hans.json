@@ -29,6 +29,9 @@
   "+ {n} Extras|+ {n} Extras": {
     "other": "+ {n} 个附赠"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "other": "+ {n} 个已公布"
+  },
   "-- Keine Angabe --": "-- 未填写 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "恢复后有 1 个账户需要重置密码（备份中没有密码）：{names}。",
   "32 Zeichen aus 0–9 und a–f": "由 0–9 和 a–f 组成的 32 个字符",
@@ -207,6 +210,9 @@
   "Art des Eintrags": "条目类型",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "你的账户“{name}”在其中同样没有密码：之后只能由其他管理员在用户管理中设置，或在服务器上执行控制台命令“{command}”来设置新密码。",
   "Auch für automatische Aktualisierungen verwenden": "同时用于自动更新",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "other": "另加 {n} 个Special Edition/套盒"
+  },
   "Auf Crunchyroll suchen": "在 Crunchyroll 上搜索",
   "Auf Einkaufsliste setzen": "加入购物清单",
   "Auf Server übertragen": "传输到服务器",
@@ -250,6 +256,7 @@
     "other": "自适应：{items} 共 {n} 行"
   },
   "Automatisch": "自动",
+  "Automatisch aus den Daten": "根据数据自动确定",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "每日自动备份和快照恢复",
   "Autor": "作者",
   "Autor / Mangaka": "作者 / 漫画家",
@@ -536,6 +543,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "网页版会在“连接应用”（首页底部）中以二维码形式显示该链接，也可复制。",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "将密钥限制为仅可用于 Books API，复制后粘贴到下方。",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "要将缺失的第 {volume} 卷登记为“{status}”状态吗？",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "要将缺失的第 {volume} 卷加入购物清单吗？",
   "Der Band existiert bereits": "该卷已存在",
   "Der Barcode-Scanner ließ sich nicht starten.": "无法启动条形码扫描器。",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "条形码扫描器正在通过 Google Play 服务安装。请稍后再试一次。",
@@ -1013,6 +1021,7 @@
   "Geschätzter Gesamtpreis": "预估总价",
   "Gesehen": "已看",
   "Gesehene Folgen": "已看集数",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "已看集数（目前已播出 {aired} 集）",
   "Gesehene Folgen (von {max})": "已看集数（共 {max} 集）",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "已看集数必须是不小于 0 的整数",
   "Gesetzte Tags": "已设置的标签",
@@ -1326,6 +1335,8 @@
   "Lädt… {loaded} von {total} MB": "加载中… {loaded}/{total} MB",
   "Läuft": "播出中",
   "Läuft gerade": "当前正在运行",
+  "Läuft noch": "仍在播出",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "仍在播出——“已看”要等最后一集播完后才能选择；请选择“在看”",
   "Läuft seit": "运行开始于",
   "Löschen": "删除",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "删除不能与其他更改合并",
@@ -1400,6 +1411,7 @@
   "Mehrere Reihen passen – bitte auswählen": "有多个系列匹配——请选择",
   "Mein Fortschritt": "我的进度",
   "Meine": "我的",
+  "Meine Liste": "我的列表",
   "Meine Notiz": "我的备注",
   "Meine Vorbestellungen & Budget": "我的预订和预算",
   "Meine Vorbestellungen & Lieferungen": "我的预订和送达",
@@ -2193,6 +2205,7 @@
   "Vom Manga ({publisher}) übernehmen": "采用漫画的值（{publisher}）",
   "Vom Server holen": "从服务器获取",
   "Von Band": "从第几卷",
+  "Von deiner Liste entfernt": "已从你的列表中移除",
   "Von der Wunschliste": "从愿望清单移除",
   "Von meiner Liste entfernen": "从我的列表中移除",
   "Vor Update": "更新前",
@@ -2375,6 +2388,7 @@
   "aus der Umgebung gesetzt": "由环境变量设置",
   "beginnt mit „AIza“, 39 Zeichen": "以“AIza”开头，共 39 个字符",
   "beschädigt": "已损坏",
+  "bisher {n} erschienen": "目前已发售 {n} 卷",
   "collecting::Pausiert": "已暂停",
   "diesen Band": "此卷",
   "drei Buchstaben, z. B. EUR": "三个字母，如 EUR",
@@ -2394,6 +2408,7 @@
   },
   "fehlt": "缺失",
   "fehlt ({count})": "缺失（{count}）",
+  "festgelegt": "已设定",
   "freier Speicher unbekannt": "可用空间未知",
   "gehört zu einem anderen Manga-Shelf-Server": "属于另一个 Manga Shelf 服务器",
   "gelesen": "已读",
@@ -2643,11 +2658,20 @@
   "{n} Seiten|{n} Seiten": {
     "other": "{n} 页"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "other": "要将 {n} 个Special Edition/套盒登记为“{status}”状态吗？"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "other": "要将 {n} 个Special Edition/套盒加入购物清单吗？"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n} 天 {hours} 小时"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n} 天"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "other": "要将 {n} 个缺失的卷加入购物清单吗？"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "在线找到 {n} 个结果"
@@ -2726,6 +2750,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}：{owners}已拥有",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}：仍缺失，且不在购物清单中",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} 恢复会用所选 ZIP 压缩包中的内容覆盖当前的 SQLite 数据库（{file}）和封面图片。系统会先检查备份；之后你可以查看其内容并确认恢复。",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "已看 {watched} 集（目前已播出 {aired} 集）",
   "{watched} von unbekannt vielen Folgen gesehen": "已看 {watched} 集（总集数未知）",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "other": "已看 {watched}/{n} 集"

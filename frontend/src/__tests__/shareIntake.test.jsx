@@ -54,7 +54,11 @@ function stubApi({ list = [entry()], answer = answerOf(), watched, server = null
         previous: before && { ...before }
       });
     }
-    if (/\/progress$/.test(url) && method === 'PUT') return fakeResponse(200, { status: body.status, episodes_watched: body.episodes_watched, score: null, notes: null });
+    if (/\/progress$/.test(url) && method === 'PUT') {
+      const airing = ['RELEASING', 'NOT_YET_RELEASED'].includes((server || list).find((a) => url === `/api/anime/${a.id}/progress`)?.status);
+      if (body.status === 'Gesehen' && body.restore !== true && airing) return fakeResponse(400, { error: 'Läuft noch', code: 'STILL_AIRING' });
+      return fakeResponse(200, { status: body.status, episodes_watched: body.episodes_watched, score: null, notes: null });
+    }
     if (/\/progress$/.test(url) && method === 'DELETE') return fakeResponse(200, { success: true });
     return fakeResponse(404, { error: 'unbekannt' });
   });
@@ -214,7 +218,7 @@ describe('ShareLinkDialog', () => {
     const toast = toasts.last();
     expect(toast).toMatchObject({ kind: 'success', message: 'Frieren: Folge 8 gesehen', action: { label: 'Rückgängig' } });
     await act(() => toast.action.onClick());
-    expect(api.calls.at(-1)).toEqual({ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7 } });
+    expect(api.calls.at(-1)).toEqual({ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7, restore: true } });
   });
 
   it('without a match it asks "Welcher Eintrag?"; the chosen entry is written, and undo takes it off my list again', async () => {
@@ -385,7 +389,7 @@ describe('ShareLinkDialog', () => {
     await waitFor(() => expect(harness.anime.loaded).toBe(true));
     await act(() => toasts.last().action.onClick());
     expect(api.calls.some((c) => c.method === 'DELETE')).toBe(false);
-    expect(api.calls.at(-1)).toEqual({ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7 } });
+    expect(api.calls.at(-1)).toEqual({ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7, restore: true } });
   });
 
   it('undo with an old cached list uses the server\'s value from before the share, not the cached one', async () => {
@@ -398,7 +402,34 @@ describe('ShareLinkDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ja, gesehen' }));
     await waitFor(() => expect(toasts.last()?.action?.label).toBe('Rückgängig'));
     await act(() => toasts.last().action.onClick());
-    expect(api.calls.filter((c) => /\/progress$/.test(c.url))).toEqual([{ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7 } }]);
+    expect(api.calls.filter((c) => /\/progress$/.test(c.url))).toEqual([{ method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Schaue', episodes_watched: 7, restore: true } }]);
+    gate.release();
+  });
+
+  it('undo of a share on a running series puts its "Gesehen" back, with the list loaded and before it loaded', async () => {
+    const running = () => entry({ status: 'RELEASING', episodes: null, my_progress: { status: 'Gesehen', episodes_watched: 7, score: null, notes: null } });
+    const share = async () => {
+      act(() => { harness.share.start({ text: `Frieren Folge 8 ${EPISODE_URL}` }); });
+      fireEvent.click(await screen.findByRole('button', { name: 'Ja, gesehen' }));
+      await waitFor(() => expect(toasts.last()?.action?.label).toBe('Rückgängig'));
+      await act(() => toasts.last().action.onClick());
+    };
+    const restored = { method: 'PUT', url: '/api/anime/1/progress', body: { status: 'Gesehen', episodes_watched: 7, restore: true } };
+
+    let api = stubApi({ list: [running()] });
+    const { unmount } = await loadHarness();
+    await share();
+    expect(api.calls.filter((c) => /\/progress$/.test(c.url))).toEqual([restored]);
+    expect(harness.anime.list[0].my_progress).toMatchObject({ status: 'Gesehen', episodes_watched: 7 });
+    unmount();
+
+    localStorage.clear();
+    const gate = deferred();
+    api = stubApi({ list: [], server: [running()], listGate: gate.promise, answer: answerOf({ entry: { id: 1, title: 'Frieren', episodes: null, my_status: 'Gesehen', my_episodes: 7 } }) });
+    render(<Harness />);
+    await share();
+    expect(api.calls.filter((c) => /\/progress$/.test(c.url))).toEqual([restored]);
+    expect(toasts.messages('error')).toEqual([]);
     gate.release();
   });
 

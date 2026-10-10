@@ -32,6 +32,12 @@
     "many": "+ {n} dodatków",
     "other": "+ {n} dodatku"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} zapowiedziany",
+    "few": "+ {n} zapowiedziane",
+    "many": "+ {n} zapowiedzianych",
+    "other": "+ {n} zapowiedzianego"
+  },
   "-- Keine Angabe --": "-- Brak danych --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 konto wymaga resetu hasła po przywróceniu (brak hasła w kopii zapasowej): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 znaki: cyfry 0–9 i litery a–f",
@@ -210,6 +216,12 @@
   "Art des Eintrags": "Rodzaj wpisu",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Twoje konto „{name}” też nie ma w niej hasła: nowe ustawi potem tylko inny administrator w zarządzaniu użytkownikami albo polecenie konsoli „{command}” na serwerze.",
   "Auch für automatische Aktualisierungen verwenden": "Używaj także do automatycznych aktualizacji",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Także {n} wydanie specjalne/box",
+    "few": "Także {n} wydania specjalne/boxy",
+    "many": "Także {n} wydań specjalnych/boxów",
+    "other": "Także {n} wydania specjalnego/boxu"
+  },
   "Auf Crunchyroll suchen": "Szukaj w Crunchyroll",
   "Auf Einkaufsliste setzen": "Dodaj do listy zakupów",
   "Auf Server übertragen": "Prześlij na serwer",
@@ -256,6 +268,7 @@
     "other": "Auto-dopasowanie: {n} rzędu na {items}"
   },
   "Automatisch": "Automatycznie",
+  "Automatisch aus den Daten": "Automatycznie z danych",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Automatyczne kopie dzienne i przywracanie migawek",
   "Autor": "Autor",
   "Autor / Mangaka": "Autor / mangaka",
@@ -569,6 +582,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "Link pokazuje wersja webowa w „Połącz z aplikacją” (na dole strony głównej) jako kod QR i do skopiowania.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Ogranicz klucz do Books API, skopiuj go i wklej poniżej.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Dodać brakujący tom {volume} ze statusem „{status}”?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Dodać brakujący tom {volume} do listy zakupów?",
   "Der Band existiert bereits": "Tom już istnieje",
   "Der Barcode-Scanner ließ sich nicht starten.": "Nie udało się uruchomić skanera kodów kreskowych.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "Skaner kodów kreskowych jest właśnie instalowany przez Usługi Google Play. Spróbuj ponownie za chwilę.",
@@ -1058,6 +1072,7 @@
   "Geschätzter Gesamtpreis": "Szacunkowa cena łączna",
   "Gesehen": "Obejrzane",
   "Gesehene Folgen": "Obejrzane odcinki",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Obejrzane odcinki (dotąd wyemitowano {aired})",
   "Gesehene Folgen (von {max})": "Obejrzane odcinki (z {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Obejrzane odcinki muszą być liczbą całkowitą od 0",
   "Gesetzte Tags": "Ustawione tagi",
@@ -1386,6 +1401,8 @@
   "Lädt… {loaded} von {total} MB": "Wczytywanie… {loaded} z {total} MB",
   "Läuft": "Emitowane",
   "Läuft gerade": "Działa teraz",
+  "Läuft noch": "Wciąż emitowane",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Wciąż emitowane – „Obejrzane” jest możliwe dopiero po ostatnim odcinku; wybierz „Oglądam”",
   "Läuft seit": "Działa od",
   "Löschen": "Usuń",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "Usuwania nie można łączyć z innymi zmianami",
@@ -1469,6 +1486,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Pasuje kilka serii – wybierz jedną",
   "Mein Fortschritt": "Mój postęp",
   "Meine": "Moje",
+  "Meine Liste": "Moja lista",
   "Meine Notiz": "Moja notatka",
   "Meine Vorbestellungen & Budget": "Moje zamówienia w przedsprzedaży i budżet",
   "Meine Vorbestellungen & Lieferungen": "Moje zamówienia w przedsprzedaży i dostawy",
@@ -2292,6 +2310,7 @@
   "Vom Manga ({publisher}) übernehmen": "Przejmij z mangi ({publisher})",
   "Vom Server holen": "Pobierz z serwera",
   "Von Band": "Od tomu",
+  "Von deiner Liste entfernt": "Usunięto z twojej listy",
   "Von der Wunschliste": "Usuń z listy życzeń",
   "Von meiner Liste entfernen": "Usuń z mojej listy",
   "Vor Update": "Przed aktualizacją",
@@ -2486,6 +2505,7 @@
   "aus der Umgebung gesetzt": "ustawiono ze środowiska",
   "beginnt mit „AIza“, 39 Zeichen": "zaczyna się od „AIza”, 39 znaków",
   "beschädigt": "uszkodzona",
+  "bisher {n} erschienen": "dotąd wydano {n}",
   "collecting::Pausiert": "Wstrzymane",
   "diesen Band": "ten tom",
   "drei Buchstaben, z. B. EUR": "trzy litery, np. EUR",
@@ -2508,6 +2528,7 @@
   },
   "fehlt": "brakuje",
   "fehlt ({count})": "brakuje ({count})",
+  "festgelegt": "ustalone",
   "freier Speicher unbekannt": "wolne miejsce nieznane",
   "gehört zu einem anderen Manga-Shelf-Server": "należy do innego serwera Manga Shelf",
   "gelesen": "przeczytane",
@@ -2823,6 +2844,18 @@
     "many": "{n} stron",
     "other": "{n} strony"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "Dodać {n} wydanie specjalne/box ze statusem „{status}”?",
+    "few": "Dodać {n} wydania specjalne/boxy ze statusem „{status}”?",
+    "many": "Dodać {n} wydań specjalnych/boxów ze statusem „{status}”?",
+    "other": "Dodać {n} wydania specjalnego/boxu ze statusem „{status}”?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "Dodać {n} wydanie specjalne/box do listy zakupów?",
+    "few": "Dodać {n} wydania specjalne/boxy do listy zakupów?",
+    "many": "Dodać {n} wydań specjalnych/boxów do listy zakupów?",
+    "other": "Dodać {n} wydania specjalnego/boxu do listy zakupów?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} dzień {hours} godz.",
     "few": "{n} dni {hours} godz.",
@@ -2834,6 +2867,12 @@
     "few": "{n} dni",
     "many": "{n} dni",
     "other": "{n} dnia"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "Dodać {n} brakujący tom do listy zakupów?",
+    "few": "Dodać {n} brakujące tomy do listy zakupów?",
+    "many": "Dodać {n} brakujących tomów do listy zakupów?",
+    "other": "Dodać {n} brakującego tomu do listy zakupów?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "Znaleziono online: {n}",
@@ -2933,6 +2972,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: posiada {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: jeszcze brakuje i nie ma na liście zakupów",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} Przywrócenie nadpisuje bieżącą bazę danych SQLite ({file}) i okładki stanem z wybranego archiwum ZIP. Kopia zapasowa jest najpierw sprawdzana; potem zobaczysz, co zawiera, i potwierdzisz przywrócenie.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "Obejrzano {watched} z {aired} dotychczas wyemitowanych odcinków",
   "{watched} von unbekannt vielen Folgen gesehen": "Obejrzano {watched} z nieznanej liczby odcinków",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "Obejrzano {watched} z {n} odcinka",

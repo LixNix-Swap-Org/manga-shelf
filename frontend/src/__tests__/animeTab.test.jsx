@@ -14,8 +14,9 @@ import { mainViewOf, searchForView } from '../Dashboard';
 import {
   countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache,
   ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
-  shortDescription
+  shortDescription, progressPercent, airedEpisodes, stillAiring
 } from '../utils/animeHelpers';
+import { subscribe as subscribeToasts } from '../utils/notify';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
 import { setOpenExternal } from '../app/openExternal';
 import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
@@ -60,6 +61,26 @@ describe('AnimeCard', () => {
     expect(screen.getByText('geschätzt')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Schauen auch: kim' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Zur verknüpften Reihe' }).getAttribute('href')).toBe('/manga/9');
+  });
+
+  it('a running show without a total counts against the aired episodes; "Gesehen" is locked while it airs, +1 is not', () => {
+    const onePiece = entry({ title: 'ONE PIECE', episodes: null, status: 'RELEASING', next_airing: { episode: 1181, at: 1798985760, estimated: false }, my_progress: { status: 'Gesehen', episodes_watched: 12 } });
+    const { rerender } = inRouter(<AnimeCard anime={onePiece} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
+    expect(screen.getByText('12 / 1180+')).toBeTruthy();
+    expect(screen.getByLabelText('12 von bisher 1180 ausgestrahlten Folgen gesehen')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /eine Folge mehr gesehen/ }).disabled).toBe(false);
+    const option = screen.getByRole('option', { name: 'Gesehen' });
+    expect(option.disabled).toBe(true);
+    expect(option.getAttribute('title')).toBe('Läuft noch');
+    expect(screen.getByRole('option', { name: 'Schaue' }).disabled).toBe(false);
+
+    rerender(<MemoryRouter><AnimeCard anime={{ ...onePiece, next_airing: { ...onePiece.next_airing, estimated: true } }} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.getByText('12 / ?')).toBeTruthy();
+    expect(screen.getByLabelText('12 von unbekannt vielen Folgen gesehen')).toBeTruthy();
+
+    rerender(<MemoryRouter><AnimeCard anime={entry({ status: 'FINISHED' })} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.getByRole('option', { name: 'Gesehen' }).disabled).toBe(false);
+    expect(screen.getByRole('option', { name: 'Gesehen' }).getAttribute('title')).toBeNull();
   });
 });
 
@@ -117,11 +138,34 @@ describe('animeHelpers', () => {
     expect(progressText(7, null)).toBe('7 / ?');
     expect(plusOneDisabled({ status: 'Schaue', episodes_watched: 12 }, 12)).toBe(true);
     expect(plusOneDisabled({ status: 'Schaue', episodes_watched: 12 }, null)).toBe(false);
+    expect(plusOneDisabled({ status: 'Gesehen', episodes_watched: 12 }, 12)).toBe(true);
+    expect(plusOneDisabled({ status: 'Gesehen', episodes_watched: 12 }, null)).toBe(false);
+    expect(plusOneDisabled({ status: 'Gesehen', episodes_watched: 5 }, 12)).toBe(false);
     const now = new Date(2026, 9, 4, 22, 0);
     expect(countdownText({ episode: 8, at: Math.floor(new Date(2026, 9, 5, 1, 0).getTime() / 1000) }, now)).toBe('Folge 8 · morgen');
     expect(countdownText({ episode: 8, at: Math.floor(new Date(2026, 9, 4, 23, 30).getTime() / 1000) }, now)).toMatch(/^Folge 8 · heute 23:30/);
     expect(countdownText({ episode: 8, at: Math.floor(new Date(2026, 9, 1).getTime() / 1000) }, now)).toBeNull();
     expect(staleText({ stale: true, meta_fetched_at: Date.now() - 3 * 86400000 })).toMatch(/^Stand: vor 3 Tagen/);
+  });
+
+  it('the aired episodes of a running show without a total are for display only and need a confirmed next airing', () => {
+    const onePiece = { episodes: null, status: 'RELEASING', next_airing: { episode: 1181, at: 1798985760, estimated: false } };
+    expect(airedEpisodes(onePiece)).toBe(1180);
+    expect(airedEpisodes({ ...onePiece, next_airing: { ...onePiece.next_airing, estimated: true } })).toBeNull();
+    expect(airedEpisodes({ ...onePiece, next_airing: { ...onePiece.next_airing, episode: 1 } })).toBeNull();
+    expect(airedEpisodes({ ...onePiece, next_airing: null })).toBeNull();
+    expect(airedEpisodes({ ...onePiece, episodes: 1200 })).toBeNull();
+    expect(progressText(12, null, 1180)).toBe('12 / 1180+');
+    expect(progressText(12, 24, 1180)).toBe('12 / 24');
+    expect(progressPercent(590, null, 1180)).toBe(50);
+    expect(progressPercent(1300, null, 1180)).toBe(100);
+    expect(progressPercent(7, null)).toBeNull();
+    expect(progressPercent(6, 12, 1180)).toBe(50);
+    expect(predictProgress({ status: 'Schaue', episodes_watched: 1180 }, { episodes_watched: 1181 }, null)).toMatchObject({ status: 'Schaue', episodes_watched: 1181 });
+    expect(stillAiring(onePiece)).toBe(true);
+    expect(stillAiring({ status: 'NOT_YET_RELEASED' })).toBe(true);
+    expect(stillAiring({ status: 'FINISHED' })).toBe(false);
+    expect(stillAiring(null)).toBe(false);
   });
 
   it('the description is plain text: line breaks kept, tags removed even when nested, cut at a word', () => {
@@ -152,6 +196,23 @@ describe('animeHelpers', () => {
     expect(predictProgress({ status: 'Schaue', episodes_watched: 11 }, { episodes_watched: 12 }, 12)).toMatchObject({ status: 'Gesehen', episodes_watched: 12 });
     expect(predictProgress({ status: 'Schaue', episodes_watched: 3 }, { status: 'Gesehen' }, 12).episodes_watched).toBe(12);
     expect(predictProgress({ status: 'Schaue', episodes_watched: 3 }, { episodes_watched: 99 }, 12).episodes_watched).toBe(12);
+  });
+
+  it('predicts "Geplant" and "Gesehen" like the server: choosing Geplant resets, a counter means Schaue, below the total Gesehen goes back', () => {
+    const watching = { status: 'Schaue', episodes_watched: 5, score: 8, notes: null, started_at: '2026-10-01', finished_at: null };
+    expect(predictProgress(watching, { status: 'Geplant' }, 12)).toMatchObject({ status: 'Geplant', episodes_watched: 0, score: 8, started_at: null, finished_at: null });
+    expect(predictProgress(watching, { status: 'Geplant', episodes_watched: 3 }, 12)).toMatchObject({ status: 'Schaue', episodes_watched: 3 });
+    expect(predictProgress(null, { status: 'Geplant', episodes_watched: 3 }, null)).toMatchObject({ status: 'Schaue', episodes_watched: 3 });
+    expect(predictProgress({ ...watching, status: 'Geplant', episodes_watched: 3 }, { score: 9 }, 12)).toMatchObject({ status: 'Schaue', episodes_watched: 3, score: 9 });
+
+    const done = { status: 'Gesehen', episodes_watched: 12, score: null, notes: null, started_at: '2026-10-01', finished_at: '2026-10-10' };
+    expect(predictProgress(done, { status: 'Geplant' }, 12)).toMatchObject({ status: 'Geplant', episodes_watched: 0, finished_at: null, started_at: null });
+    expect(predictProgress(done, { status: 'Pausiert' }, 12)).toMatchObject({ status: 'Pausiert', episodes_watched: 12, finished_at: null, started_at: '2026-10-01' });
+    expect(predictProgress(done, { episodes_watched: 5 }, 12)).toMatchObject({ status: 'Schaue', episodes_watched: 5, finished_at: null });
+    expect(predictProgress(done, { episodes_watched: 13 }, null)).toMatchObject({ status: 'Schaue', episodes_watched: 13 });
+    expect(predictProgress(done, { episodes_watched: 12 }, 12)).toMatchObject({ status: 'Gesehen', finished_at: '2026-10-10' });
+    expect(predictProgress(done, { score: 7 }, null)).toMatchObject({ status: 'Gesehen', episodes_watched: 12, finished_at: '2026-10-10' });
+    expect(predictProgress({ ...done, status: 'Schaue', finished_at: null }, { status: 'Gesehen' }, 12)).toMatchObject({ status: 'Gesehen', episodes_watched: 12 });
   });
 
   it('a counter change by hand drops the remembered "Weiter" page; a shared episode never lowers the counter', () => {
@@ -396,6 +457,28 @@ describe('useAnimeList', () => {
     expect(result.current.list[0].my_progress.episodes_watched).toBe(8);
   });
 
+  it('"Gesehen" on a running show refused by the server (STILL_AIRING) goes back and shows the server\'s text', async () => {
+    const text = 'Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“';
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url === '/api/anime') return fakeResponse(200, [entry({ episodes: null, status: 'RELEASING' })]);
+      if (url === '/api/anime/1/progress') return fakeResponse(400, { error: text, code: 'STILL_AIRING' });
+      return fakeResponse(404, {});
+    }));
+    const shown = [];
+    const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push([e.toast.kind, e.toast.message]); });
+    try {
+      const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'admin', role: 'admin' } }));
+      await act(() => result.current.fetchAnime());
+      let saved;
+      await act(async () => { saved = await result.current.updateProgress(1, { status: 'Gesehen' }); });
+      expect(saved).toBeNull();
+      expect(result.current.list[0].my_progress.status).toBe('Schaue');
+      expect(shown).toEqual([['error', text]]);
+    } finally {
+      stop();
+    }
+  });
+
   it('a shared episode shows at once, keeps the link for "Weiter" and goes back when the server refuses', async () => {
     const list = [entry({ watch: { next_url: null, series_url: null, search_url: 'https://www.crunchyroll.com/search?q=Frieren' } })];
     let refuse = false;
@@ -480,8 +563,13 @@ describe('tab and statistics', () => {
     expect(onSelectView).toHaveBeenCalledWith('radar');
   });
 
-  it('the anime card of the statistics shows counts and watch time', () => {
-    render(<AnimeStatsCard anime={{ total: 4, watching: 1, completed: 2, planned: 1, per_user: [{ user_id: 1, username: 'kim', episodes_watched: 30, watch_minutes: 720 }] }} />);
+  it('the anime card of the statistics shows counts and watch time; the status tiles are labelled as my list', () => {
+    render(<AnimeStatsCard anime={{ total: 4, watching: 1, completed: 2, planned: 3, per_user: [{ user_id: 1, username: 'kim', episodes_watched: 30, watch_minutes: 720 }] }} />);
+    const mine = screen.getByRole('group', { name: 'Meine Liste' });
+    const tile = (root, label) => within(root).getByText(label).nextElementSibling.textContent;
+    expect([tile(mine, 'Schauen'), tile(mine, 'Gesehen'), tile(mine, 'Geplant')]).toEqual(['1', '2', '3']);
+    expect(within(mine).queryByText('Einträge')).toBeNull();
+    expect(tile(document.getElementById('stats-anime'), 'Einträge')).toBe('4');
     expect(screen.getByText('kim')).toBeTruthy();
     expect(screen.getByText(/30 Folgen · 12 Std\./)).toBeTruthy();
     expect(watchTime(3000)).toBe('2 Tage 2 Std.');
@@ -531,6 +619,89 @@ describe('AnimeDetailModal', () => {
     } finally {
       setOpenExternal((url) => window.open(url, '_blank', 'noopener,noreferrer'));
     }
+  });
+
+  describe('own progress', () => {
+    const onePiece = () => entry({ title: 'ONE PIECE', episodes: null, status: 'RELEASING', next_airing: { episode: 1181, at: 1798985760, estimated: false },
+      my_progress: { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3' }, progress: [{ user_id: 1, username: 'admin', status: 'Schaue', episodes_watched: 12, score: 9 }] });
+    const openEditable = (anime, props = {}) => render(
+      <MemoryRouter>
+        <AnimeDetailModal isOpen animeId={anime.id} fallback={anime} onClose={vi.fn()} canEdit
+          fetchDetail={vi.fn(async () => anime)} updateProgress={vi.fn(async () => ({}))} removeFromMyList={vi.fn(async () => true)} update={vi.fn()}
+          refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} {...props} />
+      </MemoryRouter>
+    );
+
+    it('a running show: "Gesehen" is locked, the aired episodes show without capping the counter', async () => {
+      openEditable(onePiece());
+      await act(async () => {});
+      const select = screen.getByLabelText('Status');
+      const option = within(select).getByRole('option', { name: 'Gesehen' });
+      expect(option.disabled).toBe(true);
+      expect(option.getAttribute('title')).toBe('Läuft noch');
+      expect(screen.getByLabelText('Gesehene Folgen (bisher 1180 ausgestrahlt)').getAttribute('max')).toBeNull();
+      expect(screen.getByText('12 / 1180+')).toBeTruthy();
+    });
+
+    it('a fresh counter is sent without a status, so the server makes it "Schaue"', async () => {
+      const updateProgress = vi.fn(async () => ({}));
+      openEditable(entry({ my_progress: null, progress: [] }), { updateProgress });
+      await act(async () => {});
+      expect(within(screen.getByLabelText('Status')).getByRole('option', { name: 'Gesehen' }).disabled).toBe(false);
+      for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole('button', { name: 'Eine Folge mehr' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fortschritt speichern' })); });
+      expect(updateProgress).toHaveBeenCalledWith(1, { episodes_watched: 3 });
+    });
+
+    it('"Von meiner Liste entfernen" offers to undo with the removed progress', async () => {
+      const shown = [];
+      const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
+      const updateProgress = vi.fn(async () => ({ status: 'Schaue' }));
+      const removeFromMyList = vi.fn(async () => true);
+      const fetchDetail = vi.fn(async () => onePiece());
+      try {
+        openEditable(onePiece(), { updateProgress, removeFromMyList, fetchDetail });
+        await act(async () => {});
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
+        expect(removeFromMyList).toHaveBeenCalledWith(1);
+        expect(shown.map((toast) => [toast.kind, toast.message, toast.action?.label])).toEqual([['success', 'Von deiner Liste entfernt', 'Rückgängig']]);
+        const loads = fetchDetail.mock.calls.length;
+        await act(async () => { await shown[0].action.onClick(); });
+        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3', restore: true });
+        expect(fetchDetail.mock.calls.length).toBe(loads + 1);
+      } finally {
+        stop();
+      }
+    });
+
+    it('the undo puts back a "Gesehen" of a running show as it was (restore, no STILL_AIRING)', async () => {
+      const shown = [];
+      const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
+      const updateProgress = vi.fn(async () => ({ status: 'Gesehen' }));
+      const seen = () => ({ ...onePiece(), my_progress: { status: 'Gesehen', episodes_watched: 12, score: 9, notes: 'Arc 3' } });
+      try {
+        openEditable(seen(), { updateProgress, fetchDetail: vi.fn(async () => seen()) });
+        await act(async () => {});
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
+        await act(async () => { await shown[0].action.onClick(); });
+        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Gesehen', episodes_watched: 12, score: 9, notes: 'Arc 3', restore: true });
+      } finally {
+        stop();
+      }
+    });
+
+    it('no undo when the removal failed', async () => {
+      const shown = [];
+      const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
+      try {
+        openEditable(onePiece(), { removeFromMyList: vi.fn(async () => false) });
+        await act(async () => {});
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
+        expect(shown).toEqual([]);
+      } finally {
+        stop();
+      }
+    });
   });
 
   it('the title wraps with hyphens in its language; the close button has a 44 px hit area', async () => {

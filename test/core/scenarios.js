@@ -326,10 +326,10 @@ const scenarios = [
 
             const watched = await ed('POST', `/anime/${id}/watched`, { episode: 7, url, remember: { service: 'crunchyroll', external_id: 'GKERN0001' } });
             assert.deepEqual([watched.status, watched.body.progress.episodes_watched, watched.body.progress.resume_episode], [200, 7, 7]);
-            assert.deepEqual([watched.body.previous, watched.body.entry_episodes], [null, 28]);
+            assert.deepEqual([watched.body.previous.status, watched.body.previous.episodes_watched, watched.body.entry_episodes], ['Geplant', 0, 28]);
             const again = await ed('POST', `/anime/${id}/watched`, { episode: 3 });
             assert.deepEqual([again.body.progress.episodes_watched, again.body.previous.episodes_watched], [7, 7]);
-            assert.deepEqual(resolved.body.entry, { id, title: 'Kern Frieren', episodes: 28, my_status: null, my_episodes: null });
+            assert.deepEqual(resolved.body.entry, { id, title: 'Kern Frieren', episodes: 28, my_status: 'Geplant', my_episodes: 0 });
             const above = await ed('POST', `/anime/${id}/watched`, { episode: 29 });
             assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
             assert.equal((await ed('POST', `/anime/${id}/watched`, { episode: 8, url: 'https://www.crunchyroll.com/series/GKERN0001' })).body.code, 'UNSUPPORTED_LINK');

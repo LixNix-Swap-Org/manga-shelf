@@ -476,6 +476,22 @@ test('volumes: invalid prices and numbers are a 400 instead of silently clearing
     assert.equal((await editor('PUT', `/volumes/${legacy}`, { ...row, status: 'Fehlt' })).status, 200);
 });
 
+test('volumes: a single volume takes its release year from the release date unless one is given', async () => {
+    const id = await newSeries('Erscheinungsjahr');
+    const add = async (body) => {
+        const res = await editor('POST', '/volumes', { manga_id: id, ...body });
+        assert.equal(res.status, 200, JSON.stringify(body));
+        return (await detailOf(id)).volumes.find(v => v.id === res.body.id);
+    };
+    assert.equal((await add({ volume_number: '1', release_date: '2021-08-04' })).release_year, 2021);
+    assert.equal((await add({ volume_number: '2', release_date: '2022-03' })).release_year, 2022);
+    assert.equal((await add({ volume_number: '3', release_date: '2023', release_year: '' })).release_year, 2023);
+    assert.equal((await add({ volume_number: '4', release_date: '2021-08-04', release_year: 2020 })).release_year, 2020);
+    assert.equal((await add({ volume_number: '5', release_year: 2019 })).release_year, 2019);
+    const none = await add({ volume_number: '6', release_date: '' });
+    assert.deepEqual([none.release_date, none.release_year], [null, null]);
+});
+
 test('volumes: correcting price, date or condition updates owners that still hold the old value', async () => {
     const ids = await userIds();
     const id = await newSeries('Besitzerpreis');

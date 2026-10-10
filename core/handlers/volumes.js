@@ -198,6 +198,8 @@ function create(ctx, { body }) {
     `);
 
     const { price, target_price, pages, release_year } = numeric.values;
+    const rDate = isBlank(release_date) ? null : String(release_date).trim();
+    const year = release_year ?? (rDate ? Number(rDate.slice(0, 4)) : null);
     let newVolumeId = null;
     ctx.db.transaction(() => {
         const result = stmt.run(
@@ -205,8 +207,8 @@ function create(ctx, { body }) {
             volNumStr,
             normalizeIsbn(isbn),
             price,
-            isBlank(release_date) ? null : String(release_date).trim(),
-            release_year,
+            rDate,
+            year,
             condition ? String(condition).trim() : null,
             pages,
             publisher ? normalizePublisher(publisher) : null,

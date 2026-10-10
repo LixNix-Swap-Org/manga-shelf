@@ -30,6 +30,10 @@
     "one": "+ {n} extra",
     "other": "+ {n} extra's"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} aangekondigd",
+    "other": "+ {n} aangekondigd"
+  },
   "-- Keine Angabe --": "-- Geen opgave --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 account heeft na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 tekens uit 0–9 en a–f",
@@ -208,6 +212,10 @@
   "Art des Eintrags": "Soort item",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Ook je account “{name}” heeft daarin geen wachtwoord: een nieuw wachtwoord stel je daarna alleen in via een andere beheerder in het gebruikersbeheer of via het consolecommando “{command}” op de server.",
   "Auch für automatische Aktualisierungen verwenden": "Ook gebruiken voor automatische updates",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Ook {n} speciale uitgave/box set",
+    "other": "Ook {n} speciale uitgaven/box sets"
+  },
   "Auf Crunchyroll suchen": "Zoeken op Crunchyroll",
   "Auf Einkaufsliste setzen": "Op de kooplijst zetten",
   "Auf Server übertragen": "Naar server overdragen",
@@ -252,6 +260,7 @@
     "other": "Auto-fit: {n} rijen voor {items}"
   },
   "Automatisch": "Automatisch",
+  "Automatisch aus den Daten": "Automatisch uit de gegevens",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Automatische dagelijkse back-ups en snapshotherstel",
   "Autor": "Auteur",
   "Autor / Mangaka": "Auteur / mangaka",
@@ -547,6 +556,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "De link wordt door de webversie getoond onder “Met app verbinden” (onderaan de startpagina) als QR-code en om te kopiëren.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Beperk de sleutel tot de Books API, kopieer hem en plak hem hieronder.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Het ontbrekende deel {volume} registreren met status '{status}'?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Het ontbrekende deel {volume} op de kooplijst zetten?",
   "Der Band existiert bereits": "Het deel bestaat al",
   "Der Barcode-Scanner ließ sich nicht starten.": "De barcodescanner kon niet worden gestart.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "De barcodescanner wordt momenteel geïnstalleerd via Google Play-services. Probeer het zo meteen opnieuw.",
@@ -1028,6 +1038,7 @@
   "Geschätzter Gesamtpreis": "Geschatte totaalprijs",
   "Gesehen": "Gezien",
   "Gesehene Folgen": "Gekeken afleveringen",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Gekeken afleveringen ({aired} tot nu toe uitgezonden)",
   "Gesehene Folgen (von {max})": "Gekeken afleveringen (van {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Gekeken afleveringen moeten een geheel getal vanaf 0 zijn",
   "Gesetzte Tags": "Ingestelde tags",
@@ -1346,6 +1357,8 @@
   "Lädt… {loaded} von {total} MB": "Laden… {loaded} van {total} MB",
   "Läuft": "Lopend",
   "Läuft gerade": "Loopt momenteel",
+  "Läuft noch": "Loopt nog",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Loopt nog – “Gezien” kan pas na de laatste aflevering; kies “Aan het kijken”",
   "Läuft seit": "Loopt sinds",
   "Löschen": "Verwijderen",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "Verwijderen kan niet met andere wijzigingen worden gecombineerd",
@@ -1423,6 +1436,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Meerdere reeksen passen – kies er een",
   "Mein Fortschritt": "Mijn voortgang",
   "Meine": "Mijn",
+  "Meine Liste": "Mijn lijst",
   "Meine Notiz": "Mijn notitie",
   "Meine Vorbestellungen & Budget": "Mijn voorbestellingen en budget",
   "Meine Vorbestellungen & Lieferungen": "Mijn voorbestellingen en leveringen",
@@ -2226,6 +2240,7 @@
   "Vom Manga ({publisher}) übernehmen": "Overnemen van de manga ({publisher})",
   "Vom Server holen": "Van de server halen",
   "Von Band": "Vanaf deel",
+  "Von deiner Liste entfernt": "Van je lijst verwijderd",
   "Von der Wunschliste": "Van verlanglijst halen",
   "Von meiner Liste entfernen": "Van mijn lijst verwijderen",
   "Vor Update": "Voor update",
@@ -2412,6 +2427,7 @@
   "aus der Umgebung gesetzt": "via de omgeving ingesteld",
   "beginnt mit „AIza“, 39 Zeichen": "begint met “AIza”, 39 tekens",
   "beschädigt": "beschadigd",
+  "bisher {n} erschienen": "tot nu toe {n} verschenen",
   "collecting::Pausiert": "Gepauzeerd",
   "diesen Band": "dit deel",
   "drei Buchstaben, z. B. EUR": "drie letters, bijv. EUR",
@@ -2432,6 +2448,7 @@
   },
   "fehlt": "ontbreekt",
   "fehlt ({count})": "ontbreekt ({count})",
+  "festgelegt": "ingesteld",
   "freier Speicher unbekannt": "vrije ruimte onbekend",
   "gehört zu einem anderen Manga-Shelf-Server": "hoort bij een andere Manga Shelf-server",
   "gelesen": "gelezen",
@@ -2703,6 +2720,14 @@
     "one": "{n} pagina",
     "other": "{n} pagina's"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "{n} speciale uitgave/box set registreren met status '{status}'?",
+    "other": "{n} speciale uitgaven/box sets registreren met status '{status}'?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "{n} speciale uitgave/box set op de kooplijst zetten?",
+    "other": "{n} speciale uitgaven/box sets op de kooplijst zetten?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} dag {hours} u",
     "other": "{n} dagen {hours} u"
@@ -2710,6 +2735,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} dag",
     "other": "{n} dagen"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "{n} ontbrekend deel op de kooplijst zetten?",
+    "other": "{n} ontbrekende delen op de kooplijst zetten?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} online gevonden",
@@ -2795,6 +2824,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: aanwezig bij {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: ontbreekt nog en staat niet op de kooplijst",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} Terugzetten overschrijft de huidige SQLite-database ({file}) en coverafbeeldingen met de stand uit het gekozen ZIP-archief. De back-up wordt eerst gecontroleerd; daarna zie je wat erin zit en bevestig je het herstel.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "{watched} van de {aired} tot nu toe uitgezonden afleveringen gezien",
   "{watched} von unbekannt vielen Folgen gesehen": "{watched} van een onbekend aantal afleveringen gezien",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "{watched} van {n} aflevering gezien",

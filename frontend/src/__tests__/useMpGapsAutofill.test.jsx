@@ -89,9 +89,19 @@ describe('useMpGaps: autofill of an unconfirmed edition', () => {
 
 describe('gapFillConfirmText', () => {
   it('names a single gap in the singular', () => {
-    expect(gapFillConfirmText(['4'], 'Fehlt')).toBe("Den fehlenden Band 4 auf Status 'Fehlt' erfassen?");
+    expect(gapFillConfirmText(['4'], 'Vorbestellt')).toBe("Den fehlenden Band 4 auf Status 'Vorbestellt' erfassen?");
     expect(gapFillConfirmText(['4', '5'], 'Vorbestellt', 'Testreihe'))
       .toBe("2 fehlende Bände auf Status 'Vorbestellt' erfassen? Preise, Termine und Cover kommen aus der Manga-Passion-Edition „Testreihe“.");
+  });
+
+  it('names the shopping list and whether volumes or special editions/schuber are sent', () => {
+    expect(gapFillConfirmText(['4'], 'Fehlt')).toBe('Den fehlenden Band 4 auf die Einkaufsliste setzen?');
+    expect(gapFillConfirmText([4, 5, 6], 'Fehlt')).toBe('3 fehlende Bände auf die Einkaufsliste setzen?');
+    expect(gapFillConfirmText(['2 (Collectors Edition)', '11 (Schuber)'], 'Fehlt', 'Testreihe', { extras: true }))
+      .toBe('2 Sonderausgaben/Schuber auf die Einkaufsliste setzen? Preise, Termine und Cover kommen aus der Manga-Passion-Edition „Testreihe“.');
+    expect(gapFillConfirmText(['11 (Schuber)'], 'Fehlt', null, { extras: true })).toBe('1 Sonderausgabe/Schuber auf die Einkaufsliste setzen?');
+    expect(gapFillConfirmText(['11 (Schuber)', 'Artbook'], 'Vorbestellt', null, { extras: true }))
+      .toBe("2 Sonderausgaben/Schuber auf Status 'Vorbestellt' erfassen?");
   });
 });
 
