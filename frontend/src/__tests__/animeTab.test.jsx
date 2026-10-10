@@ -13,7 +13,8 @@ import useAnimeList from '../hooks/useAnimeList';
 import { mainViewOf, searchForView } from '../Dashboard';
 import {
   countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache,
-  ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS
+  ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
+  shortDescription
 } from '../utils/animeHelpers';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
 import { setOpenExternal } from '../app/openExternal';
@@ -121,6 +122,15 @@ describe('animeHelpers', () => {
     expect(countdownText({ episode: 8, at: Math.floor(new Date(2026, 9, 4, 23, 30).getTime() / 1000) }, now)).toMatch(/^Folge 8 · heute 23:30/);
     expect(countdownText({ episode: 8, at: Math.floor(new Date(2026, 9, 1).getTime() / 1000) }, now)).toBeNull();
     expect(staleText({ stale: true, meta_fetched_at: Date.now() - 3 * 86400000 })).toMatch(/^Stand: vor 3 Tagen/);
+  });
+
+  it('the description is plain text: line breaks kept, tags removed even when nested, cut at a word', () => {
+    expect(shortDescription('A<br>B<br/>C <i>kursiv</i>')).toEqual({ text: 'A\nB\nC kursiv', cut: false });
+    expect(shortDescription('<scr<script>ipt>alert(1)</script>x').text).toBe('ipt>alert(1)x');
+    expect(shortDescription('<<b>b>fett</b>').text).not.toMatch(/<[^>]*>/);
+    expect(shortDescription('1 < 2').text).toBe('1 < 2');
+    expect(shortDescription(null)).toEqual({ text: '', cut: false });
+    expect(shortDescription('wort '.repeat(10), 12)).toEqual({ text: 'wort wort …', cut: true });
   });
 
   it('filters by my status, sorts, counts', () => {

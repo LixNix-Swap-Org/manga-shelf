@@ -16,12 +16,14 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const http = require('http');
 const https = require('https');
 const { config, validateConfig, loadDotenv } = require('./utils/config');
 // Tests import the app with MANGA_SHELF_NO_LISTEN=1 and must not pick up a developer's .env
 if (!config.noListen) loadDotenv();
 const log = require('./utils/logger').child('app');
+const rateLimitLog = log.child('rate-limit');
 
 try {
     validateConfig(log);
@@ -37,8 +39,9 @@ const { initScheduler, lastVerifiedSnapshot } = require('./services/scheduler');
 const lifecycle = require('./services/lifecycle');
 const { setStaticHeaders, createUploadHeaders } = require('./utils/staticHeaders');
 const { freeBytes } = require('./utils/disk');
-const { defaultCode, errorBody, isAppCode, msg } = require('./utils/httpError');
+const { HttpError, defaultCode, errorBody, isAppCode, msg } = require('./utils/httpError');
 const { requireEditor } = require('./middleware/auth');
+const { clientIp, createLimiterStore } = require('./middleware/rateLimit');
 const { createOriginCheck, normalizeOrigin } = require('./middleware/originCheck');
 const { ALLOWED_IMAGE_EXTS } = require('./middleware/upload');
 
@@ -68,6 +71,11 @@ const CONTENT_SECURITY_POLICY = [
 // camera stays allowed for this origin (a live barcode scanner would need getUserMedia)
 const PERMISSIONS_POLICY = 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()';
 const HSTS = 'max-age=15552000';
+const API_PATH = /^\/api(?:\/|$)/i;
+const UPLOADS_PATH = /^\/uploads(?:\/|$)/i;
+const UMBRELLA_WINDOW_MS = 60 * 1000;
+const UMBRELLA_FACTORS = { api: 1, static: 2.5, uploads: 20 };
+const umbrellaBucket = (req) => (API_PATH.test(req.path) ? 'api' : UPLOADS_PATH.test(req.path) ? 'uploads' : 'static');
 const APP_CORS = {
     origin: true,
     credentials: false,
@@ -172,7 +180,8 @@ const PRECOMPRESSED = [['br', '.br'], ['gzip', '.gz']];
 
 /** Serves <asset>.br / .gz written by the build when the client accepts them; anything else falls through. */
 function precompressedAssets(assetsDir) {
-    const available = new Set(fs.readdirSync(assetsDir).filter(f => /\.(br|gz)$/.test(f)));
+    const root = path.resolve(assetsDir);
+    const available = new Set(fs.readdirSync(root).filter(f => /\.(br|gz)$/.test(f)));
     return (req, res, next) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
         const name = req.path.slice(1);
@@ -180,9 +189,11 @@ function precompressedAssets(assetsDir) {
         res.vary('Accept-Encoding');
         for (const [encoding, ext] of PRECOMPRESSED) {
             if (!available.has(name + ext) || !req.acceptsEncodings(encoding)) continue;
+            const file = path.resolve(root, name + ext);
+            if (!file.startsWith(root + path.sep)) break;
             res.setHeader('Content-Encoding', encoding);
             res.type(path.extname(name));
-            return res.sendFile(path.join(assetsDir, name + ext), { maxAge: '1y', immutable: true, dotfiles: 'allow' }, err => {
+            return res.sendFile(file, { maxAge: '1y', immutable: true, dotfiles: 'allow' }, err => {
                 // a client that goes away mid-transfer is not an error
                 if (!err || err.code === 'ECONNABORTED' || err.syscall === 'write') return;
                 if (res.headersSent) {
@@ -308,6 +319,22 @@ function createApp() {
         if (origin && credentialedOrigins.has(origin)) return callback(null, { origin: true, credentials: true });
         if (origin && appOrigins.has(origin)) return callback(null, APP_CORS);
         callback(null, { origin: false });
+    }));
+    const umbrellaPerMinute = config.rateLimitUmbrella;
+    app.use(rateLimit({
+        windowMs: UMBRELLA_WINDOW_MS,
+        limit: (req) => Math.ceil(umbrellaPerMinute * UMBRELLA_FACTORS[umbrellaBucket(req)]),
+        keyGenerator: (req) => `${umbrellaBucket(req)}\n${clientIp(req)}`,
+        store: createLimiterStore({ windowMs: UMBRELLA_WINDOW_MS, name: 'Anfragen je Client' }),
+        skip: () => umbrellaPerMinute === 0,
+        standardHeaders: 'draft-7',
+        legacyHeaders: false,
+        logger: rateLimitLog,
+        handler: (req, res, next) => {
+            const { used, limit } = req.rateLimit;
+            if (used === limit + 1) rateLimitLog.warn(`[RateLimit] ${clientIp(req)} hat mehr als ${limit} Anfragen pro Minute gestellt, weitere werden bis zum Ende der Minute abgelehnt (RATE_LIMIT_UMBRELLA)`);
+            next(new HttpError(429, 'Zu viele Anfragen – bitte kurz warten.'));
+        }
     }));
     // before any body parser: a refused cross-origin request never gets its body read
     app.use('/api', createOriginCheck({ allowedOrigins: corsOrigins, appOrigins: appOriginList }));

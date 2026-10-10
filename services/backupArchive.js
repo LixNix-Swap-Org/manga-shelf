@@ -7,7 +7,7 @@ const zlib = require('zlib');
 const { Readable, Transform, Writable } = require('stream');
 const { pipeline } = require('stream/promises');
 const { ZipArchive } = require('archiver');
-const { db, uploadsDir, tempDir } = require('../db');
+const { db, dataDir, uploadsDir, tempDir } = require('../db');
 const pkg = require('../package.json');
 const log = require('../utils/logger').child('backup');
 const { msg, isMsg } = require('../core/errors');
@@ -146,7 +146,9 @@ async function readAt(fh, length, position) {
 }
 
 async function openZip(file, maxEntries = Infinity) {
-    const fh = await fs.promises.open(file, 'r');
+    const archive = path.resolve(dataDir, String(file));
+    if (!archive.startsWith(dataDir + path.sep)) throw notAZip(msg('Datei kann nicht gelesen werden'));
+    const fh = await fs.promises.open(archive, 'r');
     try {
         const { size } = await fh.stat();
         if (size < 22) throw notAZip(msg('Datei ist zu klein'));

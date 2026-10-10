@@ -195,8 +195,11 @@ describe('motion, phones and blur', () => {
 
 describe('index.html and fonts', () => {
   it('loads no font from Google', () => {
-    expect(html).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/);
-    expect(cssSource).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/);
+    const hosts = (text) => [...text.matchAll(/\/\/([\w.-]+)/g)].map((m) => m[1].toLowerCase());
+    const google = (text) => hosts(text).filter((host) => host === 'fonts.googleapis.com' || host === 'fonts.gstatic.com');
+    expect(google('<link href="https://fonts.googleapis.com/css2"> url(//Fonts.gstatic.com/a.woff2)')).toHaveLength(2);
+    expect(google(html)).toEqual([]);
+    expect(google(cssSource)).toEqual([]);
   });
 
   it('self-hosts Plus Jakarta Sans with files that exist', () => {

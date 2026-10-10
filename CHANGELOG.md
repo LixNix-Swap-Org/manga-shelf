@@ -131,6 +131,18 @@ Every dialog uses a shared overlay (`.dialog-overlay`/`.dialog-box`) that scroll
 - The server binary does not start on top of a `.env` in the data folder that other users may change.
 - Apps: a new token of the same session (password change, "Alle Sitzungen beenden", own account in the user management) keeps the approved server addresses.
 - CodeQL, Dependabot, audit gate and minimal permissions in the CI.
+- A general request limit per client sits in front of every route (new runtime dependency `express-rate-limit`; `RATE_LIMIT_UMBRELLA`, default 1200 API, 3000 web app and 24000 cover requests per minute, `0` = off); above it 429 `TOO_MANY_REQUESTS` with `Retry-After`. Its counters keep the bounded keys and entry cap of the other limiters.
+- Precompressed assets are only served from inside the assets folder.
+- Uploads and backup restores resolve every stored file path inside its data directory (`uploads/`, `data/temp`, `DATA_DIR`) before reading, moving or deleting it; anything outside is refused with a 400.
+- The service worker ignores `SKIP_WAITING`/`WARM_LANGUAGE` messages from other origins.
+- Open Library covers get `?default=false` only when the host is `openlibrary.org` or a subdomain of it.
+- Server ids created without `crypto.randomUUID` (plain-HTTP LAN address) and outbox entry ids use WebCrypto random bytes instead of `Math.random`.
+- Docker health check: validates the server certificate (own cert file + public roots). The name comes from the certificate, and certificates without a usable host name (IP or free text as CN) are pinned to the file's certificate.
+- `install-service` (Windows): a data folder with a space and a trailing backslash no longer breaks the task arguments.
+- Anime descriptions: entities such as `&amp;lt;` are no longer decoded twice.
+- `build:server`: the downloaded Node archive is checked against `SHASUMS256.txt` and unpacked in memory; only the extracted binary stays in `.node-cache`.
+- Dependency overrides `postcss-selector-parser` ^7.1.6 (`frontend/package.json`) and `global-agent` ^4.1.3 (`desktop/package.json`) remove advisories without changing behaviour.
+- The CodeQL findings of the public repository are resolved: path checks for uploads and backups, certificate validation in the Docker health check, origin check in the service worker, anchored URL checks, tag stripping that cannot be re-assembled.
 
 ### Backups and restore
 - Verified snapshots with a manifest and a restore test, retention per category, nightly time window.

@@ -60,8 +60,13 @@ function syncVersion({ version, check = false, files = FILES } = {}) {
   const target = version || JSON.parse(fs.readFileSync(ROOT_PACKAGE, 'utf-8')).version;
   const changed = [];
   for (const [key, file] of Object.entries(files)) {
-    if (!fs.existsSync(file)) throw new Error(`${file} fehlt (npx cap add android/ios ausgeführt?)`);
-    const before = fs.readFileSync(file, 'utf-8');
+    let before;
+    try {
+      before = fs.readFileSync(file, 'utf-8');
+    } catch (err) {
+      if (err.code === 'ENOENT') throw new Error(`${file} fehlt (npx cap add android/ios ausgeführt?)`, { cause: err });
+      throw err;
+    }
     const after = PATCHERS[key](before, target);
     if (after === before) continue;
     changed.push(file);

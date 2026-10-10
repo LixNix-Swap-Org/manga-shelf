@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const express = require('express');
-const { createOriginCheck, parseOrigins, bearerToken } = require('../middleware/originCheck');
+const { createOriginCheck, parseOrigins, normalizeOrigin, bearerToken } = require('../middleware/originCheck');
 
 let server;
 let port;
@@ -74,6 +74,17 @@ test('origins listed in CORS_ORIGIN pass, normalised like the configuration', as
     assert.equal((await send('POST', { Origin: 'https://tools.example.org.evil.example', 'Sec-Fetch-Site': 'cross-site' })).status, 403);
     assert.deepEqual(parseOrigins(''), []);
     assert.deepEqual(parseOrigins(undefined), []);
+});
+
+test('normalizeOrigin trims spaces and every trailing slash, in linear time for a header made of slashes', () => {
+    assert.equal(normalizeOrigin(' HTTPS://Tools.Example.org// '), 'https://tools.example.org');
+    assert.equal(normalizeOrigin('https://a.example/x/'), 'https://a.example/x');
+    assert.equal(normalizeOrigin('a/ /'), 'a/ ');
+    assert.equal(normalizeOrigin('///'), '');
+    const slashes = '/'.repeat(200000) + 'x';
+    const started = process.hrtime.bigint();
+    assert.equal(normalizeOrigin(slashes), slashes);
+    assert.ok(Number(process.hrtime.bigint() - started) / 1e6 < 1000);
 });
 
 const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJpZCI6MX0.c2lnbmF0dXJl';

@@ -294,7 +294,12 @@ export function markSlowHint({ forever = false } = {}) {
 
 /** Description for the detail view: plain text, at most `max` characters when collapsed. */
 export function shortDescription(text, max = 420) {
-  const clean = String(text || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').trim();
+  let clean = String(text || '').replace(/<br\s*\/?>/gi, '\n');
+  for (let previous = ''; clean !== previous;) {
+    previous = clean;
+    clean = clean.replace(/<[^>]*>/g, '');
+  }
+  clean = clean.trim();
   if (clean.length <= max) return { text: clean, cut: false };
   return { text: `${clean.slice(0, max).replace(/\s+\S*$/, '')} …`, cut: true };
 }

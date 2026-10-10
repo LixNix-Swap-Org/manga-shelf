@@ -5,7 +5,12 @@
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const MESSAGE = 'Anfrage von einer fremden Seite abgelehnt. Bitte Manga Shelf direkt über seine eigene Adresse öffnen.';
 
-const normalizeOrigin = (origin) => String(origin).trim().replace(/\/+$/, '').toLowerCase();
+function normalizeOrigin(origin) {
+    const text = String(origin).trim();
+    let end = text.length;
+    while (end > 0 && text[end - 1] === '/') end--;
+    return text.slice(0, end).toLowerCase();
+}
 
 /** CORS_ORIGIN value (comma separated) as a list of normalised origins. */
 const parseOrigins = (value) => String(value || '').split(',').map(normalizeOrigin).filter(Boolean);

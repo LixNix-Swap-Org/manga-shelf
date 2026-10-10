@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import LiveScanner, { cameraErrorText, createScanDebounce, SAME_ISBN_PAUSE_MS } from '../components/common/LiveScanner';
 import BarcodeScannerButton from '../components/common/BarcodeScannerButton';
-import { liveScanSupported } from '../utils/scanHelpers';
+import { buildScanPrefill, liveScanSupported } from '../utils/scanHelpers';
 
 const zxing = vi.hoisted(() => ({ calls: [], stop: null }));
 vi.mock('@zxing/browser', () => ({
@@ -218,5 +218,19 @@ describe('BarcodeScannerButton with live scanning', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Foto-Scan' }));
     expect(click).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('scan prefill cover', () => {
+  const cover = (url) => buildScanPrefill({ title: 'X', cover_url: url }, '978').form.cover_image;
+
+  it('asks Open Library itself for a 404 instead of its placeholder, never another host that only names it', () => {
+    expect(cover('https://covers.openlibrary.org/b/isbn/978-L.jpg')).toBe('https://covers.openlibrary.org/b/isbn/978-L.jpg?default=false');
+    expect(cover('https://openlibrary.org/b/isbn/978-L.jpg')).toBe('https://openlibrary.org/b/isbn/978-L.jpg?default=false');
+    expect(cover('https://covers.openlibrary.org/b/isbn/978-L.jpg?default=false')).toBe('https://covers.openlibrary.org/b/isbn/978-L.jpg?default=false');
+    for (const other of ['https://evil.test/openlibrary.org/a.jpg', 'https://openlibrary.org.evil.test/a.jpg', 'https://notopenlibrary.org/a.jpg', 'covers.openlibrary.org/a.jpg']) {
+      expect(cover(other)).toBe(other);
+    }
+    expect(cover('')).toBe('');
   });
 });

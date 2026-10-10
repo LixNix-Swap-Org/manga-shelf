@@ -47,6 +47,16 @@ function storedFiles(req) {
     return [];
 }
 
+const uploadsRoot = path.resolve(uploadsDir);
+
+/** Absolute path of a stored upload, or null when it is not inside uploadsDir (such a file is never read or moved). */
+function storedUploadPath(file) {
+    if (!file || typeof file.path !== 'string' || !file.path) return null;
+    const filePath = path.resolve(uploadsRoot, file.path);
+    if (!filePath.startsWith(uploadsRoot + path.sep)) return null;
+    return filePath;
+}
+
 async function stripStoredMetadata(filePath, ext) {
     const original = await fs.promises.readFile(filePath);
     const stripped = stripImageMetadata(original, ext);
@@ -100,26 +110,33 @@ function stripImageFileSync(filePath) {
  */
 async function verifyImageUploads(req, res, next) {
     const files = storedFiles(req);
+    const paths = files.map(f => storedUploadPath(f));
+    const removeAll = () => Promise.all(paths.filter(Boolean).map(p => fs.promises.unlink(p).catch(() => {})));
+    if (paths.some(p => !p)) {
+        await removeAll();
+        return next(invalidTypeError());
+    }
     try {
-        const detected = await Promise.all(files.map(f => sniffImageExt(f.path).catch(() => null)));
+        const detected = await Promise.all(paths.map(p => sniffImageExt(p).catch(() => null)));
         if (detected.some(ext => !ext)) {
-            await Promise.all(files.map(f => fs.promises.unlink(f.path).catch(() => {})));
+            await removeAll();
             return next(invalidTypeError());
         }
         for (let i = 0; i < files.length; i++) {
-            const f = files[i];
-            await stripStoredMetadata(f.path, detected[i]);
-            const current = path.extname(f.filename).toLowerCase();
+            const source = paths[i];
+            await stripStoredMetadata(source, detected[i]);
+            const current = path.extname(source).toLowerCase();
             if ((current === '.jpeg' ? '.jpg' : current) === detected[i]) continue;
-            const filename = path.basename(f.filename, path.extname(f.filename)) + detected[i];
-            const target = path.join(path.dirname(f.path), filename);
-            await fs.promises.rename(f.path, target);
-            f.filename = filename;
-            f.path = target;
+            const filename = path.basename(source, path.extname(source)) + detected[i];
+            const target = path.join(path.dirname(source), filename);
+            await fs.promises.rename(source, target);
+            paths[i] = target;
+            files[i].filename = filename;
+            files[i].path = target;
         }
         next();
     } catch (err) {
-        await Promise.all(files.map(f => fs.promises.unlink(f.path).catch(() => {})));
+        await removeAll();
         next(err);
     }
 }

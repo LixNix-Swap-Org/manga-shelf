@@ -2,8 +2,9 @@
 // The vite plugin that stubs the local core in web builds, and the built output when WEB_BUILD_DIR is set.
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { webBuildWithoutLocalCore, APP_ONLY_MODULES } from '../../vite.config.js';
+import viteConfig, { webBuildWithoutLocalCore, APP_ONLY_MODULES } from '../../vite.config.js';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const plugin = webBuildWithoutLocalCore();
@@ -40,5 +41,28 @@ describe('web build without the standalone modules', () => {
     expect(sources.filter((s) => /bcryptjs|fflate|sql\.js|takeover|backupZip|LocalOffer|LocalScreen|LocalSetup|TakeoverDialog|BackupExportModal|SourcesPanel/.test(s))).toEqual([]);
     const sw = fs.readFileSync(path.join(dir, 'sw.js'), 'utf8');
     expect(sw).not.toMatch(/bcrypt|fflate|sql-wasm|TakeoverDialog|LocalScreen/);
+  });
+});
+
+describe('service worker stamping after the build', () => {
+  const plugins = viteConfig({ mode: 'production', command: 'build' }).plugins.flat();
+  const plugin = (name) => plugins.find((p) => p?.name === name);
+
+  it('stamps dist/sw.js in place and does nothing when the build has no worker', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-stamp-'));
+    try {
+      plugin('build-out-dir').configResolved({ root: dir, build: { outDir: 'dist' } });
+      expect(() => plugin('stamp-sw-version').closeBundle()).not.toThrow();
+      expect(fs.readdirSync(dir)).toEqual([]);
+      fs.mkdirSync(path.join(dir, 'dist', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'dist', 'assets', 'index-A.js'), 'x');
+      fs.writeFileSync(path.join(dir, 'dist', 'sw.js'), "const BUILD_ID = '__BUILD_ID__';\nconst BUILD_FILES = [/*__PRECACHE__*/];\n");
+      plugin('stamp-sw-version').closeBundle();
+      const stamped = fs.readFileSync(path.join(dir, 'dist', 'sw.js'), 'utf8');
+      expect(stamped).toMatch(/^const BUILD_ID = '[0-9a-f]{12}';$/m);
+      expect(stamped).toContain('const BUILD_FILES = ["/assets/index-A.js"];');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

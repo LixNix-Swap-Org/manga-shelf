@@ -138,6 +138,18 @@ describe('applyChangeToCaches', () => {
   });
 });
 
+describe('outbox entry ids', () => {
+  it('a new entry gets a unique id with a part from the WebCrypto generator; a stored id is kept', () => {
+    const spy = vi.spyOn(globalThis.crypto, 'getRandomValues');
+    const raw = { kind: 'read', volumeId: 1, userId: 1, serverId: 'web', value: true };
+    const ids = new Set(Array.from({ length: 50 }, () => normalizeOutboxEntry(raw, { now: 1000 }).id));
+    expect(ids.size).toBe(50);
+    expect(spy).toHaveBeenCalled();
+    for (const id of ids) expect(id).toMatch(/^rs-[0-9a-z]+-[0-9a-f]{8}$/);
+    expect(normalizeOutboxEntry({ ...raw, id: 'kept' }).id).toBe('kept');
+  });
+});
+
 describe('outbox storage', () => {
   it('without IndexedDB the entries live in localStorage', async () => {
     const storage = defaultOutboxStorage();

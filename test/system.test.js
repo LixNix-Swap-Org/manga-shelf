@@ -76,7 +76,7 @@ test('update check: a newer GitHub release is reported after the background chec
         assert.match(second.url, /^https:\/\/github\.com\//);
         assert.ok(second.checked_at);
         assert.equal(gh.calls.length, 1, 'checked once a day');
-        assert.match(gh.calls[0], /api\.github\.com\/repos\/LixNix-Swap-Org\/manga-shelf\/releases\/latest/);
+        assert.equal(gh.calls[0], 'https://api.github.com/repos/LixNix-Swap-Org/manga-shelf/releases/latest');
     } finally {
         gh.restore();
     }

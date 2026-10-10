@@ -57,8 +57,18 @@ const dbFilePath = path.join(dataDir, 'manga.db');
 const stagedDbPath = path.join(dataDir, 'manga.db.restore-tmp');
 const bakPath = path.join(dataDir, 'manga.db.bak');
 
+/** `file` resolved inside `root`, or null when it points anywhere else (traversal, another absolute path). */
+function resolveInside(root, file) {
+    if (typeof file !== 'string' || !file) return null;
+    const resolved = path.resolve(root, file);
+    if (!resolved.startsWith(root + path.sep)) return null;
+    return resolved;
+}
+
 function unlinkQuietly(file) {
-    try { fs.unlinkSync(file); } catch (e) { /* not there */ }
+    const target = resolveInside(dataDir, file);
+    if (!target) return;
+    try { fs.unlinkSync(target); } catch (e) { /* not there */ }
 }
 
 function removeJournalFiles(file) {
@@ -610,10 +620,12 @@ const restoredMessage = (result) => payloadMsg('message', msg('Backup erfolgreic
     mangas: result.mangaCount, images: result.restoredImagesCount
 }));
 
+const uploadedBackupPath = (req) => resolveInside(tempDir, req.file?.path);
+
 // 7. Manual ZIP upload restore. multer stages the upload in data/temp (bounds only the compressed size);
 // restoreFromZip streams the extraction and enforces its own uncompressed limits.
 const handleUploadedBackupRestore = async (req, res) => {
-    const uploadedPath = req.file?.path;
+    const uploadedPath = uploadedBackupPath(req);
     if (!uploadedPath || !fs.existsSync(uploadedPath)) {
         return sendError(res, 400, 'Keine Backup-Datei (.zip) ausgewählt', 'NO_BACKUP_FILE');
     }
@@ -643,7 +655,7 @@ router.post('/restore', requireAdmin, requireSpaceForUpload, uploadBackup.single
 // ({ filename }), check it and report what it contains. The staging id is valid for 15 minutes.
 router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup.single('backup'), async (req, res) => {
     const id = crypto.randomUUID();
-    const uploadedPath = req.file?.path;
+    const uploadedPath = uploadedBackupPath(req);
     let stagedPath = null;
     let release = null;
     let kept = false;
@@ -652,7 +664,8 @@ router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup
     try {
         assertNoRollbackCopy();
         let source;
-        if (uploadedPath) {
+        if (req.file) {
+            if (!uploadedPath) return sendError(res, 400, 'Keine Backup-Datei (.zip) ausgewählt', 'NO_BACKUP_FILE');
             stagedPath = path.join(tempDir, `restore-staged-${id}.zip`);
             fs.renameSync(uploadedPath, stagedPath);
             source = { type: 'upload', path: stagedPath, filename: req.file.originalname || null, size: req.file.size };

@@ -125,12 +125,14 @@ if (SQL_JS) {
         const copy = connectionFromSqlJs(new SQL.Database(bytes));
         assert.equal(copy.prepare('SELECT count(*) AS n FROM volumes').get().n, 1);
         // the export is a SQLite file node:sqlite opens as well
-        const file = path.join(require('node:os').tmpdir(), `adapter-${process.pid}-${Date.now()}.db`);
-        require('node:fs').writeFileSync(file, bytes);
+        const fs = require('node:fs');
+        const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'adapter-'));
+        const file = path.join(dir, 'export.db');
+        fs.writeFileSync(file, bytes);
         const node = new DatabaseSync(file);
         assert.equal(node.prepare('SELECT title FROM mangas').get().title, 'Export');
         node.close();
-        require('node:fs').unlinkSync(file);
+        fs.rmSync(dir, { recursive: true, force: true });
         conn.close();
         copy.close();
     });

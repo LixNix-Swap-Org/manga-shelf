@@ -38,6 +38,7 @@ const renderModal = (props = {}) => {
 };
 
 const titleInput = () => screen.getByPlaceholderText(/One Piece/);
+const coverInput = () => screen.getByPlaceholderText(/^https:\/\/example\.com\//);
 const submitButton = () => document.querySelector('button[type="submit"]');
 
 describe('AddMangaModal: lookup status and publisher', () => {
@@ -297,7 +298,7 @@ describe('AddMangaModal: covers', () => {
     });
     const first = renderModal();
     fireEvent.change(titleInput(), { target: { value: 'Akira' } });
-    fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'https://example.org/akira.jpg' } });
+    fireEvent.change(coverInput(), { target: { value: 'https://example.org/akira.jpg' } });
     fireEvent.click(submitButton());
     await waitFor(() => expect(first.onSuccess).toHaveBeenCalled());
     expect(bodyOf(callsTo(fetchFn, 'POST /api/mangas')[0]).cover_image).toBe('/uploads/typed.jpg');
@@ -306,7 +307,7 @@ describe('AddMangaModal: covers', () => {
     answer = json(400, { error: 'Bild-URL nicht erreichbar oder nicht erlaubt' });
     const second = renderModal();
     fireEvent.change(titleInput(), { target: { value: 'Akira' } });
-    fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'https://example.org/akira.jpg' } });
+    fireEvent.change(coverInput(), { target: { value: 'https://example.org/akira.jpg' } });
     fireEvent.click(submitButton());
     await waitFor(() => expect(second.onSuccess).toHaveBeenCalled());
     expect(bodyOf(callsTo(fetchFn, 'POST /api/mangas')[1]).cover_image).toBe('https://example.org/akira.jpg');
@@ -338,7 +339,7 @@ describe('AddMangaModal: choosing a lookup result', () => {
     fireEvent.click(buttonB);
     await act(async () => { coverA.resolve(json(200, { url: '/uploads/a.jpg' })); });
     await waitFor(() => expect(titleInput().value).toBe('Result A'));
-    expect(screen.getByPlaceholderText(/example\.com/).value).toBe('/uploads/a.jpg');
+    expect(coverInput().value).toBe('/uploads/a.jpg');
     expect(submitButton().disabled).toBe(false);
   });
 
@@ -358,7 +359,7 @@ describe('AddMangaModal: choosing a lookup result', () => {
     rerender(<AddMangaModal isOpen {...props} />);
     await act(async () => { coverA.resolve(json(200, { url: '/uploads/a.jpg' })); });
     expect(titleInput().value).toBe('');
-    expect(screen.getByPlaceholderText(/example\.com/).value).toBe('');
+    expect(coverInput().value).toBe('');
   });
 });
 

@@ -3,10 +3,16 @@ const { decodeHtmlEntities } = require('./isbnLookup');
 
 const ANILIST_TIMEOUT_MS = 8000;
 
-/** AniList text: line breaks kept, tags removed, then entities decoded (in this order, or "&lt;Twilight&gt;" would vanish as a tag). */
+/** AniList text: line breaks kept, tags removed, then entities decoded once (in this order, or "&lt;Twilight&gt;" would vanish as a tag). */
 function cleanAniListDescription(raw) {
     if (!raw || typeof raw !== 'string') return null;
-    const text = decodeHtmlEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ''))
+    let html = raw.replace(/<br\s*\/?>/gi, '\n');
+    let previous;
+    do {
+        previous = html;
+        html = html.replace(/<[^>]*>/g, '');
+    } while (html !== previous);
+    const text = decodeHtmlEntities(html)
         .replace(/\r\n?/g, '\n')
         .replace(/[ \t]+\n/g, '\n')
         .replace(/\n{3,}/g, '\n\n')

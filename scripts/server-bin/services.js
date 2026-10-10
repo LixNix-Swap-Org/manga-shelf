@@ -35,7 +35,20 @@ const isUnderHome = (dir) => {
     const normalized = path.posix.resolve(String(dir));
     return HOME_ROOTS.some((rootDir) => normalized === rootDir || normalized.startsWith(rootDir + '/'));
 };
-const quoteWindows = (arg) => (/[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg);
+function quoteWindows(arg) {
+    if (!/[\s"]/.test(arg)) return arg;
+    let out = '"';
+    let slashes = 0;
+    for (const ch of arg) {
+        if (ch === '\\') {
+            slashes++;
+            continue;
+        }
+        out += '\\'.repeat(ch === '"' ? slashes * 2 + 1 : slashes) + ch;
+        slashes = 0;
+    }
+    return `${out}${'\\'.repeat(slashes * 2)}"`;
+}
 const xml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function systemdUnit({ binary, args, system = true }) {

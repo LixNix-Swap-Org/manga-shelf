@@ -488,8 +488,8 @@ test('a database copy that fails halfway (file size limit) leaves no partial cop
         const script = `const s = require(${JSON.stringify(path.join(__dirname, '..', 'services', 'scheduler'))});
             try { s.copyDatabaseToTemp(); console.log('copied'); } catch (e) { console.log('failed: ' + e.message); }`;
         // 2048 blocks of 512 or 1024 bytes: the 4 MB copy cannot be written completely
-        const out = execFileSync('/bin/sh', ['-c', 'ulimit -f 2048 && exec "$0" -e "$1"', process.execPath, script], {
-            env: { ...process.env, DATA_DIR: dir, LOG_LEVEL: 'silent' },
+        const out = execFileSync('/bin/sh', ['-c', 'ulimit -f 2048 && exec "$CHILD_NODE" -e "$CHILD_SCRIPT"'], {
+            env: { ...process.env, DATA_DIR: dir, LOG_LEVEL: 'silent', CHILD_NODE: process.execPath, CHILD_SCRIPT: script },
             encoding: 'utf8'
         });
         assert.match(out, /failed: /);

@@ -161,13 +161,11 @@ function prepareWeb(frontendDir, outDir, version) {
     return { manifest, assets };
 }
 
-async function download(url, dest) {
+async function download(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Download ${url}: HTTP ${res.status}`);
-    fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+    return Buffer.from(await res.arrayBuffer());
 }
-
-const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 /** Official Node binary of the running version for a target, cached under <out>/.node-cache. */
 async function officialNode(target, cacheDir) {
@@ -179,25 +177,22 @@ async function officialNode(target, cacheDir) {
     const binary = path.join(dir, ...exe.split('/'));
     if (fs.existsSync(binary)) return binary;
     fs.mkdirSync(cacheDir, { recursive: true });
-    const archivePath = path.join(cacheDir, file);
     const url = `https://nodejs.org/dist/${version}/`;
     log(`Lade ${url}${file} ...`);
-    await download(url + file, archivePath);
+    const data = await download(url + file);
     const sums = await (await fetch(url + 'SHASUMS256.txt')).text();
     const line = sums.split('\n').find(l => l.trim().endsWith(`  ${file}`));
-    if (!line || line.split(/\s+/)[0] !== sha256(archivePath)) {
-        fs.rmSync(archivePath, { force: true });
+    if (!line || line.split(/\s+/)[0] !== crypto.createHash('sha256').update(data).digest('hex')) {
         throw new Error(`Prüfsumme von ${file} stimmt nicht mit SHASUMS256.txt überein`);
     }
     if (archive === 'zip') {
         const AdmZip = require('adm-zip');
-        new AdmZip(archivePath).extractEntryTo(`${base}/${exe}`, dir, false, true);
+        new AdmZip(data).extractEntryTo(`${base}/${exe}`, dir, false, true);
         fs.renameSync(path.join(dir, path.basename(exe)), binary);
     } else {
         fs.mkdirSync(dir, { recursive: true });
-        execFileSync('tar', ['-xzf', archivePath, '-C', cacheDir, `${base}/${exe}`]);
+        execFileSync('tar', ['-xzf', '-', '-C', cacheDir, `${base}/${exe}`], { input: data });
     }
-    fs.rmSync(archivePath, { force: true });
     return binary;
 }
 

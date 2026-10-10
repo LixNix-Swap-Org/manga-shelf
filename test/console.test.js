@@ -54,7 +54,7 @@ test('hilfe lists every command; unknown commands and empty lines are handled', 
 test('status and benutzer describe the instance and its users', async () => {
     const status = await run('status');
     assert.equal(status.ok, true);
-    assert.match(status.text, new RegExp(`Manga Shelf v${require('../package.json').version.replace(/\./g, '\\.')}`));
+    assert.ok(status.text.includes(`Manga Shelf v${require('../package.json').version}`), status.text);
     assert.match(status.text, /Schema v\d+, 0 Reihen, 0 Bände, 3 Benutzer/);
     assert.match(status.text, /Freier Speicher: /);
     assert.match(status.text, /Letztes geprüftes Backup: keins/);
@@ -264,7 +264,7 @@ function fakeProviders(t) {
     global.fetch = async (url, init = {}) => {
         calls.push(String(url));
         if (String(url).startsWith('https://api.myanimelist.net/v2')) return init.headers['X-MAL-CLIENT-ID'] === MAL_ID ? reply(200, { data: [] }) : reply(401, {});
-        if (String(url).startsWith('https://graphql.anilist.co')) {
+        if (URL.parse(String(url))?.hostname === 'graphql.anilist.co') {
             return init.headers.Authorization === `Bearer ${ANILIST_TOKEN}` ? reply(200, { data: { Viewer: { id: 1, name: 'kim-al' } } }) : reply(401, { errors: [{ status: 401 }] });
         }
         throw new TypeError('offline in tests');
@@ -282,7 +282,7 @@ test('quellen: table without keys, guide with links, the AniList link from the c
 
     const mal = await run('quellen anleitung mal');
     assert.match(mal.text, /1\. Bei MyAnimeList anmelden/);
-    assert.match(mal.text, /https:\/\/myanimelist\.net\/apiconfig/);
+    assert.ok(mal.lines.includes('   https://myanimelist.net/apiconfig'), mal.text);
     assert.ok(mal.lines.every((l) => l.length <= 80), 'wrapped to 80 columns');
 
     const lines = [];

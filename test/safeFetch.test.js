@@ -13,7 +13,7 @@ const onlyTestServer = { isBlockedAddress: (a) => a !== '127.0.0.1' };
 
 let server;
 let base;
-const routes = {
+const routes = new Map(Object.entries({
     '/cover.jpg': (req, res) => { res.writeHead(200, { 'Content-Type': 'image/jpeg' }); res.end(JPEG); },
     '/cover.png': (req, res) => { res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(PNG); },
     '/moved': (req, res) => { res.writeHead(301, { Location: '/redirect-2' }); res.end(); },
@@ -41,10 +41,14 @@ const routes = {
         const timer = setInterval(() => res.write(Buffer.from([0xff])), 50);
         res.on('close', () => clearInterval(timer));
     }
-};
+}));
 
 test.before(async () => {
-    server = http.createServer((req, res) => (routes[req.url] || routes['/missing.jpg'])(req, res));
+    server = http.createServer((req, res) => {
+        const handler = routes.get(req.url);
+        if (typeof handler === 'function') return handler(req, res);
+        return routes.get('/missing.jpg')(req, res);
+    });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     base = 'http://127.0.0.1:' + server.address().port;
 });

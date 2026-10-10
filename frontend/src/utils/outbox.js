@@ -53,7 +53,8 @@ export const isPurchaseEntry = (e) => e.kind === 'purchase'
 export const outboxKey = (e) => [e.serverId, e.userId, group(e.kind), e.volumeId, e.targetUserId].join('|');
 
 let idCounter = 0;
-const newId = (now) => `${now.toString(36)}-${(++idCounter).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const randomPart = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('');
+const newId = (now) => `${now.toString(36)}-${(++idCounter).toString(36)}-${randomPart()}`;
 
 /** A valid entry (with key, id, ts) or null. */
 export function normalizeOutboxEntry(raw, { now = Date.now() } = {}) {

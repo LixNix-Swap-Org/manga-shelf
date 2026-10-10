@@ -308,11 +308,15 @@ const displayGroupLabel = (label, groupBy, empty) => {
   return groupBy === 'status' ? mangaStatusLabel(label) : label;
 };
 
+const GROUP_LABELS = new Map([
+  ['publisher', (m) => (m.publisher ? normalizePubName(m.publisher) : '')],
+  ['author', (m) => splitAuthors(m.author).join(', ')],
+  ['status', (m) => (m.status ? String(m.status) : '')]
+]);
+
 const groupLabelOf = (m, groupBy) => {
-  if (groupBy === 'publisher') return m.publisher ? normalizePubName(m.publisher) : '';
-  if (groupBy === 'author') return splitAuthors(m.author).join(', ');
-  if (groupBy === 'status') return m.status ? String(m.status) : '';
-  return '';
+  const labelOf = GROUP_LABELS.get(groupBy);
+  return typeof labelOf === 'function' ? labelOf(m) : '';
 };
 
 // Sections [{ key, label, items }] of a sorted list, keeping its order inside; sections are alphabetical (status:

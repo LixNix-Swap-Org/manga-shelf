@@ -34,6 +34,15 @@ afterEach(() => {
 });
 
 describe('server store', () => {
+  it('falls back to WebCrypto random bytes for a server id when randomUUID is missing', () => {
+    const real = globalThis.crypto;
+    const getRandomValues = vi.fn((a) => real.getRandomValues(a));
+    vi.stubGlobal('crypto', { getRandomValues });
+    const s = saveServer({ urls: ['https://a.example'] });
+    expect(s.id).toMatch(/^srv-[0-9a-z]+-[0-9a-f]{8}$/);
+    expect(getRandomValues).toHaveBeenCalled();
+  });
+
   it('normalizes a server address to origin plus path without trailing slash', () => {
     expect(normalizeBase('https://shelf.example.org/')).toBe('https://shelf.example.org');
     expect(normalizeBase('  http://192.168.1.20:3000/manga//  ')).toBe('http://192.168.1.20:3000/manga');

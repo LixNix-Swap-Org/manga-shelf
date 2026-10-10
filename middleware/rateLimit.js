@@ -196,6 +196,30 @@ function createRateLimiter({ windowMs, max, message, keyFn, maxEntries, maxPerPr
     return middleware;
 }
 
+/**
+ * Store for express-rate-limit with the same key length, entry and IPv6 /48 caps.
+ */
+function createLimiterStore({ windowMs, maxEntries, maxPerPrefix, name }) {
+    const store = createWindowStore({ windowMs, lockAt: Infinity, maxEntries, maxPerPrefix, failOpen: true, name });
+    const info = (entry) => ({ totalHits: entry.count, resetTime: new Date(entry.resetAt) });
+    const limiterStore = {
+        localKeys: true,
+        get: (key) => {
+            const entry = store.live(boundedKey(key));
+            return entry ? info(entry) : undefined;
+        },
+        increment: (key) => info(store.increment(boundedKey(key))),
+        decrement: (key) => store.decrement(boundedKey(key)),
+        resetKey: (key) => store.delete(boundedKey(key)),
+        resetAll: () => store.clear(),
+        reset: () => store.clear(),
+        size: () => store.size(),
+        keys: () => store.keys()
+    };
+    allLimiters.add(limiterStore);
+    return limiterStore;
+}
+
 /** Counts failures per key; `isLocked` once `max` failures fall into the window. */
 function createFailureTracker({ windowMs, max, maxEntries, name }) {
     const store = createWindowStore({ windowMs, lockAt: max, maxEntries, name: name || 'Fehlversuche' });
@@ -313,8 +337,10 @@ function resetRateLimits() {
 }
 
 module.exports = {
+    boundedKey,
     createWindowStore,
     createRateLimiter,
+    createLimiterStore,
     createFailureTracker,
     createLoginGuard,
     accountKey,

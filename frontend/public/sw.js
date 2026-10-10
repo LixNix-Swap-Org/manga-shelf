@@ -75,6 +75,7 @@ async function warmLanguage(language) {
 }
 
 self.addEventListener('message', (event) => {
+  if (event.origin && event.origin !== self.location.origin) return;
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
   if (event.data && event.data.type === 'WARM_LANGUAGE') event.waitUntil(warmLanguage(event.data.language).catch(() => {}));
 });
