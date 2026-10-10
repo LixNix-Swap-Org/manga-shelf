@@ -226,7 +226,7 @@ test('CLI runs of the binary and scripts/admin.js only finish an interrupted swi
     fs.writeFileSync(entry, `process.execPath = process.env.FAKE_EXEC;\nprocess.argv = [process.argv[0], 'x', 'version', '--data-dir', process.env.CLI_DATA];\nrequire(${JSON.stringify(path.join(ROOT, 'scripts', 'server-bin', 'entry.js'))});\n`);
     const version = await run([entry], { env: { FAKE_EXEC: fake, CLI_DATA: dataDir } });
     assert.equal(version.code, 0, version.output);
-    assert.match(version.output, new RegExp(`manga-shelf-server v${pkg.version.replace(/\./g, '\\.')}`));
+    assert.ok(version.output.includes(`manga-shelf-server v${pkg.version} `), version.output);
     const finished = readState(dataDir);
     assert.equal(finished.phase, 'swapped', 'the journal was completed (the binary at the path is the new one)');
     assert.equal(finished.attempts, 0, 'a CLI run never counts a start');

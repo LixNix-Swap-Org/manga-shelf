@@ -25,13 +25,16 @@ function validState(data) {
 /** Parsed and checked state of `dataDir`, or null. */
 function readState(dataDir) {
     let text;
+    let fd;
     try {
-        const file = statePath(dataDir);
-        const st = fs.lstatSync(file);
+        fd = fs.openSync(statePath(dataDir), fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+        const st = fs.fstatSync(fd);
         if (!st.isFile() || st.size > 1024 * 1024) return null;
-        text = fs.readFileSync(file, 'utf8');
+        text = fs.readFileSync(fd, 'utf8');
     } catch (e) {
         return null;
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
     }
     try {
         return validState(JSON.parse(text));
