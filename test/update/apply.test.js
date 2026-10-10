@@ -249,7 +249,7 @@ test('SEA: link + one rename keeps the path present at every step; rollback rest
     assert.equal(fs.statSync(execPath).mode & 0o777, 0o750);
     swap.revertCode(state, { execPath });
     assert.equal(fs.readFileSync(execPath, 'utf8'), 'old binary');
-    assert.equal(fs.existsSync(`${execPath}.previous`), false);
+    assert.throws(() => fs.statSync(`${execPath}.previous`), { code: 'ENOENT' });
 });
 
 test('SEA: a crash between link and rename is reverted; after the rename it counts as completed', posix, (t) => {
@@ -355,7 +355,7 @@ test('SEA: a .new changed after it was written is refused at the switch; nothing
     fs.writeFileSync(`${execPath}.new`, 'tampered');
     assert.throws(() => swap.swapForward(state, { execPath }), (e) => e.code === 'NEXT_CHANGED');
     assert.equal(fs.readFileSync(execPath, 'utf8'), 'old binary');
-    assert.equal(fs.existsSync(`${execPath}.previous`), false);
+    assert.throws(() => fs.statSync(`${execPath}.previous`), { code: 'ENOENT' });
 });
 
 const win32 = { platform: 'win32' };
@@ -370,7 +370,7 @@ test('Windows binary: two renames forward replace a stale .previous; rollback mo
     assert.equal(fs.existsSync(`${execPath}.new`), false);
     swap.revertCode(state, { execPath, ...win32 });
     assert.equal(fs.readFileSync(execPath, 'utf8'), 'old binary');
-    assert.equal(fs.existsSync(`${execPath}.previous`), false);
+    assert.throws(() => fs.statSync(`${execPath}.previous`), { code: 'ENOENT' });
     const failed = fs.readdirSync(dir).filter((n) => n.startsWith('manga-shelf-server.failed-'));
     assert.equal(failed.length, 1);
     assert.equal(fs.readFileSync(path.join(dir, failed[0]), 'utf8'), 'new binary');

@@ -904,7 +904,7 @@ describe('esbuild bundle of the server', { skip: bundleSkip }, () => {
         const env = { ...process.env, MANGA_SHELF_CACHE_DIR: path.join(dir, 'cache'), DATA_DIR: path.join(dir, 'check-data'), LOG_LEVEL: 'warn' };
         const version = spawnSync(process.execPath, [bundlePath, 'version'], { encoding: 'utf8', env });
         assert.equal(version.status, 0, version.stderr);
-        assert.match(version.stdout, new RegExp(`^manga-shelf-server v${require('../package.json').version.replace(/\./g, '\\.')} `));
+        assert.ok(version.stdout.startsWith(`manga-shelf-server v${require('../package.json').version} `), version.stdout);
         const empty = path.join(dir, 'leer.db');
         fs.writeFileSync(empty, '');
         const check = spawnSync(process.execPath, [bundlePath, 'db-check', empty], { encoding: 'utf8', env });
