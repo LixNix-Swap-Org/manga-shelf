@@ -214,7 +214,7 @@ async function runLocked(ctx, userId, row, priority) {
 }
 
 /** Pushes one entry after the caller's own +1 or share; presses within 2 s coalesce into one job that reads the latest row. */
-function schedulePush(ctx, userId, animeId) {
+function schedulePush(ctx, userId, animeId, { delayMs } = {}) {
     if (!ctx.user || ctx.user.id !== userId) return false;
     const row = syncRow(ctx, userId);
     if (!row || !row.enabled || !row.external_user_id) return false;
@@ -227,7 +227,7 @@ function schedulePush(ctx, userId, animeId) {
     const timer = setTimeout(() => {
         state.pushTimers.delete(key);
         gateway.runInBackground(ctx, key, 'interactive', (host) => pushOne(host, userId, animeId, generation));
-    }, state.pushDelayMs);
+    }, delayMs === undefined ? state.pushDelayMs : delayMs);
     if (timer && typeof timer === 'object' && typeof timer.unref === 'function') timer.unref();
     state.pushTimers.set(key, timer);
     return true;
@@ -275,7 +275,7 @@ function onCredentialChanged(ctx, userId, provider, { removed = false } = {}) {
 /** A role change to visitor or guest switches the sync off. */
 function onRoleChanged(ctx, userId, role) {
     if (SYNC_ROLES.includes(role)) return;
-    ctx.db.prepare('UPDATE anime_sync SET enabled = 0, updated_at = ? WHERE user_id = ? AND enabled = 1').run(sqlNow(ctx), userId);
+    ctx.db.prepare('UPDATE anime_sync SET enabled = 0, updated_at = ? WHERE user_id = ? AND service = ? AND enabled = 1').run(sqlNow(ctx), userId, SERVICE);
 }
 
 /** Scheduler: every enabled editor or admin whose last sync is older than 6 h, in the background share. { due, ran } */

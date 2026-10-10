@@ -44,6 +44,19 @@ function requireBuild(dir, what) {
     }
 }
 
+const WATCH_MANIFEST_KEY = 'src/app/watch/CrunchyrollCard.jsx';
+
+/** The desktop web build must carry the Crunchyroll card unless VITE_WATCH_CRUNCHYROLL is 'off'. */
+function requireWatchBuild(dir, env = process.env) {
+    if (env.VITE_WATCH_CRUNCHYROLL === 'off') return;
+    const file = path.join(dir, '.vite', 'manifest.json');
+    let manifest;
+    try { manifest = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { manifest = null; }
+    if (!manifest || !Object.prototype.hasOwnProperty.call(manifest, WATCH_MANIFEST_KEY)) {
+        throw new Error(`Web-Build ohne ${WATCH_MANIFEST_KEY} (${file}): mit "vite build --mode desktop" bauen oder VITE_WATCH_CRUNCHYROLL=off setzen`);
+    }
+}
+
 function main() {
     const opts = parseStageArgs(process.argv.slice(2));
     const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -62,11 +75,13 @@ function main() {
     const frontend = path.join(ROOT, 'frontend');
     if (opts.buildFrontend) {
         if (!fs.existsSync(path.join(frontend, 'node_modules'))) run('npm', ['ci', '--no-audit', '--no-fund'], frontend);
-        run('npx', ['vite', 'build', '--outDir', webOut, '--emptyOutDir'], frontend);
+        run('npx', ['vite', 'build', '--mode', 'desktop', '--outDir', webOut, '--emptyOutDir'], frontend);
+        requireWatchBuild(webOut);
         run('npx', ['vite', 'build', '--mode', 'app', '--outDir', appOut, '--emptyOutDir'], frontend);
     } else {
         requireBuild(opts.web, 'Web-Build');
         requireBuild(opts.app, 'App-Build (vite build --mode app)');
+        requireWatchBuild(opts.web);
         copyEntry(opts.web, webOut);
         copyEntry(opts.app, appOut);
     }
@@ -83,4 +98,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { backendEntries, missingEntries, parseStageArgs, STAGE };
+module.exports = { backendEntries, missingEntries, parseStageArgs, requireWatchBuild, WATCH_MANIFEST_KEY, STAGE };

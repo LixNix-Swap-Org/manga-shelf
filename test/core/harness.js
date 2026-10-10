@@ -15,9 +15,40 @@ const PASSWORD = 'password123';
 
 const offline = (url) => Object.assign(new TypeError(`fetch failed (offline in tests): ${url}`), { cause: { code: 'ENOTFOUND' } });
 
-/** No network: external lookups fail like an unreachable host. */
+let aniList = null;
+
+/**
+ * Switches a fake graphql.anilist.co on for both harnesses ({ media: [AniList Media], search: { term: [ids] } }) or off
+ * (null): every search alias (Page, s1, …) answers the ids listed for its term, id_in answers from `media`.
+ */
+function useAniList(fixtures) {
+    aniList = fixtures || null;
+}
+
+function aniListAnswer(url, init) {
+    if (!aniList || URL.parse(String(url))?.hostname !== 'graphql.anilist.co') return null;
+    const { query, variables = {} } = JSON.parse(init.body);
+    const byId = (id) => aniList.media.find((m) => m.id === id);
+    let data;
+    if (query.includes('id_in')) {
+        data = { Page: { media: variables.ids.map(byId).filter(Boolean) } };
+    } else {
+        data = {};
+        for (const [name, term] of Object.entries(variables)) {
+            const i = Number(name.slice(1));
+            data[i === 0 ? 'Page' : `s${i}`] = { media: ((aniList.search || {})[term] || []).map(byId).filter(Boolean) };
+        }
+    }
+    return new Response(JSON.stringify({ data }), { status: 200, headers: { 'content-type': 'application/json' } });
+}
+
+/** No network: external lookups fail like an unreachable host (AniList answers from useAniList() while it is on). */
 const offlineHttp = () => ({
-    fetch: async (url) => { throw offline(url); },
+    fetch: async (url, init) => {
+        const fake = aniListAnswer(url, init);
+        if (fake) return fake;
+        throw offline(url);
+    },
     fetchText: async (url) => { throw offline(url); },
     fetchImage: async () => { throw Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' }); }
 });
@@ -87,7 +118,11 @@ async function startExpressCore() {
     const { startTestServer } = require('../helpers');
     const server = await startTestServer();
     const realFetch = global.fetch;
-    global.fetch = (url, init) => (String(url).startsWith(server.root) ? realFetch(url, init) : Promise.reject(offline(url)));
+    global.fetch = (url, init) => {
+        if (String(url).startsWith(server.root)) return realFetch(url, init);
+        const fake = aniListAnswer(url, init || {});
+        return fake ? Promise.resolve(fake) : Promise.reject(offline(url));
+    };
 
     const clients = {};
     clients.admin = server.client();
@@ -131,4 +166,4 @@ async function startExpressCore() {
     };
 }
 
-module.exports = { createMemoryCore, startExpressCore, USERS, offlineHttp };
+module.exports = { createMemoryCore, startExpressCore, USERS, offlineHttp, useAniList };

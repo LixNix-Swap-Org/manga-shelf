@@ -394,6 +394,7 @@ jobs:
           NOTARIZE_APPLE_ID: ${{ secrets.APPLE_ID }}
           NOTARIZE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           NOTARIZE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VITE_WATCH_CRUNCHYROLL: ${{ vars.WATCH_CRUNCHYROLL }}
         run: |
           if [ "$RUNNER_OS" = Windows ] && [ "$SIGN_WINDOWS" = true ]; then
             export CSC_LINK="$WIN_CSC_LINK" CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"

@@ -86,15 +86,15 @@ test('watch history: highest episode per series and season, seen by flag or play
     const items = cr.parseWatchHistory(fixture('crunchyroll/watch-history.json'));
     assert.deepEqual(items, [
         {
-            external_id: 'GTESTSER01', series_title: 'Frieren: Beyond Journey\'s End', season: 1, episode: 8, fully_watched: false,
+            external_id: 'GTESTSER01', series_title: 'Frieren: Beyond Journey\'s End', series_slug: 'frieren-beyond-journeys-end', season: 1, episode: 8, fully_watched: false,
             resume_url: 'https://www.crunchyroll.com/watch/GTESTEP008/test-episode-eight', resume_episode: 8, watched_at: '2026-10-03T20:15:00.000Z'
         },
         {
-            external_id: 'GTESTSER01', series_title: 'Frieren: Beyond Journey\'s End', season: 2, episode: 2, fully_watched: true,
+            external_id: 'GTESTSER01', series_title: 'Frieren: Beyond Journey\'s End', series_slug: null, season: 2, episode: 2, fully_watched: true,
             resume_url: null, resume_episode: null, watched_at: '2026-10-01T19:00:00.000Z'
         },
         {
-            external_id: 'GTESTDNG01', series_title: 'Delicious in Dungeon', season: 1, episode: 3, fully_watched: true,
+            external_id: 'GTESTDNG01', series_title: 'Delicious in Dungeon', series_slug: null, season: 1, episode: 3, fully_watched: true,
             resume_url: null, resume_episode: null, watched_at: '2026-09-30T21:00:00.000Z'
         }
     ]);
@@ -107,15 +107,25 @@ test('discover history and merge: the in-progress or next episode becomes the re
     const next = cr.parseDiscoverHistory(fixture('crunchyroll/discover-history.json'));
     assert.deepEqual(next.map((i) => [i.external_id, i.episode, i.fully_watched, i.resume_episode]),
         [['GTESTSER01', 8, false, 8], ['GTESTDNG01', 4, false, 4], ['GTESTNEW99', 1, false, 1]]);
+    assert.equal(next.find((i) => i.series_title === 'Test New Show').watched_at, null, 'a never watched panel has no watch date');
+    const played = fixture('crunchyroll/discover-history.json');
+    played.data[2].date_played = '2026-10-05T10:00:00Z';
+    assert.equal(cr.parseDiscoverHistory(played).find((i) => i.external_id === 'GTESTNEW99').watched_at, null, 'never_watched wins over date_played');
+    played.data[2].never_watched = false;
+    assert.equal(cr.parseDiscoverHistory(played).find((i) => i.external_id === 'GTESTNEW99').watched_at, '2026-10-05T10:00:00.000Z');
     const merged = cr.mergeItems(watch, next);
     const dungeon = merged.find((i) => i.external_id === 'GTESTDNG01');
     assert.deepEqual([dungeon.episode, dungeon.fully_watched, dungeon.resume_url, dungeon.resume_episode, dungeon.watched_at],
         [4, false, 'https://www.crunchyroll.com/watch/GTESTDG004/test-dungeon-four', 4, '2026-09-30T21:00:00.000Z'],
         'three seen plus a link to four beats three seen without a link; the newest date stays');
     assert.deepEqual(merged.map((i) => cr.watchedCount(i)), [7, 2, 3, 0]);
+    assert.deepEqual(merged.map((i) => i.series_slug), ['frieren-beyond-journeys-end', null, null, null]);
+    const slugged = cr.mergeItems([{ external_id: 'GTESTSLG01', episode: 5, fully_watched: true }], [{ external_id: 'GTESTSLG01', episode: 2, fully_watched: true, series_slug: 'Test-Slug' }]);
+    assert.deepEqual(slugged.map((i) => [i.episode, i.series_slug]), [[5, 'test-slug']], 'the slug is filled in from another item like the title');
     const body = cr.syncBody(merged);
     assert.equal(body.service, 'crunchyroll');
     assert.deepEqual(body.items, merged);
+    assert.equal(body.items[0].series_slug, 'frieren-beyond-journeys-end', 'the slug goes to the server');
     assert.ok(!JSON.stringify(body).includes('etp'), 'nothing secret in the sync body');
     const many = Array.from({ length: 250 }, (_, i) => ({ external_id: `GTESTMNY${String(i).padStart(2, '0')}`, episode: 1, fully_watched: true }));
     assert.equal(cr.syncBody(many).items.length, 200, 'the body stays within the handler cap');
@@ -123,7 +133,13 @@ test('discover history and merge: the in-progress or next episode becomes the re
 
 test('cleanItem: the item rules the handler checks again', () => {
     assert.deepEqual(cr.cleanItem({ external_id: 'gtestser01', episode: 3, fully_watched: true, resume_url: 'https://www.crunchyroll.com/de/watch/GTESTEP004/x?y=1', watched_at: '2026-10-01T00:00:00+02:00' }),
-        { external_id: 'GTESTSER01', series_title: null, season: 1, episode: 3, fully_watched: true, resume_url: 'https://www.crunchyroll.com/watch/GTESTEP004/x', resume_episode: 4, watched_at: '2026-09-30T22:00:00.000Z' });
+        { external_id: 'GTESTSER01', series_title: null, series_slug: null, season: 1, episode: 3, fully_watched: true, resume_url: 'https://www.crunchyroll.com/watch/GTESTEP004/x', resume_episode: 4, watched_at: '2026-09-30T22:00:00.000Z' });
+    assert.equal(Object.keys(cr.cleanItem({ external_id: 'GTESTSER01', episode: 3 })).length, 9);
+    assert.equal(cr.cleanItem({ external_id: 'GTESTSER01', episode: 3, series_slug: 'Frieren-Beyond-2' }).series_slug, 'frieren-beyond-2');
+    for (const slug of ['../x', 'a b', '', 'x'.repeat(201), 7, { a: 1 }]) {
+        const item = cr.cleanItem({ external_id: 'GTESTSER01', episode: 3, series_slug: slug });
+        assert.equal(item.series_slug, null, `a bad slug is dropped, the item stays: ${JSON.stringify(slug)}`);
+    }
     assert.equal(cr.cleanItem({ external_id: 'GTESTSER01', episode: 3, resume_url: 'https://www.crunchyroll.com/series/GTESTSER01' }).resume_url, null, 'series links are no resume link');
     assert.equal(cr.cleanItem({ external_id: 'GTESTSER01', episode: 3, resume_url: 'https://evil.example/watch/GTESTEP004' }).resume_url, null);
     for (const bad of [null, {}, { external_id: 'x', episode: 1 }, { external_id: 'GTESTSER01', episode: 0 }, { external_id: 'GTESTSER01', episode: 1.5 },

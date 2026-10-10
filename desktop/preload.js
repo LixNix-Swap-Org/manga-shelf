@@ -50,9 +50,39 @@ ipcRenderer.on('desktop:open-api-keys', () => {
 let locale = null;
 try { locale = ipcRenderer.sendSync('desktop:locale') || null; } catch (_) { locale = null; }
 
+let watchAllowed;
+try { watchAllowed = ipcRenderer.sendSync('desktop:watch-allowed') === true; } catch (_) { watchAllowed = false; }
+const WATCH_PLATFORMS = { darwin: 'macos', win32: 'windows', linux: 'linux' };
+const invokeOr = (fallback, channel, ...args) => ipcRenderer.invoke(channel, ...args).catch(() => fallback);
+const PREFS_REFUSED = { ok: false, code: 'not_allowed' };
+
+const watch = watchAllowed ? {
+    platform: WATCH_PLATFORMS[process.platform],
+    status: () => invokeOr({ ok: true, available: false, reason: 'unreadable', connected: false }, 'desktop:watch-status'),
+    login: () => invokeOr({ ok: false, code: 'failed' }, 'desktop:watch-login'),
+    sync: (options) => invokeOr({ ok: false, code: 'network' }, 'desktop:watch-sync', { force: Boolean(options && options.force) }),
+    logout: () => invokeOr({ ok: true }, 'desktop:watch-logout'),
+    prefs: {
+        get: (key) => invokeOr(PREFS_REFUSED, 'desktop:watch-prefs-get', key),
+        set: (key, value) => invokeOr(PREFS_REFUSED, 'desktop:watch-prefs-set', key, value),
+        remove: (key) => invokeOr(PREFS_REFUSED, 'desktop:watch-prefs-remove', key)
+    },
+    onForeground: (callback) => {
+        if (typeof callback !== 'function') return () => {};
+        let active = true;
+        const off = subscribe('desktop:watch-foreground', () => callback());
+        invokeOr(false, 'desktop:watch-foreground-now').then((now) => { if (active && now === true) callback(); });
+        return () => {
+            active = false;
+            off();
+        };
+    }
+} : null;
+
 contextBridge.exposeInMainWorld('mangashelfDesktop', {
     platform: process.platform,
     locale,
+    ...(watch ? { watch } : {}),
     appBuild: isAppBuild,
     storage,
     openExternal: (url) => ipcRenderer.send('desktop:open-external', String(url)),

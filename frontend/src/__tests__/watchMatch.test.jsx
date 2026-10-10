@@ -1,6 +1,6 @@
 // Unmatched series of the Crunchyroll history: the hint in the anime tab and the match dialog.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act, renderHook } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // AnimeView and AccountModal read the build mode when they load (the web build drops the app-only chunks)
@@ -9,11 +9,16 @@ import fs from 'fs';
 import path from 'path';
 import api, { ApiError } from '../utils/api';
 import AnimeView from '../components/dashboard/AnimeView';
-import { confirmMatch, seriesLabel, preselectedCandidate, seasonOfCandidate, syncAfterMatch } from '../app/watch/WatchMatchDialog';
+import {
+  confirmMatch, createMatch, seriesLabel, preselectedCandidate, seasonOfCandidate, syncAfterMatch, splitCandidates
+} from '../app/watch/WatchMatchDialog';
 import { UNMATCHED_KEY, SKIPPED_KEY, WATCH_SYNC_EVENT, loadUnmatched, resetUnmatchedView, patchState } from '../app/watch/watchState';
 import { writeSecret } from '../app/watch/crunchyrollSecret';
 import { startWatchSync } from '../app/watch/crunchyrollSync';
-import { COOKIE, EDITOR, fakeBridge } from './watchFakes';
+import { CARD_TEXTS } from '../app/watch/CrunchyrollCard';
+import useAnimeList from '../hooks/useAnimeList';
+import { COOKIE, EDITOR, fakeBridge, fakeDesktopBridge } from './watchFakes';
+import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
 
 const SCOPE = 'srv-1:3';
@@ -48,7 +53,7 @@ const openDialog = async () => {
 beforeEach(() => {
   vi.stubEnv('VITE_APP_MODE', 'app');
   fake = fakeBridge();
-  window.mangashelfNative = fake.bridge;
+  window.mangashelfNative = fake.bridge.native;
 });
 
 afterEach(() => {
@@ -109,7 +114,7 @@ describe('WatchMatchDialog', () => {
       episode: 7, remember: { service: 'crunchyroll', external_id: 'GSERIES001', season: 1 }
     }, expect.anything());
     expect(post.mock.calls[0][1]).not.toHaveProperty('url');
-    expect(synced.mock.calls[0][0].detail).toMatchObject({ changed: true });
+    expect(synced.mock.calls[0][0].detail).toEqual({ service: 'crunchyroll', applied: 1, added: 0, changed: true, watch: null });
     window.removeEventListener(WATCH_SYNC_EVENT, synced);
     expect(toasts.messages('success')).toContain('Frieren: zugeordnet');
     toasts.stop();
@@ -226,6 +231,8 @@ describe('WatchMatchDialog', () => {
     expect(preselectedCandidate({ season: 2 }, [{ id: 2, title: 'Sousou no Frieren 2nd Season', score: 0.9 }])?.id).toBe(2);
     expect(preselectedCandidate({ season: 1, reason: 'episode_above_total' }, [{ id: 1, title: 'Frieren', score: 0.5, season: 1 }])?.id).toBe(1);
     expect(preselectedCandidate(item, [])).toBeNull();
+    // a series the user took off the list: one Enter must not bring it back
+    expect(preselectedCandidate({ season: 1, reason: 'declined' }, [{ id: 1, title: 'Frieren', score: 1, season: 1 }])).toBeNull();
     expect(seasonOfCandidate({ title: 'Frieren', season: 3 })).toBe(3);
     expect(seasonOfCandidate({ title: 'Frieren' })).toBe(1);
   });
@@ -263,6 +270,99 @@ describe('WatchMatchDialog', () => {
     expect(sync).toHaveBeenCalledWith({ bridge: fake.bridge });
   });
 
+  it('a throttled or too early sync after the dialog is tried again after the retryIn seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const reason of ['throttled', 'too_soon']) {
+        const sync = vi.fn().mockResolvedValueOnce({ ran: false, reason, retryIn: 2 }).mockResolvedValue({ ran: true });
+        await syncAfterMatch(fake.bridge, { sync });
+        vi.advanceTimersByTime(1999);
+        expect(sync).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(1);
+        expect(sync).toHaveBeenCalledTimes(2);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const KUSURIYA = { kind: 'external', anilist_id: 161645, mal_id: 54492, title: 'Kusuriya no Hitorigoto', format: 'TV', season_year: 2023, episodes: 24, score: 1 };
+  const PHARMACIST = { ...DANDADAN, external_id: 'GSERIES003', series_title: 'The Apothecary Diaries', season: 1, episodes_watched: 3, reason: 'no_match' };
+
+  it('candidates not in the list yet: their own group, never preselected; "Anlegen: {title}" creates the entry with the episode', async () => {
+    await seed([{ ...PHARMACIST, candidates: [KUSURIYA] }]);
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 9, title: 'Kusuriya no Hitorigoto' });
+    const synced = vi.fn();
+    window.addEventListener(WATCH_SYNC_EVENT, synced);
+    view();
+    const dialog = await openDialog();
+    const group = within(dialog).getByRole('group', { name: 'Noch nicht in der Liste' });
+    const radio = within(group).getByRole('radio', { name: /Kusuriya no Hitorigoto/ });
+    expect(radio.checked).toBe(false);
+    expect(radio.value).toBe('ext:161645');
+    expect(within(dialog).getByRole('button', { name: 'Ja, zuordnen' }).disabled).toBe(true);
+    fireEvent.click(radio);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Anlegen: Kusuriya no Hitorigoto' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(post).toHaveBeenCalledWith('/api/anime', {
+      anilist_id: 161645, watched: { episode: 3, remember: { service: 'crunchyroll', external_id: 'GSERIES003', season: 1 } }
+    }, expect.anything());
+    expect(synced.mock.calls[0][0].detail).toEqual({ service: 'crunchyroll', applied: 1, added: 0, changed: true, watch: null });
+    window.removeEventListener(WATCH_SYNC_EVENT, synced);
+  });
+
+  it('list and AniList candidates are cut separately (5 and 3); a sure list hit stays preselected next to them', () => {
+    const listed = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, title: `Eintrag ${i + 1}`, score: i ? 0.5 : 0.95, season: 1 }));
+    const external = Array.from({ length: 4 }, (_, i) => ({ ...KUSURIYA, anilist_id: 100 + i, title: `Neu ${i}` }));
+    const split = splitCandidates({ candidates: [...external.slice(0, 2), ...listed, ...external.slice(2), { kind: 'external', anilist_id: null }] });
+    expect(split.list.map((c) => c.id)).toEqual([1, 2, 3, 4, 5]);
+    expect(split.external.map((c) => c.anilist_id)).toEqual([100, 101, 102]);
+    expect(preselectedCandidate({ season: 1, reason: 'ambiguous' }, split.list)?.id).toBe(1);
+  });
+
+  it('a sure list hit with AniList candidates beside it: all offered, the hit chosen, the others not', async () => {
+    await seed([{ ...FRIEREN, candidates: [{ id: 1, title: 'Frieren', score: 0.95, episodes: 28, season: 1 }, KUSURIYA] }]);
+    view();
+    const dialog = await openDialog();
+    expect(within(dialog).getByRole('radio', { name: 'Frieren' }).checked).toBe(true);
+    expect(within(dialog).getByRole('radio', { name: /Kusuriya/ }).checked).toBe(false);
+    expect(within(dialog).getByRole('button', { name: 'Ja, zuordnen' })).toBeTruthy();
+  });
+
+  it('"Anlegen" of an entry that exists by now assigns the episode to it; above its total the complete button follows', async () => {
+    const item = { ...PHARMACIST, episodes_watched: 30 };
+    const post = vi.fn()
+      .mockRejectedValueOnce(new ApiError('Dieser Anime ist schon in der Liste', { status: 409, code: 'DUPLICATE', data: { id: 4 } }))
+      .mockResolvedValueOnce({ anime_id: 4 });
+    expect(await createMatch(item, KUSURIYA, { post })).toEqual({ ok: true, animeId: 4 });
+    expect(post.mock.calls[1]).toEqual(['/api/anime/4/watched', { episode: 30, remember: { service: 'crunchyroll', external_id: 'GSERIES003', season: 1 } }, expect.anything()]);
+
+    post.mockReset().mockRejectedValueOnce(new ApiError('Zu viele Folgen', { status: 400, code: 'EPISODE_ABOVE_TOTAL', data: { episodes: 24 } }));
+    expect(await createMatch(item, KUSURIYA, { post })).toEqual({ aboveTotal: 24 });
+    post.mockReset().mockResolvedValueOnce({ id: 9 });
+    expect(await createMatch(item, KUSURIYA, { post, complete: true })).toEqual({ ok: true, animeId: 9 });
+    expect(post.mock.calls[0][1].watched).toMatchObject({ episode: 30, complete: true });
+  });
+
+  it('"Anderen Anime suchen…" opens the search above the dialog and confirms the entry it brings back', async () => {
+    await seed([{ ...PHARMACIST, candidates: [KUSURIYA] }]);
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ anime_id: 3 });
+    let answer;
+    const onSearchAnime = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    view({ onSearchAnime });
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Anderen Anime suchen…' }));
+    expect(onSearchAnime).toHaveBeenCalledWith('The Apothecary Diaries');
+    await act(async () => { answer(null); });
+    expect(post).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBe(dialog);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Anderen Anime suchen…' }));
+    await act(async () => { answer({ id: 3 }); });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(post).toHaveBeenCalledWith('/api/anime/3/watched', { episode: 3, remember: { service: 'crunchyroll', external_id: 'GSERIES003', season: 1 } }, expect.anything());
+  });
+
   it('touch targets: radio rows and footer buttons reach 44 px on phones', async () => {
     await seed([FRIEREN]);
     view();
@@ -286,5 +386,117 @@ describe('WatchMatchDialog', () => {
     expect(text).toMatch(/className="outline-none dialog-overlay /);
     expect(text).toMatch(/className="dialog-box /);
     expect(text).toMatch(/useDialogA11y\(true/);
+  });
+});
+
+describe('"Aktualisieren" with the Crunchyroll history (desktop)', () => {
+  const WATCH = { auto_add: true, last_at: Date.now(), last_platform: 'macos', last_applied: 1, last_added: 0 };
+  let desktop;
+  let toasts;
+  let calls;
+  const serve = ({ watchSync = { applied: [], unmatched: [], unchanged: [], added: [], watch: WATCH }, pulled = 0 } = {}) => {
+    calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const method = (init.method || 'GET').toUpperCase();
+      const path = url.replace(/^https?:\/\/[^/]+/, '');
+      calls.push(`${method} ${path}`);
+      if (path === '/api/anime/watch-sync') return typeof watchSync === 'function' ? watchSync() : fakeResponse(200, watchSync);
+      if (path === '/api/anime/sync/run') return fakeResponse(200, { anilist: { ran: true, pulled, pushed: 0, changed: pulled > 0 }, watch: WATCH });
+      if (path === '/api/anime') return fakeResponse(200, []);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    }));
+  };
+  const setup = async (options) => {
+    desktop = fakeDesktopBridge(options);
+    window.mangashelfDesktop = { watch: desktop.watch };
+    await patchState(desktop.bridge, { enabled: true });
+    const hook = renderHook(() => useAnimeList({ user: EDITOR }));
+    return hook;
+  };
+  const refresh = async (hook) => { await act(() => hook.result.current.refreshList()); };
+
+  beforeEach(() => { toasts = recordToasts(); });
+  afterEach(() => {
+    toasts.stop();
+    vi.unstubAllGlobals();
+    delete window.mangashelfDesktop;
+  });
+
+  it('runs the history first, then the AniList sync and the list; the count adds both', async () => {
+    serve({ watchSync: { applied: [{ anime_id: 1 }, { anime_id: 2 }], unmatched: [], unchanged: [], added: [], watch: WATCH }, pulled: 1 });
+    const hook = await setup();
+    await refresh(hook);
+    expect(desktop.calls.filter((c) => c.method === 'sync').map((c) => c.args)).toEqual([[{ force: true }]]);
+    expect(calls.filter((c) => !c.startsWith('GET /api/anime/sync'))).toEqual(['POST /api/anime/watch-sync', 'POST /api/anime/sync/run', 'GET /api/anime']);
+    expect(toasts.messages()).toEqual(['3 Serien aktualisiert']);
+    expect(hook.result.current.watchLast).toEqual(WATCH);
+  });
+
+  it('nothing new, and only new entries (their own toast with undo, no second one)', async () => {
+    serve();
+    let hook = await setup();
+    await refresh(hook);
+    expect(toasts.messages()).toEqual(['Nichts Neues']);
+    hook.unmount();
+
+    serve({ watchSync: { applied: [], unmatched: [], unchanged: [], added: [{ anime_id: 7, title: 'Dandadan', external_id: 'GSERIES002', season: 1, episodes_watched: 1, status: 'Schaue' }], watch: WATCH } });
+    hook = await setup();
+    await refresh(hook);
+    expect(toasts.messages().slice(1)).toEqual(['Neu in der Liste: Dandadan']);
+  });
+
+  it('too early, a locked key store and a failed run each say so', async () => {
+    serve();
+    let hook = await setup({ sync: { ok: false, code: 'too_soon', retryIn: 12 } });
+    await refresh(hook);
+    expect(toasts.last()).toMatchObject({ kind: 'info', message: 'Gerade erst abgeglichen – wieder in 12 s' });
+    hook.unmount();
+
+    hook = await setup({ sync: { ok: false, code: 'locked' } });
+    await refresh(hook);
+    expect(toasts.last()).toMatchObject({ kind: 'error', message: CARD_TEXTS.locked });
+    hook.unmount();
+
+    serve({ watchSync: () => fakeResponse(500, { error: 'Interner Fehler beim Abgleich' }) });
+    hook = await setup();
+    await refresh(hook);
+    expect(toasts.last()).toMatchObject({ kind: 'error', message: 'Interner Fehler beim Abgleich' });
+  });
+
+  it('a history the device could not fetch (offline) is no "Nichts Neues"', async () => {
+    serve();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const hook = await setup();
+      await refresh(hook);
+      expect(desktop.calls.filter((c) => c.method === 'sync')).toEqual([]);
+      expect(toasts.messages()).toEqual(['Aktualisierung fehlgeschlagen']);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it('without a Crunchyroll login only the AniList sync and the list run', async () => {
+    serve({ pulled: 2 });
+    const hook = await setup({ status: { ok: true, available: true, connected: false } });
+    await refresh(hook);
+    expect(desktop.watch.sync).not.toHaveBeenCalled();
+    expect(calls.filter((c) => !c.startsWith('GET /api/anime/sync'))).toEqual(['POST /api/anime/sync/run', 'GET /api/anime']);
+    expect(toasts.messages()).toEqual(['2 Serien aktualisiert']);
+  });
+
+  it('the last watch summary stays when an event brings none', async () => {
+    serve();
+    const hook = await setup();
+    await refresh(hook);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: 'crunchyroll', applied: 0, added: 0, changed: true, watch: null } }));
+    });
+    expect(hook.result.current.watchLast).toEqual(WATCH);
+    const next = { ...WATCH, last_platform: 'windows' };
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: 'crunchyroll', applied: 0, added: 0, changed: false, watch: next } }));
+    });
+    expect(hook.result.current.watchLast).toEqual(next);
   });
 });

@@ -22,14 +22,16 @@ function findUnpackedBinary(outDir, platform = process.platform) {
     return candidates.find((file) => fs.existsSync(file)) || null;
 }
 
+/** Command and arguments to start an Electron binary: --no-sandbox on Linux, under xvfb-run without a display. */
+function electronCommand(binary, args, { platform = process.platform, env = process.env } = {}) {
+    if (platform !== 'linux') return { command: binary, args: [...args] };
+    const all = [...args, '--no-sandbox'];
+    return env.DISPLAY ? { command: binary, args: all } : { command: 'xvfb-run', args: ['-a', binary, ...all] };
+}
+
 /** Command and arguments for the smoke start (xvfb-run and --no-sandbox on Linux CI). */
 function smokeCommand(binary, { port, dataDir, userDataDir, platform = process.platform, env = process.env }) {
-    const args = ['--server-only', '--port', String(port), '--data-dir', dataDir, `--user-data-dir=${userDataDir}`];
-    if (platform === 'linux') {
-        args.push('--no-sandbox');
-        if (!env.DISPLAY) return { command: 'xvfb-run', args: ['-a', binary, ...args] };
-    }
-    return { command: binary, args };
+    return electronCommand(binary, ['--server-only', '--port', String(port), '--data-dir', dataDir, `--user-data-dir=${userDataDir}`], { platform, env });
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,4 +78,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { findUnpackedBinary, smokeCommand };
+module.exports = { findUnpackedBinary, smokeCommand, electronCommand };

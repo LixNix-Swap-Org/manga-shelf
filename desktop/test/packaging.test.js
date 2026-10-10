@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { backendEntries, missingEntries, parseStageArgs, STAGE } = require('../scripts/stage');
+const { backendEntries, missingEntries, parseStageArgs, requireWatchBuild, WATCH_MANIFEST_KEY, STAGE } = require('../scripts/stage');
 
 const desktop = path.resolve(__dirname, '..');
 const repo = path.resolve(desktop, '..');
@@ -121,4 +121,91 @@ test('smoke helpers find the unpacked app per OS and run Linux under xvfb withou
     assert.equal(smokeCommand('/bin/app', { ...opts, platform: 'linux', env: { DISPLAY: ':0' } }).command, '/bin/app');
     const mac = smokeCommand('/bin/app', { ...opts, platform: 'darwin', env: {} });
     assert.deepEqual(mac.args, ['--server-only', '--port', '3999', '--data-dir', '/d', '--user-data-dir=/u']);
+});
+
+test('electronCommand: --no-sandbox on Linux and xvfb-run -a without a display, shared by smoke and the Electron gate test', () => {
+    const { electronCommand, smokeCommand } = require('../scripts/smoke');
+    assert.deepEqual(electronCommand('/e', ['run.js', '--user-data-dir=/u'], { platform: 'linux', env: {} }), { command: 'xvfb-run', args: ['-a', '/e', 'run.js', '--user-data-dir=/u', '--no-sandbox'] });
+    assert.deepEqual(electronCommand('/e', ['run.js'], { platform: 'linux', env: { DISPLAY: ':0' } }), { command: '/e', args: ['run.js', '--no-sandbox'] });
+    assert.deepEqual(electronCommand('/e', ['run.js'], { platform: 'darwin', env: {} }), { command: '/e', args: ['run.js'] });
+    assert.deepEqual(electronCommand('/e', ['run.js'], { platform: 'win32', env: {} }), { command: '/e', args: ['run.js'] });
+    const opts = { port: 1, dataDir: '/d', userDataDir: '/u' };
+    for (const env of [{}, { DISPLAY: ':1' }]) {
+        assert.deepEqual(smokeCommand('/bin/app', { ...opts, platform: 'linux', env }), electronCommand('/bin/app', ['--server-only', '--port', '1', '--data-dir', '/d', '--user-data-dir=/u'], { platform: 'linux', env }));
+    }
+    const launcher = read('scripts/electronTest.js');
+    assert.match(launcher, /require\('\.\/smoke'\)/);
+    assert.match(launcher, /electronCommand\(binary, \[path\.join\(DESKTOP, 'test', 'electron', 'run\.js'\), `--user-data-dir=\$\{userData\}`\]\)/);
+    assert.equal(desktopPkg.scripts['test:electron'], 'node scripts/electronTest.js');
+    assert.equal(desktopPkg.scripts.test, 'node --test test/*.test.js');
+});
+
+test('the Electron gate launcher fails on a kill, a signal and a null or non-zero code', () => {
+    const { exitCodeOf, LIMIT_MS } = require('../scripts/electronTest');
+    assert.equal(LIMIT_MS, 120000);
+    assert.equal(exitCodeOf({ code: 0, signal: null, killed: false }), 0);
+    assert.equal(exitCodeOf({ code: 1, signal: null, killed: false }), 1);
+    assert.equal(exitCodeOf({ code: null, signal: 'SIGKILL', killed: true }), 1);
+    assert.equal(exitCodeOf({ code: null, signal: 'SIGSEGV', killed: false }), 1);
+    assert.equal(exitCodeOf({ code: null, signal: null, killed: false }), 1);
+    assert.equal(exitCodeOf({ code: 0, signal: null, killed: true }), 1);
+    const run = read('test/electron/run.js');
+    const handlers = run.indexOf("process.on('uncaughtException', fail);\nprocess.on('unhandledRejection', fail);");
+    assert.ok(handlers > 0);
+    assert.ok(handlers < run.indexOf("const { app } = require('electron');"));
+    assert.ok(handlers < run.indexOf("require('./transport')"));
+    assert.match(run, /const fail = \(err\) => \{\n[^\n]*\n\s*require\('electron'\)\.app\.exit\(1\);/);
+    assert.match(run, /app\.exit\(failed \? 1 : 0\)/);
+});
+
+test('the Electron gate test is complete in a checkout: every file it loads exists, none is git-ignored, the TLS fixture holds', (t) => {
+    const { spawnSync } = require('child_process');
+    const crypto = require('crypto');
+    const gateDir = path.join(desktop, 'test', 'electron');
+    const seen = new Set();
+    const visit = (abs) => {
+        if (seen.has(abs)) return;
+        seen.add(abs);
+        assert.ok(fs.existsSync(abs), `${path.relative(repo, abs)} fehlt`);
+        for (const [, dep] of fs.readFileSync(abs, 'utf8').matchAll(/require\('(\.{1,2}\/[^']+)'\)/g)) {
+            const target = path.resolve(path.dirname(abs), dep);
+            visit(target.endsWith('.js') ? target : `${target}.js`);
+        }
+    };
+    visit(path.join(desktop, 'scripts', 'electronTest.js'));
+    visit(path.join(gateDir, 'run.js'));
+    assert.ok(seen.has(path.join(gateDir, 'fixtureTls.js')));
+    assert.doesNotMatch(read('test/electron/transport.js'), /readFileSync/);
+
+    const { CERT, KEY } = require('./electron/fixtureTls');
+    const cert = new crypto.X509Certificate(CERT);
+    assert.ok(cert.checkPrivateKey(crypto.createPrivateKey(KEY)));
+    assert.equal(cert.checkIP('127.0.0.1'), '127.0.0.1');
+    assert.ok(Date.parse(cert.validTo) > Date.now(), `fixture certificate expired ${cert.validTo}`);
+
+    const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: repo, encoding: 'utf8' });
+    if (top.status !== 0 || fs.realpathSync(top.stdout.trim()) !== fs.realpathSync(repo)) {
+        t.skip('kein Git-Checkout');
+        return;
+    }
+    const files = [...new Set([...seen, ...fs.readdirSync(gateDir).map((name) => path.join(gateDir, name))])].map((abs) => path.relative(repo, abs));
+    const ignored = spawnSync('git', ['check-ignore', '--no-index', '--verbose', '--', ...files], { cwd: repo, encoding: 'utf8' });
+    assert.equal(ignored.status, 1, ignored.stdout || ignored.stderr);
+});
+
+test('the stage builds the desktop web build and refuses one without the Crunchyroll card unless it is switched off', (t) => {
+    const os = require('os');
+    const stage = read('scripts/stage.js');
+    assert.match(stage, /run\('npx', \['vite', 'build', '--mode', 'desktop', '--outDir', webOut, '--emptyOutDir'\], frontend\);\n\s*requireWatchBuild\(webOut\);/);
+    assert.match(stage, /requireWatchBuild\(opts\.web\);\n\s*copyEntry\(opts\.web, webOut\);/);
+    assert.equal(WATCH_MANIFEST_KEY, 'src/app/watch/CrunchyrollCard.jsx');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-web-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    assert.throws(() => requireWatchBuild(dir, {}), /src\/app\/watch\/CrunchyrollCard\.jsx.*--mode desktop/);
+    fs.mkdirSync(path.join(dir, '.vite'));
+    fs.writeFileSync(path.join(dir, '.vite', 'manifest.json'), JSON.stringify({ 'index.html': {} }));
+    assert.throws(() => requireWatchBuild(dir, {}), /VITE_WATCH_CRUNCHYROLL=off/);
+    assert.doesNotThrow(() => requireWatchBuild(dir, { VITE_WATCH_CRUNCHYROLL: 'off' }));
+    fs.writeFileSync(path.join(dir, '.vite', 'manifest.json'), JSON.stringify({ 'index.html': {}, [WATCH_MANIFEST_KEY]: {} }));
+    assert.doesNotThrow(() => requireWatchBuild(dir, {}));
 });

@@ -124,7 +124,8 @@ function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {
         title: title || meta.title.preferred || 'Ohne Titel',
         manga_id,
         updated_by: ctx.user ? ctx.user.id : null,
-        updated_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19)
+        updated_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19),
+        created_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19)
     };
     if (!images.cover_image && meta.cover_url) columns.cover_image = meta.cover_url;
     if (!images.banner_image && meta.banner_url) columns.banner_image = meta.banner_url;

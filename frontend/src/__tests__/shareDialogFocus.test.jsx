@@ -93,4 +93,32 @@ describe('Dashboard: share dialog and the lazy add dialog', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Anime hinzufügen' })).toBeNull());
     expect(share.contains(document.activeElement)).toBe(true);
   });
+
+  it('the share dialog offers the server\'s suggestion and the anime tab its "Aktualisieren"', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      calls.push(`${init.method || 'GET'} ${url}`);
+      if (url === '/api/anime') return fakeResponse(200, []);
+      if (url === '/api/anime/sync/run') return fakeResponse(200, { anilist: { ran: false, pulled: 0, changed: false }, watch: { auto_add: true, last_at: null } });
+      if (url === '/api/anime/resolve-link') {
+        return fakeResponse(200, {
+          service: 'crunchyroll', kind: 'episode', external_id: 'GG1U2Q5MW', series_id: 'GG5H5XQX4', series_title: 'Frieren', episode: 7, episode_source: 'text',
+          anime_id: null, match: null, candidates: [], entry: null, url: 'https://www.crunchyroll.com/watch/GG1U2Q5MW/the-hero-party', page_checked: false,
+          suggestion: { anilist_id: 154587, title: 'Sousou no Frieren', episodes: 28, format: 'TV' }
+        });
+      }
+      return fakeResponse(200, {});
+    }));
+    render(
+      <MemoryRouter initialEntries={['/?share_text=' + encodeURIComponent(CR_TEXT)]}>
+        <Routes><Route path="/" element={<Dashboard user={{ id: 1, username: 'anna', role: 'editor' }} onLogout={vi.fn()} />} /></Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByRole('button', { name: 'Anlegen und als gesehen markieren' })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const before = calls.filter((c) => c === 'POST /api/anime/sync/run').length;
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aktualisieren' })); });
+    await waitFor(() => expect(calls.filter((c) => c === 'POST /api/anime/sync/run')).toHaveLength(before + 1));
+  });
 });

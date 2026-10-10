@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain, clipboard, protocol, net, safeStorage, powerMonitor, session } = require('electron');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -15,6 +16,13 @@ const { addressPage, portPage, dataUrl } = require('./lib/pages');
 const { qrSvgData } = require('./lib/qrCode');
 const { resolvePaths, resolveDataDir } = require('./lib/paths');
 const { setAutostart, startedAtLogin } = require('./lib/autostart');
+const { createWatchSecret } = require('./lib/watchSecret');
+const { createWatchPrefs } = require('./lib/watchPrefs');
+const { createTransport } = require('./lib/watchTransport');
+const { createForeground } = require('./lib/watchForeground');
+const { createWatchService } = require('./lib/watchService');
+const { createWatchLogin, browserUserAgent, registerClientCertificateGuard } = require('./lib/watchLogin');
+const { registerWatchIpc } = require('./lib/watchIpc');
 
 const argv = process.argv.slice(app.isPackaged ? 1 : 2);
 const startArgs = parseArgs(argv);
@@ -40,6 +48,9 @@ let setupPending = false;
 let pendingUrl = startArgs.deepLink || null;
 let bridgeReady = false;
 let hiddenStart = false;
+let foreground = null;
+let login = null;
+let service = null;
 // every change of mode, port, view or tray runs after the previous one has finished
 const runQueue = createSerialQueue();
 
@@ -48,6 +59,7 @@ const senderOrigin = (event) => originOf(event.senderFrame?.url || event.sender?
 const fromApp = (event) => senderOrigin(event) === APP_ORIGIN;
 const fromLocal = (event) => Boolean(localOrigin()) && senderOrigin(event) === localOrigin();
 const fromOwnPage = (event) => fromApp(event) || fromLocal(event);
+const isWatchSender = (event) => fromOwnPage(event) && event.sender === mainWindow?.webContents;
 const isWebUrl = (url) => /^https?:\/\//i.test(String(url || ''));
 
 function openExternal(url) {
@@ -114,6 +126,9 @@ function guardNavigation(contents) {
         event.preventDefault();
         openExternal(url);
     });
+    contents.on('will-redirect', (details) => {
+        if (details.isMainFrame && originOf(details.url) !== originOf(viewUrl() || '')) details.preventDefault();
+    });
 }
 
 function createMainWindow() {
@@ -136,6 +151,7 @@ function createMainWindow() {
         }
     });
     guardNavigation(win.webContents);
+    foreground.attach(win);
     win.webContents.on('did-start-loading', () => { bridgeReady = false; });
     win.once('ready-to-show', () => { if (!hiddenStart) win.show(); });
     win.on('close', (event) => {
@@ -571,6 +587,7 @@ if (!app.requestSingleInstanceLock()) {
     for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => app.quit());
     app.on('before-quit', (event) => {
         quitting = true;
+        login?.finishPending('cancelled');
         if (stopped || !serverCtl?.current()) return;
         event.preventDefault();
         serverCtl.stop({ force: true })
@@ -596,6 +613,18 @@ if (!app.requestSingleInstanceLock()) {
         registerAppProtocol({ protocol, net }, paths.appFrontendDir);
         registerSession();
         registerIpc();
+        const crunchyroll = require(path.join(paths.serverDir, 'core', 'watch', 'crunchyroll.js'));
+        const { createFlow, FlowError } = require(path.join(paths.serverDir, 'core', 'watch', 'crunchyrollFlow.js'));
+        const apiSession = session.fromPartition('crunchyroll-api', { cache: false });
+        const ua = browserUserAgent(app.userAgentFallback);
+        const secret = createWatchSecret({ file: path.join(userData, 'watch-secret.json'), safeStorage, platform: process.platform });
+        const prefs = createWatchPrefs({ file: path.join(userData, 'watch-state.json') });
+        const transport = createTransport({ net, session: apiSession, userAgent: ua, isAllowedUrl: crunchyroll.isAllowedApiUrl, deadlineMs: 20000 });
+        foreground = createForeground({ powerMonitor, net, platform: process.platform, timers: { setTimeout, clearTimeout, setInterval, clearInterval } });
+        service = createWatchService({ createFlow, FlowError, crunchyroll, secret, transport, apiSession, randomUUID: crypto.randomUUID, now: Date.now, isForeground: foreground.isForeground });
+        login = createWatchLogin({ BrowserWindow, session, dialog, app, getMainWindow: () => mainWindow, service, crunchyroll, userAgent: ua });
+        registerClientCertificateGuard(app, login.isLoginContents);
+        registerWatchIpc({ ipcMain, isWatchSender, service, login, prefs, foreground });
         powerMonitor.on('resume', () => mainWindow?.webContents.send('desktop:resume'));
 
         if (resolveRun(settings.get(), overrides).needsChoice) {

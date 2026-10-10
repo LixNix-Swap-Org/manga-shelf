@@ -61,6 +61,7 @@ const CLIENT_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 const COOKIE_RE = /^[A-Za-z0-9._~+/=%-]{8,4096}$/;
 const DEVICE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const ACCOUNT_RE = /^[A-Za-z0-9-]{1,64}$/;
+const SLUG_RE = /^[a-z0-9-]{1,200}$/i;
 
 function parseJson(text) {
     if (text && typeof text === 'object') return text;
@@ -233,6 +234,7 @@ function cleanItem(raw) {
     return {
         external_id: externalId,
         series_title: cleanTitle(raw.series_title),
+        series_slug: isText(raw.series_slug, SLUG_RE) ? raw.series_slug.toLowerCase() : null,
         season: intIn(raw.season, 1, MAX_SEASON) || 1,
         episode,
         fully_watched: fully,
@@ -263,12 +265,13 @@ function recordOf(entry) {
     return cleanItem({
         external_id: meta.series_id,
         series_title: meta.series_title,
+        series_slug: meta.series_slug_title,
         season: intIn(meta.season_number, 1, MAX_SEASON) || 1,
         episode: number,
         fully_watched: fully,
         resume_url: fully ? null : url,
         resume_episode: fully ? null : number,
-        watched_at: entry.date_played || null
+        watched_at: entry.never_watched === true ? null : entry.date_played || null
     });
 }
 
@@ -304,7 +307,12 @@ function mergeItems(...lists) {
         const better = watchedCount(item) - watchedCount(best) || Number(Boolean(item.resume_url)) - Number(Boolean(best.resume_url))
             || (item.watched_at && item.watched_at === newest && item.watched_at !== best.watched_at ? 1 : 0);
         const winner = better > 0 ? item : best;
-        groups.set(key, { ...winner, series_title: winner.series_title || item.series_title || best.series_title, watched_at: newest });
+        groups.set(key, {
+            ...winner,
+            series_title: winner.series_title || item.series_title || best.series_title,
+            series_slug: winner.series_slug || item.series_slug || best.series_slug,
+            watched_at: newest
+        });
     }
     return [...groups.values()].sort((a, b) => (b.watched_at || '').localeCompare(a.watched_at || '')
         || a.external_id.localeCompare(b.external_id) || a.season - b.season);
@@ -376,7 +384,7 @@ const seasonServiceOf = (serviceId, season) => `${serviceId}:season:${season}`;
 const seasonLinkOf = (serviceId, seriesId, season) => ({ service: seasonServiceOf(serviceId, season), external_id: `${String(seriesId).toUpperCase()}:${season}` });
 
 module.exports = {
-    ENDPOINTS, LOGIN_OPTIONS, CLIENT_ID_SCRIPT, MESSAGES, MAX_ITEMS, MAX_SEASON, clientIdFrom, secretFromLogin, parseSecret, serializeSecret,
+    ENDPOINTS, LOGIN_OPTIONS, CLIENT_ID_SCRIPT, MESSAGES, MAX_ITEMS, COOKIE_RE, MAX_SEASON, clientIdFrom, secretFromLogin, parseSecret, serializeSecret,
     buildTokenRequest, parseTokenResponse, rotatedEtpRt, isAllowedApiUrl, buildApiRequest, parseMe, parseHistoryResponse, parseWatchHistory,
     parseDiscoverHistory, mergeItems, cleanItem, watchedCount, syncBody, planProgress, seasonMarkerOf, seasonFromTitles, seasonServiceOf, seasonLinkOf, base64
 };

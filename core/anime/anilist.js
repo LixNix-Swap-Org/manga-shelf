@@ -161,6 +161,17 @@ async function byIds(ctx, { anilist = [], mal = [] }, { credential, timeoutMs, s
     return { metas: list.map((m) => normalize(m, nowMs)), rate };
 }
 
+/** Up to 50 AniList ids with relations, description and links (id_in): { metas, rate }; unknown ids are missing. */
+async function byIdsDetail(ctx, ids, { credential, timeoutMs, signal } = {}) {
+    const list = ids.slice(0, BATCH_SIZE).map(Number);
+    if (!list.length) return { metas: [], rate: null };
+    const query = `query ($ids: [Int]) { Page(page: 1, perPage: ${BATCH_SIZE}) { media(id_in: $ids, type: ANIME) { ${DETAIL_FIELDS} } } }`;
+    const { data, rate } = await post(ctx, query, { ids: list }, { credential, timeoutMs, signal });
+    const nowMs = ctx.now().getTime();
+    const media = data.Page && Array.isArray(data.Page.media) ? data.Page.media.filter(Boolean) : [];
+    return { metas: media.map((m) => normalize(m, nowMs)), rate };
+}
+
 /** Anime adaptations of a manga found by title: [{ relation, kind, anilist_id, mal_id, title, … }] and the manga hit. */
 async function adaptations(ctx, title, { credential, timeoutMs, signal } = {}) {
     const query = `query ($s: String) { Page(page: 1, perPage: 3) { media(search: $s, type: MANGA, sort: SEARCH_MATCH) {
@@ -224,4 +235,4 @@ async function saveListEntry(ctx, { mediaId, progress, status }, { credential, t
     return { entry: saved ? listEntryOf({ mediaId: Number(mediaId), ...saved }) : null, rate };
 }
 
-module.exports = { search, byId, byIds, adaptations, viewer, listCollection, listEntry, saveListEntry, normalize, BATCH_SIZE, API_URL, LABEL };
+module.exports = { search, byId, byIds, byIdsDetail, adaptations, viewer, listCollection, listEntry, saveListEntry, normalize, BATCH_SIZE, API_URL, LABEL };

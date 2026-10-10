@@ -90,6 +90,7 @@ const routes = [
     { method: 'POST', path: '/anime/resolve-link', role: 'editor', handler: anime.resolveLink },
     // results the app read from the user's streaming history on the device; never cookies or tokens
     { method: 'POST', path: '/anime/watch-sync', role: 'editor', handler: watch.sync },
+    { method: 'POST', path: '/anime/watch-sync/undo', role: 'editor', handler: watch.undo },
     { method: 'GET', path: '/anime/sync', role: 'editor', handler: anime.syncState },
     { method: 'PUT', path: '/anime/sync', role: 'editor', handler: anime.syncUpdate },
     { method: 'POST', path: '/anime/sync/run', role: 'editor', handler: anime.syncRun },

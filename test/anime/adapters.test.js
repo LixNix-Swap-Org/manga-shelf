@@ -168,3 +168,26 @@ test('AniList list: collection without duplicates of custom lists, a missing ent
     assert.deepEqual(http.calls.at(-1).body.variables, { m: 154587, p: 7, s: 'CURRENT' });
     assert.ok(http.calls.every((c) => c.headers.Authorization === 'Bearer tok'));
 });
+
+test('AniList details of several ids: one id_in request with relations and links, unknown ids missing', async () => {
+    const calls = [];
+    const media = fixture('anilist-media-154587.json').data.Media;
+    const ctx = {
+        now: () => new Date(NOW),
+        config: { appVersion: 'test' },
+        http: {
+            fetch: async (url, init) => {
+                calls.push(JSON.parse(init.body));
+                return new Response(JSON.stringify({ data: { Page: { media: [media] } } }), { status: 200, headers: { 'content-type': 'application/json' } });
+            }
+        }
+    };
+    const { metas } = await anilist.byIdsDetail(ctx, [154587, 1]);
+    assert.deepEqual(metas.map((m) => m.anilist_id), [154587]);
+    assert.ok(metas[0].relations.length > 0 && metas[0].external_links.length > 0);
+    assert.deepEqual(calls[0].variables, { ids: [154587, 1] });
+    assert.match(calls[0].query, /id_in: \$ids/);
+    assert.match(calls[0].query, /relations \{ edges/);
+    assert.deepEqual(await anilist.byIdsDetail(ctx, []), { metas: [], rate: null });
+    assert.equal(calls.length, 1);
+});

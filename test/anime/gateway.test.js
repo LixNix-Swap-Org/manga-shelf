@@ -5,6 +5,8 @@ const gateway = require('../../core/anime/gateway');
 const { fakeFetch, aniListFixtures, jikanFixtures, memoryWith, ctxAs, json, fixture } = require('./helpers');
 
 const { requestJson, SourceError } = require('../../core/anime/request');
+const cache = require('../../core/anime/cache');
+const { searchKey } = require('../../core/anime/normalize');
 
 /** One AniList Media request through requestJson with the access's credential (as the adapters send it). */
 const aniListExec = (ctx, credential) => requestJson(ctx, 'https://graphql.anilist.co', {
@@ -346,4 +348,105 @@ test('ownOnly calls use the own key alone: no pool, no volunteers, no strikes; w
         (err) => err.kind === 'bad');
     assert.equal(bad.calls.length, 1);
     assert.equal(failed.length, 2, 'a refused-looking answer is no strike without a pool to compare');
+});
+
+test('spare lookups: own key then pool at prefetch priority, no waiting, no volunteers, no half-open probe', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures });
+    const credentials = {
+        get: (userId, provider) => (userId === 2 && provider === 'anilist' ? { secret: 'eigener-token' } : null),
+        background: () => [{ userId: 3, secret: 'freiwilliger-token' }],
+        used: () => {}
+    };
+    const ctx = ctxAs(memoryWith(http.fetch, { credentials }), 'ed');
+    let counted = 0;
+    const options = { userId: 2, beforeRequest: () => { counted++; } };
+    const lists = await gateway.spareSearch(ctx, ['Frieren'], options);
+    assert.ok(lists[0].length > 0 && lists[0].every((m) => m.anilist_id));
+    assert.equal(http.calls.at(-1).headers.Authorization, 'Bearer eigener-token');
+    assert.equal(counted, 1);
+    assert.ok(cache.read(ctx, `watch:search:${searchKey('Frieren')}`), 'cached under watch:search only');
+    assert.equal(cache.read(ctx, `anime:search:${searchKey('Frieren')}:10`), null);
+    await gateway.spareSearch(ctx, ['Frieren'], options);
+    assert.deepEqual([counted, http.count('anilist')], [1, 1], 'the cached term asks nobody');
+
+    const budget = gateway.state().budget;
+    const now = Date.now();
+    while (budget.take('user:2:anilist', { perMinute: 30 }, 'prefetch', now)) { /* down to the interactive reserve */ }
+    assert.ok(budget.take('user:2:anilist', { perMinute: 30 }, 'interactive', now), 'the own key keeps its reserve for the user');
+    await gateway.spareDetail(ctx, [154587], options);
+    assert.equal(http.calls.at(-1).headers.Authorization, undefined, 'the pool, not the reserve and never a volunteer');
+
+    for (let i = 0; i < 3; i++) budget.failure('shared:anilist', Date.now());
+    while (budget.take('user:2:anilist', { perMinute: 30 }, 'interactive', Date.now())) { /* empty */ }
+    await assert.rejects(gateway.spareDetail(ctx, [154587], options), (err) => err instanceof SourceError);
+    assert.equal(http.calls.filter((c) => c.headers.Authorization === 'Bearer freiwilliger-token').length, 0);
+    budget.state('shared:anilist', Date.now() + 61 * 1000);
+    assert.equal(budget.state('shared:anilist', Date.now() + 61 * 1000).circuit, 'half-open');
+    const before = http.count('anilist');
+    await assert.rejects(gateway.call({ ...ctx, now: () => new Date(Date.now() + 61 * 1000) }, 'anilist', { spare: true }, () => ({ metas: [] })));
+    assert.equal(http.count('anilist'), before, 'the half-open pool is left to its own probe');
+});
+
+test('spare lookups: the gate runs once per AniList request sent, after a token was taken', async () => {
+    const http = fakeFetch({ anilist: (body, init) => (init.headers.Authorization === 'Bearer eigener-token' ? json({}, { status: 503 }) : aniListFixtures(body)) });
+    const credentials = { get: (userId, provider) => (userId === 2 && provider === 'anilist' ? { secret: 'eigener-token' } : null), used: () => {} };
+    const ctx = ctxAs(memoryWith(http.fetch, { credentials }), 'ed');
+    let counted = 0;
+    const options = { userId: 2, beforeRequest: () => { counted++; } };
+    const lists = await gateway.spareSearch(ctx, ['Frieren'], options);
+    assert.ok(lists[0].length > 0);
+    assert.deepEqual(http.calls.map((c) => c.headers.Authorization), ['Bearer eigener-token', undefined]);
+    assert.equal(counted, 2, 'the own key and then the pool: two requests, two lookups');
+
+    const budget = gateway.state().budget;
+    for (const bucket of ['user:2:anilist', 'shared:anilist']) {
+        while (budget.take(bucket, { perMinute: 30 }, 'prefetch', Date.now())) { /* down to the interactive reserve */ }
+    }
+    await assert.rejects(gateway.spareDetail(ctx, [154587], options), (err) => err instanceof SourceError && err.kind === 'busy');
+    assert.deepEqual([counted, http.count('anilist')], [2, 2], 'nothing sent, nothing counted');
+
+    let refused = 0;
+    const stop = { userId: 2, beforeRequest: () => { refused++; throw new Error('stop'); } };
+    gateway.resetGatewayState();
+    await assert.rejects(gateway.spareDetail(ctx, [154587], stop), /stop/);
+    assert.deepEqual([refused, http.count('anilist')], [1, 2], 'a refusing gate ends the call before the next access');
+});
+
+test('spare lookups: the UI cache counts only with AniList in it; a too complex search halves without touching the group size', async () => {
+    let complex = true;
+    const http = fakeFetch({
+        anilist: (body) => {
+            if (Object.keys(body.variables).length > 1 && complex) {
+                complex = false;
+                return json({ errors: [{ message: 'Max query complexity exceeded', status: 400 }], data: null }, { status: 400 });
+            }
+            return aniListFixtures(body);
+        }
+    });
+    const ctx = ctxAs(memoryWith(http.fetch), 'ed');
+    cache.write(ctx, `anime:search:${searchKey('Nur Jikan')}:10`, { results: [{ anilist_id: null, mal_id: 5 }], sources_used: ['jikan'] }, cache.TTL.search);
+    cache.write(ctx, `anime:search:${searchKey('Mit AniList')}:10`, { results: [{ anilist_id: 77, mal_id: 5 }, { anilist_id: null, mal_id: 6 }], sources_used: ['anilist', 'jikan'] }, cache.TTL.search);
+    let counted = 0;
+    const lists = await gateway.spareSearch(ctx, ['Mit AniList', 'Nur Jikan', 'Frieren'], { beforeRequest: () => { counted++; } });
+    assert.deepEqual(lists[0].map((m) => m.anilist_id), [77]);
+    assert.equal(counted, 3, 'the pair was too complex: one more request per half');
+    assert.equal(gateway.state().groupSize, 3);
+    assert.deepEqual(http.calls.slice(1).map((c) => Object.values(c.body.variables)), [['Nur Jikan'], ['Frieren']]);
+    await assert.rejects(gateway.spareSearch(ctx, ['Ganz Neu'], { beforeRequest: () => { throw new Error('stop'); } }), /stop/);
+    assert.equal(http.count('anilist'), 3, 'a refusing gate sends nothing');
+});
+
+test('an aborted caller signal is not an outage: the token is released, no failure, no next access', async () => {
+    const controller = new AbortController();
+    const http = fakeFetch({ anilist: (body, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))) });
+    const credentials = { get: (userId, provider) => (userId === 2 && provider === 'anilist' ? { secret: 'eigener-token' } : null), used: () => {} };
+    const ctx = ctxAs(memoryWith(http.fetch, { credentials }), 'ed');
+    for (let i = 0; i < 3; i++) {
+        const signal = i === 0 ? controller.signal : AbortSignal.abort();
+        const pending = gateway.spareSearch(ctx, [`Abbruch ${i}`], { userId: 2, signal });
+        if (i === 0) setTimeout(() => controller.abort(), 10);
+        await assert.rejects(pending, (err) => err instanceof SourceError && (i > 0 || err.aborted === true));
+    }
+    assert.equal(http.count('anilist'), 1, 'own key only, the pool is not tried; an aborted signal sends nothing');
+    assert.equal(gateway.state().budget.state('user:2:anilist', Date.now()).circuit, 'closed');
 });

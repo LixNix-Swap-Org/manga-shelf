@@ -5,9 +5,11 @@ import { notify } from '../utils/notify';
 import { displayTitle } from '../utils/animeHelpers';
 import {
   SHARE_TEXTS, findStreamingLink, resolveSharedLink, resolveErrorText, isUnsupportedLink, knownEntry, displaySeriesTitle, savedRaised, progressBefore,
-  raisesCounter, readClipboardText
+  raisesCounter, readClipboardText, aboveTotalText
 } from '../utils/shareIntake';
 import { t } from '../i18n/index.js';
+
+const seenText = (title, episode, complete) => (complete ? t('{title}: komplett gesehen', { title }) : t('{title}: Folge {episode} gesehen', { title, episode }));
 
 // A streaming link shared to the app (share target, Android share sheet, "Link einfügen"): asks the server what it points to,
 // lets the user confirm "Frieren, Folge 7 gesehen?" and saves it with an undo toast. `state` drives ShareLinkDialog:
@@ -104,7 +106,7 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
     if (s?.link) resolve(s.input, s.link);
   }, [resolve]);
 
-  const choose = useCallback((id) => setState((s) => (s ? { ...s, chosenId: id } : s)), []);
+  const choose = useCallback((id) => setState((s) => (s ? { ...s, chosenId: id, createError: null } : s)), []);
 
   /** "Zur Liste hinzufügen": the add dialog opens above this one; the entry it creates or finds comes back via choose(). */
   const addToList = useCallback(() => {
@@ -143,7 +145,7 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
       notify.success(t('{title}: Link für „Weiter“ gemerkt', { title }));
       return;
     }
-    const text = saved.progress?.status === 'Gesehen' && complete ? `${title}: komplett gesehen` : `${title}: Folge ${episode} gesehen`;
+    const text = seenText(title, episode, saved.progress?.status === 'Gesehen' && complete);
     // an older server without `previous` gets no undo: guessing from the list could delete real progress
     const undo = hasPrevious
       ? { label: t('Rückgängig'), onClick: () => animeRef.current.undoWatched(animeId, saved.previous) }
@@ -151,5 +153,37 @@ export default function useShareIntake({ anime, user, canEdit, showAnime, openAd
     notify.success(text, undo ? { action: undo } : undefined);
   }, [close]);
 
-  return { state, start, paste, submitPaste, retry, choose, addToList, confirm, close };
+  const create = useCallback(async ({ episode }) => {
+    const s = stateRef.current;
+    const suggestion = s?.answer?.suggestion;
+    if (!Number.isInteger(suggestion?.anilist_id) || !(episode > 0)) return;
+    const { answer } = s;
+    setState({ ...s, phase: 'saving', aboveTotal: null, createError: null });
+    const watched = { episode };
+    if (answer.kind !== 'series' && answer.url) watched.url = answer.url;
+    if (answer.series_id) watched.remember = { service: answer.service, external_id: answer.series_id };
+    let detail;
+    try {
+      detail = await animeRef.current.add({ anilist_id: suggestion.anilist_id, watched });
+    } catch (err) {
+      if (err?.status === 409 && err.data?.id) {
+        const next = { ...stateRef.current, phase: 'confirm', chosenId: err.data.id };
+        stateRef.current = next;
+        setState(next);
+        await confirm({ animeId: err.data.id, episode });
+        return;
+      }
+      const createError = err?.code === 'EPISODE_ABOVE_TOTAL' && Number(err.data?.episodes) > 0
+        ? aboveTotalText(episode, Number(err.data.episodes))
+        : err?.message || t('Anime konnte nicht hinzugefügt werden');
+      setState((cur) => (cur ? { ...cur, phase: 'confirm', createError } : cur));
+      return;
+    }
+    close();
+    const title = (detail ? displayTitle(detail) : '') || suggestion.title || t('Anime');
+    const undo = Number.isInteger(detail?.id) ? { label: t('Rückgängig'), onClick: () => animeRef.current.undoCreated(detail.id) } : undefined;
+    notify.success(seenText(title, episode, false), undo ? { action: undo } : undefined);
+  }, [close, confirm]);
+
+  return { state, start, paste, submitPaste, retry, choose, addToList, confirm, create, close };
 }

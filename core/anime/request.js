@@ -8,12 +8,13 @@ const MAX_BYTES = 4 * 1024 * 1024;
 class SourceError extends Error {
     /** kind: rate | auth | server | network | complexity | notfound | bad | notoken (own-key-only call without a key) */
     /** graphql: the answer carried GraphQL error messages (a refused-like answer, see gateway refusedLike). */
-    constructor(kind, message, { status = 0, retryAfterSec = null, resetAt = null, graphql = false } = {}) {
+    constructor(kind, message, { status = 0, retryAfterSec = null, resetAt = null, graphql = false, aborted = false } = {}) {
         super(message);
         this.name = 'SourceError';
         this.kind = kind;
         this.status = status;
         this.graphql = graphql;
+        this.aborted = aborted;
         this.retryAfterSec = retryAfterSec;
         this.resetAt = resetAt;
     }
@@ -71,7 +72,8 @@ async function requestJson(ctx, url, init = {}, { label, timeoutMs = DEFAULT_TIM
     try {
         res = await ctx.http.fetch(url, { ...init, signal: anySignal([signal, timeoutSignal(timeoutMs)]) });
     } catch (err) {
-        throw new SourceError('network', `${label} nicht erreichbar (${err && err.name === 'TimeoutError' ? 'Zeitüberschreitung' : 'Netzwerkfehler'})`);
+        throw new SourceError('network', `${label} nicht erreichbar (${err && err.name === 'TimeoutError' ? 'Zeitüberschreitung' : 'Netzwerkfehler'})`,
+            { aborted: Boolean(signal && signal.aborted) });
     }
     const rate = rateHeaders(res.headers);
     if (res.status === 429) {
@@ -82,7 +84,7 @@ async function requestJson(ctx, url, init = {}, { label, timeoutMs = DEFAULT_TIM
     try {
         text = await readCapped(res);
     } catch (err) {
-        throw new SourceError('network', `${label}: Antwort abgebrochen`, { status: res.status });
+        throw new SourceError('network', `${label}: Antwort abgebrochen`, { status: res.status, aborted: Boolean(signal && signal.aborted) });
     }
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch (_) { /* not JSON */ }

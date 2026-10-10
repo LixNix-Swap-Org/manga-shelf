@@ -176,6 +176,17 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const shareDialogRef = useRef(null);
   const openShareAdd = useCallback((query) => setAnimeAdd({ mangaId: null, query, share: true }), []);
   const share = useShareIntake({ anime, user, canEdit, showAnime: showAnimeView, openAddAnime: openShareAdd });
+  const matchSearch = useRef(null);
+  const settleMatchSearch = useCallback((answer) => {
+    const resolve = matchSearch.current;
+    matchSearch.current = null;
+    resolve?.(answer);
+  }, []);
+  const searchAnimeForMatch = useCallback((query) => new Promise((resolve) => {
+    settleMatchSearch(null);
+    matchSearch.current = resolve;
+    setAnimeAdd({ mangaId: null, query });
+  }), [settleMatchSearch]);
 
   onOnlineRef.current = () => {
     syncPendingPurchases();
@@ -687,6 +698,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         onStatusChange={handleAnimeStatus}
         onRetry={anime.fetchAnime}
         onOpenAccount={user?.offline ? null : openApiKeys}
+        onRefresh={anime.refreshList}
+        watchLast={anime.watchLast}
+        onSearchAnime={searchAnimeForMatch}
       />
     )}
 
@@ -782,6 +796,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               onChoose={share.choose}
               onAddToList={share.addToList}
               onConfirm={share.confirm}
+              onCreate={share.create}
             />
           )}
         </Suspense>
@@ -790,11 +805,13 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           {animeAdd && (
             <AddAnimeModal
               isOpen
-              onClose={() => setAnimeAdd(null)}
+              onClose={() => { settleMatchSearch(null); setAnimeAdd(null); }}
               search={anime.search}
               loadAdaptations={anime.adaptations}
-              onAdd={animeAdd.share ? async (body) => { const added = await anime.add(body); share.choose(added?.id ?? null); return added; } : anime.add}
-              onOpenExisting={animeAdd.share ? share.choose : (id) => setAnimeDetailId(id)}
+              onAdd={animeAdd.share
+                ? async (body) => { const added = await anime.add(body); share.choose(added?.id ?? null); return added; }
+                : async (body) => { const added = await anime.add(body); settleMatchSearch(added?.id ? { id: added.id } : null); return added; }}
+              onOpenExisting={animeAdd.share ? share.choose : (id) => { if (matchSearch.current) settleMatchSearch({ id }); else setAnimeDetailId(id); }}
               mangas={mangas}
               initialMangaId={animeAdd.mangaId}
               initialQuery={animeAdd.query || ''}

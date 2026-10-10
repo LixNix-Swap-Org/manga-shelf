@@ -141,18 +141,33 @@ const refusedLike = (err) => err.kind === 'bad' && [400, 401, 403].includes(err.
 
 const unavailable = (provider, reason = 'unavailable') => new SourceError(reason, `${SOURCE_LABELS[provider] || provider} ist gerade nicht verfügbar`);
 
+function spareAccesses(ctx, provider, userId) {
+    const s = S();
+    const own = userId ? credentialsOf(ctx).get(userId, provider) : null;
+    const list = [];
+    if (own && own.secret) list.push({ bucket: `user:${userId}:${provider}`, credential: own, kind: 'own', userId });
+    list.push({ bucket: `shared:${provider}`, credential: null, kind: 'shared' });
+    return list.filter((access) => {
+        const state = s.budget.state(access.bucket, nowMs(ctx));
+        return !state || state.circuit === 'closed';
+    });
+}
+
 // One source request through budget and accesses. exec(credential) does the request and may resolve with `rate` (headers).
 // Resolves { ...result, credential_used }; rejects with a SourceError.
 // ownOnly: only the caller's own key (kind 'notoken' without one), no pool fallback and so no suspect strikes.
-async function call(ctx, provider, { priority = 'interactive', userId = null, signal, probe = false, ownOnly = false } = {}, exec) {
+async function call(ctx, provider, { priority = 'interactive', userId = null, signal, probe = false, ownOnly = false, spare = false, beforeRequest = null } = {}, exec) {
     const s = remember(ctx);
     const creds = credentialsOf(ctx);
     const options = bucketOptions(ctx, provider);
-    const accesses = accessesFor(ctx, provider, { userId, priority, ownOnly });
+    const accesses = spare ? spareAccesses(ctx, provider, userId) : accessesFor(ctx, provider, { userId, priority, ownOnly });
     if (ownOnly && !accesses.length) throw new SourceError('notoken', `Kein eigener ${SOURCE_LABELS[provider] || provider}-Schlüssel hinterlegt`);
+    if (spare) priority = 'prefetch';
     const plan = [];
     for (const access of accesses) {
-        if (ownOnly) {
+        if (spare) {
+            plan.push({ access, deadlineMs: 0 });
+        } else if (ownOnly) {
             plan.push({ access, deadlineMs: priority === 'interactive' ? INTERACTIVE_WAIT_MS : OWN_BACKGROUND_WAIT_MS });
         } else if (probe) {
             if (access.kind === 'shared') plan.push({ access, deadlineMs: 0 });
@@ -162,7 +177,7 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
     }
     // background work waits for the shared pool's background share when nobody had a token at once
     const shared = accesses.find((a) => a.kind === 'shared');
-    if (priority !== 'interactive' && !probe && shared) plan.push({ access: shared, deadlineMs: Infinity });
+    if (priority !== 'interactive' && !probe && !spare && shared) plan.push({ access: shared, deadlineMs: Infinity });
     let lastError = null;
     // a personal key that got a refused-looking answer: a strike only when a later shared access gets a proper one
     let suspect = null;
@@ -188,6 +203,14 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
             lastError = lastError || unavailable(provider, 'busy');
             continue;
         }
+        if (beforeRequest) {
+            try {
+                beforeRequest();
+            } catch (err) {
+                s.budget.release(access.bucket);
+                throw err;
+            }
+        }
         try {
             const result = await exec(access.credential);
             s.budget.success(access.bucket);
@@ -199,7 +222,7 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
             if (suspect && access.kind === 'shared') strike(suspect.access, suspect.err);
             return { ...result, provider, credential_used: access.kind === 'own' ? 'own' : 'shared' };
         } catch (err) {
-            if (!(err instanceof SourceError)) {
+            if (!(err instanceof SourceError) || err.aborted || (signal && signal.aborted)) {
                 s.budget.release(access.bucket);
                 throw err;
             }
@@ -284,6 +307,67 @@ async function aniListSearch(ctx, terms, userId) {
         }
     }
     return { metas, credential_used: parts[0] ? parts[0].credential_used : 'shared' };
+}
+
+const spareCall = (ctx, { userId, signal, beforeRequest }, exec) => call(ctx, 'anilist', { userId, signal, spare: true, beforeRequest }, exec);
+
+async function spareTerms(ctx, terms, options) {
+    const { timeoutMs, signal } = options;
+    try {
+        return (await spareCall(ctx, options, (credential) => anilist.search(ctx, terms, { credential, timeoutMs, signal }))).metas;
+    } catch (err) {
+        if (!(err instanceof SourceError) || err.kind !== 'complexity' || terms.length < 2) throw err;
+        const half = Math.ceil(terms.length / 2);
+        const a = await spareTerms(ctx, terms.slice(0, half), options);
+        const b = await spareTerms(ctx, terms.slice(half), options);
+        return [...a, ...b];
+    }
+}
+
+/** AniList search of up to 3 terms over the spare plan (own key, then pool, no waiting): one list of AniList metas per term. */
+async function spareSearch(ctx, terms, { userId = null, timeoutMs, signal, beforeRequest = () => {} } = {}) {
+    remember(ctx);
+    const list = terms.slice(0, 3);
+    const found = new Map();
+    const ask = [];
+    for (const term of list) {
+        const key = searchKey(term);
+        const ui = key ? cache.read(ctx, `anime:search:${key}:10`) : null;
+        if (ui && ui.value && Array.isArray(ui.value.sources_used) && ui.value.sources_used.includes('anilist') && Array.isArray(ui.value.results)) {
+            found.set(term, ui.value.results.filter((meta) => meta && meta.anilist_id));
+            continue;
+        }
+        const own = key ? cache.read(ctx, `watch:search:${key}`) : null;
+        if (own && Array.isArray(own.value)) {
+            found.set(term, own.value);
+            continue;
+        }
+        ask.push(term);
+    }
+    if (ask.length) {
+        const metas = await spareTerms(ctx, ask, { userId, timeoutMs, signal, beforeRequest });
+        ask.forEach((term, i) => {
+            const hits = (metas[i] || []).filter((meta) => meta && meta.anilist_id);
+            cache.write(ctx, `watch:search:${searchKey(term)}`, hits, hits.length ? cache.TTL.search : cache.TTL.notFound);
+            found.set(term, hits);
+        });
+    }
+    return list.map((term) => found.get(term) || []);
+}
+
+/** AniList details (relations, links) of up to 50 ids over the spare plan; a too complex request is split in halves. */
+async function spareDetail(ctx, ids, { userId = null, timeoutMs, signal, beforeRequest = () => {} } = {}) {
+    remember(ctx);
+    const options = { userId, timeoutMs, signal, beforeRequest };
+    try {
+        return (await spareCall(ctx, options, (credential) => anilist.byIdsDetail(ctx, ids, { credential, timeoutMs, signal }))).metas;
+    } catch (err) {
+        if (!(err instanceof SourceError) || err.kind !== 'complexity' || ids.length < 2) throw err;
+        const half = Math.ceil(ids.length / 2);
+        const a = await spareDetail(ctx, ids.slice(0, half), options);
+        const b = await spareDetail(ctx, ids.slice(half), options);
+        return [...a, ...b];
+    }
 }
 
 /** The MyAnimeList side: official API when a client id exists, Jikan otherwise and when the official API fails. */
@@ -932,6 +1016,6 @@ function forgetAccess(userId, provider) {
 
 module.exports = {
     searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, refreshDue,
-    adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf,
-    state: () => S(), MANUAL_REFRESH_MS
+    adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
+    spareDetail, state: () => S(), MANUAL_REFRESH_MS
 };

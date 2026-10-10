@@ -342,3 +342,55 @@ test('delete: editors only, progress goes with the entry', async () => {
     assert.equal(db.prepare('SELECT count(*) AS n FROM anime_progress WHERE anime_id = ?').get(id).n, 0);
     assert.equal((await admin('GET', `/anime/${id}`)).status, 404);
 });
+
+test('create with watched: one request adds the entry and the episode; above the total nothing is created; the undo takes it back', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'mia', password: 'password123', role: 'editor' })).status, 200);
+    const mia = ctx.client();
+    await mia('POST', '/auth/login', { username: 'mia', password: 'password123' });
+    const remember = { service: 'crunchyroll', external_id: 'GZZZZZZZ1', season: 1 };
+    const above = await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 29, remember } });
+    assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM animes WHERE anilist_id = 154587').get().n, 0, 'rolled back');
+    assert.equal((await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 'x' } })).status, 400);
+    const calls = sources.calls.length;
+    assert.equal((await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 1, url: 'https://example.org/x' } })).body.code, 'UNSUPPORTED_LINK');
+    assert.equal(sources.calls.length, calls, 'checked before AniList is asked');
+
+    const url = 'https://www.crunchyroll.com/watch/GZZZEP0003/drei';
+    const res = await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 3, url, remember } });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.equal(res.body.anilist_id, 154587);
+    assert.deepEqual([res.body.watched.progress.status, res.body.watched.progress.episodes_watched, res.body.watched.progress.resume_url, res.body.watched.previous, res.body.watched.entry_episodes],
+        ['Schaue', 3, url, null, 28]);
+    assert.ok(db.prepare("SELECT 1 FROM anime_links WHERE anime_id = ? AND service = 'crunchyroll:season:1' AND external_id = 'GZZZZZZZ1:1'").get(res.body.id));
+    const duplicate = await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 4 } });
+    assert.deepEqual([duplicate.status, duplicate.body.code, duplicate.body.id], [409, 'DUPLICATE', res.body.id]);
+
+    await mia('PUT', `/anime/${res.body.id}/progress`, { status: 'Geplant' });
+    assert.equal((await admin('POST', '/anime/watch-sync/undo', { anime_id: res.body.id })).body.code, 'UNDO_EXPIRED', 'someone else has a row');
+    await mia('DELETE', `/anime/${res.body.id}/progress`);
+    assert.deepEqual((await admin('POST', '/anime/watch-sync/undo', { anime_id: res.body.id })).body, { removed: 'entry' });
+    assert.equal((await admin('GET', `/anime/${res.body.id}`)).status, 404);
+
+    const manual = await admin('POST', '/anime', { title: 'Handarbeit', episodes: 5, watched: { episode: 5 } });
+    assert.deepEqual([manual.status, manual.body.watched.progress.status, manual.body.watched.entry_episodes], [201, 'Gesehen', 5]);
+    await admin('DELETE', `/anime/${manual.body.id}`);
+});
+
+test('DELETE progress with ?decline=1 records the declines of the user whose row went, without it nothing', async () => {
+    const id = (await admin('POST', '/anime', { title: 'Abgelehnt', episodes: 12 })).body.id;
+    await admin('POST', `/anime/${id}/watched`, { episode: 2, remember: { service: 'crunchyroll', external_id: 'GABLEHN01', season: 1 } });
+    const declined = (username) => {
+        const row = db.prepare("SELECT s.last_report FROM anime_sync s JOIN users u ON u.id = s.user_id WHERE u.username = ? AND s.service = 'crunchyroll'").get(username);
+        return row ? JSON.parse(row.last_report).declined : [];
+    };
+    assert.equal((await admin('DELETE', `/anime/${id}/progress`)).status, 200);
+    assert.deepEqual(declined('admin'), []);
+    await admin('POST', `/anime/${id}/watched`, { episode: 2 });
+    assert.deepEqual((await admin('DELETE', `/anime/${id}/progress?decline=1`)).body, { success: true, removed: true });
+    assert.deepEqual(declined('admin'), ['GABLEHN01:1']);
+    await admin('POST', `/anime/${id}/watched`, { episode: 3, remember: { service: 'crunchyroll', external_id: 'GABLEHN01', season: 1 } });
+    assert.deepEqual(declined('admin'), [], 'a confirmed season lifts it');
+    await admin('DELETE', `/anime/${id}`);
+    assert.deepEqual(declined('admin'), ['GABLEHN01:1'], 'deleting the entry declines its season links');
+});

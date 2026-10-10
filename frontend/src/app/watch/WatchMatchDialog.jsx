@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { History, X } from 'lucide-react';
+import { History, Search, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import api from '../../utils/api';
+import api, { TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
-import { displayTitle } from '../../utils/animeHelpers';
+import { displayTitle, formatYearLine } from '../../utils/animeHelpers';
 import { aboveTotalText } from '../../utils/shareIntake';
 import { langFor } from '../../components/common/lang';
 import crunchyroll from '../../../../core/watch/crunchyroll.js';
@@ -15,11 +15,22 @@ import {
 import { t } from '../../i18n/index.js';
 
 const MAX_CANDIDATES = 5;
+const MAX_EXTERNAL = 3;
 const SURE_SCORE = 0.9;
 // the server takes one history per user every 30 s
 const THROTTLE_RETRY_MS = 31000;
 
 const seasonOfItem = (u) => Number(u?.season) || 1;
+const externalKey = (c) => `ext:${c.anilist_id}`;
+
+/** The list candidates (at most 5) and the AniList ones not in the list yet (at most 3) of an unmatched series. */
+export function splitCandidates(item) {
+  const all = Array.isArray(item?.candidates) ? item.candidates.filter((c) => c && typeof c === 'object') : [];
+  return {
+    list: all.filter((c) => c.kind !== 'external' && c.id !== null && c.id !== undefined).slice(0, MAX_CANDIDATES),
+    external: all.filter((c) => c.kind === 'external' && Number.isInteger(c.anilist_id) && c.anilist_id > 0).slice(0, MAX_EXTERNAL)
+  };
+}
 
 /** The season a candidate's titles name (the server sends it; older answers: read from the title). */
 export const seasonOfCandidate = (c) => (Number.isInteger(c?.season) ? c.season : crunchyroll.seasonFromTitles([c?.title]));
@@ -33,7 +44,7 @@ export const seriesLabel = (u, withSeason = false) => (seasonOfItem(u) > 1 || wi
  */
 export function preselectedCandidate(item, candidates) {
   const first = candidates[0];
-  if (!first) return null;
+  if (!first || item.reason === 'declined') return null;
   if (item.reason === 'episode_above_total') return first;
   return Number(first.score) >= SURE_SCORE && seasonOfCandidate(first) === seasonOfItem(item) ? first : null;
 }
@@ -42,10 +53,14 @@ export function preselectedCandidate(item, candidates) {
  * Sends the confirmation: POST /anime/:id/watched with `remember`, so the next sync maps the series by itself. Resolves
  * { ok: true } or { aboveTotal: total|null } or { error }.
  */
-export async function confirmMatch(item, animeId, { complete = false, post = api.post } = {}) {
+const rememberOf = (item) => {
   const remember = { service: SERVICE, external_id: item.external_id };
   if (Number.isInteger(Number(item.season)) && Number(item.season) >= 1) remember.season = Number(item.season);
-  const body = { episode: Number(item.episodes_watched ?? item.episode), remember };
+  return remember;
+};
+
+export async function confirmMatch(item, animeId, { complete = false, post = api.post } = {}) {
+  const body = { episode: Number(item.episodes_watched ?? item.episode), remember: rememberOf(item) };
   if (complete) body.complete = true;
   try {
     await post(`/api/anime/${animeId}/watched`, body, { fallback: t('Zuordnung konnte nicht gespeichert werden') });
@@ -56,18 +71,38 @@ export async function confirmMatch(item, animeId, { complete = false, post = api
   }
 }
 
-/** One forced sync after the dialog (again once after the server's limit when the sync on opening was just before). */
-export function syncAfterMatch(bridge, { sync = syncNow, wait = THROTTLE_RETRY_MS } = {}) {
+/** 'Anlegen: {title}': creates the AniList entry with the watched episode; an entry that exists already gets the episode. */
+export async function createMatch(item, candidate, { complete = false, post = api.post } = {}) {
+  const watched = { episode: Number(item.episodes_watched ?? item.episode), remember: rememberOf(item) };
+  if (complete) watched.complete = true;
+  try {
+    const detail = await post('/api/anime', { anilist_id: candidate.anilist_id, watched }, { timeout: TIMEOUTS.lookup, fallback: t('Anime konnte nicht hinzugefügt werden') });
+    return { ok: true, animeId: detail?.id ?? null };
+  } catch (err) {
+    if (err?.status === 409 && err.data?.id) {
+      const result = await confirmMatch(item, err.data.id, { complete, post });
+      return result.ok ? { ok: true, animeId: err.data.id } : result;
+    }
+    if (err?.code === 'EPISODE_ABOVE_TOTAL') return { aboveTotal: Number(err.data?.episodes) || null };
+    return { error: err?.message || t('Anime konnte nicht hinzugefügt werden') };
+  }
+}
+
+/** One forced sync after the dialog (again once after the limit, `retryIn` seconds, when the last sync was just before). */
+export function syncAfterMatch(bridge, { sync = syncNow, wait } = {}) {
   return sync({ bridge })
     .then((result) => {
-      if (result?.reason === 'throttled') setTimeout(() => { sync({ bridge }).catch(() => {}); }, wait);
+      if (result?.reason === 'throttled' || result?.reason === 'too_soon') {
+        const delay = wait ?? (Number.isInteger(result.retryIn) && result.retryIn > 0 ? result.retryIn * 1000 : THROTTLE_RETRY_MS);
+        setTimeout(() => { sync({ bridge }).catch(() => {}); }, delay);
+      }
       return result;
     })
     .catch(() => null);
 }
 
-function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
-  const candidates = (item.candidates || []).slice(0, MAX_CANDIDATES);
+function MatchStep({ item, list, ids, titleId, onDone, onSkip, onSearch }) {
+  const { list: candidates, external } = useMemo(() => splitCandidates(item), [item]);
   const preselected = preselectedCandidate(item, candidates);
   const [chosenId, setChosenId] = useState(preselected?.id ?? null);
   const [picking, setPicking] = useState(!candidates.length);
@@ -79,8 +114,12 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
     return list.filter((a) => !shown.has(a.id)).sort((a, b) => compareNatural(displayTitle(a), displayTitle(b)));
   }, [list, candidates]);
 
-  const entry = list.find((a) => a.id === chosenId);
-  const candidate = candidates.find((c) => c.id === chosenId);
+  const entryOf = (key) => list.find((a) => a.id === key) || null;
+  const candidateOf = (key) => candidates.find((c) => c.id === key) || null;
+  const externalOf = (key) => external.find((c) => externalKey(c) === key) || null;
+  const entry = entryOf(chosenId);
+  const candidate = candidateOf(chosenId);
+  const created = externalOf(chosenId);
   const entryTitle = entry ? displayTitle(entry) : candidate?.title || '';
   const episode = Number(item.episodes_watched ?? item.episode) || 0;
   const above = refused && refused.animeId === chosenId ? refused : null;
@@ -91,30 +130,49 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
     setChosenId(id);
     setError('');
   };
-  const submit = async (complete = false) => {
+  const save = async (key, complete = false) => {
+    const target = externalOf(key);
+    setSaving(true);
+    setError('');
+    const result = target ? await createMatch(item, target, { complete }) : await confirmMatch(item, key, { complete });
+    setSaving(false);
+    const known = entryOf(key);
+    if (result.ok) onDone(item, target ? target.title : known ? displayTitle(known) : candidateOf(key)?.title || '');
+    else if ('aboveTotal' in result) setRefused({ animeId: key, total: result.aboveTotal ?? (target || known || candidateOf(key))?.episodes ?? null });
+    else setError(result.error);
+  };
+  const submit = (complete = false) => {
     if (!chosenId) {
       setError(t('Bitte einen Eintrag wählen.'));
       return;
     }
-    setSaving(true);
-    setError('');
-    const result = await confirmMatch(item, chosenId, { complete });
-    setSaving(false);
-    if (result.ok) onDone(item, entryTitle);
-    else if ('aboveTotal' in result) setRefused({ animeId: chosenId, total: result.aboveTotal ?? entry?.episodes ?? candidate?.episodes ?? null });
-    else setError(result.error);
+    save(chosenId, complete);
   };
+  const searchOther = async () => {
+    if (saving) return;
+    setError('');
+    let found;
+    try {
+      found = await onSearch(item.series_title || '');
+    } catch (_) {
+      return;
+    }
+    if (!found?.id) return;
+    setChosenId(found.id);
+    await save(found.id);
+  };
+  const radioRow = 'flex items-center gap-3 min-h-11 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-100 cursor-pointer has-[:checked]:border-brand-500/70';
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); submit(Boolean(above)); }} className="space-y-4" noValidate data-busy={saving ? 'true' : undefined}>
       <p id={titleId} className="text-base font-semibold text-white leading-snug break-words [overflow-wrap:anywhere] pr-10">{question}</p>
       <p className="text-xs text-slate-400 -mt-2">{t('Crunchyroll: bis Folge {episode} gesehen', { episode })}</p>
 
-      {(candidates.length > 1 || (candidates.length === 1 && !preselected)) && (
+      {(candidates.length > 1 || (candidates.length === 1 && (!preselected || external.length > 0))) && (
         <fieldset className="space-y-2">
           <legend className="text-xs font-semibold text-slate-300 mb-1.5">{t('Welcher Eintrag?')}</legend>
           {candidates.map((c, i) => (
-            <label key={c.id} className="flex items-center gap-3 min-h-11 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-100 cursor-pointer has-[:checked]:border-brand-500/70">
+            <label key={c.id} className={radioRow}>
               <input
                 type="radio"
                 name={`${ids}-entry`}
@@ -124,6 +182,19 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
                 data-autofocus={!preselected && i === 0 ? true : undefined}
               />
               <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]" lang={langFor(c.title) || 'de'}>{c.title}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      {external.length > 0 && (
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-semibold text-slate-300 mb-1.5">{t('Noch nicht in der Liste')}</legend>
+          {external.map((c) => (
+            <label key={externalKey(c)} className={radioRow}>
+              <input type="radio" name={`${ids}-entry`} value={externalKey(c)} checked={chosenId === externalKey(c)} onChange={() => choose(externalKey(c))} />
+              <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]" lang={langFor(c.title) || 'de'}>{c.title}</span>
+              {formatYearLine(c) && <span className="text-[11px] text-slate-400 shrink-0">{formatYearLine(c)}</span>}
             </label>
           ))}
         </fieldset>
@@ -150,6 +221,11 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
       ) : (
         <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline" onClick={() => setPicking(true)}>{t('Anderer Eintrag…')}</button>
       )}
+      {onSearch && (
+        <button type="button" className="hit-44 self-start text-xs text-brand-300 hover:text-brand-200 underline inline-flex items-center gap-1.5" onClick={searchOther} aria-disabled={saving || undefined}>
+          <Search className="w-3.5 h-3.5" aria-hidden="true" /> {t('Anderen Anime suchen…')}
+        </button>
+      )}
 
       {above && (
         <p className="text-sm text-amber-300" aria-live="polite">
@@ -161,7 +237,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
       <div className="flex flex-wrap justify-end gap-2 [@media(pointer:coarse)]:gap-5 pt-1">
         <button type="button" className="hit-44 btn-secondary text-sm" onClick={() => onSkip(item)} disabled={saving}>{t('Überspringen')}</button>
         <button type="submit" className="hit-44 btn-primary text-sm" disabled={saving || !chosenId} data-autofocus={preselected ? true : undefined}>
-          {saving ? t('Wird gespeichert…') : above ? t('Als komplett gesehen markieren') : t('Ja, zuordnen')}
+          {saving ? t('Wird gespeichert…') : above ? t('Als komplett gesehen markieren') : created ? t('Anlegen: {title}', { title: created.title }) : t('Ja, zuordnen')}
         </button>
       </div>
     </form>
@@ -172,7 +248,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip }) {
  * The series of the Crunchyroll history the server could not map (watchState): one at a time, with the candidates,
  * 'Anderer Eintrag…' (whole list) and 'Überspringen' (remembered on this device). Lazy; mounted only while open.
  */
-export default function WatchMatchDialog({ list = [], onClose, bridge = watchBridge() }) {
+export default function WatchMatchDialog({ list = [], onClose, onSearch, bridge = watchBridge() }) {
   const ids = useId();
   const titleId = `${ids}-question`;
   const pending = useWatchUnmatched();
@@ -203,7 +279,7 @@ export default function WatchMatchDialog({ list = [], onClose, bridge = watchBri
   const done = (matched, title) => {
     confirmed.current += 1;
     resolveUnmatched(bridge, matched);
-    window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: SERVICE, applied: 1, changed: true } }));
+    window.dispatchEvent(new CustomEvent(WATCH_SYNC_EVENT, { detail: { service: SERVICE, applied: 1, added: 0, changed: true, watch: null } }));
     notify.success(t('{title}: zugeordnet', { title: title || seriesLabel(matched) }));
     dialogRef.current?.focus();
   };
@@ -234,7 +310,7 @@ export default function WatchMatchDialog({ list = [], onClose, bridge = watchBri
         </h2>
         {total > 1 && <p className="text-xs text-slate-400 mt-1 mb-3">{t('Serie {position} von {total}', { position: Math.min(position, total), total })}</p>}
         <div className={total > 1 ? '' : 'mt-3'}>
-          <MatchStep key={unmatchedKey(item)} item={item} list={list} ids={ids} titleId={titleId} onDone={done} onSkip={skip} />
+          <MatchStep key={unmatchedKey(item)} item={item} list={list} ids={ids} titleId={titleId} onDone={done} onSkip={skip} onSearch={onSearch} />
         </div>
       </div>
     </div>

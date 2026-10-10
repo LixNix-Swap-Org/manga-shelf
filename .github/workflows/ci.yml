@@ -69,6 +69,9 @@ jobs:
         continue-on-error: true
       - run: npm run build
         working-directory: frontend
+      - name: Web build without the Crunchyroll chunks
+        run: WEB_BUILD_DIR=dist npx vitest run src/__tests__/webBuildStub.test.js
+        working-directory: frontend
       - name: Bundle size budget (gzip, +15 % allowed)
         run: node scripts/check-bundle-size.js
       - name: Service worker carries the app version
@@ -238,6 +241,10 @@ jobs:
           npm test
           npm run build:dir
           npm run smoke
+      - name: Electron gate test
+        if: steps.project.outputs.present == 'true'
+        working-directory: desktop
+        run: npm run test:electron
 
   build:
     name: Artifacts

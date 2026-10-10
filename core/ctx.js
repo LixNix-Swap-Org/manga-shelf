@@ -1,5 +1,5 @@
 // The one thing core/ handlers and modules get from their host: no Node API, no Express, only this object.
-// ctx = { db, files, http, now(), log, user, config, credentials?, signal?, limit(name), randomId(), undo, yield() }
+// ctx = { db, files, http, now(), log, user, config, credentials?, signal?, limit(name, { soft }?), randomId(), undo, yield() }
 // db: prepare/exec/transaction/generation(); files: uploads by plain name; http: fetch, fetchText, fetchImage;
 // user: { id, username, role } (null in background work); undo: bulk-undo Map shared per database.
 
@@ -79,7 +79,7 @@ function createCtx(parts) {
         user: null,
         config: { appTimeZone: 'Europe/Berlin' },
         signal: undefined,
-        limit: noop,
+        limit: () => true,
         randomId,
         yield: () => new Promise(resolve => setTimeout(resolve, 0)),
         undo: undoStoreFor(parts.db),

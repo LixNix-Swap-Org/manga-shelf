@@ -230,24 +230,35 @@ export function continueTarget(anime, { search = true } = {}) {
   return url ? { url, kind: 'search', label: t('Auf Crunchyroll suchen') } : null;
 }
 
+const watchOf = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
+
 /** The stored list for the offline view (only for the same user and only when no logout happened since `generation`). */
 export function readAnimeCache(userId) {
   try {
     const meta = JSON.parse(localStorage.getItem(ANIME_META_KEY) || 'null');
     if (!meta || meta.user_id !== userId) return null;
     const list = JSON.parse(localStorage.getItem(ANIME_CACHE_KEY) || 'null');
-    return Array.isArray(list) ? { list, timestamp: meta.timestamp } : null;
+    return Array.isArray(list) ? { list, timestamp: meta.timestamp, watch: watchOf(meta.watch) } : null;
   } catch (_) {
     return null;
   }
 }
 
-export function writeAnimeCache(list, userId, generation = getClearGeneration()) {
+/** Stores the list; the stored `watch` stays unless a new one is given, and `list` null only sets `watch` beside the stored list. */
+export function writeAnimeCache(list, userId, generation = getClearGeneration(), { watch } = {}) {
   if (generation !== getClearGeneration() || !userId) return null;
   try {
+    const meta = JSON.parse(localStorage.getItem(ANIME_META_KEY) || 'null');
+    const own = meta && meta.user_id === userId ? meta : null;
+    const nextWatch = watch === undefined ? watchOf(own?.watch) : watchOf(watch);
+    if (list === null) {
+      if (!own || !Array.isArray(JSON.parse(localStorage.getItem(ANIME_CACHE_KEY) || 'null'))) return null;
+      localStorage.setItem(ANIME_META_KEY, JSON.stringify({ user_id: userId, timestamp: own.timestamp, ...(nextWatch ? { watch: nextWatch } : {}) }));
+      return own.timestamp;
+    }
     const timestamp = new Date().toISOString();
     localStorage.setItem(ANIME_CACHE_KEY, JSON.stringify(list));
-    localStorage.setItem(ANIME_META_KEY, JSON.stringify({ user_id: userId, timestamp }));
+    localStorage.setItem(ANIME_META_KEY, JSON.stringify({ user_id: userId, timestamp, ...(nextWatch ? { watch: nextWatch } : {}) }));
     return timestamp;
   } catch (_) {
     return null;

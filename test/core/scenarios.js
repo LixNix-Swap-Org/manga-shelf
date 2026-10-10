@@ -9,8 +9,21 @@ function monthFromNow(offset) {
     return `${m.getFullYear()}-${pad(m.getMonth() + 1)}`;
 }
 
-// both harnesses run in this process: forgets the per-user watch-sync throttle (30 s) between steps
-const watchSyncAgain = () => require('../../core/anime/gateway').state().watchSync?.clear();
+// both harnesses run in this process: forgets the per-user watch-sync throttle (30 s) and lookup caps between steps
+const watchSyncAgain = () => {
+    const state = require('../../core/anime/gateway').state();
+    state.watchSync?.clear();
+    state.watchCaps?.clear();
+};
+// a watch-sync answer without its `watch` object (the sync state)
+const ran = (body) => Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'watch'));
+
+/** An AniList Media of the fake AniList (harness useAniList) with Crunchyroll links. */
+const aniListMedia = (id, title, links) => ({
+    id, idMal: null, type: 'ANIME', format: 'TV', status: 'FINISHED', episodes: 12, seasonYear: 2025, title: { romaji: title, english: null, native: null },
+    synonyms: [], coverImage: { large: null }, genres: [], studios: { nodes: [] }, description: '', streamingEpisodes: [], relations: { edges: [] },
+    externalLinks: links.map((url) => ({ site: 'Crunchyroll', url, type: 'STREAMING' }))
+});
 
 async function newSeries(api, title, extra = {}) {
     const res = await api('POST', '/mangas', { title, ...extra });
@@ -360,16 +373,69 @@ const scenarios = [
             const mine = (await ed('GET', `/anime/${id}`)).body.my_progress;
             assert.deepEqual([mine.episodes_watched, mine.resume_url, mine.resume_episode], [3, 'https://www.crunchyroll.com/watch/GKERNVEP04/folge-vier', 4]);
             const lower = { service: 'crunchyroll', items: [item({ episode: 2, fully_watched: true, resume_url: null })] };
-            assert.deepEqual((await ed('POST', '/anime/watch-sync', lower)).body, { applied: [], unmatched: [], throttled: true });
+            const throttled = (await ed('POST', '/anime/watch-sync', lower)).body;
+            assert.deepEqual({ ...throttled, retry_after: Number.isInteger(throttled.retry_after) && throttled.retry_after >= 1 && throttled.retry_after <= 30 },
+                { applied: [], unmatched: [], added: [], throttled: true, retry_after: true });
             watchSyncAgain();
-            assert.deepEqual((await ed('POST', '/anime/watch-sync', lower)).body, { applied: [], unmatched: [], unchanged: 1 });
+            assert.deepEqual(ran((await ed('POST', '/anime/watch-sync', lower)).body), { applied: [], unmatched: [], unchanged: 1, added: [] });
 
             await ed('POST', `/anime/${other}/watched`, { episode: 2, remember: { service: 'crunchyroll', external_id: 'GKERNBUCH1', season: 1 } });
             watchSyncAgain();
             const mapped = await ed('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [item({ external_id: 'GKERNBUCH1', series_title: 'Kern Verlaufsbuch', episode: 12, fully_watched: true, resume_url: null })] });
-            assert.deepEqual(mapped.body, { applied: [{ anime_id: other, episodes_watched: 12, status: 'Gesehen' }], unmatched: [], unchanged: 0 });
+            assert.deepEqual(ran(mapped.body), { applied: [{ anime_id: other, episodes_watched: 12, status: 'Gesehen' }], unmatched: [], unchanged: 0, added: [] });
+            assert.deepEqual((await ed('GET', '/anime/sync')).body.watch, { auto_add: true, last_at: mapped.body.watch.last_at, last_platform: null, last_applied: 1, last_added: 0 });
             assert.equal((await ed('DELETE', `/anime/${id}`)).status, 200);
             assert.equal((await ed('DELETE', `/anime/${other}`)).status, 200);
+        }
+    },
+    {
+        name: 'anime watch-sync: automatic adding, its undo and an AniList entry already in the list (fake AniList)',
+        async run({ ed, vis, run }) {
+            const { useAniList } = require('./harness');
+            require('../../core/anime/gateway').resetGatewayState();
+            useAniList({
+                media: [
+                    aniListMedia(91001, 'Kern Automatik', ['https://www.crunchyroll.com/series/GKERNAUTO1/kern-automatik']),
+                    aniListMedia(91002, 'Kern Duplikat', ['https://www.crunchyroll.com/series/GKERNDUPL1/kern-duplikat'])
+                ],
+                search: { 'Kern Automatik': [91001], 'Kern Duplikat': [91002] }
+            });
+            try {
+                const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+                const started = { external_id: 'GKERNAUTO1', series_title: 'Kern Automatik', season: 1, episode: 1, fully_watched: false,
+                    resume_url: 'https://www.crunchyroll.com/watch/GKERNAEP01/eins', resume_episode: 1, watched_at: recent };
+                const body = (items) => ({ service: 'crunchyroll', items, auto_add: true, platform: 'linux' });
+                const first = await ed('POST', '/anime/watch-sync', body([started]));
+                assert.equal(first.status, 200, JSON.stringify(first.body));
+                const [added] = first.body.added;
+                assert.deepEqual({ ...added, anime_id: typeof added.anime_id },
+                    { anime_id: 'number', title: 'Kern Automatik', external_id: 'GKERNAUTO1', season: 1, episodes_watched: 0, status: 'Schaue' });
+                assert.deepEqual([first.body.applied, first.body.watch.last_platform, first.body.watch.last_added], [[], 'linux', 1]);
+                const mine = (await ed('GET', `/anime/${added.anime_id}`)).body.my_progress;
+                assert.deepEqual([mine.status, mine.episodes_watched, mine.resume_episode], ['Schaue', 0, 1]);
+
+                const keyed = { anime_id: added.anime_id, external_id: added.external_id, season: added.season };
+                assert.equal((await vis('POST', '/anime/watch-sync/undo', keyed)).status, 403);
+                assert.deepEqual((await ed('POST', '/anime/watch-sync/undo', keyed)).body, { removed: 'entry' });
+                assert.equal((await ed('GET', `/anime/${added.anime_id}`)).status, 404);
+                assert.equal((await ed('POST', '/anime/watch-sync/undo', keyed)).status, 404);
+                watchSyncAgain();
+                const declined = await ed('POST', '/anime/watch-sync', body([{ ...started, episode: 2, fully_watched: true }]));
+                assert.deepEqual([declined.body.added, declined.body.unmatched.map(u => u.reason)], [[], ['declined']]);
+
+                run("INSERT INTO animes (title, anilist_id, episodes) VALUES ('Ganz anders benannt', 91002, 12)");
+                const id = (await ed('GET', '/anime')).body.find(a => a.anilist_id === 91002).id;
+                watchSyncAgain();
+                const dup = await ed('POST', '/anime/watch-sync', body([{ ...started, external_id: 'GKERNDUPL1', series_title: 'Kern Duplikat', episode: 3, fully_watched: true, resume_url: null }]));
+                assert.deepEqual([dup.body.added, dup.body.applied], [[], [{ anime_id: id, episodes_watched: 3, status: 'Schaue' }]]);
+                watchSyncAgain();
+                const linked = await ed('POST', '/anime/watch-sync', { service: 'crunchyroll', items: [{ ...started, external_id: 'GKERNDUPL1', series_title: null, episode: 4, fully_watched: true, resume_url: null }] });
+                assert.deepEqual(linked.body.applied, [{ anime_id: id, episodes_watched: 4, status: 'Schaue' }], 'the season link was learned');
+                assert.equal((await ed('DELETE', `/anime/${id}`)).status, 200);
+            } finally {
+                useAniList(null);
+                watchSyncAgain();
+            }
         }
     },
     {

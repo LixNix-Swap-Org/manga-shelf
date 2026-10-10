@@ -153,6 +153,43 @@ test('the preload hands app.getLocale() to the page (own pages only) for the lan
     const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
     const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
     assert.match(preload, /locale = ipcRenderer\.sendSync\('desktop:locale'\)/);
-    assert.match(preload, /exposeInMainWorld\('mangashelfDesktop', \{[^}]*\blocale,/s);
+    assert.match(preload, /exposeInMainWorld\('mangashelfDesktop', \{[^}]*\blocale,\n\s*\.\.\.\(watch \? \{ watch \} : \{\}\),/s);
     assert.match(main, /ipcMain\.on\('desktop:locale', \(event\) => \{\s*event\.returnValue = fromOwnPage\(event\) \? app\.getLocale\(\) : null;/);
+});
+
+test('main wires the Crunchyroll parts after registerIpc and before the first run, with the core from the server folder', () => {
+    const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    const lines = [
+        "registerIpc();",
+        "const crunchyroll = require(path.join(paths.serverDir, 'core', 'watch', 'crunchyroll.js'));",
+        "const { createFlow, FlowError } = require(path.join(paths.serverDir, 'core', 'watch', 'crunchyrollFlow.js'));",
+        "const apiSession = session.fromPartition('crunchyroll-api', { cache: false });",
+        "const ua = browserUserAgent(app.userAgentFallback);",
+        "const secret = createWatchSecret({ file: path.join(userData, 'watch-secret.json'), safeStorage, platform: process.platform });",
+        "const prefs = createWatchPrefs({ file: path.join(userData, 'watch-state.json') });",
+        "const transport = createTransport({ net, session: apiSession, userAgent: ua, isAllowedUrl: crunchyroll.isAllowedApiUrl, deadlineMs: 20000 });",
+        "foreground = createForeground({ powerMonitor, net, platform: process.platform, timers: { setTimeout, clearTimeout, setInterval, clearInterval } });",
+        "service = createWatchService({ createFlow, FlowError, crunchyroll, secret, transport, apiSession, randomUUID: crypto.randomUUID, now: Date.now, isForeground: foreground.isForeground });",
+        "login = createWatchLogin({ BrowserWindow, session, dialog, app, getMainWindow: () => mainWindow, service, crunchyroll, userAgent: ua });",
+        "registerClientCertificateGuard(app, login.isLoginContents);",
+        "registerWatchIpc({ ipcMain, isWatchSender, service, login, prefs, foreground });",
+        "if (resolveRun(settings.get(), overrides).needsChoice) {",
+        "await runQueue(() => applyRun({ announceSetup: true }));"
+    ];
+    let at = 0;
+    for (const line of lines) {
+        const next = main.indexOf(line, at);
+        assert.ok(next > at || (at === 0 && next >= 0), line);
+        at = next + line.length;
+    }
+    assert.match(main, /^const crypto = require\('crypto'\);$/m);
+    assert.match(main, /^let foreground = null;\nlet login = null;\nlet service = null;$/m);
+    assert.match(main, /^const isWatchSender = \(event\) => fromOwnPage\(event\) && event\.sender === mainWindow\?\.webContents;$/m);
+    assert.match(main, /guardNavigation\(win\.webContents\);\n\s*foreground\.attach\(win\);/);
+    assert.match(main, /contents\.on\('will-redirect', \(details\) => \{\n\s*if \(details\.isMainFrame && originOf\(details\.url\) !== originOf\(viewUrl\(\) \|\| ''\)\) details\.preventDefault\(\);\n\s*\}\);/);
+    assert.match(main, /app\.on\('before-quit', \(event\) => \{\n\s*quitting = true;\n\s*login\?\.finishPending\('cancelled'\);/);
+    for (const file of ['watchSecret', 'watchPrefs', 'watchTransport', 'watchForeground', 'watchService', 'watchLogin', 'watchIpc']) {
+        const source = fs.readFileSync(path.join(__dirname, '..', 'lib', `${file}.js`), 'utf8');
+        assert.doesNotMatch(source, /require\('electron'\)|core\//, file);
+    }
 });

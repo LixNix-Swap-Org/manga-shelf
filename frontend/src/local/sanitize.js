@@ -15,7 +15,7 @@ export function sanitizeImportedDatabase(conn) {
     let changed = conn.prepare('UPDATE users SET password_hash = ? WHERE password_hash IS NULL OR password_hash <> ?')
       .run(LOCAL_PASSWORD_HASH, LOCAL_PASSWORD_HASH).changes || 0;
     if (tableExists(conn, 'user_api_credentials')) changed += conn.prepare('DELETE FROM user_api_credentials').run().changes || 0;
-    if (tableExists(conn, 'anime_sync')) changed += conn.prepare('DELETE FROM anime_sync').run().changes || 0;
+    if (tableExists(conn, 'anime_sync')) changed += conn.prepare("DELETE FROM anime_sync WHERE service = 'anilist'").run().changes || 0;
     changed += conn.prepare(`DELETE FROM app_settings WHERE ${SERVER_ONLY_SETTINGS}`).run().changes || 0;
     return changed;
   } finally {

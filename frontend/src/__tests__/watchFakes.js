@@ -1,4 +1,5 @@
-// Fakes for the Crunchyroll history tests (watch*.test.jsx): the native bridge of version 3 and a scripted Crunchyroll.
+// Fakes for the Crunchyroll history tests (watch*.test.jsx): the native bridge of version 3 with a scripted Crunchyroll, and
+// the desktop watch bridge.
 import { vi } from 'vitest';
 
 export const COOKIE = 'etpRtCookieValue-0123456789';
@@ -16,7 +17,7 @@ export const historyRecord = ({ series = 'GSERIES001', title = 'Sousou no Friere
   date_played: '2026-10-01T20:00:00Z'
 });
 
-/** In-memory plugins of mobile/src/native-bridge.mjs (version 3) plus a scripted Crunchyroll behind WebLogin.request. */
+/** `.bridge` is the watchBridge() value of the apps; `.bridge.native` the in-memory window.mangashelfNative (version 3). */
 export function fakeBridge({ token = {}, history = { data: [historyRecord()] }, discover = { data: [] }, connected = true } = {}) {
   const prefs = new Map();
   const secure = new Map();
@@ -58,7 +59,62 @@ export function fakeBridge({ token = {}, history = { data: [historyRecord()] }, 
       })
     }
   };
-  const bridge = { version: 3, platform: 'ios', plugins, constants: { KeychainAccess: { whenUnlocked: 0, whenUnlockedThisDeviceOnly: 1 } } };
+  const native = { version: 3, platform: 'ios', plugins, constants: { KeychainAccess: { whenUnlocked: 0, whenUnlockedThisDeviceOnly: 1 } } };
+  const bridge = { kind: 'capacitor', platform: 'ios', native };
   const emit = (event, data) => (listeners[event] || []).forEach((fn) => fn(data));
   return { bridge, prefs, secure, calls, answers, emit, listeners };
+}
+
+const PREF_KEYS = ['watch-sync:crunchyroll:state', 'watch-sync:crunchyroll:unmatched', 'watch-sync:crunchyroll:skipped'];
+const PREF_LIMIT = 262144;
+
+/**
+ * window.mangashelfDesktop.watch of the preload with scripted answers (each an object or a function of the call); `calls` lists
+ * every `{ method, args }` in order, `foreground()` fires the onForeground callbacks. Tests install `{ watch }` themselves.
+ */
+export function fakeDesktopBridge({
+  platform = 'macos', status = { ok: true, available: true, connected: true }, login = { ok: true }, sync = { ok: true, items: [] }
+} = {}) {
+  const prefs = new Map();
+  const calls = [];
+  const foregroundListeners = new Set();
+  const call = (method, answer) => vi.fn(async (...args) => {
+    const entry = { method, args };
+    calls.push(entry);
+    return typeof answer === 'function' ? answer(entry) : answer;
+  });
+  const prefsAnswer = (method, fn) => vi.fn(async (...args) => {
+    calls.push({ method, args });
+    const [key, value] = args;
+    if (!PREF_KEYS.includes(key)) return { ok: false, code: 'not_allowed' };
+    return fn(key, value);
+  });
+  const watch = {
+    platform,
+    status: call('status', status),
+    login: call('login', login),
+    sync: call('sync', sync),
+    logout: call('logout', { ok: true }),
+    prefs: {
+      get: prefsAnswer('prefs.get', (key) => ({ ok: true, value: prefs.has(key) ? prefs.get(key) : null })),
+      set: prefsAnswer('prefs.set', (key, value) => {
+        if (typeof key !== 'string' || typeof value !== 'string') return { ok: false, code: 'not_allowed' };
+        if (new TextEncoder().encode(value).length > PREF_LIMIT) return { ok: false, code: 'too_large' };
+        prefs.set(key, value);
+        return { ok: true };
+      }),
+      remove: prefsAnswer('prefs.remove', (key) => {
+        prefs.delete(key);
+        return { ok: true };
+      })
+    },
+    onForeground: vi.fn((cb) => {
+      calls.push({ method: 'onForeground', args: [cb] });
+      foregroundListeners.add(cb);
+      return () => foregroundListeners.delete(cb);
+    })
+  };
+  const bridge = { kind: 'desktop', platform, watch };
+  const foreground = () => [...foregroundListeners].forEach((cb) => cb());
+  return { bridge, watch, prefs, calls, foreground, foregroundListeners };
 }

@@ -190,7 +190,7 @@ export default function AnimeDetailModal({
   const onRemove = () => run(async () => {
     const id = animeId;
     const prev = anime.my_progress;
-    const removed = await removeFromMyList(id);
+    const removed = await removeFromMyList(id, { decline: true });
     await load();
     if (!removed || !prev) return;
     notify.success(t('Von deiner Liste entfernt'), {

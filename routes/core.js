@@ -26,7 +26,11 @@ function adapt(row) {
             user: req.user || null,
             signal: ac.signal,
             // a limit applied inside the handler (e.g. only when the collection cannot answer): 429 is sent here
-            limit: (name) => { if (LIMITERS[name].consume(req, res)) throw ANSWERED; }
+            limit: (name, { soft = false } = {}) => {
+                if (soft) return LIMITERS[name].tryConsume(req);
+                if (LIMITERS[name].consume(req, res)) throw ANSWERED;
+                return true;
+            }
         });
         let result;
         try {
