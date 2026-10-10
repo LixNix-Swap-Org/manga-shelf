@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+
+### Added
+- **Search bar can also search online.** A globe button in the search field switches between searching only your collection (the default, remembered per device) and searching your collection plus Manga Passion (German editions), AniList and MyAnimeList. The shelf keeps filtering as you type; the online search starts 600 ms after you stop typing (from 3 characters on), or at once with Enter.
+- **Online hits below the shelf,** at most ten, each with a note: already in your collection (link), another edition is (language) or a similar title exists (link). Editors add a hit with "Create": the add dialog opens prefilled, as after Auto-fill, and after confirming you land on the new series. Guests can search online but not add. Not available offline.
+- **Online search without changing the setting:** in the collection-only mode, "Search online for “…”" below the shelf and in the empty panel looks up the current text once. When nothing in the collection matches, the "No matches found" panel offers the online search and, for editors, "Create new series “…”" (the add dialog opens with the title).
+
 ## 3.1.0
 
 ### Before updating

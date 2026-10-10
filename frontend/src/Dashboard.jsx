@@ -10,7 +10,7 @@ import ContinueReading from './components/dashboard/ContinueReading';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { normalizePubName } from './utils/volumeHelpers';
@@ -33,6 +33,7 @@ import useShareIntake from './hooks/useShareIntake';
 import { findStreamingLink } from './utils/shareIntake';
 import { SHARE_LINK_EVENT, takePendingShare } from './app/deepLink';
 import useDashboardKeyboard from './hooks/useDashboardKeyboard';
+import useSearchScope, { ONLINE_MIN_CHARS } from './hooks/useSearchScope';
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
 import { apiFetch, readJson, TIMEOUTS } from './utils/api';
@@ -50,6 +51,7 @@ const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreM
 const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
+const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
 
 // i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime' };
@@ -140,6 +142,14 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     otherCurrencyTotals
   } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
+
+  const lookupAvailable = Boolean(user) && !user.offline && !isOfflineMode;
+  const searchScope = useSearchScope({ enabled: lookupAvailable });
+  const { onlineQuery, onlineSeq, pending: onlinePending, submitOnline, clearOnline } = searchScope;
+  const searchCleared = search.trim() === '';
+  useEffect(() => {
+    if (searchCleared) clearOnline();
+  }, [searchCleared, clearOnline]);
 
   const {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
@@ -279,6 +289,29 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setScanPrefill(prefill);
     setShowAddModal(true);
   };
+  const openAddRef = useRef(openAddWithPrefill);
+  openAddRef.current = openAddWithPrefill;
+  const openPrefilled = useCallback((prefill) => openAddRef.current(prefill), []);
+  const onlineFocusRef = useRef(false);
+
+  const shelfQuery = deferredSearch.trim();
+  const showOnline = lookupAvailable && onlineQuery !== '';
+  const searchExtras = useMemo(() => {
+    if (!shelfQuery) return null;
+    return {
+      query: shelfQuery,
+      renderSection: showOnline ? (embedded) => (
+        <Suspense fallback={null}>
+          <OnlineResults query={onlineQuery} seq={onlineSeq} mangas={mangas} canEdit={canEdit} onAdd={openPrefilled} embedded={embedded} focusRequest={onlineFocusRef} />
+        </Suspense>
+      ) : null,
+      onSearchOnline: lookupAvailable && !showOnline && !onlinePending && shelfQuery.length >= ONLINE_MIN_CHARS ? () => {
+        onlineFocusRef.current = true;
+        submitOnline(shelfQuery);
+      } : null,
+      onCreateSeries: canEdit ? () => openPrefilled({ form: { title: shelfQuery }, volume: null }) : null
+    };
+  }, [shelfQuery, showOnline, onlineQuery, onlineSeq, mangas, canEdit, openPrefilled, lookupAvailable, onlinePending, submitOnline]);
 
   // right after a dialog closed its history entry is still current: the series replaces it
   const navigateFromDialog = (path) => navigate(path, dialogEntryOnTop() ? { replace: true } : undefined);
@@ -496,6 +529,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         radarData={radarData}
         search={search}
         searchInputRef={searchInputRef}
+        searchScope={searchScope}
         setMobileMenuOpen={setMobileMenuOpen}
         setSearch={setSearch}
         setView={setView}
@@ -602,6 +636,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           languageFilter={languageFilter}
           setLanguageFilter={setLanguageFilter}
           onAuthorClick={handleAuthorClick}
+          searchExtras={searchExtras}
         />
       </>
     )}

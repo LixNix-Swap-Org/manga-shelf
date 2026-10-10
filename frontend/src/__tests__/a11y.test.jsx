@@ -162,6 +162,33 @@ describe('page structure', () => {
     expect(screen.getAllByPlaceholderText('Titel, Autor, Tag, ISBN oder Notiz suchen...').length).toBeGreaterThan(0);
   });
 
+  it('the search scope is a named toggle button and the online results report through a polite status line', async () => {
+    const noop = vi.fn();
+    const searchScope = { scope: 'online', setScope: noop, onTyped: noop, submitOnline: noop, clearOnline: noop };
+    render(
+      <DashboardHeader
+        activeMainView="shelf" canEdit={false} handleBarcodeDetected={noop} handleInstallClick={noop} handleOpenCsvModal={noop}
+        handleOpenModal={noop} handleOpenPasswordModal={noop} handleOpenRestoreModal={noop} handleOpenStats={noop}
+        handleOpenUsersModal={noop} isInstallable={false} isInstalledApp={false} isOfflineMode={false} isVisitor={false}
+        mobileMenuOpen={false} onLogout={noop} radarData={null} search="" searchInputRef={{ current: null }} searchScope={searchScope}
+        setMobileMenuOpen={noop} setSearch={noop} setView={noop} shoppingData={null} user={{ id: 1, username: 'anna', role: 'editor' }}
+      />
+    );
+    const toggle = screen.getByRole('button', { name: 'Online mitsuchen' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
+
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, [{ id: 'al_1', source: 'anilist', title: 'Rosa' }])));
+    const { default: OnlineResults, clearOnlineAnswers } = await import('../components/dashboard/OnlineResults');
+    clearOnlineAnswers();
+    render(<MemoryRouter><OnlineResults query="rosa" mangas={[]} canEdit={false} onAdd={noop} /></MemoryRouter>);
+    const region = screen.getByRole('region', { name: 'Online-Treffer zu „rosa“' });
+    const status = within(region).getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(await within(region).findByText('1 online gefunden')).toBe(status);
+    vi.unstubAllGlobals();
+  });
+
   it('a page that is still loading keeps the previous title instead of the generic one', () => {
     function Detail({ title }) {
       useDocumentTitle(title);

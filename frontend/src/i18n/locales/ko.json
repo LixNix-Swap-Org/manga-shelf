@@ -133,6 +133,7 @@
   "Alternativer Titel": "다른 제목",
   "Alternativtitel muss ein Text sein": "다른 제목은 텍스트여야 해요",
   "Am Server anmelden": "서버에 로그인",
+  "Andere Ausgabe vorhanden ({language})": "다른 판을 보유하고 있어요 ({language})",
   "Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)": "본인 외의 사용자는 관리자만 입력할 수 있어요 (무시됨)",
   "Andere Datei auswählen": "다른 파일 선택",
   "Andere Sprachausgabe anlegen oder verknüpfen": "다른 언어판 만들기 또는 연결",
@@ -1102,6 +1103,7 @@
   "In der Anime-Liste suchen...": "애니메이션 목록에서 검색...",
   "In der Manga-Shelf-App den Code mit der Kamera scannen oder den Link unter „Server hinzufügen“ einfügen.": "Manga Shelf 앱에서 카메라로 코드를 스캔하거나 “서버 추가”에 링크를 붙여넣어 주세요.",
   "In der Panel-Konsole nachsehen; bleibt der Server gestoppt, im Panel auf „Start“ drücken.": "Panel 콘솔을 확인해 보세요. 서버가 멈춘 채로 있으면 Panel에서 “Start”를 눌러 주세요.",
+  "In der Sammlung": "컬렉션에 있음",
   "In der Sammlung suchen...": "컬렉션에서 검색...",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "이 기간에는 날짜와 함께 읽음으로 표시된 항목이 없어요.",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "{file}에 이 줄을 추가한 뒤 컨테이너를 다시 시작해 주세요:",
@@ -1487,6 +1489,7 @@
   "Neue Ausgabe anlegen": "새 판 만들기",
   "Neue Datei laden und den Dienst neu einrichten:": "새 파일을 받아서 서비스를 다시 설정해 주세요:",
   "Neue Reihe anlegen": "새 시리즈 만들기",
+  "Neue Reihe „{q}“ anlegen": "새 시리즈 “{q}” 만들기",
   "Neue Reihen starten in dieser Sprache. Reihen in anderen Sprachen tragen ein Sprachkürzel (z. B. EN) und lassen sich in der Sammlung nach Sprache filtern.": "새 시리즈는 이 언어로 시작해요. 다른 언어의 시리즈에는 언어 코드(예: EN)가 붙고, 컬렉션에서 언어별로 필터링할 수 있어요.",
   "Neue Termine bei Manga Passion ({count})": "Manga Passion의 새 일정 ({count})",
   "Neue Version verfügbar": "새 버전이 있어요",
@@ -1528,6 +1531,7 @@
   "Nicht genug Speicherplatz für das Update (frei: {free}, benötigt: {needed}).": "업데이트에 필요한 저장 공간이 부족해요 (여유: {free}, 필요: {needed}).",
   "Nicht gespeichert": "저장되지 않음",
   "Nicht hochgeladen: {files}": "업로드되지 않음: {files}",
+  "Nicht in deiner Sammlung": "내 컬렉션에 없음",
   "Nicht in der Offline-Kopie": "오프라인 사본에 없음",
   "Nicht in der Sammlung: {name}": "컬렉션에 없음: {name}",
   "Nicht installiert: Die Datei stammt nicht nachweislich aus dem Release-Workflow von manga-shelf. Nichts wurde verändert, die Datei wurde gelöscht. Bitte melden.": "설치하지 않았어요: 이 파일이 manga-shelf의 릴리스 워크플로에서 만들어졌다는 것을 확인할 수 없어요. 아무것도 변경되지 않았고 파일은 삭제되었어요. 문제를 신고해 주세요.",
@@ -1615,6 +1619,12 @@
   "Ohne Zustand": "컨디션 없음",
   "Ohne konkretes Datum": "정확한 날짜 없음",
   "Online & abgeglichen": "온라인 & 대조됨",
+  "Online mitsuchen": "온라인도 검색",
+  "Online nach „{q}“ suchen": "온라인에서 “{q}” 검색",
+  "Online nichts gefunden zu „{q}“": "온라인에서 “{q}” 검색 결과가 없어요",
+  "Online-Quellen gerade nicht erreichbar": "지금 온라인 출처에 연결할 수 없어요",
+  "Online-Suche läuft…": "온라인 검색 중…",
+  "Online-Treffer zu „{q}“": "“{q}” 온라인 검색 결과",
   "Original": "원본",
   "Original in neuem Tab öffnen": "원본을 새 탭에서 열기",
   "Papierkorb": "휴지통",
@@ -1758,6 +1768,7 @@
   "Sammlung konnte nicht geladen werden (Fehler {status}).": "컬렉션을 불러오지 못했어요 (오류 {status}).",
   "Sammlung nicht erreichbar – nächster Versuch beim nächsten Öffnen": "컬렉션에 연결할 수 없어요 – 다음에 열 때 다시 시도해요",
   "Sammlung schließen": "컬렉션 닫기",
+  "Sammlung und online suchen…": "컬렉션과 온라인 검색…",
   "Sammlung wird geprüft…": "컬렉션을 검사하는 중…",
   "Sammlung öffnen": "컬렉션 열기",
   "Sammlungs-Fortschritt": "컬렉션 진행 상황",
@@ -1964,6 +1975,8 @@
   "Suche…": "검색 중…",
   "Sucht in AniList und MyAnimeList (Manga Passion kennt nur deutsche Ausgaben)": "AniList와 MyAnimeList에서 검색합니다 (Manga Passion은 독일어판만 지원합니다)",
   "Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList": "Manga Passion(독일어판), AniList, MyAnimeList에서 검색해요",
+  "Sucht in der Sammlung und online": "컬렉션과 온라인에서 검색해요",
+  "Sucht nur in der Sammlung": "컬렉션에서만 검색해요",
   "Sucht offizielle deutsche Ausgaben über Manga Passion (mit AniList-Fallback)": "Manga Passion을 통해 공식 독일어판을 검색해요 (AniList 대체 포함)",
   "System": "시스템",
   "System: Version, Speicher, Backups, Quellen": "시스템: 버전, 저장 공간, 백업, 출처",
@@ -2307,6 +2320,7 @@
   "Zu viele Einträge (maximal {max_entries})": "항목이 너무 많아요 (최대 {max_entries}개)",
   "Zu viele Fehlversuche. Die Anmeldung mit diesem Konto ist vorübergehend gesperrt.": "실패한 시도가 너무 많아요. 이 계정의 로그인이 일시적으로 잠겼어요.",
   "Zu viele Fehlversuche. Erneut möglich ab {time} Uhr; so lange ist auch die Anmeldung mit diesem Konto gesperrt.": "실패한 시도가 너무 많아요. {time} 이후에 다시 시도할 수 있고, 그때까지 이 계정의 로그인도 잠겨 있어요.",
+  "Zu viele Online-Suchen – in {seconds} s wieder": "온라인 검색이 너무 많아요 – {seconds}초 후에 다시 할 수 있어요",
   "Zu viele Suchanfragen, bitte kurz warten": "검색 요청이 너무 많아요, 잠시 기다려 주세요",
   "Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.": "비밀번호 변경 시도가 너무 많아요. 몇 분 후에 다시 시도해 주세요.",
   "Zu viele Versuche. Erneut möglich ab {time} Uhr.": "시도가 너무 많아요. {time} 이후에 다시 시도할 수 있어요.",
@@ -2635,6 +2649,9 @@
   "{n} Tag|{n} Tage": {
     "other": "{n}일"
   },
+  "{n} online gefunden|{n} online gefunden": {
+    "other": "온라인에서 {n}건 찾았어요"
+  },
   "{n} vorgemerkter Kauf wurde vom Server abgelehnt.|{n} vorgemerkte Käufe wurden vom Server abgelehnt.": {
     "other": "대기 중이던 구매 {n}건이 서버에서 거부되었어요."
   },
@@ -2716,6 +2733,7 @@
   "Ähnlich wie „{title}“ in deiner Sammlung": "컬렉션의 “{title}”과(와) 비슷함",
   "Ähnlicher Titel": "비슷한 제목",
   "Ähnlicher Titel in deiner Sammlung": "컬렉션의 비슷한 제목",
+  "Ähnlicher Titel: {title}": "비슷한 제목: {title}",
   "Ältere Versionen lassen sich nicht per Klick installieren: Die Datenbank wird nur vorwärts migriert.": "이전 버전은 클릭만으로 설치할 수 없어요. 데이터베이스는 앞으로만 마이그레이션되거든요.",
   "Änderung konnte nicht gespeichert werden": "변경 사항을 저장하지 못했어요",
   "Änderung|Änderungen": {

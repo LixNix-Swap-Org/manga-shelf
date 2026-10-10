@@ -133,6 +133,7 @@
   "Alternativer Titel": "別タイトル",
   "Alternativtitel muss ein Text sein": "別タイトルは文字列である必要があります",
   "Am Server anmelden": "サーバーにサインイン",
+  "Andere Ausgabe vorhanden ({language})": "別の版を所持しています({language})",
   "Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)": "自分以外のユーザーは管理者のみ登録できます(無視されました)",
   "Andere Datei auswählen": "別のファイルを選ぶ",
   "Andere Sprachausgabe anlegen oder verknüpfen": "別の言語の版を作成またはリンク",
@@ -1102,6 +1103,7 @@
   "In der Anime-Liste suchen...": "アニメリストで検索...",
   "In der Manga-Shelf-App den Code mit der Kamera scannen oder den Link unter „Server hinzufügen“ einfügen.": "Manga Shelfアプリで、カメラでコードをスキャンするか、「サーバーを追加」にリンクを貼り付けてください。",
   "In der Panel-Konsole nachsehen; bleibt der Server gestoppt, im Panel auf „Start“ drücken.": "Panelのコンソールを確認してください。サーバーが停止したままの場合は、Panelで「Start」を押してください。",
+  "In der Sammlung": "コレクション内",
   "In der Sammlung suchen...": "コレクションを検索...",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "この期間に、日付付きで既読にした巻はありません。",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "{file}に次の行を追加し、コンテナを再起動してください:",
@@ -1487,6 +1489,7 @@
   "Neue Ausgabe anlegen": "新しい版を作成",
   "Neue Datei laden und den Dienst neu einrichten:": "新しいファイルをダウンロードし、サービスを設定し直してください:",
   "Neue Reihe anlegen": "新しいシリーズを追加",
+  "Neue Reihe „{q}“ anlegen": "新しいシリーズ「{q}」を追加",
   "Neue Reihen starten in dieser Sprache. Reihen in anderen Sprachen tragen ein Sprachkürzel (z. B. EN) und lassen sich in der Sammlung nach Sprache filtern.": "新しいシリーズはこの言語で始まります。他の言語のシリーズには言語コード(例: EN)が付き、コレクションで言語別に絞り込めます。",
   "Neue Termine bei Manga Passion ({count})": "Manga Passionの新しい日程({count})",
   "Neue Version verfügbar": "新しいバージョンがあります",
@@ -1528,6 +1531,7 @@
   "Nicht genug Speicherplatz für das Update (frei: {free}, benötigt: {needed}).": "アップデートに必要な空き容量が足りません(空き: {free}、必要: {needed})。",
   "Nicht gespeichert": "未保存",
   "Nicht hochgeladen: {files}": "アップロードされなかったファイル: {files}",
+  "Nicht in deiner Sammlung": "コレクションにありません",
   "Nicht in der Offline-Kopie": "オフラインコピーにありません",
   "Nicht in der Sammlung: {name}": "コレクションにありません: {name}",
   "Nicht installiert: Die Datei stammt nicht nachweislich aus dem Release-Workflow von manga-shelf. Nichts wurde verändert, die Datei wurde gelöscht. Bitte melden.": "インストールしていません: このファイルがmanga-shelfのリリースワークフローによるものである証明が取れませんでした。何も変更されておらず、ファイルは削除されました。ご報告ください。",
@@ -1615,6 +1619,12 @@
   "Ohne Zustand": "状態なし",
   "Ohne konkretes Datum": "具体的な日付なし",
   "Online & abgeglichen": "オンライン・照合済み",
+  "Online mitsuchen": "オンラインも検索",
+  "Online nach „{q}“ suchen": "「{q}」をオンラインで検索",
+  "Online nichts gefunden zu „{q}“": "「{q}」はオンラインで見つかりませんでした",
+  "Online-Quellen gerade nicht erreichbar": "オンラインの情報源に現在接続できません",
+  "Online-Suche läuft…": "オンライン検索中…",
+  "Online-Treffer zu „{q}“": "「{q}」のオンライン検索結果",
   "Original": "オリジナル",
   "Original in neuem Tab öffnen": "オリジナルを新しいタブで開く",
   "Papierkorb": "ごみ箱",
@@ -1758,6 +1768,7 @@
   "Sammlung konnte nicht geladen werden (Fehler {status}).": "コレクションを読み込めませんでした(エラー {status})。",
   "Sammlung nicht erreichbar – nächster Versuch beim nächsten Öffnen": "コレクションに接続できません – 次回開いたときに再試行します",
   "Sammlung schließen": "コレクションを閉じる",
+  "Sammlung und online suchen…": "コレクションとオンラインを検索…",
   "Sammlung wird geprüft…": "コレクションを確認中…",
   "Sammlung öffnen": "コレクションを開く",
   "Sammlungs-Fortschritt": "コレクションの進捗",
@@ -1964,6 +1975,8 @@
   "Suche…": "検索中…",
   "Sucht in AniList und MyAnimeList (Manga Passion kennt nur deutsche Ausgaben)": "AniList と MyAnimeList を検索します(Manga Passion はドイツ語版のみ対応)",
   "Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList": "Manga Passion(ドイツ語版)、AniList、MyAnimeListから検索します",
+  "Sucht in der Sammlung und online": "コレクション内とオンラインを検索します",
+  "Sucht nur in der Sammlung": "コレクション内のみ検索します",
   "Sucht offizielle deutsche Ausgaben über Manga Passion (mit AniList-Fallback)": "Manga Passion経由で公式のドイツ語版を検索します(AniListがフォールバック)",
   "System": "システム",
   "System: Version, Speicher, Backups, Quellen": "システム: バージョン、ストレージ、バックアップ、情報源",
@@ -2307,6 +2320,7 @@
   "Zu viele Einträge (maximal {max_entries})": "項目が多すぎます(最大{max_entries})",
   "Zu viele Fehlversuche. Die Anmeldung mit diesem Konto ist vorübergehend gesperrt.": "失敗した試行が多すぎます。このアカウントでのサインインは一時的にロックされています。",
   "Zu viele Fehlversuche. Erneut möglich ab {time} Uhr; so lange ist auch die Anmeldung mit diesem Konto gesperrt.": "失敗した試行が多すぎます。{time}以降に再試行できます。それまでは、このアカウントでのサインインもロックされます。",
+  "Zu viele Online-Suchen – in {seconds} s wieder": "オンライン検索が多すぎます。{seconds}秒後にもう一度お試しください",
   "Zu viele Suchanfragen, bitte kurz warten": "検索リクエストが多すぎます。しばらくお待ちください",
   "Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.": "パスワード変更の試行回数が多すぎます。数分後にもう一度お試しください。",
   "Zu viele Versuche. Erneut möglich ab {time} Uhr.": "試行が多すぎます。{time}以降に再試行できます。",
@@ -2635,6 +2649,9 @@
   "{n} Tag|{n} Tage": {
     "other": "{n}日"
   },
+  "{n} online gefunden|{n} online gefunden": {
+    "other": "オンラインで{n}件見つかりました"
+  },
   "{n} vorgemerkter Kauf wurde vom Server abgelehnt.|{n} vorgemerkte Käufe wurden vom Server abgelehnt.": {
     "other": "保留中の購入{n}件がサーバーに拒否されました。"
   },
@@ -2716,6 +2733,7 @@
   "Ähnlich wie „{title}“ in deiner Sammlung": "コレクションの「{title}」に似ています",
   "Ähnlicher Titel": "似たタイトル",
   "Ähnlicher Titel in deiner Sammlung": "コレクション内の似たタイトル",
+  "Ähnlicher Titel: {title}": "似たタイトル: {title}",
   "Ältere Versionen lassen sich nicht per Klick installieren: Die Datenbank wird nur vorwärts migriert.": "古いバージョンはワンクリックではインストールできません。データベースは新しいバージョンに向けてのみ移行されるためです。",
   "Änderung konnte nicht gespeichert werden": "変更を保存できませんでした",
   "Änderung|Änderungen": {
