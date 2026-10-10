@@ -248,12 +248,27 @@ test('PUT /stats/settings with null or an empty date removes the setting: the st
     assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
 });
 
+test('collection_start_date_source says whether the start date is stored or derived', async () => {
+    const source = async () => {
+        const { collection_start_date: date, collection_start_date_source: src } = (await getStats()).summary;
+        return [date, src];
+    };
+    assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2021-04-09' })).status, 200);
+    assert.deepEqual(await source(), ['2021-04-09', 'stored']);
+    assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: null })).status, 200);
+    const { derivedStartDate } = require('../core/handlers/stats');
+    assert.deepEqual(await source(), [derivedStartDate({ db }, new Date()), 'derived']);
+    assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
+    assert.equal((await getStats()).summary.collection_start_date_source, 'stored');
+});
+
 test('a stored start date that is invalid or before 1900 falls back to the derived date', async () => {
     db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('collection_start_date', '0000-01-01')").run();
     const s = (await getStats()).summary;
     const { derivedStartDate } = require('../core/handlers/stats');
     assert.equal(s.collection_start_date, derivedStartDate({ db }, new Date()));
     assert.notEqual(s.collection_start_date, '2021-04-09');
+    assert.equal(s.collection_start_date_source, 'derived');
     assert.ok(s.collection_days < 365 * 200);
     assert.equal((await admin('PUT', '/stats/settings', { collection_start_date: '2022-01-05' })).status, 200);
 });

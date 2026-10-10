@@ -1,6 +1,6 @@
 import { TriangleAlert, CircleAlert, Check, Sparkles, Search, ShoppingCart } from 'lucide-react';
 import { formatCount } from '../../utils/format';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 import { rich } from '../../i18n/react.jsx';
 import { payloadText } from '../../i18n/serverText.js';
 
@@ -27,7 +27,7 @@ const gapLabel = (g) => {
 /** Banners above the volume list: edition confirmation, duplicate entries, Manga-Passion discrepancy and the detected gaps. */
 export default function GapNotices({
   duplicateEntries = [], canEdit, isOffline = false, showGaps, detectedGaps = [], detectedGapEntries = [],
-  volumeFilter, volumeSearch = '', gapsAllowedByFilters, volumeViewMode,
+  announcedGapCount = 0, volumeFilter, volumeSearch = '', gapsAllowedByFilters, volumeViewMode,
   mpGapData, mpGapLoading, mpGapNotice, fillingGapLoading, canSyncVolumeCount, gapEditionUnconfirmed,
   handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal, collecting = 'aktiv'
 }) {
@@ -42,6 +42,9 @@ export default function GapNotices({
   const showDiscrepancy = Boolean(canEdit && !isOffline && canSyncVolumeCount && mpGapData?.discrepancy && !searching);
   const officialTotal = mpGapData?.total_official_volumes;
   const extraGapCount = detectedGapEntries.filter(e => e.type !== 'volume').length;
+  const regularGapCount = detectedGaps.length - extraGapCount;
+  const fillDisabled = fillingGapLoading || unconfirmed;
+  const fillTitle = unconfirmed ? t('Erst die Manga-Passion-Edition bestätigen') : undefined;
   const suggestedEdition = <em>{mpGapData?.edition?.title || t('unbekannte Edition')}</em>;
   const checkedEdition = <em>{mpGapData?.edition?.title}</em>;
 
@@ -123,6 +126,7 @@ export default function GapNotices({
             <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
             <span>
               <strong>{t('{count} entdeckt:', { count: formatCount(detectedGaps.length, 'Lücke', 'Lücken') })}</strong> {detectedGaps.slice(0, 8).map(gapLabel).join(', ')}{detectedGaps.length > 8 ? t(' (+ {count} weitere)', { count: detectedGaps.length - 8 }) : ''}{extraGapCount > 0 ? t(' · davon {count}', { count: formatCount(extraGapCount, 'Sonderausgabe/Schuber', 'Sonderausgaben/Schuber') }) : ''}
+              {announcedGapCount > 0 && <span className="ml-1.5 text-amber-200/80">{tn('+ {n} angekündigt', '+ {n} angekündigt', announcedGapCount)}</span>}
               {mpGapData?.matched && mpGapData.edition?.title && (
                 <span className="ml-1.5 text-amber-300/80 text-[11px]">
                   {officialTotal
@@ -132,7 +136,7 @@ export default function GapNotices({
               )}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!isOffline && (
               <button
                 type="button"
@@ -144,12 +148,12 @@ export default function GapNotices({
                 <span>{t('Manga-Passion-Edition')}</span>
               </button>
             )}
-            {canEdit && !isOffline && (
+            {canEdit && !isOffline && regularGapCount > 0 && (
               <button
                 type="button"
                 onClick={() => handleBatchFillGaps('Fehlt')}
-                disabled={fillingGapLoading || unconfirmed}
-                title={unconfirmed ? t('Erst die Manga-Passion-Edition bestätigen') : undefined}
+                disabled={fillDisabled}
+                title={fillTitle}
                 className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-lg text-amber-200 font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {fillingGapLoading ? (
@@ -158,6 +162,17 @@ export default function GapNotices({
                   <ShoppingCart className="w-3 h-3 text-amber-300" aria-hidden="true" />
                 )}
                 <span>{fillingGapLoading ? t('Wird übertragen...') : t('Alle auf Einkaufsliste')}</span>
+              </button>
+            )}
+            {canEdit && !isOffline && extraGapCount > 0 && (
+              <button
+                type="button"
+                onClick={() => handleBatchFillGaps('Fehlt', { extrasOnly: true })}
+                disabled={fillDisabled}
+                title={fillTitle}
+                className="px-1 py-1 text-amber-200 hover:text-amber-100 underline underline-offset-2 font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {tn('Auch {n} Sonderausgabe/Schuber', 'Auch {n} Sonderausgaben/Schuber', extraGapCount)}
               </button>
             )}
           </div>

@@ -369,6 +369,7 @@ async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'F
       const mpVolId = matchedOfficial ? matchedOfficial.id : null;
       const publisher = manga.publisher || null;
       const notes = targetType === 'volume' ? (matchedOfficial?.title || null) : (matchedOfficial?.title || cleanLabel);
+      const status = targetStatus === 'Fehlt' && matchedOfficial?.is_released === false ? 'Erscheint bald' : targetStatus;
 
       const existing = existingMap.get(key);
       // never write German edition data into a volume of another language, nor add a second entry next to it
@@ -379,10 +380,10 @@ async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'F
           skippedOwned.push(existing.id);
           continue;
         }
-        updateStmt.run(targetStatus, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
+        updateStmt.run(status, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
         updatedIds.push(existing.id);
       } else {
-        const ins = insertStmt.run(mangaId, volNumber, targetStatus, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
+        const ins = insertStmt.run(mangaId, volNumber, status, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
         importedIds.push(Number(ins.lastInsertRowid));
       }
     }

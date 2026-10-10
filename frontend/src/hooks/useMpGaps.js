@@ -1,21 +1,33 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { buildMpGapMap, detectGapEntries, isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText } from '../utils/volumeHelpers';
+import { buildMpGapMap, detectGapEntries, countAnnouncedEntries, announcedGapNumbers, isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText } from '../utils/volumeHelpers';
 import { apiFetch, readJson, TIMEOUTS } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import { formatCount } from '../utils/format';
 import { deleteVolumeRequest } from '../components/detail/volumeEdit/editorUtils';
-import { t } from '../i18n/index.js';
+import { t, tn } from '../i18n/index.js';
 import { payloadText, serverText } from '../i18n/serverText.js';
 import { statusLabel } from '../utils/enumLabels';
 import { isMpEdition } from '../utils/editions';
 import { readCache, cacheOwner, LIST_KEY } from '../utils/dataCache';
 
-/** Confirm text for importing the detected gaps; one gap is named as "den fehlenden Band". */
-export function gapFillConfirmText(gaps, targetStatus, editionTitle) {
+/** Confirm text for importing the detected gaps (regular volumes, or with `extras` the special editions/schuber). */
+export function gapFillConfirmText(gaps, targetStatus, editionTitle, { extras = false } = {}) {
   const status = statusLabel(targetStatus);
-  const question = gaps.length === 1
-    ? t("Den fehlenden Band {volume} auf Status '{status}' erfassen?", { volume: gaps[0], status })
-    : t("{count} fehlende Bände auf Status '{status}' erfassen?", { count: gaps.length, status });
+  const shopping = targetStatus === 'Fehlt';
+  let question;
+  if (extras) {
+    question = shopping
+      ? tn('{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?', '{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?', gaps.length)
+      : tn("{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?", "{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?", gaps.length, { status });
+  } else if (gaps.length === 1) {
+    question = shopping
+      ? t('Den fehlenden Band {volume} auf die Einkaufsliste setzen?', { volume: gaps[0] })
+      : t("Den fehlenden Band {volume} auf Status '{status}' erfassen?", { volume: gaps[0], status });
+  } else {
+    question = shopping
+      ? tn('{n} fehlender Band auf die Einkaufsliste setzen?', '{n} fehlende Bände auf die Einkaufsliste setzen?', gaps.length)
+      : t("{count} fehlende Bände auf Status '{status}' erfassen?", { count: gaps.length, status });
+  }
   if (!editionTitle) return question;
   return `${question} ${t('Preise, Termine und Cover kommen aus der Manga-Passion-Edition „{edition}“.', { edition: editionTitle })}`;
 }
@@ -167,21 +179,22 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
     } : undefined);
   };
 
-  const handleBatchFillGaps = async (targetStatus = 'Fehlt') => {
-    if (!canEdit || detectedGaps.length === 0 || fillingGapLoading) return;
+  const handleBatchFillGaps = async (targetStatus = 'Fehlt', { extrasOnly = false } = {}) => {
+    const labels = detectedGapEntries.filter(e => (e.type !== 'volume') === extrasOnly).map(e => e.label);
+    if (!canEdit || labels.length === 0 || fillingGapLoading) return;
     if (isGapEditionUnconfirmed(mpGapData)) {
       notify.error(t('Die Manga-Passion-Edition „{edition}“ ist nicht bestätigt. Bitte zuerst „Edition bestätigen“ oder eine andere Edition wählen, sonst werden Bände dieser Vermutung erfasst.', { edition: mpGapData.edition?.title || '?' }));
       return;
     }
     const edition = mpGapData?.matched ? mpGapData.edition : null;
-    if (!confirm(gapFillConfirmText(detectedGaps, targetStatus, edition?.title))) return;
+    if (!confirm(gapFillConfirmText(labels, targetStatus, edition?.title, { extras: extrasOnly }))) return;
     const requestedFor = id;
     setFillingGapLoading(true);
     try {
       const res = await apiFetch(`/api/mangas/${id}/batch-import-gaps`, {
         method: 'POST',
         body: {
-          volume_numbers: detectedGaps.map(String),
+          volume_numbers: labels.map(String),
           target_status: targetStatus,
           edition_id: edition?.id || null
         },
@@ -263,6 +276,14 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
     [gapData, volumes, manga?.total_volumes]
   );
   const detectedGaps = useMemo(() => detectedGapEntries.map(e => e.label), [detectedGapEntries]);
+  const announcedGapCount = useMemo(
+    () => (gapData?.matched ? countAnnouncedEntries(gapData.gaps, volumes) : 0),
+    [gapData, volumes]
+  );
+  const announcedGaps = useMemo(
+    () => (gapData?.matched ? announcedGapNumbers(gapData.gaps, volumes) : []),
+    [gapData, volumes]
+  );
   const mpGapNotice = useMemo(() => gapStatusText(gapData, gapError), [gapData, gapError]);
 
   return {
@@ -270,6 +291,6 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
     mpGapData: gapData, mpGapLoading: mpEnabled && mpGapLoading, mpGapError: gapError, mpGapNotice, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
     handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition, mpEnabled,
     gapEditionUnconfirmed: isGapEditionUnconfirmed(gapData), canSyncVolumeCount: canFixVolumeCount(gapData),
-    mpGapMap, detectedGapEntries, detectedGaps
+    mpGapMap, detectedGapEntries, detectedGaps, announcedGapCount, announcedGaps
   };
 }

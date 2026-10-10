@@ -117,7 +117,7 @@ export default function VolumeGridView({
                       )}
 
                       {(gapMeta?.publisher || manga.publisher) && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={t('Verlag: {publisher}', { publisher: gapMeta?.publisher || manga.publisher })}>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-full" title={t('Verlag: {publisher}', { publisher: gapMeta?.publisher || manga.publisher })}>
                           <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                           <span className="truncate">{gapMeta?.publisher || manga.publisher}</span>
                         </span>
@@ -372,7 +372,7 @@ export default function VolumeGridView({
                 ) : null}
 
                 {effectivePublisher ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-[110px]" title={t('Verlag: {effectivePublisher}', { effectivePublisher })}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-300 bg-slate-800/70 border border-slate-700/60 truncate max-w-full" title={t('Verlag: {effectivePublisher}', { effectivePublisher })}>
                     <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
                     <span className="truncate">{effectivePublisher}</span>
                   </span>

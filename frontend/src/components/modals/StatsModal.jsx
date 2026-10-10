@@ -135,13 +135,11 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
     setEditingStartDate(!editingStartDate);
   };
 
-  const handleSaveStartDate = async (e) => {
-    e.preventDefault();
-    if (!newStartDate) return;
+  const saveStartDate = async (value) => {
     setSavingStartDate(true);
     setStartDateError(null);
     try {
-      const res = await apiFetch('/api/stats/settings', { method: 'PUT', body: { collection_start_date: newStartDate } });
+      const res = await apiFetch('/api/stats/settings', { method: 'PUT', body: { collection_start_date: value } });
       if (res.ok) {
         setEditingStartDate(false);
         await fetchStats();
@@ -153,6 +151,12 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
     } finally {
       setSavingStartDate(false);
     }
+  };
+
+  const handleSaveStartDate = (e) => {
+    e.preventDefault();
+    if (!newStartDate) return;
+    saveStartDate(newStartDate);
   };
 
   const dialogRef = useDialogA11y(isOpen);
@@ -294,6 +298,16 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
                           >
                             {savingStartDate ? t('Speichert...') : t('Datum speichern')}
                           </button>
+                          {summary.collection_start_date_source === 'stored' && (
+                            <button
+                              type="button"
+                              disabled={savingStartDate}
+                              onClick={() => saveStartDate(null)}
+                              className="btn-secondary text-xs py-2 px-3 mt-auto"
+                            >
+                              {t('Automatisch aus den Daten')}
+                            </button>
+                          )}
                         </form>
                       )}
 

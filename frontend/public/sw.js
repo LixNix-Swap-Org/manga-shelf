@@ -78,6 +78,9 @@ self.addEventListener('message', (event) => {
   if (event.origin && event.origin !== self.location.origin) return;
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
   if (event.data && event.data.type === 'WARM_LANGUAGE') event.waitUntil(warmLanguage(event.data.language).catch(() => {}));
+  if (event.data && event.data.type === 'HAS_FILE' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage(BUILD_FILES.includes(event.data.url));
+  }
 });
 
 self.addEventListener('activate', (event) => {

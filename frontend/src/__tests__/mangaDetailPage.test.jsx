@@ -26,10 +26,10 @@ const json = (status, body) => fakeResponse(status, body);
 const editor = { id: 2, username: 'ed', role: 'editor' };
 const MANGA = { id: 5, title: 'Server Titel', status: 'Laufend', total_volumes: 3, volumes: [], reader_stats: [] };
 
-function stubFetch(mangaResponse) {
+function stubFetch(mangaResponse, gapResponse = { matched: false, gaps: [] }) {
   const fetchMock = vi.fn(async (url) => {
     if (url === '/api/mangas/5') return mangaResponse();
-    if (url.startsWith('/api/mangas/5/gaps')) return json(200, { matched: false, gaps: [] });
+    if (url.startsWith('/api/mangas/5/gaps')) return json(200, gapResponse);
     return json(404, {});
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -80,6 +80,21 @@ describe('MangaDetail page', () => {
     renderPage({ state: { from: '/?view=shopping' } });
     await screen.findByText('Server Titel');
     expect(screen.getByRole('link', { name: /Zurück zur Übersicht/ }).getAttribute('href')).toBe('/?view=shopping');
+  });
+
+  it('the gap banner counts announced official volumes separately from the gaps', async () => {
+    const manga = { ...MANGA, total_volumes: 24, volumes: [{ id: 51, manga_id: 5, volume_number: '1', type: 'volume', status: 'Vorhanden' }] };
+    stubFetch(() => json(200, manga), {
+      matched: true, link_confirmed: true, edition: { id: 9, title: 'DE' }, total_official_volumes: 24,
+      gaps: [
+        { volume_number: '2', type: 'volume', is_released: true },
+        { volume_number: '23', type: 'volume', is_released: false },
+        { volume_number: '24', type: 'volume', is_released: false }
+      ]
+    });
+    renderPage();
+    expect(await screen.findByText('+ 2 angekündigt')).toBeTruthy();
+    expect(screen.getByText(/1 Lücke entdeckt/)).toBeTruthy();
   });
 
   it('Escape typed in the title field keeps the edit form and what was typed', async () => {

@@ -174,7 +174,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     mpGapData, mpGapLoading, mpGapError, mpGapNotice, fetchMpGaps, batchAutofilling, handleBatchAutofillManga,
     handleBatchFillGaps, handleSyncTotalVolumes, handleSelectMpEdition, mpEnabled,
     gapEditionUnconfirmed, canSyncVolumeCount,
-    mpGapMap, detectedGapEntries, detectedGaps
+    mpGapMap, detectedGapEntries, detectedGaps, announcedGapCount, announcedGaps
   } = useMpGaps({ id, canEdit, volumes, manga, fetchManga, setShowMpEditionModal, user });
 
   const {
@@ -245,8 +245,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
 
   const displayVolumeItems = useMemo(() => buildDisplayVolumeItems({
     filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort,
-    volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing
-  }), [showGaps, detectedGaps, detectedGapEntries, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap,
+    announcedGapNumbers: announcedGaps, volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing
+  }), [showGaps, detectedGaps, detectedGapEntries, announcedGaps, volumeTypeFilter, volumeFilter, volumeSearch, volumeSort, filteredVolumes, mpGapMap,
     volumePublisherFilter, volumeConditionFilter, volumeOwnerFilter, volumeOwnerMissing]);
 
   const {
@@ -590,6 +590,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             showGaps={showGaps}
             detectedGaps={detectedGaps}
             detectedGapEntries={detectedGapEntries}
+            announcedGapCount={announcedGapCount}
             volumeFilter={volumeFilter}
             volumeSearch={volumeSearch}
             gapsAllowedByFilters={gapsAllowedByFilters}
@@ -772,6 +773,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
             onClose={() => setShowBatchModal(false)}
             manga={manga}
             mangaId={id}
+            volumes={manga?.volumes}
+            officialTotal={mpGapData?.total_official_volumes}
             onSuccess={fetchManga}
           />
         )}

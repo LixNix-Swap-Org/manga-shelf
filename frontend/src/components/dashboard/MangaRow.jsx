@@ -69,7 +69,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
       <td className="py-2.5 px-4 min-w-[9rem]">
         <div className="flex flex-col items-start gap-0.5">
           <span className="font-bold text-white font-mono whitespace-nowrap">
-            {owned} {total > 0 ? `/ ${total}` : t('Bde.')}{extras > 0 ? ` +${extras}` : ''}
+            {owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}
           </span>
           {readState.read > 0 ? (
             <span className={`text-[10px] font-mono whitespace-nowrap ${readState.complete ? 'text-emerald-400 font-bold' : 'text-sky-300'}`}>

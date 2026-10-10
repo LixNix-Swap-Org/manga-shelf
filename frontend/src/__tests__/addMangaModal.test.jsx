@@ -77,6 +77,47 @@ describe('AddMangaModal: lookup status and publisher', () => {
     expect(body.manga_passion_id).toBe(12);
   });
 
+  it('sends the tags of the picked hit and none for a manual series', async () => {
+    const fetchFn = mockFetch({
+      'GET /api/lookup/manga': () => json(200, [{ id: 'mp_269', source: 'manga_passion', title: 'Chainsaw Man', status: 'Laufend', manga_passion_id: 269, tags: 'Shounen, Action, Horror' }]),
+      'POST /api/mangas': () => json(200, { success: true, id: 9 })
+    });
+    const picked = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Chainsaw' } });
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
+    await waitFor(() => expect(titleInput().value).toBe('Chainsaw Man'));
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(picked.onSuccess).toHaveBeenCalled());
+    expect(bodyOf(callsTo(fetchFn, 'POST /api/mangas')[0]).tags).toBe('Shounen, Action, Horror');
+    picked.unmount();
+
+    const manualFetch = mockFetch({ 'POST /api/mangas': () => json(200, { success: true, id: 10 }) });
+    const manual = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Eigene Reihe' } });
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(manual.onSuccess).toHaveBeenCalled());
+    expect(bodyOf(callsTo(manualFetch, 'POST /api/mangas')[0]).tags).toBeNull();
+  });
+
+  it('a running hit names its released volumes in the empty total field; a finished one fills the total', async () => {
+    const hits = {
+      chainsaw: { id: 'mp_269', source: 'manga_passion', title: 'Chainsaw Man', status: 'Laufend', total_volumes: 22, manga_passion_id: 269 },
+      monster: { id: 'mp_3', source: 'manga_passion', title: 'Monster', status: 'Abgeschlossen', total_volumes: 9, manga_passion_id: 3 }
+    };
+    mockFetch({ 'GET /api/lookup/manga': (url) => json(200, [new URL(url, 'http://x').searchParams.get('q') === 'Monster' ? hits.monster : hits.chainsaw]) });
+    renderModal();
+    const total = screen.getByLabelText('Geplante / Gesamtbände');
+    expect(total.placeholder).toBe('z.B. 108');
+    fireEvent.change(titleInput(), { target: { value: 'Chainsaw' } });
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
+    await waitFor(() => expect(total.placeholder).toBe('bisher 22 erschienen'));
+    expect(total.value).toBe('');
+    fireEvent.change(titleInput(), { target: { value: 'Monster' } });
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
+    await waitFor(() => expect(total.value).toBe('9'));
+    expect(total.placeholder).toBe('z.B. 108');
+  });
+
   it('names every lookup source in the Auto-Fill tooltip', () => {
     renderModal();
     expect(screen.getByRole('button', { name: /Auto-Fill/ }).title).toBe('Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList');

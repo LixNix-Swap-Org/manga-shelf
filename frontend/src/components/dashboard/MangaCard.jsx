@@ -102,7 +102,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             </span>
 
             <span className="bg-slate-950/85 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
-              {owned} {total > 0 ? `/ ${total}` : t('Bde.')}{extras > 0 ? ` +${extras}` : ''}
+              {owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}
             </span>
           </div>
 

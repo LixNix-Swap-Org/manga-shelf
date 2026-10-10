@@ -31,6 +31,11 @@
     "many": "+ {n} extras",
     "other": "+ {n} extras"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} annoncé",
+    "many": "+ {n} annoncés",
+    "other": "+ {n} annoncés"
+  },
   "-- Keine Angabe --": "-- Non précisé --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 compte a besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caractères parmi 0–9 et a–f",
@@ -209,6 +214,11 @@
   "Art des Eintrags": "Type d'entrée",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Ton compte « {name} » n'y a pas non plus de mot de passe : ensuite, seul un autre administrateur dans la gestion des utilisateurs ou la commande console « {command} » sur le serveur pourra en définir un nouveau.",
   "Auch für automatische Aktualisierungen verwenden": "Utiliser aussi pour les mises à jour automatiques",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Aussi {n} édition spéciale/coffret",
+    "many": "Aussi {n} éditions spéciales/coffrets",
+    "other": "Aussi {n} éditions spéciales/coffrets"
+  },
   "Auf Crunchyroll suchen": "Chercher sur Crunchyroll",
   "Auf Einkaufsliste setzen": "Mettre dans la liste d'achats",
   "Auf Server übertragen": "Transférer vers le serveur",
@@ -254,6 +264,7 @@
     "other": "Ajustement auto : {n} rangées pour {items}"
   },
   "Automatisch": "Automatique",
+  "Automatisch aus den Daten": "Automatiquement d'après les données",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Sauvegardes quotidiennes automatiques et restauration d'instantanés",
   "Autor": "Auteur",
   "Autor / Mangaka": "Auteur / mangaka",
@@ -558,6 +569,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "La version web affiche le lien sous « Connecter à l'app » (en bas de la page d'accueil) sous forme de code QR et à copier.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Restreins la clé à l'API Books, copie-la et colle-la ci-dessous.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Enregistrer le tome manquant {volume} avec le statut « {status} » ?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Mettre le tome manquant {volume} dans la liste d'achats ?",
   "Der Band existiert bereits": "Le tome existe déjà",
   "Der Barcode-Scanner ließ sich nicht starten.": "Impossible de démarrer le lecteur de code-barres.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "Le lecteur de code-barres est en cours d'installation via les services Google Play. Réessaie dans un instant.",
@@ -1043,6 +1055,7 @@
   "Geschätzter Gesamtpreis": "Prix total estimé",
   "Gesehen": "Vu",
   "Gesehene Folgen": "Épisodes vus",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Épisodes vus ({aired} diffusés à ce jour)",
   "Gesehene Folgen (von {max})": "Épisodes vus (sur {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Les épisodes vus doivent être un entier à partir de 0",
   "Gesetzte Tags": "Tags définis",
@@ -1366,6 +1379,8 @@
   "Lädt… {loaded} von {total} MB": "Chargement… {loaded} sur {total} Mo",
   "Läuft": "En cours de diffusion",
   "Läuft gerade": "En cours",
+  "Läuft noch": "Toujours en cours de diffusion",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Toujours en cours de diffusion – « Vu » n'est possible qu'après le dernier épisode ; choisis « En visionnage »",
   "Läuft seit": "En cours depuis",
   "Löschen": "Supprimer",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "La suppression ne peut pas être combinée avec d'autres modifications",
@@ -1446,6 +1461,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Plusieurs séries correspondent – choisis-en une",
   "Mein Fortschritt": "Ma progression",
   "Meine": "Perso",
+  "Meine Liste": "Ma liste",
   "Meine Notiz": "Ma note",
   "Meine Vorbestellungen & Budget": "Mes précommandes et budget",
   "Meine Vorbestellungen & Lieferungen": "Mes précommandes et livraisons",
@@ -2259,6 +2275,7 @@
   "Vom Manga ({publisher}) übernehmen": "Reprendre du manga ({publisher})",
   "Vom Server holen": "Récupérer depuis le serveur",
   "Von Band": "À partir du tome",
+  "Von deiner Liste entfernt": "Retiré de ta liste",
   "Von der Wunschliste": "Retirer de la liste de souhaits",
   "Von meiner Liste entfernen": "Retirer de ma liste",
   "Vor Update": "Avant la mise à jour",
@@ -2449,6 +2466,7 @@
   "aus der Umgebung gesetzt": "défini via l'environnement",
   "beginnt mit „AIza“, 39 Zeichen": "commence par « AIza », 39 caractères",
   "beschädigt": "endommagé",
+  "bisher {n} erschienen": "{n} parus à ce jour",
   "collecting::Pausiert": "En pause",
   "diesen Band": "ce tome",
   "drei Buchstaben, z. B. EUR": "trois lettres, par ex. EUR",
@@ -2470,6 +2488,7 @@
   },
   "fehlt": "manquant",
   "fehlt ({count})": "manquants ({count})",
+  "festgelegt": "défini",
   "freier Speicher unbekannt": "espace libre inconnu",
   "gehört zu einem anderen Manga-Shelf-Server": "appartient à un autre serveur Manga Shelf",
   "gelesen": "lu",
@@ -2763,6 +2782,16 @@
     "many": "{n} pages",
     "other": "{n} pages"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "Enregistrer {n} édition spéciale/coffret avec le statut « {status} » ?",
+    "many": "Enregistrer {n} éditions spéciales/coffrets avec le statut « {status} » ?",
+    "other": "Enregistrer {n} éditions spéciales/coffrets avec le statut « {status} » ?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "Mettre {n} édition spéciale/coffret dans la liste d'achats ?",
+    "many": "Mettre {n} éditions spéciales/coffrets dans la liste d'achats ?",
+    "other": "Mettre {n} éditions spéciales/coffrets dans la liste d'achats ?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} jour {hours} h",
     "many": "{n} jours {hours} h",
@@ -2772,6 +2801,11 @@
     "one": "{n} jour",
     "many": "{n} jours",
     "other": "{n} jours"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "Mettre {n} tome manquant dans la liste d'achats ?",
+    "many": "Mettre {n} tomes manquants dans la liste d'achats ?",
+    "other": "Mettre {n} tomes manquants dans la liste d'achats ?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} résultat trouvé en ligne",
@@ -2864,6 +2898,7 @@
   "{volume}: bei {owners} vorhanden": "{volume} : possédé par {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume} : encore manquant et pas dans la liste d'achats",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} La restauration écrase la base de données SQLite actuelle ({file}) et les couvertures avec l'état de l'archive ZIP choisie. La sauvegarde est d'abord vérifiée ; ensuite tu vois ce qu'elle contient et tu confirmes la restauration.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "{watched} épisodes vus sur les {aired} diffusés jusqu'ici",
   "{watched} von unbekannt vielen Folgen gesehen": "{watched} épisodes vus sur un nombre inconnu",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "{watched} sur {n} épisode vu",

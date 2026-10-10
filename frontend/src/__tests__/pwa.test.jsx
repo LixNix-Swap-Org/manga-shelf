@@ -10,7 +10,7 @@ import usePullToRefresh, { useForegroundRefresh, FOREGROUND_REFRESH_MS } from '.
 import DashboardFooter, { formatStorageUsage, HTTPS_GUIDE_URL } from '../components/dashboard/DashboardFooter';
 import {
   watchServiceWorkerUpdates, resetServiceWorkerWatcher, maybeShowIosInstallHint, isIosSafari, needsHttps,
-  IOS_HINT_KEY, IOS_HINT_TEXT, UPDATE_TEXT, UPDATE_CHECK_INTERVAL_MS
+  IOS_HINT_KEY, IOS_HINT_TEXT, UPDATE_TEXT, UPDATE_CHECK_INTERVAL_MS, WORKER_ANSWER_TIMEOUT_MS
 } from '../hooks/usePwaInstall';
 
 const swSource = fs.readFileSync(path.resolve(import.meta.dirname, '../../public/sw.js'), 'utf8');
@@ -279,6 +279,80 @@ describe('service worker updates in the page', () => {
     expect(toasts.map((t) => t.message)).toEqual([UPDATE_TEXT]);
     toasts[0].action.onClick();
     expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+  });
+
+  describe('a waiting worker of the release the page already runs', () => {
+    let entry;
+    beforeEach(() => {
+      entry = document.createElement('script');
+      entry.type = 'module';
+      entry.setAttribute('src', '/assets/index-A.js');
+      document.head.appendChild(entry);
+    });
+    afterEach(() => entry.remove());
+
+    const releaseWorker = (files) => {
+      const sw = loadWorker({ source: stamped(files), fetchImpl: vi.fn(), caches: fakeCaches(vi.fn()) });
+      const worker = fakeWorker();
+      worker.state = 'installed';
+      worker.postMessage = vi.fn((data, ports) => sw.listeners.message({ data, ports, origin: '', waitUntil: () => {} }));
+      return worker;
+    };
+    const settle = () => new Promise((resolve) => { setTimeout(resolve, 50); });
+
+    it('is not offered when it precaches the entry script of this page', async () => {
+      const RealChannel = globalThis.MessageChannel;
+      globalThis.MessageChannel = class {
+        constructor() {
+          this.port1 = { onmessage: null, close: vi.fn() };
+          this.port2 = { postMessage: (data) => this.port1.onmessage?.({ data }) };
+        }
+      };
+      vi.useFakeTimers();
+      try {
+        const reg = fakeRegistration();
+        reg.waiting = releaseWorker(['/assets/index-A.js', '/assets/index-A.css']);
+        await watchServiceWorkerUpdates({ container: fakeContainer({ registration: reg }), win: window, doc: document, reload: vi.fn() });
+        expect(reg.waiting.postMessage).toHaveBeenCalledWith({ type: 'HAS_FILE', url: '/assets/index-A.js' }, [expect.anything()]);
+        await vi.advanceTimersByTimeAsync(WORKER_ANSWER_TIMEOUT_MS * 2);
+        expect(toasts).toHaveLength(0);
+        expect(reg.waiting.postMessage).not.toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+      } finally {
+        vi.useRealTimers();
+        globalThis.MessageChannel = RealChannel;
+      }
+    });
+
+    it('a worker of another release is offered', async () => {
+      const reg = fakeRegistration();
+      const container = fakeContainer({ registration: reg });
+      await watchServiceWorkerUpdates({ container, win: window, doc: document, reload: vi.fn() });
+      const worker = releaseWorker(['/assets/index-B.js']);
+      worker.state = 'installing';
+      reg.installing = worker;
+      reg.listeners.updatefound();
+      worker.state = 'installed';
+      worker.listeners.statechange();
+      await vi.waitFor(() => expect(toasts.map((t) => t.message)).toEqual([UPDATE_TEXT]));
+      await settle();
+      expect(toasts).toHaveLength(1);
+    });
+
+    it('an older worker that does not answer is offered after the timeout', async () => {
+      vi.useFakeTimers();
+      try {
+        const reg = fakeRegistration();
+        reg.waiting = fakeWorker();
+        await watchServiceWorkerUpdates({ container: fakeContainer({ registration: reg }), win: window, doc: document, reload: vi.fn() });
+        expect(reg.waiting.postMessage).toHaveBeenCalledWith({ type: 'HAS_FILE', url: '/assets/index-A.js' }, [expect.anything()]);
+        await vi.advanceTimersByTimeAsync(WORKER_ANSWER_TIMEOUT_MS - 1);
+        expect(toasts).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(toasts.map((t) => [t.message, t.action?.label])).toEqual([[UPDATE_TEXT, 'Neu laden']]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('checks for an update when the app returns to the foreground, at most hourly', async () => {

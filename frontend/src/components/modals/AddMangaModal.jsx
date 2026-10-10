@@ -15,7 +15,7 @@ import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import { editionDefaults, isMpEdition } from '../../utils/editions';
-import { hitToForm, lookupSourceLabels } from '../../utils/lookupPrefill';
+import { hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
 export { lookupSourceLabels };
 
@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   publisher: '',
   status: 'Laufend',
   total_volumes: '',
+  tags: '',
   description: '',
   cover_image: '',
   manga_passion_id: null,
@@ -83,6 +84,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const [lookupError, setLookupError] = useState('');
   const [applyingId, setApplyingId] = useState(null);
   const [failedImages, setFailedImages] = useState({});
+  const [releasedHint, setReleasedHint] = useState(null);
   const [scanVolume, setScanVolume] = useState(null);
   // series created, scanned volume failed: the next submit only retries the volume
   const [createdManga, setCreatedManga] = useState(null);
@@ -111,6 +113,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     }
     setForm({ ...EMPTY_FORM, ...editionDefaults(), ...(prefill?.form || {}) });
     setScanVolume(prefill?.volume || null);
+    setReleasedHint(null);
     setCreatedManga(null);
     setErrorMessage('');
     setCoverFile(null);
@@ -200,6 +203,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       if (isRemoteUrl(cover)) cover = (await cacheRemoteCover(cover)) || cover;
       if (!isCurrent()) return;
       setForm(prev => hitToForm({ ...item, cover_image: cover }, prev));
+      setReleasedHint(releasedSoFar(item));
       if (cover) {
         setCoverFile(null);
         replacePreview(cover);
@@ -309,6 +313,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             publisher: form.publisher.trim() || null,
             status: form.status,
             total_volumes: form.total_volumes ? parseInt(form.total_volumes, 10) : null,
+            tags: form.tags || null,
             description: form.description.trim() || null,
             cover_image: cover,
             manga_passion_id: form.manga_passion_id || null,
@@ -616,7 +621,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 min="1"
                 max="5000"
                 step="1"
-                placeholder={t('z.B. 108')}
+                placeholder={releasedHint ? t('bisher {n} erschienen', { n: releasedHint }) : t('z.B. 108')}
                 className="input-field"
                 value={form.total_volumes}
                 onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, total_volumes: value })); }}

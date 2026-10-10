@@ -7,7 +7,7 @@ import { langFor } from '../common/lang';
 import { openLinkOutside } from '../../app/openExternal';
 import {
   PROGRESS_STATUSES, displayTitle, formatYearLine, progressText, progressPercent, plusOneDisabled, countdownText, staleText,
-  initials, sourceBadges, continueTarget
+  initials, sourceBadges, continueTarget, airedEpisodes, stillAiring
 } from '../../utils/animeHelpers';
 import { t, tn } from '../../i18n/index.js';
 import { animeProgressLabel } from '../../utils/enumLabels.js';
@@ -33,7 +33,9 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
   const titleId = useId();
   const mine = anime.my_progress;
   const watched = mine?.episodes_watched || 0;
-  const percent = progressPercent(watched, anime.episodes);
+  const aired = airedEpisodes(anime);
+  const percent = progressPercent(watched, anime.episodes, aired);
+  const airing = stillAiring(anime);
   const countdown = countdownText(anime.next_airing, now);
   const stale = staleText(anime, now.getTime());
   const others = (anime.progress_users || []).filter((p) => p.user_id !== userId);
@@ -82,8 +84,8 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
         <div>
           <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
             <span className="min-w-0">{mine ? animeProgressLabel(mine.status) : t('Nicht auf meiner Liste')}</span>
-            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={anime.episodes > 0 ? tn('{watched} von {n} Folgen gesehen', '{watched} von {n} Folgen gesehen', anime.episodes, { watched, n: anime.episodes }) : t('{watched} von unbekannt vielen Folgen gesehen', { watched })}>
-              {progressText(watched, anime.episodes)}
+            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={anime.episodes > 0 ? tn('{watched} von {n} Folgen gesehen', '{watched} von {n} Folgen gesehen', anime.episodes, { watched, n: anime.episodes }) : aired ? t('{watched} von bisher {aired} ausgestrahlten Folgen gesehen', { watched, aired }) : t('{watched} von unbekannt vielen Folgen gesehen', { watched })}>
+              {progressText(watched, anime.episodes, aired)}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden" aria-hidden="true">
@@ -150,7 +152,10 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
               className="input-field text-base sm:text-xs py-1.5 px-2 min-w-0 flex-1"
             >
               {!mine && <option value="">{t('Status wählen')}</option>}
-              {PROGRESS_STATUSES.map((s) => <option key={s} value={s}>{animeProgressLabel(s)}</option>)}
+              {PROGRESS_STATUSES.map((s) => {
+                const locked = airing && s === 'Gesehen';
+                return <option key={s} value={s} disabled={locked} title={locked ? t('Läuft noch') : undefined}>{animeProgressLabel(s)}</option>;
+              })}
             </select>
           </div>
         )}

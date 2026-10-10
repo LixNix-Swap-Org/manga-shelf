@@ -128,6 +128,56 @@ describe('useMpGaps', () => {
     expect(globalThis.confirm.mock.calls[0][0]).toMatch(/Bestätigt/);
   });
 
+  it('"Alle auf Einkaufsliste" sends the regular volumes only; the extras go with their own action', async () => {
+    const data = { ...linked, gaps: [
+      { volume_number: '2', type: 'volume' },
+      { volume_number: '3', type: 'volume' },
+      { volume_number: '3', type: 'special_edition', title: 'Collectors Edition' },
+      { volume_number: '11', type: 'schuber', title: 'Schuber' }
+    ] };
+    const fetchMock = vi.fn(async (url) => (String(url).includes('batch-import') ? json(200, { success: true, imported_count: 2 }) : json(200, data)));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useMpGaps(baseProps()));
+    await act(async () => { await result.current.fetchMpGaps(); });
+    expect(result.current.detectedGaps).toEqual([2, 3, '3 (Collectors Edition)', '11 (Schuber)']);
+    const imports = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('batch-import')).map(([, init]) => JSON.parse(init.body));
+
+    await act(async () => { await result.current.handleBatchFillGaps('Fehlt'); });
+    expect(imports()).toHaveLength(1);
+    expect(imports()[0]).toMatchObject({ volume_numbers: ['2', '3'], target_status: 'Fehlt', edition_id: 9 });
+    expect(globalThis.confirm.mock.calls[0][0]).toMatch(/^2 fehlende Bände auf die Einkaufsliste setzen\?/);
+
+    await act(async () => { await result.current.handleBatchFillGaps('Fehlt', { extrasOnly: true }); });
+    expect(imports()).toHaveLength(2);
+    expect(imports()[1]).toMatchObject({ volume_numbers: ['3 (Collectors Edition)', '11 (Schuber)'], target_status: 'Fehlt', edition_id: 9 });
+    expect(globalThis.confirm.mock.calls[1][0]).toMatch(/^2 Sonderausgaben\/Schuber auf die Einkaufsliste setzen\?/);
+  });
+
+  it('unreleased official volumes are counted as announced, never imported or drawn as gaps', async () => {
+    const data = { ...linked, gaps: [
+      { volume_number: '2', type: 'volume', is_released: true },
+      { volume_number: '23', type: 'volume', is_released: false, release_date: '2026-12-08' },
+      { volume_number: '24', type: 'volume', is_released: false, release_date: null },
+      { volume_number: '25', type: 'volume', is_released: false }
+    ] };
+    const fetchMock = vi.fn(async (url) => (String(url).includes('batch-import') ? json(200, { success: true, imported_count: 1 }) : json(200, data)));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook((props) => useMpGaps(props), { initialProps: baseProps() });
+    expect(result.current.announcedGapCount).toBe(0);
+    await act(async () => { await result.current.fetchMpGaps(); });
+    expect(result.current.detectedGaps).toEqual([2]);
+    expect(result.current.detectedGapEntries).toEqual([{ label: 2, type: 'volume' }]);
+    expect(result.current.announcedGapCount).toBe(3);
+    rerender(baseProps({ volumes: [{ volume_number: '1' }, { volume_number: '25', status: 'Vorbestellt' }] }));
+    expect(result.current.announcedGapCount).toBe(2);
+
+    await act(async () => { await result.current.handleBatchFillGaps('Fehlt'); });
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('batch-import'));
+    expect(JSON.parse(call[1].body).volume_numbers).toEqual(['2']);
+    await act(async () => { await result.current.handleBatchFillGaps('Fehlt', { extrasOnly: true }); });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('batch-import'))).toHaveLength(1);
+  });
+
   it('a gap check may take minutes (a cold edition pages through Manga Passion)', async () => {
     vi.useFakeTimers();
     try {

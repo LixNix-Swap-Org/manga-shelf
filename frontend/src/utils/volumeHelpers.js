@@ -151,13 +151,14 @@ export const gapVolumeNumber = (gap) => {
 };
 
 /**
- * Collection progress of a series. Only regular volumes count (schuber and extras are "+N"); the target grows with
- * the highest owned number so a stale total never shows "21 / 18". Incomplete never 100 %, started never 0 %.
+ * Collection progress of a series. Only regular volumes count (schuber and extras are "+N"); above a known total the
+ * target grows with the highest owned number so a stale total never shows "21 / 18", without a total there is no
+ * target (total 0, pct null). Incomplete never 100 %, started never 0 %.
  */
 export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes, extras_owned }) => {
   const all = owned_volumes || 0;
   const regular = regular_owned ?? all;
-  const total = Math.max(total_volumes || 0, max_regular_number || 0);
+  const total = total_volumes > 0 ? Math.max(total_volumes, max_regular_number || 0) : 0;
   let pct = null;
   if (total > 0) {
     pct = Math.min(100, Math.round((regular / total) * 100));
@@ -447,12 +448,13 @@ export const gapStatusText = (mpGapData, error) => {
 
 /**
  * Gaps as { label, type }: label is shown in the banner, type decides drawing (only regular volumes get ghost
- * entries) and import. Uses the Manga Passion edition when matched, else the volumes 1..max(total, highest owned).
+ * entries) and import. Uses the Manga Passion edition when matched (announced, unreleased entries are no gaps),
+ * else the volumes 1..max(total, highest owned).
  */
 export const detectGapEntries = (mpGapData, volumes, totalVolumes) => {
   if (mpGapData && mpGapData.matched && Array.isArray(mpGapData.gaps)) {
     return mpGapData.gaps
-      .filter(g => !isGapCovered(g, volumes))
+      .filter(g => g.is_released !== false && !isGapCovered(g, volumes))
       .map(g => {
         const match = String(g.volume_number).trim().match(/^(\d+)$/);
         const label = match
@@ -479,6 +481,17 @@ export const detectGapEntries = (mpGapData, volumes, totalVolumes) => {
   }
   return gaps;
 };
+
+/** Number of official entries not released yet (is_released false) that the collection does not cover. */
+const announcedEntries = (gaps, volumes) =>
+  (Array.isArray(gaps) ? gaps : []).filter(g => g.is_released === false && !isGapCovered(g, volumes || []));
+export const countAnnouncedEntries = (gaps, volumes) => announcedEntries(gaps, volumes).length;
+/** Regular volume numbers of announced, unreleased official entries (drawn as ghosts, never counted or imported). */
+export const announcedGapNumbers = (gaps, volumes) =>
+  announcedEntries(gaps, volumes)
+    .filter(g => (g.type || 'volume') === 'volume')
+    .map(g => gapVolumeNumber(String(g.volume_number).trim()))
+    .filter(n => n !== null);
 
 // read-state pseudo-values of the status filter: neutral ids, never shown (VolumeFilterBar labels its chips); the
 // other values are stored statuses. The old German ids are still accepted.
@@ -509,16 +522,16 @@ export const filtersAllowGaps = ({
  * and filtersAllowGaps()). A ghost takes the slot of its regular volume, ahead of a special edition of that number.
  */
 export const buildDisplayVolumeItems = ({
-  filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeSort, ...filters
+  filteredVolumes, detectedGapEntries, detectedGaps, mpGapMap, showGaps, volumeSort, announcedGapNumbers = [], ...filters
 }) => {
   const isNumberSort = volumeSort === 'number_asc' || volumeSort === 'number_desc';
-  if (!showGaps || detectedGaps.length === 0 || !isNumberSort || !filtersAllowGaps(filters)) {
+  if (!showGaps || (detectedGaps.length === 0 && announcedGapNumbers.length === 0) || !isNumberSort || !filtersAllowGaps(filters)) {
     return filteredVolumes.map(v => ({ isGap: false, volume: v }));
   }
   const descending = volumeSort === 'number_desc';
 
   // titled gaps ("26 (Titel)") resolve to their volume number; only regular volumes get ghost entries
-  const gapsSet = new Set(detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null));
+  const gapsSet = new Set([...detectedGapEntries.filter(e => e.type === 'volume').map(e => gapVolumeNumber(e.label)).filter(n => n !== null), ...announcedGapNumbers]);
   for (const v of filteredVolumes) {
     const n = regularVolumeNumber(v);
     if (n !== null) gapsSet.delete(n);

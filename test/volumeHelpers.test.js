@@ -127,6 +127,22 @@ test('buildDisplayVolumeItems: gaps are interleaved by number, but only when sor
     assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [{ label: 3, type: 'volume' }], detectedGaps: [3] })), ['v1', 'v3', 'v5']);
     // special-edition gaps never become ghost entries
     assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [{ label: '2 (Collectors Edition)', type: 'special_edition' }], detectedGaps: ['2 (Collectors Edition)'] })), ['v1', 'v3', 'v5']);
+    // announced volumes are drawn as ghosts (pre-orders) even when no released gap exists
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, announcedGapNumbers: [6, 7] })), ['v1', 'gap2', 'v3', 'gap4', 'v5', 'gap6', 'gap7']);
+    assert.deepEqual(shape(buildDisplayVolumeItems({ ...base, detectedGapEntries: [], detectedGaps: [], announcedGapNumbers: [6] })), ['v1', 'v3', 'v5', 'gap6']);
+});
+
+test('announcedGapNumbers: regular numbers of unreleased, uncovered official entries', async () => {
+    const { announcedGapNumbers } = await load();
+    const gaps = [
+        { volume_number: '23', type: 'volume', is_released: false, release_date: '2026-12-08' },
+        { volume_number: '24', type: 'volume', is_released: false, release_date: null },
+        { volume_number: '25', type: 'special_edition', title: 'Limited', is_released: false },
+        { volume_number: '22', type: 'volume', is_released: true }
+    ];
+    assert.deepEqual(announcedGapNumbers(gaps, []), [23, 24]);
+    assert.deepEqual(announcedGapNumbers(gaps, [{ volume_number: '23', type: 'volume', status: 'Vorbestellt' }]), [24]);
+    assert.deepEqual(announcedGapNumbers(undefined, undefined), []);
 });
 
 test('buildDisplayVolumeItems: decimals keep the order, a special edition with the same number does not hide the gap', async () => {
@@ -272,6 +288,29 @@ test('detectGapEntries: local fallback counts "Band N" but not "Starter 1"; MP g
     ]);
 });
 
+test('detectGapEntries / countAnnouncedEntries: unreleased official volumes are announced, not gaps', async () => {
+    const { detectGapEntries, countAnnouncedEntries } = await load();
+    const gaps = [
+        { volume_number: '5', type: 'volume', is_released: true },
+        { volume_number: '7', type: 'volume' },
+        { volume_number: '8', type: 'volume', is_released: false, release_date: '2026-12-08' },
+        { volume_number: '9', type: 'volume', is_released: false, release_date: null },
+        { volume_number: '10', type: 'volume', is_released: false },
+        { volume_number: '6', type: 'special_edition', title: 'Limited Edition', is_released: false },
+        { volume_number: '4', type: 'schuber', title: 'Schuber' }
+    ];
+    const volumes = [{ volume_number: '1' }, { volume_number: '10' }];
+    assert.deepEqual(detectGapEntries({ matched: true, gaps }, volumes, 12), [
+        { label: 5, type: 'volume' },
+        { label: 7, type: 'volume' },
+        { label: '4 (Schuber)', type: 'schuber' }
+    ]);
+    assert.equal(countAnnouncedEntries(gaps, volumes), 3);
+    assert.equal(countAnnouncedEntries(gaps, []), 4);
+    assert.equal(countAnnouncedEntries(undefined, volumes), 0);
+    assert.equal(countAnnouncedEntries(gaps.filter(g => g.is_released !== false), volumes), 0);
+});
+
 test('regularVolumeNumber: only "N" and "Band N" of regular volumes', async () => {
     const { regularVolumeNumber } = await load();
     assert.equal(regularVolumeNumber({ volume_number: '5' }), 5);
@@ -294,6 +333,18 @@ test('getSeriesProgress: an incomplete series never shows 100 %, a started one n
     assert.equal(pct(0, 300), 0);
     assert.equal(getSeriesProgress({ regular_owned: 0, total_volumes: 0, owned_volumes: 0 }).pct, null);
     assert.equal(getSeriesProgress({ regular_owned: 6, max_regular_number: 6, total_volumes: 5, owned_volumes: 6 }).pct, 100);
+});
+
+test('getSeriesProgress: without a known total there is no target; above one the highest owned number raises it', async () => {
+    const { getSeriesProgress } = await load();
+    assert.deepEqual(getSeriesProgress({ regular_owned: 6, max_regular_number: 6, total_volumes: null, owned_volumes: 6 }),
+        { owned: 6, total: 0, extras: 0, pct: null });
+    assert.deepEqual(getSeriesProgress({ regular_owned: 6, max_regular_number: 9, total_volumes: 0, owned_volumes: 6 }),
+        { owned: 6, total: 0, extras: 0, pct: null });
+    assert.deepEqual(getSeriesProgress({ regular_owned: 6, max_regular_number: 6, total_volumes: 22, owned_volumes: 6 }),
+        { owned: 6, total: 22, extras: 0, pct: 27 });
+    assert.deepEqual(getSeriesProgress({ regular_owned: 7, max_regular_number: 7, total_volumes: 5, owned_volumes: 7 }),
+        { owned: 7, total: 7, extras: 0, pct: 100 });
 });
 
 test('getSeriesProgress / getVolumeProgressCounts: a duplicate regular volume is no extra', async () => {

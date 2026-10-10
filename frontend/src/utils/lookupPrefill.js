@@ -22,10 +22,17 @@ export function hitToForm(hit, base = {}) {
     publisher: knownValue(hit.publisher) || base.publisher,
     status: normalizeLookupStatus(hit.status, base.status),
     total_volumes: prefillTotalVolumes(hit, base.total_volumes),
+    tags: hit.tags || '',
     description: hit.description || base.description,
     cover_image: hit.cover_image || base.cover_image,
     manga_passion_id: isMpEdition(base) ? (hit.manga_passion_id || null) : null,
     work_key: hit.source === 'manga_passion' ? null : (hit.work_key || workKeyOfHit(hit))
   };
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== undefined));
+}
+
+/** Volumes released so far of a running series hit whose total the prefill leaves open, else null. */
+export function releasedSoFar(hit) {
+  const count = Number(hit?.total_volumes);
+  return Number.isInteger(count) && count > 0 && prefillTotalVolumes(hit, '') === '' ? count : null;
 }

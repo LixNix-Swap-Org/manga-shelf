@@ -33,8 +33,13 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
     if (watched !== undefined && total !== null && episodes >= total && change.status === undefined) status = 'Gesehen';
     if (watched !== undefined && change.status === undefined && status === 'Geplant' && episodes > 0) status = 'Schaue';
     if (monotonic && change.status === undefined && episodes > current.episodes_watched && (status === 'Pausiert' || status === 'Abgebrochen')) status = 'Schaue';
-    const startedAt = current.started_at || (episodes > 0 ? day : null);
-    const finishedAt = status === 'Gesehen' ? (current.status === 'Gesehen' && current.finished_at ? current.finished_at : day) : current.finished_at;
+    if (status === 'Geplant' && episodes > 0) {
+        if (!monotonic && change.status === 'Geplant' && watched === undefined) episodes = 0;
+        else status = 'Schaue';
+    }
+    if (watched !== undefined && change.status === undefined && status === 'Gesehen' && (total === null || episodes < total)) status = 'Schaue';
+    const startedAt = status === 'Geplant' ? null : (current.started_at || (episodes > 0 ? day : null));
+    const finishedAt = status === 'Gesehen' ? (current.status === 'Gesehen' && current.finished_at ? current.finished_at : day) : null;
     let resumeUrl = current.resume_url ?? null;
     let resumeEpisode = current.resume_episode ?? null;
     // a lower shared episode (monotonic) leaves the counter and with it the resume link alone

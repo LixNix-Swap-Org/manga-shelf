@@ -224,7 +224,8 @@ function stats(ctx) {
     const settingRow = ctx.db.prepare("SELECT value FROM app_settings WHERE key = 'collection_start_date'").get();
     const storedStart = settingRow?.value;
     const now = ctx.now();
-    const startDateStr = parseStartDate(storedStart) ? storedStart : derivedStartDate(ctx, now);
+    const startStored = Boolean(parseStartDate(storedStart));
+    const startDateStr = startStored ? storedStart : derivedStartDate(ctx, now);
     const startDate = parseStartDate(startDateStr);
     const diffMs = Math.max(1, now.getTime() - startDate.getTime());
     const totalDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
@@ -308,6 +309,7 @@ function stats(ctx) {
         avg_price_per_volume: avgPricePerVolume,
         priced_owned_volumes: pricedOwnedVolumes,
         collection_start_date: startDateStr,
+        collection_start_date_source: startStored ? 'stored' : 'derived',
         collection_days: totalDays,
         collection_months: totalMonths,
         collection_years: parseFloat(totalYears),

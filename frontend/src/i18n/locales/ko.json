@@ -29,6 +29,9 @@
   "+ {n} Extras|+ {n} Extras": {
     "other": "+ 부록 {n}개"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "other": "+ {n}개 발표됨"
+  },
   "-- Keine Angabe --": "-- 선택 안 함 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "복원 후 계정 1개의 비밀번호를 재설정해야 해요 (백업에 비밀번호가 없어요): {names}.",
   "32 Zeichen aus 0–9 und a–f": "0–9와 a–f로 이루어진 32자",
@@ -207,6 +210,9 @@
   "Art des Eintrags": "항목 종류",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "“{name}” 계정에도 비밀번호가 없어요. 이후에 새 비밀번호는 다른 관리자가 사용자 관리에서 설정하거나, 서버에서 콘솔 명령 “{command}”로만 설정할 수 있어요.",
   "Auch für automatische Aktualisierungen verwenden": "자동 업데이트에도 사용",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "other": "특별판/박스 세트도 {n}개"
+  },
   "Auf Crunchyroll suchen": "Crunchyroll에서 검색",
   "Auf Einkaufsliste setzen": "쇼핑 목록에 올리기",
   "Auf Server übertragen": "서버로 전송",
@@ -250,6 +256,7 @@
     "other": "자동 맞춤: {items}에 대해 {n}줄"
   },
   "Automatisch": "자동",
+  "Automatisch aus den Daten": "데이터에서 자동으로",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "자동 일일 백업 및 스냅샷 복원",
   "Autor": "작가",
   "Autor / Mangaka": "작가 / 만화가",
@@ -536,6 +543,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "링크는 웹 버전의 “앱과 연결”(시작 페이지 아래쪽)에서 QR 코드와 복사용으로 볼 수 있어요.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "키를 Books API로 제한한 뒤 복사해서 아래에 붙여넣어 주세요.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "빠진 {volume}권을 상태 ‘{status}’(으)로 등록할까요?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "빠진 {volume}권을 쇼핑 목록에 올릴까요?",
   "Der Band existiert bereits": "이미 있는 권이에요",
   "Der Barcode-Scanner ließ sich nicht starten.": "바코드 스캐너를 시작하지 못했어요.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "바코드 스캐너를 Google Play 서비스에서 설치하는 중이에요. 잠시 후 다시 시도해 주세요.",
@@ -1013,6 +1021,7 @@
   "Geschätzter Gesamtpreis": "예상 총 가격",
   "Gesehen": "시청함",
   "Gesehene Folgen": "시청한 에피소드",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "시청한 에피소드 (지금까지 {aired}화 방영)",
   "Gesehene Folgen (von {max})": "시청한 에피소드 (최대 {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "시청한 에피소드는 0 이상의 정수여야 해요",
   "Gesetzte Tags": "설정된 태그",
@@ -1326,6 +1335,8 @@
   "Lädt… {loaded} von {total} MB": "불러오는 중… {loaded} / {total}MB",
   "Läuft": "방영 중",
   "Läuft gerade": "지금 실행 중",
+  "Läuft noch": "아직 방영 중",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "아직 방영 중이에요 – “시청함”은 마지막 화 이후에 고를 수 있어요. “시청 중”을 골라 주세요",
   "Läuft seit": "실행 시작 시각",
   "Löschen": "삭제",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "삭제는 다른 변경과 함께 처리할 수 없어요",
@@ -1400,6 +1411,7 @@
   "Mehrere Reihen passen – bitte auswählen": "여러 시리즈가 일치해요 – 선택해 주세요",
   "Mein Fortschritt": "내 진행 상황",
   "Meine": "내 것",
+  "Meine Liste": "내 목록",
   "Meine Notiz": "내 메모",
   "Meine Vorbestellungen & Budget": "내 예약 구매 & 예산",
   "Meine Vorbestellungen & Lieferungen": "내 예약 구매 & 수령",
@@ -2193,6 +2205,7 @@
   "Vom Manga ({publisher}) übernehmen": "만화({publisher})에서 가져오기",
   "Vom Server holen": "서버에서 가져오기",
   "Von Band": "시작 권",
+  "Von deiner Liste entfernt": "내 목록에서 삭제했어요",
   "Von der Wunschliste": "위시리스트에서 제거",
   "Von meiner Liste entfernen": "내 목록에서 삭제",
   "Vor Update": "업데이트 전",
@@ -2375,6 +2388,7 @@
   "aus der Umgebung gesetzt": "환경 변수로 설정됨",
   "beginnt mit „AIza“, 39 Zeichen": "“AIza”로 시작, 39자",
   "beschädigt": "손상됨",
+  "bisher {n} erschienen": "지금까지 {n}권 발매",
   "collecting::Pausiert": "일시 중지",
   "diesen Band": "이 권",
   "drei Buchstaben, z. B. EUR": "세 글자, 예: EUR",
@@ -2394,6 +2408,7 @@
   },
   "fehlt": "미보유",
   "fehlt ({count})": "미보유 ({count})",
+  "festgelegt": "설정됨",
   "freier Speicher unbekannt": "여유 공간을 알 수 없음",
   "gehört zu einem anderen Manga-Shelf-Server": "다른 Manga Shelf 서버에 속해 있어요",
   "gelesen": "읽음",
@@ -2643,11 +2658,20 @@
   "{n} Seiten|{n} Seiten": {
     "other": "{n}쪽"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "other": "특별판/박스 세트 {n}개를 상태 ‘{status}’(으)로 등록할까요?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "other": "특별판/박스 세트 {n}개를 쇼핑 목록에 올릴까요?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n}일 {hours}시간"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}일"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "other": "미보유 {n}권을 쇼핑 목록에 올릴까요?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "온라인에서 {n}건 찾았어요"
@@ -2726,6 +2750,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: {owners}에게 있어요",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: 아직 없고 쇼핑 목록에도 없어요",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} 복원하면 현재 SQLite 데이터베이스({file})와 표지 이미지가 선택한 ZIP 아카이브의 상태로 덮어써져요. 백업을 먼저 검사하고, 그 후 내용을 확인한 다음 복원을 승인해요.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "지금까지 방영된 {aired}화 중 {watched}화 시청",
   "{watched} von unbekannt vielen Folgen gesehen": "총 화수 미상 중 {watched}화 시청",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "other": "{n}화 중 {watched}화 시청"

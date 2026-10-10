@@ -31,6 +31,11 @@
     "many": "+ {n} extras",
     "other": "+ {n} extras"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} anunciado",
+    "many": "+ {n} anunciados",
+    "other": "+ {n} anunciados"
+  },
   "-- Keine Angabe --": "-- Não informado --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 conta precisa de redefinição de senha após a restauração (sem senha no backup): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caracteres de 0–9 e a–f",
@@ -209,6 +214,11 @@
   "Art des Eintrags": "Tipo do item",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Sua conta “{name}” também não tem senha nele: depois, uma nova só pode ser definida por outro administrador no gerenciamento de usuários ou pelo comando de console “{command}” no servidor.",
   "Auch für automatische Aktualisierungen verwenden": "Usar também para atualizações automáticas",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Também {n} edição especial/box set",
+    "many": "Também {n} edições especiais/box sets",
+    "other": "Também {n} edições especiais/box sets"
+  },
   "Auf Crunchyroll suchen": "Buscar no Crunchyroll",
   "Auf Einkaufsliste setzen": "Colocar na lista de compras",
   "Auf Server übertragen": "Enviar ao servidor",
@@ -254,6 +264,7 @@
     "other": "Auto-Fit: {n} linhas para {items}"
   },
   "Automatisch": "Automático",
+  "Automatisch aus den Daten": "Automaticamente a partir dos dados",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Backups diários automáticos e restauração de snapshots",
   "Autor": "Autor",
   "Autor / Mangaka": "Autor / Mangaká",
@@ -558,6 +569,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "O link aparece na versão web em “Conectar ao app” (no fim da página inicial), como QR code e para copiar.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Restrinja a chave à Books API, copie-a e cole abaixo.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Registrar o volume {volume}, que está faltando, com o status “{status}”?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Colocar o volume {volume}, que está faltando, na lista de compras?",
   "Der Band existiert bereits": "O volume já existe",
   "Der Barcode-Scanner ließ sich nicht starten.": "Não foi possível iniciar o leitor de código de barras.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "O leitor de código de barras está sendo instalado pelos serviços do Google Play. Tente novamente em instantes.",
@@ -1043,6 +1055,7 @@
   "Geschätzter Gesamtpreis": "Preço total estimado",
   "Gesehen": "Assistido",
   "Gesehene Folgen": "Episódios assistidos",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Episódios assistidos ({aired} exibidos até agora)",
   "Gesehene Folgen (von {max})": "Episódios assistidos (de {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Os episódios assistidos devem ser um inteiro a partir de 0",
   "Gesetzte Tags": "Tags definidas",
@@ -1366,6 +1379,8 @@
   "Lädt… {loaded} von {total} MB": "Baixando… {loaded} de {total} MB",
   "Läuft": "Em exibição",
   "Läuft gerade": "Em execução agora",
+  "Läuft noch": "Ainda em exibição",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Ainda em exibição – “Assistido” só é possível depois do último episódio; escolha “Assistindo”",
   "Läuft seit": "Em execução desde",
   "Löschen": "Excluir",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "A exclusão não pode ser combinada com outras alterações",
@@ -1446,6 +1461,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Várias séries correspondem – escolha uma",
   "Mein Fortschritt": "Meu progresso",
   "Meine": "Meus",
+  "Meine Liste": "Minha lista",
   "Meine Notiz": "Minha nota",
   "Meine Vorbestellungen & Budget": "Minhas pré-encomendas e orçamento",
   "Meine Vorbestellungen & Lieferungen": "Minhas pré-encomendas e entregas",
@@ -2259,6 +2275,7 @@
   "Vom Manga ({publisher}) übernehmen": "Adotar do mangá ({publisher})",
   "Vom Server holen": "Buscar do servidor",
   "Von Band": "Do volume",
+  "Von deiner Liste entfernt": "Removido da sua lista",
   "Von der Wunschliste": "Remover da lista de desejos",
   "Von meiner Liste entfernen": "Remover da minha lista",
   "Vor Update": "Antes da atualização",
@@ -2449,6 +2466,7 @@
   "aus der Umgebung gesetzt": "definida pelo ambiente",
   "beginnt mit „AIza“, 39 Zeichen": "começa com “AIza”, 39 caracteres",
   "beschädigt": "corrompido",
+  "bisher {n} erschienen": "{n} lançados até agora",
   "collecting::Pausiert": "Pausado",
   "diesen Band": "este volume",
   "drei Buchstaben, z. B. EUR": "três letras, p. ex. EUR",
@@ -2470,6 +2488,7 @@
   },
   "fehlt": "falta",
   "fehlt ({count})": "falta ({count})",
+  "festgelegt": "definido",
   "freier Speicher unbekannt": "espaço livre desconhecido",
   "gehört zu einem anderen Manga-Shelf-Server": "pertence a outro servidor Manga Shelf",
   "gelesen": "lido",
@@ -2763,6 +2782,16 @@
     "many": "{n} páginas",
     "other": "{n} páginas"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "Registrar {n} edição especial/box set com o status “{status}”?",
+    "many": "Registrar {n} edições especiais/box sets com o status “{status}”?",
+    "other": "Registrar {n} edições especiais/box sets com o status “{status}”?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "Colocar {n} edição especial/box set na lista de compras?",
+    "many": "Colocar {n} edições especiais/box sets na lista de compras?",
+    "other": "Colocar {n} edições especiais/box sets na lista de compras?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} dia {hours} h",
     "many": "{n} dias {hours} h",
@@ -2772,6 +2801,11 @@
     "one": "{n} dia",
     "many": "{n} dias",
     "other": "{n} dias"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "Colocar {n} volume faltando na lista de compras?",
+    "many": "Colocar {n} volumes faltando na lista de compras?",
+    "other": "Colocar {n} volumes faltando na lista de compras?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} resultado encontrado online",
@@ -2864,6 +2898,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: possuído por {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: ainda falta e não está na lista de compras",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} A restauração sobrescreve o banco de dados SQLite atual ({file}) e as imagens de capa com o estado do arquivo ZIP escolhido. O backup é verificado primeiro; depois você vê o que ele contém e confirma a restauração.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "{watched} episódios assistidos dos {aired} exibidos até agora",
   "{watched} von unbekannt vielen Folgen gesehen": "{watched} de um número desconhecido de episódios assistidos",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "{watched} de {n} episódio assistido",

@@ -351,6 +351,20 @@ describe('missing volumes keep full-strength text (contrast)', () => {
   });
 });
 
+describe('grid publisher chips', () => {
+  it('take the full row width instead of a fixed 110 px, still truncated with the name as title', () => {
+    render(<VolumeGridView {...viewProps({ manga: { ...manga, publisher: 'Panini Verlags GmbH' }, displayVolumeItems: [
+      { isGap: false, volume: vol() }, { isGap: true, gapNumber: 6 }
+    ] })} />);
+    const chips = screen.getAllByTitle('Verlag: Panini Verlags GmbH');
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) {
+      expect(classesOf(chip)).toEqual(expect.arrayContaining(['truncate', 'max-w-full']));
+      expect(classesOf(chip).some((c) => c.startsWith('max-w-['))).toBe(false);
+    }
+  });
+});
+
 describe('touch hit areas on the series page', () => {
   it('grid: read chip, "Band N erfassen" and the selection checkbox', () => {
     const { rerender } = render(<VolumeGridView {...viewProps({ displayVolumeItems: [{ isGap: false, volume: vol() }, { isGap: true, gapNumber: 6 }] })} />);

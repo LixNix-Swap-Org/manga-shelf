@@ -6,7 +6,8 @@ import { isValidPriceInput } from './volumeEdit/editorUtils';
 import { apiFetch, readJson, TIMEOUTS } from '../../utils/api';
 import { t as tr, tn } from '../../i18n/index.js';
 import { currencySymbol, formatNumber } from '../../utils/format';
-import { editionCurrency } from '../../utils/editions';
+import { editionCurrency, isMpEdition } from '../../utils/editions';
+import { regularVolumeNumber } from '../../utils/volumeHelpers';
 
 export const MAX_BATCH_VOLUMES = 300;
 
@@ -21,6 +22,15 @@ export function validateBatchRange(from, to) {
   if (start > end) return tr('„Von Band“ darf nicht größer als „Bis Band“ sein.');
   if (end - start + 1 > MAX_BATCH_VOLUMES) return tr('Höchstens {max} Bände auf einmal.', { max: MAX_BATCH_VOLUMES });
   return null;
+}
+
+/** Initial range: after the highest regular volume up to the known total (else ten volumes), capped at MAX_BATCH_VOLUMES. */
+export function batchDefaults(volumes, totalVolumes, officialTotal) {
+  const highest = (Array.isArray(volumes) ? volumes : []).reduce((max, vol) => Math.max(max, regularVolumeNumber(vol) ?? 0), 0);
+  const from = highest + 1;
+  const known = Math.max(Number(totalVolumes) || 0, Number(officialTotal) || 0);
+  const to = Math.min(known >= from ? known : from + 9, from + MAX_BATCH_VOLUMES - 1);
+  return { from: String(from), to: String(to) };
 }
 
 /** "3 Bände angelegt, übersprungen (schon vorhanden): 4, 5" from the batch response. */
@@ -41,9 +51,10 @@ const pillClass = (active, tone) => `py-2 px-2.5 rounded-lg text-xs font-bold tr
     : 'text-slate-400 hover:text-slate-200 border border-transparent'
 }`;
 
-export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess }) {
-  const [batchFrom, setBatchFrom] = useState('1');
-  const [batchTo, setBatchTo] = useState('10');
+export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess, volumes, officialTotal }) {
+  const [initialRange] = useState(() => batchDefaults(volumes, manga?.total_volumes, officialTotal));
+  const [batchFrom, setBatchFrom] = useState(initialRange.from);
+  const [batchTo, setBatchTo] = useState(initialRange.to);
   const [batchStatus, setBatchStatus] = useState('Vorhanden');
   const [batchPrice, setBatchPrice] = useState('');
   const [batchPublisher, setBatchPublisher] = useState('');
@@ -85,13 +96,16 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
           to: parseInt(batchTo, 10),
           status: batchStatus,
           default_price: batchPrice.trim() || null,
-          publisher: batchPublisher.trim() || null,
+          publisher: batchPublisher.trim() || manga?.publisher || null,
           condition: batchCondition.trim() || null
         },
         timeout: TIMEOUTS.long
       });
       if (res.ok) {
         const data = (await readJson(res)) ?? {};
+        if ((Number(data.created) || 0) > 0 && isMpEdition(manga) && manga?.manga_passion_id) {
+          await apiFetch(`/api/mangas/${mangaId}/autofill-volumes`, { method: 'POST', body: {}, timeout: TIMEOUTS.lookup }).catch(() => null);
+        }
         setBatchPrice('');
         setBatchPublisher('');
         setBatchCondition('');

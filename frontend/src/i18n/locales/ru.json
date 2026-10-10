@@ -32,6 +32,12 @@
     "many": "+ {n} экстра",
     "other": "+ {n} экстра"
   },
+  "+ {n} angekündigt|+ {n} angekündigt": {
+    "one": "+ {n} анонсировано",
+    "few": "+ {n} анонсировано",
+    "many": "+ {n} анонсировано",
+    "other": "+ {n} анонсировано"
+  },
   "-- Keine Angabe --": "— Не указано —",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "После восстановления 1 аккаунту нужен сброс пароля (в резервной копии нет пароля): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 символа из 0–9 и a–f",
@@ -210,6 +216,12 @@
   "Art des Eintrags": "Тип записи",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "В ней у вашего аккаунта «{name}» тоже нет пароля: новый потом сможет задать только другой администратор в управлении пользователями или консольная команда «{command}» на сервере.",
   "Auch für automatische Aktualisierungen verwenden": "Использовать и для автоматических обновлений",
+  "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
+    "one": "Ещё {n} особое издание/бокс-сет",
+    "few": "Ещё {n} особых издания/бокс-сета",
+    "many": "Ещё {n} особых изданий/бокс-сетов",
+    "other": "Ещё {n} особых издания/бокс-сета"
+  },
   "Auf Crunchyroll suchen": "Искать на Crunchyroll",
   "Auf Einkaufsliste setzen": "В список покупок",
   "Auf Server übertragen": "Перенести на сервер",
@@ -256,6 +268,7 @@
     "other": "Автоподбор: {n} серии для {items}"
   },
   "Automatisch": "Автоматически",
+  "Automatisch aus den Daten": "Автоматически по данным",
   "Automatische Tagessicherungen und Snapshot-Wiederherstellung": "Автоматические ежедневные копии и восстановление из снимков",
   "Autor": "Автор",
   "Autor / Mangaka": "Автор / мангака",
@@ -569,6 +582,7 @@
   "Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.": "Ссылку показывает веб-версия в разделе «Подключить приложение» (внизу главной страницы) в виде QR-кода и для копирования.",
   "Den Schlüssel auf die Books API einschränken, kopieren und unten einfügen.": "Ограничьте ключ Books API, скопируйте его и вставьте ниже.",
   "Den fehlenden Band {volume} auf Status '{status}' erfassen?": "Внести отсутствующий том {volume} со статусом «{status}»?",
+  "Den fehlenden Band {volume} auf die Einkaufsliste setzen?": "Добавить отсутствующий том {volume} в список покупок?",
   "Der Band existiert bereits": "Том уже существует",
   "Der Barcode-Scanner ließ sich nicht starten.": "Не удалось запустить сканер штрихкодов.",
   "Der Barcode-Scanner wird gerade über die Google Play-Dienste installiert. Bitte gleich noch einmal versuchen.": "Сканер штрихкодов сейчас устанавливается через сервисы Google Play. Повторите попытку чуть позже.",
@@ -1058,6 +1072,7 @@
   "Geschätzter Gesamtpreis": "Примерная общая цена",
   "Gesehen": "Просмотрено",
   "Gesehene Folgen": "Просмотренные эпизоды",
+  "Gesehene Folgen (bisher {aired} ausgestrahlt)": "Просмотренные эпизоды (вышло {aired})",
   "Gesehene Folgen (von {max})": "Просмотренные эпизоды (из {max})",
   "Gesehene Folgen müssen eine ganze Zahl ab 0 sein": "Просмотренные эпизоды должны быть целым числом от 0",
   "Gesetzte Tags": "Заданные теги",
@@ -1386,6 +1401,8 @@
   "Lädt… {loaded} von {total} MB": "Загрузка… {loaded} из {total} МБ",
   "Läuft": "Выходит",
   "Läuft gerade": "Выполняется сейчас",
+  "Läuft noch": "Ещё выходит",
+  "Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“": "Ещё выходит — «Просмотрено» можно выбрать только после последнего эпизода; выберите «Смотрю»",
   "Läuft seit": "Работает с",
   "Löschen": "Удалить",
   "Löschen lässt sich nicht mit anderen Änderungen verbinden": "Удаление нельзя сочетать с другими изменениями",
@@ -1469,6 +1486,7 @@
   "Mehrere Reihen passen – bitte auswählen": "Подходит несколько серий — выберите",
   "Mein Fortschritt": "Мой прогресс",
   "Meine": "Мои",
+  "Meine Liste": "Мой список",
   "Meine Notiz": "Моя заметка",
   "Meine Vorbestellungen & Budget": "Мои предзаказы и бюджет",
   "Meine Vorbestellungen & Lieferungen": "Мои предзаказы и поставки",
@@ -2292,6 +2310,7 @@
   "Vom Manga ({publisher}) übernehmen": "Взять из манги ({publisher})",
   "Vom Server holen": "Получить с сервера",
   "Von Band": "С тома",
+  "Von deiner Liste entfernt": "Убрано из вашего списка",
   "Von der Wunschliste": "Убрать из списка желаемого",
   "Von meiner Liste entfernen": "Убрать из моего списка",
   "Vor Update": "Перед обновлением",
@@ -2486,6 +2505,7 @@
   "aus der Umgebung gesetzt": "задан из окружения",
   "beginnt mit „AIza“, 39 Zeichen": "начинается с «AIza», 39 символов",
   "beschädigt": "повреждён",
+  "bisher {n} erschienen": "пока вышло: {n}",
   "collecting::Pausiert": "На паузе",
   "diesen Band": "этот том",
   "drei Buchstaben, z. B. EUR": "три буквы, например EUR",
@@ -2508,6 +2528,7 @@
   },
   "fehlt": "нет",
   "fehlt ({count})": "нет ({count})",
+  "festgelegt": "задано",
   "freier Speicher unbekannt": "свободное место неизвестно",
   "gehört zu einem anderen Manga-Shelf-Server": "принадлежит другому серверу Manga Shelf",
   "gelesen": "прочитано",
@@ -2823,6 +2844,18 @@
     "many": "{n} страниц",
     "other": "{n} страницы"
   },
+  "{n} Sonderausgabe/Schuber auf Status '{status}' erfassen?|{n} Sonderausgaben/Schuber auf Status '{status}' erfassen?": {
+    "one": "Внести {n} особое издание/бокс-сет со статусом «{status}»?",
+    "few": "Внести {n} особых издания/бокс-сета со статусом «{status}»?",
+    "many": "Внести {n} особых изданий/бокс-сетов со статусом «{status}»?",
+    "other": "Внести {n} особых издания/бокс-сета со статусом «{status}»?"
+  },
+  "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
+    "one": "Добавить {n} особое издание/бокс-сет в список покупок?",
+    "few": "Добавить {n} особых издания/бокс-сета в список покупок?",
+    "many": "Добавить {n} особых изданий/бокс-сетов в список покупок?",
+    "other": "Добавить {n} особых издания/бокс-сета в список покупок?"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} день {hours} ч",
     "few": "{n} дня {hours} ч",
@@ -2834,6 +2867,12 @@
     "few": "{n} дня",
     "many": "{n} дней",
     "other": "{n} дня"
+  },
+  "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
+    "one": "Добавить {n} недостающий том в список покупок?",
+    "few": "Добавить {n} недостающих тома в список покупок?",
+    "many": "Добавить {n} недостающих томов в список покупок?",
+    "other": "Добавить {n} недостающего тома в список покупок?"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "Найдено онлайн: {n}",
@@ -2933,6 +2972,7 @@
   "{volume}: bei {owners} vorhanden": "{volume}: есть у {owners}",
   "{volume}: fehlt noch und steht nicht auf der Einkaufsliste": "{volume}: ещё нет и не в списке покупок",
   "{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.": "{warning} Загрузка перезапишет текущую базу данных SQLite ({file}) и обложки состоянием из выбранного ZIP-архива. Резервная копия сначала проверяется; затем вы увидите, что в ней, и подтвердите восстановление.",
+  "{watched} von bisher {aired} ausgestrahlten Folgen gesehen": "Просмотрено эпизодов: {watched} из {aired} вышедших",
   "{watched} von unbekannt vielen Folgen gesehen": "Просмотрено эпизодов: {watched} (всего неизвестно)",
   "{watched} von {n} Folgen gesehen|{watched} von {n} Folgen gesehen": {
     "one": "{watched} из {n} эпизода просмотрено",
