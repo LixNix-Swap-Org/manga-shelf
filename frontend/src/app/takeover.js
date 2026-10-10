@@ -104,7 +104,7 @@ export const serverHasData = (inspect) => Boolean(inspect?.current_counts)
 
 /** Step 2: restores what step 1 staged; afterwards the app signs in again (the restore ended every session). */
 export async function finishTransfer(session, stagingId, { username, password }) {
-  const result = await call(session, `/api/backup/restore/${encodeURIComponent(stagingId)}`, { method: 'POST', body: {} });
+  const result = await call(session, `/api/backup/restore/${encodeURIComponent(stagingId)}`, { method: 'POST', body: { current_password: password } });
   const again = await remoteLogin({ url: session.base, username, password, fetchImpl: session.fetchImpl });
   return { result, session: again };
 }

@@ -1,13 +1,15 @@
 // JWT auth: sessions are cookie or bearer tokens bound to users.password_changed_at; the signing secret lives in a file.
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const { db, dataDir } = require('../db');
 const { config } = require('../utils/config');
 const log = require('../utils/logger').child('auth');
 const { bearerToken } = require('./originCheck');
-const { AUTH_TEXTS } = require('../core/errors');
+const { loginGuard, accountKey, clientIp } = require('./rateLimit');
+const { AUTH_TEXTS, HttpError, badRequest } = require('../core/errors');
 
 // An explicit JWT_SECRET is only accepted if it is long enough and not a well-known placeholder from the repo;
 // otherwise a random secret is kept in <DATA_DIR>/secret.key. Never in the database: backups would carry it.
@@ -222,6 +224,31 @@ const AUTH_ERRORS = {
 };
 const authError = (res, status, code) => res.status(status).json({ error: AUTH_ERRORS[code], code });
 
+const CURRENT_PASSWORD_MISSING = 'Bitte das aktuelle Passwort eingeben';
+const WRONG_PASSWORD = 'Das aktuelle Passwort stimmt nicht';
+const PASSWORD_LOCK_TEXTS = {
+    signIn: 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.',
+    passwordChange: 'Zu viele Versuche, das Passwort zu ändern. Bitte in einigen Minuten erneut versuchen.'
+};
+
+/** Checks the caller's current password under the sign-in lock; throws 400, 403 or 429 (Retry-After), returns the user row. */
+async function confirmCurrentPassword(req, res, password, { lock = 'signIn' } = {}) {
+    if (typeof password !== 'string' || !password) throw badRequest(CURRENT_PASSWORD_MISSING);
+    const user = db.prepare('SELECT id, username, role, password_hash FROM users WHERE id = ?').get(req.user.id);
+    if (!user) throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
+    const account = accountKey(user.username);
+    const ip = clientIp(req);
+    const state = loginGuard.check(account, ip);
+    if (state.locked) {
+        res.setHeader('Retry-After', state.retryAfter);
+        throw new HttpError(429, PASSWORD_LOCK_TEXTS[lock], 'TOO_MANY_ATTEMPTS');
+    }
+    loginGuard.attempt(account, ip);
+    if (!(await bcrypt.compare(password, user.password_hash))) throw new HttpError(403, WRONG_PASSWORD, 'WRONG_PASSWORD');
+    loginGuard.succeeded(account, ip);
+    return user;
+}
+
 const requireAuth = (req, res, next) => {
     const { token, scheme } = sessionFromRequest(req);
     if (!token) return authError(res, 401, 'AUTH_REQUIRED');
@@ -272,6 +299,7 @@ module.exports = {
     endSession,
     tokenFromRequest,
     sameUsername,
+    confirmCurrentPassword,
     setAuthCookie,
     clearAuthCookie,
     requireAuth,

@@ -64,9 +64,11 @@ async function snapshotDbBuffer(mutate) {
     return data;
 }
 
+const PASSWORD = { current_password: 'password123' };
+
 async function uploadZip(buffer, url = '/backup/restore', fields = {}) {
     const fd = new FormData();
-    for (const [key, value] of Object.entries(fields)) fd.append(key, value);
+    for (const [key, value] of Object.entries(url === '/backup/inspect' ? fields : { ...PASSWORD, ...fields })) fd.append(key, value);
     fd.append('backup', new Blob([buffer], { type: 'application/zip' }), 'backup.zip');
     const res = await fetch(ctx.base + url, { method: 'POST', headers: { Cookie: admin.cookie }, body: fd });
     const set = res.headers.get('set-cookie');
@@ -164,7 +166,7 @@ test('migration v14 skips the index with a warning when case duplicates exist an
 test('the session issued after a restore carries the session claims and survives', async () => {
     const jwt = require('jsonwebtoken');
     const snapshot = await createSnapshot();
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 200);
     assert.equal(res.body.relogin, false);
     const claims = jwt.decode(admin.cookie.slice('token='.length));
@@ -284,7 +286,7 @@ test('a failure after the swap rolls back to the previous database and removes t
     auth.persistJwtSecret = () => { throw new Error('persist failed'); };
     let res;
     try {
-        res = await admin('POST', `/backups/${snapshot}/restore`);
+        res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     } finally {
         auth.persistJwtSecret = original;
     }
@@ -311,7 +313,7 @@ test('if the rollback itself fails, manga.db.bak is kept for manual recovery', a
     };
     let res;
     try {
-        res = await admin('POST', `/backups/${snapshot}/restore`);
+        res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     } finally {
         auth.persistJwtSecret = originalPersist;
         fs.copyFileSync = originalCopy;
@@ -319,7 +321,7 @@ test('if the rollback itself fails, manga.db.bak is kept for manual recovery', a
     assert.equal(res.status, 500);
     assert.ok(fs.existsSync(bak), 'the safety copy survives a failed rollback');
 
-    const blocked = await admin('POST', `/backups/${snapshot}/restore`);
+    const blocked = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(blocked.status, 503);
     assert.match(blocked.body.error, /manga\.db\.bak/);
     const upload = await uploadZip(zipOf({ 'manga.db': fs.readFileSync(bak) }).toBuffer());
@@ -333,7 +335,7 @@ test('if the rollback itself fails, manga.db.bak is kept for manual recovery', a
     fs.unlinkSync(bak);
     dbm.initDb();
     assert.equal(mangaCount(), before);
-    assert.equal((await admin('POST', `/backups/${snapshot}/restore`)).status, 200, 'restores work again once the copy is dealt with');
+    assert.equal((await admin('POST', `/backups/${snapshot}/restore`, PASSWORD)).status, 200, 'restores work again once the copy is dealt with');
 });
 
 test('initDb refuses to create an empty database while manga.db.bak waits for recovery', () => {
@@ -365,14 +367,14 @@ test('a failing safety copy leaves no staged files behind and keeps the live dat
         if (String(dest).endsWith('manga.db.bak.tmp')) throw Object.assign(new Error('EIO: copy failed'), { code: 'EIO' });
         return copy(src, dest, ...rest);
     });
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 500);
     assert.deepEqual(dataFiles().filter(f => f.includes('restore-tmp') || f.startsWith('manga.db.bak')), []);
     const list = await admin('GET', '/mangas');
     assert.equal(list.status, 200);
     assert.equal(mangaCount(), before);
     t.mock.restoreAll();
-    assert.equal((await admin('POST', `/backups/${snapshot}/restore`)).status, 200);
+    assert.equal((await admin('POST', `/backups/${snapshot}/restore`, PASSWORD)).status, 200);
 });
 
 test('restore limits are enforced on the inflated size, not on what the archive claims', async () => {
@@ -480,7 +482,7 @@ test('a snapshot deleted while it is extracted still restores (entries are read 
         if (args[0] === file) fs.unlinkSync(file);
         return fh;
     });
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.ok(!fs.existsSync(file));
     assert.equal(fs.readFileSync(cover, 'utf8'), 'jpeg bytes');
@@ -501,7 +503,7 @@ test('retention pruning during a restore keeps the snapshot being restored', asy
         }
         return open.apply(fs.promises, args);
     });
-    const res = await admin('POST', `/backups/${older}/restore`);
+    const res = await admin('POST', `/backups/${older}/restore`, PASSWORD);
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(runningDuringRestore, true);
     assert.equal(routes.isRestoreRunning(), false);
@@ -546,7 +548,7 @@ test('a snapshot round-trip restores the covers it contains', async () => {
     fs.writeFileSync(cover, 'jpeg bytes');
     const snapshot = await createSnapshot();
     fs.unlinkSync(cover);
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 200);
     assert.ok(res.body.restoredImagesCount >= 1);
     assert.equal(fs.readFileSync(cover, 'utf8'), 'jpeg bytes');
@@ -555,15 +557,15 @@ test('a snapshot round-trip restores the covers it contains', async () => {
 test('a request running in parallel to a restore is answered normally', async () => {
     const snapshot = await createSnapshot();
     const [restore, list] = await Promise.all([
-        admin('POST', `/backups/${snapshot}/restore`),
+        admin('POST', `/backups/${snapshot}/restore`, PASSWORD),
         admin('GET', '/backups')
     ]);
     assert.equal(restore.status, 200);
     assert.equal(list.status, 200);
 
     const results = await Promise.all([
-        admin('POST', `/backups/${snapshot}/restore`),
-        admin('POST', `/backups/${snapshot}/restore`)
+        admin('POST', `/backups/${snapshot}/restore`, PASSWORD),
+        admin('POST', `/backups/${snapshot}/restore`, PASSWORD)
     ]);
     const statuses = results.map(r => r.status).sort();
     assert.ok(statuses[0] === 200 && [200, 409].includes(statuses[1]), statuses.join(','));
@@ -710,7 +712,7 @@ test('every restore takes a DB-only pre-restore snapshot that undoes it', async 
     const snapshot = await createSnapshot();
     seedMangas(4, 'Nach dem Snapshot (Undo)');
     const before = mangaCount();
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const pre = res.body.preRestoreSnapshot;
     assert.match(pre, /^vor-wiederherstellung-\d{4}-.*Z\.zip$/);
@@ -723,7 +725,7 @@ test('every restore takes a DB-only pre-restore snapshot that undoes it', async 
     assert.equal(listed.verified, true);
     assert.equal(listed.manifest.counts.mangas, before);
 
-    const undo = await admin('POST', `/backups/${pre}/restore`);
+    const undo = await admin('POST', `/backups/${pre}/restore`, PASSWORD);
     assert.equal(undo.status, 200, JSON.stringify(undo.body));
     assert.equal(mangaCount(), before);
     assert.match(undo.body.preRestoreSnapshot, /^vor-wiederherstellung-/);
@@ -735,7 +737,7 @@ test('a restore whose safety snapshot fails is aborted before the live database 
     const before = mangaCount();
     const archive = require('../services/backupArchive');
     t.mock.method(archive, 'verifyArchive', async () => ({ verified: false, error: 'kaputt', verified_at: new Date().toISOString() }));
-    const res = await admin('POST', `/backups/${snapshot}/restore`);
+    const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(res.status, 500);
     assert.match(res.body.error, /Details im Server-Log/);
     assert.equal(mangaCount(), before);
@@ -747,7 +749,7 @@ test('a leftover manga.db.bak blocks every restore, also after a restart (state 
     const bak = path.join(ctx.dataDir, 'manga.db.bak');
     fs.writeFileSync(bak, 'only good copy');
     try {
-        const res = await admin('POST', `/backups/${snapshot}/restore`);
+        const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
         assert.equal(res.status, 503);
         assert.equal(res.body.code, 'ROLLBACK_COPY_PENDING');
         assert.match(res.body.error, /manga\.db\.bak/);
@@ -760,7 +762,7 @@ test('a leftover manga.db.bak blocks every restore, also after a restart (state 
     } finally {
         fs.rmSync(bak, { force: true });
     }
-    assert.equal((await admin('POST', `/backups/${snapshot}/restore`)).status, 200);
+    assert.equal((await admin('POST', `/backups/${snapshot}/restore`, PASSWORD)).status, 200);
 });
 
 test('a backup from a newer schema is refused unless explicitly allowed', async () => {
@@ -780,16 +782,100 @@ test('a backup from a newer schema is refused unless explicitly allowed', async 
         assert.equal(inspected.status, 200);
         assert.equal(inspected.body.schema_newer, true);
         assert.ok(inspected.body.warnings.some(w => /neueren Version/.test(w)));
-        const step2 = await admin('POST', `/backup/restore/${inspected.body.staging_id}`);
+        const step2 = await admin('POST', `/backup/restore/${inspected.body.staging_id}`, PASSWORD);
         assert.equal(step2.status, 400);
         assert.equal(step2.body.code, 'SCHEMA_NEWER');
-        const forced = await admin('POST', `/backup/restore/${inspected.body.staging_id}`, { allow_newer_schema: true });
+        const forced = await admin('POST', `/backup/restore/${inspected.body.staging_id}`, { ...PASSWORD, allow_newer_schema: true });
         assert.equal(forced.status, 200, JSON.stringify(forced.body));
 
         const viaForm = await uploadZip(zipOf({ 'manga.db': data }).toBuffer(), '/backup/restore', { allow_newer_schema: 'true' });
         assert.equal(viaForm.status, 200, JSON.stringify(viaForm.body));
+        assert.equal(dbm.db.prepare("SELECT value FROM app_settings WHERE key = 'schema_newer_accepted'").get().value, '999',
+            'the consent travels with the restored database');
+        dbm.initDb();
+        assert.equal((await admin('GET', '/mangas')).status, 200, 'a restart opens the accepted newer schema');
     } finally {
         dbm.db.prepare('DELETE FROM schema_migrations WHERE version = 999').run();
+        dbm.db.prepare("DELETE FROM app_settings WHERE key = 'schema_newer_accepted'").run();
+    }
+});
+
+test('while an update is applied, backup changes refuse with 409 UPDATE_RUNNING before any upload is read', async () => {
+    const lock = require('../services/update/lock');
+    const snapshot = await createSnapshot();
+    const inspected = await admin('POST', '/backup/inspect', { filename: snapshot });
+    assert.equal(inspected.status, 200);
+    const files = fs.readdirSync(path.join(ctx.dataDir, 'backups')).sort();
+    const before = mangaCount();
+    lock.setPhase('ready');
+    lock.begin('applying');
+    try {
+        const answers = [
+            await admin('POST', '/backups/create'),
+            await admin('DELETE', `/backups/${snapshot}`),
+            await admin('POST', `/backups/${snapshot}/restore`, PASSWORD),
+            await admin('POST', '/backup/inspect', { filename: snapshot }),
+            await admin('POST', `/backup/restore/${inspected.body.staging_id}`, PASSWORD),
+            await uploadZip(Buffer.from('kein zip'), '/backup/restore'),
+            await uploadZip(Buffer.from('kein zip'), '/restore'),
+            await uploadZip(Buffer.from('kein zip'), '/backup/inspect')
+        ];
+        for (const res of answers) {
+            assert.equal(res.status, 409, JSON.stringify(res.body));
+            assert.equal(res.body.code, 'UPDATE_RUNNING');
+            assert.match(res.body.error, /Gerade läuft ein Update/);
+        }
+        assert.equal((await admin('GET', '/backups')).status, 200, 'reading stays possible');
+        await assert.rejects(require('../services/restore').restoreFromZip(path.join(ctx.dataDir, 'backups', snapshot)), (err) => err.code === 'UPDATE_RUNNING');
+    } finally {
+        lock.release();
+    }
+    assert.deepEqual(fs.readdirSync(path.join(ctx.dataDir, 'backups')).sort(), files);
+    assert.equal(mangaCount(), before);
+    assert.deepEqual(fs.readdirSync(dbm.tempDir).filter(f => /^restore-[0-9a-f-]+\.zip$/.test(f)), [], 'multer never wrote the uploads');
+    assert.equal((await admin('POST', `/backup/restore/${inspected.body.staging_id}`, PASSWORD)).status, 200, 'the staging survived the refusal');
+});
+
+test('maintenance: writes get 503 MAINTENANCE with Retry-After, reads and the update endpoints pass', async () => {
+    const lock = require('../services/update/lock');
+    lock.setMaintenance(true);
+    try {
+        const refused = await fetch(ctx.base + '/backups/create', { method: 'POST', headers: { Cookie: admin.cookie } });
+        assert.equal(refused.status, 503);
+        assert.equal(refused.headers.get('retry-after'), '60');
+        const body = await refused.json();
+        assert.equal(body.code, 'MAINTENANCE');
+        assert.match(body.error, /wird gerade aktualisiert/);
+        assert.equal((await admin('PUT', '/mangas/1', { title: 'x' })).status, 503);
+        assert.equal((await admin('POST', '/auth/logout')).status, 503);
+        assert.equal((await admin('GET', '/backups')).status, 200);
+        assert.equal((await admin('GET', '/health')).status, 200);
+        assert.notEqual((await admin('POST', '/system/update/nicht-da')).status, 503);
+    } finally {
+        lock.release();
+    }
+    assert.equal((await admin('POST', '/backups/create')).status, 200);
+});
+
+test('the backup an update still needs cannot be deleted until the update is confirmed', async () => {
+    const snapshot = await createSnapshot();
+    const stateFile = path.join(ctx.dataDir, 'update-state.json');
+    const state = {
+        format: 1, phase: 'started', mode: 'pterodactyl', restart: 'pterodactyl', from: '3.0.0', to: '3.0.1', at: new Date().toISOString(),
+        user: 1, pid: 1, schema_before: 1, backup: { file: snapshot, sha256: 'a'.repeat(64) }, previous: { sha256: 'b'.repeat(64) }, attempts: 0
+    };
+    fs.writeFileSync(stateFile, JSON.stringify(state));
+    try {
+        const held = await admin('DELETE', `/backups/${snapshot}`);
+        assert.equal(held.status, 409);
+        assert.equal(held.body.code, 'BACKUP_HELD');
+        assert.match(held.body.error, /gehört zum laufenden Update/);
+        assert.ok(fs.existsSync(backupsPath(snapshot)));
+        fs.writeFileSync(stateFile, JSON.stringify({ ...state, phase: 'confirmed' }));
+        assert.equal((await admin('DELETE', `/backups/${snapshot}`)).status, 200);
+        assert.ok(!fs.existsSync(backupsPath(snapshot)));
+    } finally {
+        fs.rmSync(stateFile, { force: true });
     }
 });
 
@@ -823,14 +909,14 @@ test('inspect stages an uploaded backup, reports its content and restores it in 
     assert.equal(mangaCount(), live, 'inspect never touches the live database');
     assert.deepEqual(stagedFiles(), [`restore-staged-${b.staging_id}.zip`]);
 
-    const done = await admin('POST', `/backup/restore/${b.staging_id}`);
+    const done = await admin('POST', `/backup/restore/${b.staging_id}`, PASSWORD);
     assert.equal(done.status, 200, JSON.stringify(done.body));
     assert.equal(done.body.mangaCount, expected);
     assert.equal(done.body.restoredImagesCount, 1);
     assert.match(done.body.preRestoreSnapshot, /^vor-wiederherstellung-/);
     assert.equal(mangaCount(), expected);
     assert.deepEqual(stagedFiles(), []);
-    const again = await admin('POST', `/backup/restore/${b.staging_id}`);
+    const again = await admin('POST', `/backup/restore/${b.staging_id}`, PASSWORD);
     assert.equal(again.status, 404);
     assert.equal(again.body.code, 'STAGING_NOT_FOUND');
 });
@@ -866,7 +952,7 @@ test('inspect of a server snapshot, of a backup without the current user, cancel
     assert.equal(res.body.created_at_source, 'manifest');
     assert.equal(res.body.app_version, require('../package.json').version);
     assert.equal((await admin('DELETE', `/backup/restore/${res.body.staging_id}`)).status, 200);
-    assert.equal((await admin('POST', `/backup/restore/${res.body.staging_id}`)).status, 404);
+    assert.equal((await admin('POST', `/backup/restore/${res.body.staging_id}`, PASSWORD)).status, 404);
 
     const noUser = await snapshotDbBuffer((d) => d.exec("UPDATE users SET username = 'jemand' WHERE username = 'admin'"));
     const other = await uploadZip(zipOf({ 'manga.db': noUser }).toBuffer(), '/backup/inspect');
@@ -1003,7 +1089,7 @@ test('too little free space answers 507 before a snapshot, an upload or a restor
     assert.deepEqual(fs.readdirSync(path.join(ctx.dataDir, 'backups')).sort(), files);
     assert.deepEqual(fs.readdirSync(dbm.tempDir).filter(f => f.startsWith('backup-db-')), []);
 
-    const restore = await admin('POST', `/backups/${snapshot}/restore`);
+    const restore = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
     assert.equal(restore.status, 507);
     assert.match(restore.body.error, /Speicherplatz/);
     assert.equal(mangaCount(), before);
@@ -1086,7 +1172,7 @@ test(`a ${BIG_ARCHIVE_MB} MB archive restores with bounded memory (streaming ext
         const sampler = setInterval(() => { peak = Math.max(peak, process.memoryUsage().rss); }, 10);
         let res;
         try {
-            res = await admin('POST', `/backups/${name}/restore`);
+            res = await admin('POST', `/backups/${name}/restore`, PASSWORD);
         } finally {
             clearInterval(sampler);
         }
@@ -1110,7 +1196,7 @@ test('undoing a restore after the nightly orphan cleanup still finds the covers 
     fs.writeFileSync(cover, 'png');
     const created = await admin('POST', '/mangas', { title: 'Undo Original', cover_image: '/uploads/undo-orig-cover.png' });
     assert.equal(created.status, 200);
-    const res = await admin('POST', `/backups/${emptyish}/restore`);
+    const res = await admin('POST', `/backups/${emptyish}/restore`, PASSWORD);
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const pre = res.body.preRestoreSnapshot;
 
@@ -1118,7 +1204,7 @@ test('undoing a restore after the nightly orphan cleanup still finds the covers 
     assert.ok(!result.files.includes('undo-orig-cover.png'), 'the retained pre-restore snapshot still references it');
     assert.ok(fs.existsSync(cover));
 
-    const undo = await admin('POST', `/backups/${pre}/restore`);
+    const undo = await admin('POST', `/backups/${pre}/restore`, PASSWORD);
     assert.equal(undo.status, 200, JSON.stringify(undo.body));
     const list = (await admin('GET', '/mangas')).body;
     assert.ok(list.some(m => m.title === 'Undo Original' && m.cover_image === '/uploads/undo-orig-cover.png'));
@@ -1165,7 +1251,7 @@ test('inspecting or staging a backup leaves the live publisher aliases alone; a 
     assert.equal(created.status, 200);
     assert.equal(dbm.db.prepare('SELECT publisher FROM mangas WHERE id = ?').get(created.body.id).publisher, 'Crunchyroll');
 
-    const restored = await admin('POST', `/backups/${before}/restore`);
+    const restored = await admin('POST', `/backups/${before}/restore`, PASSWORD);
     assert.equal(restored.status, 200, JSON.stringify(restored.body));
     assert.equal(normalizePublisher('Kaze Manga'), 'Kazé Manga', 'the restored database has no such alias');
     assert.equal(normalizePublisher('EMA'), 'Egmont Manga', 'its seeded aliases are live');
@@ -1232,6 +1318,54 @@ test('an uploaded backup whose stored path lies outside data/temp is refused wit
     fs.unlinkSync(decoy);
     assert.deepEqual(stagedFiles(), []);
     assert.equal(integrityOk(), true);
+});
+
+test('a restore needs the caller password, so a crafted backup cannot plant a known admin password', async () => {
+    const { resetRateLimits } = require('../middleware/rateLimit');
+    const known = require('bcryptjs').hashSync('angreifer123', 4);
+    const crafted = zipOf({ 'manga.db': await snapshotDbBuffer((d) => d.prepare("UPDATE users SET password_hash = ? WHERE username = 'admin'").run(known)) }).toBuffer();
+    const snapshot = await createSnapshot();
+    const inspected = await uploadZip(crafted, '/backup/inspect');
+    assert.equal(inspected.status, 200, JSON.stringify(inspected.body));
+    const liveHash = () => dbm.db.prepare("SELECT password_hash FROM users WHERE username = 'admin'").get().password_hash;
+    const before = liveHash();
+    const multerFiles = () => fs.readdirSync(dbm.tempDir).filter(f => /^restore-[0-9a-f-]+\.zip$/.test(f));
+    const json = (current) => (current === undefined ? undefined : { current_password: current });
+    const attempts = (current) => [
+        [`snapshot ${current}`, () => admin('POST', `/backups/${snapshot}/restore`, json(current))],
+        [`staged ${current}`, () => admin('POST', `/backup/restore/${inspected.body.staging_id}`, json(current))],
+        [`upload ${current}`, () => uploadZip(crafted, '/backup/restore', { current_password: current ?? '' })],
+        [`legacy upload ${current}`, () => uploadZip(crafted, '/restore', { current_password: current ?? '' })]
+    ];
+    try {
+        for (const [current, status, code] of [[undefined, 400, 'BAD_REQUEST'], ['', 400, 'BAD_REQUEST'], ['angreifer123', 403, 'WRONG_PASSWORD']]) {
+            for (const [label, call] of attempts(current)) {
+                const res = await call();
+                assert.deepEqual([res.status, res.body.code], [status, code], label);
+                if (status === 400) assert.equal(res.body.error, 'Bitte das aktuelle Passwort eingeben', label);
+            }
+        }
+        assert.equal(liveHash(), before, 'the live password stays');
+        assert.deepEqual(multerFiles(), [], 'refused uploads are deleted');
+        assert.equal((await admin('DELETE', `/backup/restore/${inspected.body.staging_id}`)).status, 200, 'a refused password keeps the staging');
+
+        let locked = null;
+        for (let i = 0; i < 12 && !locked; i++) {
+            const res = await fetch(`${ctx.base}/backups/${snapshot}/restore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Cookie: admin.cookie },
+                body: JSON.stringify({ current_password: 'falsch-123' })
+            });
+            if (res.status === 429) locked = res;
+            else assert.equal(res.status, 403);
+        }
+        assert.ok(locked, 'wrong passwords count toward the sign-in lock');
+        assert.equal((await locked.json()).code, 'TOO_MANY_ATTEMPTS');
+        assert.ok(Number(locked.headers.get('retry-after')) > 0);
+    } finally {
+        resetRateLimits();
+    }
+    assert.equal((await admin('POST', `/backups/${snapshot}/restore`, PASSWORD)).status, 200);
 });
 
 test('openZip reads archives only from the data directory', async () => {

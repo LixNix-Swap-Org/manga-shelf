@@ -14,6 +14,7 @@ import { getLocalRuntime, resetLocalRuntime, onSourceBlocked } from './local/loc
 import { enterLocalMode, leaveLocalMode, subscribeMode, getLocalProfile } from './local/profile';
 import { LOCAL_STORE_EVENT, SAVE_FAILED_TEXT, LOCKED_TEXT, CONFLICT_TEXT } from './local/store';
 import { notify } from './utils/notify';
+import { announceUpdateOutcome } from './utils/updateWatcher';
 import AppErrorBoundary from './AppErrorBoundary';
 import { clearViewState, endViewSession, startViewSession } from './utils/viewState';
 import Toaster from './components/common/Toaster';
@@ -430,6 +431,7 @@ function App() {
   }, [handleUnauthorized]);
 
   useEffect(() => (isAppMode() ? startConnectionManager() : undefined), []);
+  useEffect(() => { announceUpdateOutcome(); }, []);
 
   // apps: the opt-in Crunchyroll history sync runs in the foreground for a signed-in user or the opened device collection
   useWatchSync(user, localMode ? 'local' : activeServer?.id ?? 'server');

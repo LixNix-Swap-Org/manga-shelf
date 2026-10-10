@@ -411,3 +411,108 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
     }
 });
+
+test('newerSchema and acceptNewerSchema (core/schema.js): only the exact accepted version counts', () => {
+    const schema = require('../core/schema');
+    const { DatabaseSync } = require('node:sqlite');
+    const conn = new DatabaseSync(':memory:');
+    try {
+        schema.applySchema(conn);
+        assert.equal(schema.newerSchema(conn), null);
+        const future = schema.LATEST_SCHEMA_VERSION + 2;
+        conn.prepare("INSERT INTO schema_migrations (version, name) VALUES (?, 'future')").run(future);
+        assert.deepEqual(schema.newerSchema(conn), { version: future, known: schema.LATEST_SCHEMA_VERSION, accepted: false });
+        conn.prepare("INSERT INTO app_settings (key, value) VALUES ('schema_newer_accepted', ?)").run(String(future - 1));
+        assert.equal(schema.newerSchema(conn).accepted, false, 'the consent of another version does not count');
+        assert.equal(schema.acceptNewerSchema(conn), future);
+        assert.equal(schema.newerSchema(conn).accepted, true);
+    } finally {
+        conn.close();
+    }
+});
+
+test('a database of a newer version is refused (SCHEMA_NEWER, exit code 78, a panel route on Pterodactyl) unless a restore accepted it or it is allowed', () => {
+    const future = dbm.LATEST_SCHEMA_VERSION + 1;
+    db().prepare("INSERT INTO schema_migrations (version, name) VALUES (?, 'future')").run(future);
+    try {
+        assert.throws(() => dbm.initDb(), (err) => {
+            assert.equal(err.code, 'SCHEMA_NEWER');
+            assert.equal(err.exitCode, 78);
+            assert.match(err.message, new RegExp(`Schema v${future} und stammt aus einer neueren Version von Manga Shelf \\(diese Version kennt Schema bis v${dbm.LATEST_SCHEMA_VERSION}\\)`));
+            assert.match(err.message, /"manga-shelf-server restore <backup\.zip>"/);
+            assert.match(err.message, /"node scripts\/admin\.js wiederherstellen <backup\.zip>"/);
+            assert.match(err.message, /ALLOW_NEWER_SCHEMA=1/);
+            return true;
+        });
+        assert.throws(() => dbm.db.prepare('SELECT 1').get(), (err) => err.code === 'SCHEMA_NEWER', 'nothing runs on the refused database');
+        assert.throws(() => dbm.ensureDbOpen(), (err) => err.code === 'SCHEMA_NEWER');
+
+        const panel = process.env.P_SERVER_UUID;
+        process.env.P_SERVER_UUID = 'test-server';
+        try {
+            assert.throws(() => dbm.initDb(), (err) => {
+                assert.equal(err.exitCode, 78);
+                assert.ok(err.message.includes(`im Dateimanager in die Datei ${path.join(process.cwd(), '.env')} die Zeile ALLOW_NEWER_SCHEMA=1 eintragen`), err.message);
+                assert.match(err.message, /im Dialog "Backups" das Backup von vor dem Update \(vor-update-…zip aus /);
+                assert.match(err.message, /die Zeile danach wieder entfernen/);
+                assert.doesNotMatch(err.message, /wiederherstellen <backup\.zip>|restore <backup\.zip>/, 'a stopped Pterodactyl server has no shell');
+                return true;
+            });
+        } finally {
+            if (panel === undefined) delete process.env.P_SERVER_UUID;
+            else process.env.P_SERVER_UUID = panel;
+        }
+
+        dbm.initDb({ allowNewerSchema: true });
+        assert.equal(dbm.ensureDbOpen().prepare('SELECT max(version) AS v FROM schema_migrations').get().v, future);
+
+        process.env.ALLOW_NEWER_SCHEMA = '1';
+        try {
+            dbm.initDb();
+        } finally {
+            delete process.env.ALLOW_NEWER_SCHEMA;
+        }
+        db().prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_newer_accepted', ?)").run(String(future));
+        dbm.initDb();
+        assert.deepEqual(dbm.getLastMigrationReport(), []);
+
+        const out = execFileSync(process.execPath, ['-e', `
+            const d = require('./db.js');
+            d.db.prepare("UPDATE app_settings SET value = 'x' WHERE key = 'schema_newer_accepted'").run();
+            d.closeDb();
+            const again = require('child_process').spawnSync(process.execPath, ['-e', "const d = require('./db.js'); try { d.db.prepare('SELECT 1').get(); console.log('open'); } catch (e) { console.log(e.code, e.exitCode); }"], { encoding: 'utf8', env: process.env });
+            process.stdout.write(again.stdout);
+        `], { cwd: path.join(__dirname, '..'), env: { ...process.env, DATA_DIR: dataDir, LOG_LEVEL: 'silent' }, encoding: 'utf8' });
+        assert.equal(out.trim(), 'SCHEMA_NEWER 78', 'loading db.js does not throw; the first use does');
+    } finally {
+        dbm.initDb({ allowNewerSchema: true });
+        db().prepare('DELETE FROM schema_migrations WHERE version = ?').run(future);
+        db().prepare("DELETE FROM app_settings WHERE key = 'schema_newer_accepted'").run();
+        dbm.initDb();
+    }
+});
+
+test('the safety snapshot before migrations never prunes the backup an unconfirmed update needs', () => {
+    const stateFile = path.join(dataDir, 'update-state.json');
+    process.env.BACKUP_KEEP_PRE_UPDATE = '1';
+    try {
+        rerunMigration16();
+        const [held] = safetySnapshots().slice(-1);
+        fs.writeFileSync(stateFile, JSON.stringify({
+            format: 1, phase: 'swapped', mode: 'pterodactyl', restart: 'pterodactyl', from: '3.0.0', to: '3.0.1', at: new Date().toISOString(),
+            user: 1, pid: 1, schema_before: 15, backup: { file: held, sha256: 'a'.repeat(64) }, previous: { sha256: 'b'.repeat(64) }, attempts: 1
+        }));
+        rerunMigration16();
+        rerunMigration16();
+        const kept = safetySnapshots();
+        assert.equal(kept.length, 2);
+        assert.ok(kept.includes(held), 'the update backup stays next to the newest one');
+        fs.rmSync(stateFile);
+        rerunMigration16();
+        assert.equal(safetySnapshots().length, 1);
+        assert.ok(!safetySnapshots().includes(held));
+    } finally {
+        delete process.env.BACKUP_KEEP_PRE_UPDATE;
+        fs.rmSync(stateFile, { force: true });
+    }
+});

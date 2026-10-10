@@ -443,3 +443,161 @@ test('the first-start hint about API keys appears once per database and never wi
         delete process.env.GOOGLE_BOOKS_KEY;
     }
 });
+
+
+const ADMIN_SCRIPT = path.join(__dirname, '..', 'scripts', 'admin.js');
+const { spawnSync } = require('child_process');
+const { DatabaseSync } = require('node:sqlite');
+const AdmZip = require('adm-zip');
+const { LATEST_SCHEMA_VERSION } = require('../core/schema');
+const offlineDirs = [];
+test.after(() => { for (const dir of offlineDirs) fs.rmSync(dir, { recursive: true, force: true }); });
+const offlineDir = () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-offline-'));
+    offlineDirs.push(dir);
+    return dir;
+};
+
+function adminRun(args, env) {
+    const res = spawnSync(process.execPath, [ADMIN_SCRIPT, ...args], { env: { ...process.env, MANGA_SHELF_NO_LISTEN: '1', LOG_LEVEL: 'silent', ...env }, encoding: 'utf8' });
+    return { status: res.status, out: res.stdout + res.stderr };
+}
+
+function databaseCopy(file, mutate) {
+    db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    if (mutate) {
+        const conn = new DatabaseSync(file);
+        try { mutate(conn); } finally { conn.close(); }
+    }
+    return file;
+}
+
+const titles = (file) => {
+    const conn = new DatabaseSync(file, { readOnly: true });
+    try {
+        return { titles: conn.prepare('SELECT title FROM mangas ORDER BY title').all().map(r => r.title), schema: conn.prepare('SELECT max(version) AS v FROM schema_migrations').get().v };
+    } finally { conn.close(); }
+};
+
+const future = (title) => (conn) => {
+    conn.prepare("INSERT INTO schema_migrations (version, name) VALUES (?, 'future')").run(LATEST_SCHEMA_VERSION + 1);
+    if (title) conn.prepare('INSERT INTO mangas (title) VALUES (?)').run(title);
+};
+
+test('db-check migrates a copy in a temp folder and leaves the file and the data folder alone', () => {
+    const dir = offlineDir();
+    const untouched = path.join(dir, 'daten');
+    fs.mkdirSync(untouched);
+    const env = { DATA_DIR: untouched };
+    const empty = path.join(dir, 'leer.db');
+    fs.writeFileSync(empty, '');
+    const fresh = adminRun(['db-check', empty], env);
+    assert.equal(fresh.status, 0, fresh.out);
+    assert.match(fresh.out, new RegExp(`Datenbank-Prüfung bestanden: Schema v0 → v${LATEST_SCHEMA_VERSION}, ${LATEST_SCHEMA_VERSION} Migrationen an einer Kopie`));
+    assert.equal(fs.statSync(empty).size, 0, 'the checked file itself is never changed');
+
+    const current = databaseCopy(path.join(dir, 'aktuell.db'));
+    assert.match(adminRun(['db-check', current], env).out, new RegExp(`v${LATEST_SCHEMA_VERSION} → v${LATEST_SCHEMA_VERSION}, 0 Migrationen`));
+
+    const broken = path.join(dir, 'kaputt.db');
+    fs.writeFileSync(broken, 'keine Datenbank, nur Text '.repeat(40));
+    const bad = adminRun(['db-check', broken], env);
+    assert.equal(bad.status, 1);
+    assert.match(bad.out, /Datenbank-Prüfung fehlgeschlagen/);
+
+    const newer = databaseCopy(path.join(dir, 'neuer.db'), future());
+    const refused = adminRun(['db-check', newer], env);
+    assert.equal(refused.status, 1);
+    assert.match(refused.out, new RegExp(`Schema v${LATEST_SCHEMA_VERSION + 1} ist neuer als diese Version \\(v${LATEST_SCHEMA_VERSION}\\)`));
+    const conn = new DatabaseSync(newer);
+    conn.prepare("INSERT INTO app_settings (key, value) VALUES ('schema_newer_accepted', ?)").run(String(LATEST_SCHEMA_VERSION + 1));
+    conn.close();
+    assert.equal(adminRun(['db-check', newer], env).status, 0, 'a newer schema accepted by a restore passes');
+
+    assert.equal(adminRun(['db-check', path.join(dir, 'fehlt.db')], env).status, 1);
+    const usage = adminRun(['db-check'], env);
+    assert.equal(usage.status, 2);
+    assert.match(usage.out, /Aufruf: node scripts\/admin\.js db-check <datei>/);
+    assert.deepEqual(fs.readdirSync(untouched), [], 'no database was opened in DATA_DIR');
+    assert.deepEqual(fs.readdirSync(dir).filter(f => f.startsWith('manga-shelf-db-check-')), [], 'the copy next to the file is gone');
+});
+
+test('wiederherstellen restores the backup before an update into a stopped server, also onto a newer schema', () => {
+    const live = offlineDir();
+    fs.mkdirSync(path.join(live, 'backups'));
+    databaseCopy(path.join(live, 'manga.db'), future('Nur in der neueren Version'));
+    const backup = 'vor-update-v3.0.0-auf-v3.1.0-2026-10-10T10-00-00-000Z.zip';
+    const zip = new AdmZip();
+    zip.addLocalFile(databaseCopy(path.join(offlineDir(), 'backup.db'), (c) => c.prepare("INSERT INTO mangas (title) VALUES ('Nur im Backup')").run()), '', 'manga.db');
+    zip.writeZip(path.join(live, 'backups', backup));
+
+    const res = adminRun(['wiederherstellen', backup], { DATA_DIR: live });
+    assert.equal(res.status, 0, res.out);
+    assert.match(res.out, /Backup eingespielt: vor-update-v3\.0\.0-auf-v3\.1\.0-.*\.zip \(\d+ Manga-Reihen, 0 Bilddateien\)/);
+    assert.match(res.out, /Die Datenbank davor liegt als Sicherung in backups\/vor-wiederherstellung-/);
+    const restored = titles(path.join(live, 'manga.db'));
+    assert.ok(restored.titles.includes('Nur im Backup'));
+    assert.ok(!restored.titles.includes('Nur in der neueren Version'));
+    assert.equal(restored.schema, LATEST_SCHEMA_VERSION);
+    const safety = fs.readdirSync(path.join(live, 'backups')).find(f => f.startsWith('vor-wiederherstellung-') && f.endsWith('.zip'));
+    const before = path.join(offlineDir(), 'davor.db');
+    fs.writeFileSync(before, new AdmZip(path.join(live, 'backups', safety)).getEntry('manga.db').getData());
+    assert.equal(titles(before).schema, LATEST_SCHEMA_VERSION + 1, 'the replaced newer database is kept as a snapshot');
+    assert.ok(fs.existsSync(path.join(live, 'backups', backup)), 'the restored backup stays');
+    assert.ok(!fs.existsSync(path.join(live, 'manga.db.bak')));
+    const start = spawnSync(process.execPath, ['-e', "require('./db.js').db.prepare('SELECT 1').get(); console.log('ok')"], { cwd: path.join(__dirname, '..'), env: { ...process.env, DATA_DIR: live, LOG_LEVEL: 'silent' }, encoding: 'utf8' });
+    assert.equal(start.stdout.trim(), 'ok', 'the old version opens the restored database again');
+});
+
+test('wiederherstellen refuses while the server has the database open, and copies a backup from elsewhere into temp/', () => {
+    const live = offlineDir();
+    databaseCopy(path.join(live, 'manga.db'), (c) => c.prepare("INSERT INTO mangas (title) VALUES ('Live')").run());
+    const outside = path.join(offlineDir(), 'download.zip');
+    const zip = new AdmZip();
+    zip.addLocalFile(databaseCopy(path.join(offlineDir(), 'b.db'), (c) => c.prepare("INSERT INTO mangas (title) VALUES ('Von woanders')").run()), '', 'manga.db');
+    zip.writeZip(outside);
+
+    const server = new DatabaseSync(path.join(live, 'manga.db'));
+    server.exec('PRAGMA journal_mode = WAL;');
+    server.prepare('SELECT count(*) FROM mangas').get();
+    try {
+        const busy = adminRun(['wiederherstellen', outside], { DATA_DIR: live });
+        assert.equal(busy.status, 1);
+        assert.match(busy.out, /Die Datenbank ist geöffnet, der Server läuft also noch\. Erst den Server stoppen/);
+        assert.ok(server.prepare("SELECT 1 FROM mangas WHERE title = 'Live'").get(), 'nothing changed');
+    } finally {
+        server.close();
+    }
+
+    const res = adminRun(['wiederherstellen', outside], { DATA_DIR: live });
+    assert.equal(res.status, 0, res.out);
+    assert.ok(titles(path.join(live, 'manga.db')).titles.includes('Von woanders'));
+    assert.deepEqual(fs.readdirSync(path.join(live, 'temp')).filter(f => f.startsWith('restore-')), [], 'the copy in temp/ is removed');
+    assert.ok(fs.existsSync(outside));
+
+    assert.equal(adminRun(['wiederherstellen', path.join(live, 'fehlt.zip')], { DATA_DIR: live }).status, 1);
+    const usage = adminRun(['wiederherstellen'], { DATA_DIR: live });
+    assert.equal(usage.status, 2);
+    assert.match(usage.out, /Aufruf: node scripts\/admin\.js wiederherstellen <backup\.zip> \[--allow-newer-schema\]/);
+});
+
+test('wiederherstellen of a newer backup needs --allow-newer-schema and keeps that consent for the next start', () => {
+    const live = offlineDir();
+    databaseCopy(path.join(live, 'manga.db'));
+    const newer = path.join(offlineDir(), 'neuer.zip');
+    const zip = new AdmZip();
+    zip.addLocalFile(databaseCopy(path.join(offlineDir(), 'n.db'), future('Aus der Zukunft')), '', 'manga.db');
+    zip.writeZip(newer);
+
+    const refused = adminRun(['wiederherstellen', newer], { DATA_DIR: live });
+    assert.equal(refused.status, 1);
+    assert.match(refused.out, /Backup stammt aus einer neueren Version/);
+    const res = adminRun(['wiederherstellen', newer, '--allow-newer-schema'], { DATA_DIR: live });
+    assert.equal(res.status, 0, res.out);
+    const conn = new DatabaseSync(path.join(live, 'manga.db'), { readOnly: true });
+    try {
+        assert.equal(conn.prepare("SELECT value FROM app_settings WHERE key = 'schema_newer_accepted'").get().value, String(LATEST_SCHEMA_VERSION + 1));
+    } finally { conn.close(); }
+    const start = spawnSync(process.execPath, ['-e', "require('./db.js').db.prepare('SELECT 1').get(); console.log('ok')"], { cwd: path.join(__dirname, '..'), env: { ...process.env, DATA_DIR: live, LOG_LEVEL: 'silent' }, encoding: 'utf8' });
+    assert.equal(start.stdout.trim(), 'ok', start.stderr);
+});

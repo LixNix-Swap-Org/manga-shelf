@@ -32,10 +32,7 @@ function waitForJobs(ms) {
 
 const isShuttingDown = () => shutdownPromise !== null;
 
-/**
- * Idempotent shutdown: stops timers and console, stops accepting connections, waits up to `jobDeadlineMs` for tracked
- * jobs, cuts remaining connections, closes the database. `parts`: { server, stopScheduler, closeConsole, closeDb }.
- */
+/** Idempotent shutdown of `parts` { server, stopScheduler, closeConsole, abortDownloads, closeDb }, jobs get `jobDeadlineMs`. */
 function shutdown(parts = {}, { jobDeadlineMs = JOB_DEADLINE_MS } = {}) {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = (async () => {
@@ -44,6 +41,7 @@ function shutdown(parts = {}, { jobDeadlineMs = JOB_DEADLINE_MS } = {}) {
         };
         if (parts.stopScheduler) step('Scheduler stoppen', parts.stopScheduler);
         if (parts.closeConsole) step('Konsole schließen', parts.closeConsole);
+        if (parts.abortDownloads) step('Update-Downloads abbrechen', parts.abortDownloads);
         const server = parts.server;
         const closed = server && server.listening
             ? new Promise(resolve => server.close(() => resolve()))

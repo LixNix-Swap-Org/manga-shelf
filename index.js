@@ -1,4 +1,21 @@
 // Express app and server entry: middleware order, static frontend, API routers; start()/stop() are exported for tests.
+const updatePrelude = (() => {
+    try {
+        return require('./services/update/prelude');
+    } catch (e) {
+        if (e.code !== 'MODULE_NOT_FOUND') throw e;
+    }
+    for (const candidate of ['./.update/previous/services/update/prelude', './.update/next/services/update/prelude']) {
+        try {
+            return require(candidate);
+        } catch (e) {
+            if (e.code !== 'MODULE_NOT_FOUND') throw e;
+        }
+    }
+    return null;
+})();
+if (updatePrelude) updatePrelude.run({ dataDir: updatePrelude.resolveDataDir({ codeDir: __dirname }), codeDir: __dirname, server: process.env.MANGA_SHELF_NO_LISTEN !== '1' });
+
 // Suppress Node.js 25+ fs.Stats constructor deprecation warning from internal dependencies
 const origEmitWarning = process.emitWarning;
 process.emitWarning = (warning, ...args) => {
@@ -34,7 +51,15 @@ try {
 }
 
 const pkg = require('./package.json');
-const { db, closeDb, uploadsDir, dataDir, getInstanceId } = require('./db');
+const { db, closeDb, uploadsDir, dataDir, getInstanceId, ensureDbOpen } = require('./db');
+try {
+    ensureDbOpen();
+} catch (err) {
+    if (err.code !== 'SCHEMA_NEWER' || config.noListen) throw err;
+    log.error(`[Datenbank] ${err.message}`);
+    process.exit(err.exitCode);
+}
+const update = require('./services/update');
 const { initScheduler, lastVerifiedSnapshot } = require('./services/scheduler');
 const lifecycle = require('./services/lifecycle');
 const { setStaticHeaders, createUploadHeaders } = require('./utils/staticHeaders');
@@ -338,6 +363,7 @@ function createApp() {
     }));
     // before any body parser: a refused cross-origin request never gets its body read
     app.use('/api', createOriginCheck({ allowedOrigins: corsOrigins, appOrigins: appOriginList }));
+    app.use('/api', update.maintenanceGuard());
 
     app.use(cookieParser());
     // The 10 MB CSV body is only read once the caller is known to be an editor; the general parser below then skips
@@ -485,7 +511,7 @@ async function start({ host = '0.0.0.0', port = config.port, dataDir: wantedData
     }
     running = {
         server,
-        parts: { server, stopScheduler, closeConsole: adminConsole ? () => adminConsole.close() : null, closeDb }
+        parts: { server, stopScheduler, closeConsole: adminConsole ? () => adminConsole.close() : null, abortDownloads: update.abortDownloads, closeDb }
     };
     const shownHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
     return { server, port: actualPort, url: `${isNativeHttps ? 'https' : 'http'}://${shownHost}:${actualPort}` };
@@ -536,13 +562,18 @@ function printBanner(port, isNativeHttps) {
 // egg) require.main is another module and the server would exit at once with code 0.
 if (!config.noListen) {
     const port = config.port;
-    start({ port, banner: true, console: config.adminConsole }).catch((err) => {
+    start({ port, banner: true, console: config.adminConsole }).then(() => {
+        if (updatePrelude) updatePrelude.markStarted();
+    }, (err) => {
+        if (updatePrelude) updatePrelude.markListenFailed(err);
         // EADDRINUSE/EACCES: nothing to shut down gracefully, end with a clear line and a non-zero code
         log.error(`[Server] Port ${port} konnte nicht geöffnet werden:`, err);
         closeDb();
         process.exit(1);
     });
+    update.registerRestart(() => stop());
     const shutdown = (code) => {
+        if (update.lock.currentPhase() === 'restarting') return;
         if (!lifecycle.isShuttingDown()) log.info('Shutting down...');
         lifecycle.exitAfterShutdown(running ? running.parts : { closeDb }, code);
     };

@@ -8,6 +8,7 @@ const { config } = require('./utils/config');
 const schema = require('./core/schema');
 const { loadPublisherAliases } = require('./core/lib/publishers');
 const { msg } = require('./core/errors');
+const updateState = require('./services/update/state');
 
 // DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
 const dataDir = config.dataDir;
@@ -71,10 +72,12 @@ function writePreMigrationSnapshot(conn, fromVersion, toVersion) {
             try { fs.unlinkSync(copy + suffix); } catch (e) { /* not there */ }
         }
     }
+    const held = updateState.heldBackup(dataDir);
     const older = fs.readdirSync(backupsDir)
         .filter(f => f.startsWith(SAFETY_SNAPSHOT_PREFIX + '-') && SAFETY_SNAPSHOT_TIME.test(f))
         .sort((a, b) => SAFETY_SNAPSHOT_TIME.exec(b)[1].localeCompare(SAFETY_SNAPSHOT_TIME.exec(a)[1]))
-        .slice(safetySnapshotKeep());
+        .slice(safetySnapshotKeep())
+        .filter(f => f !== held);
     for (const name of older) {
         try { fs.unlinkSync(path.join(backupsDir, name)); } catch (e) { log.warn(`[Database] Could not delete old safety snapshot ${name}:`, e.message); }
     }
@@ -223,8 +226,48 @@ function ensureInstanceId(conn) {
     }
 }
 
+const EXIT_SCHEMA_NEWER = 78;
+const allowNewerFromEnv = () => /^(true|1|yes|on|ja)$/i.test(String(process.env.ALLOW_NEWER_SCHEMA || '').trim());
+
+function schemaNewerWayBack() {
+    const backups = path.join(dataDir, 'backups');
+    if (process.env.P_SERVER_UUID) {
+        return 'Zurück zu dieser Version im Panel (ein gestoppter Server hat keine Shell): im Dateimanager in die Datei '
+            + `${path.join(process.cwd(), '.env')} die Zeile ALLOW_NEWER_SCHEMA=1 eintragen, den Server starten, sofort im Dialog `
+            + `"Backups" das Backup von vor dem Update (vor-update-…zip aus ${backups}) wiederherstellen, vorher nichts ändern, `
+            + 'und die Zeile danach wieder entfernen.';
+    }
+    return 'Zurück zu dieser Version: bei gestopptem Server das Backup von vor dem Update einspielen, mit '
+        + '"manga-shelf-server restore <backup.zip>" (Binärdatei) bzw. "node scripts/admin.js wiederherstellen <backup.zip>" '
+        + `(die Backups liegen in ${backups}). Nur wenn sicher ist, dass diese Version mit der neueren Datenbank arbeiten kann: `
+        + 'einmal mit ALLOW_NEWER_SCHEMA=1 starten.';
+}
+
+function schemaNewerError({ version, known }) {
+    const err = new Error(`Die Datenbank ${dbPath} hat Schema v${version} und stammt aus einer neueren Version von Manga Shelf `
+        + `(diese Version kennt Schema bis v${known}); sie wird nicht geöffnet. Zurück zur neueren Version: diese wieder installieren und starten. `
+        + schemaNewerWayBack());
+    err.code = 'SCHEMA_NEWER';
+    err.exitCode = EXIT_SCHEMA_NEWER;
+    return err;
+}
+
+function checkNewerSchema(conn, allowNewerSchema) {
+    const newer = schema.newerSchema(conn);
+    if (!newer || allowNewerSchema) return;
+    if (newer.accepted) {
+        log.warn(`[Database] Schema v${newer.version} ist neuer als diese Version (v${newer.known}); bei der Wiederherstellung bestätigt, die Datenbank wird geöffnet.`);
+        return;
+    }
+    if (allowNewerFromEnv()) {
+        log.warn(`[Database] Schema v${newer.version} ist neuer als diese Version (v${newer.known}); ALLOW_NEWER_SCHEMA ist gesetzt, die Datenbank wird trotzdem geöffnet. Die Variable danach wieder entfernen.`);
+        return;
+    }
+    throw schemaNewerError(newer);
+}
+
 // (Re)opens the live database; currentDb is only assigned once schema and migrations succeeded, so a failed init is retried on next access.
-function initDb() {
+function initDb({ allowNewerSchema = false } = {}) {
     closeDb();
     assertNoPendingRollbackCopy();
 
@@ -234,10 +277,11 @@ function initDb() {
         // recommended with WAL: a crash of the app loses nothing, a power cut at most the last commits; no corruption
         conn.exec('PRAGMA synchronous = NORMAL;');
         conn.exec('PRAGMA foreign_keys = ON;');
+        checkNewerSchema(conn, allowNewerSchema);
         lastMigrationReport = applySchema(conn, { safetySnapshot: true });
     } catch (err) {
         // Running on with a half-migrated schema only fails later with unclear SQL errors: stop here with the real cause
-        log.error('[Database] Opening the database failed:', err);
+        if (err.code !== 'SCHEMA_NEWER') log.error('[Database] Opening the database failed:', err);
         try { conn.close(); } catch (e) { /* ignore */ }
         throw err;
     }
@@ -260,7 +304,17 @@ function closeDb() {
     } catch (e) { log.warn('Closing the database failed:', e.message); }
 }
 
-initDb();
+try {
+    initDb();
+} catch (err) {
+    if (err.code !== 'SCHEMA_NEWER') throw err;
+}
+
+/** The live connection, opened when it is not open yet (throws SCHEMA_NEWER for a refused database). */
+function ensureDbOpen() {
+    if (!currentDb) initDb();
+    return currentDb;
+}
 
 /**
  * Runs fn inside one SQLite transaction (BEGIN IMMEDIATE; rollback on error). fn MUST be synchronous:
@@ -365,6 +419,7 @@ function hasAdmin() {
 module.exports = {
     db,
     initDb,
+    ensureDbOpen,
     closeDb,
     hasAdmin,
     uploadsDir,

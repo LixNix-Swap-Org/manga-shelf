@@ -1,8 +1,10 @@
 # Manual release ("Run workflow" in the Actions tab). The branch comes from "Use workflow from".
 #   action build:   build every artifact of that branch (nothing is pushed or published)
-#   action release: set the version (bump), commit + tag vX.Y.Z on the branch, build everything (incl. the apps), push
-#                   the Docker image to GHCR under its immutable tags (X.Y.Z, vX.Y.Z), create the GitHub release with
-#                   all files and SHA256SUMS.txt, and only then move X.Y and latest to that image
+#   action release: only with a protected main and required reviewers on the environment release; set the version (bump),
+#                   commit + tag vX.Y.Z on the branch, build everything (incl. the apps), push the Docker image to GHCR under
+#                   its immutable tags (X.Y.Z, vX.Y.Z), sign SHA256SUMS.txt with the version marker and the image keyless
+#                   (job sign in the environment release, the only one with id-token), create the GitHub release with all
+#                   files, SHA256SUMS.txt and its Sigstore bundle, and only then move X.Y and latest to that image
 # A pushed tag alone never publishes anything; a failed run never moves latest. With a protected branch the push needs the secret RELEASE_TOKEN
 # (fine-grained PAT, contents: write); otherwise GITHUB_TOKEN is used.
 name: Release
@@ -63,6 +65,21 @@ jobs:
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
             echo "::error::Tag $TAG existiert bereits; veröffentlichte Tags werden nie verschoben"
+            exit 1
+          fi
+      - name: Release only with a protected main and reviewers on the release environment
+        if: inputs.action == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          protected="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.protected')"
+          reviewed="$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/main" --jq '[.[] | select(.type == "pull_request" and (.parameters.required_approving_review_count // 0) >= 1)] | length')"
+          if [ "$protected" != true ] && [ "$reviewed" = 0 ]; then
+            echo "::error::main ist nicht geschützt (Branch-Schutz oder Ruleset mit Pflicht-Review); Server installieren alles, was release.yml auf main signiert"
+            exit 1
+          fi
+          if ! reviewers="$(gh api "repos/$GITHUB_REPOSITORY/environments/release" --jq '[.protection_rules[]? | select(.type == "required_reviewers")] | length')" || [ "$reviewers" = 0 ]; then
+            echo "::error::Die Umgebung release fehlt oder hat keine Pflicht-Reviewer (Settings → Environments → release → Required reviewers)"
             exit 1
           fi
 
@@ -140,7 +157,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
     outputs:
       image: ${{ steps.image.outputs.name }}
       digest: ${{ steps.push.outputs.digest }}
@@ -182,20 +198,81 @@ jobs:
             REVISION=${{ needs.tag.outputs.sha }}
           cache-from: type=gha,scope=manga-shelf-image
           cache-to: type=gha,mode=max,scope=manga-shelf-image
-      # keyless signing writes the repository name into the public Rekor log: only once the repository is public
+
+  sign:
+    name: Sign SHA256SUMS.txt and the image (Sigstore, keyless)
+    needs: [version, tag, build, mobile, docker]
+    if: inputs.action == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Keyless signing only for a public repository
+        if: github.event.repository.private
+        run: |
+          echo "::error::Das Repository ist privat; eine keyless Signatur schriebe seinen Namen ins öffentliche Rekor-Log"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.tag.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '{pterodactyl-zip,server-*,desktop-*,mobile-*}'
+          path: dist/release
+          merge-multiple: true
+      - name: Version marker and SHA256SUMS.txt
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ needs.tag.outputs.sha }}
+        run: |
+          test -f dist/release/pterodactyl-manga-shelf.zip
+          node scripts/release/marker.js dist/release "$VERSION" "$COMMIT"
+          node scripts/release/checksums.js dist/release
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-        if: ${{ !github.event.repository.private }}
-        continue-on-error: true
-      - name: Keyless signature (cosign, Actions OIDC)
-        if: ${{ !github.event.repository.private }}
+        with:
+          cosign-release: v3.0.6
+      - name: Keyless signature of SHA256SUMS.txt (cosign, Actions OIDC)
+        run: |
+          for attempt in 1 2 3; do
+            if cosign sign-blob --yes --bundle dist/release/SHA256SUMS.txt.sigstore.json dist/release/SHA256SUMS.txt; then
+              exit 0
+            fi
+            rm -f dist/release/SHA256SUMS.txt.sigstore.json
+            if [ "$attempt" -lt 3 ]; then sleep 20; fi
+          done
+          echo "::error::cosign sign-blob ist dreimal gescheitert"
+          exit 1
+      - name: Verify the bundle with the server's own verifier before anything is published
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN node scripts/release/verify-bundle.js dist/release
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-signature
+          path: |
+            dist/release/SHA256SUMS.txt
+            dist/release/SHA256SUMS.txt.sigstore.json
+            dist/release/manga-shelf-release-v*.json
+          if-no-files-found: error
+      - name: Keyless signature of the image (cosign, Actions OIDC)
         continue-on-error: true
         env:
-          IMAGE: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
-        run: cosign sign --yes "$IMAGE"
+          IMAGE: ${{ needs.docker.outputs.image }}@${{ needs.docker.outputs.digest }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          cosign sign --yes "$IMAGE"
 
   publish:
     name: GitHub release
-    needs: [version, tag, build, mobile, docker]
+    needs: [version, tag, build, mobile, docker, sign]
     if: inputs.action == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -211,13 +288,17 @@ jobs:
           node-version: 22
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: '{pterodactyl-zip,server-*,desktop-*,mobile-*}'
+          pattern: '{pterodactyl-zip,server-*,desktop-*,mobile-*,release-signature}'
           path: dist/release
           merge-multiple: true
-      - name: SHA256SUMS.txt
+      - name: Exactly the files the sign job signed
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           test -f dist/release/pterodactyl-manga-shelf.zip
-          node scripts/release/checksums.js dist/release
+          test -f dist/release/SHA256SUMS.txt.sigstore.json
+          test -f "dist/release/manga-shelf-release-v$VERSION.json"
+          node scripts/release/checksums.js dist/release --verify --complete
       - name: Release text
         env:
           TAG: ${{ needs.version.outputs.tag }}

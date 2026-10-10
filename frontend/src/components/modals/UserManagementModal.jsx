@@ -20,7 +20,12 @@ const ROLE_OPTIONS = [
   ['admin', 'Admin']
 ];
 
+// i18n
+const CONFIRM_HINT = 'Bei Administratorkonten ist dein eigenes Passwort nötig. Falsche Eingaben zählen wie fehlgeschlagene Anmeldungen.';
+const CONFIRM_CODES = new Set(['WRONG_PASSWORD', 'TOO_MANY_ATTEMPTS']);
+
 const isReadOnlyRole = (role) => role === 'visitor' || role === 'guest';
+const isConfirmError = (data) => CONFIRM_CODES.has(data?.code);
 const roleLabel = (role) => (ROLE_LABELS[role] ? t(ROLE_LABELS[role]) : role);
 const formatCreated = (value) => {
   const date = parseUtcTimestamp(value);
@@ -42,6 +47,33 @@ function errorMessage(res, data, fallback) {
   return t('{message} (HTTP {status})', { message: fallback, status: res.status });
 }
 
+function ConfirmPasswordField({ id, username, value, onChange, error, inputRef, autoFocus = false, labelClassName }) {
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  return (
+    <div>
+      <label htmlFor={id} className={labelClassName}>{t('Passwort zur Bestätigung')}</label>
+      <input type="text" name="username" autoComplete="username" value={username || ''} readOnly hidden className="text-base" />
+      <input
+        id={id}
+        ref={inputRef}
+        name="current-password"
+        type="password"
+        autoComplete="current-password"
+        required
+        autoFocus={autoFocus}
+        className="input-field text-base sm:text-xs py-1.5"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={error ? `${errorId} ${hintId}` : hintId}
+      />
+      {error && <p id={errorId} role="alert" className="mt-1 text-[11px] text-red-300">{error}</p>}
+      <p id={hintId} className="mt-1 text-[10px] text-slate-400">{t(CONFIRM_HINT)}</p>
+    </div>
+  );
+}
+
 export default function UserManagementModal({ isOpen, onClose, currentUser }) {
   const [usersList, setUsersList] = useState([]);
   const [usersLoaded, setUsersLoaded] = useState(false);
@@ -54,6 +86,14 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
   const [pendingIds, setPendingIds] = useState({});
   const [resetTargetId, setResetTargetId] = useState(null);
   const [resetPassword, setResetPassword] = useState('');
+  const [promoteTargetId, setPromoteTargetId] = useState(null);
+  const [rowConfirm, setRowConfirm] = useState('');
+  const [rowConfirmError, setRowConfirmError] = useState('');
+  const [createConfirm, setCreateConfirm] = useState('');
+  const [createConfirmError, setCreateConfirmError] = useState('');
+  const rowConfirmRef = useRef(null);
+  const createConfirmRef = useRef(null);
+  const promoteOpenerRef = useRef(null);
   const usersRequestRef = useRef(0);
   const fieldId = useId();
 
@@ -66,6 +106,21 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
   const showResult = (error, success = '') => {
     setUserError(error);
     setUserSuccess(success);
+  };
+
+  const rejectConfirm = (inputRef, setError, message) => {
+    setError(message);
+    inputRef.current?.focus();
+  };
+
+  const clearRowConfirm = () => {
+    setRowConfirm('');
+    setRowConfirmError('');
+  };
+
+  const closePromote = () => {
+    setPromoteTargetId(null);
+    clearRowConfirm();
   };
 
   const fetchUsers = async () => {
@@ -100,12 +155,17 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       setPendingIds({});
       setResetTargetId(null);
       setResetPassword('');
+      setPromoteTargetId(null);
+      clearRowConfirm();
+      setCreateConfirm('');
+      setCreateConfirmError('');
       fetchUsers();
     }
   }, [isOpen]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    setCreateConfirmError('');
     if (!newUser.username.trim() || !newUser.password) {
       showResult(t('Bitte Benutzername und Passwort eingeben.'));
       return;
@@ -115,19 +175,29 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       return;
     }
 
+    const confirming = newUser.role === 'admin';
+    if (confirming && !createConfirm) {
+      showResult('');
+      rejectConfirm(createConfirmRef, setCreateConfirmError, t('Bitte das aktuelle Passwort eingeben'));
+      return;
+    }
+
     setCreatingUser(true);
     showResult('');
 
     try {
       const res = await apiFetch('/api/users', {
         method: 'POST',
-        body: newUser
+        body: confirming ? { ...newUser, current_password: createConfirm } : newUser
       });
       const data = await readJson(res);
       if (res.ok) {
         showResult('', t('Benutzer "{username}" erfolgreich angelegt!', { username: newUser.username.trim() }));
         setNewUser(EMPTY_USER);
+        setCreateConfirm('');
         await fetchUsers();
+      } else if (confirming && isConfirmError(data)) {
+        rejectConfirm(createConfirmRef, setCreateConfirmError, errorMessage(res, data, t('Fehler beim Erstellen des Benutzers')));
       } else {
         showResult(errorMessage(res, data, t('Fehler beim Erstellen des Benutzers')));
       }
@@ -138,21 +208,26 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
     }
   };
 
-  const handleRoleChange = async (target, role) => {
+  const handleRoleChange = async (target, role, currentPassword = null) => {
     if (role === target.role) return;
+    const confirming = currentPassword !== null;
     showResult('');
     setPending(target.id, 'role');
     try {
       const res = await apiFetch(`/api/users/${target.id}`, {
         method: 'PUT',
-        body: { role }
+        body: confirming ? { role, current_password: currentPassword } : { role }
       });
       const data = await readJson(res);
       if (res.ok) {
         const newRole = data?.user?.role || role;
         setUsersList(prev => prev.map(u => (u.id === target.id ? { ...u, role: newRole } : u)));
+        if (confirming) closePromote();
         showResult('', t('Rolle von "{username}" ist jetzt {role}.', { username: target.username, role: roleLabel(newRole) }));
+      } else if (confirming && isConfirmError(data)) {
+        rejectConfirm(rowConfirmRef, setRowConfirmError, errorMessage(res, data, t('Rolle konnte nicht geändert werden')));
       } else {
+        if (confirming) closePromote();
         showResult(errorMessage(res, data, t('Rolle konnte nicht geändert werden')));
         if (res.status === 404 || res.status === 409) fetchUsers();
       }
@@ -163,31 +238,74 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
     }
   };
 
+  const handleRoleSelect = (target, role, select) => {
+    if (role === 'admin' && target.role !== 'admin') {
+      showResult('');
+      setResetTargetId(null);
+      setResetPassword('');
+      clearRowConfirm();
+      promoteOpenerRef.current = select;
+      setPromoteTargetId(target.id);
+      return;
+    }
+    if (promoteTargetId === target.id) closePromote();
+    handleRoleChange(target, role);
+  };
+
+  const cancelPromote = () => {
+    closePromote();
+    promoteOpenerRef.current?.focus();
+  };
+
+  const handlePromote = (e, target) => {
+    e.preventDefault();
+    setRowConfirmError('');
+    if (!rowConfirm) {
+      rejectConfirm(rowConfirmRef, setRowConfirmError, t('Bitte das aktuelle Passwort eingeben'));
+      return;
+    }
+    handleRoleChange(target, 'admin', rowConfirm);
+  };
+
   const openReset = (target) => {
     setResetTargetId(prev => (prev === target.id ? null : target.id));
     setResetPassword('');
+    closePromote();
+  };
+
+  const closeReset = () => {
+    setResetTargetId(null);
+    setResetPassword('');
+    clearRowConfirm();
   };
 
   const handleResetPassword = async (e, target) => {
     e.preventDefault();
+    const confirming = target.role === 'admin';
+    setRowConfirmError('');
     if (resetPassword.length < MIN_PASSWORD_LENGTH) {
       showResult(tn('Passwort muss mindestens {n} Zeichen lang sein.', 'Passwort muss mindestens {n} Zeichen lang sein.', MIN_PASSWORD_LENGTH));
       return;
     }
     showResult('');
+    if (confirming && !rowConfirm) {
+      rejectConfirm(rowConfirmRef, setRowConfirmError, t('Bitte das aktuelle Passwort eingeben'));
+      return;
+    }
     setPending(target.id, 'password');
     try {
       const res = await apiFetch(`/api/users/${target.id}`, {
         method: 'PUT',
-        body: { password: resetPassword }
+        body: confirming ? { password: resetPassword, current_password: rowConfirm } : { password: resetPassword }
       });
       const data = await readJson(res);
       if (res.ok) {
         // only an own reset answers with a token: it revokes the old one, and the app build continues with the new one
         rememberToken(data, { rotate: true });
-        setResetTargetId(null);
-        setResetPassword('');
+        closeReset();
         showResult('', t('Neues Passwort für "{username}" gesetzt. {username} wurde auf allen Geräten abgemeldet.', { username: target.username }));
+      } else if (confirming && isConfirmError(data)) {
+        rejectConfirm(rowConfirmRef, setRowConfirmError, errorMessage(res, data, t('Passwort konnte nicht zurückgesetzt werden')));
       } else {
         showResult(errorMessage(res, data, t('Passwort konnte nicht zurückgesetzt werden')));
         if (res.status === 404 || res.status === 409) fetchUsers();
@@ -208,7 +326,8 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       const data = await readJson(res);
       if (res.ok) {
         setUsersList(prev => prev.filter(u => u.id !== target.id));
-        if (resetTargetId === target.id) setResetTargetId(null);
+        if (resetTargetId === target.id) closeReset();
+        if (promoteTargetId === target.id) closePromote();
         showResult('', t('Benutzer "{username}" wurde gelöscht.', { username: target.username }));
       } else {
         showResult(errorMessage(res, data, t('Fehler beim Löschen des Benutzers')));
@@ -321,7 +440,11 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                   id={`${fieldId}-role`}
                   className="input-field bg-slate-950 text-base sm:text-xs py-2"
                   value={newUser.role}
-                  onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                  onChange={e => {
+                    setNewUser({ ...newUser, role: e.target.value });
+                    setCreateConfirm('');
+                    setCreateConfirmError('');
+                  }}
                 >
                   <option value="editor">{t('Editor (Mangas verwalten)')}</option>
                   <option value="visitor">{t('Gast (Nur Lesezugriff)')}</option>
@@ -329,6 +452,20 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                 </select>
               </div>
             </div>
+
+            {newUser.role === 'admin' && (
+              <div className="sm:max-w-xs">
+                <ConfirmPasswordField
+                  id={`${fieldId}-create-confirm`}
+                  username={currentUser?.username}
+                  value={createConfirm}
+                  onChange={setCreateConfirm}
+                  error={createConfirmError}
+                  inputRef={createConfirmRef}
+                  labelClassName="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1"
+                />
+              </div>
+            )}
 
             <div className="flex justify-end pt-1">
               <button
@@ -367,6 +504,17 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                 const isSelf = u.id === currentUser?.id;
                 const pending = pendingIds[u.id];
                 const resetOpen = resetTargetId === u.id;
+                const promoteOpen = promoteTargetId === u.id;
+                const resetButtons = (
+                  <>
+                    <button type="submit" disabled={Boolean(pending)} className="btn-primary text-xs py-1.5 px-3">
+                      {t('Zurücksetzen')}
+                    </button>
+                    <button type="button" onClick={closeReset} className="btn-secondary text-xs py-1.5 px-3">
+                      {t('Abbrechen')}
+                    </button>
+                  </>
+                );
 
                 return (
                   <div key={u.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
@@ -419,9 +567,9 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                         ) : (
                           <select
                             aria-label={t('Rolle von {username}', { username: u.username })}
-                            value={u.role}
+                            value={promoteOpen ? 'admin' : u.role}
                             disabled={Boolean(pending)}
-                            onChange={e => handleRoleChange(u, e.target.value)}
+                            onChange={e => handleRoleSelect(u, e.target.value, e.target)}
                             className="input-field bg-slate-950 text-base sm:text-[11px] py-1 px-2 w-auto"
                           >
                             {ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
@@ -476,16 +624,60 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                             onChange={e => setResetPassword(e.target.value)}
                             autoFocus
                           />
-                          <button type="submit" disabled={Boolean(pending)} className="btn-primary text-xs py-1.5 px-3">
-                            {t('Zurücksetzen')}
-                          </button>
-                          <button type="button" onClick={() => setResetTargetId(null)} className="btn-secondary text-xs py-1.5 px-3">
-                            {t('Abbrechen')}
-                          </button>
+                          {u.role !== 'admin' && resetButtons}
                         </div>
+                        {u.role === 'admin' && (
+                          <>
+                            <ConfirmPasswordField
+                              id={`${fieldId}-reset-confirm-${u.id}`}
+                              username={currentUser?.username}
+                              value={rowConfirm}
+                              onChange={setRowConfirm}
+                              error={rowConfirmError}
+                              inputRef={rowConfirmRef}
+                              labelClassName="block text-[11px] font-semibold text-slate-400 mb-1"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">{resetButtons}</div>
+                          </>
+                        )}
                         <p className="text-[10px] text-slate-400">
                           {t('Mindestens {minPasswordLength} Zeichen. {username} wird danach auf allen Geräten abgemeldet.', { minPasswordLength: MIN_PASSWORD_LENGTH, username: u.username })}
                         </p>
+                      </form>
+                    )}
+
+                    {promoteOpen && (
+                      <form
+                        onSubmit={e => handlePromote(e, u)}
+                        onKeyDown={e => {
+                          if (e.key !== 'Escape') return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          cancelPromote();
+                        }}
+                        className="mt-3 pt-3 border-t border-slate-800 space-y-2"
+                      >
+                        <p className="text-[11px] font-semibold text-slate-300">
+                          {t('Rolle von "{username}" auf Admin ändern', { username: u.username })}
+                        </p>
+                        <ConfirmPasswordField
+                          id={`${fieldId}-promote-${u.id}`}
+                          username={currentUser?.username}
+                          value={rowConfirm}
+                          onChange={setRowConfirm}
+                          error={rowConfirmError}
+                          inputRef={rowConfirmRef}
+                          autoFocus
+                          labelClassName="block text-[11px] font-semibold text-slate-400 mb-1"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button type="submit" disabled={Boolean(pending)} className="btn-primary text-xs py-1.5 px-3">
+                            {t('Bestätigen')}
+                          </button>
+                          <button type="button" onClick={cancelPromote} className="btn-secondary text-xs py-1.5 px-3">
+                            {t('Abbrechen')}
+                          </button>
+                        </div>
                       </form>
                     )}
                   </div>

@@ -115,6 +115,7 @@ function createServerController({ serverDir, dataDir, setupToken, env = process.
         if (!backend) return [];
         const jobs = [...serverModule('services', 'lifecycle.js').runningJobs()];
         if (serverModule('routes', 'backups.js').isRestoreRunning?.()) jobs.push('Wiederherstellung');
+        if (serverModule('services', 'update', 'lock.js').isUpdateRunning?.()) jobs.push('Aktualisierung');
         return [...new Set(jobs)];
     }
 

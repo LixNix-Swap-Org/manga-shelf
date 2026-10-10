@@ -82,6 +82,8 @@ async function openConfirmation() {
   return screen.findByRole('heading', { name: 'Wiederherstellung bestätigen' });
 }
 
+const typePassword = (value = 'password123') => fireEvent.change(screen.getByLabelText('Passwort zur Bestätigung'), { target: { value } });
+
 beforeEach(() => {
   vi.stubGlobal('confirm', vi.fn(() => true));
   clearOfflineData.mockClear();
@@ -211,11 +213,17 @@ describe('BackupRestoreModal two-step restore', () => {
     expect(screen.getByText(/2\.20\.0/).textContent).toMatch(/aktuell 2\.21\.0/);
     expect(within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' })).getByText(/Alle anderen Sitzungen/)).toBeTruthy();
 
+    const field = screen.getByLabelText('Passwort zur Bestätigung');
+    expect([field.type, field.getAttribute('autocomplete'), field.getAttribute('aria-invalid')]).toEqual(['password', 'current-password', null]);
+    const account = document.querySelector('input[name="username"]');
+    expect([account.value, account.getAttribute('autocomplete'), account.hidden, account.className]).toEqual(['admin', 'username', true, 'text-base']);
+    expect(screen.getByRole('button', { name: 'Wiederherstellen' }).disabled).toBe(true);
+    typePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     const status = await screen.findByText(/Backup erfolgreich eingespielt!/);
     expect(status.textContent).toContain(`Rückgängig: Snapshot „${PRE}“`);
     expect(status.textContent).toMatch(/Die Seite wird neu geladen/);
-    expect(JSON.parse(calls(fetchMock, 'POST', `/api/backup/restore/${STAGING}`)[0][1].body)).toEqual({});
+    expect(JSON.parse(calls(fetchMock, 'POST', `/api/backup/restore/${STAGING}`)[0][1].body)).toEqual({ current_password: 'password123' });
     expect(JSON.parse(sessionStorage.getItem(UNDO_KEY)).filename).toBe(PRE);
     expect(screen.getByRole('dialog').getAttribute('data-busy')).toBe('true');
     expect(document.getElementById('btn-close-restore-modal').disabled).toBe(true);
@@ -420,6 +428,7 @@ describe('BackupRestoreModal two-step restore', () => {
     const line = screen.getByText(userLine);
     expect(line.parentElement.className).toMatch(/font-semibold/);
     expect(within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' })).queryByText(userLine)).toBeNull();
+    typePassword();
     expect(screen.getByRole('button', { name: 'Wiederherstellen' }).disabled).toBe(false);
   });
 
@@ -436,7 +445,8 @@ describe('BackupRestoreModal two-step restore', () => {
     await openConfirmation();
     const list = within(screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' }));
     expect(list.getAllByText(serverLine)).toHaveLength(1);
-    expect(list.getByText('Auch dein Konto „admin“ hat darin kein Passwort: vor dem Abmelden in der Benutzerverwaltung ein neues setzen.')).toBeTruthy();
+    expect(list.getByText('Auch dein Konto „admin“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „passwort-reset admin“ auf dem Server.')).toBeTruthy();
+    typePassword();
     expect(screen.getByRole('button', { name: 'Wiederherstellen' }).disabled).toBe(false);
   });
 
@@ -476,12 +486,13 @@ describe('BackupRestoreModal two-step restore', () => {
     await openConfirmation();
     expect(screen.getByText(schemaLine)).toBeTruthy();
     const confirmButton = screen.getByRole('button', { name: 'Wiederherstellen' });
+    typePassword();
     expect(confirmButton.disabled).toBe(true);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Trotzdem einspielen (nicht empfohlen)' }));
     expect(confirmButton.disabled).toBe(false);
     fireEvent.click(confirmButton);
     await screen.findByText(/Die Seite wird neu geladen/);
-    expect(JSON.parse(calls(fetchMock, 'POST', `/api/backup/restore/${STAGING}`)[0][1].body)).toEqual({ allow_newer_schema: true });
+    expect(JSON.parse(calls(fetchMock, 'POST', `/api/backup/restore/${STAGING}`)[0][1].body)).toEqual({ current_password: 'password123', allow_newer_schema: true });
   });
 
   it('a SCHEMA_NEWER refusal in step 2 shows the override', async () => {
@@ -492,6 +503,7 @@ describe('BackupRestoreModal two-step restore', () => {
     });
     renderBackup();
     await openConfirmation();
+    typePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Backup stammt aus einer neueren Version.');
     expect(screen.getByRole('checkbox', { name: 'Trotzdem einspielen (nicht empfohlen)' })).toBeTruthy();
@@ -509,6 +521,7 @@ describe('BackupRestoreModal two-step restore', () => {
     });
     renderBackup();
     await openConfirmation();
+    typePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/nicht rechtzeitig geantwortet.*Seite neu laden/);
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
@@ -526,12 +539,69 @@ describe('BackupRestoreModal two-step restore', () => {
     });
     renderBackup();
     await openConfirmation();
+    typePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect((await screen.findByRole('alert')).textContent).toBe(text);
     expect(screen.queryByRole('heading', { name: 'Wiederherstellung bestätigen' })).toBeNull();
     expect(screen.getByRole('tablist')).toBeTruthy();
     await waitFor(() => expect(calls(fetchMock, 'GET', '/api/backups')).toHaveLength(2));
     expect(calls(fetchMock, 'DELETE', `/api/backup/restore/${STAGING}`)).toHaveLength(0);
+  });
+
+  it('step 2: a wrong or missing password stays in the confirmation with the error at the field; the staging is kept', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    const replies = [
+      json(403, { error: 'Das aktuelle Passwort stimmt nicht', code: 'WRONG_PASSWORD' }),
+      json(400, { error: 'Bitte das aktuelle Passwort eingeben', code: 'BAD_REQUEST' }),
+      restored()
+    ];
+    const fetchMock = mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection()),
+      [`POST /api/backup/restore/${STAGING}`]: () => replies.shift()
+    });
+    renderBackup();
+    await openConfirmation();
+    typePassword('falsch-falsch');
+    fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Das aktuelle Passwort stimmt nicht');
+    const field = screen.getByLabelText('Passwort zur Bestätigung');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby').split(' ')).toContain(alert.id);
+    expect(document.activeElement).toBe(field);
+    expect(screen.getByRole('heading', { name: 'Wiederherstellung bestätigen' })).toBeTruthy();
+
+    fireEvent.submit(field.form);
+    expect((await screen.findByRole('alert')).textContent).toBe('Bitte das aktuelle Passwort eingeben');
+    expect(screen.getByRole('heading', { name: 'Wiederherstellung bestätigen' })).toBeTruthy();
+
+    typePassword();
+    fireEvent.submit(field.form);
+    await screen.findByText(/Die Seite wird neu geladen/);
+    expect(calls(fetchMock, 'POST', `/api/backup/restore/${STAGING}`).map(([, init]) => JSON.parse(init.body).current_password))
+      .toEqual(['falsch-falsch', 'falsch-falsch', 'password123']);
+    expect(calls(fetchMock, 'DELETE', `/api/backup/restore/${STAGING}`)).toHaveLength(0);
+  });
+
+  it('step 2: a locked account shows until when, at the field', async () => {
+    const locked = new Response(JSON.stringify({ error: 'Zu viele fehlgeschlagene Anmeldeversuche für diesen Benutzer. Bitte in einigen Minuten erneut versuchen.', code: 'TOO_MANY_ATTEMPTS' }), {
+      status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '600' }
+    });
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection()),
+      [`POST /api/backup/restore/${STAGING}`]: () => locked
+    });
+    renderBackup();
+    await openConfirmation();
+    typePassword();
+    fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
+    expect((await screen.findByRole('alert')).textContent)
+      .toMatch(/^Zu viele Fehlversuche\. Erneut möglich ab \d{2}:\d{2} Uhr; so lange ist auch die Anmeldung mit diesem Konto gesperrt\.$/);
+    expect(screen.getByLabelText('Passwort zur Bestätigung').getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Wiederherstellung bestätigen' })).toBeTruthy();
   });
 
   it('marks the dialog busy while step 2 runs and blocks the close buttons', async () => {
@@ -545,6 +615,7 @@ describe('BackupRestoreModal two-step restore', () => {
     renderBackup({ onClose });
     await openConfirmation();
     expect(screen.getByRole('dialog').getAttribute('data-busy')).toBeNull();
+    typePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     await waitFor(() => expect(screen.getByRole('dialog').getAttribute('data-busy')).toBe('true'));
     expect(screen.getByRole('button', { name: 'Abbrechen' }).disabled).toBe(true);

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { RefreshCw, TriangleAlert, ShieldAlert } from 'lucide-react';
 import { formatDateTime, formatMegabytes, formatNumber, formatTime } from '../../../utils/format';
 import { t } from '../../../i18n/index.js';
@@ -15,9 +15,14 @@ const ROWS = [
 const SCHEMA_NEWER_FALLBACK = 'Das Backup stammt aus einer neueren Version von Manga Shelf – erst Manga Shelf aktualisieren.';
 
 /** Step 1 result of the two-step restore: what the backup holds, what it would replace, and the warnings. */
-export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerChange, restoring, onConfirm, onCancel }) {
+export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerChange, restoring, onConfirm, onCancel, username = '', passwordError = '' }) {
   const headingRef = useRef(null);
+  const passwordRef = useRef(null);
   const checkboxId = useId();
+  const [password, setPassword] = useState('');
+  const passwordId = `${checkboxId}-password`;
+  const hintId = `${checkboxId}-hint`;
+  const errorId = `${checkboxId}-error`;
   const {
     source, created_at: createdAt, created_at_source: createdAtSource, app_version: appVersion,
     current_app_version: currentAppVersion, schema_version: schemaVersion, current_schema_version: currentSchemaVersion,
@@ -29,6 +34,11 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
+  useEffect(() => {
+    if (!passwordError) return;
+    passwordRef.current?.focus();
+    passwordRef.current?.select?.();
+  }, [passwordError]);
 
   // lines are picked by the server's German text and shown in the UI language
   const shown = (i) => payloadText(inspection, 'warnings', i);
@@ -149,27 +159,52 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
         {expires && ` ${t('Diese Prüfung gilt bis {expires} Uhr.', { expires })}`}
       </p>
 
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          id="btn-cancel-restore"
-          type="button"
-          onClick={onCancel}
-          disabled={restoring}
-          className="btn-secondary text-xs px-4 py-2 disabled:opacity-50"
-        >
-          {t('Abbrechen')}
-        </button>
-        <button
-          id="btn-confirm-restore"
-          type="button"
-          onClick={onConfirm}
-          disabled={restoring || blocked}
-          className="btn-primary flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
-          {restoring ? t('Wird eingespielt...') : t('Wiederherstellen')}
-        </button>
-      </div>
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!restoring && !blocked && password) onConfirm(password);
+        }}
+      >
+        {username && <input type="text" name="username" autoComplete="username" value={username} readOnly hidden className="text-base" />}
+        <label htmlFor={passwordId} className="block text-xs font-semibold text-slate-300">{t('Passwort zur Bestätigung')}</label>
+        <input
+          ref={passwordRef}
+          id={passwordId}
+          type="password"
+          name="current-password"
+          autoComplete="current-password"
+          className="input-field text-base sm:text-xs py-1.5"
+          required
+          readOnly={restoring}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          aria-invalid={passwordError ? 'true' : undefined}
+          aria-describedby={passwordError ? `${hintId} ${errorId}` : hintId}
+        />
+        <p id={hintId} className="text-[11px] text-slate-400">{t('Falsche Eingaben zählen zur Anmeldesperre deines Kontos.')}</p>
+        {passwordError && <p id={errorId} role="alert" className="text-xs text-rose-300">{passwordError}</p>}
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <button
+            id="btn-cancel-restore"
+            type="button"
+            onClick={onCancel}
+            disabled={restoring}
+            className="btn-secondary text-xs px-4 py-2 disabled:opacity-50"
+          >
+            {t('Abbrechen')}
+          </button>
+          <button
+            id="btn-confirm-restore"
+            type="submit"
+            disabled={restoring || blocked || !password}
+            className="btn-primary flex items-center gap-2 text-xs !bg-emerald-700 hover:!bg-emerald-800 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {restoring ? t('Wird eingespielt...') : t('Wiederherstellen')}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

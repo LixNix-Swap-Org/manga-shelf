@@ -26,7 +26,7 @@ const loggedIn = async (username, password = 'password123') => {
     return client;
 };
 const createUser = async (username, role) => {
-    const res = await admin('POST', '/users', { username, password: 'password123', role });
+    const res = await admin('POST', '/users', { username, password: 'password123', role, ...(role === 'admin' ? { current_password: 'password123' } : {}) });
     assert.equal(res.status, 200, username);
     ids[username] = res.body.user.id;
     return res.body.user.id;
@@ -122,14 +122,16 @@ test('auth and permission errors are German and carry a code', async () => {
 });
 
 test('the last admin can be neither demoted nor deleted; with two admins both work', async () => {
-    const demote = await admin('PUT', '/users/' + ids.admin, { role: 'editor' });
-    assert.equal(demote.status, 400);
+    const unconfirmed = await admin('PUT', '/users/' + ids.admin, { role: 'editor' });
+    assert.deepEqual([unconfirmed.status, unconfirmed.body.error], [400, 'Bitte das aktuelle Passwort eingeben']);
+    const demote = await admin('PUT', '/users/' + ids.admin, { role: 'editor', current_password: 'password123' });
+    assert.deepEqual([demote.status, demote.body.error], [400, 'Der letzte verbleibende Administrator kann nicht herabgestuft werden']);
     assert.equal((await admin('GET', '/auth/me')).body.user.role, 'admin');
     assert.equal((await admin('DELETE', '/users/' + ids.admin)).status, 400);
 
     const second = await createUser('second-admin', 'admin');
     assert.equal((await admin('PUT', '/users/' + second, { role: 'editor' })).status, 200);
-    assert.equal((await admin('PUT', '/users/' + second, { role: 'admin' })).status, 200);
+    assert.equal((await admin('PUT', '/users/' + second, { role: 'admin', current_password: 'password123' })).status, 200);
     assert.equal((await admin('DELETE', '/users/' + second)).status, 200);
 });
 
@@ -158,9 +160,9 @@ test('two admins demoting each other at the same time leave one admin and keep s
 
     // put things back for the following tests
     if (results[0].status === 200) {
-        assert.equal((await admin('PUT', '/users/' + bobId, { role: 'admin' })).status, 200);
+        assert.equal((await admin('PUT', '/users/' + bobId, { role: 'admin', current_password: 'password123' })).status, 200);
     } else {
-        assert.equal((await bob('PUT', '/users/' + ids.admin, { role: 'admin', password: 'password123' })).status, 200);
+        assert.equal((await bob('PUT', '/users/' + ids.admin, { role: 'admin', password: 'password123', current_password: 'password123' })).status, 200);
         admin = await loggedIn('admin');
     }
     const roles = (await admin('GET', '/users')).body.filter(u => u.role === 'admin').map(u => u.username).sort();
@@ -419,10 +421,10 @@ test('bearer: an own password change answers with the new token; cookie clients 
 test('bearer: an admin resetting their own password via user management gets the new token', async () => {
     const id = await createUser('selfreset', 'admin');
     const app = withBearer(await appLogin('selfreset'));
-    const res = await app('PUT', '/users/' + id, { password: 'password789' });
+    const res = await app('PUT', '/users/' + id, { password: 'password789', current_password: 'password123' });
     assert.equal(res.status, 200);
     assert.equal((await withBearer(res.body.token)('GET', '/auth/me')).body.user.id, id);
-    const other = await admin('PUT', '/users/' + id, { password: 'password123' });
+    const other = await admin('PUT', '/users/' + id, { password: 'password123', current_password: 'password123' });
     assert.equal(other.body.token, undefined, 'resetting someone else returns no token');
 });
 
@@ -433,7 +435,7 @@ async function snapshot() {
     return created.body.snapshot.filename;
 }
 async function restore(filename) {
-    const res = await admin('POST', `/backups/${filename}/restore`);
+    const res = await admin('POST', `/backups/${filename}/restore`, { current_password: 'password123' });
     assert.equal(res.status, 200);
     // the restoring admin keeps working right away (same second as the restore)
     assert.equal((await admin('GET', '/users')).status, 200);

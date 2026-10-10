@@ -158,6 +158,7 @@ async function runTestSuite() {
     assert.equal(inspectBody.counts.mangas, 2, 'the inspection should report the two seeded series');
     assert.equal(inspectBody.relogin, false, 'the admin is in the backup and should stay signed in');
     await snap('test4_restore_confirm');
+    await typeInto(page, '[role="dialog"] input[autocomplete="current-password"]', E2E_PASSWORD);
     const restored = waitForApi(page, 'POST', `/api/backup/restore/${inspectBody.staging_id}`, { timeout: 60000 });
     await clickSelector(page, '#btn-confirm-restore');
     const restoreRes = await restored;

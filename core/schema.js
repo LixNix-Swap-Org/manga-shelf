@@ -576,6 +576,24 @@ function appliedSchemaVersion(database) {
     return tracked ? (database.prepare('SELECT max(version) AS v FROM schema_migrations').get()?.v || 0) : 0;
 }
 
+const SCHEMA_NEWER_ACCEPTED_KEY = 'schema_newer_accepted';
+
+/** { version, known, accepted } for a schema newer than this code (accepted: a restore confirmed exactly that version), else null. */
+function newerSchema(database) {
+    const version = appliedSchemaVersion(database);
+    if (version <= LATEST_SCHEMA_VERSION) return null;
+    const settings = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
+    const row = settings ? database.prepare('SELECT value FROM app_settings WHERE key = ?').get(SCHEMA_NEWER_ACCEPTED_KEY) : null;
+    return { version, known: LATEST_SCHEMA_VERSION, accepted: Boolean(row) && String(row.value) === String(version) };
+}
+
+/** Records that this code may open the database's newer schema (a restore with allow_newer_schema); returns that version. */
+function acceptNewerSchema(database) {
+    const version = appliedSchemaVersion(database);
+    database.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(SCHEMA_NEWER_ACCEPTED_KEY, String(version));
+    return version;
+}
+
 /**
  * Applies pending migrations, each in its own transaction, and returns what ran: [{ version, name, changes, ms }].
  * options.beforeMigrations(database, pending) runs once before the first one (the server snapshots there).
@@ -711,6 +729,9 @@ module.exports = {
     runSequentialMigrations,
     pendingMigrations,
     appliedSchemaVersion,
+    newerSchema,
+    acceptNewerSchema,
+    SCHEMA_NEWER_ACCEPTED_KEY,
     ensureMigrationsTable,
     migrationList,
     numberSortExpr,

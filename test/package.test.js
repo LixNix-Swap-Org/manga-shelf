@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const AdmZip = require('adm-zip');
 
-const { buildPackage, PACKAGE_FILES, ZIP_NAME } = require('../package');
+const { buildPackage, PACKAGE_FILES, ZIP_NAME, RELEASE_MANIFEST } = require('../package');
 const { readManifest, shippedFiles, stageBackend } = require('../scripts/stage-backend');
 
 const repoRoot = path.join(__dirname, '..');
@@ -18,8 +18,8 @@ function write(root, rel, content = 'x') {
   fs.writeFileSync(file, content);
 }
 
-function writePackageJson(root, files) {
-  write(root, 'package.json', JSON.stringify({ name: 'fixture', files }));
+function writePackageJson(root, files, version = '1.2.3') {
+  write(root, 'package.json', JSON.stringify({ name: 'fixture', version, files }));
 }
 
 function fixture(root, files = ['index.js', 'db.js', 'mangaPassion.js', 'healthcheck.js', 'middleware/', 'routes/', 'scripts/admin.js', 'services/', 'utils/']) {
@@ -84,6 +84,47 @@ describe('package.js', () => {
     assert.ok(!names.some(n => (/^(node_modules|data|scripts|test)\//.test(n) && n !== 'scripts/admin.js') || n === '.env'), names.join(', '));
     assert.deepEqual(fs.readFileSync(path.join(root, ZIP_NAME)), fs.readFileSync(zipPath), 'root copy differs');
     assert.ok(!fs.existsSync(`${zipPath}.tmp`));
+  });
+
+  test('ships .manga-shelf-release.json with the version and every file of the ZIP', async () => {
+    write(root, 'frontend/dist/index.html', '<html></html>');
+    write(root, 'frontend/dist/assets/app.js', 'console.log(1)');
+    write(root, 'frontend/dist/.well-known/x.txt', 'x');
+    fs.mkdirSync(path.join(root, 'frontend/dist/empty'));
+    const { zipPath, names } = await build();
+    assert.ok(names.includes(RELEASE_MANIFEST));
+    const C = require('../services/update/constants');
+    assert.equal(RELEASE_MANIFEST, C.RELEASE_MANIFEST);
+    assert.equal(ZIP_NAME, C.ZIP_ASSET);
+    assert.ok(require('../services/update/swap').validEntryName(RELEASE_MANIFEST), 'the journaled swap moves the manifest like any release file');
+    const manifest = JSON.parse(new AdmZip(zipPath).getEntry(RELEASE_MANIFEST).getData().toString('utf8'));
+    assert.deepEqual(Object.keys(manifest), ['format', 'version', 'files']);
+    assert.equal(manifest.format, 1);
+    assert.equal(manifest.version, '1.2.3');
+    const files = names.filter(n => !n.endsWith('/') && n !== RELEASE_MANIFEST).sort();
+    assert.deepEqual(manifest.files, files);
+    for (const rel of ['package.json', 'index.js', 'routes/a.js', 'scripts/admin.js', 'frontend/dist/.well-known/x.txt']) assert.ok(manifest.files.includes(rel), rel);
+    assert.ok(!manifest.files.some(n => n.endsWith('/') || n === RELEASE_MANIFEST));
+  });
+
+  test('without a valid version in package.json no ZIP is written', async () => {
+    write(root, 'frontend/dist/index.html', '<html></html>');
+    const files = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).files;
+    for (const version of [undefined, '1.2', 'v1.2.3', '1.2.3-beta']) {
+      write(root, 'package.json', JSON.stringify({ name: 'fixture', version, files }));
+      await assert.rejects(buildPackage({ root }), /keine gültige Version/, String(version));
+    }
+    assert.ok(!fs.existsSync(path.join(root, 'dist_pack')));
+    assert.ok(!fs.existsSync(path.join(root, ZIP_NAME)));
+  });
+
+  test('a symlink in frontend/dist makes the file list disagree and fails the build', { skip: process.platform === 'win32' }, async () => {
+    write(root, 'frontend/dist/index.html', '<html></html>');
+    write(root, 'outside.txt', 'secret');
+    fs.symlinkSync(path.join(root, 'outside.txt'), path.join(root, 'frontend/dist/link.txt'));
+    write(root, `dist_pack/${ZIP_NAME}`, 'previous');
+    await assert.rejects(buildPackage({ root }), /weicht vom ZIP-Inhalt ab/);
+    assert.equal(fs.readFileSync(path.join(root, 'dist_pack', ZIP_NAME), 'utf8'), 'previous');
   });
 
   test('a new top-level file only has to be added to package.json "files"', async () => {

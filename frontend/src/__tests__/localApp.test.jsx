@@ -162,7 +162,7 @@ describe('App without a server (standalone mode)', () => {
     const calls = [];
     vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
       const key = `${(init.method || 'GET').toUpperCase()} ${new URL(url).pathname}`;
-      calls.push([key, init.headers?.Authorization]);
+      calls.push([key, init.headers?.Authorization, init.body]);
       switch (key) {
         case 'POST /api/auth/login': return json(200, { user: admin, token: calls.filter(([k]) => k === key).length > 1 ? 'tok-2' : 'tok-1' });
         case 'POST /api/backup/inspect': return json(200, {
@@ -200,6 +200,7 @@ describe('App without a server (standalone mode)', () => {
     expect(getServers()).toHaveLength(1);
     expect(getActiveServer()).toMatchObject({ urls: ['https://shelf.example'], token: 'tok-2', tokenOrigins: ['https://shelf.example'] });
     expect(calls.find(([k]) => k === 'POST /api/backup/inspect')[1]).toBe('Bearer tok-1');
+    expect(JSON.parse(calls.find(([k]) => k === 'POST /api/backup/restore/stage-1')[2])).toEqual({ current_password: 'password123' });
     expect(calls.filter(([k]) => k === 'GET /api/auth/me').every(([, auth]) => auth === 'Bearer tok-2')).toBe(true);
   }, 15000);
 

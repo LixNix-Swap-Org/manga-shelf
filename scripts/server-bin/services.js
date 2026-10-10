@@ -51,7 +51,7 @@ function quoteWindows(arg) {
 }
 const xml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function systemdUnit({ binary, args, system = true }) {
+function systemdUnit({ binary, args, system = true, supervised = false }) {
     const lines = [
         '[Unit]',
         'Description=Manga Shelf Server',
@@ -66,9 +66,11 @@ function systemdUnit({ binary, args, system = true }) {
     lines.push(
         `ExecStart=${[binary, ...args].map(quoteSystemd).join(' ')}`,
         'Environment=NODE_ENV=production',
+        ...(supervised ? ['Environment=MANGA_SHELF_SUPERVISOR=systemd'] : []),
         'CacheDirectory=manga-shelf',
         'Restart=on-failure',
         'RestartSec=5',
+        ...(supervised ? ['RestartPreventExitStatus=78'] : []),
         'TimeoutStopSec=20',
         'UMask=0027',
         'NoNewPrivileges=true'
@@ -101,6 +103,8 @@ ${strings}
     <dict>
         <key>NODE_ENV</key>
         <string>production</string>
+        <key>MANGA_SHELF_SUPERVISOR</key>
+        <string>launchd</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -226,7 +230,7 @@ function installPlan({ platform, options, execPath, env = {}, uid = null, home =
             const unitFile = path.posix.join(env.XDG_CONFIG_HOME || path.posix.join(home, '.config'), 'systemd', 'user', `${SERVICE_NAME}.service`);
             steps.push(
                 { kind: 'mkdir', dir: dataDir, mode: 0o700 },
-                { kind: 'write', file: unitFile, content: systemdUnit({ binary: execPath, args: serverArgs({ ...options, dataDir }), system: false }) },
+                { kind: 'write', file: unitFile, content: systemdUnit({ binary: execPath, args: serverArgs({ ...options, dataDir }), system: false, supervised: true }) },
                 { kind: 'run', cmd: 'systemctl', args: ['--user', 'daemon-reload'] },
                 { kind: 'run', cmd: 'systemctl', args: ['--user', 'enable', '--now', SERVICE_NAME] }
             );
@@ -245,7 +249,7 @@ function installPlan({ platform, options, execPath, env = {}, uid = null, home =
             steps.push({ kind: 'install', from: execPath, to: binary });
         }
         steps.push(
-            { kind: 'write', file: SYSTEM_UNIT, content: systemdUnit({ binary, args: serverArgs({ ...options, dataDir }), system: true }) },
+            { kind: 'write', file: SYSTEM_UNIT, content: systemdUnit({ binary, args: serverArgs({ ...options, dataDir }), system: true, supervised: true }) },
             { kind: 'run', cmd: 'systemctl', args: ['daemon-reload'] },
             { kind: 'run', cmd: 'systemctl', args: ['enable', SERVICE_NAME] },
             { kind: 'run', cmd: 'systemctl', args: ['restart', SERVICE_NAME] }

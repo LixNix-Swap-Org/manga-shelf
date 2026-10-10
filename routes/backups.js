@@ -1,297 +1,55 @@
-// Backup list/create/download and restore routes; a restore swaps the live database file in place.
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { db, dataDir, uploadsDir, tempDir, closeDb, initDb, validateDbFile, migrateDbFile, openRawDb } = require('../db');
+const { db, tempDir, migrateDbFile, validateDbFile, openRawDb } = require('../db');
 const auth = require('../middleware/auth');
 const { requireAdmin, signSessionToken, setAuthCookie, clearAuthCookie } = auth;
-const { uploadBackup, ALLOWED_IMAGE_EXTS, stripImageFileSync } = require('../middleware/upload');
+const { uploadBackup } = require('../middleware/upload');
 const scheduler = require('../services/scheduler');
-const { backupsDir, copyDatabaseToTemp, createBackupSnapshot, holdSnapshot, PRE_RESTORE_PREFIX } = scheduler;
+const { backupsDir, copyDatabaseToTemp, createBackupSnapshot, holdSnapshot } = scheduler;
 const {
-    invalidBackup, notAZip, createArchive, listUploads, appendUploads, manifestForCopy, readDbFacts, latestSchemaVersion,
-    openZip, extractEntry, findDbEntry, readArchiveManifest, removeDbFile, MANIFEST_NAME
+    invalidBackup, createArchive, listUploads, appendUploads, manifestForCopy, readDbFacts, latestSchemaVersion,
+    extractEntry, findDbEntry, readArchiveManifest, removeDbFile, MANIFEST_NAME
 } = require('../services/backupArchive');
+const {
+    restoreFromZip, isRestoreRunning, assertNoRollbackCopy, restoreLimits, openArchive, restorableUploads, resolveInside,
+    unlinkQuietly, removeJournalFiles, isDiskFull, dbFilePath, SPACE_MARGIN_BYTES
+} = require('../services/restore');
+const update = require('../services/update');
 const disk = require('../utils/disk');
-const { config } = require('../utils/config');
 const { trackJob } = require('../services/lifecycle');
 const { sendError } = require('../utils/httpError');
-const { msg, msgData, payloadMsg } = require('../core/errors');
+const { msg, msgData, payloadMsg, badRequest, HttpError } = require('../core/errors');
+const { clientIp } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('backup');
 
-/** Read per restore so operators (and tests) can change them without a restart. */
-function restoreLimits() {
-    return {
-        maxDbBytes: config.restoreMaxDbBytes,
-        maxUploadsBytes: config.restoreMaxUploadsBytes,
-        maxEntries: config.restoreMaxEntries
-    };
-}
+const refuseDuringUpdate = (req, res, next) => {
+    update.lock.assertNoUpdate();
+    next();
+};
 
-const SPACE_MARGIN_BYTES = 16 * 1024 * 1024;
 
-async function openArchive(source, maxEntries) {
-    return openZip(source, maxEntries).catch((err) => {
-        if (err.status) throw err;
-        log.warn('[Backup Restore] Could not read the archive:', err.message);
-        throw notAZip(msg('Datei kann nicht gelesen werden'));
-    });
-}
-
-/**
- * Covers live flat in uploads/ with an image extension (multer, remote downloads). Anything else in a backup
- * (nested paths, dotfiles, HTML/JS that /uploads would serve same-origin) is not restored.
- */
-function restorableUploadName(entryName, prefix) {
-    const base = prefix + 'uploads/';
-    if (!entryName.startsWith(base)) return null;
-    const name = entryName.slice(base.length);
-    if (!name || name.startsWith('.') || /[/\\:]/.test(name) || [...name].some(c => c.charCodeAt(0) < 32)) return null;
-    if (!ALLOWED_IMAGE_EXTS.has(path.extname(name).toLowerCase())) return null;
-    return name;
-}
-
-const dbFilePath = path.join(dataDir, 'manga.db');
-const stagedDbPath = path.join(dataDir, 'manga.db.restore-tmp');
-const bakPath = path.join(dataDir, 'manga.db.bak');
-
-/** `file` resolved inside `root`, or null when it points anywhere else (traversal, another absolute path). */
-function resolveInside(root, file) {
-    if (typeof file !== 'string' || !file) return null;
-    const resolved = path.resolve(root, file);
-    if (!resolved.startsWith(root + path.sep)) return null;
-    return resolved;
-}
-
-function unlinkQuietly(file) {
-    const target = resolveInside(dataDir, file);
-    if (!target) return;
-    try { fs.unlinkSync(target); } catch (e) { /* not there */ }
-}
-
-function removeJournalFiles(file) {
-    unlinkQuietly(file + '-wal');
-    unlinkQuietly(file + '-shm');
-}
-
-function removeStagedDb() {
-    unlinkQuietly(stagedDbPath);
-    removeJournalFiles(stagedDbPath);
-}
-
-/**
- * Puts the safety copy back after the swap. The restored file's handle is closed BEFORE the copy goes back and its WAL
- * is deleted (a WAL replays onto any main file next to it); the .bak goes only once the old database answers again.
- */
-function rollbackSwap(bakWritten) {
+async function confirmRestorePassword(req, res) {
     try {
-        closeDb();
-        removeJournalFiles(dbFilePath);
-        if (bakWritten) fs.copyFileSync(bakPath, dbFilePath);
-        else unlinkQuietly(dbFilePath);
-        removeJournalFiles(dbFilePath);
-        initDb();
-        db.prepare('SELECT count(*) AS count FROM mangas').get();
-        if (bakWritten) unlinkQuietly(bakPath);
-    } catch (rollbackErr) {
-        log.error(`[Backup Restore] Rollback failed; the previous database is kept at ${bakPath}:`, rollbackErr);
-    }
-}
-
-/**
- * Swaps the staged, validated and migrated database in. Must stay synchronous: no other request may run between
- * closeDb() and initDb(), so there is no await in here.
- */
-function swapInStagedDb() {
-    const bakTmpPath = bakPath + '.tmp';
-    let bakWritten = false;
-    let swapped = false;
-    try {
-        closeDb();
-        if (fs.existsSync(dbFilePath)) {
-            // copy under a temporary name first so a failed copy never leaves a truncated manga.db.bak
-            fs.copyFileSync(dbFilePath, bakTmpPath);
-            fs.renameSync(bakTmpPath, bakPath);
-            bakWritten = true;
-        }
-        removeJournalFiles(dbFilePath);
-        fs.renameSync(stagedDbPath, dbFilePath);
-        swapped = true;
-
-        initDb();
-        auth.persistJwtSecret();
-        const row = db.prepare('SELECT count(*) AS count FROM mangas').get();
-        if (bakWritten) unlinkQuietly(bakPath);
-        return row ? row.count : 0;
+        await auth.confirmCurrentPassword(req, res, req.body && req.body.current_password);
     } catch (err) {
-        unlinkQuietly(bakTmpPath);
-        if (swapped) {
-            rollbackSwap(bakWritten);
-        } else {
-            if (bakWritten) unlinkQuietly(bakPath);
-            try { initDb(); } catch (e) { log.error('[Backup Restore] Reopening the live database failed:', e); }
-        }
+        if (err.code === 'WRONG_PASSWORD') log.warn(`[Backup Restore] Wrong password for a restore by ${req.user.username} (${req.authScheme || '-'}, ${clientIp(req)})`);
         throw err;
     }
 }
 
-// stripping reads the whole file; image uploads are capped at 15 MB, anything far larger is no cover we wrote
-const STRIP_MAX_BYTES = 32 * 1024 * 1024;
-
-function stripRestoredUpload(file, name) {
+const requireRestorePassword = async (req, res, next) => {
     try {
-        if (fs.statSync(file).size <= STRIP_MAX_BYTES) stripImageFileSync(file);
-    } catch (e) {
-        log.warn(`[Backup Restore] Could not strip metadata from ${name}:`, e.message);
-    }
-}
-
-function moveRestoredUploads(stagingDir, names) {
-    let moved = 0;
-    for (const name of names) {
-        const from = path.join(stagingDir, name);
-        const to = path.join(uploadsDir, name);
-        try {
-            stripRestoredUpload(from, name);
-            try {
-                fs.renameSync(from, to);
-            } catch (e) {
-                if (e.code !== 'EXDEV') throw e;
-                fs.copyFileSync(from, to);
-            }
-            moved++;
-        } catch (e) {
-            log.warn(`[Backup Restore] Could not restore upload ${name}:`, e.message);
-        }
-    }
-    return moved;
-}
-
-let restoreRunning = false;
-
-/**
- * A leftover manga.db.bak means a failed rollback or a crash mid-swap and may be the only good copy, so no restore
- * runs until an operator dealt with it (read from disk, so it survives restarts).
- */
-function assertNoRollbackCopy() {
-    if (!fs.existsSync(bakPath)) return;
-    const text = msg('Eine frühere Wiederherstellung wurde nicht sauber abgeschlossen. Die vorherige Datenbank liegt als {path}. Von Hand: Server stoppen, manga.db.bak nach manga.db kopieren (oder löschen, wenn die aktuelle Datenbank stimmt) und neu starten. Oder auf dem Server "node scripts/admin.js rollback-aufraeumen" ausführen (Docker: "docker exec -it -u node manga-shelf node scripts/admin.js rollback-aufraeumen", in der Server-Konsole "rollback-aufraeumen"): es prüft die aktuelle Datenbank und löscht die Kopie erst nach Bestätigung.', { path: bakPath });
-    const blocked = new Error(text.text);
-    blocked.extra = { msg: text.template, params: text.params };
-    blocked.status = 503;
-    blocked.code = 'ROLLBACK_COPY_PENDING';
-    throw blocked;
-}
-
-function assertSchemaSupported(version, allowNewer) {
-    const current = latestSchemaVersion();
-    if (version <= current || allowNewer) return;
-    const err = invalidBackup(msg('Backup stammt aus einer neueren Version (Schema v{version} > v{current}) – erst Manga Shelf aktualisieren.', { version, current }));
-    err.code = 'SCHEMA_NEWER';
-    throw err;
-}
-
-const isDiskFull = (err) => err && (err.code === 'ENOSPC' || (err.errcode & 0xff) === 13 /* SQLITE_FULL from VACUUM INTO */);
-
-/** Restorable covers next to the archive's manga.db and their (claimed) uncompressed size. */
-function restorableUploads(entries, prefix) {
-    const list = [];
-    for (const entry of entries) {
-        if (entry.name.endsWith('/')) continue;
-        const name = restorableUploadName(entry.name, prefix);
-        if (name) list.push({ entry, name });
-    }
-    return { list, bytes: list.reduce((sum, u) => sum + u.entry.uncompressedSize, 0) };
-}
-
-/** DB-only safety snapshot right before the swap; the restore is aborted when it cannot be written or tested. */
-async function takePreRestoreSnapshot() {
-    let snapshot;
-    try {
-        snapshot = await createBackupSnapshot(PRE_RESTORE_PREFIX, { includeUploads: false });
+        await confirmRestorePassword(req, res);
     } catch (err) {
-        log.error('[Backup Restore] Pre-restore snapshot failed, restore aborted:', err);
-        if (err.status === 507) throw err;
-        const failed = new Error(isDiskFull(err)
-            ? 'Nicht genug Speicherplatz für die Sicherung vor der Wiederherstellung. Bitte Platz freigeben und erneut versuchen.'
-            : 'Sicherung vor der Wiederherstellung fehlgeschlagen');
-        failed.status = isDiskFull(err) ? 507 : 500;
-        throw failed;
-    }
-    if (!snapshot.verified) {
-        log.error(`[Backup Restore] Pre-restore snapshot ${snapshot.filename} failed its test (${snapshot.verify_error}), restore aborted`);
-        const failed = new Error('Sicherung vor der Wiederherstellung hat die Prüfung nicht bestanden');
-        failed.status = 500;
-        throw failed;
-    }
-    return snapshot;
-}
-
-/**
- * Restores a backup ZIP. Slow work (extract, validate, migrate, stage covers) runs before the live database is
- * touched; then a safety snapshot is taken and swapInStagedDb() replaces the file. options: allowNewerSchema, preRestoreSnapshot.
- */
-function restoreFromZip(source, options) {
-    return trackJob('Wiederherstellung', runRestore(source, options));
-}
-
-async function runRestore(source, { allowNewerSchema = false, preRestoreSnapshot = true } = {}) {
-    if (restoreRunning) {
-        const busy = new Error('Es läuft bereits eine Wiederherstellung. Bitte warte, bis sie fertig ist.');
-        busy.status = 409;
-        throw busy;
-    }
-    assertNoRollbackCopy();
-    restoreRunning = true;
-    let stagingDir = null;
-    try {
-        const limits = restoreLimits();
-        const zip = await openArchive(source, limits.maxEntries);
-        const images = new Set();
-        try {
-            const dbEntry = findDbEntry(zip.entries);
-            if (!dbEntry) {
-                throw invalidBackup(msg('Ungültiges Backup-Archiv: Keine manga.db Datenbank im ZIP gefunden.'));
-            }
-            const prefix = dbEntry.name.slice(0, -'manga.db'.length);
-            const uploads = restorableUploads(zip.entries, prefix);
-            disk.ensureFreeSpace(dataDir, Math.min(dbEntry.uncompressedSize, limits.maxDbBytes)
-                + Math.min(uploads.bytes, limits.maxUploadsBytes) + disk.fileSize(dbFilePath) + SPACE_MARGIN_BYTES, 'restore');
-
-            removeStagedDb();
-            await extractEntry(zip, dbEntry, stagedDbPath, limits.maxDbBytes);
-            validateDbFile(stagedDbPath);
-            removeJournalFiles(stagedDbPath);
-            assertSchemaSupported(readDbFacts(stagedDbPath).schema_version, allowNewerSchema);
-            removeJournalFiles(stagedDbPath);
-            migrateDbFile(stagedDbPath);
-
-            stagingDir = fs.mkdtempSync(path.join(tempDir, 'restore-uploads-'));
-            let budget = limits.maxUploadsBytes;
-            for (const { entry, name } of uploads.list) {
-                budget -= await extractEntry(zip, entry, path.join(stagingDir, name), budget);
-                images.add(name);
-            }
-            const skipped = zip.entries.filter(e => !e.name.endsWith('/') && e !== dbEntry && /(^|\/)uploads\//.test(e.name)).length - uploads.list.length;
-            if (skipped > 0) log.warn(`[Backup Restore] Skipped ${skipped} entries under uploads/ that are not flat image files`);
-        } finally {
-            await zip.fh.close().catch(() => {});
-        }
-
-        const safety = preRestoreSnapshot ? await takePreRestoreSnapshot() : null;
-        const mangaCount = swapInStagedDb();
-        const restoredImagesCount = moveRestoredUploads(stagingDir, images);
-        return { mangaCount, restoredImagesCount, preRestoreSnapshot: safety ? safety.filename : null };
-    } catch (err) {
-        removeStagedDb();
+        const upload = uploadedBackupPath(req);
+        if (upload) unlinkQuietly(upload);
         throw err;
-    } finally {
-        if (stagingDir) fs.rmSync(stagingDir, { recursive: true, force: true });
-        restoreRunning = false;
     }
-}
+    next();
+};
 
 // *_TEXTS: the extractor collects the role names as catalog keys (they reach the client as nested messages)
 const ROLE_TEXTS = { admin: 'Administrator', editor: 'Bearbeiter', visitor: 'Besucher', guest: 'Gast' };
@@ -465,7 +223,7 @@ function restoreErrorText(step, err, status) {
     return msg(RESTORE_REASON_TEXTS[step], { reason });
 }
 
-const EXPOSED_RESTORE_CODES = new Set(['SCHEMA_NEWER', 'ROLLBACK_COPY_PENDING', 'INSUFFICIENT_SPACE']);
+const EXPOSED_RESTORE_CODES = new Set(['SCHEMA_NEWER', 'ROLLBACK_COPY_PENDING', 'INSUFFICIENT_SPACE', 'UPDATE_RUNNING']);
 
 function sendRestoreError(res, step, err, status) {
     return sendError(res, status, restoreErrorText(step, err, status), EXPOSED_RESTORE_CODES.has(err.code) ? err.code : undefined);
@@ -549,7 +307,7 @@ router.get('/backups', requireAdmin, (req, res) => {
 });
 
 // 3. Create a new server snapshot
-router.post('/backups/create', requireAdmin, async (req, res) => {
+router.post('/backups/create', requireAdmin, refuseDuringUpdate, async (req, res) => {
     try {
         const snapshot = await trackJob('Snapshot', createBackupSnapshot('manual'));
         const body = { success: true, snapshot };
@@ -569,10 +327,11 @@ router.post('/backups/create', requireAdmin, async (req, res) => {
 });
 
 // 4. Restore from an existing server snapshot (one step; the two-step flow is /backup/inspect + /backup/restore/:id)
-router.post('/backups/:filename/restore', requireAdmin, async (req, res) => {
+router.post('/backups/:filename/restore', requireAdmin, refuseDuringUpdate, async (req, res) => {
+    const snapshot = findSnapshot(req.params.filename);
+    if (!snapshot) return snapshotNotFound(res);
+    await confirmRestorePassword(req, res);
     try {
-        const snapshot = findSnapshot(req.params.filename);
-        if (!snapshot) return snapshotNotFound(res);
         const { filename } = snapshot;
 
         const release = holdSnapshot(filename);
@@ -609,9 +368,12 @@ router.get('/backups/:filename/download', requireAdmin, (req, res) => {
 });
 
 // 6. Delete a specific server snapshot (and its sidecar)
-router.delete('/backups/:filename', requireAdmin, (req, res) => {
+router.delete('/backups/:filename', requireAdmin, refuseDuringUpdate, (req, res) => {
     const snapshot = findSnapshot(req.params.filename);
     if (!snapshot) return snapshotNotFound(res);
+    if (snapshot.filename === update.heldBackup()) {
+        return sendError(res, 409, 'Dieses Backup gehört zum laufenden Update und kann erst nach dessen Abschluss gelöscht werden.', 'BACKUP_HELD');
+    }
     scheduler.deleteSnapshot(snapshot.filename);
     res.json({ success: true, ...payloadMsg('message', msg('Snapshot gelöscht')) });
 });
@@ -648,12 +410,12 @@ const handleUploadedBackupRestore = async (req, res) => {
     }
 };
 
-router.post('/backup/restore', requireAdmin, requireSpaceForUpload, uploadBackup.single('backup'), handleUploadedBackupRestore);
-router.post('/restore', requireAdmin, requireSpaceForUpload, uploadBackup.single('backup'), handleUploadedBackupRestore);
+router.post('/backup/restore', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
+router.post('/restore', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
 
 // 8. Two-step restore, step 1: stage an uploaded ZIP (multipart field "backup") or a server snapshot
 // ({ filename }), check it and report what it contains. The staging id is valid for 15 minutes.
-router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup.single('backup'), async (req, res) => {
+router.post('/backup/inspect', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), async (req, res) => {
     const id = crypto.randomUUID();
     const uploadedPath = uploadedBackupPath(req);
     let stagedPath = null;
@@ -708,10 +470,10 @@ router.post('/backup/inspect', requireAdmin, requireSpaceForUpload, uploadBackup
 const stagingNotFound = (res) => sendError(res, 404,
     'Die Prüfung ist abgelaufen oder unbekannt. Bitte das Backup erneut auswählen und prüfen.', 'STAGING_NOT_FOUND');
 
-// Step 2: restore what step 1 staged. Body: { allow_newer_schema?: true }.
-router.post('/backup/restore/:stagingId', requireAdmin, async (req, res) => {
+router.post('/backup/restore/:stagingId', requireAdmin, refuseDuringUpdate, async (req, res) => {
     const entry = staged.get(req.params.stagingId);
     if (!entry || entry.userId !== req.user.id) return stagingNotFound(res);
+    await confirmRestorePassword(req, res);
     try {
         if (entry.type === 'snapshot') {
             const snapshot = findSnapshot(entry.filename);
@@ -751,6 +513,6 @@ router.delete('/backup/restore/:stagingId', requireAdmin, (req, res) => {
 });
 
 // for /api/health ("restoring")
-router.isRestoreRunning = () => restoreRunning;
+router.isRestoreRunning = isRestoreRunning;
 
 module.exports = router;

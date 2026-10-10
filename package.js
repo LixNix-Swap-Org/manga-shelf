@@ -5,12 +5,21 @@ const fs = require('fs');
 const path = require('path');
 const { ZipArchive } = require('archiver');
 const { readManifest, shippedFiles } = require('./scripts/stage-backend');
+const { ZIP_ASSET: ZIP_NAME, RELEASE_MANIFEST } = require('./services/update/constants');
 
-const ZIP_NAME = 'pterodactyl-manga-shelf.zip';
 // package-lock.json makes the egg's `npm install --omit=dev` install the tested dependency tree
 const PACKAGE_FILES = ['package.json', 'package-lock.json', '.env.example'];
 const FRONTEND_DIST = 'frontend/dist';
 const FRONTEND_INDEX = `${FRONTEND_DIST}/index.html`;
+const VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+function listFiles(root, rel) {
+  return fs.readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap(e => {
+    const child = `${rel}/${e.name}`;
+    if (e.isDirectory()) return listFiles(root, child);
+    return e.isFile() ? [child] : [];
+  });
+}
 
 function missingInputs(root) {
   const missing = [...PACKAGE_FILES, FRONTEND_INDEX].filter(rel => !fs.existsSync(path.join(root, rel)));
@@ -32,8 +41,12 @@ async function buildPackage({ root = __dirname, outDir = path.join(root, 'dist_p
     throw new Error(`Fehlende Dateien für die ZIP: ${missing.join(', ')}` +
       (missing.some(m => m.startsWith(FRONTEND_DIST)) ? ' (zuerst `npm run build:frontend`)' : ''));
   }
+  const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  if (!VERSION_RE.test(String(version))) throw new Error(`package.json hat keine gültige Version: ${version}`);
   const backend = shippedFiles(root);
   const required = [...PACKAGE_FILES, ...backend, FRONTEND_INDEX];
+  const files = [...PACKAGE_FILES, ...backend, ...listFiles(root, FRONTEND_DIST)].sort();
+  const manifest = { format: 1, version, files };
 
   fs.mkdirSync(outDir, { recursive: true });
   const zipPath = path.join(outDir, ZIP_NAME);
@@ -52,17 +65,22 @@ async function buildPackage({ root = __dirname, outDir = path.join(root, 'dist_p
       archive.pipe(output);
       for (const rel of [...PACKAGE_FILES, ...backend]) archive.file(path.join(root, rel), { name: rel });
       archive.directory(path.join(root, FRONTEND_DIST), FRONTEND_DIST);
+      archive.append(JSON.stringify(manifest, null, 2) + '\n', { name: RELEASE_MANIFEST });
       archive.finalize();
     });
-    const absent = required.filter(name => !entries.includes(name));
+    const absent = [...required, RELEASE_MANIFEST].filter(name => !entries.includes(name));
     if (absent.length) throw new Error(`Die ZIP enthält nicht alles Nötige: ${absent.join(', ')}`);
+    const zipped = entries.filter(name => !name.endsWith('/') && name !== RELEASE_MANIFEST).sort();
+    if (zipped.length !== files.length || zipped.some((name, i) => name !== files[i])) {
+      throw new Error(`Die Dateiliste in ${RELEASE_MANIFEST} weicht vom ZIP-Inhalt ab`);
+    }
     fs.renameSync(tmpPath, zipPath);
   } finally {
     fs.rmSync(tmpPath, { force: true });
   }
 
   if (copyToRoot) fs.copyFileSync(zipPath, path.join(root, ZIP_NAME));
-  return { zipPath, entries };
+  return { zipPath, entries, manifest };
 }
 
 if (require.main === module) {
@@ -77,4 +95,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { buildPackage, PACKAGE_FILES, FRONTEND_DIST, ZIP_NAME };
+module.exports = { buildPackage, PACKAGE_FILES, FRONTEND_DIST, ZIP_NAME, RELEASE_MANIFEST };

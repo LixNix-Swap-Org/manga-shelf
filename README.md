@@ -34,7 +34,7 @@ Repository: **[LixNix-Swap-Org/manga-shelf](https://github.com/LixNix-Swap-Org/m
 
 ## 2. Ways to run it
 
-Every release ships the Pterodactyl ZIP, the Docker image, the headless server binaries and packages, the desktop installers and the phone apps, plus `SHA256SUMS.txt`. Whatever you pick, the first start works the same way ([First start](#first-start)).
+Every release ships the Pterodactyl ZIP, the Docker image, the headless server binaries and packages, the desktop installers and the phone apps, plus `SHA256SUMS.txt` with its Sigstore signature ([Updating](#updating)). Whatever you pick, the first start works the same way ([First start](#first-start)).
 
 ### Docker
 
@@ -48,7 +48,7 @@ With Compose: take `docker-compose.yml` from the repository (`JWT_SECRET`, `TRUS
 
 * **Data:** database, images and backups live in `./data` on the host. The container starts as root, takes over the folder for uid 1000 and then runs the app as the user `node`.
 * **Setup code:** `docker logs manga-shelf` (or `docker compose logs manga-shelf`).
-* **Update:** `docker compose pull && docker compose up -d`. Without Compose: `docker pull`, remove the container, run the same `docker run` again.
+* **Update:** `docker compose pull && docker compose up -d`. Without Compose: `docker pull`, remove the container, run the same `docker run` again. A specific version and the way back: [Updating](#updating).
 * **Health:** the image has a `HEALTHCHECK` on `/api/health`; `docker ps` shows `healthy`.
 * **Console commands:** `docker exec -it -u node manga-shelf node scripts/admin.js status` (likewise `backup`, `benutzer`, `passwort-reset <name>`, `quellen`). Always pass `-u node`; without it new backups and reset files belong to root.
 * **Console via `docker attach`:** only when the container runs with an open stdin: enable the commented lines `stdin_open: true` and `tty: true` in `docker-compose.yml` (or `docker run -it -d …`) and recreate the container. Leave with Ctrl+P, Ctrl+Q; Ctrl+C stops the server.
@@ -66,6 +66,8 @@ Requires Node.js 22.13 or newer (the app uses the built-in `node:sqlite`).
 5. **Start.** The egg installs the dependencies at every start (`npm install --omit=dev --ignore-scripts`), creates `data/manga.db` and prints the setup code to the console.
 
 **Update:** upload the new `pterodactyl-manga-shelf.zip` in the File Manager, unpack it and overwrite the existing files (delete nothing beforehand; `data/`, `.env` and `ssl/` stay), then restart the server.
+
+From 3.1.0 on the server installs a new release by itself under System → Updates ([Updating](#updating)); the manual way above stays valid.
 
 If `npm run package` fails, build the ZIP by hand: run `cd frontend && npm install && npm run build`, then zip with their folder structure `package.json`, `package-lock.json`, `.env.example`, `frontend/dist/` and everything listed under `"files"` in `package.json` (today `index.js`, `db.js`, `core/`, `mangaPassion.js`, `healthcheck.js`, `middleware/`, `routes/`, `scripts/admin.js`, `services/`, `utils/`). Never include `node_modules/` or `data/` (a packed `data/` would overwrite the database on the server when unpacked).
 
@@ -85,13 +87,13 @@ chmod +x manga-shelf-server-linux-x64
 ./manga-shelf-server-linux-x64 --port 3000 --data-dir ./manga-data
 ```
 
-Options: `--port`, `--host` (default `0.0.0.0`), `--data-dir`, `--log-file` (also writes `<data folder>/logs/manga-shelf.log`, rotated), `--no-console`, `--version`, `--help`. Without `--data-dir` the data lives in `~/.local/share/manga-shelf` (Linux), `~/Library/Application Support/manga-shelf` (macOS) or `%LOCALAPPDATA%\manga-shelf\data` (Windows). A `.env` in the data folder is read; the environment and the command line win. The server refuses to start when that `.env` is a link, belongs to another user or can be changed by others, and names the fix (`chmod 600 <data folder>/.env`, on Windows an `icacls` line). The web portal is unpacked into a cache folder (`MANGA_SHELF_CACHE_DIR` moves it). Console commands run as subcommands: `manga-shelf-server-linux-x64 passwort-reset Kim --data-dir ./manga-data`.
+Options: `--port`, `--host` (default `0.0.0.0`), `--data-dir`, `--log-file` (also writes `<data folder>/logs/manga-shelf.log`, rotated), `--no-console`, `--version`, `--help`. For a stopped server there are `restore <backup.zip> [--allow-newer-schema]` and `db-check <file>` ([Updating](#updating)). Without `--data-dir` the data lives in `~/.local/share/manga-shelf` (Linux), `~/Library/Application Support/manga-shelf` (macOS) or `%LOCALAPPDATA%\manga-shelf\data` (Windows). A `.env` in the data folder is read; the environment and the command line win. The server refuses to start when that `.env` is a link, belongs to another user or can be changed by others, and names the fix (`chmod 600 <data folder>/.env`, on Windows an `icacls` line). The web portal is unpacked into a cache folder (`MANGA_SHELF_CACHE_DIR` moves it). Console commands run as subcommands: `manga-shelf-server-linux-x64 passwort-reset Kim --data-dir ./manga-data`.
 
 **As a service** (`uninstall-service` removes it; the data stays):
 
-* **Linux (systemd):** `sudo ./manga-shelf-server-linux-x64 install-service` copies the program to `/usr/local/bin/manga-shelf-server`, creates the user `manga-shelf`, uses `/var/lib/manga-shelf` (0750) and starts `manga-shelf.service`. Logs and setup code: `journalctl -u manga-shelf -n 50`. Without root: `install-service --user` (plus `loginctl enable-linger $USER` to run without a login).
-* **Debian/Ubuntu/Fedora:** `sudo apt install ./manga-shelf-server_*_amd64.deb` or `sudo dnf install ./manga-shelf-server-*.rpm` sets up the same service; install a newer package to update. Removing the package keeps `/var/lib/manga-shelf`.
-* **macOS (launchd):** `./manga-shelf-server-macos-universal install-service` creates the LaunchAgent `de.manga-shelf.server` (starts at login, restarts after a crash). Logs: `~/Library/Application Support/manga-shelf/logs/manga-shelf.log`.
+* **Linux (systemd):** `sudo ./manga-shelf-server-linux-x64 install-service` copies the program to `/usr/local/bin/manga-shelf-server`, creates the user `manga-shelf`, uses `/var/lib/manga-shelf` (0750) and starts `manga-shelf.service`. Logs and setup code: `journalctl -u manga-shelf -n 50`. Without root: `install-service --user` (plus `loginctl enable-linger $USER` to run without a login); that service runs the program file where it lies and can update itself under System → Updates when that folder is yours.
+* **Debian/Ubuntu/Fedora:** `sudo apt install ./manga-shelf-server_*_amd64.deb` or `sudo dnf install ./manga-shelf-server-*.rpm` sets up the same service; install a newer package to update (System → Updates shows the command for the version you pick). Removing the package keeps `/var/lib/manga-shelf`.
+* **macOS (launchd):** `./manga-shelf-server-macos-universal install-service` creates the LaunchAgent `de.manga-shelf.server` (starts at login, restarts after a crash; the program stays where it is and can update itself under System → Updates when that folder is yours). Logs: `~/Library/Application Support/manga-shelf/logs/manga-shelf.log`.
 * **Windows:** in a command prompt **as Administrator** `manga-shelf-server-windows-x64.exe install-service`. The program goes to `C:\Program Files\Manga Shelf Server\` and runs as the scheduled task "Manga Shelf Server" at system start as **LOCAL SERVICE** (`--account NetworkService`, `DOMAIN\name`, `.\name` or a SID for another account), data in `C:\ProgramData\manga-shelf\data` with permissions only for that account, SYSTEM and the Administrators. Installs made with an older version (ran as SYSTEM) run `install-service` once more. Open the port in the Windows Firewall for other devices.
 
 Build it yourself (in the project folder): `npm ci && (cd frontend && npm ci && npm run build) && node scripts/server-bin/build-sea.js` (current system; `--target linux-x64,linux-arm64,windows-x64,macos-universal` for others, `macos-universal` only on a Mac, downloading the official Node per target and checking its checksum; needs Node 25.5 or newer). `node scripts/server-bin/smoke.js <file>` checks a result.
@@ -127,9 +129,70 @@ Admins add further accounts under Users: **Editor** (changes the collection), **
 | `rollback-aufraeumen [bestaetigen]` | check `manga.db` and delete a leftover `manga.db.bak` |
 | `quellen …` | API keys: state, guide, set, remove ([API keys](#api-keys)) |
 
+Two more commands run only as a one-shot call, not in the console: `node scripts/admin.js wiederherstellen <backup.zip>` restores a backup into a stopped server, and `node scripts/admin.js db-check <file>` tests on a copy whether this version can open and migrate a database (the headless binary has them as the subcommands `restore` and `db-check`; [Updating](#updating)).
+
+### Updating
+
+As an admin, open **System → Updates** to see every published release. Where the server can replace itself (Pterodactyl, a headless binary installed under your own user), "Auf vX aktualisieren", or another version plus "Herunterladen und prüfen", downloads and checks the release in the background. You can close the dialog meanwhile, and "Abbrechen" discards the download. "Installieren" asks for your password again, creates a verified database backup and restarts the server. The page reloads by itself once the new version answers; after 3 minutes it shows where to look (panel console, journalctl, launchd log, or the start command). Everywhere else the card shows the exact command or download link for the chosen version.
+
+Only newer versions can be installed with a click, and only releases from 3.1.0 on carry the signature the check needs (older ones show "ohne Signatur"). The step from 3.0.0 to 3.1.0 is therefore the last manual one for Pterodactyl servers and self-installed binaries; servers before 3.1.0 have no Updates card. The phone apps and the desktop app are updated separately from the server.
+
+* **Pterodactyl** (recognised by the variable `P_SERVER_UUID` that the panel sets; the program folder must be writable): installs `pterodactyl-manga-shelf.zip` by itself. After the switch the server exits with code 75 and Wings starts it again like after a crash; if it stays stopped, press **Start** in the panel. The console shows `[Update] Neustart für Update auf vX (Exit 75 beabsichtigt)` first, and the panel console then shows a crash with exit code 75: that is intended. When a release changes the production dependencies, the start command has to install them (`npm install` or `npm ci`, as the egg does), otherwise the update is refused before anything changes. Only the files the ZIP ships are replaced; files the previous release listed in its `.manga-shelf-release.json` (3.1.0 and newer) and the new one no longer ships are moved aside, and `data/`, `node_modules/`, `.env`, `ssl/`, `uploads/` and files of your own are never touched.
+* **Headless binary in a folder of your own** (the file belongs to the account that runs it, is not a link, cannot be changed by others and is not in a system folder such as `/usr/bin`, `/usr/local/bin` or `Program Files`): replaces the file. Started by systemd (`install-service --user`) or launchd (the macOS LaunchAgent) it exits with code 75 and the service manager starts the new file; started by hand (also on Windows) it exits cleanly after the switch and the page shows the command to start it again.
+* **Everything else** shows the steps for the version you pick:
+  * Linux service made with `sudo … install-service`: `curl -LO <download link> && chmod +x <file> && sudo ./<file> install-service` plus your usual options.
+  * Debian/Ubuntu/Fedora packages: `curl -LO <download link> && sudo apt install ./<file>` or `sudo dnf install ./<file>`.
+  * Windows task: download `manga-shelf-server-windows-x64.exe` and run `manga-shelf-server-windows-x64.exe install-service` in a command prompt as Administrator, with your usual options.
+  * Any other binary you cannot change (system folder, another owner): replace the file as its owner and restart it.
+  * Docker: `docker compose pull && docker compose up -d` for the newest release. For another version put the line `image: ghcr.io/lixnix-swap-org/manga-shelf:X.Y.Z` into `docker-compose.yml` and run `docker compose up -d`. Started with `docker run`: `docker pull ghcr.io/lixnix-swap-org/manga-shelf:X.Y.Z`, remove the container and run the same `docker run` command again with that tag.
+  * Desktop app (also for a server it hosts): install the new version from the [releases](https://github.com/LixNix-Swap-Org/manga-shelf/releases).
+  * From source: unpack `pterodactyl-manga-shelf.zip` of the release over the program files (`data/`, `.env` and `ssl/` stay) and run `npm ci --omit=dev`, or check out the tag (`git fetch --tags && git checkout vX.Y.Z`) and run `npm ci && (cd frontend && npm ci && npm run build)`; then restart.
+
+**Private data folder.** Installing from the system page needs a private data folder: `DATA_DIR` must be a real folder (no symbolic link) owned by the user the server runs as and not writable by group or others (for example `chmod 700`; on Windows only the check for a link applies). Otherwise the page refuses with "Dieses Update kann auf diesem Server nicht installiert werden." and the console names the folder and the problem (`symlink`, `foreign_owner` or `shared_writable`). `temp/` and `temp/update/` inside it are created with 0700, and existing ones lose the write permission of group and others automatically.
+
+**What is checked.** Before a downloaded file is written into place:
+
+* It comes over HTTPS from `api.github.com`, `github.com`, `objects.githubusercontent.com` or `release-assets.githubusercontent.com` (at most three redirects, all to these hosts; addresses of the local network are refused; size limits apply).
+* `SHA256SUMS.txt` carries a keyless Sigstore signature (`SHA256SUMS.txt.sigstore.json`) made by the release workflow `release.yml` on `main` of this repository: the signer identity, the issuer and the certificate's repository, owner, trigger, runner and branch are pinned. The Sigstore trust root comes from `tuf-repo-cdn.sigstore.dev` (cached in `<data folder>/cache/sigstore`).
+* The signed sums contain the version marker `manga-shelf-release-vX.Y.Z.json`, which ties them to the chosen version, and the SHA-256 of the downloaded file has to match its line.
+* The new files must fit the server: for the ZIP the version, the Node.js range, the syntax of `index.js` and `db.js` and the dependencies, for a binary a test run (`version`, and from 3.1.0 on `db-check` on a copy of the database).
+
+If anything fails, nothing changes and the download is deleted. A successful check stays valid for 15 minutes. By hand (cosign v3), the same as in the release text:
+
+```bash
+cosign verify-blob SHA256SUMS.txt --bundle SHA256SUMS.txt.sigstore.json --certificate-identity https://github.com/LixNix-Swap-Org/manga-shelf/.github/workflows/release.yml@refs/heads/main --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c SHA256SUMS.txt --ignore-missing
+```
+
+A server trusts whatever the release workflow on `main` signs, so protecting `main` and that workflow is the maintainers' job. Before the first release with the updater (3.1.0) the maintainers set up three things: branch protection or a ruleset on `main` with at least one required approving review, the GitHub Environment `release` with required reviewers (Settings → Environments; limit its deployment branches to `main`), and immutable releases (Settings → General → Releases). The job `sign` runs in that environment, so nothing is signed before a reviewer approves the run, and the `version` job refuses `action: release` while `main` is unprotected or the environment has no required reviewers. A compromised maintainer account is outside what the check can catch.
+
+**What "Installieren" does.** From the backup until the restart the server refuses every write request (503 `MAINTENANCE`; restoring and deleting backups answer 409 `UPDATE_RUNNING`), reading keeps working and everyone stays signed in:
+
+1. The backup `backups/vor-update-v<old>-auf-v<new>-<time>.zip` (database only, verified, uploads stay) is written. It is kept until the new version has run for 10 minutes. If the new version still has database migrations to run, it writes its own `vor-update-…` backup with schema numbers at its first start.
+2. The new files are put next to the old ones, the old server shuts down, and only then the files are switched (a journal makes a crash in between harmless: the next start completes or undoes the switch).
+3. The server restarts as described above and counts the start. Ten minutes after a good start the previous files, the staging and the hold on the backup are removed.
+
+If the new version does not come up, or crashes within 10 minutes of starting, the previous files are put back automatically (Pterodactyl at the first crash, binaries at the second). If the new version had already migrated the database, the backup from before the update is restored too; if it had already started by then, the database it wrote is kept in the data folder as `manga.db.v<version>-<time>` (with its `-wal` file), so changes made in those minutes are not lost. On Pterodactyl the console then says `[Update] vorherige Version wiederhergestellt – Server im Panel starten`: press **Start**. System → Updates shows the result and the name of the backup.
+
+The exit codes of this process: 75 asks Wings, systemd or launchd for a restart (after the switch and after a rollback), 78 stands for a database from a newer version (below), and 74 means that a rollback was started and could not be finished. The console then says `[Update] Zurücksetzen auf vX unterbrochen: … – der nächste Start setzt es fort`, the server stops on purpose, and the next start finishes the rollback before the new version runs. If that line comes back after every start, check the file permissions in the code folder (for a binary: the folder it lies in).
+
+**Going back.** The database only migrates forward, so there is no click for an older version. To return, the backup from before the update is the way (the file stays in `<data folder>/backups`; upload it in the Backups dialog if it is not listed):
+
+1. Stop the server and install the old version the usual way (old ZIP, image tag or binary), but do not start it yet.
+2. With the old version from 3.1.0 on, restore the backup while the server is stopped: `manga-shelf-server restore <backup.zip>` for the binary (plus `--data-dir <folder>` if you use one), `node scripts/admin.js wiederherstellen <backup.zip>` for the ZIP, from source and Docker (`docker compose run --rm manga-shelf node scripts/admin.js wiederherstellen <backup.zip>`). The file name from `backups/` is enough; the current database is saved as `vor-wiederherstellung-….zip` first. Then start the server.
+3. With an old version before 3.1.0 (no offline restore) start it and at once restore the backup as an admin in the Backups dialog; change nothing before.
+
+**Pterodactyl:** a stopped server has no shell, so the offline restore of step 2 cannot be run there. Install the old ZIP with the panel's file manager and, with an old version from 3.1.0 on, add the line `ALLOW_NEWER_SCHEMA=1` to `.env` in the server's folder (`/home/container/.env`) with the file manager. Start the server and restore the `vor-update-…zip` backup in the Backups dialog right away (your password is asked); change nothing before that. Then remove the line again.
+
+Never run an old version permanently on the migrated database: what it writes (e.g. the old volume status "Gelesen") is not converted by a later update. Images in `uploads/` survive both directions.
+
+**Database from a newer version.** From 3.1.0 on a server refuses to open a database written by a newer version: it logs `SCHEMA_NEWER` with the way out and exits with code 78 (a systemd unit made by `install-service` does not restart after it; the `.deb`/`.rpm` unit and the macOS LaunchAgent keep trying every few seconds until you act). Either install the newer version again, or restore the backup from before the update as above. Only if you know that this version can work with the newer database, start it once with `ALLOW_NEWER_SCHEMA=1` (and remove that afterwards). On Pterodactyl (`P_SERVER_UUID` set) the `SCHEMA_NEWER` message names the panel route instead of the shell commands: `.env` with `ALLOW_NEWER_SCHEMA=1`, then the Backups dialog ("Going back" above). A restore confirmed with "allow newer schema" (the Backups dialog or `--allow-newer-schema`) is remembered and lets the server start.
+
+**Switches and connections.** `UPDATE_CHECK=false` hides the card and switches off every connection to GitHub; `UPDATE_INSTALL=false` keeps the list and the instructions but refuses downloading and installing ([section 5](#5-configuration)). The server contacts `api.github.com` (the release list), `github.com`, `objects.githubusercontent.com` and `release-assets.githubusercontent.com` (downloads) and `tuf-repo-cdn.sigstore.dev` (Sigstore trust root, only when a release is verified), and only while an admin has System open or an update is being prepared. The release list is cached for an hour in `<data folder>/cache/releases.json`; after a failure "Erneut versuchen" asks again (at most six times in ten minutes), and a GitHub rate limit shows the time of the next try.
+
 ### Upgrading from v2.19.1
 
-Read the admin notes at the top of [`CHANGELOG.md`](CHANGELOG.md) first. In short:
+Read the admin notes of the 3.0.0 section in [`CHANGELOG.md`](CHANGELOG.md) first. In short:
 
 * **Database migrations 12–27** run at the first start. Before any pending migration the server writes `data/backups/vor-update-v<old>-auf-v<new>-….zip`; if that fails (disk full, read-only folder) it does not start and changes nothing. `MIGRATE_WITHOUT_SNAPSHOT=1` migrates without it, once and deliberately.
 * **Data changes:** migration 22 unifies known publisher spellings (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga"); migration 27 turns series languages into ISO codes ("Deutsch" → `de`), sets the currency `EUR` on every series and sets an unrecognised language to `de`, named in the start log, so check those series afterwards.
@@ -138,7 +201,7 @@ Read the admin notes at the top of [`CHANGELOG.md`](CHANGELOG.md) first. In shor
 * **Pterodactyl:** import the egg again. **Windows service:** run `install-service` again.
 * **Scripts against the API:** `GET /api/stats` moved its key figures under `summary`, series languages are ISO codes, money totals add euro only. Details in the changelog.
 
-**No downgrade.** There is no automatic way back. To return to the old version: stop the server, install the old version (old ZIP or image tag), start it and at once restore the `vor-update-…zip` backup as an admin (upload it if it is not listed); change nothing before. Never run the old version permanently on the migrated database: what it writes (e.g. the old volume status "Gelesen") is not converted by a later update. Images in `uploads/` survive both directions.
+**No downgrade.** There is no automatic way back; the steps with the `vor-update-…zip` backup are under "Going back" in [Updating](#updating).
 
 ### HTTPS and reverse proxy
 
@@ -192,7 +255,7 @@ The interface switches between shelf, shopping list, release radar and anime tab
 * **Trash:** deleted series and volumes can be restored for 30 days (statistics dialog → Trash).
 * **Tidy up:** "Merge publishers" unifies spellings, editable tags, "Tidy up collection" lists incomplete or contradictory entries with one-click fixes.
 * **Users and roles:** Admin, Editor, Guest; "End all sessions"; "Connect with app" shows a QR code for the phone apps.
-* **System page** (admins): version and update notice, storage, database, backups, orphaned images, load of the external sources.
+* **System page** (admins): version, releases and updates ([Updating](#updating)), storage, database, backups, orphaned images, load of the external sources.
 * **Installable web app (PWA)** with a readable offline copy and an offline outbox.
 
 ### API keys
@@ -219,7 +282,7 @@ Windows `manga-shelf-<version>-windows-x64-setup.exe` or `-portable.exe`, macOS 
 * **"Mit Server verbinden"** (connect to a server): a client of your Docker, Pterodactyl or headless server; addresses and sign-in in the system keychain.
 * **"Dieses Gerät ist Server"** (this device is the server): port 3000 in the home network, "Adresse für andere Geräte" shows the address and a QR code for the phone apps, tray icon, optional start at login.
 
-The app sets and shows the setup code (File → "Einrichtungscode anzeigen…"). To move from "only this device" to a server, download the backup ZIP and restore it on the server. Command line: `--server-only`, `--port <n>`, `--host <address>`, `--data-dir <folder>`, `--connect <url>`, `--hidden`, `--user-data-dir <folder>`. There are no automatic updates; admins see new versions on the system page.
+The app sets and shows the setup code (File → "Einrichtungscode anzeigen…"). To move from "only this device" to a server, download the backup ZIP and restore it on the server. Command line: `--server-only`, `--port <n>`, `--host <address>`, `--data-dir <folder>`, `--connect <url>`, `--hidden`, `--user-data-dir <folder>`. There are no automatic updates: under System → Updates admins see the new versions and the download link.
 
 Unsigned builds: macOS "cannot be opened" → right click → Open (or `xattr -dr com.apple.quarantine "/Applications/Manga Shelf.app"`); Windows SmartScreen → "More info" → "Run anyway"; Linux AppImage needs `chmod +x`.
 
@@ -242,7 +305,7 @@ Under **Server** you find "Export backup"/import (ZIP in the server's backup for
 
 | Path | When | What happens |
 |---|---|---|
-| **Transfer to server** | a new, freshly set up server | sign in as admin; the app sends its collection with covers as a backup, the server shows its figures first and warns when it already holds data; the local profile becomes that admin account |
+| **Transfer to server** | a new, freshly set up server | sign in as admin (that password confirms the restore); the app sends its collection with covers as a backup, the server shows its figures first and warns when it already holds data; the local profile becomes that admin account |
 | **Merge** | a server with its own collection | series and volumes are added via CSV (dry run with preview first); ownership and reading go to the signed-in user; covers are not transferred |
 | **Fetch from server** | a server collection onto the phone | as admin the full backup with covers, otherwise the offline copy; replaces the collection on the device; passwords, API keys and calendar keys of server accounts never stay on the device |
 
@@ -261,7 +324,7 @@ Apps only, off by default, editors and admins. The card "Crunchyroll history (ex
 
 ## 5. Configuration
 
-Every variable is optional. Sources in order of priority: the command line of the headless server (`--port`, `--host`, `--data-dir`), the environment (Pterodactyl startup tab, Docker `environment`), a `.env` in the working directory (headless server: in the data folder; `scripts/admin.js`: next to `index.js`). `.env.example` comments every value. An unusable value logs a warning at startup and the default applies; only an invalid port, an invalid `TRUST_PROXY`, an unreadable `secret.key`, a pre-update backup that cannot be written and, for the headless server, a `.env` others may change stop the start.
+Every variable is optional. Sources in order of priority: the command line of the headless server (`--port`, `--host`, `--data-dir`), the environment (Pterodactyl startup tab, Docker `environment`), a `.env` in the working directory (headless server: in the data folder; `scripts/admin.js`: next to `index.js`). `.env.example` comments every value. An unusable value logs a warning at startup and the default applies; only an invalid port, an invalid `TRUST_PROXY`, an unreadable `secret.key`, a pre-update backup that cannot be written, a database written by a newer version (exit code 78) and, for the headless server, a `.env` others may change stop the start.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -282,7 +345,8 @@ Every variable is optional. Sources in order of priority: the command line of th
 | `MIGRATE_WITHOUT_SNAPSHOT` | `false` | `1` migrates even when the pre-update backup cannot be written (set once, deliberately). |
 | `RESTORE_MAX_DB_BYTES`, `RESTORE_MAX_UPLOADS_BYTES`, `RESTORE_MAX_ENTRIES` | 2 GiB, 4 GiB, `100000` | Limits when unpacking a backup. |
 | `ADMIN_CONSOLE` | `true` | Console commands on stdin. |
-| `UPDATE_CHECK` | `true` | The system page asks GitHub for a new version at most once a day, only while an admin has it open. |
+| `UPDATE_CHECK` | `true` | The system page asks GitHub for the published releases (list cached for an hour), only while an admin has it open. `false` removes the update card and every connection to GitHub. |
+| `UPDATE_INSTALL` | `true` | Install updates from the system page (Pterodactyl, headless binary in your own folder). `false` keeps the list and the manual instructions but refuses downloading and installing (403 `UPDATE_INSTALL_OFF`). |
 | `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | `debug`/`info`/`warn`/`error`/`silent`; `json` for log tools. |
 | `ANIME_ANILIST_RPM`, `ANIME_JIKAN_RPM` | `30`, `60` | Requests per minute of the shared AniList and Jikan access (1 to 600). |
 | `ANIME_SOURCES` | `anilist,jikan` | Active anime sources (`jikan` or `mal` stands for MyAnimeList); unknown names are ignored with a warning. |
@@ -304,19 +368,19 @@ Not read by the server: `REMOTE_URL`, `REMOTE_HOST`, `REMOTE_PORT`, `REMOTE_USER
 
 ### Data folder
 
-`DATA_DIR` holds `manga.db` (SQLite, WAL), `uploads/` (images), `backups/` (snapshots), `secret.key` and, for the headless server, `.env`, `ssl/` and `logs/`. Copying the whole folder while the server is stopped moves everything, the secret included.
+`DATA_DIR` holds `manga.db` (SQLite, WAL), `uploads/` (images), `backups/` (snapshots), `secret.key`, `cache/` (release list and Sigstore trust root of the updater, safe to delete), `temp/` (staging; during an update `temp/update/`), the journal `update-state.json` of the last in-app update and, for the headless server, `.env`, `ssl/` and `logs/`. Copying the whole folder while the server is stopped moves everything, the secret included.
 
 ### Backups and restore
 
 As an admin under **Backups**:
 
-* **Automatic:** every day at `BACKUP_HOUR` (default 3, time zone `BACKUP_TIMEZONE`) a verified snapshot in `data/backups/`. Kept per kind: 7 daily, 10 manual, 3 before a restore, 3 before an update (`BACKUP_KEEP_*`).
+* **Automatic:** every day at `BACKUP_HOUR` (default 3, time zone `BACKUP_TIMEZONE`) a verified snapshot in `data/backups/`. Kept per kind: 7 daily, 10 manual, 3 before an update (`BACKUP_KEEP_*`; the backup an update still needs is never removed before the update is confirmed).
 * **Create a snapshot** (or `backup` in the console) and **download a ZIP** directly: `manga.db` plus every image from `uploads/`.
-* **Restore** from a snapshot or an uploaded ZIP (up to 500 MB). The server checks the archive first and shows its content; it swaps only after confirmation. A `vor-wiederherstellung-*` snapshot is taken before, so the restore can be undone. Every other session ends.
+* **Restore** from a snapshot or an uploaded ZIP (up to 500 MB). The server checks the archive first and shows its content; it swaps only after confirmation, which asks for your current password because a restore replaces every account and its password (a wrong entry counts toward the sign-in lock; scripts send it as `current_password`). A `vor-wiederherstellung-*` snapshot is taken before, so the restore can be undone. Every other session ends.
 * **Secret:** `secret.key` is in no backup. Stored API keys are encrypted with it, so after restoring on another server they have to be entered again.
-* **Backup from the app:** a server collection fetched into the app, or imported there from a server ZIP, holds no passwords any more. When that app ZIP is restored on a server, the check names the accounts without a password; they need a password reset in the user management. If your own account is among them, set a new password before signing out; with nobody signed in only the console command `passwort-reset <name>` helps. Into a server with a collection of its own, use "Merge" (CSV) instead of a restore.
+* **Backup from the app:** a server collection fetched into the app, or imported there from a server ZIP, holds no passwords any more. When that app ZIP is restored on a server, the check names the accounts without a password; they need a password reset: another admin sets one in the user management, or the console command `passwort-reset <name>` does. Your own password cannot be changed without its current one, so if your account is among them and nobody else can sign in, only the console helps. Into a server with a collection of its own, use "Merge" (CSV) instead of a restore.
 * Deleted something after the last backup? Look in the trash first (30 days).
-* Going back to an older version: see [Upgrading from v2.19.1](#upgrading-from-v2191).
+* Going back to an older version: see "Going back" in [Updating](#updating).
 
 ### Security model
 
@@ -325,6 +389,7 @@ As an admin under **Backups**:
 * **Origin check:** writing API requests a browser sends from another origin are rejected; CORS only for `CORS_ORIGIN` and the app origins. Security headers include a CSP, Permissions-Policy, COOP and HSTS over HTTPS.
 * **Rate limits** per address and per account (brute-force protection without locking out the admin) and per-account limits for external lookups. They depend on correct client addresses, hence `TRUST_PROXY`. A general limit per client in front of every route (`RATE_LIMIT_UMBRELLA`, default 1200 API, 3000 web app and 24000 cover requests per minute) is a flood guard; it is set high enough that clients sharing one address behind a proxy, or an app taking over a large collection, do not reach it.
 * **Uploads:** images up to 15 MB, checked by magic bytes, EXIF/GPS stripped, random file names, a CSP of their own under `/uploads`; image downloads from URLs are SSRF-safe.
+* **Updates:** only admins, and the install asks for the current password again (cookie and bearer alike; wrong entries count toward the sign-in lock of the account). Nothing is installed that is not signed by this repository's release workflow ([Updating](#updating)); one update at a time, writes are refused while it runs. Restoring a backup, changing your own account and creating or promoting an admin in the user management ask for your current password as well (scripts send it as `current_password`).
 * **Headless server:** refuses a `.env` others can change; Linux data folder 0750 and `UMask=0027`, Windows service as LOCAL SERVICE with a protected ACL.
 * **Apps:** tokens and API keys in the system keychain or keystore; plain `http://` only to home-network addresses.
 
@@ -344,7 +409,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 | `npm run dev` | backend and Vite together, demo collection in `data-dev/` |
 | `npm run dev:api` | backend only |
 | `npm start` | production server (`node index.js`) |
-| `npm test` | backend tests (`node:test`: `test/`, `test/core/`, `test/anime/`) |
+| `npm test` | backend tests (`node:test`: `test/`, `test/core/`, `test/anime/`, `test/update/`) |
 | `npm run test:frontend` | Vitest component tests in `frontend/` |
 | `npm run lint` | ESLint 10 |
 | `npm run build:frontend` | `npm ci` and the Vite build of `frontend/` |
@@ -374,11 +439,12 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 * **Build by button:** Actions → **Build** → **Run workflow** on any branch builds every artifact (unsigned, nothing published; the desktop installers can be switched off); Actions → **Mobile** → **Run workflow** builds only the apps (`smoke`: debug APK and simulator app, `build`: APK/AAB and IPA).
 * **Publishing only by button:** Actions → **Release** → **Run workflow**, pick the branch and `action`:
   * `build`: build everything (signed when the secrets exist), publish nothing;
-  * `release`: bump the version (`bump` = `patch`/`minor`/`major`; `none` takes the version from `package.json`, its tag must not exist), commit and tag `vX.Y.Z`, build everything including the apps, push the image to GHCR with `X.Y.Z` and `vX.Y.Z` (signed keyless with cosign), create the GitHub release with all files, `SHA256SUMS.txt` and generated notes; only then do `X.Y` and `latest` move to that image. A failed run never moves `latest`; a pushed tag alone publishes nothing.
+  * `release`: bump the version (`bump` = `patch`/`minor`/`major`; `none` takes the version from `package.json`, its tag must not exist), commit and tag `vX.Y.Z` (only when `main` is protected and the environment `release` has required reviewers, otherwise the run stops before anything is committed), build everything including the apps, push the image to GHCR with `X.Y.Z` and `vX.Y.Z`, write the version marker `manga-shelf-release-vX.Y.Z.json` and `SHA256SUMS.txt` and sign the sums and the image keyless with Sigstore (job `sign`, which waits for the approval of the `release` environment; `SHA256SUMS.txt.sigstore.json` is checked with the server's own verifier before anything is published, and the image signature is the last step and does not stop the release), create the GitHub release with all files, the signed sums and generated notes; only then do `X.Y` and `latest` move to that image. A failed run never moves `latest`; a pushed tag alone publishes nothing.
 * **Locally:** `node release.js minor --dry-run` shows the next version, `node release.js minor` (or `patch`, `major`, `X.Y.Z`) needs a clean tree and a free tag and sets it in every `package.json`/`package-lock.json` and the native Android/iOS projects, without commit, tag or push; then commit, push and run the workflow with `bump = none`.
-* **Once:** with a protected branch, a fine-grained PAT with `Contents: Read and write` as the secret `RELEASE_TOKEN` (otherwise `GITHUB_TOKEN` is enough). Set the GHCR package `manga-shelf` to public after the first release. While the repository itself is private, release downloads and the image are reachable only for collaborators and the in-app update notice gets no data; make the repository public for end users.
-* **Recovery:** `release` pushes the version commit and the tag before it builds; if a later job fails, use **Re-run failed jobs** on that run (a fresh run would need the next version). `release` only runs from the default branch; `build` runs from any branch.
-* **Update notice:** the server checks `releases/latest` of `LixNix-Swap-Org/manga-shelf`; never publish releases as pre-releases.
+* **Once:** protect `main` with a required review, create the environment `release` with required reviewers and turn on immutable releases ([Updating](#updating)). A fine-grained PAT with `Contents: Read and write` goes in as the secret `RELEASE_TOKEN`; with a required review on `main` it has to belong to an account allowed to bypass that rule (classic protection: an admin with bypassing allowed; ruleset: the bypass list), because the `tag` job pushes the version commit directly. Set the GHCR package `manga-shelf` to public after the first release. While the repository itself is private, release downloads and the image are reachable only for collaborators, System → Updates gets no data and the `sign` job refuses to run; make the repository public for end users.
+* **Recovery:** `release` pushes the version commit and the tag before it builds; if a later job fails, use **Re-run failed jobs** on that run (a fresh run would need the next version). If the `sign` job fails after the tag exists, open the run and use "Re-run failed jobs": `sign` and `publish` run again, nothing was published (the image only has its fixed `X.Y.Z`/`vX.Y.Z` tags, `latest` did not move). The sign job refuses to run for a private repository, because a keyless signature writes the repository name into the public Rekor log. `release` only runs from the default branch; `build` runs from any branch.
+* **Update list:** servers from 3.1.0 on read the published releases of `LixNix-Swap-Org/manga-shelf` (tags `vX.Y.Z`, no drafts or pre-releases), older servers read `releases/latest`; never publish releases as pre-releases.
+* **Admin notes:** a `### Before updating` block inside the CHANGELOG section `## X.Y.Z` is copied by `scripts/release/notes.js` to the top of the release text (it ends at the next heading) and shown by System → Updates in the confirm step. The section has to be on `main` before the release is dispatched.
 
 **Signing** (repository secrets; missing groups are built unsigned):
 
