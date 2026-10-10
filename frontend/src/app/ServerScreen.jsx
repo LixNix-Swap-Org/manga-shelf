@@ -1,8 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Check, ClipboardPaste, Pencil, Plug, Plus, Server, ShieldAlert, Trash, Wifi, WifiOff, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Camera, Check, ClipboardPaste, Pencil, Plug, Plus, Server, ShieldAlert, Trash, Wifi, WifiOff, X } from 'lucide-react';
 import { useDocumentTitle } from '../components/common/PageChrome';
 import { notify } from '../utils/notify';
+import { haptic } from '../utils/haptics';
+import { liveScanSupported } from '../utils/scanHelpers';
 import { formatRelative, formatCount } from '../utils/format';
 import { getOutbox, retiredServerId } from '../utils/outbox';
 import { flushPendingLogout } from '../appShell';
@@ -15,6 +18,7 @@ import { probeUrl, PROBE_ERRORS, getActiveBase, getToken } from './connection';
 
 const TakeoverDialog = lazy(() => import('./TakeoverDialog'));
 const LocalOffer = lazy(() => import('./LocalOffer'));
+const LiveScanner = lazy(() => import('../components/common/LiveScanner'));
 import { parseConnectLink, takePendingDeepLink } from './deepLink';
 import LanguageSelect from '../components/common/LanguageSelect';
 import { t } from '../i18n/index.js';
@@ -215,20 +219,31 @@ function ServerForm({ initial, onSaved, onCancel }) {
   );
 }
 
+const canScanQr = () => Boolean(globalThis.window?.mangashelfNative?.plugins?.BarcodeScanner) || liveScanSupported();
+
 function PasteLink({ onLink }) {
   const ids = useId();
   const [text, setText] = useState('');
   const [error, setError] = useState('');
-  const apply = (e) => {
-    e.preventDefault();
-    const link = parseConnectLink(text);
+  const [scanning, setScanning] = useState(false);
+  const take = (value) => {
+    const link = parseConnectLink(value);
     if (!link) {
       setError(t('Kein gültiger Verbindungslink (manga-shelf://connect?…) und keine http(s)-Adresse.'));
-      return;
+      return false;
     }
     setError('');
     setText('');
     onLink(link);
+    return true;
+  };
+  const apply = (e) => {
+    e.preventDefault();
+    take(text);
+  };
+  const onScan = (value) => {
+    if (take(value)) haptic('success', { sound: true });
+    else haptic('error');
   };
   return (
     <form onSubmit={apply} className="space-y-2">
@@ -252,7 +267,18 @@ function PasteLink({ onLink }) {
         </button>
       </div>
       {error && <p id={`${ids}-link-error`} role="alert" className="text-xs text-red-300">{error}</p>}
+      {canScanQr() && (
+        <button type="button" onClick={() => setScanning(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
+          <Camera className="w-4 h-4" aria-hidden="true" /> {t('QR-Code scannen')}
+        </button>
+      )}
       <p className="text-xs text-slate-400">{t('Den Link zeigt die Web-Version unter „Mit App verbinden“ (unten auf der Startseite) als QR-Code und zum Kopieren.')}</p>
+      {scanning && createPortal(
+        <Suspense fallback={null}>
+          <LiveScanner formats="qr" onDetected={onScan} onClose={() => setScanning(false)} />
+        </Suspense>,
+        document.body
+      )}
     </form>
   );
 }

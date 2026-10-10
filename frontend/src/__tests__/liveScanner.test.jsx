@@ -1,7 +1,8 @@
 // LiveScanner and its helpers, with a BarcodeDetector stand-in.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import LiveScanner, { cameraErrorText, createScanDebounce, SAME_ISBN_PAUSE_MS } from '../components/common/LiveScanner';
+import { BarcodeFormat } from '@zxing/library';
+import LiveScanner, { cameraErrorText, createScanDebounce, NATIVE_TEXTS, SAME_ISBN_PAUSE_MS } from '../components/common/LiveScanner';
 import BarcodeScannerButton from '../components/common/BarcodeScannerButton';
 import { buildScanPrefill, liveScanSupported } from '../utils/scanHelpers';
 
@@ -22,6 +23,7 @@ vi.mock('@zxing/browser', () => ({
 }));
 
 const ISBN = '9783551762931';
+const LINK = 'manga-shelf://connect?url=https%3A%2F%2Fmanga.example&name=Zuhause&id=inst-1';
 
 function fakeCamera({ torch = true } = {}) {
   const track = {
@@ -80,6 +82,7 @@ describe('live scanner helpers', () => {
     expect(cameraErrorText({ name: 'NotAllowedError' })).toMatch(/Kein Zugriff auf die Kamera/);
     expect(cameraErrorText({ name: 'NotFoundError' })).toBe('Keine passende Kamera gefunden.');
     expect(cameraErrorText(new Error('x'))).toBe('Die Kamera ließ sich nicht starten.');
+    expect(cameraErrorText({ name: 'NotAllowedError' }, true)).toBe('Kein Zugriff auf die Kamera. Erlaube sie in den Browser-Einstellungen.');
   });
 });
 
@@ -193,6 +196,63 @@ describe('LiveScanner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Scanner schließen' }));
     expect(onClose).toHaveBeenCalledTimes(2);
     await act(async () => {});
+  });
+});
+
+describe('LiveScanner for QR codes', () => {
+  const nativeBridge = ({ barcodes = [], camera = 'granted' } = {}) => ({
+    platform: 'ios',
+    plugins: { BarcodeScanner: { scan: vi.fn(async () => ({ barcodes })), requestPermissions: vi.fn(async () => ({ camera })) } },
+    constants: { BarcodeFormat: { QrCode: 'QR_CODE', Ean13: 'EAN_13', Ean8: 'EAN_8', UpcA: 'UPC_A' } }
+  });
+
+  it('asks BarcodeDetector for QR codes only and reports the first text once, verbatim, then closes', async () => {
+    const camera = fakeCamera();
+    const Detector = fakeDetector([[{ rawValue: LINK, format: 'qr_code' }], [{ rawValue: LINK, format: 'qr_code' }]]);
+    const onDetected = vi.fn();
+    const onClose = vi.fn();
+    render(<LiveScanner formats="qr" onDetected={onDetected} onClose={onClose} mediaDevices={camera.mediaDevices} Detector={Detector} />);
+    expect(screen.getByRole('dialog', { name: 'QR-Code scannen' })).toBeTruthy();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(Detector).toHaveBeenCalledWith({ formats: ['qr_code'] });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(onDetected.mock.calls).toEqual([[LINK]]);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows its own hint and a square guide', async () => {
+    const camera = fakeCamera();
+    const { container } = render(<LiveScanner formats="qr" onDetected={vi.fn()} onClose={vi.fn()} mediaDevices={camera.mediaDevices} Detector={fakeDetector([])} />);
+    expect(await screen.findByText('QR-Code in den Rahmen halten')).toBeTruthy();
+    expect(container.querySelector('[data-scan-guide]').className).toContain('aspect-square');
+  });
+
+  it('without BarcodeDetector ZXing gets the QR hint', async () => {
+    const camera = fakeCamera();
+    const onDetected = vi.fn();
+    const onClose = vi.fn();
+    render(<LiveScanner formats="qr" onDetected={onDetected} onClose={onClose} mediaDevices={camera.mediaDevices} Detector={undefined} />);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect([...zxing.calls[0].hints.values()][0]).toEqual([BarcodeFormat.QR_CODE]);
+    expect(onDetected.mock.calls).toEqual([[ISBN]]);
+  });
+
+  it('in the app ML Kit scans QR codes only and the text is reported once', async () => {
+    const bridge = nativeBridge({ barcodes: [{ rawValue: LINK, format: 'QR_CODE' }, { rawValue: 'zweiter', format: 'QR_CODE' }] });
+    const onDetected = vi.fn();
+    const onClose = vi.fn();
+    render(<LiveScanner native={bridge} formats="qr" onDetected={onDetected} onClose={onClose} />);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(bridge.plugins.BarcodeScanner.scan).toHaveBeenCalledWith({ formats: ['QR_CODE'] });
+    expect(onDetected.mock.calls).toEqual([[LINK]]);
+  });
+
+  it('in the app a refused camera explains itself without the photo hint', async () => {
+    const bridge = nativeBridge({ camera: 'denied' });
+    render(<LiveScanner native={bridge} formats="qr" onDetected={vi.fn()} onClose={vi.fn()} />);
+    expect((await screen.findByRole('alert')).textContent).toBe(NATIVE_TEXTS.deniedQr);
+    expect(bridge.plugins.BarcodeScanner.scan).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'QR-Code scannen' })).toBeTruthy();
   });
 });
 

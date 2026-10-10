@@ -12,6 +12,7 @@ import { getOutbox, resetOutbox, retiredServerId } from '../utils/outbox';
 import ConnectQr, { connectAddress } from '../components/common/ConnectQr';
 import DashboardFooter from '../components/dashboard/DashboardFooter';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
+import { HAPTIC_PATTERNS } from '../utils/haptics';
 import { recordToasts } from './toastLog';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -300,6 +301,67 @@ describe('ServerScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
     expect(screen.queryByRole('heading', { name: /hinzufügen\?/ })).toBeNull();
     expect(getServer(a.id).urls).toEqual(['https://home.example']);
+  });
+});
+
+describe('QR scan of the connect link', () => {
+  const LINK = 'manga-shelf://connect?url=https%3A%2F%2Fa.example&name=Zuhause&id=inst-9';
+  const nativeScanner = (rawValue) => {
+    const scan = vi.fn(async () => ({ barcodes: [{ rawValue, format: 'QR_CODE' }] }));
+    window.mangashelfNative = {
+      platform: 'ios',
+      plugins: { BarcodeScanner: { scan, requestPermissions: vi.fn(async () => ({ camera: 'granted' })) } },
+      constants: { BarcodeFormat: { QrCode: 'QR_CODE', Ean13: 'EAN_13', Ean8: 'EAN_8', UpcA: 'UPC_A' } }
+    };
+    return scan;
+  };
+  let vibrate;
+  beforeEach(() => {
+    vibrate = vi.fn(() => true);
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
+  });
+  afterEach(() => {
+    delete window.mangashelfNative;
+    delete navigator.vibrate;
+  });
+
+  it('without a camera there is only the link field', () => {
+    renderScreen();
+    expect(screen.getByLabelText('Verbindungslink einfügen')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /QR-Code scannen/ })).toBeNull();
+  });
+
+  it('in the app a scanned connect link fills the form like a pasted one, and saving connects', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    vi.stubGlobal('fetch', vi.fn(async () => healthy('inst-9')));
+    const scan = nativeScanner(LINK);
+    const { onSelect } = renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /QR-Code scannen/ }));
+    await waitFor(() => expect(screen.getByLabelText('Adressen (eine pro Zeile)').value).toBe('https://a.example'));
+    expect(scan).toHaveBeenCalledWith({ formats: ['QR_CODE'] });
+    expect(screen.getByLabelText('Name').value).toBe('Zuhause');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vibrate).toHaveBeenCalledWith(HAPTIC_PATTERNS.success);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Speichern und verbinden/ }));
+    expect(await screen.findByText('Login-Seite')).toBeTruthy();
+    const [saved] = getServers();
+    expect(saved).toMatchObject({ name: 'Zuhause', urls: ['https://a.example'], instanceId: 'inst-9' });
+    expect(onSelect).toHaveBeenCalledWith(saved.id);
+  });
+
+  it('a scanned code that is no connect link shows the link error and the scanner stays closed', async () => {
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    const scan = nativeScanner('WIFI:S:Heim;T:WPA;P:geheim;;');
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /QR-Code scannen/ }));
+    const field = screen.getByLabelText('Verbindungslink einfügen');
+    await waitFor(() => expect(field.getAttribute('aria-invalid')).toBe('true'));
+    expect(document.getElementById(field.getAttribute('aria-describedby')).textContent).toMatch(/Kein gültiger Verbindungslink/);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(scan).toHaveBeenCalledTimes(1);
+    expect(vibrate).toHaveBeenCalledWith(HAPTIC_PATTERNS.error);
+    expect(screen.getByLabelText('Adressen (eine pro Zeile)').value).toBe('');
   });
 });
 
