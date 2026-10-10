@@ -40,7 +40,7 @@ vi.mock('../components/modals/StatsModal', () => ({ default: ({ isOpen }) => (is
 vi.mock('../components/modals/AddMangaModal', () => ({
   default: ({ isOpen, onClose, onSeriesCreated, prefill }) => (isOpen ? (
     <div>
-      <span>Anlegen-Dialog {prefill ? `mit ${prefill.form.title || '(leer)'} ${prefill.volume.isbn}` : 'leer'}</span>
+      <span>Anlegen-Dialog {prefill ? `mit ${[prefill.form.title || '(leer)', prefill.volume?.isbn].filter(Boolean).join(' ')}` : 'leer'}</span>
       <button type="button" onClick={() => onSeriesCreated?.({ success: true, id: 42 })}>Nur Reihe angelegt</button>
       <button type="button" onClick={onClose}>Anlegen schließen</button>
     </div>

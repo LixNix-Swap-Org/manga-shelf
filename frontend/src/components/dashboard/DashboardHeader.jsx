@@ -6,7 +6,7 @@ import BottomNav, { useIsNarrow } from '../common/BottomNav';
 import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
-import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
+import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Globe, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { t } from '../../i18n/index.js';
 
@@ -133,6 +133,7 @@ export default function DashboardHeader({
   radarData,
   search,
   searchInputRef,
+  searchScope = null,
   setMobileMenuOpen,
   setSearch,
   setView,
@@ -161,6 +162,10 @@ export default function DashboardHeader({
   const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
   const logoutLabel = local ? t('Sammlung schließen') : t('Abmelden');
   const accountLabel = local ? t('Konto: API-Schlüssel') : t('Konto: Passwort und API-Schlüssel');
+  const showScope = Boolean(searchScope) && !user?.offline;
+  const searchOnline = showScope && searchScope.scope === 'online';
+  let searchPlaceholder = activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...');
+  if (searchOnline) searchPlaceholder = t('Sammlung und online suchen…');
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -261,7 +266,7 @@ export default function DashboardHeader({
             id="main-search-input"
             type="text" 
             aria-label={t('Sammlung durchsuchen')}
-            placeholder={activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...')}
+            placeholder={searchPlaceholder}
             className="w-full min-w-0 bg-transparent border-0 px-0 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
             value={search} 
             onFocus={() => { searchTypedRef.current = false; }}
@@ -270,10 +275,30 @@ export default function DashboardHeader({
               // the header search always searches the collection: typing on another view shows the shelf
               if (activeMainView !== 'shelf') setView('shelf');
               setSearch(e.target.value);
+              searchScope?.onTyped(e.target.value);
             }} 
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || e.nativeEvent.isComposing || !searchOnline) return;
+              e.preventDefault();
+              if (activeMainView !== 'shelf') setView('shelf');
+              searchScope.submitOnline(e.currentTarget.value);
+            }}
           />
           <div className="shrink-0 flex items-center gap-1">
             <BarcodeScannerButton compact onDetected={handleBarcodeDetected} className={HEADER_SCAN_CLASS} />
+            {showScope && (
+              <button
+                id="btn-search-scope"
+                type="button"
+                onClick={() => searchScope.setScope(searchOnline ? 'collection' : 'online')}
+                className={`hit-44 p-1 rounded shrink-0 transition-colors ${searchOnline ? 'text-sky-300 bg-sky-500/15 hover:bg-sky-500/25' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                aria-pressed={searchOnline}
+                aria-label={t('Online mitsuchen')}
+                title={searchOnline ? t('Sucht in der Sammlung und online') : t('Sucht nur in der Sammlung')}
+              >
+                <Globe className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
             {search && (
               <button 
                 type="button"

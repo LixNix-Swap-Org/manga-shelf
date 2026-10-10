@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useRef } from 'react';
-import { BookOpen, Plus, RefreshCw, Trash, TriangleAlert, X } from 'lucide-react';
+import { BookOpen, Globe, Plus, RefreshCw, Trash, TriangleAlert, X } from 'lucide-react';
 import MangaCard from './MangaCard';
 import MangaRow from './MangaRow';
 import useProgressiveList from '../../hooks/useProgressiveList';
@@ -113,20 +113,51 @@ function FreshnessNote({ refreshing, dataAt }) {
   );
 }
 
-function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleOpenModal, resetFilters }) {
+function SearchOnlineButton({ extras }) {
+  return (
+    <button type="button" onClick={extras.onSearchOnline} className="btn-secondary text-sm inline-flex items-center gap-2">
+      <Globe className="w-4 h-4" aria-hidden="true" /> {t('Online nach „{q}“ suchen', { q: extras.query })}
+    </button>
+  );
+}
+
+function OnlineRow({ extras }) {
+  if (extras.renderSection) return extras.renderSection(false);
+  if (!extras.onSearchOnline) return null;
+  return (
+    <div className="mt-8 flex justify-center">
+      <SearchOnlineButton extras={extras} />
+    </div>
+  );
+}
+
+function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleOpenModal, resetFilters, searchExtras = null }) {
   let icon = <BookOpen className="w-8 h-8" />;
   let heading;
   let text;
+  let body = null;
   let action = null;
 
   if (filtersActive) {
-    heading = t('Keine Treffer gefunden');
-    text = t('Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.');
-    action = (
+    const reset = (
       <button type="button" onClick={resetFilters} className="btn-secondary text-sm inline-flex items-center gap-2">
         <X className="w-4 h-4" /> {t('Filter & Suche zurücksetzen')}
       </button>
     );
+    body = searchExtras?.renderSection ? searchExtras.renderSection(true) : null;
+    heading = body ? t('Nicht in deiner Sammlung') : t('Keine Treffer gefunden');
+    text = body ? null : t('Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.');
+    action = searchExtras ? (
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {!body && searchExtras.onSearchOnline && <SearchOnlineButton extras={searchExtras} />}
+        {searchExtras.onCreateSeries && (
+          <button type="button" onClick={searchExtras.onCreateSeries} className="btn-primary text-sm inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" aria-hidden="true" /> {t('Neue Reihe „{q}“ anlegen', { q: searchExtras.query })}
+          </button>
+        )}
+        {reset}
+      </div>
+    ) : reset;
   } else if (error) {
     icon = <TriangleAlert className="w-8 h-8" />;
     heading = t('Sammlung konnte nicht geladen werden');
@@ -153,12 +184,12 @@ function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleO
   }
 
   return (
-    <div className="glass-panel p-8 sm:p-12 rounded-3xl text-center max-w-lg mx-auto my-12 border border-slate-800 animate-fade-in">
+    <div className={`glass-panel p-8 sm:p-12 rounded-3xl text-center ${body ? 'max-w-3xl' : 'max-w-lg'} mx-auto my-12 border border-slate-800 animate-fade-in`}>
       <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-4">
         {icon}
       </div>
       <h2 className="text-lg font-bold text-white mb-2">{heading}</h2>
-      <p className={`text-sm text-slate-400 ${action ? 'mb-6' : ''}`}>{text}</p>
+      {body ? <div className="mt-4 mb-6">{body}</div> : <p className={`text-sm text-slate-400 ${action ? 'mb-6' : ''}`}>{text}</p>}
       {action}
     </div>
   );
@@ -198,7 +229,8 @@ function MangaCollectionGrid({
   setTagFilter,
   languageFilter = 'ALL',
   setLanguageFilter,
-  onAuthorClick
+  onAuthorClick,
+  searchExtras = null
 }) {
   const isList = viewMode === 'list';
   const { visible, total, shown, hasMore, showMore, sentinelRef } = useProgressiveList(filtered, {
@@ -246,6 +278,7 @@ function MangaCollectionGrid({
           isOffline={isOffline}
           canEdit={canEdit}
           handleOpenModal={handleOpenModal}
+          searchExtras={searchExtras}
           resetFilters={() => {
             setSearch('');
             setStatusFilter('ALL');
@@ -262,6 +295,7 @@ function MangaCollectionGrid({
 
   const freshness = <FreshnessNote refreshing={refreshing} dataAt={dataAt} />;
   const progress = hasMore ? <ListProgress shown={shown} total={total} onMore={showMore} sentinelRef={sentinelRef} /> : null;
+  const online = searchExtras ? <OnlineRow extras={searchExtras} /> : null;
 
   const renderRow = (manga) => (
     <MangaRow
@@ -330,6 +364,7 @@ function MangaCollectionGrid({
           </div>
         </div>
         {progress}
+        {online}
       </>
     );
   }
@@ -353,6 +388,7 @@ function MangaCollectionGrid({
         </section>
       ))}
       {progress}
+      {online}
     </>
   );
 }

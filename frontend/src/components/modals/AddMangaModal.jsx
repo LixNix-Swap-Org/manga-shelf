@@ -1,8 +1,8 @@
 // Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
 import { useState, useEffect, useRef, useId } from 'react';
 import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
-import { buildScanVolumePayload, prefillTotalVolumes } from '../../utils/scanHelpers';
-import { MANGA_STATUSES, lookupMangaUrl, normalizeLookupStatus } from '../../hooks/useMangaData';
+import { buildScanVolumePayload } from '../../utils/scanHelpers';
+import { MANGA_STATUSES, lookupMangaUrl } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError } from '../../utils/api';
@@ -14,7 +14,10 @@ import { t } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
-import { editionDefaults, isMpEdition, workKeyOfHit } from '../../utils/editions';
+import { editionDefaults, isMpEdition } from '../../utils/editions';
+import { hitToForm, lookupSourceLabels } from '../../utils/lookupPrefill';
+
+export { lookupSourceLabels };
 
 // i18n
 const EMPTY_FORM = {
@@ -45,16 +48,7 @@ const LOOKUP_SOURCES_HINT_OTHER = 'Sucht in AniList und MyAnimeList (Manga Passi
 
 const isRemoteUrl = (url) => /^https?:\/\//i.test(url || '');
 const isBlobUrl = (url) => typeof url === 'string' && url.startsWith('blob:');
-const knownValue = (value) => (value && value !== 'Unbekannt' ? value : '');
 const lookupKey = (item) => item.id ?? item.title;
-const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList' };
-
-/** Badges of a non-Manga-Passion lookup hit: its own source, then the sources the server merged into it (also_on). */
-export function lookupSourceLabels(item) {
-  const own = item?.source_label || SOURCE_LABELS[item?.source];
-  const merged = (Array.isArray(item?.also_on) ? item.also_on : []).map((source) => SOURCE_LABELS[source]).filter(Boolean);
-  return [...new Set([own, ...merged].filter(Boolean))];
-}
 
 async function request(url, init) {
   try {
@@ -205,20 +199,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       let cover = item.cover_image || '';
       if (isRemoteUrl(cover)) cover = (await cacheRemoteCover(cover)) || cover;
       if (!isCurrent()) return;
-      setForm(prev => ({
-        ...prev,
-        title: item.title || prev.title,
-        alt_title: item.alt_title || prev.alt_title,
-        author: item.author || prev.author,
-        publisher: knownValue(item.publisher) || prev.publisher,
-        status: normalizeLookupStatus(item.status, prev.status),
-        total_volumes: prefillTotalVolumes(item, prev.total_volumes),
-        description: item.description || prev.description,
-        cover_image: cover || prev.cover_image,
-        manga_passion_id: isMpEdition(prev) ? (item.manga_passion_id || null) : null,
-        // an AniList/MyAnimeList hit names the work, so other language editions can be linked to it
-        work_key: item.source === 'manga_passion' ? null : (item.work_key || workKeyOfHit(item))
-      }));
+      setForm(prev => hitToForm({ ...item, cover_image: cover }, prev));
       if (cover) {
         setCoverFile(null);
         replacePreview(cover);
