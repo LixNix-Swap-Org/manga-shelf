@@ -1,7 +1,7 @@
 {
   "name": "manga-shelf-desktop",
   "productName": "Manga Shelf",
-  "version": "2.19.1",
+  "version": "3.0.0",
   "private": true,
   "description": "Manga Shelf als Desktop-App (lokaler Server, Client oder Server im Heimnetz)",
   "homepage": "https://github.com/LixNix-Swap-Org/manga-shelf",

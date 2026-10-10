@@ -1,7 +1,7 @@
 {
   "name": "manga-shelf-mobile",
   "private": true,
-  "version": "2.19.1",
+  "version": "3.0.0",
   "description": "Manga Shelf für Android und iPhone (Capacitor 7)",
   "engines": {
     "node": ">=22.13.0"
