@@ -180,6 +180,7 @@ function entryOf(row, nowMs) {
         original_language: row.original_language ?? null,
         spoken_languages: parseJson(row.spoken_languages, []),
         seasons: parseJson(row.seasons, []),
+        custom_seasons: episodeMarks.parseSeasons(row.custom_seasons),
         urls: { ...urls, tmdb: urls.tmdb ?? null, imdb: urls.imdb ?? null },
         notes: row.notes,
         manual: !row.anilist_id && !row.mal_id && !row.tmdb_id,

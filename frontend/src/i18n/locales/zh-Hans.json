@@ -42,6 +42,7 @@
   "API-Schlüssel": "API 密钥",
   "API-Schlüssel oder Lesezugriffstoken": "API 密钥或读取访问令牌",
   "AUS": "关",
+  "Ab Folge": "起始集",
   "Abbrechen": "取消",
   "Abenteuer": "冒险",
   "Abfragegrenze erreicht, nächster Versuch um {time}": "已达到查询上限，下次尝试时间：{time}",
@@ -775,6 +776,8 @@
   "Editor": "编辑者",
   "Editor (Mangas verwalten)": "编辑者（管理漫画）",
   "Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.": "自己的密钥是可选的：不填的话，搜索和数据会通过服务器的共享通道，并受其限额约束。已保存的密钥会加密存放，且不会再次显示。",
+  "Eigene Staffeln entfernen": "移除自定义季",
+  "Eigene Staffeln entfernt": "已移除自定义季",
   "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).": "为通过 Google Books 进行 ISBN 查询提供你自己的配额（否则服务器会共用匿名限额）。",
   "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.": "专属于你的每分钟 30 次请求限额；搜索和元数据不再走共享库。",
   "Ein Administrator wurde bereits angelegt – bitte melde dich an.": "已经创建过管理员——请登录。",
@@ -1001,6 +1004,7 @@
   "Für alle (Instanz)": "对所有人（实例）",
   "Für alle löschen": "对所有人删除",
   "Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).": "比对需要你自己的 AniList 令牌（账户 → 来源）。",
+  "Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).": "获取建议需要 TMDB 密钥（账户和语言 → API 密钥）。",
   "Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.": "没有找到符合当前搜索和筛选条件的漫画。",
   "Für diese Datei gibt es keine signierte Prüfsumme.": "此文件没有已签名的校验和。",
   "Für eine Reihe, die du schon in einer anderen Sprache sammelst. Vorschläge: gleicher Titel und Autor.": "适用于你已在收集其他语言版本的系列。建议：标题和作者相同。",
@@ -1203,6 +1207,8 @@
   "Ja, zuordnen": "是，匹配",
   "Jahr": "年份",
   "Jahr ({year})": "年份（{year}）",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.": "每一季必须在上一季之后开始，第一季从第 1 集开始，且不能晚于第 {total} 集。",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.": "每一季必须在上一季之后开始，第一季从第 1 集开始。",
   "Jetzt abgleichen": "立即比对",
   "Jetzt auf dem Server": "现已在服务器上",
   "Jetzt umstellen": "立即转换",
@@ -1342,6 +1348,7 @@
   "Leeren": "清空",
   "Leertaste": "空格键",
   "Lege an…": "正在创建…",
+  "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "设置每一季从第几集开始。季的划分对所有人生效。",
   "Lese-Fortschritt der Community": "社区阅读进度",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "阅读追踪与 TBR（待读书堆）",
   "Lese-Tracking (Nutzer)": "阅读追踪（用户）",
@@ -1532,6 +1539,7 @@
   "Nach rechts scrollen": "向右滚动",
   "Nach rechts verschieben": "右移",
   "Name": "名称",
+  "Name (optional)": "名称（可选）",
   "Nebengeschichte": "外传",
   "Netzwerkfehler": "网络错误",
   "Netzwerkfehler bei der Metadatensuche": "元数据搜索时出现网络错误",
@@ -2015,8 +2023,16 @@
   "Sprache ist erforderlich": "必须填写语言",
   "Sprache muss ein Text sein": "语言必须是文本",
   "Sprache offline nicht verfügbar": "该语言离线时不可用",
+  "Staffel hinzufügen": "添加一季",
+  "Staffel {season}": "第 {season} 季",
+  "Staffel {season} entfernen": "移除第 {season} 季",
   "Staffel {season} · Folgen {from}–{to}": "第 {season} 季 · 第 {from}–{to} 集",
   "Staffel {season}, Folge {episode}": "第 {season} 季第 {episode} 集",
+  "Staffeln bearbeiten": "编辑季",
+  "Staffeln gespeichert": "季已保存",
+  "Staffeln konnten nicht geladen werden": "无法加载季",
+  "Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})": "季必须从第 1 集开始，起始集数递增，名称不超过 {max_name} 个字符（最多 {max} 季）",
+  "Staffeln speichern": "保存季",
   "Staffeln: {n} · Folgen: {m}": "季数：{n} · 集数：{m}",
   "Stand Offline-Kopie": "离线副本的状态",
   "Stand Offline-Kopie {age}": "离线副本的状态：{age}",
@@ -2077,6 +2093,7 @@
   "System: Version, Speicher, Backups, Quellen": "系统：版本、存储、备份、来源",
   "Systemdaten konnten nicht geladen werden": "无法加载系统数据",
   "TMDB (Filme & Serien)": "TMDB（电影和剧集）",
+  "TMDB kennt für diesen Eintrag keine Staffeln.": "TMDB 没有该条目的季。",
   "TMDB lehnt den Schlüssel ab ({status})": "TMDB 拒绝了该密钥（{status}）",
   "TV (kurz)": "TV（短篇）",
   "Tabelle \"{table}\" fehlt in der Datenbank": "数据库中缺少表“{table}”",
@@ -2340,6 +2357,7 @@
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.": "预览：{volumes}（{series}），另有 {existing} 已存在，{errors}，{notes}。",
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.": "预览：{volumes}（{series}），另有 {existing} 已存在，{errors}。",
   "Vorschlag": "建议",
+  "Vorschlag von TMDB laden": "从 TMDB 加载建议",
   "Vorschlag: {edition} ({count}). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "建议：{edition}（{count}）。如果不对，比对会显示错误的缺口。“确认”会关联该版本并采用其卷数和状态。",
   "Vorschlag: {edition}. Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "建议：{edition}。如果不对，比对会显示错误的缺口。“确认”会关联该版本并采用其卷数和状态。",
   "Vorschläge": "建议",
@@ -2733,6 +2751,7 @@
   "{name} ist bereits im Regal – Status nicht geändert.": "{name} 已在书架上——状态未更改。",
   "{name} passt zu mehreren Reihen ({candidates})": "{name} 匹配多个系列（{candidates}）",
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name} 已添加到现有系列。",
+  "{name} · Folgen {from}–{to}": "{name} · 第 {from}–{to} 集",
   "{name}. Server wechseln": "{name}。切换服务器",
   "{name}: Reihe noch nicht in der Sammlung": "{name}：该系列尚未加入收藏",
   "{name}: {state}": "{name}：{state}",
@@ -2786,11 +2805,17 @@
   "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
     "other": "要将 {n} 个Special Edition/套盒加入购物清单吗？"
   },
+  "{n} Staffel von TMDB übernommen. Prüfen und speichern.|{n} Staffeln von TMDB übernommen. Prüfen und speichern.": {
+    "other": "已从 TMDB 获取 {n} 季。请检查后保存。"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n} 天 {hours} 小时"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n} 天"
+  },
+  "{n} eigene Staffel|{n} eigene Staffeln": {
+    "other": "{n} 个自定义季"
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "要将 {n} 个缺失的卷加入购物清单吗？"

@@ -149,10 +149,24 @@ async function byId(ctx, kind, id, { credential, timeoutMs, signal } = {}) {
     }
 }
 
+/** Regular seasons of a TV show with their names in `language`: [{ season_number, episode_count, name }] ([] when unknown). */
+async function seasonList(ctx, id, { language = DETAIL_LANGUAGE, credential, timeoutMs, signal } = {}) {
+    if (!Number.isSafeInteger(Number(id))) return [];
+    try {
+        const { json } = await get(ctx, `/tv/${Number(id)}?language=${encodeURIComponent(language)}`, credential, { timeoutMs, signal });
+        const names = {};
+        for (const s of json && Array.isArray(json.seasons) ? json.seasons : []) if (s && Number.isInteger(s.season_number)) names[s.season_number] = text(s.name);
+        return seasonsOf(json && json.seasons).map((s) => ({ season_number: s.season_number, episode_count: s.episode_count, name: names[s.season_number] || null }));
+    } catch (err) {
+        if (err.kind === 'notfound') return [];
+        throw err;
+    }
+}
+
 /** Check of a key or read token: resolves { label } on 200, rejects with a SourceError (auth for a refused key). */
 async function check(ctx, secret, { timeoutMs, signal } = {}) {
     await get(ctx, '/authentication', { secret }, { timeoutMs, signal });
     return { label: `Schlüssel …${String(secret).slice(-4)}` };
 }
 
-module.exports = { search, byId, check, normalizeHit, normalizeDetail, BASE, LABEL, POSTER_BASE, KINDS };
+module.exports = { search, byId, seasonList, check, normalizeHit, normalizeDetail, BASE, LABEL, POSTER_BASE, KINDS };

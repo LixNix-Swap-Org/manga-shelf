@@ -270,3 +270,30 @@ test('fold: only Japanese animation, only hits with an AniList id, only in the s
     const byStartDate = foldTmdbHits([{ ...ani, season_year: null, start_date: '2023-09-29' }], [hit({ season_year: null, start_date: '2023-10-01' })]);
     assert.deepEqual([byStartDate.rest.length, byStartDate.metas[0].also_on], [0, ['tmdb']], 'the year of start_date counts too');
 });
+
+test('season suggestion: the TMDb twin of an anime entry, names in the UI language, unaired seasons past the count dropped', async () => {
+    const http = fakeFetch({ tmdb: tmdbFixtures });
+    const ctx = ctxWith(http, keys({ instance: HEX_KEY }).provider);
+    const row = { kind: 'anime', title: 'Sousou no Frieren', title_romaji: 'Sousou no Frieren', title_native: '葬送のフリーレン', season_year: 2023, episodes: 38 };
+    const result = await gateway.tmdbSeasons(ctx, row, { language: 'de' });
+    assert.deepEqual(result, {
+        seasons: [
+            { start: 1, name: 'Season 1', episodes: 28, season_number: 1 },
+            { start: 29, name: 'Season 2', episodes: 10, season_number: 2 }
+        ],
+        reason: null,
+        tmdb_id: 209867
+    });
+    assert.match(http.calls[0].url, /\/search\/multi\?query=Sousou%20no%20Frieren&.*language=de-DE/);
+    assert.match(http.calls[1].url, /\/tv\/209867\?language=de-DE&api_key=/);
+
+    const own = await gateway.tmdbSeasons(ctx, { kind: 'tv', tmdb_kind: 'tv', tmdb_id: 209867, title: 'Frieren', episodes: null }, { language: 'en' });
+    assert.deepEqual(own.seasons.map((s) => s.start), [1, 29, 39], 'its own TMDb show, no search; without a count every season stays');
+    assert.match(http.calls.at(-1).url, /\/tv\/209867\?language=en-US/);
+
+    const nothing = await gateway.tmdbSeasons(ctx, { kind: 'anime', title: 'Völlig unbekannt', episodes: 12 });
+    assert.deepEqual(nothing, { seasons: [], reason: 'not_found', tmdb_id: null });
+
+    const keyless = await gateway.tmdbSeasons(ctxWith(http, keys().provider), row);
+    assert.deepEqual(keyless, { seasons: [], reason: 'no_key', tmdb_id: null });
+});

@@ -44,6 +44,7 @@
   "API-Schlüssel": "API-sleutel",
   "API-Schlüssel oder Lesezugriffstoken": "API-sleutel of leestoegangstoken",
   "AUS": "UIT",
+  "Ab Folge": "Vanaf aflevering",
   "Abbrechen": "Annuleren",
   "Abenteuer": "Avontuur",
   "Abfragegrenze erreicht, nächster Versuch um {time}": "Aanvraaglimiet bereikt, volgende poging om {time}",
@@ -788,6 +789,8 @@
   "Editor": "Redacteur",
   "Editor (Mangas verwalten)": "Redacteur (manga beheren)",
   "Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.": "Eigen sleutels zijn vrijwillig: zonder sleutels lopen zoeken en gegevens via de gedeelde toegang van de server, alleen met diens limiet. Opgeslagen sleutels worden versleuteld bewaard en nooit meer getoond.",
+  "Eigene Staffeln entfernen": "Eigen seizoenen verwijderen",
+  "Eigene Staffeln entfernt": "Eigen seizoenen verwijderd",
   "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).": "Eigen quotum voor het opzoeken van ISBN's via Google Books (anders deelt de server de anonieme limiet).",
   "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.": "Eigen limiet van 30 verzoeken per minuut alleen voor jou; zoeken en metadata lopen niet meer via de gedeelde pool.",
   "Ein Administrator wurde bereits angelegt – bitte melde dich an.": "Er is al een beheerder aangemaakt – log in.",
@@ -1017,6 +1020,7 @@
   "Für alle (Instanz)": "Voor iedereen (instantie)",
   "Für alle löschen": "Voor iedereen verwijderen",
   "Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).": "Voor de synchronisatie is een eigen AniList-token nodig (Account → Bronnen).",
+  "Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).": "Voor de suggestie is een TMDB-sleutel nodig (Account en taal → API-sleutels).",
   "Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.": "Voor de huidige zoek- en filterinstellingen is geen passende manga gevonden.",
   "Für diese Datei gibt es keine signierte Prüfsumme.": "Voor dit bestand is er geen ondertekende controlesom.",
   "Für eine Reihe, die du schon in einer anderen Sprache sammelst. Vorschläge: gleicher Titel und Autor.": "Voor een reeks die je al in een andere taal verzamelt. Suggesties: dezelfde titel en auteur.",
@@ -1223,6 +1227,8 @@
   "Ja, zuordnen": "Ja, koppelen",
   "Jahr": "Jaar",
   "Jahr ({year})": "Jaar ({year})",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.": "Elk seizoen moet na het vorige beginnen, het eerste bij aflevering 1 en geen na aflevering {total}.",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.": "Elk seizoen moet na het vorige beginnen, het eerste bij aflevering 1.",
   "Jetzt abgleichen": "Nu synchroniseren",
   "Jetzt auf dem Server": "Nu op de server",
   "Jetzt umstellen": "Nu omzetten",
@@ -1364,6 +1370,7 @@
   "Leeren": "Leegmaken",
   "Leertaste": "Spatiebalk",
   "Lege an…": "Aanmaken…",
+  "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Leg vast bij welke aflevering elk seizoen begint. De seizoenen gelden voor iedereen.",
   "Lese-Fortschritt der Community": "Leesvoortgang van de community",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Leesvoortgang en TBR (stapel ongelezen boeken)",
   "Lese-Tracking (Nutzer)": "Leesvoortgang (gebruikers)",
@@ -1558,6 +1565,7 @@
   "Nach rechts scrollen": "Naar rechts scrollen",
   "Nach rechts verschieben": "Naar rechts verplaatsen",
   "Name": "Naam",
+  "Name (optional)": "Naam (optioneel)",
   "Nebengeschichte": "Zijverhaal",
   "Netzwerkfehler": "Netwerkfout",
   "Netzwerkfehler bei der Metadatensuche": "Netwerkfout bij het zoeken naar metadata",
@@ -2048,8 +2056,16 @@
   "Sprache ist erforderlich": "Taal is verplicht",
   "Sprache muss ein Text sein": "Taal moet een tekst zijn",
   "Sprache offline nicht verfügbar": "Taal niet offline beschikbaar",
+  "Staffel hinzufügen": "Seizoen toevoegen",
+  "Staffel {season}": "Seizoen {season}",
+  "Staffel {season} entfernen": "Seizoen {season} verwijderen",
   "Staffel {season} · Folgen {from}–{to}": "Seizoen {season} · Afleveringen {from}–{to}",
   "Staffel {season}, Folge {episode}": "Seizoen {season}, aflevering {episode}",
+  "Staffeln bearbeiten": "Seizoenen bewerken",
+  "Staffeln gespeichert": "Seizoenen opgeslagen",
+  "Staffeln konnten nicht geladen werden": "Seizoenen konden niet worden geladen",
+  "Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})": "Seizoenen moeten bij aflevering 1 beginnen met oplopende startafleveringen en namen van maximaal {max_name} tekens (hoogstens {max})",
+  "Staffeln speichern": "Seizoenen opslaan",
   "Staffeln: {n} · Folgen: {m}": "Seizoenen: {n} · Afleveringen: {m}",
   "Stand Offline-Kopie": "Stand offlinekopie",
   "Stand Offline-Kopie {age}": "Stand offlinekopie {age}",
@@ -2110,6 +2126,7 @@
   "System: Version, Speicher, Backups, Quellen": "Systeem: versie, opslag, back-ups, bronnen",
   "Systemdaten konnten nicht geladen werden": "Systeemgegevens konden niet worden geladen",
   "TMDB (Filme & Serien)": "TMDB (films en series)",
+  "TMDB kennt für diesen Eintrag keine Staffeln.": "TMDB kent geen seizoenen voor dit item.",
   "TMDB lehnt den Schlüssel ab ({status})": "TMDB wijst de sleutel af ({status})",
   "TV (kurz)": "TV (kort)",
   "Tabelle \"{table}\" fehlt in der Datenbank": "Tabel “{table}” ontbreekt in de database",
@@ -2377,6 +2394,7 @@
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.": "Voorbeeld: {volumes} ({series}), {existing} al aanwezig, {errors}, {notes}.",
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.": "Voorbeeld: {volumes} ({series}), {existing} al aanwezig, {errors}.",
   "Vorschlag": "Voorstel",
+  "Vorschlag von TMDB laden": "Suggestie van TMDB laden",
   "Vorschlag: {edition} ({count}). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "Voorstel: {edition} ({count}). Klopt dat niet, dan toont de vergelijking verkeerde hiaten. “Bevestigen” koppelt de editie en neemt aantal delen en status over.",
   "Vorschlag: {edition}. Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "Voorstel: {edition}. Klopt dat niet, dan toont de vergelijking verkeerde hiaten. “Bevestigen” koppelt de editie en neemt aantal delen en status over.",
   "Vorschläge": "Voorstellen",
@@ -2781,6 +2799,7 @@
   "{name} ist bereits im Regal – Status nicht geändert.": "{name} staat al op de plank – status niet gewijzigd.",
   "{name} passt zu mehreren Reihen ({candidates})": "{name} past bij meerdere reeksen ({candidates})",
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name} is toegevoegd aan de bestaande reeks.",
+  "{name} · Folgen {from}–{to}": "{name} · Afleveringen {from}–{to}",
   "{name}. Server wechseln": "{name}. Van server wisselen",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: reeks nog niet in de collectie",
   "{name}: {state}": "{name}: {state}",
@@ -2850,6 +2869,10 @@
     "one": "{n} speciale uitgave/box set op de kooplijst zetten?",
     "other": "{n} speciale uitgaven/box sets op de kooplijst zetten?"
   },
+  "{n} Staffel von TMDB übernommen. Prüfen und speichern.|{n} Staffeln von TMDB übernommen. Prüfen und speichern.": {
+    "one": "{n} seizoen van TMDB overgenomen. Controleer en sla op.",
+    "other": "{n} seizoenen van TMDB overgenomen. Controleer en sla op."
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} dag {hours} u",
     "other": "{n} dagen {hours} u"
@@ -2857,6 +2880,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} dag",
     "other": "{n} dagen"
+  },
+  "{n} eigene Staffel|{n} eigene Staffeln": {
+    "one": "{n} eigen seizoen",
+    "other": "{n} eigen seizoenen"
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "one": "{n} ontbrekend deel op de kooplijst zetten?",

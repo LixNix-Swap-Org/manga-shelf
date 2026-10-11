@@ -44,6 +44,7 @@
   "API-Schlüssel": "API anahtarı",
   "API-Schlüssel oder Lesezugriffstoken": "API anahtarı veya okuma erişim belirteci",
   "AUS": "KAPALI",
+  "Ab Folge": "Başlangıç bölümü",
   "Abbrechen": "İptal",
   "Abenteuer": "Macera",
   "Abfragegrenze erreicht, nächster Versuch um {time}": "İstek sınırına ulaşıldı, sonraki deneme saat {time}",
@@ -788,6 +789,8 @@
   "Editor": "Editör",
   "Editor (Mangas verwalten)": "Editör (manga yönetir)",
   "Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.": "Kendi anahtarların isteğe bağlıdır: onlar olmadan arama ve veriler sunucunun ortak erişimiyle, yalnızca onun sınırıyla çalışır. Kayıtlı anahtarlar şifreli saklanır ve bir daha asla gösterilmez.",
+  "Eigene Staffeln entfernen": "Özel sezonları kaldır",
+  "Eigene Staffeln entfernt": "Özel sezonlar kaldırıldı",
   "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).": "Google Books üzerinden ISBN araması için kendi kotan (aksi halde sunucu anonim sınırı paylaşır).",
   "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.": "Yalnızca sana özel dakikada 30 istek sınırı; arama ve meta veriler artık ortak havuz üzerinden çalışmaz.",
   "Ein Administrator wurde bereits angelegt – bitte melde dich an.": "Bir yönetici zaten oluşturuldu – lütfen giriş yap.",
@@ -1017,6 +1020,7 @@
   "Für alle (Instanz)": "Herkes için (sunucu)",
   "Für alle löschen": "Herkes için sil",
   "Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).": "Eşleştirme için kendi AniList belirtecin gerekir (Hesap → Kaynaklar).",
+  "Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).": "Öneri için bir TMDB anahtarı gerekir (Hesap ve dil → API anahtarları).",
   "Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.": "Geçerli arama ve filtre ayarlarına uyan manga bulunamadı.",
   "Für diese Datei gibt es keine signierte Prüfsumme.": "Bu dosya için imzalı bir sağlama toplamı yok.",
   "Für eine Reihe, die du schon in einer anderen Sprache sammelst. Vorschläge: gleicher Titel und Autor.": "Zaten başka bir dilde topladığın bir seri için. Öneriler: aynı başlık ve yazar.",
@@ -1223,6 +1227,8 @@
   "Ja, zuordnen": "Evet, eşleştir",
   "Jahr": "Yıl",
   "Jahr ({year})": "Yıl ({year})",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.": "Her sezon bir öncekinden sonra başlamalı, ilki 1. bölümde başlamalı ve hiçbiri {total}. bölümden sonra olmamalı.",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.": "Her sezon bir öncekinden sonra başlamalı, ilki 1. bölümde başlamalı.",
   "Jetzt abgleichen": "Şimdi eşleştir",
   "Jetzt auf dem Server": "Şu an sunucuda",
   "Jetzt umstellen": "Şimdi dönüştür",
@@ -1364,6 +1370,7 @@
   "Leeren": "Temizle",
   "Leertaste": "Boşluk tuşu",
   "Lege an…": "Oluşturuluyor…",
+  "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Her sezonun hangi bölümle başladığını belirle. Sezonlar herkes için geçerlidir.",
   "Lese-Fortschritt der Community": "Topluluğun okuma ilerlemesi",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Okuma takibi ve SuB (okunmamış kitap yığını)",
   "Lese-Tracking (Nutzer)": "Okuma takibi (kullanıcılar)",
@@ -1558,6 +1565,7 @@
   "Nach rechts scrollen": "Sağa kaydır",
   "Nach rechts verschieben": "Sağa taşı",
   "Name": "Ad",
+  "Name (optional)": "Ad (isteğe bağlı)",
   "Nebengeschichte": "Yan hikâye",
   "Netzwerkfehler": "Ağ hatası",
   "Netzwerkfehler bei der Metadatensuche": "Meta veri aramasında ağ hatası",
@@ -2048,8 +2056,16 @@
   "Sprache ist erforderlich": "Dil zorunlu",
   "Sprache muss ein Text sein": "Dil bir metin olmalı",
   "Sprache offline nicht verfügbar": "Dil çevrimdışı kullanılamıyor",
+  "Staffel hinzufügen": "Sezon ekle",
+  "Staffel {season}": "{season}. sezon",
+  "Staffel {season} entfernen": "{season}. sezonu kaldır",
   "Staffel {season} · Folgen {from}–{to}": "{season}. sezon · {from}–{to}. bölümler",
   "Staffel {season}, Folge {episode}": "{season}. sezon, {episode}. bölüm",
+  "Staffeln bearbeiten": "Sezonları düzenle",
+  "Staffeln gespeichert": "Sezonlar kaydedildi",
+  "Staffeln konnten nicht geladen werden": "Sezonlar yüklenemedi",
+  "Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})": "Sezonlar 1. bölümde başlamalı, başlangıç bölümleri artan sırada olmalı ve adlar en fazla {max_name} karakter olmalı (en fazla {max})",
+  "Staffeln speichern": "Sezonları kaydet",
   "Staffeln: {n} · Folgen: {m}": "Sezonlar: {n} · Bölümler: {m}",
   "Stand Offline-Kopie": "Çevrimdışı kopya durumu",
   "Stand Offline-Kopie {age}": "Çevrimdışı kopya durumu {age}",
@@ -2110,6 +2126,7 @@
   "System: Version, Speicher, Backups, Quellen": "Sistem: sürüm, depolama, yedekler, kaynaklar",
   "Systemdaten konnten nicht geladen werden": "Sistem verileri yüklenemedi",
   "TMDB (Filme & Serien)": "TMDB (filmler ve diziler)",
+  "TMDB kennt für diesen Eintrag keine Staffeln.": "TMDB bu kayıt için sezon bilmiyor.",
   "TMDB lehnt den Schlüssel ab ({status})": "TMDB anahtarı reddediyor ({status})",
   "TV (kurz)": "TV (kısa)",
   "Tabelle \"{table}\" fehlt in der Datenbank": "“{table}” tablosu veritabanında yok",
@@ -2377,6 +2394,7 @@
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.": "Önizleme: {volumes} ({series}), {existing} zaten var, {errors}, {notes}.",
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.": "Önizleme: {volumes} ({series}), {existing} zaten var, {errors}.",
   "Vorschlag": "Öneri",
+  "Vorschlag von TMDB laden": "TMDB önerisini yükle",
   "Vorschlag: {edition} ({count}). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "Öneri: {edition} ({count}). Yanlışsa eşleştirme hatalı boşluklar gösterir. “Onayla” baskıyı bağlar ve cilt sayısını ve durumu devralır.",
   "Vorschlag: {edition}. Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "Öneri: {edition}. Yanlışsa eşleştirme hatalı boşluklar gösterir. “Onayla” baskıyı bağlar ve cilt sayısını ve durumu devralır.",
   "Vorschläge": "Öneriler",
@@ -2781,6 +2799,7 @@
   "{name} ist bereits im Regal – Status nicht geändert.": "{name} zaten rafta – durum değiştirilmedi.",
   "{name} passt zu mehreren Reihen ({candidates})": "{name} birden çok seriyle eşleşiyor ({candidates})",
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name} mevcut seriye eklendi.",
+  "{name} · Folgen {from}–{to}": "{name} · {from}–{to}. bölümler",
   "{name}. Server wechseln": "{name}. Sunucuyu değiştir",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: seri henüz koleksiyonda değil",
   "{name}: {state}": "{name}: {state}",
@@ -2850,6 +2869,10 @@
     "one": "{n} özel baskı/kutu seti alışveriş listesine eklensin mi?",
     "other": "{n} özel baskı/kutu seti alışveriş listesine eklensin mi?"
   },
+  "{n} Staffel von TMDB übernommen. Prüfen und speichern.|{n} Staffeln von TMDB übernommen. Prüfen und speichern.": {
+    "one": "TMDB'den {n} sezon alındı. Kontrol edip kaydet.",
+    "other": "TMDB'den {n} sezon alındı. Kontrol edip kaydet."
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "one": "{n} gün {hours} sa",
     "other": "{n} gün {hours} sa"
@@ -2857,6 +2880,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} gün",
     "other": "{n} gün"
+  },
+  "{n} eigene Staffel|{n} eigene Staffeln": {
+    "one": "{n} özel sezon",
+    "other": "{n} özel sezon"
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "one": "Eksik {n} cilt alışveriş listesine eklensin mi?",

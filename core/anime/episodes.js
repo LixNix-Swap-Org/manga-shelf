@@ -117,4 +117,50 @@ function storedScores(scores) {
     return scores && Object.keys(scores).length ? JSON.stringify(scores) : null;
 }
 
-module.exports = { MAX_MARKS, cleanScores, parseScores, storedScores, cleanMarks, parseMarks, marksOf, isPlain, storedMarks, fitMarks, throughEpisode, nextUnwatched };
+// Seasons of an entry set by hand (animes.custom_seasons): [{ start, name }] with the absolute first episode of each season,
+// shared by everybody. NULL means none: the grid then follows the TMDb seasons of a TV show, else blocks of 100 episodes.
+
+const MAX_SEASONS = 200;
+const MAX_SEASON_NAME = 80;
+
+/** Seasons by start, the first one at episode 1, unique starts, names trimmed (empty = null). Anything invalid is dropped. */
+function cleanSeasons(list) {
+    const out = [];
+    const seen = {};
+    for (const item of Array.isArray(list) ? list : []) {
+        if (!item || typeof item !== 'object') continue;
+        const start = item.start;
+        if (!Number.isInteger(start) || start < 1 || seen[start]) continue;
+        seen[start] = true;
+        const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, MAX_SEASON_NAME) : null;
+        out.push({ start, name });
+    }
+    out.sort((a, b) => a.start - b.start);
+    return out.length && out[0].start === 1 ? out.slice(0, MAX_SEASONS) : [];
+}
+
+/** The stored column as a list (empty for NULL or anything unreadable). */
+function parseSeasons(stored) {
+    if (stored === null || stored === undefined || stored === '') return [];
+    if (Array.isArray(stored)) return cleanSeasons(stored);
+    try {
+        return cleanSeasons(JSON.parse(stored));
+    } catch (_) {
+        return [];
+    }
+}
+
+/** TMDb seasons ([{ season_number, episode_count, name? }]) as starts: [{ start, name }]; seasons without episodes are skipped. */
+function seasonsFromCounts(seasons) {
+    const out = [];
+    let start = 1;
+    for (const s of Array.isArray(seasons) ? seasons : []) {
+        const count = Number(s && s.episode_count) || 0;
+        if (count <= 0) continue;
+        out.push({ start, name: s.name || null, episodes: count, season_number: s.season_number ?? null });
+        start += count;
+    }
+    return out;
+}
+
+module.exports = { MAX_MARKS, MAX_SEASONS, MAX_SEASON_NAME, cleanSeasons, parseSeasons, seasonsFromCounts, cleanScores, parseScores, storedScores, cleanMarks, parseMarks, marksOf, isPlain, storedMarks, fitMarks, throughEpisode, nextUnwatched };

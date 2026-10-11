@@ -385,11 +385,47 @@ function update(ctx, { params, body }) {
         if (!kind) throw badRequest(msg('Unbekannte Art (erlaubt: {allowed})', { allowed: KINDS.join(', ') }));
         columns.kind = kind;
     }
+    if (body.custom_seasons !== undefined) {
+        const seasons = parseCustomSeasons(body.custom_seasons, row.episodes);
+        columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
+    }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
     columns.updated_by = ctx.user.id;
     store.updateRow(ctx, id, columns);
     return { body: detailOf(ctx, id) };
+}
+
+const seasonsError = () => badRequest(msg('Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})',
+    { max: episodeMarks.MAX_SEASONS, max_name: episodeMarks.MAX_SEASON_NAME }));
+
+/** custom_seasons of PUT /anime/:id: null or [] clears them, else [{ start, name }] starting at episode 1, ascending. */
+function parseCustomSeasons(value, episodes) {
+    if (value === null) return null;
+    if (!Array.isArray(value) || value.length > episodeMarks.MAX_SEASONS) throw seasonsError();
+    if (!value.length) return null;
+    let last = 0;
+    for (const item of value) {
+        const ok = item && typeof item === 'object' && Number.isInteger(item.start) && item.start > last && item.start <= MAX_EPISODES
+            && (item.name === undefined || item.name === null || (typeof item.name === 'string' && item.name.trim().length <= episodeMarks.MAX_SEASON_NAME));
+        if (!ok || (last === 0 && item.start !== 1)) throw seasonsError();
+        last = item.start;
+    }
+    if (episodes > 0 && last > episodes) throw episodeAboveTotal(last, episodes);
+    return episodeMarks.cleanSeasons(value);
+}
+
+/** GET /anime/:id/season-suggestion: the TMDb seasons of the entry (or of its TMDb twin) as [{ start, name, episodes }]. */
+async function seasonSuggestion(ctx, { params, query }) {
+    const id = parseId(params.id);
+    const row = loadRow(ctx, id);
+    if (row.kind === 'movie') return { body: { seasons: [], reason: 'not_found' } };
+    try {
+        return { body: await gateway.tmdbSeasons(ctx, row, { language: searchLanguage(ctx, query.language) }) };
+    } catch (err) {
+        if (!(err instanceof SourceError)) throw err;
+        throw new HttpError(503, msg('{source} ist gerade nicht erreichbar. Bitte später erneut versuchen.', { source: TMDB_LABEL }), 'SOURCES_UNAVAILABLE');
+    }
 }
 
 function cleanLanguage(value) {
@@ -892,6 +928,6 @@ function exportCsv(ctx) {
 
 module.exports = {
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
-    removeProgress, refresh, remove, adaptations, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
+    removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
     duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

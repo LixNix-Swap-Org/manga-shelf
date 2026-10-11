@@ -42,6 +42,7 @@
   "API-Schlüssel": "APIキー",
   "API-Schlüssel oder Lesezugriffstoken": "APIキーまたは読み取りアクセストークン",
   "AUS": "OFF",
+  "Ab Folge": "開始話",
   "Abbrechen": "キャンセル",
   "Abenteuer": "アドベンチャー",
   "Abfragegrenze erreicht, nächster Versuch um {time}": "リクエスト上限に達しました。次回の試行は{time}です",
@@ -775,6 +776,8 @@
   "Editor": "編集者",
   "Editor (Mangas verwalten)": "編集者(漫画を管理)",
   "Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.": "独自のキーは任意です。なければ、検索とデータはサーバー共通のアクセスを通り、その上限が適用されます。保存したキーは暗号化されて保管され、再表示はされません。",
+  "Eigene Staffeln entfernen": "独自シーズンを削除",
+  "Eigene Staffeln entfernt": "独自シーズンを削除しました",
   "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).": "Google Booksを使ったISBN検索の専用枠です(なければ、サーバーが匿名枠を共有します)。",
   "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.": "あなた専用の、1分あたり30リクエストの上限です。検索とメタデータは共有プールを経由しなくなります。",
   "Ein Administrator wurde bereits angelegt – bitte melde dich an.": "管理者はすでに作成されています – サインインしてください。",
@@ -1001,6 +1004,7 @@
   "Für alle (Instanz)": "全員向け(インスタンス)",
   "Für alle löschen": "全員分を削除",
   "Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).": "照合には、専用のAniListトークンが必要です(アカウント → 情報源)。",
+  "Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).": "提案には TMDB キーが必要です（アカウントと言語 → API キー）。",
   "Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.": "現在の検索・フィルター条件に一致するマンガは見つかりませんでした。",
   "Für diese Datei gibt es keine signierte Prüfsumme.": "このファイルには署名済みのチェックサムがありません。",
   "Für eine Reihe, die du schon in einer anderen Sprache sammelst. Vorschläge: gleicher Titel und Autor.": "すでに別の言語で集めているシリーズ用です。候補: 同じタイトルと作者。",
@@ -1203,6 +1207,8 @@
   "Ja, zuordnen": "はい、割り当てる",
   "Jahr": "年",
   "Jahr ({year})": "年({year})",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.": "各シーズンは前のシーズンより後に始まる必要があります。最初は第1話から、第{total}話より後には置けません。",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.": "各シーズンは前のシーズンより後に始まる必要があります。最初は第1話からです。",
   "Jetzt abgleichen": "今すぐ照合",
   "Jetzt auf dem Server": "サーバー上にあります",
   "Jetzt umstellen": "今すぐ切り替え",
@@ -1342,6 +1348,7 @@
   "Leeren": "クリア",
   "Leertaste": "スペースキー",
   "Lege an…": "作成中…",
+  "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "各シーズンが何話から始まるかを設定します。シーズンは全員に適用されます。",
   "Lese-Fortschritt der Community": "コミュニティの読書進捗",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "読書の記録と積読(未読の本の山)",
   "Lese-Tracking (Nutzer)": "読書の記録(ユーザー)",
@@ -1532,6 +1539,7 @@
   "Nach rechts scrollen": "右へスクロール",
   "Nach rechts verschieben": "右へ移動",
   "Name": "名前",
+  "Name (optional)": "名前（任意）",
   "Nebengeschichte": "外伝",
   "Netzwerkfehler": "ネットワークエラー",
   "Netzwerkfehler bei der Metadatensuche": "メタデータの検索中にネットワークエラーが発生しました",
@@ -2015,8 +2023,16 @@
   "Sprache ist erforderlich": "言語は必須です",
   "Sprache muss ein Text sein": "言語は文字列である必要があります",
   "Sprache offline nicht verfügbar": "この言語はオフラインでは利用できません",
+  "Staffel hinzufügen": "シーズンを追加",
+  "Staffel {season}": "シーズン{season}",
+  "Staffel {season} entfernen": "シーズン{season}を削除",
   "Staffel {season} · Folgen {from}–{to}": "シーズン{season} · {from}–{to}話",
   "Staffel {season}, Folge {episode}": "シーズン{season}、{episode}話",
+  "Staffeln bearbeiten": "シーズンを編集",
+  "Staffeln gespeichert": "シーズンを保存しました",
+  "Staffeln konnten nicht geladen werden": "シーズンを読み込めませんでした",
+  "Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})": "シーズンは第1話から始まり、開始話は昇順で、名前は{max_name}文字以内にしてください（最大{max}件）",
+  "Staffeln speichern": "シーズンを保存",
   "Staffeln: {n} · Folgen: {m}": "シーズン: {n} · 話数: {m}",
   "Stand Offline-Kopie": "オフラインコピー時点",
   "Stand Offline-Kopie {age}": "オフラインコピー時点: {age}",
@@ -2077,6 +2093,7 @@
   "System: Version, Speicher, Backups, Quellen": "システム: バージョン、ストレージ、バックアップ、情報源",
   "Systemdaten konnten nicht geladen werden": "システムデータを読み込めませんでした",
   "TMDB (Filme & Serien)": "TMDB(映画とTVシリーズ)",
+  "TMDB kennt für diesen Eintrag keine Staffeln.": "TMDB にはこの項目のシーズンがありません。",
   "TMDB lehnt den Schlüssel ab ({status})": "TMDBがキーを拒否しました({status})",
   "TV (kurz)": "TV(短編)",
   "Tabelle \"{table}\" fehlt in der Datenbank": "テーブル「{table}」がデータベースにありません",
@@ -2340,6 +2357,7 @@
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.": "プレビュー: {volumes}({series})、既存は{existing}、{errors}、{notes}。",
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.": "プレビュー: {volumes}({series})、既存は{existing}、{errors}。",
   "Vorschlag": "提案",
+  "Vorschlag von TMDB laden": "TMDB から提案を読み込む",
   "Vorschlag: {edition} ({count}). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "提案: {edition}({count})。違っている場合、照合で誤った欠番が表示されます。「確定」を押すと、版がリンクされ、巻数とステータスが取り込まれます。",
   "Vorschlag: {edition}. Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "提案: {edition}。違っている場合、照合で誤った欠番が表示されます。「確定」を押すと、版がリンクされ、巻数とステータスが取り込まれます。",
   "Vorschläge": "候補",
@@ -2733,6 +2751,7 @@
   "{name} ist bereits im Regal – Status nicht geändert.": "{name}はすでに本棚にあります – ステータスは変更されませんでした。",
   "{name} passt zu mehreren Reihen ({candidates})": "{name}は複数のシリーズに一致します({candidates})",
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name}を既存のシリーズに追加しました。",
+  "{name} · Folgen {from}–{to}": "{name} · {from}–{to}話",
   "{name}. Server wechseln": "{name}。サーバーを切り替え",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: このシリーズはまだコレクションにありません",
   "{name}: {state}": "{name}: {state}",
@@ -2786,11 +2805,17 @@
   "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
     "other": "特別版/ボックスセット{n}点を買い物リストに入れますか？"
   },
+  "{n} Staffel von TMDB übernommen. Prüfen und speichern.|{n} Staffeln von TMDB übernommen. Prüfen und speichern.": {
+    "other": "TMDB から{n}シーズンを取り込みました。確認して保存してください。"
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n}日{hours}時間"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}日"
+  },
+  "{n} eigene Staffel|{n} eigene Staffeln": {
+    "other": "独自シーズン{n}件"
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "未所持の{n}冊を買い物リストに入れますか？"

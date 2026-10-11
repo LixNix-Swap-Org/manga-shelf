@@ -835,6 +835,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             updateProgress={anime.updateProgress}
             removeFromMyList={anime.removeFromMyList}
             update={anime.update}
+            seasonSuggestion={anime.seasonSuggestion}
             refresh={anime.refresh}
             remove={anime.remove}
             onAdd={anime.add}

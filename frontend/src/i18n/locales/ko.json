@@ -42,6 +42,7 @@
   "API-Schlüssel": "API 키",
   "API-Schlüssel oder Lesezugriffstoken": "API 키 또는 읽기 액세스 토큰",
   "AUS": "꺼짐",
+  "Ab Folge": "시작 화",
   "Abbrechen": "취소",
   "Abenteuer": "모험",
   "Abfragegrenze erreicht, nächster Versuch um {time}": "요청 한도에 도달했어요. 다음 시도: {time}",
@@ -775,6 +776,8 @@
   "Editor": "편집자",
   "Editor (Mangas verwalten)": "편집자 (만화 관리)",
   "Eigene Schlüssel sind freiwillig: ohne sie laufen Suche und Daten über den gemeinsamen Zugang des Servers, nur mit dessen Limit. Gespeicherte Schlüssel werden verschlüsselt abgelegt und nie wieder angezeigt.": "개인 키는 선택 사항이에요. 없으면 검색과 데이터가 서버의 공용 접근을 통해 처리되며 그 한도만 적용돼요. 저장된 키는 암호화되어 보관되고 다시는 표시되지 않아요.",
+  "Eigene Staffeln entfernen": "사용자 시즌 삭제",
+  "Eigene Staffeln entfernt": "사용자 시즌을 삭제했습니다",
   "Eigenes Kontingent für die ISBN-Suche über Google Books (sonst teilt sich der Server das anonyme Limit).": "Google Books를 통한 ISBN 검색용 개인 할당량 (없으면 서버가 익명 한도를 함께 사용해요).",
   "Eigenes Limit von 30 Anfragen pro Minute nur für dich; Suche und Metadaten laufen nicht mehr über den gemeinsamen Pool.": "나만을 위한 분당 30회 요청 한도예요. 검색과 메타데이터가 더 이상 공용 풀을 거치지 않아요.",
   "Ein Administrator wurde bereits angelegt – bitte melde dich an.": "관리자가 이미 만들어져 있어요 – 로그인해 주세요.",
@@ -1001,6 +1004,7 @@
   "Für alle (Instanz)": "모두에게 (인스턴스)",
   "Für alle löschen": "모두에게서 삭제",
   "Für den Abgleich braucht es einen eigenen AniList-Token (Konto → Quellen).": "대조하려면 개인 AniList 토큰이 필요해요 (계정 → 출처).",
+  "Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).": "제안을 받으려면 TMDB 키가 필요합니다(계정 & 언어 → API 키).",
   "Für die aktuellen Such- und Filtereinstellungen wurden keine passenden Mangas gefunden.": "현재 검색 및 필터 설정에 맞는 만화가 없어요.",
   "Für diese Datei gibt es keine signierte Prüfsumme.": "이 파일에는 서명된 체크섬이 없어요.",
   "Für eine Reihe, die du schon in einer anderen Sprache sammelst. Vorschläge: gleicher Titel und Autor.": "이미 다른 언어로 모으고 있는 시리즈용이에요. 제안: 제목과 저자가 같은 시리즈.",
@@ -1203,6 +1207,8 @@
   "Ja, zuordnen": "네, 연결",
   "Jahr": "연도",
   "Jahr ({year})": "연도 ({year})",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.": "각 시즌은 이전 시즌 뒤에 시작해야 하며, 첫 시즌은 1화부터, {total}화 이후에는 시작할 수 없습니다.",
+  "Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.": "각 시즌은 이전 시즌 뒤에 시작해야 하며, 첫 시즌은 1화부터입니다.",
   "Jetzt abgleichen": "지금 대조",
   "Jetzt auf dem Server": "현재 서버에 있음",
   "Jetzt umstellen": "지금 바꾸기",
@@ -1342,6 +1348,7 @@
   "Leeren": "비우기",
   "Leertaste": "스페이스바",
   "Lege an…": "만드는 중…",
+  "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "각 시즌이 몇 화부터 시작하는지 정하세요. 시즌은 모든 사용자에게 적용됩니다.",
   "Lese-Fortschritt der Community": "커뮤니티의 읽기 진행 상황",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "독서 기록 & 쌓아둔 책 (안 읽은 책 더미)",
   "Lese-Tracking (Nutzer)": "독서 기록 (사용자)",
@@ -1532,6 +1539,7 @@
   "Nach rechts scrollen": "오른쪽으로 스크롤",
   "Nach rechts verschieben": "오른쪽으로 이동",
   "Name": "이름",
+  "Name (optional)": "이름(선택)",
   "Nebengeschichte": "외전",
   "Netzwerkfehler": "네트워크 오류",
   "Netzwerkfehler bei der Metadatensuche": "메타데이터 검색 중 네트워크 오류가 발생했어요",
@@ -2015,8 +2023,16 @@
   "Sprache ist erforderlich": "언어는 필수예요",
   "Sprache muss ein Text sein": "언어는 텍스트여야 해요",
   "Sprache offline nicht verfügbar": "오프라인에서는 언어를 사용할 수 없습니다",
+  "Staffel hinzufügen": "시즌 추가",
+  "Staffel {season}": "시즌 {season}",
+  "Staffel {season} entfernen": "시즌 {season} 삭제",
   "Staffel {season} · Folgen {from}–{to}": "시즌 {season} · {from}–{to}화",
   "Staffel {season}, Folge {episode}": "시즌 {season}, {episode}화",
+  "Staffeln bearbeiten": "시즌 편집",
+  "Staffeln gespeichert": "시즌을 저장했습니다",
+  "Staffeln konnten nicht geladen werden": "시즌을 불러오지 못했습니다",
+  "Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})": "시즌은 1화부터 시작하고 시작 화가 오름차순이어야 하며 이름은 {max_name}자 이하여야 합니다(최대 {max}개)",
+  "Staffeln speichern": "시즌 저장",
   "Staffeln: {n} · Folgen: {m}": "시즌: {n} · 에피소드: {m}",
   "Stand Offline-Kopie": "오프라인 사본 기준",
   "Stand Offline-Kopie {age}": "오프라인 사본 기준 {age}",
@@ -2077,6 +2093,7 @@
   "System: Version, Speicher, Backups, Quellen": "시스템: 버전, 저장 공간, 백업, 출처",
   "Systemdaten konnten nicht geladen werden": "시스템 데이터를 불러오지 못했어요",
   "TMDB (Filme & Serien)": "TMDB (영화 및 TV 시리즈)",
+  "TMDB kennt für diesen Eintrag keine Staffeln.": "TMDB에 이 항목의 시즌이 없습니다.",
   "TMDB lehnt den Schlüssel ab ({status})": "TMDB가 키를 거부했어요 ({status})",
   "TV (kurz)": "TV (단편)",
   "Tabelle \"{table}\" fehlt in der Datenbank": "데이터베이스에 “{table}” 테이블이 없어요",
@@ -2340,6 +2357,7 @@
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}, {notes}.": "미리보기: {volumes} ({series}), 이미 있던 항목 {existing}개, {errors}, {notes}.",
   "Vorschau: {volumes} ({series}), {existing} schon vorhanden, {errors}.": "미리보기: {volumes} ({series}), 이미 있던 항목 {existing}개, {errors}.",
   "Vorschlag": "제안",
+  "Vorschlag von TMDB laden": "TMDB에서 제안 불러오기",
   "Vorschlag: {edition} ({count}). Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "제안: {edition} ({count}). 맞지 않으면 대조 결과에 잘못된 빠진 권이 표시돼요. “확인”을 누르면 판을 연결하고 권수와 상태를 가져와요.",
   "Vorschlag: {edition}. Stimmt das nicht, zeigt der Abgleich falsche Lücken. „Bestätigen“ verknüpft die Edition und übernimmt Bandzahl und Status.": "제안: {edition}. 맞지 않으면 대조 결과에 잘못된 빠진 권이 표시돼요. “확인”을 누르면 판을 연결하고 권수와 상태를 가져와요.",
   "Vorschläge": "제안",
@@ -2733,6 +2751,7 @@
   "{name} ist bereits im Regal – Status nicht geändert.": "{name}은(는) 이미 책장에 있어요 – 상태는 변경하지 않았어요.",
   "{name} passt zu mehreren Reihen ({candidates})": "{name}은(는) 여러 시리즈와 일치해요 ({candidates})",
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name}을(를) 기존 시리즈에 추가했어요.",
+  "{name} · Folgen {from}–{to}": "{name} · {from}–{to}화",
   "{name}. Server wechseln": "{name}. 서버 전환",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: 시리즈가 아직 컬렉션에 없어요",
   "{name}: {state}": "{name}: {state}",
@@ -2786,11 +2805,17 @@
   "{n} Sonderausgabe/Schuber auf die Einkaufsliste setzen?|{n} Sonderausgaben/Schuber auf die Einkaufsliste setzen?": {
     "other": "특별판/박스 세트 {n}개를 쇼핑 목록에 올릴까요?"
   },
+  "{n} Staffel von TMDB übernommen. Prüfen und speichern.|{n} Staffeln von TMDB übernommen. Prüfen und speichern.": {
+    "other": "TMDB에서 시즌 {n}개를 가져왔습니다. 확인하고 저장하세요."
+  },
   "{n} Tag {hours} Std.|{n} Tage {hours} Std.": {
     "other": "{n}일 {hours}시간"
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}일"
+  },
+  "{n} eigene Staffel|{n} eigene Staffeln": {
+    "other": "사용자 시즌 {n}개"
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "미보유 {n}권을 쇼핑 목록에 올릴까요?"

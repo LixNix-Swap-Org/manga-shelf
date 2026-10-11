@@ -57,7 +57,7 @@
     "src/components/detail/VolumeEditModal.jsx": 11571,
     "src/components/modals/AddAnimeModal.jsx": 5240,
     "src/components/modals/AddMangaModal.jsx": 6570,
-    "src/components/modals/AnimeDetailModal.jsx": 6600,
+    "src/components/modals/AnimeDetailModal.jsx": 8700,
     "src/components/modals/BackupRestoreModal.jsx": 9515,
     "src/components/modals/CleanupModal.jsx": 2985,
     "src/components/modals/PublishersModal.jsx": 2638,

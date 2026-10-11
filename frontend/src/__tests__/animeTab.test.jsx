@@ -231,7 +231,14 @@ describe('animeHelpers', () => {
     expect([next.episodes_watched, next.watched_episodes]).toEqual([12, null]);
     expect(episodeSections({ kind: 'anime' }, 250).map((s) => [s.from, s.to])).toEqual([[1, 100], [101, 200], [201, 250]]);
     expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }, { season_number: 2, episode_count: 10 }] }, 18))
-      .toEqual([{ from: 1, to: 8, season: 1 }, { from: 9, to: 18, season: 2 }]);
+      .toEqual([{ from: 1, to: 8, season: 1, name: null, relative: true }, { from: 9, to: 18, season: 2, name: null, relative: true }]);
+    const onePiece = { kind: 'anime', custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: null }, { start: 1200, name: 'Zu spät' }] };
+    expect(episodeSections(onePiece, 135)).toEqual([
+      { from: 1, to: 61, season: 1, name: 'East Blue', relative: false },
+      { from: 62, to: 135, season: 2, name: null, relative: false }
+    ]);
+    expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }], custom_seasons: [{ start: 1, name: 'A' }] }, 8))
+      .toEqual([{ from: 1, to: 8, season: 1, name: 'A', relative: false }], 'seasons set by hand win over TMDb');
     expect(episodeGridCount({ episodes: 12 }, [])).toBe(12);
     expect(episodeGridCount({ episodes: null }, [1, 4])).toBe(5);
     expect(episodeGridCount({ episodes: null, next_airing: { episode: 30, estimated: false } }, [1])).toBe(29);
@@ -912,6 +919,48 @@ describe('AnimeDetailModal', () => {
       fireEvent.click(mode);
       fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' }));
       await waitFor(() => expect(updateProgress).toHaveBeenLastCalledWith(1, { watched_episodes: [1, 3, 6], episode_scores: { 6: 9 } }));
+    });
+
+    it('seasons: "Vorschlag von TMDB laden" fills the editor, saving stores them for everybody and the grid follows the names', async () => {
+      let current = entry({ episodes: 135, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
+      const update = vi.fn(async (id, body) => { current = { ...current, custom_seasons: body.custom_seasons || [] }; return current; });
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Arabasta', episodes: 74 }], reason: null, tmdb_id: 37854 }));
+      openEditable(current, { update, seasonSuggestion, fetchDetail: vi.fn(async () => current) });
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' })); });
+      expect(seasonSuggestion).toHaveBeenCalledWith(1);
+      expect(screen.getByRole('status').textContent).toBe('2 Staffeln von TMDB übernommen. Prüfen und speichern.');
+      const names = screen.getAllByLabelText('Name (optional)');
+      expect(names.map((input) => input.value)).toEqual(['East Blue', 'Arabasta']);
+      fireEvent.change(names[1], { target: { value: 'Alabasta' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Staffel hinzufügen' }));
+      fireEvent.change(screen.getAllByLabelText('Ab Folge')[2], { target: { value: '200' } });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
+      expect(screen.getByRole('alert').textContent).toBe('Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge 135.');
+      fireEvent.click(screen.getByRole('button', { name: 'Staffel 3 entfernen' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
+      expect(update).toHaveBeenCalledWith(1, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
+      const grid = await screen.findByRole('list', { name: 'Alabasta · Folgen 62–135' });
+      expect(within(grid).getByRole('button', { name: 'Folge 71' }).textContent).toBe('71');
+      expect(screen.getByText('2 eigene Staffeln')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Eigene Staffeln entfernen' })); });
+      expect(update).toHaveBeenLastCalledWith(1, { custom_seasons: null });
+      expect(await screen.findByRole('list', { name: 'Folgen 1–100' })).toBeTruthy();
+    });
+
+    it('seasons: without a TMDB key the suggestion says so; without the prop there is no editor', async () => {
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [], reason: 'no_key', tmdb_id: null }));
+      const { unmount } = openEditable(entry(), { seasonSuggestion });
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' })); });
+      expect(screen.getByRole('status').textContent).toBe('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).');
+      unmount();
+      openEditable(entry());
+      await act(async () => {});
+      expect(screen.queryByRole('button', { name: 'Staffeln bearbeiten' })).toBeNull();
     });
 
     it('no undo when the removal failed', async () => {

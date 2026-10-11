@@ -240,6 +240,27 @@ test('episode ratings: PUT progress with episode_scores, answered in the list an
         .run(...cols.map((c) => before[c]), id, kimId());
 });
 
+test('seasons set by hand: PUT custom_seasons, shared in the list and the detail, validated; the TMDb suggestion needs a key', async () => {
+    const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
+    let res = await editor('PUT', `/anime/${id}`, { custom_seasons: [{ start: 1, name: ' Erster Teil ' }, { start: 15 }] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.custom_seasons, [{ start: 1, name: 'Erster Teil' }, { start: 15, name: null }]);
+    assert.deepEqual((await visitor('GET', '/anime')).body.find((a) => a.id === id).custom_seasons, res.body.custom_seasons, 'shared with everybody');
+    assert.deepEqual((await visitor('GET', `/anime/${id}`)).body.custom_seasons, res.body.custom_seasons);
+    for (const body of [{ custom_seasons: 'x' }, { custom_seasons: [{ start: 2 }] }, { custom_seasons: [{ start: 1 }, { start: 1 }] },
+        { custom_seasons: [{ start: 1 }, { start: 5.5 }] }, { custom_seasons: [{ start: 1, name: 'x'.repeat(81) }] }, { custom_seasons: [{ start: 1, name: 7 }] }]) {
+        assert.equal((await editor('PUT', `/anime/${id}`, body)).status, 400, JSON.stringify(body));
+    }
+    const above = await editor('PUT', `/anime/${id}`, { custom_seasons: [{ start: 1 }, { start: 29 }] });
+    assert.deepEqual([above.status, above.body.code], [400, 'EPISODE_ABOVE_TOTAL']);
+    assert.equal((await visitor('PUT', `/anime/${id}`, { custom_seasons: null })).status, 403);
+    assert.deepEqual((await editor('GET', `/anime/${id}/season-suggestion`)).body, { seasons: [], reason: 'no_key', tmdb_id: null });
+    assert.equal((await visitor('GET', `/anime/${id}/season-suggestion`)).status, 403);
+    res = await editor('PUT', `/anime/${id}`, { custom_seasons: [] });
+    assert.deepEqual(res.body.custom_seasons, [], 'an empty list clears them');
+    assert.equal(db.prepare('SELECT custom_seasons FROM animes WHERE id = ?').get(id).custom_seasons, null);
+});
+
 test('single episodes: PUT progress with watched_episodes, the counter follows, "Weiter" points at the first gap', async () => {
     const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
     const before = { ...db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()) };
@@ -455,6 +476,9 @@ test('films and TV shows: search parameters, TMDb hits in the collection, create
 
     const ani = await admin('POST', '/anime', { anilist_id: 154587 });
     assert.equal(ani.status, 201);
+    const suggestion = await admin('GET', `/anime/${ani.body.id}/season-suggestion?language=en`);
+    assert.deepEqual([suggestion.body.tmdb_id, suggestion.body.seasons], [209867, [{ start: 1, name: 'Season 1', episodes: 28, season_number: 1 }]],
+        'the TMDb twin; seasons past the 28 known episodes are left out');
     const shows = await admin('GET', '/anime/search?q=Frieren&kind=tv&language=en');
     assert.deepEqual(shows.body.sources_used, ['tmdb']);
     assert.match(tmdbUrl(), /language=en-US&page=1&api_key=/);

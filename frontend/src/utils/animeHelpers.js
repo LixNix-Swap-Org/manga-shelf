@@ -320,23 +320,33 @@ export function averageEpisodeScore(scores) {
 export const watchedEpisodesOf = (progress) => episodeMarks.marksOf(progress);
 
 /**
- * Sections of the episode grid: the seasons of a TV show (absolute numbers), else blocks of 100. `count` is the number of
- * episodes to show; each section is { from, to, season }.
+ * Sections of the episode grid: the seasons set by hand (custom_seasons, absolute episode numbers, `name` may be null),
+ * else the regular TMDb seasons of a TV show (numbered within the season, `relative`), else blocks of `size` episodes.
+ * Each section is { from, to, season, name, relative }; `season` is null for a plain block.
  */
 export function episodeSections(anime, count, size = 100) {
-  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
+  const custom = Array.isArray(anime?.custom_seasons) ? anime.custom_seasons : [];
   const out = [];
+  if (custom.length) {
+    custom.forEach((s, i) => {
+      const from = s.start;
+      const to = Math.min(i + 1 < custom.length ? custom[i + 1].start - 1 : count, count);
+      if (from <= count && from <= to) out.push({ from, to, season: i + 1, name: s.name || null, relative: false });
+    });
+    if (out.length) return out;
+  }
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
   if (kindOf(anime) === 'tv' && seasons.length) {
     let before = 0;
     for (const s of seasons) {
       const n = Number(s.episode_count) || 0;
-      if (n > 0 && before < count) out.push({ from: before + 1, to: Math.min(before + n, count), season: s.season_number });
+      if (n > 0 && before < count) out.push({ from: before + 1, to: Math.min(before + n, count), season: s.season_number, name: null, relative: true });
       before += n;
     }
-    if (before < count) out.push({ from: before + 1, to: count, season: null });
+    if (before < count) out.push({ from: before + 1, to: count, season: null, name: null, relative: false });
     return out;
   }
-  for (let from = 1; from <= count; from += size) out.push({ from, to: Math.min(from + size - 1, count), season: null });
+  for (let from = 1; from <= count; from += size) out.push({ from, to: Math.min(from + size - 1, count), season: null, name: null, relative: false });
   return out;
 }
 

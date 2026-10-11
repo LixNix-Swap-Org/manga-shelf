@@ -171,6 +171,10 @@ export default function useAnimeList({ user }) {
 
   const fetchDetail = useCallback((id, { signal } = {}) => api.get(`/api/anime/${id}`, { signal, fallback: t('Anime konnte nicht geladen werden') }), []);
 
+  // TMDb seasons as a suggestion for the season editor ({ seasons, reason, tmdb_id }); names in the UI language
+  const seasonSuggestion = useCallback((id) => api.get(`/api/anime/${id}/season-suggestion?language=${encodeURIComponent(getLanguage())}`,
+    { timeout: TIMEOUTS.lookup, fallback: t('Staffeln konnten nicht geladen werden') }), []);
+
   // `watch` (the "Weiter" target) is computed by the server from the progress: after a change it is read again
   const refreshWatch = useCallback(async (id) => {
     try {
@@ -363,7 +367,7 @@ export default function useAnimeList({ user }) {
 
   return {
     list, loaded, loading, error, cacheAt, fromCache, sources, listSync, watchLast,
-    fetchAnime, fetchSources, syncList, refreshList, search, adaptations, add, update, fetchDetail, updateProgress, markWatched, undoWatched,
+    fetchAnime, fetchSources, syncList, refreshList, search, adaptations, add, update, fetchDetail, seasonSuggestion, updateProgress, markWatched, undoWatched,
     undoCreated, removeFromMyList, remove, refresh
   };
 }

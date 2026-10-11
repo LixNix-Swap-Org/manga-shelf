@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ExternalLink, Minus, Play, Plus, RefreshCw, Star, Trash, Tv, X } from 'lucide-react';
+import { BookOpen, ExternalLink, ListOrdered, Minus, Play, Plus, RefreshCw, Sparkles, Star, Trash, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
@@ -213,10 +213,12 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
     }
     change(sorted(set), nextScores);
   };
-  const sectionLabel = (s) => (s.season !== null
-    ? t('Staffel {season} · Folgen {from}–{to}', { season: s.season, from: s.from, to: s.to })
-    : t('Folgen {from}–{to}', { from: s.from, to: s.to }));
-  const episodeLabel = (n) => (section.season !== null
+  const sectionLabel = (s) => {
+    if (s.name) return t('{name} · Folgen {from}–{to}', { name: s.name, from: s.from, to: s.to });
+    if (s.season !== null) return t('Staffel {season} · Folgen {from}–{to}', { season: s.season, from: s.from, to: s.to });
+    return t('Folgen {from}–{to}', { from: s.from, to: s.to });
+  };
+  const episodeLabel = (n) => (section.relative
     ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.from + 1 })
     : t('Folge {n}', { n }));
   const cellLabel = (n) => (scores[n] ? t('{episode}, Bewertung {score} von 10', { episode: episodeLabel(n), score: scores[n] }) : episodeLabel(n));
@@ -268,7 +270,7 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
                   ? 'bg-brand-700 border-brand-500 text-white'
                   : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'} ${selected ? 'ring-2 ring-amber-400' : ''}`}
               >
-                {section.season !== null ? n - section.from + 1 : n}
+                {section.relative ? n - section.from + 1 : n}
                 {scores[n] && (
                   <span aria-hidden="true" className="absolute -top-1.5 -right-1 min-w-[1rem] px-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-bold leading-4 font-sans">
                     {scores[n]}
@@ -302,12 +304,146 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
   );
 }
 
+/** Rows of the season editor from the stored seasons (or one season from episode 1). */
+const seasonRows = (custom) => (custom.length ? custom : [{ start: 1, name: null }]).map((s) => ({ start: String(s.start), name: s.name || '' }));
+
+/**
+ * Seasons set by hand for everybody (PUT /anime/:id with custom_seasons): the first episode of each season and an optional
+ * name. "Vorschlag von TMDB laden" fills the rows from TMDb (needs a TMDB key); nothing is stored before "Speichern".
+ */
+function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
+  const ids = useId();
+  const custom = useMemo(() => (Array.isArray(anime.custom_seasons) ? anime.custom_seasons : []), [anime.custom_seasons]);
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const total = anime.episodes > 0 ? anime.episodes : null;
+
+  if (!rows) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {custom.length > 0 && <p className="text-xs text-slate-300">{tn('{n} eigene Staffel', '{n} eigene Staffeln', custom.length)}</p>}
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={disabled}
+          onClick={() => { setRows(seasonRows(custom)); setError(''); setNote(''); }}>
+          <ListOrdered className="w-3.5 h-3.5" aria-hidden="true" /> {t('Staffeln bearbeiten')}
+        </button>
+      </div>
+    );
+  }
+
+  const setRow = (i, field, value) => setRows((list) => list.map((r, j) => (j === i ? { ...r, [field]: value } : r)));
+  const addRow = () => setRows((list) => {
+    const last = Number(list[list.length - 1]?.start) || 0;
+    return [...list, { start: String(last + 1), name: '' }];
+  });
+  const removeRow = (i) => setRows((list) => list.filter((_, j) => j !== i));
+  const close = () => { setRows(null); setError(''); setNote(''); };
+  const suggest = async () => {
+    setLoading(true);
+    setError('');
+    setNote('');
+    try {
+      const answer = await loadSuggestion();
+      if (answer?.seasons?.length) {
+        setRows(answer.seasons.map((s) => ({ start: String(s.start), name: s.name || '' })));
+        setNote(tn('{n} Staffel von TMDB übernommen. Prüfen und speichern.', '{n} Staffeln von TMDB übernommen. Prüfen und speichern.', answer.seasons.length));
+      } else if (answer?.reason === 'no_key') {
+        setNote(t('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).'));
+      } else {
+        setNote(t('TMDB kennt für diesen Eintrag keine Staffeln.'));
+      }
+    } catch (err) {
+      if (!isAbortError(err)) setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const save = async (e) => {
+    e.preventDefault();
+    const list = rows.map((r) => ({ start: Number(r.start), name: r.name.trim() || null }));
+    let last = 0;
+    for (const [i, s] of list.entries()) {
+      const bad = !Number.isInteger(s.start) || s.start < 1 || (i === 0 && s.start !== 1) || s.start <= last || (total && s.start > total);
+      if (bad) {
+        setError(total
+          ? t('Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge {total}.', { total })
+          : t('Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1.'));
+        return;
+      }
+      last = s.start;
+    }
+    try {
+      await onSave(list.length > 1 || list[0].name ? list : null);
+      close();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const clear = async () => {
+    try {
+      await onSave(null);
+      close();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <form onSubmit={save} noValidate className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 space-y-3" aria-labelledby={`${ids}-title`}>
+      <div>
+        <h4 id={`${ids}-title`} className="text-xs font-semibold text-slate-100">{t('Staffeln bearbeiten')}</h4>
+        <p className="text-[11px] text-slate-400">{t('Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.')}</p>
+      </div>
+      <ol className="space-y-2">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-wrap items-end gap-2">
+            <span className="text-xs text-slate-300 w-full sm:w-auto sm:min-w-[5.5rem] sm:pb-2">{t('Staffel {season}', { season: i + 1 })}</span>
+            <div className="w-24">
+              <label htmlFor={`${ids}-start-${i}`} className="block text-[11px] text-slate-400 mb-1">{t('Ab Folge')}</label>
+              <input id={`${ids}-start-${i}`} type="number" inputMode="numeric" min={1} max={total || undefined} className="input-field text-base sm:text-sm"
+                value={r.start} readOnly={i === 0} disabled={disabled} onChange={(e) => setRow(i, 'start', e.target.value)} />
+            </div>
+            <div className="flex-1 min-w-[8rem]">
+              <label htmlFor={`${ids}-name-${i}`} className="block text-[11px] text-slate-400 mb-1">{t('Name (optional)')}</label>
+              <input id={`${ids}-name-${i}`} type="text" maxLength={80} className="input-field text-base sm:text-sm" value={r.name} disabled={disabled}
+                onChange={(e) => setRow(i, 'name', e.target.value)} />
+            </div>
+            {i > 0 && (
+              <button type="button" className="btn-secondary p-2.5 hit-44 shrink-0" disabled={disabled}
+                aria-label={t('Staffel {season} entfernen', { season: i + 1 })} title={t('Staffel {season} entfernen', { season: i + 1 })} onClick={() => removeRow(i)}>
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
+      {note && <p role="status" className="text-xs text-slate-300">{note}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={disabled} onClick={addRow}>
+          <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Staffel hinzufügen')}
+        </button>
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={disabled || loading} aria-busy={loading} onClick={suggest}>
+          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> {loading ? t('Lädt…') : t('Vorschlag von TMDB laden')}
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2 justify-end">
+        {custom.length > 0 && <button type="button" className="btn-secondary text-xs text-red-300" disabled={disabled} onClick={clear}>{t('Eigene Staffeln entfernen')}</button>}
+        <button type="button" className="btn-secondary text-xs" onClick={close}>{t('Abbrechen')}</button>
+        <button type="submit" className="btn-primary text-xs" disabled={disabled}>{t('Staffeln speichern')}</button>
+      </div>
+    </form>
+  );
+}
+
 /**
  * Detail of one anime: banner, metadata, description, relations (add or open), everybody's progress, my progress,
  * link to a series, refresh (60 s lock) and delete. `fallback` is the list entry (offline it is all there is).
  */
 export default function AnimeDetailModal({
-  isOpen, animeId, fallback, onClose, canEdit, mangas = [], fetchDetail, updateProgress, removeFromMyList, update, refresh, remove, onAdd, onOpenAnime
+  isOpen, animeId, fallback, onClose, canEdit, mangas = [], fetchDetail, updateProgress, removeFromMyList, update, seasonSuggestion, refresh, remove, onAdd,
+  onOpenAnime
 }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
@@ -421,6 +557,17 @@ export default function AnimeDetailModal({
 
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
   const saveKind = (value) => run(async () => setDetail(await update(animeId, { kind: value })));
+  // the season editor shows its own errors: no toast, the busy flag only
+  const saveSeasons = async (customSeasons) => {
+    setBusy(true);
+    try {
+      setDetail(await update(animeId, { custom_seasons: customSeasons }));
+      notify.success(customSeasons ? t('Staffeln gespeichert') : t('Eigene Staffeln entfernt'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const loadSeasonSuggestion = () => seasonSuggestion(animeId);
   const saveTitle = (e) => {
     e.preventDefault();
     run(async () => setDetail(await update(animeId, { title_de: titleDe.trim() || null })));
@@ -537,7 +684,13 @@ export default function AnimeDetailModal({
               {canEdit && kind !== 'movie' && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-episodes`}>
                   <h3 id={`${titleId}-episodes`} className="text-sm font-bold text-white mb-2">{t('Einzelne Folgen')}</h3>
-                  <EpisodeGrid key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveEpisodes} disabled={busy} />
+                  {seasonSuggestion && (
+                    <div className="mb-3">
+                      <SeasonEditor anime={anime} onSave={saveSeasons} loadSuggestion={loadSeasonSuggestion} disabled={busy} />
+                    </div>
+                  )}
+                  <EpisodeGrid key={`${anime.id}:${(anime.custom_seasons || []).map((c) => c.start).join(',')}`} anime={anime} progress={anime.my_progress}
+                    onSave={saveEpisodes} disabled={busy} />
                 </section>
               )}
 

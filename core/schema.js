@@ -594,6 +594,15 @@ function migrationList(log = silentLog) {
                 const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
                 if (!progressCols.has('episode_scores')) d.exec('ALTER TABLE anime_progress ADD COLUMN episode_scores TEXT;');
             }
+        },
+        {
+            version: 31,
+            name: 'add_anime_custom_seasons',
+            up: (d) => {
+                // Seasons set by hand per entry (JSON [{ start, name }]); NULL = TMDb seasons or blocks of 100
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('custom_seasons')) d.exec('ALTER TABLE animes ADD COLUMN custom_seasons TEXT;');
+            }
         }
     ];
 }
