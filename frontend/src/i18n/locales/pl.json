@@ -446,6 +446,7 @@
   "Bestätigen": "Potwierdź",
   "Besucher": "Gość",
   "Bewertung": "Ocena",
+  "Bewertung entfernen": "Usuń ocenę",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "Ocena musi być liczbą całkowitą od 1 do 10",
   "Bezeichnung": "Nazwa",
   "Bild": "Obraz",
@@ -997,7 +998,9 @@
   "Folge {n}": "Odcinek {n}",
   "Folgen": "Odcinki",
   "Folgen (optional)": "Odcinki (opcjonalnie)",
+  "Folgen bewerten": "Oceniaj odcinki",
   "Folgen {from}–{to}": "Odcinki {from}–{to}",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "Oceny odcinków muszą przypisywać numerom odcinków od 1 liczby całkowite od 1 do 10 (najwyżej {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "Liczba odcinków musi być liczbą całkowitą od 0",
   "Folge|Folgen": {
     "one": "odcinek",
@@ -2195,6 +2198,7 @@
   "Thriller": "Thriller",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "Wskazówka: wpisz tytuł i kliknij „Autouzupełnij”",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Dotknij odcinka, aby oznaczyć go jako obejrzany lub usunąć oznaczenie.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Dotknij odcinka, aby go ocenić.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Przytrzymaj pole i wybierz „Wklej”.",
   "Titel": "Tytuł",
   "Titel & Autor": "Tytuł i autor",
@@ -2828,6 +2832,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} dotknij „Otwórz w aplikacji kalendarza” i „Subskrybuj” – albo Ustawienia → Kalendarz → Konta → Dodaj konto → Inne → Dodaj subskrybowany kalendarz, wklej adres.",
   "{entry} von „{title}“ wiederhergestellt": "Przywrócono {entry} z „{title}”",
   "{episodes} à {duration} Min.": "{episodes} × {duration} min",
+  "{episode} bewerten": "Oceń: {episode}",
+  "{episode}, Bewertung {score} von 10": "{episode}, ocena {score} na 10",
   "{failure} (keine Verbindung zum Server)": "{failure} (brak połączenia z serwerem)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} (przesłano {uploaded} z {n} zdjęcia)",
@@ -3116,6 +3122,12 @@
   },
   "Öffnen": "Otwórz",
   "Ø Preis": "Śr. cena",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "few": "Ø {avg} z {n} ocenionych odcinków",
+    "many": "Ø {avg} z {n} ocenionych odcinków",
+    "one": "Ø {avg} z {n} ocenionego odcinka",
+    "other": "Ø {avg} z {n} ocenionych odcinków"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Wyszukaj w AniList lub MyAnimeList przez „Dodaj anime” albo utwórz wpis ręcznie.",
   "Übernatürlich": "Nadprzyrodzone",
   "Übernehmen": "Zastosuj",

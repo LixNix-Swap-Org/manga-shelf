@@ -19,14 +19,15 @@ const readProgress = (ctx, animeId, userId) => ctx.db.prepare('SELECT * FROM ani
 // "Pausiert"/"Abgebrochen" to "Schaue". A counter change without a new resume_url drops the resume link.
 // `watched_episodes` (array) sets the single watched episodes and with them the counter; `null` drops them back to the plain
 // counter. A monotonic counter (link, history sync, AniList) adds 1..N to existing marks; any other counter change fills the
-// lowest unwatched episodes or drops the highest marks (core/anime/episodes.js).
+// lowest unwatched episodes or drops the highest marks (core/anime/episodes.js). `episode_scores` (object episode -> 1..10)
+// replaces the ratings of single episodes, `null` removes them; ratings above a known episode count are dropped.
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
     const anime = ctx.db.prepare('SELECT id, episodes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;
     const stored = readProgress(ctx, animeId, userId);
     const current = stored
         || { status: 'Geplant', episodes_watched: 0, score: null, notes: null, started_at: null, finished_at: null, resume_url: null, resume_episode: null,
-            audio_language: null, subtitle_language: null, watched_episodes: null };
+            audio_language: null, subtitle_language: null, watched_episodes: null, episode_scores: null };
     const total = anime.episodes > 0 ? anime.episodes : null;
     const currentMarks = episodeMarks.parseMarks(current.watched_episodes);
     let watched = change.episodes_watched;
@@ -69,19 +70,21 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
     }
     const marked = change.watched_episodes === null ? null : (marks || currentMarks);
     const marksColumn = marked ? episodeMarks.storedMarks(episodeMarks.fitMarks(episodeMarks.cleanMarks(marked, total), episodes)) : null;
+    const scores = change.episode_scores === undefined ? episodeMarks.parseScores(current.episode_scores) : (change.episode_scores || {});
+    const scoresColumn = episodeMarks.storedScores(episodeMarks.cleanScores(scores, total));
     const audio = change.audio_language === undefined ? current.audio_language ?? null : change.audio_language;
     const subtitle = change.subtitle_language === undefined ? current.subtitle_language ?? null : change.subtitle_language;
     ctx.db.prepare(`
         INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, notes, started_at, finished_at, updated_at, resume_url, resume_episode,
-            audio_language, subtitle_language, watched_episodes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            audio_language, subtitle_language, watched_episodes, episode_scores)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (anime_id, user_id) DO UPDATE SET status = excluded.status, episodes_watched = excluded.episodes_watched,
             score = excluded.score, notes = excluded.notes, started_at = excluded.started_at, finished_at = excluded.finished_at,
             updated_at = excluded.updated_at, resume_url = excluded.resume_url, resume_episode = excluded.resume_episode,
             audio_language = excluded.audio_language, subtitle_language = excluded.subtitle_language,
-            watched_episodes = excluded.watched_episodes
+            watched_episodes = excluded.watched_episodes, episode_scores = excluded.episode_scores
     `).run(animeId, userId, status, episodes, change.score === undefined ? current.score : change.score,
-        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn);
+        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn);
     return readProgress(ctx, animeId, userId);
 }
 

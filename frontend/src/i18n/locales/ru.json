@@ -446,6 +446,7 @@
   "Bestätigen": "Подтвердить",
   "Besucher": "Посетитель",
   "Bewertung": "Оценка",
+  "Bewertung entfernen": "Удалить оценку",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "Оценка должна быть целым числом от 1 до 10",
   "Bezeichnung": "Название",
   "Bild": "Изображение",
@@ -997,7 +998,9 @@
   "Folge {n}": "Эпизод {n}",
   "Folgen": "Эпизоды",
   "Folgen (optional)": "Эпизоды (необязательно)",
+  "Folgen bewerten": "Оценивать серии",
   "Folgen {from}–{to}": "Эпизоды {from}–{to}",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "Оценки серий должны сопоставлять номера серий от 1 целым числам от 1 до 10 (не более {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "Число эпизодов должно быть целым числом от 0",
   "Folge|Folgen": {
     "one": "эпизод",
@@ -2195,6 +2198,7 @@
   "Thriller": "Триллер",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "Подсказка: введите название и нажмите «Автозаполнение»",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Нажмите на эпизод, чтобы отметить его как просмотренный или снять отметку.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Нажмите на серию, чтобы оценить её.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Нажмите и удерживайте поле и выберите «Вставить».",
   "Titel": "Название",
   "Titel & Autor": "Название и автор",
@@ -2828,6 +2832,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} нажмите «Открыть в приложении календаря» и «Подписаться» — или Настройки → Календарь → Учётные записи → Добавить учётную запись → Другое → Добавить подписной календарь, вставьте адрес.",
   "{entry} von „{title}“ wiederhergestellt": "Восстановлено: {entry} «{title}»",
   "{episodes} à {duration} Min.": "{episodes} по {duration} мин",
+  "{episode} bewerten": "Оценить: {episode}",
+  "{episode}, Bewertung {score} von 10": "{episode}, оценка {score} из 10",
   "{failure} (keine Verbindung zum Server)": "{failure} (нет соединения с сервером)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} (загружено фото: {uploaded} из {n})",
@@ -3116,6 +3122,12 @@
   },
   "Öffnen": "Открыть",
   "Ø Preis": "Ср. цена",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "few": "Ø {avg} по {n} оценённым сериям",
+    "many": "Ø {avg} по {n} оценённым сериям",
+    "one": "Ø {avg} по {n} оценённой серии",
+    "other": "Ø {avg} по {n} оценённым сериям"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Найдите аниме в AniList или MyAnimeList через «Добавить аниме» либо создайте запись вручную.",
   "Übernatürlich": "Сверхъестественное",
   "Übernehmen": "Применить",

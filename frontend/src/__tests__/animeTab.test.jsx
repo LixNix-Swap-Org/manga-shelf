@@ -869,7 +869,7 @@ describe('AnimeDetailModal', () => {
       fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2' }));
       expect(within(grid).getByRole('button', { name: 'Folge 9' }).getAttribute('aria-pressed')).toBe('true');
       await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1));
-      expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 3, 4, 5, 6, 7, 9] });
+      expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 3, 4, 5, 6, 7, 9], episode_scores: {} });
       await waitFor(() => expect(fetchDetail.mock.calls.length).toBeGreaterThan(1));
     });
 
@@ -882,11 +882,36 @@ describe('AnimeDetailModal', () => {
       const grid = screen.getByRole('list', { name: 'Staffel 2 · Folgen 11–20' });
       expect(within(grid).getByRole('button', { name: 'Staffel 2, Folge 3' }).textContent).toBe('3');
       fireEvent.click(screen.getByRole('button', { name: 'Alle im Abschnitt gesehen' }));
-      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: Array.from({ length: 20 }, (_, i) => i + 1) }));
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: Array.from({ length: 20 }, (_, i) => i + 1), episode_scores: {} }));
       unmount();
       openEditable(entry({ kind: 'movie', episodes: 1 }));
       await act(async () => {});
       expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
+    });
+
+    it('episode ratings: "Folgen bewerten" rates a tapped episode, marks it watched and shows the average; unmarking drops the rating', async () => {
+      let rated = entry({ my_progress: { status: 'Schaue', episodes_watched: 3, score: null, notes: null, episode_scores: { 2: 7 } } });
+      const updateProgress = vi.fn(async (id, change) => {
+        rated = { ...rated, my_progress: { ...rated.my_progress, episodes_watched: change.watched_episodes.length, ...change } };
+        return rated.my_progress;
+      });
+      openEditable(rated, { updateProgress, fetchDetail: vi.fn(async () => rated) });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Folgen 1–12' });
+      expect(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' })).toBeTruthy();
+      expect(screen.getByText('Ø 7 aus 1 bewerteten Folge')).toBeTruthy();
+      const mode = screen.getByRole('button', { name: 'Folgen bewerten' });
+      fireEvent.click(mode);
+      expect(mode.getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 6' }));
+      const panel = screen.getByRole('group', { name: 'Folge 6 bewerten' });
+      fireEvent.click(within(panel).getByRole('button', { name: '9' }));
+      expect(screen.queryByRole('group', { name: 'Folge 6 bewerten' })).toBeNull();
+      expect(screen.getByText('Ø 8 aus 2 bewerteten Folgen')).toBeTruthy();
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 2, 3, 6], episode_scores: { 2: 7, 6: 9 } }));
+      fireEvent.click(mode);
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' }));
+      await waitFor(() => expect(updateProgress).toHaveBeenLastCalledWith(1, { watched_episodes: [1, 3, 6], episode_scores: { 6: 9 } }));
     });
 
     it('no undo when the removal failed', async () => {

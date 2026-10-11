@@ -413,6 +413,7 @@
   "Bestätigen": "確定",
   "Besucher": "ゲスト",
   "Bewertung": "評価",
+  "Bewertung entfernen": "評価を削除",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "評価は1から10までの整数である必要があります",
   "Bezeichnung": "名称",
   "Bild": "画像",
@@ -952,7 +953,9 @@
   "Folge {n}": "{n}話",
   "Folgen": "話数",
   "Folgen (optional)": "話数(任意)",
+  "Folgen bewerten": "エピソードを評価",
   "Folgen {from}–{to}": "{from}–{to}話",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "エピソードの評価は1以上の話数と1〜10の整数の組み合わせである必要があります（最大{max}件）",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "話数は0以上の整数にしてください",
   "Folge|Folgen": {
     "other": "話"
@@ -2093,6 +2096,7 @@
   "Thriller": "スリラー",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "ヒント: タイトルを入力して「自動入力」をクリック",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "話をタップすると視聴済みにしたり、印を外したりできます。",
+  "Tippe eine Folge an, um sie zu bewerten.": "エピソードをタップして評価します。",
   "Tippe lange ins Feld und wähle „Einfügen“.": "入力欄を長押しして「ペースト」を選んでください。",
   "Titel": "タイトル",
   "Titel & Autor": "タイトルと作者",
@@ -2687,6 +2691,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device}「カレンダーアプリで開く」をタップして「購読」– または、設定 → カレンダー → アカウント → アカウントを追加 → その他 → 照会するカレンダーを追加 の順に進み、アドレスを貼り付けます。",
   "{entry} von „{title}“ wiederhergestellt": "「{title}」の{entry}を復元しました",
   "{episodes} à {duration} Min.": "{episodes} × {duration}分",
+  "{episode} bewerten": "{episode}を評価",
+  "{episode}, Bewertung {score} von 10": "{episode}、評価 {score}/10",
   "{failure} (keine Verbindung zum Server)": "{failure}(サーバーに接続できません)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "other": "{failure}(写真{n}枚中{uploaded}枚をアップロード済み)"
@@ -2888,6 +2894,9 @@
   },
   "Öffnen": "開く",
   "Ø Preis": "平均価格",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "other": "評価済み {n} 話の平均 Ø {avg}"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "「アニメを追加」からAniListまたはMyAnimeListで検索するか、項目を手動で作成してください。",
   "Übernatürlich": "超自然",
   "Übernehmen": "適用",

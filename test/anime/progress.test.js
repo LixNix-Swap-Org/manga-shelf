@@ -128,6 +128,20 @@ test('single episodes: the marks set the counter, gaps stay, Gesehen and Geplant
     assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null], 'every episode marked means Gesehen');
 });
 
+test('episode ratings: stored per episode, kept by other changes, above the total dropped, null clears them', () => {
+    const { save } = setup(12);
+    let row = save({ episode_scores: { 3: 8, 1: 10, 40: 5, 2: 11, 4: 7.5 } });
+    assert.deepEqual(JSON.parse(row.episode_scores), { 1: 10, 3: 8 }, 'whole scores 1..10 within the episode count only');
+    assert.equal(row.episodes_watched, 0, 'a rating does not mark the episode as watched');
+    row = save({ watched_episodes: [1, 2], status: 'Schaue' });
+    assert.deepEqual(JSON.parse(row.episode_scores), { 1: 10, 3: 8 }, 'other changes keep the ratings');
+    row = save({ episode_scores: {} });
+    assert.equal(row.episode_scores, null, 'an empty object stores NULL');
+    save({ episode_scores: { 5: 6 } });
+    row = save({ episode_scores: null });
+    assert.equal(row.episode_scores, null);
+});
+
 test('single episodes: +1 fills the first gap, lowering drops the highest marks, null goes back to the counter', () => {
     const { save } = setup(12);
     save({ watched_episodes: [1, 2, 5] });

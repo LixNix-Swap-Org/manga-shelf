@@ -204,7 +204,8 @@ const progressOf = (row) => (row ? {
     resume_episode: row.resume_episode ?? null,
     audio_language: row.audio_language ?? null,
     subtitle_language: row.subtitle_language ?? null,
-    watched_episodes: episodeMarks.parseMarks(row.watched_episodes)
+    watched_episodes: episodeMarks.parseMarks(row.watched_episodes),
+    episode_scores: episodeMarks.parseScores(row.episode_scores)
 } : null);
 
 /** The stored link lists of a row: { external_links, streaming_episodes } (arrays). */

@@ -413,6 +413,7 @@
   "Bestätigen": "확인",
   "Besucher": "방문자",
   "Bewertung": "평점",
+  "Bewertung entfernen": "평점 삭제",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "평점은 1에서 10 사이의 정수여야 해요",
   "Bezeichnung": "이름",
   "Bild": "이미지",
@@ -952,7 +953,9 @@
   "Folge {n}": "{n}화",
   "Folgen": "에피소드",
   "Folgen (optional)": "에피소드 (선택)",
+  "Folgen bewerten": "에피소드 평가",
   "Folgen {from}–{to}": "{from}–{to}화",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "에피소드 평점은 1 이상의 화 번호와 1~10의 정수여야 합니다(최대 {max}개)",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "에피소드 수는 0 이상의 정수여야 해요",
   "Folge|Folgen": {
     "other": "화"
@@ -2093,6 +2096,7 @@
   "Thriller": "스릴러",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "팁: 제목을 입력하고 “자동 채우기”를 클릭해 보세요",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "에피소드를 탭하면 시청함으로 표시하거나 표시를 지울 수 있어요.",
+  "Tippe eine Folge an, um sie zu bewerten.": "에피소드를 탭하여 평가하세요.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "입력란을 길게 누르고 “붙여넣기”를 선택해 주세요.",
   "Titel": "제목",
   "Titel & Autor": "제목 & 작가",
@@ -2687,6 +2691,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} “캘린더 앱에서 열기”를 누르고 “구독”을 선택해요 – 또는 설정 → 캘린더 → 계정 → 계정 추가 → 기타 → 구독 캘린더 추가에 주소를 붙여넣어요.",
   "{entry} von „{title}“ wiederhergestellt": "“{title}”의 {entry}을(를) 복원했어요",
   "{episodes} à {duration} Min.": "{episodes}, 편당 {duration}분",
+  "{episode} bewerten": "{episode} 평가",
+  "{episode}, Bewertung {score} von 10": "{episode}, 평점 {score}/10",
   "{failure} (keine Verbindung zum Server)": "{failure} (서버에 연결되어 있지 않아요)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "other": "{failure} (사진 {n}장 중 {uploaded}장 업로드됨)"
@@ -2888,6 +2894,9 @@
   },
   "Öffnen": "열기",
   "Ø Preis": "평균 가격",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "other": "평가한 {n}화 평균 Ø {avg}"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "“애니메이션 추가”에서 AniList나 MyAnimeList를 검색하거나 항목을 직접 만들어 주세요.",
   "Übernatürlich": "초자연",
   "Übernehmen": "적용",

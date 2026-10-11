@@ -585,6 +585,15 @@ function migrationList(log = silentLog) {
                 const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
                 if (!progressCols.has('watched_episodes')) d.exec('ALTER TABLE anime_progress ADD COLUMN watched_episodes TEXT;');
             }
+        },
+        {
+            version: 30,
+            name: 'add_anime_episode_scores',
+            up: (d) => {
+                // Ratings of single episodes per user (JSON object episode -> 1..10); NULL = none
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('episode_scores')) d.exec('ALTER TABLE anime_progress ADD COLUMN episode_scores TEXT;');
+            }
         }
     ];
 }

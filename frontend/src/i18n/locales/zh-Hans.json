@@ -413,6 +413,7 @@
   "Bestätigen": "确认",
   "Besucher": "访客",
   "Bewertung": "评分",
+  "Bewertung entfernen": "删除评分",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "评分必须是 1 到 10 的整数",
   "Bezeichnung": "名称",
   "Bild": "图片",
@@ -952,7 +953,9 @@
   "Folge {n}": "第 {n} 集",
   "Folgen": "集数",
   "Folgen (optional)": "集数（可选）",
+  "Folgen bewerten": "为剧集评分",
   "Folgen {from}–{to}": "第 {from}–{to} 集",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "剧集评分必须将从 1 开始的集数对应到 1 至 10 的整数（最多 {max} 个）",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "集数必须是不小于 0 的整数",
   "Folge|Folgen": {
     "other": "集"
@@ -2093,6 +2096,7 @@
   "Thriller": "惊悚",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "提示：输入标题并点击“自动填充”",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "点按某一集即可标记为已看或取消标记。",
+  "Tippe eine Folge an, um sie zu bewerten.": "点按一集即可评分。",
   "Tippe lange ins Feld und wähle „Einfügen“.": "长按输入框，选择“粘贴”。",
   "Titel": "标题",
   "Titel & Autor": "标题和作者",
@@ -2687,6 +2691,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device}：点击“在日历应用中打开”，再点“订阅”——或者依次进入 设置 → 日历 → 账户 → 添加账户 → 其他 → 添加已订阅的日历，粘贴地址。",
   "{entry} von „{title}“ wiederhergestellt": "“{title}”：{entry} 已恢复",
   "{episodes} à {duration} Min.": "{episodes} 集 × {duration} 分钟",
+  "{episode} bewerten": "为{episode}评分",
+  "{episode}, Bewertung {score} von 10": "{episode}，评分 {score}/10",
   "{failure} (keine Verbindung zum Server)": "{failure}（无法连接服务器）",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "other": "{failure}（已上传 {uploaded}/{n} 张照片）"
@@ -2888,6 +2894,9 @@
   },
   "Öffnen": "打开",
   "Ø Preis": "均价",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "other": "已评分 {n} 集的平均分 Ø {avg}"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "通过“添加动画”在 AniList 或 MyAnimeList 中搜索，或手动创建条目。",
   "Übernatürlich": "超自然",
   "Übernehmen": "应用",

@@ -278,6 +278,7 @@ export function predictProgress(current, change, total) {
   };
   if (change.audio_language !== undefined) next.audio_language = change.audio_language;
   if (change.subtitle_language !== undefined) next.subtitle_language = change.subtitle_language;
+  if (change.episode_scores !== undefined) next.episode_scores = change.episode_scores || {};
   const marked = change.watched_episodes === null ? null : (marks || episodeMarks.parseMarks(base.watched_episodes));
   const fitted = marked ? episodeMarks.fitMarks(episodeMarks.cleanMarks(marked, known), episodes) : null;
   next.watched_episodes = fitted && !episodeMarks.isPlain(fitted) ? fitted : null;
@@ -304,6 +305,15 @@ export function predictWatched(current, { episode, url = null }, total) {
   if (total > 0 && episodes >= total) status = 'Gesehen';
   else if (episodes > had && status !== 'Gesehen') status = 'Schaue';
   return { ...base, status, episodes_watched: episodes, resume_url: url, resume_episode: url ? Number(episode) || null : null };
+}
+
+/** The ratings of single episodes of a progress answer: { episode: score } (empty without any). */
+export const episodeScoresOf = (progress) => episodeMarks.parseScores(progress?.episode_scores);
+
+/** The average of the ratings of single episodes, or null without any. */
+export function averageEpisodeScore(scores) {
+  const values = Object.values(scores || {});
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
 /** The watched episodes of a progress answer: its single marks, else 1..episodes_watched. */

@@ -215,6 +215,31 @@ test('watched from a shared link: never lowers, resume link and remembered serie
     assert.equal((await visitor('GET', `/anime/${id}`)).body.watch.next_url, 'https://www.crunchyroll.com/frieren-beyond-journeys-end/episode-1-the-journeys-end-911401');
 });
 
+test('episode ratings: PUT progress with episode_scores, answered in the list and the detail, validated', async () => {
+    const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
+    const before = { ...db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()) };
+    let res = await editor('PUT', `/anime/${id}/progress`, { episode_scores: { 7: 9, 2: 6 } });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.episode_scores, { 2: 6, 7: 9 });
+    assert.equal(res.body.episodes_watched, before.episodes_watched, 'ratings leave the counter alone');
+    assert.deepEqual((await editor('GET', '/anime')).body.find((a) => a.id === id).my_progress.episode_scores, { 2: 6, 7: 9 });
+    assert.deepEqual((await editor('GET', `/anime/${id}`)).body.my_progress.episode_scores, { 2: 6, 7: 9 });
+    res = await editor('PUT', `/anime/${id}/progress`, { notes: 'x' });
+    assert.deepEqual(res.body.episode_scores, { 2: 6, 7: 9 }, 'kept by other changes');
+    for (const body of [{ episode_scores: [8] }, { episode_scores: 'x' }, { episode_scores: { 0: 5 } }, { episode_scores: { 1: 0 } },
+        { episode_scores: { 1: 11 } }, { episode_scores: { 1: 7.5 } }, { episode_scores: { a: 5 } }, { episode_scores: { 1: '5' } }]) {
+        assert.equal((await editor('PUT', `/anime/${id}/progress`, body)).status, 400, JSON.stringify(body));
+    }
+    const above = await editor('PUT', `/anime/${id}/progress`, { episode_scores: { 29: 5 } });
+    assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
+    res = await editor('PUT', `/anime/${id}/progress`, { episode_scores: null });
+    assert.deepEqual(res.body.episode_scores, {});
+    assert.equal((await visitor('PUT', `/anime/${id}/progress`, { episode_scores: { 1: 5 } })).status, 403);
+    const cols = Object.keys(before);
+    db.prepare(`UPDATE anime_progress SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE anime_id = ? AND user_id = ?`)
+        .run(...cols.map((c) => before[c]), id, kimId());
+});
+
 test('single episodes: PUT progress with watched_episodes, the counter follows, "Weiter" points at the first gap', async () => {
     const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
     const before = { ...db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()) };

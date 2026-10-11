@@ -435,6 +435,7 @@
   "Bestätigen": "Conferma",
   "Besucher": "Visitatore",
   "Bewertung": "Valutazione",
+  "Bewertung entfernen": "Rimuovi voto",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "La valutazione deve essere un numero intero da 1 a 10",
   "Bezeichnung": "Nome",
   "Bild": "Immagine",
@@ -982,7 +983,9 @@
   "Folge {n}": "Episodio {n}",
   "Folgen": "Episodi",
   "Folgen (optional)": "Episodi (facoltativo)",
+  "Folgen bewerten": "Vota gli episodi",
   "Folgen {from}–{to}": "Episodi {from}–{to}",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "I voti degli episodi devono associare numeri di episodio da 1 a numeri interi da 1 a 10 (al massimo {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "Il numero di episodi deve essere un intero a partire da 0",
   "Folge|Folgen": {
     "one": "episodio",
@@ -2161,6 +2164,7 @@
   "Thriller": "Thriller",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "Suggerimento: inserisci il titolo e clicca su “Auto-compila”",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Tocca un episodio per segnarlo come visto o togliere il segno.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Tocca un episodio per votarlo.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Tocca e tieni premuto nel campo e scegli “Incolla”.",
   "Titel": "Titolo",
   "Titel & Autor": "Titolo e autore",
@@ -2781,6 +2785,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} tocca “Apri nell’app Calendario” e “Iscriviti” – oppure Impostazioni → Calendario → Account → Aggiungi account → Altro → Aggiungi calendario con iscrizione, incolla l’indirizzo.",
   "{entry} von „{title}“ wiederhergestellt": "Ripristinato: {entry} di “{title}”",
   "{episodes} à {duration} Min.": "{episodes} × {duration} min",
+  "{episode} bewerten": "Vota {episode}",
+  "{episode}, Bewertung {score} von 10": "{episode}, voto {score} su 10",
   "{failure} (keine Verbindung zum Server)": "{failure} (nessuna connessione al server)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} ({uploaded} su {n} foto caricata)",
@@ -3040,6 +3046,11 @@
   },
   "Öffnen": "Apri",
   "Ø Preis": "Ø prezzo",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "many": "Ø {avg} su {n} episodi votati",
+    "one": "Ø {avg} su {n} episodio votato",
+    "other": "Ø {avg} su {n} episodi votati"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Cerca con “Aggiungi anime” su AniList o MyAnimeList oppure crea una voce a mano.",
   "Übernatürlich": "Soprannaturale",
   "Übernehmen": "Applica",

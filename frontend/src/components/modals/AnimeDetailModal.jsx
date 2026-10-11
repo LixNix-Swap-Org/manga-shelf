@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ExternalLink, Minus, Play, Plus, RefreshCw, Trash, Tv, X } from 'lucide-react';
+import { BookOpen, ExternalLink, Minus, Play, Plus, RefreshCw, Star, Trash, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
@@ -12,11 +12,12 @@ import { compareNatural } from '../../utils/search';
 import {
   PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
   continueTarget, airedEpisodes, stillAiring, kindOf, kindLabel, seasonEpisodeText, ANIME_KINDS, watchedEpisodesOf, episodeSections,
-  episodeGridCount
+  episodeGridCount, episodeScoresOf, averageEpisodeScore
 } from '../../utils/animeHelpers';
+import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
 const lastRefresh = new Map();
@@ -127,18 +128,24 @@ const SAVE_DELAY_MS = 600;
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
 
 /**
- * Single episodes as toggles (aria-pressed). Taps are collected for a moment and saved as one set of watched episodes
- * (PUT progress with watched_episodes); saves run one after another, closing the dialog saves at once.
+ * Single episodes as toggles (aria-pressed). Taps are collected for a moment and saved as one set of watched episodes and
+ * episode ratings (PUT progress with watched_episodes and episode_scores); saves run one after another, closing the
+ * dialog saves at once. "Folgen bewerten" switches the taps to rating: an episode gets 1..10 and counts as watched with it;
+ * unmarking an episode drops its rating.
  */
 function EpisodeGrid({ anime, progress, onSave, disabled }) {
   const ids = useId();
   const serverMarks = useMemo(() => watchedEpisodesOf(progress), [progress]);
+  const serverScores = useMemo(() => episodeScoresOf(progress), [progress]);
   const [draft, setDraft] = useState(null);
-  const marks = draft ?? serverMarks;
+  const marks = draft ? draft.marks : serverMarks;
+  const scores = draft ? draft.scores : serverScores;
   const watched = useMemo(() => new Set(marks), [marks]);
   const count = episodeGridCount(anime, marks);
   const sections = useMemo(() => episodeSections(anime, count), [anime, count]);
   const [picked, setPicked] = useState(null);
+  const [rating, setRating] = useState(false);
+  const [ratingFor, setRatingFor] = useState(null);
   const firstOpen = useMemo(() => {
     for (let n = 1; n <= count; n++) if (!watched.has(n)) return n;
     return count;
@@ -165,44 +172,67 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
   useEffect(() => () => flush(), [flush]);
 
   if (!section) return null;
-  const change = (next) => {
-    setDraft(next);
-    pending.current = next;
+  const change = (nextMarks, nextScores) => {
+    setDraft({ marks: nextMarks, scores: nextScores });
+    pending.current = { watched_episodes: nextMarks, episode_scores: nextScores };
     clearTimeout(timer.current);
     timer.current = setTimeout(flush, SAVE_DELAY_MS);
   };
+  const sorted = (set) => [...set].sort((a, b) => a - b);
   const toggle = (n) => {
     const set = new Set(marks);
-    if (set.has(n)) set.delete(n);
-    else set.add(n);
-    change([...set].sort((a, b) => a - b));
+    const nextScores = { ...scores };
+    if (set.has(n)) {
+      set.delete(n);
+      delete nextScores[n];
+    } else set.add(n);
+    change(sorted(set), nextScores);
+  };
+  const rate = (n, value) => {
+    const set = new Set(marks);
+    const nextScores = { ...scores };
+    if (value === null) delete nextScores[n];
+    else {
+      nextScores[n] = value;
+      set.add(n);
+    }
+    change(sorted(set), nextScores);
+    setRatingFor(null);
   };
   const numbers = [];
   for (let n = section.from; n <= section.to; n++) numbers.push(n);
   const allWatched = numbers.every((n) => watched.has(n));
   const toggleSection = () => {
     const set = new Set(marks);
+    const nextScores = { ...scores };
     for (const n of numbers) {
-      if (allWatched) set.delete(n);
-      else set.add(n);
+      if (allWatched) {
+        set.delete(n);
+        delete nextScores[n];
+      } else set.add(n);
     }
-    change([...set].sort((a, b) => a - b));
+    change(sorted(set), nextScores);
   };
   const sectionLabel = (s) => (s.season !== null
     ? t('Staffel {season} · Folgen {from}–{to}', { season: s.season, from: s.from, to: s.to })
     : t('Folgen {from}–{to}', { from: s.from, to: s.to }));
-  const cellLabel = (n) => (section.season !== null
+  const episodeLabel = (n) => (section.season !== null
     ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.from + 1 })
     : t('Folge {n}', { n }));
+  const cellLabel = (n) => (scores[n] ? t('{episode}, Bewertung {score} von 10', { episode: episodeLabel(n), score: scores[n] }) : episodeLabel(n));
+  const rated = Object.keys(scores).length;
+  const average = averageEpisodeScore(scores);
 
   return (
     <div className="space-y-2">
-      <p id={`${ids}-hint`} className="text-[11px] text-slate-400">{t('Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.')}</p>
+      <p id={`${ids}-hint`} className="text-[11px] text-slate-400">
+        {rating ? t('Tippe eine Folge an, um sie zu bewerten.') : t('Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.')}
+      </p>
       <div className="flex flex-wrap items-end gap-2">
         {sections.length > 1 && (
           <div>
             <label htmlFor={`${ids}-section`} className="block text-[11px] text-slate-400 mb-1">{t('Abschnitt')}</label>
-            <select id={`${ids}-section`} className="input-field text-base sm:text-sm" value={index} onChange={(e) => setPicked(Number(e.target.value))}>
+            <select id={`${ids}-section`} className="input-field text-base sm:text-sm" value={index} onChange={(e) => { setPicked(Number(e.target.value)); setRatingFor(null); }}>
               {sections.map((s, i) => <option key={s.from} value={i}>{sectionLabel(s)}</option>)}
             </select>
           </div>
@@ -210,30 +240,64 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
         <button type="button" className="btn-secondary text-xs" onClick={toggleSection} disabled={disabled}>
           {allWatched ? t('Abschnitt zurücksetzen') : t('Alle im Abschnitt gesehen')}
         </button>
+        <button type="button" aria-pressed={rating} onClick={() => { setRating((v) => !v); setRatingFor(null); }} disabled={disabled}
+          className={`btn-secondary text-xs inline-flex items-center gap-1 ${rating ? 'ring-1 ring-amber-400 text-amber-200' : ''}`}>
+          <Star className="w-3.5 h-3.5" aria-hidden="true" /> {t('Folgen bewerten')}
+        </button>
       </div>
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5" aria-label={sectionLabel(section)} aria-describedby={`${ids}-hint`}>
+      {average !== null && (
+        <p className="text-xs text-slate-300">{tn('Ø {avg} aus {n} bewerteten Folge', 'Ø {avg} aus {n} bewerteten Folgen', rated, { avg: formatNumber(average, 1) })}</p>
+      )}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5 pt-1" aria-label={sectionLabel(section)} aria-describedby={`${ids}-hint`}>
         {numbers.map((n) => {
           const on = watched.has(n);
           const label = cellLabel(n);
+          const selected = rating && ratingFor === n;
           return (
             <li key={n}>
               <button
                 type="button"
-                aria-pressed={on}
+                aria-pressed={rating ? undefined : on}
+                aria-expanded={rating ? selected : undefined}
+                aria-controls={rating ? `${ids}-rate` : undefined}
                 aria-label={label}
                 title={label}
                 disabled={disabled}
-                onClick={() => toggle(n)}
-                className={`w-full h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-xs font-mono border transition-colors ${on
+                onClick={() => (rating ? setRatingFor(selected ? null : n) : toggle(n))}
+                className={`relative w-full h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-xs font-mono border transition-colors ${on
                   ? 'bg-brand-700 border-brand-500 text-white'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'} ${selected ? 'ring-2 ring-amber-400' : ''}`}
               >
                 {section.season !== null ? n - section.from + 1 : n}
+                {scores[n] && (
+                  <span aria-hidden="true" className="absolute -top-1.5 -right-1 min-w-[1rem] px-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-bold leading-4 font-sans">
+                    {scores[n]}
+                  </span>
+                )}
               </button>
             </li>
           );
         })}
       </ul>
+      {rating && ratingFor !== null && (
+        <div id={`${ids}-rate`} role="group" aria-labelledby={`${ids}-rate-title`} className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 space-y-2">
+          <p id={`${ids}-rate-title`} className="text-xs font-semibold text-slate-100">{t('{episode} bewerten', { episode: episodeLabel(ratingFor) })}</p>
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+              <button key={v} type="button" aria-pressed={scores[ratingFor] === v} disabled={disabled} onClick={() => rate(ratingFor, v)}
+                className={`h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-sm font-bold border transition-colors ${scores[ratingFor] === v
+                  ? 'bg-amber-400 border-amber-300 text-slate-950'
+                  : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-amber-400'}`}>
+                {v}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            {scores[ratingFor] && <button type="button" className="btn-secondary text-xs" disabled={disabled} onClick={() => rate(ratingFor, null)}>{t('Bewertung entfernen')}</button>}
+            <button type="button" className="btn-secondary text-xs" onClick={() => setRatingFor(null)}>{t('Fertig')}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -350,8 +414,8 @@ export default function AnimeDetailModal({
   });
 
   // a tap in the episode grid: no toast, the dialog reloads its detail so the counter and status follow
-  const saveEpisodes = async (marks) => {
-    const saved = await updateProgress(animeId, { watched_episodes: marks });
+  const saveEpisodes = async (change) => {
+    const saved = await updateProgress(animeId, change);
     if (saved && latest.current?.animeId === animeId) await latest.current.load();
   };
 

@@ -424,6 +424,7 @@
   "Bestätigen": "Onayla",
   "Besucher": "Ziyaretçi",
   "Bewertung": "Puan",
+  "Bewertung entfernen": "Puanı kaldır",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "Puan 1 ile 10 arasında bir tam sayı olmalı",
   "Bezeichnung": "Ad",
   "Bild": "Görsel",
@@ -967,7 +968,9 @@
   "Folge {n}": "{n}. bölüm",
   "Folgen": "Bölümler",
   "Folgen (optional)": "Bölümler (isteğe bağlı)",
+  "Folgen bewerten": "Bölümleri puanla",
   "Folgen {from}–{to}": "{from}–{to}. bölümler",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "Bölüm puanları, 1'den başlayan bölüm numaralarını 1 ile 10 arasındaki tam sayılarla eşlemelidir (en fazla {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "Bölüm sayısı 0 veya daha büyük bir tam sayı olmalı",
   "Folge|Folgen": {
     "one": "bölüm",
@@ -2127,6 +2130,7 @@
   "Thriller": "Gerilim",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "İpucu: başlığı gir ve “Otomatik doldur”a tıkla",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Bir bölümü izlendi olarak işaretlemek veya işareti kaldırmak için ona dokun.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Puanlamak için bir bölüme dokun.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Alana uzun bas ve “Yapıştır”ı seç.",
   "Titel": "Başlık",
   "Titel & Autor": "Başlık ve yazar",
@@ -2734,6 +2738,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} “Takvim uygulamasında aç”a dokun ve “Abone ol” – veya Ayarlar → Takvim → Hesaplar → Hesap Ekle → Diğer → Abone Olunan Takvim Ekle, adresi yapıştır.",
   "{entry} von „{title}“ wiederhergestellt": "“{title}” serisinin {entry} geri yüklendi",
   "{episodes} à {duration} Min.": "{episodes} × {duration} dk",
+  "{episode} bewerten": "{episode} puanla",
+  "{episode}, Bewertung {score} von 10": "{episode}, puan {score}/10",
   "{failure} (keine Verbindung zum Server)": "{failure} (sunucuyla bağlantı yok)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} ({n} fotoğraftan {uploaded} tanesi yüklendi)",
@@ -2964,6 +2970,10 @@
   },
   "Öffnen": "Aç",
   "Ø Preis": "Ort. fiyat",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "one": "{n} puanlanan bölümde Ø {avg}",
+    "other": "{n} puanlanan bölümde Ø {avg}"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "“Anime ekle” ile AniList veya MyAnimeList'te ara ya da bir kaydı elle oluştur.",
   "Übernatürlich": "Doğaüstü",
   "Übernehmen": "Uygula",

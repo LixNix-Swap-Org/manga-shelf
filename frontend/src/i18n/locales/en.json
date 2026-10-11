@@ -424,6 +424,7 @@
   "Bestätigen": "Confirm",
   "Besucher": "Visitor",
   "Bewertung": "Rating",
+  "Bewertung entfernen": "Remove rating",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "Rating must be a whole number from 1 to 10",
   "Bezeichnung": "Name",
   "Bild": "Image",
@@ -967,7 +968,9 @@
   "Folge {n}": "Episode {n}",
   "Folgen": "Episodes",
   "Folgen (optional)": "Episodes (optional)",
+  "Folgen bewerten": "Rate episodes",
   "Folgen {from}–{to}": "Episodes {from}–{to}",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "Episode ratings must map episode numbers from 1 to whole numbers from 1 to 10 (at most {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "Episode count must be a whole number from 0",
   "Folge|Folgen": {
     "one": "episode",
@@ -2127,6 +2130,7 @@
   "Thriller": "Thriller",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "Tip: enter a title & click “Auto-fill”",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Tap an episode to mark it as watched or to remove the mark.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Tap an episode to rate it.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Long-press the field and choose “Paste”.",
   "Titel": "Title",
   "Titel & Autor": "Title & author",
@@ -2734,6 +2738,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} tap “Open in calendar app” and “Subscribe” – or Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar, paste the address.",
   "{entry} von „{title}“ wiederhergestellt": "{entry} of “{title}” restored",
   "{episodes} à {duration} Min.": "{episodes} × {duration} min",
+  "{episode} bewerten": "Rate {episode}",
+  "{episode}, Bewertung {score} von 10": "{episode}, rated {score} out of 10",
   "{failure} (keine Verbindung zum Server)": "{failure} (no connection to the server)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} ({uploaded} of {n} photo uploaded)",
@@ -2964,6 +2970,10 @@
   },
   "Öffnen": "Open",
   "Ø Preis": "Ø price",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "one": "Ø {avg} across {n} rated episode",
+    "other": "Ø {avg} across {n} rated episodes"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Search AniList or MyAnimeList via “Add anime”, or create an entry by hand.",
   "Übernatürlich": "Supernatural",
   "Übernehmen": "Apply",

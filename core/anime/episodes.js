@@ -84,4 +84,37 @@ function nextUnwatched(marks) {
     return n;
 }
 
-module.exports = { MAX_MARKS, cleanMarks, parseMarks, marksOf, isPlain, storedMarks, fitMarks, throughEpisode, nextUnwatched };
+// Ratings of single episodes (anime_progress.episode_scores): a JSON object episode number -> score 1..10, NULL = none.
+// Independent of the marks: rating an episode does not mark it, unmarking keeps the rating (the grid drops it itself).
+
+/** Episode -> score with whole episodes from 1 (up to `total` when known) and whole scores 1..10; anything else is dropped. */
+function cleanScores(scores, total = null) {
+    const out = {};
+    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return out;
+    const keys = Object.keys(scores).filter((k) => /^\d+$/.test(k)).map(Number).sort((a, b) => a - b);
+    for (const episode of keys) {
+        const score = scores[episode];
+        if (episode < 1 || (total > 0 && episode > total)) continue;
+        if (!Number.isInteger(score) || score < 1 || score > 10) continue;
+        out[episode] = score;
+    }
+    return out;
+}
+
+/** The stored column as an object (empty for NULL or anything unreadable). */
+function parseScores(stored) {
+    if (stored === null || stored === undefined || stored === '') return {};
+    if (typeof stored === 'object') return cleanScores(stored);
+    try {
+        return cleanScores(JSON.parse(stored));
+    } catch (_) {
+        return {};
+    }
+}
+
+/** The column value: null without a rating, else the JSON object. */
+function storedScores(scores) {
+    return scores && Object.keys(scores).length ? JSON.stringify(scores) : null;
+}
+
+module.exports = { MAX_MARKS, cleanScores, parseScores, storedScores, cleanMarks, parseMarks, marksOf, isPlain, storedMarks, fitMarks, throughEpisode, nextUnwatched };

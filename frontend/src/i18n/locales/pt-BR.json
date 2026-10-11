@@ -435,6 +435,7 @@
   "Bestätigen": "Confirmar",
   "Besucher": "Visitante",
   "Bewertung": "Nota",
+  "Bewertung entfernen": "Remover nota",
   "Bewertung muss eine ganze Zahl von 1 bis 10 sein": "A nota deve ser um número inteiro de 1 a 10",
   "Bezeichnung": "Nome",
   "Bild": "Imagem",
@@ -982,7 +983,9 @@
   "Folge {n}": "Episódio {n}",
   "Folgen": "Episódios",
   "Folgen (optional)": "Episódios (opcional)",
+  "Folgen bewerten": "Avaliar episódios",
   "Folgen {from}–{to}": "Episódios {from}–{to}",
+  "Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})": "As notas dos episódios devem associar números de episódio a partir de 1 a números inteiros de 1 a 10 (no máximo {max})",
   "Folgenzahl muss eine ganze Zahl ab 0 sein": "O número de episódios deve ser um inteiro a partir de 0",
   "Folge|Folgen": {
     "one": "episódio",
@@ -2161,6 +2164,7 @@
   "Thriller": "Thriller",
   "Tipp: Titel eingeben & auf „Auto-Fill“ klicken": "Dica: digite o título e clique em “Auto-Fill”",
   "Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.": "Toque em um episódio para marcá-lo como assistido ou remover a marcação.",
+  "Tippe eine Folge an, um sie zu bewerten.": "Toque em um episódio para avaliá-lo.",
   "Tippe lange ins Feld und wähle „Einfügen“.": "Toque e segure no campo e escolha “Colar”.",
   "Titel": "Título",
   "Titel & Autor": "Título e autor",
@@ -2781,6 +2785,8 @@
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} toque em “Abrir no app de calendário” e em “Assinar” – ou Ajustes → Calendário → Contas → Adicionar conta → Outra → Adicionar calendário assinado, e cole o endereço.",
   "{entry} von „{title}“ wiederhergestellt": "{entry} de “{title}” restaurado",
   "{episodes} à {duration} Min.": "{episodes} × {duration} min",
+  "{episode} bewerten": "Avaliar {episode}",
+  "{episode}, Bewertung {score} von 10": "{episode}, nota {score} de 10",
   "{failure} (keine Verbindung zum Server)": "{failure} (sem conexão com o servidor)",
   "{failure} ({uploaded} von {n} Fotos hochgeladen)|{failure} ({uploaded} von {n} Fotos hochgeladen)": {
     "one": "{failure} ({uploaded} de {n} foto enviada)",
@@ -3040,6 +3046,11 @@
   },
   "Öffnen": "Abrir",
   "Ø Preis": "Preço médio",
+  "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
+    "many": "Ø {avg} em {n} episódios avaliados",
+    "one": "Ø {avg} em {n} episódio avaliado",
+    "other": "Ø {avg} em {n} episódios avaliados"
+  },
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Busque no AniList ou no MyAnimeList em “Adicionar anime” ou crie um item manualmente.",
   "Übernatürlich": "Sobrenatural",
   "Übernehmen": "Aplicar",

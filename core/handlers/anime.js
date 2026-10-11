@@ -209,7 +209,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -432,6 +432,7 @@ function updateProgress(ctx, { params, body }) {
     }
     const marks = parseWatchedEpisodes(body.watched_episodes);
     const score = parseScore(body.score);
+    const episodeScores = parseEpisodeScores(body.episode_scores);
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const audio = cleanLanguage(body.audio_language);
     const subtitle = cleanLanguage(body.subtitle_language);
@@ -445,8 +446,12 @@ function updateProgress(ctx, { params, body }) {
             const above = marks.find((n) => n > anime.episodes);
             if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
         }
+        if (episodeScores && anime.episodes > 0) {
+            const above = Object.keys(episodeScores).map(Number).find((n) => n > anime.episodes);
+            if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
+        }
         return writeProgress(ctx, id, userId, {
-            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, score, notes, audio_language: audio, subtitle_language: subtitle
+            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle
         });
     });
     listSync.schedulePush(ctx, userId, id);
@@ -461,6 +466,21 @@ function parseWatchedEpisodes(value) {
         throw badRequest(msg('Gesehene Folgen müssen eine Liste ganzer Zahlen ab 1 sein (höchstens {max})', { max: episodeMarks.MAX_MARKS }));
     }
     return episodeMarks.cleanMarks(value);
+}
+
+/** `episode_scores` of PUT progress: undefined (unchanged), null (no ratings) or an object episode number -> whole score 1..10. */
+function parseEpisodeScores(value) {
+    if (value === undefined || value === null) return value;
+    const invalid = () => badRequest(msg('Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})', { max: episodeMarks.MAX_MARKS }));
+    if (typeof value !== 'object' || Array.isArray(value)) throw invalid();
+    const keys = Object.keys(value);
+    if (keys.length > episodeMarks.MAX_MARKS) throw invalid();
+    for (const key of keys) {
+        const episode = /^\d+$/.test(key) ? Number(key) : NaN;
+        const score = value[key];
+        if (!Number.isInteger(episode) || episode < 1 || episode > MAX_EPISODES || !Number.isInteger(score) || score < 1 || score > 10) throw invalid();
+    }
+    return episodeMarks.cleanScores(value);
 }
 
 function cleanEpisode(value) {
