@@ -1,5 +1,5 @@
 import { ANIME_CACHE_KEY, ANIME_META_KEY } from './storageKeys';
-import { compareNatural, createSearch } from './search';
+import { compareNatural, createSearch, foldText } from './search';
 import { formatRelative, formatTime } from './format';
 import { OFFLINE_SYNCED_EVENT, getClearGeneration } from './offlineStore';
 import links from '../../../core/watch/links.js';
@@ -476,4 +476,59 @@ export function shortDescription(text, max = 420) {
   clean = clean.trim();
   if (clean.length <= max) return { text: clean, cut: false };
   return { text: `${clean.slice(0, max).replace(/\s+\S*$/, '')} …`, cut: true };
+}
+
+/** Statuses of my own list that still expect new episodes (an entry without progress counts as not on my list). */
+// i18n-ignore: stored anime status values
+const FOLLOWED_STATUSES = ['Schaue', 'Geplant'];
+const isFollowed = (anime) => FOLLOWED_STATUSES.includes(anime?.my_progress?.status);
+
+/**
+ * "Neue Folgen": the entries on my list (Schaue, Geplant) with a known next airing, soonest first, plus the ones with
+ * episodes that are already out but not watched. A film or an entry without an airing date never appears under
+ * `upcoming`; `behind` needs a known number of aired episodes (the episode count of a finished show, else the confirmed
+ * next airing - 1). Pure: `now` is a Date.
+ */
+export function newEpisodes(list, now = new Date()) {
+  const upcoming = [];
+  const behind = [];
+  (list || []).forEach((anime) => {
+    if (!isFollowed(anime) || kindOf(anime) === 'movie') return;
+    const watched = anime.my_progress.episodes_watched || 0;
+    const next = anime.next_airing;
+    if (next && next.at && countdownText(next, now, kindOf(anime))) upcoming.push(anime);
+    const aired = next && next.episode > 1 ? next.episode - 1 : (anime.status === 'FINISHED' && anime.episodes > 0 ? anime.episodes : null);
+    if (aired != null && aired > watched && anime.my_progress.status === 'Schaue') behind.push({ anime, missing: aired - watched });
+  });
+  upcoming.sort((a, b) => a.next_airing.at - b.next_airing.at);
+  behind.sort((a, b) => b.missing - a.missing || displayTitle(a.anime).localeCompare(displayTitle(b.anime)));
+  return { upcoming, behind };
+}
+
+const titleKey = (value) => foldText(value).replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * "Anime mit Manga verknüpfen": entries linked to a series of the shelf (`linked`, with the series row), entries
+ * without a link that name a series of the shelf (`suggestions`: the titles fold to the same text, or one starts with the
+ * other and is at least 5 characters long) and the rest. Linked entries whose series is not on the shelf (deleted,
+ * not loaded) stay in `linked` with `manga: null`.
+ */
+export function mangaLinks(list, mangas) {
+  const rows = (mangas || []).map((manga) => ({ manga, keys: [manga.title, manga.alt_title].map(titleKey).filter(Boolean) }));
+  const byId = new Map(rows.map((row) => [row.manga.id, row.manga]));
+  const linked = [];
+  const suggestions = [];
+  const unlinked = [];
+  (list || []).forEach((anime) => {
+    if (anime.manga_id) {
+      linked.push({ anime, manga: byId.get(anime.manga_id) || null });
+      return;
+    }
+    const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji].map(titleKey).filter(Boolean);
+    const hit = rows.find((row) => row.keys.some((a) => keys.some((b) => a === b || (Math.min(a.length, b.length) >= 5 && (a.startsWith(`${b} `) || b.startsWith(`${a} `))))));
+    if (hit) suggestions.push({ anime, manga: hit.manga });
+    else unlinked.push(anime);
+  });
+  const byTitle = (a, b) => displayTitle(a.anime).localeCompare(displayTitle(b.anime));
+  return { linked: linked.sort(byTitle), suggestions: suggestions.sort(byTitle), unlinked };
 }

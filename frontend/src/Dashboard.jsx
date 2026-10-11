@@ -51,10 +51,11 @@ const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreM
 const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
+const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
 const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
 
 // i18n
-const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime' };
+const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime', episodes: 'Anime-Radar' };
 const ANIME_VIEW = 'anime';
 const savedShelfScroll = () => {
   try { return Number(window.sessionStorage.getItem(SHELF_SCROLL_KEY)) || 0; } catch (_) { return 0; }
@@ -197,7 +198,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   // the installed app comes back from the background: reload the shelf (the shopping list refreshes itself)
   useForegroundRefresh(() => { if (!isOfflineMode) fetchMangas(); });
   const { pullDistance, refreshing: pulling } = usePullToRefresh(async () => {
-    await Promise.all([fetchMangas(), activeMainView === 'shopping' ? fetchShoppingList() : null, activeMainView === ANIME_VIEW ? anime.fetchAnime() : null]);
+    await Promise.all([fetchMangas(), activeMainView === 'shopping' ? fetchShoppingList() : null, (activeMainView === ANIME_VIEW || activeMainView === 'episodes') ? anime.fetchAnime() : null]);
   }, { enabled: !isOfflineMode });
 
   useEffect(() => {
@@ -209,6 +210,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       anime.fetchSources();
       anime.syncList();
     }
+    if (activeMainView === 'episodes') anime.fetchAnime();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount and on an offline change
   }, [user?.offline]);
 
@@ -235,6 +237,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       anime.fetchAnime();
       anime.fetchSources();
       anime.syncList();
+    }
+    if (view === 'episodes') {
+      anime.fetchAnime();
+      anime.fetchSources();
     }
     if (view === 'radar') {
       fetchReleaseRadar();
@@ -501,6 +507,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const handleAnimeStatus = useCallback((entry, status) => {
     if (status) anime.updateProgress(entry.id, { status });
   }, [anime.updateProgress]); // eslint-disable-line react-hooks/exhaustive-deps -- the action is stable
+  const handleAnimeLink = useCallback(async (id, mangaId) => {
+    try { await anime.update(id, { manga_id: mangaId }); } catch (err) { notify.error(err); }
+  }, [anime.update]);
   const handleOpenAnime = useCallback((entry) => setAnimeDetailId(entry.id), []);
 
   const handleOpenUsersModal = () => {
@@ -702,6 +711,21 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         watchLast={anime.watchLast}
         onSearchAnime={searchAnimeForMatch}
       />
+    )}
+
+    {activeMainView === 'episodes' && (
+      <Suspense fallback={null}>
+        <AnimeRadarView
+          list={anime.list}
+          mangas={mangas}
+          loaded={anime.loaded}
+          error={anime.error}
+          canEdit={canEdit && !user?.offline}
+          onOpen={handleOpenAnime}
+          onLink={handleAnimeLink}
+          onRetry={anime.fetchAnime}
+        />
+      </Suspense>
     )}
 
     {/* RELEASE RADAR / ERSCHEINUNGSKALENDER VIEW */}

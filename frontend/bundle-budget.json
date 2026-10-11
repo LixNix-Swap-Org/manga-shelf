@@ -61,6 +61,7 @@
     "src/components/modals/BackupRestoreModal.jsx": 9515,
     "src/components/modals/CleanupModal.jsx": 2985,
     "src/components/modals/PublishersModal.jsx": 2638,
+    "src/components/dashboard/AnimeRadarView.jsx": 2400,
     "src/components/modals/ShareLinkDialog.jsx": 3989,
     "src/components/modals/stats/ReadingOverTime.jsx": 2905,
     "src/components/modals/SystemModal.jsx": 18130,

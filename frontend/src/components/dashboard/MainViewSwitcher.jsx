@@ -1,4 +1,4 @@
-import { Library, ShoppingCart, Calendar, Tv } from 'lucide-react';
+import { Library, ShoppingCart, Calendar, Tv, CalendarClock } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 
 const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2 min-[380px]:px-2.5 sm:px-4 py-2 [@media(pointer:coarse)]:py-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
@@ -20,7 +20,7 @@ const Label = ({ full, short }) => (
 );
 
 /**
- * Tabs Sammlung / Einkaufsliste / Release-Radar / Anime plus the mode hint next to them. `onSelectView` is Dashboard's
+ * Tabs Sammlung / Einkaufsliste / Release-Radar / Anime / Anime-Radar plus the mode hint next to them. `onSelectView` is Dashboard's
  * setView (state, ?view= and the view's data in one place).
  */
 export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, animeCount = 0, shoppingData, radarData }) {
@@ -84,6 +84,17 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
               </span>
             )}
           </button>
+          <button
+            id="btn-nav-episodes"
+            type="button"
+            aria-current={activeMainView === 'episodes' ? 'page' : undefined}
+            onClick={() => onSelectView('episodes')}
+            className={tabClass(activeMainView === 'episodes')}
+          >
+            <CalendarClock className="w-4 h-4 text-amber-400 hidden sm:block" aria-hidden="true" />
+            {/* i18n-ignore: both props are translated */}
+            <Label full={t('Anime-Radar')} short={t('Folgen')} />
+          </button>
         </nav>
 
         {activeMainView === 'shopping' && (
@@ -97,6 +108,13 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
           <div className={HINT_CLASS}>
             <span aria-hidden="true" className="w-2 h-2 rounded-full bg-fuchsia-400 animate-pulse"></span>
             <span>{t('Anime-Modus: Folgen zählen, Daten von AniList & MyAnimeList')}</span>
+          </div>
+        )}
+
+        {activeMainView === 'episodes' && (
+          <div className={HINT_CLASS}>
+            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>{t('Neue Folgen deiner Anime und ihre Manga-Reihen')}</span>
           </div>
         )}
 
