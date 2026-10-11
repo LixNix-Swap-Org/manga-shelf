@@ -56,6 +56,7 @@ test('parseMarc21Xml: reads the fields, decodes entities and marks an unknown vo
     assert.equal(book.release_year, 2021);
     assert.equal(book.pages, 224);
     assert.equal(book.price, 9.99);
+    assert.equal(book.cover_url, 'https://covers.openlibrary.org/b/isbn/9783551745811-L.jpg?default=false', 'no 1x1 placeholder for an unknown cover');
 
     const noNumber = parseMarc21Xml(marc(field('245', { a: 'Berserk' })), '9783551745811', 'DNB');
     assert.equal(noNumber.volume_number, '1');           // display placeholder only
@@ -112,6 +113,7 @@ test('lookupBookByIsbn: DNB and K10plus together, DNB wins, Google Books only af
     assert.equal(google.volume_number, '7');
     assert.equal(google.volume_number_known, true);
     assert.equal(google.release_year, 2020);
+    assert.equal(google.cover_url, 'https://covers.openlibrary.org/b/isbn/9783551745811-L.jpg?default=false', 'Open Library fallback without a Google thumbnail');
     assert.deepEqual(outcomes, [true, true, true]);
 
     outcomes.length = 0;

@@ -75,6 +75,9 @@ function parseEuroPrice(raw) {
     return Number.isFinite(value) ? value : null;
 }
 
+/** Open Library answers an unknown ISBN with a 1x1 placeholder unless `default=false` is set; with it a missing cover 404s. */
+const openLibraryCover = (cleanIsbn) => `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg?default=false`;
+
 /**
  * Book data from a MARC21-XML answer. Only the first record is read (a search can return several, e.g. paperback and
  * e-book, and mixing their fields would give a Frankenstein book); XML entities are decoded ("&amp;" -> "&").
@@ -155,7 +158,7 @@ function parseMarc21Xml(xml, cleanIsbn, sourceName) {
         pages,
         price,
         source: sourceName,
-        cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
+        cover_url: openLibraryCover(cleanIsbn)
     };
 }
 
@@ -214,7 +217,7 @@ function bookFromGoogleBooks(gbData, cleanIsbn) {
         pages: vi.pageCount || null,
         price: null,
         source: GOOGLE_BOOKS_SOURCE,
-        cover_url: vi.imageLinks?.thumbnail ? vi.imageLinks.thumbnail.replace('http://', 'https://') : `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg`
+        cover_url: vi.imageLinks?.thumbnail ? vi.imageLinks.thumbnail.replace('http://', 'https://') : openLibraryCover(cleanIsbn)
     };
 }
 
