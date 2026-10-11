@@ -51,12 +51,21 @@ try {
 }
 
 const pkg = require('./package.json');
-const { db, closeDb, uploadsDir, dataDir, getInstanceId, ensureDbOpen } = require('./db');
+const dbModule = (() => {
+    try {
+        return require('./db');
+    } catch (err) {
+        if (err.code !== 'DOWNGRADE_RECOVERY_PENDING' || config.noListen) throw err;
+        log.error(err.message);
+        return process.exit(err.exitCode);
+    }
+})();
+const { db, closeDb, uploadsDir, dataDir, getInstanceId, ensureDbOpen, runTransaction, getLastSafetySnapshot } = dbModule;
 try {
     ensureDbOpen();
 } catch (err) {
-    if (err.code !== 'SCHEMA_NEWER' || config.noListen) throw err;
-    log.error(`[Datenbank] ${err.message}`);
+    if ((err.code !== 'SCHEMA_NEWER' && err.code !== 'DOWNGRADE_RECOVERY_PENDING') || config.noListen) throw err;
+    log.error(err.code === 'SCHEMA_NEWER' ? `[Datenbank] ${err.message}` : err.message);
     process.exit(err.exitCode);
 }
 const update = require('./services/update');
@@ -484,6 +493,7 @@ async function start({ host = '0.0.0.0', port = config.port, dataDir: wantedData
     }
     if (!server) server = http.createServer(app);
 
+    recordAppVersion();
     // the scheduler's startup sweep removes leftover temp files, so it runs before any request can create one
     const stopScheduler = initScheduler();
     try {
@@ -515,6 +525,23 @@ async function start({ host = '0.0.0.0', port = config.port, dataDir: wantedData
     };
     const shownHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
     return { server, port: actualPort, url: `${isNativeHttps ? 'https' : 'http'}://${shownHost}:${actualPort}` };
+}
+
+function recordAppVersion() {
+    try {
+        const { appliedSchemaVersion } = require('./core/schema');
+        runTransaction(() => {
+            const row = db.prepare("SELECT value FROM app_settings WHERE key = 'app_version'").get();
+            let current;
+            try { current = row ? JSON.parse(row.value) : null; } catch (e) { current = null; }
+            if (current && current.version === pkg.version) return;
+            const put = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)');
+            if (current && typeof current.version === 'string') put.run('app_version_previous', JSON.stringify(current));
+            put.run('app_version', JSON.stringify({ version: pkg.version, schema: appliedSchemaVersion(db), since: new Date().toISOString(), backup: getLastSafetySnapshot() }));
+        });
+    } catch (err) {
+        log.warn('[Update] Versionsstand nicht gespeichert:', err);
+    }
 }
 
 /** Ends what start() started: scheduler, console, open connections (after running jobs, max. 8 s), database. */

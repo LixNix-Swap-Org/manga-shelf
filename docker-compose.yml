@@ -37,6 +37,10 @@ services:
       # - SETUP_TOKEN=<eigener Code>   # mindestens 12 Zeichen
       # Optional: Zeitzone für das Release-Radar ("heute"), Standard Europe/Berlin
       # - APP_TIMEZONE=Europe/Berlin
+      # Optional: TMDB-Schlüssel für Filme und Serien im Anime-Tab (kostenlos für nicht-kommerzielle Nutzung unter
+      # themoviedb.org/settings/api: API-Schlüssel oder Lesezugriffstoken). Ohne Schlüssel gibt es keine TMDB-Treffer;
+      # er lässt sich auch im Konto-Dialog hinterlegen.
+      # - TMDB_API_KEY=<API-Schlüssel oder Lesezugriffstoken>
     volumes:
       # Datenbank und Bilder liegen in ./data auf dem Host. Der Container übernimmt beim Start den Besitz
       # des Ordners (uid 1000, Benutzer `node`), auch wenn Docker ihn als root angelegt hat.

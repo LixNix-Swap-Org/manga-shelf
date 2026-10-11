@@ -879,6 +879,62 @@ test('the backup an update still needs cannot be deleted until the update is con
     }
 });
 
+test('DELETE refuses only what an update holds (also the source of a downgrade), never just the rollback anchor', async () => {
+    const version = require('../package.json').version;
+    const anchor = await createSnapshot();
+    const fresh = await createSnapshot();
+    const source = await createSnapshot();
+    const stateFile = path.join(ctx.dataDir, 'update-state.json');
+    const base = { format: 1, mode: 'pterodactyl', restart: 'pterodactyl', at: new Date().toISOString(), user: 1, pid: 1, schema_before: 1, previous: { sha256: 'b'.repeat(64) }, attempts: 0 };
+    try {
+        fs.writeFileSync(stateFile, JSON.stringify({ ...base, phase: 'confirmed', from: '3.1.0', to: version, backup: { file: anchor, sha256: 'a'.repeat(64) } }));
+        assert.equal(require('../services/update').heldBackups().anchor, anchor);
+        assert.equal((await admin('DELETE', `/backups/${anchor}`)).status, 200, 'the anchor only stays out of pruning');
+        fs.writeFileSync(stateFile, JSON.stringify({
+            ...base, phase: 'ready-to-swap', from: version, to: '3.1.0', backup: { file: fresh, sha256: 'a'.repeat(64) },
+            downgrade: { undoes: { from: '3.1.0', to: version, at: 'x', backup: { file: source, sha256: 'c'.repeat(64) }, schema_before: 1 }, db: { source: { file: source, sha256: 'c'.repeat(64) }, schema: 1, replaced_at: null, kept: null, returned_at: null } }
+        }));
+        for (const name of [fresh, source]) {
+            const held = await admin('DELETE', `/backups/${name}`);
+            assert.deepEqual([held.status, held.body.code], [409, 'BACKUP_HELD'], name);
+        }
+    } finally {
+        fs.rmSync(stateFile, { force: true });
+    }
+    for (const name of [fresh, source]) assert.equal((await admin('DELETE', `/backups/${name}`)).status, 200);
+});
+
+test('an in-app restore stays with a failed downgrade journal on disk (never replaced, or armed)', async () => {
+    const version = require('../package.json').version;
+    const schema = require('../core/schema').appliedSchemaVersion(dbm.db);
+    const stateFile = path.join(ctx.dataDir, 'update-state.json');
+    seedMangas(1, 'Downgrade Journal Backup');
+    const snapshot = await createSnapshot();
+    const inBackup = mangaCount();
+    const fresh = await createSnapshot();
+    const freshSha = crypto.createHash('sha256').update(fs.readFileSync(path.join(ctx.dataDir, 'backups', fresh))).digest('hex');
+    try {
+        for (const db of [{ replaced_at: null, kept: null }, { replaced_at: new Date().toISOString(), kept: `manga.db.v${version}-2026-10-11T10-00-00-000Z` }]) {
+            seedMangas(2, 'Downgrade Journal Live');
+            fs.writeFileSync(stateFile, JSON.stringify({
+                format: 1, phase: 'failed', error: 'UPDATE_FAILED', mode: 'sea-user', restart: 'supervised', from: version, to: '3.1.0', at: new Date().toISOString(),
+                user: 1, pid: 1, schema_before: schema, backup: { file: fresh, sha256: freshSha }, previous: { sha256: 'b'.repeat(64) }, attempts: 0, exec_path: '/x',
+                downgrade: {
+                    undoes: { from: '3.1.0', to: version, at: 'x', backup: null, schema_before: schema - 1 },
+                    db: { source: { file: snapshot, sha256: 'c'.repeat(64) }, schema: schema - 1, ...db, returned_at: null }
+                }
+            }));
+            const res = await admin('POST', `/backups/${snapshot}/restore`, PASSWORD);
+            assert.equal(res.status, 200, JSON.stringify(res.body));
+            assert.equal(mangaCount(), inBackup, JSON.stringify(db));
+            assert.equal(JSON.parse(fs.readFileSync(stateFile, 'utf8')).downgrade.db.returned_at, null);
+            assert.deepEqual(leftovers(), []);
+        }
+    } finally {
+        fs.rmSync(stateFile, { force: true });
+    }
+});
+
 test('inspect stages an uploaded backup, reports its content and restores it in a second step', async () => {
     seedMangas(2, 'Inspect Live');
     const data = await snapshotDbBuffer((d) => d.exec("INSERT INTO mangas (title) VALUES ('Nur im Backup')"));

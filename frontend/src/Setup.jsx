@@ -4,6 +4,7 @@ import { apiFetch, readJson, rememberToken } from './utils/api';
 import { useDocumentTitle } from './components/common/PageChrome';
 import ApiKeyCard from './components/modals/ApiKeyCard';
 import { useApiKeys } from './components/modals/AccountModal';
+import TmdbAttribution from './components/TmdbAttribution';
 import LanguageSelect from './components/common/LanguageSelect';
 import { t as tr } from './i18n/index.js';
 import { serverText } from './i18n/serverText.js';
@@ -52,6 +53,7 @@ function SourcesStep({ onDone }) {
           />
         ) : null;
       })}
+      {keys.guideOf('tmdb') && <TmdbAttribution />}
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn-secondary text-sm" onClick={finish} disabled={finishing}>{tr('Überspringen')}</button>
         <button type="button" className="btn-primary text-sm flex items-center gap-1.5" onClick={finish} disabled={finishing}>

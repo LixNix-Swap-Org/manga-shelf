@@ -6,7 +6,7 @@ import { fakeResponse } from './fakeResponse';
 import AnimeCard from '../components/dashboard/AnimeCard';
 import AnimeView, { watchLastText } from '../components/dashboard/AnimeView';
 import AnimeDetailModal from '../components/modals/AnimeDetailModal';
-import AddAnimeModal, { sourcesNote } from '../components/modals/AddAnimeModal';
+import AddAnimeModal, { sourcesNote, sourceChipState, hitKey, SOURCES_KEY, SEARCH_KIND_KEY } from '../components/modals/AddAnimeModal';
 import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
 import AnimeStatsCard, { watchTime } from '../components/modals/stats/AnimeStatsCard';
 import useAnimeList from '../hooks/useAnimeList';
@@ -14,7 +14,7 @@ import { mainViewOf, searchForView } from '../Dashboard';
 import {
   countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache, clearAnimeCache,
   ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
-  shortDescription, progressPercent, airedEpisodes, stillAiring
+  shortDescription, progressPercent, airedEpisodes, stillAiring, seasonEpisodeText, sourceBadges, kindOf, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY
 } from '../utils/animeHelpers';
 import { subscribe as subscribeToasts } from '../utils/notify';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
@@ -298,7 +298,7 @@ describe('AddAnimeModal', () => {
     fireEvent.change(screen.getByLabelText('Folgen (optional)'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Zu Reihe verknüpfen'), { target: { value: '4' } });
     fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }));
-    await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ title: 'Heimvideo', episodes: 3, manga_id: 4 }));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ title: 'Heimvideo', episodes: 3, kind: 'anime', manga_id: 4 }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -316,7 +316,7 @@ describe('AddAnimeModal', () => {
     expect(search).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
     expect(await screen.findByText('Sousou no Frieren')).toBeTruthy();
-    expect(screen.getByText('Gerade nur AniList erreichbar')).toBeTruthy();
+    expect(screen.getByText('Gerade ohne MyAnimeList')).toBeTruthy();
     expect(screen.getByRole('button', { name: /schon im Regal/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Hinzufügen/ }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ anilist_id: 154587, mal_id: 52991, manga_id: null }));
@@ -769,7 +769,7 @@ describe('AnimeDetailModal', () => {
 
   describe('own progress', () => {
     const onePiece = () => entry({ title: 'ONE PIECE', episodes: null, status: 'RELEASING', next_airing: { episode: 1181, at: 1798985760, estimated: false },
-      my_progress: { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3' }, progress: [{ user_id: 1, username: 'admin', status: 'Schaue', episodes_watched: 12, score: 9 }] });
+      my_progress: { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3', audio_language: 'ja', subtitle_language: 'de' }, progress: [{ user_id: 1, username: 'admin', status: 'Schaue', episodes_watched: 12, score: 9 }] });
     const openEditable = (anime, props = {}) => render(
       <MemoryRouter>
         <AnimeDetailModal isOpen animeId={anime.id} fallback={anime} onClose={vi.fn()} canEdit
@@ -813,7 +813,7 @@ describe('AnimeDetailModal', () => {
         expect(shown.map((toast) => [toast.kind, toast.message, toast.action?.label])).toEqual([['success', 'Von deiner Liste entfernt', 'Rückgängig']]);
         const loads = fetchDetail.mock.calls.length;
         await act(async () => { await shown[0].action.onClick(); });
-        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3', restore: true });
+        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3', audio_language: 'ja', subtitle_language: 'de', restore: true });
         expect(fetchDetail.mock.calls.length).toBe(loads + 1);
       } finally {
         stop();
@@ -830,7 +830,7 @@ describe('AnimeDetailModal', () => {
         await act(async () => {});
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
         await act(async () => { await shown[0].action.onClick(); });
-        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Gesehen', episodes_watched: 12, score: 9, notes: 'Arc 3', restore: true });
+        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Gesehen', episodes_watched: 12, score: 9, notes: 'Arc 3', audio_language: null, subtitle_language: null, restore: true });
       } finally {
         stop();
       }
@@ -859,3 +859,280 @@ describe('AnimeDetailModal', () => {
   });
 });
 
+
+describe('films and TV shows', () => {
+  const SOURCES = {
+    anilist: { enabled: true, available: true }, mal: { enabled: true, available: true },
+    tmdb: { enabled: true, name: 'TMDB', own: null, key_disabled: false, available: true, error: null }
+  };
+  const NO_TMDB_KEY = { ...SOURCES, tmdb: { ...SOURCES.tmdb, available: false } };
+  const show = (over = {}) => entry({
+    id: 5, kind: 'tv', title: 'Severance', format: 'TV', anilist_id: null, mal_id: null, tmdb_id: 95396, tmdb_kind: 'tv', episodes: 19, status: 'RELEASING',
+    seasons: [{ season_number: 1, episode_count: 9, air_date: '2022-02-18' }, { season_number: 2, episode_count: 10, air_date: '2025-01-17' }],
+    urls: { tmdb: 'https://www.themoviedb.org/tv/95396', imdb: 'https://www.imdb.com/title/tt11280740/' },
+    my_progress: { status: 'Schaue', episodes_watched: 12, score: null, notes: null, audio_language: 'en', subtitle_language: 'de' }, ...over
+  });
+  const film = (over = {}) => entry({
+    id: 6, kind: 'movie', title: 'Dune', format: 'MOVIE', anilist_id: null, mal_id: null, tmdb_id: 438631, tmdb_kind: 'movie', episodes: 1, duration: 155,
+    status: 'FINISHED', seasons: [], urls: { tmdb: 'https://www.themoviedb.org/movie/438631', imdb: 'https://www.imdb.com/title/tt1160419/' },
+    my_progress: { status: 'Geplant', episodes_watched: 0, score: null, notes: null }, ...over
+  });
+
+  it('helpers: missing kind is anime, S×E by the running sum, the airing lock per kind, TMDB badge, no "Weiter" for non-anime', () => {
+    expect(kindOf({})).toBe('anime');
+    expect(kindOf({ kind: 'movie' })).toBe('movie');
+    expect(seasonEpisodeText(show(), 12)).toBe('S2E3');
+    expect(seasonEpisodeText(show(), 9)).toBe('S1E9');
+    expect(seasonEpisodeText(show(), 0)).toBeNull();
+    expect(seasonEpisodeText(show({ seasons: [] }), 4)).toBeNull();
+    expect(seasonEpisodeText(entry(), 4)).toBeNull();
+    expect(stillAiring(show({ next_airing: { episode: 19, at: 1798985760, estimated: true } }))).toBe(true);
+    expect(stillAiring(show({ next_airing: { episode: 20, at: 1798985760, estimated: true } }))).toBe(false);
+    expect(stillAiring(show({ next_airing: null }))).toBe(false);
+    expect(stillAiring(film({ status: 'NOT_YET_RELEASED' }))).toBe(false);
+    expect(stillAiring({ status: 'RELEASING' })).toBe(true);
+    expect(sourceBadges(show())).toEqual(['TMDB']);
+    expect(continueTarget(show({ watch: { next_url: null, series_url: null, search_url: null } }))).toBeNull();
+    expect(predictProgress({ status: 'Schaue', episodes_watched: 3, audio_language: 'ja' }, { subtitle_language: 'de' }, 12))
+      .toMatchObject({ audio_language: 'ja', subtitle_language: 'de' });
+    expect(predictProgress({ status: 'Schaue', episodes_watched: 3, audio_language: 'ja' }, { audio_language: null }, 12).audio_language).toBeNull();
+  });
+
+  it('a TV show airs by date: no clock time, today until the day is over; anime keep the time', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 11, 20, 0));
+    const at = Math.floor(new Date(2026, 9, 11, 9, 0).getTime() / 1000);
+    expect(countdownText({ episode: 20, at }, new Date(), 'tv')).toBe('Folge 20 · heute');
+    expect(countdownText({ episode: 8, at }, new Date())).toBeNull();
+    expect(countdownText({ episode: 20, at: at - 86400 }, new Date(), 'tv')).toBeNull();
+  });
+
+  it('filters by kind and watched language', () => {
+    const list = [entry(), show(), film()];
+    expect(filterAnime(list, { kind: 'tv' }).map((a) => a.id)).toEqual([5]);
+    expect(filterAnime(list, { kind: 'anime' }).map((a) => a.id)).toEqual([1]);
+    expect(filterAnime(list, { language: 'en' }).map((a) => a.id)).toEqual([5]);
+  });
+
+  it('card: S×E for a TV show, the language pill with full names, TMDB badge, no IMDb link; a film has no counter and no +1', () => {
+    const { rerender } = inRouter(<AnimeCard anime={show()} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
+    expect(screen.getByText('S2E3')).toBeTruthy();
+    const pill = screen.getByRole('img', { name: 'Englisch · Untertitel: Deutsch' });
+    expect(pill.textContent).toBe('EN');
+    expect(pill.getAttribute('title')).toBe('Englisch · Untertitel: Deutsch');
+    expect(screen.getByText('TMDB')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /IMDb/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /eine Folge mehr gesehen/ })).toBeTruthy();
+
+    rerender(<MemoryRouter><AnimeCard anime={show({ my_progress: { status: 'Geplant', episodes_watched: 0 } })} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.getByText('0 / 19')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /Englisch/ })).toBeNull();
+
+    rerender(<MemoryRouter><AnimeCard anime={film()} canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: /eine Folge mehr gesehen/ })).toBeNull();
+    expect(screen.queryByText('0 / 1')).toBeNull();
+    expect(screen.getByLabelText(/Status für Dune/)).toBeTruthy();
+  });
+
+  it('view: heading "Anime & Serien", kind chips remembered per device, the language filter falls back to "Alle"', () => {
+    localStorage.setItem(LANGUAGE_FILTER_KEY, 'fr');
+    const base = { loaded: true, loading: false, error: null, fromCache: false, cacheAt: null, user: { id: 1, role: 'editor' }, onAdd: vi.fn(), onOpen: vi.fn(), onPlusOne: vi.fn(), onStatusChange: vi.fn(), onRetry: vi.fn() };
+    const { unmount } = render(<MemoryRouter><AnimeView {...base} list={[entry()]} canEdit /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Anime' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Nach Art filtern' })).toBeNull();
+    expect(screen.queryByLabelText('Sprache')).toBeNull();
+    unmount();
+
+    render(<MemoryRouter><AnimeView {...base} list={[entry(), show(), film()]} canEdit /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Anime & Serien' })).toBeTruthy();
+    const kinds = screen.getByRole('group', { name: 'Nach Art filtern' });
+    expect(within(kinds).getAllByRole('button').map((b) => b.textContent)).toEqual(['Alle 3', 'Anime 1', 'Serien 1', 'Filme 1']);
+    fireEvent.click(within(kinds).getByRole('button', { name: /Filme/ }));
+    expect(localStorage.getItem(KIND_FILTER_KEY)).toBe('movie');
+    expect(document.querySelectorAll('[data-anime-id]')).toHaveLength(1);
+    expect(document.querySelector('[data-anime-id="6"]')).toBeTruthy();
+    fireEvent.click(within(kinds).getByRole('button', { name: /Alle/ }));
+    const language = screen.getByLabelText('Sprache');
+    expect(language.value).toBe('all');
+    expect([...language.options].map((o) => o.textContent)).toEqual(['Alle', 'Englisch']);
+    fireEvent.change(language, { target: { value: 'en' } });
+    expect(localStorage.getItem(LANGUAGE_FILTER_KEY)).toBe('en');
+    expect([...document.querySelectorAll('[data-anime-id]')].map((n) => n.getAttribute('data-anime-id'))).toEqual(['5']);
+  });
+
+  describe('add dialog', () => {
+    const tmdbHit = { kind: 'tv', tmdb_id: 95396, tmdb_kind: 'tv', title: { preferred: 'Severance', english: 'Severance', native: 'Severance', romaji: null }, format: 'TV', season_year: 2022, in_collection_id: null };
+    const movieHit = { kind: 'movie', tmdb_id: 95396, tmdb_kind: 'movie', title: { preferred: 'Dune: Teil 1', english: 'Dune: Teil 1', native: 'Dune', romaji: null }, format: 'MOVIE', episodes: 1, season_year: 2021, in_collection_id: null };
+    const answer = (over = {}) => ({ results: [tmdbHit, movieHit], sources_used: ['anilist', 'tmdb'], partial: true, cached: false, sources_available: ['anilist', 'mal', 'tmdb'], ...over });
+
+    it('chip states follow GET /api/anime/sources', () => {
+      expect(sourceChipState(SOURCES, 'tmdb')).toBe('on');
+      expect(sourceChipState(NO_TMDB_KEY, 'tmdb')).toBe('disabled');
+      expect(sourceChipState({ ...SOURCES, tmdb: { enabled: false, available: false } }, 'tmdb')).toBe('hidden');
+      expect(sourceChipState(SOURCES, 'tmdb', { animeOnly: true })).toBe('hidden');
+      expect(sourceChipState(null, 'tmdb')).toBe('hidden');
+      expect(sourceChipState(null, 'anilist')).toBe('on');
+      expect(hitKey(tmdbHit)).toBe('tmdb:tv:95396');
+      expect(hitKey(movieHit)).toBe('tmdb:movie:95396');
+      expect(sourcesNote(answer(), { sources: [], kind: 'all' })).toBe('Gerade ohne MyAnimeList');
+      expect(sourcesNote(answer({ sources_used: ['tmdb'] }), { sources: ['tmdb'], kind: 'all' })).toBeNull();
+      expect(sourcesNote(answer({ sources_used: ['anilist'] }), { sources: [], kind: 'anime' })).toBe('Gerade ohne MyAnimeList');
+      expect(sourcesNote(answer({ sources_used: ['jikan'], sources_available: ['anilist', 'mal'] }), {})).toBe('Gerade ohne AniList');
+    });
+
+    it('loads the sources on open, searches with the chosen chips and kind, keys TMDb hits by kind and id and adds one with its title', async () => {
+      const search = vi.fn(async () => answer());
+      const loadSources = vi.fn();
+      const onAdd = vi.fn(async () => ({}));
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={onAdd} sources={SOURCES} loadSources={loadSources} />);
+      expect(loadSources).toHaveBeenCalledTimes(1);
+      const chips = screen.getByRole('group', { name: 'Quellen' });
+      expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['AniList', 'MyAnimeList', 'TMDB (Filme & Serien)']);
+      fireEvent.click(within(chips).getByRole('button', { name: 'MyAnimeList' }));
+      expect(JSON.parse(localStorage.getItem(SOURCES_KEY))).toEqual(['anilist', 'tmdb']);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Art' })).getByRole('button', { name: 'Serien' }));
+      expect(localStorage.getItem(SEARCH_KIND_KEY)).toBe('tv');
+      fireEvent.change(screen.getByLabelText('Titel suchen'), { target: { value: 'Severance' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
+      await screen.findByText('Dune: Teil 1');
+      expect(search).toHaveBeenCalledWith('Severance', expect.objectContaining({ sources: ['anilist', 'tmdb'], kind: 'tv' }));
+      expect(screen.getAllByText('Daten: TMDB')).toHaveLength(2);
+      expect(screen.getAllByText('TMDB')).toHaveLength(2);
+      expect(screen.getByText('Dune')).toBeTruthy();
+      expect(screen.queryByText(/1 Folgen/)).toBeNull();
+      fireEvent.click(screen.getAllByRole('button', { name: /Hinzufügen/ })[1]);
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ tmdb_id: 95396, tmdb_kind: 'movie', title: 'Dune: Teil 1', manga_id: null }));
+    });
+
+    it('without a TMDB key: the TMDB chip, "Serien" and "Filme" are disabled, a remembered "Serien" counts as "Alle", the hint opens the keys', async () => {
+      localStorage.setItem(SEARCH_KIND_KEY, 'tv');
+      localStorage.setItem(SOURCES_KEY, JSON.stringify(['anilist', 'mal', 'tmdb']));
+      const search = vi.fn(async () => answer({ results: [], sources_used: ['anilist', 'jikan'], partial: false, sources_available: ['anilist', 'mal'] }));
+      const onClose = vi.fn();
+      const opened = vi.fn();
+      window.addEventListener('mangashelf:open-account', opened);
+      try {
+        render(<AddAnimeModal isOpen onClose={onClose} search={search} onAdd={vi.fn()} sources={NO_TMDB_KEY} />);
+        expect(screen.getByRole('button', { name: 'TMDB (Filme & Serien)' }).disabled).toBe(true);
+        const kinds = screen.getByRole('group', { name: 'Art' });
+        expect(within(kinds).getByRole('button', { name: 'Serien' }).disabled).toBe(true);
+        expect(within(kinds).getByRole('button', { name: 'Filme' }).disabled).toBe(true);
+        expect(within(kinds).getByRole('button', { name: 'Alle' }).getAttribute('aria-pressed')).toBe('true');
+        fireEvent.change(screen.getByLabelText('Titel suchen'), { target: { value: 'Frieren' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
+        await waitFor(() => expect(search).toHaveBeenCalledWith('Frieren', expect.objectContaining({ sources: ['anilist', 'mal'], kind: 'all' })));
+        fireEvent.click(screen.getByRole('button', { name: 'Schlüssel hinterlegen' }));
+        expect(onClose).toHaveBeenCalled();
+        expect(opened.mock.calls[0][0].detail).toBe('keys');
+      } finally {
+        window.removeEventListener('mangashelf:open-account', opened);
+      }
+    });
+
+    it('a disabled source hidden by ANIME_SOURCES has no chip; anime only (share, match) ignores the remembered chips and hides kind and TMDB', async () => {
+      localStorage.setItem(SEARCH_KIND_KEY, 'movie');
+      localStorage.setItem(SOURCES_KEY, JSON.stringify(['tmdb']));
+      const search = vi.fn(async () => answer({ results: [], sources_used: ['anilist', 'jikan'], partial: false }));
+      const { unmount } = render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={vi.fn()} sources={{ ...SOURCES, mal: { enabled: false, available: false } }} />);
+      expect(within(screen.getByRole('group', { name: 'Quellen' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['AniList', 'TMDB (Filme & Serien)']);
+      unmount();
+
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={vi.fn()} sources={SOURCES} animeOnly initialQuery="Frieren" />);
+      await waitFor(() => expect(search).toHaveBeenCalledWith('Frieren', expect.objectContaining({ sources: ['anilist', 'mal'], kind: 'anime' })));
+      expect(screen.queryByRole('group', { name: 'Art' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'TMDB (Filme & Serien)' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'AniList' }));
+      expect(localStorage.getItem(SOURCES_KEY)).toBe(JSON.stringify(['tmdb']));
+    });
+
+    it('the manual tab has a kind select', async () => {
+      const onAdd = vi.fn(async () => ({ id: 3 }));
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={vi.fn()} onAdd={onAdd} />);
+      fireEvent.click(screen.getByRole('tab', { name: 'Manuell' }));
+      const kind = screen.getByLabelText('Art');
+      expect([...kind.options].map((o) => o.textContent)).toEqual(['Anime', 'Serie', 'Film']);
+      fireEvent.change(kind, { target: { value: 'movie' } });
+      fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Heimvideo' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }));
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ title: 'Heimvideo', episodes: null, kind: 'movie', manga_id: null }));
+    });
+
+    it('anime only (share, match) has no kind select in the manual tab and adds an anime', async () => {
+      const onAdd = vi.fn(async () => ({ id: 3 }));
+      const search = vi.fn(async () => answer({ results: [], sources_used: ['anilist', 'jikan'], partial: false }));
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={onAdd} sources={SOURCES} animeOnly initialQuery="Frieren" />);
+      await waitFor(() => expect(search).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('tab', { name: 'Manuell' }));
+      expect(screen.queryByLabelText('Art')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }));
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ title: 'Frieren', episodes: null, kind: 'anime', manga_id: null }));
+    });
+  });
+
+  it('useAnimeList sends sources, kind and the UI language', async () => {
+    const fetchMock = vi.fn(async (url) => fakeResponse(200, url.startsWith('/api/anime/search') ? { results: [], sources_used: [], partial: false, cached: false, sources_available: [] } : {}));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'anna', role: 'editor' } }));
+    await act(() => result.current.search('Dune Teil', { sources: ['anilist', 'tmdb'], kind: 'movie' }));
+    await act(() => result.current.search('Dune', { sources: [], kind: 'all' }));
+    const urls = fetchMock.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/anime/search'));
+    expect(urls).toEqual(['/api/anime/search?q=Dune%20Teil&sources=anilist%2Ctmdb&kind=movie&language=de', '/api/anime/search?q=Dune&language=de']);
+  });
+
+  describe('detail', () => {
+    const openDetail = (anime, props = {}) => render(
+      <MemoryRouter>
+        <AnimeDetailModal isOpen animeId={anime.id} fallback={anime} onClose={vi.fn()} canEdit
+          fetchDetail={vi.fn(async () => anime)} updateProgress={vi.fn(async () => ({}))} removeFromMyList={vi.fn(async () => true)} update={vi.fn(async () => anime)}
+          refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} {...props} />
+      </MemoryRouter>
+    );
+
+    it('a TV show: kind, seasons line, S×E, IMDb and TMDB links; the languages are saved with the progress', async () => {
+      const updateProgress = vi.fn(async () => ({}));
+      openDetail(show(), { updateProgress });
+      await act(async () => {});
+      expect(screen.getByText('Art').nextElementSibling.textContent).toBe('Serie');
+      expect(screen.getByText('Staffeln: 2 · Folgen: 19')).toBeTruthy();
+      expect(screen.queryByText('Folgen')).toBeNull();
+      expect(screen.getAllByText('S2E3').length).toBeGreaterThan(0);
+      expect(screen.getByRole('link', { name: /IMDb/ }).getAttribute('href')).toBe('https://www.imdb.com/title/tt11280740/');
+      expect(screen.getByRole('link', { name: /TMDB/ }).getAttribute('href')).toBe('https://www.themoviedb.org/tv/95396');
+      const audio = screen.getByLabelText('Gesehen auf');
+      expect(audio.value).toBe('en');
+      expect(audio.options[0].textContent).toBe('Keine Angabe');
+      fireEvent.change(audio, { target: { value: 'ja' } });
+      fireEvent.change(screen.getByLabelText('Untertitel'), { target: { value: '' } });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fortschritt speichern' })); });
+      expect(updateProgress).toHaveBeenCalledWith(5, { audio_language: 'ja', subtitle_language: null });
+    });
+
+    it('a film shows its running time and no counter; a manual entry gets a kind select that saves with PUT', async () => {
+      const { unmount } = openDetail(film());
+      await act(async () => {});
+      expect(screen.getByText('Laufzeit: 155 Min.')).toBeTruthy();
+      expect(screen.queryByText('Folgen')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Eine Folge mehr' })).toBeNull();
+      expect(screen.queryByLabelText('Art')).toBeNull();
+      unmount();
+
+      const update = vi.fn(async (id, body) => ({ ...entry({ manual: true, anilist_id: null, mal_id: null }), ...body }));
+      openDetail(entry({ manual: true, anilist_id: null, mal_id: null }), { update });
+      await act(async () => {});
+      const kind = screen.getByLabelText('Art');
+      expect(kind.value).toBe('anime');
+      await act(async () => { fireEvent.change(kind, { target: { value: 'tv' } }); });
+      expect(update).toHaveBeenCalledWith(1, { kind: 'tv' });
+    });
+  });
+
+  it('statistics: the kinds show only once the list holds a TV show or a film', () => {
+    const { unmount } = render(<AnimeStatsCard anime={{ total: 2, by_kind: { anime: 2, tv: 0, movie: 0 }, watching: 0, completed: 0, planned: 0, per_user: [] }} />);
+    expect(screen.queryByTestId('stats-anime-kinds')).toBeNull();
+    unmount();
+    render(<AnimeStatsCard anime={{ total: 4, by_kind: { anime: 2, tv: 1, movie: 1 }, watching: 0, completed: 0, planned: 0, per_user: [] }} />);
+    const kinds = screen.getByTestId('stats-anime-kinds');
+    const tile = (label) => within(kinds).getByText(label).nextElementSibling.textContent;
+    expect([tile('Anime'), tile('Serien'), tile('Filme')]).toEqual(['2', '1', '1']);
+  });
+});

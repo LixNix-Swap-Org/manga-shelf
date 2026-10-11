@@ -92,6 +92,18 @@ describe('SystemModal', () => {
     expect(within(cards).getByRole('heading', { name: /MyAnimeList/ })).toBeTruthy();
   });
 
+  it('the TMDB instance key card shows its refusal, with the TMDB notice under the cards', async () => {
+    serve({ extra: (url) => (url === '/api/admin/api-keys'
+      ? fakeResponse(200, { keys: [keyState('mal'), keyState('tmdb', { configured: true, last4: 'beef', last_error: 'TMDB lehnt den Schlüssel ab (401)' })], users_with_keys: 0 })
+      : undefined) });
+    render(<SystemModal isOpen onClose={vi.fn()} />);
+    const dialog = await screen.findByRole('dialog', { name: 'System' });
+    const sources = within(dialog).getByRole('region', { name: 'Quellen' });
+    const card = (await within(sources).findByRole('heading', { name: /TMDB/ })).closest('section');
+    expect(within(card).getByTestId('key-state').textContent).toBe('TMDB lehnt den Schlüssel ab (401)');
+    expect(within(sources).getByTestId('tmdb-attribution').textContent).toContain('Dieses Produkt verwendet die TMDB-API, ist aber nicht von TMDB unterstützt oder zertifiziert.');
+  });
+
   it('"Backup jetzt" creates a snapshot and reloads the page data', async () => {
     let created = false;
     const fetchMock = serve({ info: () => systemInfo({ backups: { ...systemInfo().backups, count: created ? 8 : 7 } }), extra: (url) => {

@@ -37,6 +37,10 @@ function snapshotColumns(meta, nowMs) {
         urls: JSON.stringify(meta.urls || {}),
         external_links: JSON.stringify(meta.external_links || []),
         streaming_episodes: JSON.stringify(meta.streaming_episodes || []),
+        imdb_id: meta.imdb_id ?? null,
+        original_language: meta.original_language ?? null,
+        spoken_languages: JSON.stringify(meta.spoken_languages || []),
+        seasons: JSON.stringify(meta.seasons || []),
         meta_source: meta.source,
         meta_fetched_at: nowMs,
         next_check_at: nextCheckAt(meta, nowMs)
@@ -62,6 +66,7 @@ async function downloadImage(ctx, url) {
  * banner_source } with only the changed ones set. Network only, no database.
  */
 async function freshImages(ctx, meta, row = null) {
+    if (meta.source === 'tmdb') return meta.cover_url ? { cover_image: meta.cover_url, cover_source: meta.cover_url } : {};
     const out = {};
     for (const [field, url] of [['cover', meta.cover_url], ['banner', meta.banner_url]]) {
         if (!url || (row && row[`${field}_source`] === url && row[`${field}_image`])) continue;
@@ -79,7 +84,8 @@ function updateRow(ctx, id, columns) {
 }
 
 // a partial snapshot (AniList id batches) never clears what the full answer stored
-const KEEP_WHEN_EMPTY = ['description', 'relations', 'title_english', 'studios', 'genres', 'external_links', 'streaming_episodes'];
+const KEEP_WHEN_EMPTY = ['description', 'relations', 'title_english', 'studios', 'genres', 'external_links', 'streaming_episodes', 'imdb_id',
+    'original_language', 'spoken_languages', 'seasons'];
 const ANILIST_ONLY = ['external_links', 'streaming_episodes'];
 const emptyColumn = (value) => value === null || value === undefined || value === '' || value === '[]';
 
@@ -121,6 +127,9 @@ function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {
         ...images,
         anilist_id: meta.anilist_id,
         mal_id: meta.mal_id,
+        kind: meta.kind || 'anime',
+        tmdb_id: meta.tmdb_id ?? null,
+        tmdb_kind: meta.tmdb_kind ?? null,
         title: title || meta.title.preferred || 'Ohne Titel',
         manga_id,
         updated_by: ctx.user ? ctx.user.id : null,
@@ -134,14 +143,19 @@ function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {
     return Number(result.lastInsertRowid);
 }
 
-const isStale = (row, nowMs) => Boolean((row.anilist_id || row.mal_id) && row.next_check_at && row.next_check_at <= nowMs);
+const isStale = (row, nowMs) => Boolean((row.anilist_id || row.mal_id || row.tmdb_id) && row.next_check_at && row.next_check_at <= nowMs);
 
 /** Shape of an entry in GET /anime (detail adds description, relations and progress). */
 function entryOf(row, nowMs) {
+    const urls = parseJson(row.urls, {});
     return {
         id: row.id,
+        kind: row.kind || 'anime',
         anilist_id: row.anilist_id,
         mal_id: row.mal_id,
+        tmdb_id: row.tmdb_id ?? null,
+        tmdb_kind: row.tmdb_kind ?? null,
+        imdb_id: row.imdb_id ?? null,
         title: row.title,
         title_de: row.title_de,
         title_romaji: row.title_romaji,
@@ -162,9 +176,12 @@ function entryOf(row, nowMs) {
         banner_image: row.banner_image,
         next_airing: row.next_airing_at ? { episode: row.next_airing_episode, at: row.next_airing_at, estimated: Boolean(row.next_airing_estimated) } : null,
         manga_id: row.manga_id,
-        urls: parseJson(row.urls, {}),
+        original_language: row.original_language ?? null,
+        spoken_languages: parseJson(row.spoken_languages, []),
+        seasons: parseJson(row.seasons, []),
+        urls: { ...urls, tmdb: urls.tmdb ?? null, imdb: urls.imdb ?? null },
         notes: row.notes,
-        manual: !row.anilist_id && !row.mal_id,
+        manual: !row.anilist_id && !row.mal_id && !row.tmdb_id,
         meta_source: row.meta_source,
         meta_fetched_at: row.meta_fetched_at,
         stale: isStale(row, nowMs),
@@ -183,7 +200,9 @@ const progressOf = (row) => (row ? {
     finished_at: row.finished_at,
     updated_at: row.updated_at,
     resume_url: row.resume_url ?? null,
-    resume_episode: row.resume_episode ?? null
+    resume_episode: row.resume_episode ?? null,
+    audio_language: row.audio_language ?? null,
+    subtitle_language: row.subtitle_language ?? null
 } : null);
 
 /** The stored link lists of a row: { external_links, streaming_episodes } (arrays). */
@@ -210,7 +229,7 @@ function watchOf(row, progress, rememberedUrl = null) {
     return {
         next_url: nextUrl,
         series_url: fromSite || remembered,
-        search_url: service.searchUrl(row.title_english || row.title_romaji || row.title)
+        search_url: (row.kind || 'anime') === 'anime' ? service.searchUrl(row.title_english || row.title_romaji || row.title) : null
     };
 }
 

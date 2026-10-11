@@ -99,8 +99,8 @@ function adminNotes(body) {
     return text || null;
 }
 
-/** Adds signed / installable / reason / has_admin_notes for this server (`current`, `assetName`). */
-function decorate(release, { current, assetName }) {
+/** Adds signed / installable / reason / has_admin_notes for this server (`current`, `assetName`), and rollback: true for `rollbackTarget`. */
+function decorate(release, { current, assetName, rollbackTarget = null }) {
     const names = new Set(release.assets.map((a) => a.name));
     const signed = names.has(SUMS_NAME) && names.has(BUNDLE_NAME) && names.has(markerName(release.version));
     const order = compareVersions(release.version, current);
@@ -109,7 +109,9 @@ function decorate(release, { current, assetName }) {
     else if (order === null || order < 0) reason = 'older';
     else if (!signed) reason = 'unsigned';
     else if (!assetName || !names.has(assetName)) reason = 'no_asset';
-    return { ...release, signed, installable: reason === null, reason, has_admin_notes: adminNotes(release.body) !== null };
+    const out = { ...release, signed, installable: reason === null, reason, has_admin_notes: adminNotes(release.body) !== null };
+    if (rollbackTarget && release.version === rollbackTarget) out.rollback = true;
+    return out;
 }
 
 function rateLimitUntil(err, now) {

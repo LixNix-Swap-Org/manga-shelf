@@ -16,8 +16,11 @@ function animeStats(ctx) {
         FROM anime_progress p JOIN users u ON u.id = p.user_id JOIN animes a ON a.id = p.anime_id
         GROUP BY u.id ORDER BY watch_minutes DESC, u.username COLLATE NOCASE
     `).all();
+    const byKind = { anime: 0, tv: 0, movie: 0 };
+    for (const r of ctx.db.prepare('SELECT kind, count(*) AS n FROM animes GROUP BY kind').all()) if (Object.prototype.hasOwnProperty.call(byKind, r.kind)) byKind[r.kind] = r.n;
     return {
         total,
+        by_kind: byKind,
         watching: counts.watching || 0,
         completed: counts.completed || 0,
         planned: counts.planned || 0,

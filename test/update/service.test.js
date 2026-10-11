@@ -1,4 +1,5 @@
 process.env.LOG_LEVEL = 'silent';
+process.env.DATA_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'manga-shelf-service-data-'));
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -22,7 +23,12 @@ const release = h.makeRelease(NEXT, { 'pterodactyl-manga-shelf.zip': ZIP });
 const BUNDLE = Buffer.from(JSON.stringify(h.makeBundle(release.sumsBytes)));
 
 const root = h.tmpDir();
-test.after(() => fs.rmSync(root, { recursive: true, force: true }));
+test.after(() => {
+    const cached = require.cache[require.resolve('../../db')];
+    if (cached) cached.exports.closeDb();
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
+});
 let n = 0;
 
 const asset = (v, name, size = 10) => ({ name, size, browser_download_url: `${DL}v${v}/${name}` });

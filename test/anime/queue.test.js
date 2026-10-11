@@ -103,3 +103,63 @@ test('queue: acquire waits for a token up to the deadline; background waits long
     budget.rateLimited('k', { retryAfterSec: 3600 }, now);
     assert.equal(await acquire(budget, 'k', opts, 'interactive', { now: () => now }), false, 'a long pause is not waited out');
 });
+
+test('queue: an aborted caller leaves at once; the run aborts only when every caller aborted, then a new run starts', async () => {
+    const c = createCoalescer();
+    const runSignals = [];
+    const work = (signal) => {
+        runSignals.push(signal);
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => resolve('hits'), 60);
+            signal.addEventListener('abort', () => {
+                clearTimeout(timer);
+                reject(new Error('run aborted'));
+            });
+        });
+    };
+    const a = new AbortController();
+    const b = new AbortController();
+    const first = c.run('k', work, { signal: a.signal });
+    const second = c.run('k', work, { signal: b.signal });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    a.abort();
+    await assert.rejects(first, (err) => err.aborted === true && err.name === 'AbortError');
+    assert.equal(runSignals[0].aborted, false, 'the other caller keeps the run');
+    assert.equal(await second, 'hits');
+    assert.equal(c.size(), 0);
+
+    const x = new AbortController();
+    const y = new AbortController();
+    const one = c.run('k', work, { signal: x.signal });
+    const two = c.run('k', work, { signal: y.signal });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    x.abort();
+    y.abort();
+    await assert.rejects(one, (err) => err.aborted === true);
+    await assert.rejects(two, (err) => err.aborted === true);
+    assert.equal(runSignals[1].aborted, true);
+    assert.equal(c.size(), 0, 'an aborted run is removed');
+    assert.equal(await c.run('k', work, { signal: new AbortController().signal }), 'hits');
+    assert.equal(runSignals.length, 3);
+
+    const plain = c.run('p', work);
+    const signalled = new AbortController();
+    const joined = c.run('p', work, { signal: signalled.signal });
+    signalled.abort();
+    await assert.rejects(joined, (err) => err.aborted === true);
+    assert.equal(await plain, 'hits', 'a caller without a signal never aborts the run');
+    await assert.rejects(c.run('q', work, { signal: AbortSignal.abort() }), (err) => err.aborted === true);
+    assert.equal(c.size(), 0);
+});
+
+test('queue: acquire wakes from its sleep when the signal aborts', async () => {
+    const budget = createBudget();
+    const opts = { perMinute: 1 };
+    budget.take('k', opts, 'interactive', Date.now());
+    const controller = new AbortController();
+    const started = Date.now();
+    const pending = acquire(budget, 'k', opts, 'interactive', { deadlineMs: 120000, signal: controller.signal });
+    setTimeout(() => controller.abort(), 30);
+    assert.equal(await pending, false);
+    assert.ok(Date.now() - started < 1000, `woke after ${Date.now() - started} ms`);
+});

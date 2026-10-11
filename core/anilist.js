@@ -1,8 +1,6 @@
 // AniList media in the series-lookup shape (used by core/anime/anilist.js searchManga) and the description cleanup.
 const { decodeHtmlEntities } = require('./isbnLookup');
 
-const ANILIST_TIMEOUT_MS = 8000;
-
 /** AniList text: line breaks kept, tags removed, then entities decoded once (in this order, or "&lt;Twilight&gt;" would vanish as a tag). */
 function cleanAniListDescription(raw) {
     if (!raw || typeof raw !== 'string') return null;
@@ -43,6 +41,7 @@ function mapAniListMedia(m) {
         source_label: 'AniList',
         title: m.title?.english || m.title?.romaji,
         alt_title: m.title?.native || m.title?.romaji,
+        alt_titles: [...new Set([m.title?.romaji, m.title?.english, m.title?.native].filter(Boolean))],
         author: author || null,
         publisher: null,
         description: cleanAniListDescription(m.description),
@@ -54,4 +53,4 @@ function mapAniListMedia(m) {
     };
 }
 
-module.exports = { cleanAniListDescription, mapAniListMedia, ANILIST_TIMEOUT_MS };
+module.exports = { cleanAniListDescription, mapAniListMedia };

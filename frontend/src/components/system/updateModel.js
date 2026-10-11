@@ -22,6 +22,20 @@ export const RELEASE_REASON_TEXT = {
 };
 
 // i18n
+export const ROLLBACK_REASON_TEXT = {
+  disabled: 'auf diesem Server abgeschaltet (UPDATE_DOWNGRADE)',
+  mode: 'in dieser Installationsart nur mit Anleitung',
+  no_update: 'kein Update per Klick bekannt',
+  already_downgraded: 'schon zurückgesetzt',
+  not_previous: 'nicht die Version vor dem letzten Update',
+  too_old: 'älter als 3.1.0',
+  backup_missing: 'das Backup von vor dem Update fehlt',
+  backup_changed: 'das Backup von vor dem Update wurde verändert',
+  unsigned: 'Release ohne Signatur',
+  no_asset: 'kein passendes Paket im Release'
+};
+
+// i18n
 export const PHASE_TEXT = {
   downloading: 'Download läuft',
   verifying: 'Signatur wird geprüft',
@@ -56,12 +70,22 @@ export const sortReleases = (releases) => (Array.isArray(releases) ? [...release
 export const isSelectable = (release, { current, canInstall }) => Boolean(release?.installable)
   || (!canInstall && compareVersions(release?.version, current) > 0);
 
-/** Option text: 'v3.1.0 – 10.10.2026' plus the reason when it cannot be chosen. */
+/** Option text: 'v3.1.0 – 10.10.2026' plus the reason when it cannot be chosen (the rollback target named as such). */
 export function releaseLabel(release, selectable = Boolean(release.installable)) {
   const date = formatDay(release.published_at);
-  const reason = !selectable && RELEASE_REASON_TEXT[release.reason] ? ` – ${t(RELEASE_REASON_TEXT[release.reason])}` : '';
+  const why = release.rollback
+    ? t('vorherige Version – „Zurück zu v{version}“', { version: release.version })
+    : (RELEASE_REASON_TEXT[release.reason] ? t(RELEASE_REASON_TEXT[release.reason]) : '');
+  const reason = !selectable && why ? ` – ${why}` : '';
   return `v${release.version}${date ? ` – ${date}` : ''}${reason}`;
 }
+
+/** UI text of a rollback refusal reason, '' when unknown. */
+export const rollbackReasonText = (reason) => (ROLLBACK_REASON_TEXT[reason] ? t(ROLLBACK_REASON_TEXT[reason]) : '');
+
+/** Name pattern of the backup a downgrade writes of today's state. */
+// i18n-ignore: backup file name
+export const downgradeBackupName = (current, version) => `vor-update-v${current}-auf-v${version}-….zip`;
 
 /** 'supervised' | 'pterodactyl' | 'manual': who starts the server after the swap. */
 export function restartKind(install) {
@@ -70,7 +94,7 @@ export function restartKind(install) {
   return ['systemd', 'launchd', 'wings'].includes(install?.supervisor) ? 'supervised' : 'manual';
 }
 
-const quote = (arg) => {
+export const shellQuote = (arg) => {
   const s = String(arg);
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 };
@@ -79,12 +103,12 @@ const isOption = (arg) => String(arg).startsWith('-');
 
 /** Start command of the running server from `instructions.argv` (program first, then its options); '' without the program. */
 export function startCommand(argv) {
-  if (Array.isArray(argv)) return argv.length && !isOption(argv[0]) ? argv.map(quote).join(' ') : '';
+  if (Array.isArray(argv)) return argv.length && !isOption(argv[0]) ? argv.map(shellQuote).join(' ') : '';
   return typeof argv === 'string' && argv.trim() && !isOption(argv.trim()) ? argv.trim() : '';
 }
 
-/** Options of the running server from `instructions.argv` (the program, if given, left out). */
-export function runningOptions(argv) {
+/** Options of the running server from `instructions.argv` (the program, if given, left out), each quoted with `quote`. */
+export function runningOptions(argv, quote = shellQuote) {
   if (Array.isArray(argv)) return (argv.length && !isOption(argv[0]) ? argv.slice(1) : argv).map(quote).join(' ');
   if (typeof argv !== 'string') return '';
   const s = argv.trim();

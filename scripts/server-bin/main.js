@@ -177,8 +177,9 @@ function run(argv) {
             process.exitCode = 2;
             return;
         }
-        err(`Fehler: ${e && e.message ? e.message : e}`);
-        process.exit(e && e.code === 'SCHEMA_NEWER' ? e.exitCode : 1);
+        const pending = e && e.code === 'DOWNGRADE_RECOVERY_PENDING';
+        err(pending ? e.message : `Fehler: ${e && e.message ? e.message : e}`);
+        process.exit(e && (e.code === 'SCHEMA_NEWER' || pending) ? e.exitCode : 1);
     });
 }
 

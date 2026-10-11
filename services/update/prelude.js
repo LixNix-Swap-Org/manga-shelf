@@ -61,6 +61,13 @@ function foreignBinary(state) {
 
 const keptDatabaseName = (state) => `manga.db.v${state.to}-${now().replace(/[:.]/g, '-')}`;
 
+function codeAlreadyReverted(state) {
+    if (state.phase !== 'rolling_back' || state.mode !== 'pterodactyl' || !ctx.codeDir || !state.previous || !state.previous.sha256) return false;
+    if (swap.lexists(path.join(ctx.codeDir, swap.UPDATE_DIR))) return false;
+    const pkgFile = path.join(ctx.codeDir, 'package.json');
+    return swap.lexists(pkgFile) && swap.sha256FileSync(pkgFile) === state.previous.sha256;
+}
+
 function rollback(state, reason) {
     let journal = state;
     if (journal.phase !== 'rolling_back') {
@@ -72,7 +79,7 @@ function rollback(state, reason) {
         journal = write(journal, { db_restored: true, ...(keepAs ? { db_kept: keepAs } : {}) });
         if (keepAs) ctx.out(`[Update] Datenbank von v${journal.to} aufbewahrt als ${keepAs}`);
     }
-    swap.revertCode(journal, swapCtx());
+    if (!codeAlreadyReverted(journal)) swap.revertCode(journal, swapCtx());
     swap.cleanupCode(journal, swapCtx());
     write(journal, { phase: 'rolled_back', db_restored: journal.db_restored === true, finished_at: now() });
     ctx.out(journal.mode === 'pterodactyl' ? ROLLED_BACK_LINE : `[Update] vorherige Version v${journal.from} wiederhergestellt`);
@@ -295,7 +302,12 @@ function heldBackup() {
     return ctx.dataDir ? stateFile.heldBackup(ctx.dataDir) : null;
 }
 
+/** { hold, anchor } of the update journal for the running version (see state.heldBackups), or null before run() or without it. */
+function heldBackups() {
+    return ctx.dataDir && typeof stateFile.heldBackups === 'function' ? stateFile.heldBackups(ctx.dataDir, { version: ctx.version }) : null;
+}
+
 /** The result of run() (null before it ran). */
 const lastRun = () => ctx.result;
 
-module.exports = { run, markStarted, markListenFailed, confirm, heldBackup, lastRun, resolveDataDir, ROLLED_BACK_LINE };
+module.exports = { run, markStarted, markListenFailed, confirm, heldBackup, heldBackups, lastRun, resolveDataDir, ROLLED_BACK_LINE };

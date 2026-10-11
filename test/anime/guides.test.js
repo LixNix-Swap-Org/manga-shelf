@@ -6,11 +6,12 @@ const { GUIDES, formatError, guideLines, fillTemplate, userProviders, instancePr
 const EXAMPLES = {
     anilist: `eyJ0eXAiOiJKV1QifQ.${'a'.repeat(80)}.${'b'.repeat(30)}`,
     mal: '0123456789abcdef0123456789abcdef',
-    google_books: 'AIzaSyA-1234567890abcdefghijklmnopqrstu'
+    google_books: 'AIzaSyA-1234567890abcdefghijklmnopqrstu',
+    tmdb: '0123456789abcdef0123456789abcdef'
 };
 
 test('guides: every provider has numbered steps with text, every link is https', () => {
-    assert.deepEqual(GUIDES.map((g) => g.id), ['anilist', 'mal', 'google_books']);
+    assert.deepEqual(GUIDES.map((g) => g.id), ['anilist', 'mal', 'google_books', 'tmdb']);
     for (const guide of GUIDES) {
         assert.ok(guide.steps.length >= 3, guide.id);
         for (const step of guide.steps) {
@@ -21,8 +22,8 @@ test('guides: every provider has numbered steps with text, every link is https',
         }
         for (const field of ['name', 'benefit', 'secretLabel', 'secretHint', 'check', 'validity', 'formatError']) assert.ok(guide[field], `${guide.id}.${field}`);
     }
-    assert.deepEqual(userProviders(), ['anilist', 'mal']);
-    assert.deepEqual(instanceProviders(), ['mal', 'google_books']);
+    assert.deepEqual(userProviders(), ['anilist', 'mal', 'tmdb']);
+    assert.deepEqual(instanceProviders(), ['mal', 'google_books', 'tmdb']);
 });
 
 test('guides: the format check refuses empty and short values and accepts an example', () => {
@@ -33,6 +34,8 @@ test('guides: the format check refuses empty and short values and accepts an exa
         assert.equal(formatError(guide.id, `  ${EXAMPLES[guide.id]}\n`), null, `${guide.id} trimmed`);
     }
     assert.equal(formatError('kitsu', 'x'), 'Unbekannter Anbieter');
+    assert.equal(formatError('tmdb', `eyJhbGciOiJIUzI1NiJ9.${'a'.repeat(120)}.${'b'.repeat(43)}`), null, 'a TMDb read access token');
+    assert.equal(formatError('tmdb', 'g'.repeat(32)), GUIDES.find((g) => g.id === 'tmdb').formatError);
 });
 
 test('guides: the AniList sign-in link only exists with a numeric client id; JSON keeps everything', () => {

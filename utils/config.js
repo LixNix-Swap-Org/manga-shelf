@@ -83,12 +83,12 @@ const appOrigins = (raw, name) => {
     return warn(valid, `${name} enthält ungültige Ursprünge (${invalid.join(', ')}; erwartet z. B. capacitor://localhost), sie werden ignoriert`);
 };
 
-const ANIME_SOURCE_NAMES = ['anilist', 'jikan', 'mal'];
-const DEFAULT_ANIME_SOURCES = Object.freeze(['anilist', 'jikan']);
+const ANIME_SOURCE_NAMES = ['anilist', 'jikan', 'mal', 'tmdb'];
+const DEFAULT_ANIME_SOURCES = Object.freeze(['anilist', 'jikan', 'tmdb']);
 
-// "jikan" and "mal" both mean the MyAnimeList side (core/anime/settings.js)
+// "jikan" and "mal" both mean the MyAnimeList side (core/anime/settings.js); blank = the core's defaults
 const animeSources = (raw, name) => {
-    if (blank(raw)) return ok(DEFAULT_ANIME_SOURCES);
+    if (blank(raw)) return ok(null);
     const list = String(raw).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     const unknown = list.filter(s => !ANIME_SOURCE_NAMES.includes(s));
     const valid = Object.freeze([...new Set(list.filter(s => ANIME_SOURCE_NAMES.includes(s)))]);
@@ -161,11 +161,14 @@ const ENTRIES = [
     { key: 'adminConsole', name: 'ADMIN_CONSOLE', parse: flag(true) },
     { key: 'updateCheck', name: 'UPDATE_CHECK', parse: flag(true) },
     { key: 'updateInstall', name: 'UPDATE_INSTALL', parse: flag(true) },
+    { key: 'updateDowngrade', name: 'UPDATE_DOWNGRADE', parse: flag(true) },
     { key: 'animeAnilistRpm', name: 'ANIME_ANILIST_RPM', parse: intIn(1, 600, 30) },
     { key: 'animeJikanRpm', name: 'ANIME_JIKAN_RPM', parse: intIn(1, 600, 60) },
+    { key: 'animeTmdbRpm', name: 'ANIME_TMDB_RPM', parse: intIn(1, 600, 120) },
     { key: 'animeSources', name: 'ANIME_SOURCES', parse: animeSources },
     { key: 'malClientId', name: 'MAL_CLIENT_ID', parse: text() },
     { key: 'googleBooksKey', name: 'GOOGLE_BOOKS_KEY', parse: text() },
+    { key: 'tmdbApiKey', name: 'TMDB_API_KEY', parse: text() },
     { key: 'restoreMaxDbBytes', name: 'RESTORE_MAX_DB_BYTES', parse: intIn(1, Number.MAX_SAFE_INTEGER, 2 * 1024 ** 3) },
     { key: 'restoreMaxUploadsBytes', name: 'RESTORE_MAX_UPLOADS_BYTES', parse: intIn(1, Number.MAX_SAFE_INTEGER, 4 * 1024 ** 3) },
     { key: 'restoreMaxEntries', name: 'RESTORE_MAX_ENTRIES', parse: intIn(1, 10000000, 100000) },

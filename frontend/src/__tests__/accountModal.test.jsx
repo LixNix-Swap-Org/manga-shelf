@@ -43,6 +43,12 @@ afterEach(() => {
 });
 
 describe('AccountModal: API keys', () => {
+  it('the keys tab carries the TMDB notice for every user', async () => {
+    serve();
+    await openKeys({ id: 2, role: 'editor' });
+    expect(screen.getByTestId('tmdb-attribution').textContent).toContain('nicht von TMDB unterstützt oder zertifiziert');
+  });
+
   it('sends the secret only to PUT /api/auth/api-keys/:provider and empties the field after success', async () => {
     const fetchMock = serve();
     const card = await openKeys({ id: 2, role: 'editor' });

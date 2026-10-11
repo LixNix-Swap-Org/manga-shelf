@@ -68,6 +68,7 @@ const rateHeaders = (headers) => ({
 // A 404 is 'notfound', 401/403 and a GraphQL "Invalid token" 'auth', 429 'rate', 5xx 'server', a dropped or timed out request 'network'.
  */
 async function requestJson(ctx, url, init = {}, { label, timeoutMs = DEFAULT_TIMEOUT_MS, signal } = {}) {
+    if (signal && signal.aborted) throw new SourceError('network', `${label} nicht erreichbar (Netzwerkfehler)`, { aborted: true });
     let res;
     try {
         res = await ctx.http.fetch(url, { ...init, signal: anySignal([signal, timeoutSignal(timeoutMs)]) });

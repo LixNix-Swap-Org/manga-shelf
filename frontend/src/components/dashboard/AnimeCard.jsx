@@ -7,8 +7,9 @@ import { langFor } from '../common/lang';
 import { openLinkOutside } from '../../app/openExternal';
 import {
   PROGRESS_STATUSES, displayTitle, formatYearLine, progressText, progressPercent, plusOneDisabled, countdownText, staleText,
-  initials, sourceBadges, continueTarget, airedEpisodes, stillAiring
+  initials, sourceBadges, continueTarget, airedEpisodes, stillAiring, kindOf, seasonEpisodeText
 } from '../../utils/animeHelpers';
+import { languageName } from '../../utils/editions';
 import { t, tn } from '../../i18n/index.js';
 import { animeProgressLabel } from '../../utils/enumLabels.js';
 
@@ -36,12 +37,18 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
   const aired = airedEpisodes(anime);
   const percent = progressPercent(watched, anime.episodes, aired);
   const airing = stillAiring(anime);
-  const countdown = countdownText(anime.next_airing, now);
+  const kind = kindOf(anime);
+  const movie = kind === 'movie';
+  const countdown = countdownText(anime.next_airing, now, kind);
   const stale = staleText(anime, now.getTime());
   const others = (anime.progress_users || []).filter((p) => p.user_id !== userId);
   const title = displayTitle(anime);
   const disabled = plusOneDisabled(mine, anime.episodes);
   const next = continueTarget(anime, { search: false });
+  const episodeAt = seasonEpisodeText(anime, watched);
+  const audio = mine?.audio_language || null;
+  const subtitle = mine?.subtitle_language || null;
+  const languageText = audio ? (subtitle ? t('{language} · Untertitel: {name}', { language: languageName(audio), name: languageName(subtitle) }) : languageName(audio)) : null;
 
   return (
     <article
@@ -83,14 +90,25 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
 
         <div>
           <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
-            <span className="min-w-0">{mine ? animeProgressLabel(mine.status) : t('Nicht auf meiner Liste')}</span>
-            <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={anime.episodes > 0 ? tn('{watched} von {n} Folgen gesehen', '{watched} von {n} Folgen gesehen', anime.episodes, { watched, n: anime.episodes }) : aired ? t('{watched} von bisher {aired} ausgestrahlten Folgen gesehen', { watched, aired }) : t('{watched} von unbekannt vielen Folgen gesehen', { watched })}>
-              {progressText(watched, anime.episodes, aired)}
+            <span className="min-w-0 flex items-center gap-1.5">
+              <span className="min-w-0">{mine ? animeProgressLabel(mine.status) : t('Nicht auf meiner Liste')}</span>
+              {audio && (
+                <span role="img" className="shrink-0 text-[9px] font-bold px-1 rounded bg-slate-800 border border-slate-700 text-slate-200" aria-label={languageText} title={languageText}>
+                  {audio.toUpperCase()}
+                </span>
+              )}
             </span>
+            {!movie && (
+              <span className="font-mono whitespace-nowrap shrink-0 ml-2" aria-label={anime.episodes > 0 ? tn('{watched} von {n} Folgen gesehen', '{watched} von {n} Folgen gesehen', anime.episodes, { watched, n: anime.episodes }) : aired ? t('{watched} von bisher {aired} ausgestrahlten Folgen gesehen', { watched, aired }) : t('{watched} von unbekannt vielen Folgen gesehen', { watched })}>
+                {episodeAt || progressText(watched, anime.episodes, aired)}
+              </span>
+            )}
           </div>
-          <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden" aria-hidden="true">
-            <div className="h-full bg-gradient-to-r from-brand-600 to-sky-400" style={{ width: `${percent ?? (watched > 0 ? 100 : 0)}%`, opacity: percent === null && watched > 0 ? 0.4 : 1 }} />
-          </div>
+          {!movie && (
+            <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden" aria-hidden="true">
+              <div className="h-full bg-gradient-to-r from-brand-600 to-sky-400" style={{ width: `${percent ?? (watched > 0 ? 100 : 0)}%`, opacity: percent === null && watched > 0 ? 0.4 : 1 }} />
+            </div>
+          )}
         </div>
 
         {countdown && (
@@ -134,16 +152,18 @@ function AnimeCard({ anime, canEdit, onOpen, onPlusOne, onStatusChange, userId, 
 
         {canEdit && (
           <div className={`${next ? '' : 'mt-auto '}flex items-center gap-1.5 pt-1`}>
-            <button
-              type="button"
-              onClick={() => onPlusOne(anime)}
-              disabled={disabled}
-              className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label={t('{title}: eine Folge mehr gesehen', { title })}
-              title={t('Eine Folge mehr gesehen')}
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />1
-            </button>
+            {!movie && (
+              <button
+                type="button"
+                onClick={() => onPlusOne(anime)}
+                disabled={disabled}
+                className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label={t('{title}: eine Folge mehr gesehen', { title })}
+                title={t('Eine Folge mehr gesehen')}
+              >
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" />1
+              </button>
+            )}
             <label className="sr-only" htmlFor={`${titleId}-status`}>{t('Status für {title}', { title })}</label>
             <select
               id={`${titleId}-status`}

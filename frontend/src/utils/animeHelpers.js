@@ -26,6 +26,21 @@ export const ANIME_SORTS = [
 
 export { ANIME_CACHE_KEY, ANIME_META_KEY };
 
+export const ANIME_KINDS = ['anime', 'tv', 'movie'];
+export const KIND_FILTER_KEY = 'mangashelf_anime_kind';
+export const LANGUAGE_FILTER_KEY = 'mangashelf_anime_language';
+// i18n
+const KIND_LABELS = { anime: 'Anime', tv: 'Serie', movie: 'Film' };
+// i18n
+const KIND_FILTER_LABELS = { [ALL_FILTER]: 'Alle', anime: 'Anime', tv: 'Serien', movie: 'Filme' };
+export const KIND_FILTERS = [ALL_FILTER, ...ANIME_KINDS];
+
+/** The kind of an entry or hit; a missing kind means anime. */
+export const kindOf = (anime) => (ANIME_KINDS.includes(anime?.kind) ? anime.kind : 'anime');
+export const isAnimeKind = (anime) => kindOf(anime) === 'anime';
+export const kindLabel = (kind) => (KIND_LABELS[kind] ? t(KIND_LABELS[kind]) : null);
+export const kindFilterLabel = (filter) => (KIND_FILTER_LABELS[filter] ? t(KIND_FILTER_LABELS[filter]) : filter);
+
 // i18n
 const FORMAT_LABELS = {
   TV: 'TV', TV_SHORT: 'TV (kurz)', MOVIE: 'Film', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special', MUSIC: 'Musik', UNKNOWN: 'Sonstiges'
@@ -55,8 +70,33 @@ export const formatYearLine = (anime) => [formatLabel(anime?.format), anime?.sea
 export const airedEpisodes = (anime) => (anime?.episodes > 0 ? null
   : (anime?.next_airing && !anime.next_airing.estimated && anime.next_airing.episode > 1 ? anime.next_airing.episode - 1 : null));
 
-/** True while the show still airs or is not out yet. */
-export const stillAiring = (anime) => anime?.status === 'RELEASING' || anime?.status === 'NOT_YET_RELEASED';
+/** True while "Gesehen" is locked: an anime that airs or is not out yet, a TV show while an unaired episode is counted. */
+export function stillAiring(anime) {
+  const kind = kindOf(anime);
+  if (kind === 'tv') return Boolean(anime.next_airing && anime.episodes > 0 && anime.next_airing.episode <= anime.episodes);
+  return kind === 'anime' && (anime?.status === 'RELEASING' || anime?.status === 'NOT_YET_RELEASED');
+}
+
+/** Season and episode of an absolute counter for a TV show with seasons ({ season, episode }); null for 0 or without seasons. */
+export function seasonEpisode(anime, watched) {
+  const n = Number(watched) || 0;
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
+  if (kindOf(anime) !== 'tv' || n <= 0 || !seasons.length) return null;
+  let before = 0;
+  for (const s of seasons) {
+    const count = Number(s.episode_count) || 0;
+    if (before + count >= n) return { season: s.season_number, episode: n - before };
+    before += count;
+  }
+  const last = seasons[seasons.length - 1];
+  return { season: last.season_number, episode: n - (before - (Number(last.episode_count) || 0)) };
+}
+
+/** 'S2E3' for a TV show with seasons, else null. */
+export function seasonEpisodeText(anime, watched) {
+  const at = seasonEpisode(anime, watched);
+  return at ? `S${at.season}E${at.episode}` : null;
+}
 
 /** '7 / 12', '12 / 1180+' with only the aired episodes known, '7 / ?' while the episode count is unknown. */
 export function progressText(watched, total, aired = null) {
@@ -79,14 +119,18 @@ const dayNumber = (date) => Date.UTC(date.getFullYear(), date.getMonth(), date.g
 
 /**
  * 'Folge 8 · heute 16:15', 'Folge 8 · morgen', 'Folge 8 · in 3 Tagen' by calendar days (like the release radar);
- * null without a date or for a past one. `estimated` adds nothing here (the card shows its own badge).
+ * null without a date or for a past one. `estimated` adds nothing here (the card shows its own badge). A TV show
+ * (`kind` 'tv') airs by date only: no clock time, and it counts as today until the day is over.
  */
-export function countdownText(nextAiring, now = new Date()) {
+export function countdownText(nextAiring, now = new Date(), kind = 'anime') {
   if (!nextAiring || !nextAiring.at) return null;
   const at = new Date(nextAiring.at * 1000);
-  if (Number.isNaN(at.getTime()) || at.getTime() < now.getTime() - 60 * 60 * 1000) return null;
+  if (Number.isNaN(at.getTime())) return null;
+  const dateOnly = kind === 'tv';
+  if (dateOnly ? dayNumber(at) < dayNumber(now) : at.getTime() < now.getTime() - 60 * 60 * 1000) return null;
   const days = dayNumber(at) - dayNumber(now);
-  const when = days <= 0 ? t('heute {time}', { time: formatTime(at) }) : days === 1 ? t('morgen') : tn('in {n} Tag', 'in {n} Tagen', days);
+  const today = dateOnly ? t('heute') : t('heute {time}', { time: formatTime(at) });
+  const when = days <= 0 ? today : days === 1 ? t('morgen') : tn('in {n} Tag', 'in {n} Tagen', days);
   return nextAiring.episode ? t('Folge {episode} · {when}', { episode: nextAiring.episode, when }) : t('Nächste Folge {when}', { when });
 }
 
@@ -102,19 +146,61 @@ export const initials = (name) => String(name || '?').slice(0, 2).toLowerCase();
 
 export const sourceBadges = (anime) => [
   anime?.anilist_id ? 'AniList' : null,
-  anime?.mal_id ? 'MAL' : null
+  anime?.mal_id ? 'MAL' : null,
+  anime?.tmdb_id ? 'TMDB' : null
 ].filter(Boolean);
+
+/** The watched language of my progress (ISO code) or null. */
+export const audioLanguageOf = (anime) => anime?.my_progress?.audio_language || null;
+
+/** The watched languages present in the list, sorted. */
+export const audioLanguagesOf = (list) => [...new Set((list || []).map(audioLanguageOf).filter(Boolean))].sort();
+
+/** True when the list holds a TV show or a film. */
+export const hasOtherKinds = (list) => (list || []).some((anime) => !isAnimeKind(anime));
+
+/** A stored per-device value, `fallback` when missing, unreadable or refused by `valid`. */
+export function readSetting(key, fallback, valid = () => true) {
+  try {
+    const value = localStorage.getItem(key);
+    return value !== null && valid(value) ? value : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+export function writeSetting(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (_) { /* storage unavailable */ }
+}
 
 const searchIndex = createSearch((anime) => ({
   primary: [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native],
   secondary: [...(anime.studios || []), ...(anime.genres || []), anime.notes]
 }));
 
-/** Filter (status of my progress), search and sort of the list; never mutates. */
-export function filterAnime(list, { search = '', filter: rawFilter = ALL_FILTER, sort = 'title' } = {}) {
+/** Entries of one kind and one watched language ('all' for each lets everything through). */
+export function filterKindLanguage(list, { kind = ALL_FILTER, language = ALL_FILTER } = {}) {
+  return (list || []).filter((anime) => (kind === ALL_FILTER || kindOf(anime) === kind)
+    && (language === ALL_FILTER || audioLanguageOf(anime) === language));
+}
+
+/** Counts per kind for the kind chips. */
+export function kindCounts(list) {
+  const counts = Object.fromEntries(KIND_FILTERS.map((f) => [f, 0]));
+  for (const anime of list || []) {
+    counts[ALL_FILTER]++;
+    counts[kindOf(anime)]++;
+  }
+  return counts;
+}
+
+/** Filter (kind, watched language, status of my progress), search and sort of the list; never mutates. */
+export function filterAnime(list, { search = '', filter: rawFilter = ALL_FILTER, sort = 'title', kind = ALL_FILTER, language = ALL_FILTER } = {}) {
   const query = search.trim();
   const filter = normalizeAnimeFilter(rawFilter);
-  let rows = (list || []).filter((anime) => {
+  let rows = filterKindLanguage(list, { kind, language }).filter((anime) => {
     const mine = anime.my_progress?.status || null;
     if (filter === NO_STATUS && mine) return false;
     if (filter !== ALL_FILTER && filter !== NO_STATUS && mine !== filter) return false;
@@ -185,6 +271,8 @@ export function predictProgress(current, change, total) {
     score: change.score !== undefined ? change.score : base.score,
     notes: change.notes !== undefined ? change.notes : base.notes
   };
+  if (change.audio_language !== undefined) next.audio_language = change.audio_language;
+  if (change.subtitle_language !== undefined) next.subtitle_language = change.subtitle_language;
   if (status !== 'Gesehen') next.finished_at = null;
   if (status === 'Geplant') next.started_at = null;
   // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
@@ -217,7 +305,7 @@ const crunchyroll = () => links.SERVICES.find((s) => s.id === 'crunchyroll');
  * null when there is nothing left to watch. The card passes `search: false`: a search alone is no reason for a button.
  */
 export function continueTarget(anime, { search = true } = {}) {
-  if (!anime) return null;
+  if (!anime || !isAnimeKind(anime)) return null;
   const mine = anime.my_progress;
   if (mine?.status === 'Gesehen') return null;
   if (anime.episodes > 0 && (mine?.episodes_watched || 0) >= anime.episodes) return null;

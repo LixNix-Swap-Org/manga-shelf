@@ -446,6 +446,14 @@ describe('ShareLinkDialog', () => {
     gate.release();
   });
 
+  it('the list picker offers anime only, never a TV show or a film', async () => {
+    stubApi({ list: [entry(), entry({ id: 2, title: 'Breaking Bad', kind: 'tv' }), entry({ id: 3, title: 'Dandadan' }), entry({ id: 4, title: 'Dune', kind: 'movie' })], answer: answerOf({ anime_id: null, match: null, candidates: [] }) });
+    await loadHarness();
+    act(() => { harness.share.start({ text: EPISODE_URL }); });
+    const select = await screen.findByLabelText('Eintrag aus der Liste');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['–', 'Dandadan', 'Frieren']);
+  });
+
   it('an episode above the entry\'s total warns and offers another entry, the number field and "Trotzdem als komplett markieren"', async () => {
     const api = stubApi({ list: [entry({ episodes: 12 })], answer: answerOf({ episode: 29, entry: { ...matched, episodes: 12 } }) });
     await loadHarness();

@@ -593,6 +593,35 @@ test('pruning keeps the backup an unconfirmed update needs, also across restarts
     }
 });
 
+test('pruning keeps the rollback anchor and every downgrade backup; without heldBackups (swap window) it deletes no vor-update file', () => {
+    const version = require('../package.json').version;
+    const stateModule = require('../services/update/state');
+    clearBackups();
+    const anchor = fakeSnapshot(`vor-update-v3.1.0-auf-v${version}`, 1);
+    const downgrade = fakeSnapshot(`vor-update-v${version}-auf-v3.1.0`, 2);
+    const others = [3, 4, 5, 6].map(d => fakeSnapshot(`vor-update-v3.0.${d}-auf-v3.0.${d + 1}`, d));
+    try {
+        fs.writeFileSync(path.join(ctx.dataDir, 'update-state.json'), JSON.stringify({
+            format: 1, phase: 'confirmed', mode: 'sea-user', restart: 'supervised', from: '3.1.0', to: version, at: new Date().toISOString(), user: 1, pid: 1,
+            schema_before: 1, backup: { file: anchor, sha256: 'a'.repeat(64) }, previous: { sha256: 'b'.repeat(64) }, attempts: 0, exec_path: '/x'
+        }));
+        assert.deepEqual(scheduler.updateBackups(), { hold: [], anchor });
+        const saved = stateModule.heldBackups;
+        delete stateModule.heldBackups;
+        try {
+            assert.equal(scheduler.updateBackups(), null);
+            scheduler.pruneBackups('vor-update', 1);
+            assert.equal(zipFiles().length, 6, 'no vor-update file is deleted');
+        } finally {
+            stateModule.heldBackups = saved;
+        }
+        scheduler.pruneBackups('vor-update', 1);
+        assert.deepEqual(zipFiles(), [anchor, downgrade, others[3]].sort());
+    } finally {
+        fs.rmSync(path.join(ctx.dataDir, 'update-state.json'), { force: true });
+    }
+});
+
 test('the startup sweep removes leftover update downloads and db-check copies, but not the running download', () => {
     const update = require('../services/update');
     const stage = require('../services/update/stage');

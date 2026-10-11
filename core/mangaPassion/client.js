@@ -183,7 +183,8 @@ async function searchMangaPassionEditions(ctx, title, publisher = '', totalVolum
     } catch (err) {
       failed++;
       cutShort = true;
-      log(ctx).warn(`Manga Passion edition search for "${q}" failed, skipping the remaining queries:`, err);
+      if (opts.signal?.aborted) log(ctx).debug(`Manga Passion edition search for "${q}" aborted`);
+      else log(ctx).warn(`Manga Passion edition search for "${q}" failed, skipping the remaining queries:`, err);
       return null;
     }
     if (!res.ok) {
@@ -201,7 +202,8 @@ async function searchMangaPassionEditions(ctx, title, publisher = '', totalVolum
     } catch (err) {
       failed++;
       if (isNetworkError(err)) cutShort = true;
-      log(ctx).warn(`Manga Passion edition search for "${q}" returned an unreadable answer:`, err);
+      if (opts.signal?.aborted) log(ctx).debug(`Manga Passion edition search for "${q}" aborted`);
+      else log(ctx).warn(`Manga Passion edition search for "${q}" returned an unreadable answer:`, err);
       return null;
     }
     consecutiveFailures = 0;
@@ -433,7 +435,7 @@ async function getEditionDetailsAndVolumes(ctx, editionId, forceRefresh = false)
 }
 
 /** Edition metadata only (no volume pages). Reuses a fresh full edition entry; failures are not cached. */
-async function getEditionInfo(ctx, editionId) {
+async function getEditionInfo(ctx, editionId, { signal, timeoutMs } = {}) {
   const id = toEditionId(editionId);
   if (!id) return null;
   const full = readCache(ctx, `mp_edition_vols_${id}`, EDITION_CACHE_TTL_MS);
@@ -444,7 +446,7 @@ async function getEditionInfo(ctx, editionId) {
   if (cached) return cached.notFound ? null : normalizeEdition(cached.edition);
 
   try {
-    const res = await fetchWithTimeout(ctx, `${API_BASE}/editions/${id}`, { headers: mpHeaders(ctx) });
+    const res = await fetchWithTimeout(ctx, `${API_BASE}/editions/${id}`, { headers: mpHeaders(ctx), signal }, timeoutMs || REQUEST_TIMEOUT_MS);
     if (res.status === 404) {
       writeCache(ctx, cacheKey, { notFound: true });
       return null;
@@ -454,7 +456,8 @@ async function getEditionInfo(ctx, editionId) {
     writeCache(ctx, cacheKey, { edition });
     return edition;
   } catch (err) {
-    log(ctx).warn(`Failed to fetch details for edition ${id}:`, err);
+    if (signal?.aborted) log(ctx).debug(`Fetching details for edition ${id} aborted`);
+    else log(ctx).warn(`Failed to fetch details for edition ${id}:`, err);
     return null;
   }
 }
@@ -468,7 +471,7 @@ async function searchMangaPassionForLookup(ctx, queryTerm, opts = {}) {
   if (!searchRes.candidates || searchRes.candidates.length === 0) return [];
 
   const top = searchRes.candidates.filter(c => c.score >= 0).slice(0, 5);
-  const editions = await Promise.all(top.map(c => (c.score >= LOOKUP_DETAIL_MIN_SCORE ? getEditionInfo(ctx, c.id) : null)));
+  const editions = await Promise.all(top.map(c => (c.score >= LOOKUP_DETAIL_MIN_SCORE ? getEditionInfo(ctx, c.id, { signal: opts.signal, timeoutMs: opts.requestTimeoutMs }) : null)));
 
   return top.map((cand, i) => {
     const ed = editions[i] || {};

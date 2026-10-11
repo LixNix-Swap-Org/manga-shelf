@@ -21,7 +21,8 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
     if (!anime) return null;
     const stored = readProgress(ctx, animeId, userId);
     const current = stored
-        || { status: 'Geplant', episodes_watched: 0, score: null, notes: null, started_at: null, finished_at: null, resume_url: null, resume_episode: null };
+        || { status: 'Geplant', episodes_watched: 0, score: null, notes: null, started_at: null, finished_at: null, resume_url: null, resume_episode: null,
+            audio_language: null, subtitle_language: null };
     const total = anime.episodes > 0 ? anime.episodes : null;
     let watched = change.episodes_watched;
     if (monotonic && watched !== undefined && watched < current.episodes_watched) watched = undefined;
@@ -50,14 +51,18 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
         resumeUrl = null;
         resumeEpisode = null;
     }
+    const audio = change.audio_language === undefined ? current.audio_language ?? null : change.audio_language;
+    const subtitle = change.subtitle_language === undefined ? current.subtitle_language ?? null : change.subtitle_language;
     ctx.db.prepare(`
-        INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, notes, started_at, finished_at, updated_at, resume_url, resume_episode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, notes, started_at, finished_at, updated_at, resume_url, resume_episode,
+            audio_language, subtitle_language)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (anime_id, user_id) DO UPDATE SET status = excluded.status, episodes_watched = excluded.episodes_watched,
             score = excluded.score, notes = excluded.notes, started_at = excluded.started_at, finished_at = excluded.finished_at,
-            updated_at = excluded.updated_at, resume_url = excluded.resume_url, resume_episode = excluded.resume_episode
+            updated_at = excluded.updated_at, resume_url = excluded.resume_url, resume_episode = excluded.resume_episode,
+            audio_language = excluded.audio_language, subtitle_language = excluded.subtitle_language
     `).run(animeId, userId, status, episodes, change.score === undefined ? current.score : change.score,
-        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode);
+        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle);
     return readProgress(ctx, animeId, userId);
 }
 

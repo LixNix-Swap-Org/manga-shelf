@@ -9,6 +9,7 @@ const WEEK = 7 * DAY;
 
 const STATUSES = ['FINISHED', 'RELEASING', 'NOT_YET_RELEASED', 'CANCELLED', 'HIATUS'];
 const FORMATS = ['TV', 'TV_SHORT', 'MOVIE', 'OVA', 'ONA', 'SPECIAL', 'MUSIC'];
+const URL_KEYS = ['anilist', 'mal', 'tmdb', 'imdb'];
 
 /** ä→a, ö→o, ü→u, ß→ss (AniList's search does not match umlauts). */
 function foldUmlauts(text) {
@@ -167,10 +168,11 @@ function mergeMeta(base, extra) {
         title,
         synonyms: [...new Set([...(base.synonyms || []), ...(extra.synonyms || [])])],
         source: 'merged',
-        urls: { anilist: pick(base.urls?.anilist, extra.urls?.anilist), mal: pick(base.urls?.mal, extra.urls?.mal) }
+        urls: Object.fromEntries(URL_KEYS.map((key) => [key, pick(base.urls?.[key], extra.urls?.[key]) ?? null]))
     };
     for (const key of ['format', 'episodes', 'duration', 'status', 'season', 'season_year', 'start_date', 'end_date', 'cover_url',
-        'banner_url', 'genres', 'studios', 'score', 'description', 'relations', 'external_links', 'streaming_episodes']) {
+        'banner_url', 'genres', 'studios', 'score', 'description', 'relations', 'external_links', 'streaming_episodes', 'kind', 'tmdb_id',
+        'tmdb_kind', 'imdb_id', 'original_language', 'spoken_languages', 'seasons', 'tmdb_genre_ids']) {
         merged[key] = pick(base[key], extra[key]);
     }
     if (!base.next_airing && extra.next_airing) {
@@ -201,20 +203,70 @@ function mergeResults(primary, secondary) {
 }
 
 /** Empty AnimeMeta with the given fields set (adapters fill it). */
-function emptyMeta(fields) {
+function emptyMeta(fields = {}) {
     return {
-        mal_id: null, anilist_id: null,
+        kind: 'anime', mal_id: null, anilist_id: null, tmdb_id: null, tmdb_kind: null, imdb_id: null,
         title: { romaji: null, english: null, native: null, preferred: null }, synonyms: [],
         format: null, episodes: null, duration: null, status: null, season: null, season_year: null, start_date: null, end_date: null,
         cover_url: null, banner_url: null, genres: [], studios: [], score: null, description: null,
-        next_airing: null, next_airing_estimated: false, relations: [], urls: { anilist: null, mal: null },
+        next_airing: null, next_airing_estimated: false, relations: [],
         external_links: [], streaming_episodes: [],
+        original_language: null, spoken_languages: [], seasons: [], tmdb_genre_ids: [],
         source: null, fetched_at: null,
-        ...fields
+        ...fields,
+        urls: { anilist: null, mal: null, tmdb: null, imdb: null, ...(fields.urls || {}) }
     };
+}
+
+const ANIMATION_GENRE = 16;
+
+/** A TMDb hit that is an anime (Japanese, genre Animation). */
+const isTmdbAnime = (meta) => Boolean(meta && meta.tmdb_id && meta.original_language === 'ja' && (meta.tmdb_genre_ids || []).includes(ANIMATION_GENRE));
+
+/** Year of a meta or a stored row: season_year, else the year of start_date. */
+function yearOf(meta) {
+    if (meta && meta.season_year) return Number(meta.season_year);
+    const start = meta && typeof meta.start_date === 'string' ? /^(\d{4})/.exec(meta.start_date) : null;
+    return start ? Number(start[1]) : null;
+}
+
+/** Best titleScore of a TMDb hit's titles (localised and original) against `titles`. */
+const tmdbTwinScore = (meta, titles) => Math.max(0, ...[meta.title?.english, meta.title?.native].filter(Boolean).map((t) => titleScore(t, titles)));
+
+/** TMDb anime hits folded into the same-year AniList hit whose titles match at 0.9 or more: { metas, rest }. */
+function foldTmdbHits(metas, tmdbMetas) {
+    const out = metas.slice();
+    const rest = [];
+    for (const hit of tmdbMetas) {
+        const year = yearOf(hit);
+        let best = -1;
+        let bestScore = 0;
+        if (isTmdbAnime(hit) && year) {
+            out.forEach((meta, i) => {
+                if (!meta.anilist_id || yearOf(meta) !== year) return;
+                const score = tmdbTwinScore(hit, allTitles(meta));
+                if (score >= 0.9 && score > bestScore) {
+                    best = i;
+                    bestScore = score;
+                }
+            });
+        }
+        if (best < 0) {
+            rest.push(hit);
+            continue;
+        }
+        const target = out[best];
+        out[best] = {
+            ...target,
+            also_on: [...new Set([...(target.also_on || []), 'tmdb'])],
+            folded_tmdb: target.folded_tmdb || { tmdb_kind: hit.tmdb_kind, tmdb_id: hit.tmdb_id }
+        };
+    }
+    return { metas: out, rest };
 }
 
 module.exports = {
     STATUSES, FORMATS, MINUTE, HOUR, DAY, foldUmlauts, searchKey, titleScore, keyScore, rankByTitle, allTitles, fuzzyDate, isoDay,
-    cleanDescription, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta
+    cleanDescription, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta, isTmdbAnime, yearOf,
+    tmdbTwinScore, foldTmdbHits
 };

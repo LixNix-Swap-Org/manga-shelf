@@ -11,9 +11,10 @@ import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
   PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
-  continueTarget, airedEpisodes, stillAiring
+  continueTarget, airedEpisodes, stillAiring, kindOf, kindLabel, seasonEpisodeText, ANIME_KINDS
 } from '../../utils/animeHelpers';
 import { animeProgressLabel } from '../../utils/enumLabels';
+import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
 import { t } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -29,19 +30,37 @@ function MetaRow({ label, children }) {
   );
 }
 
-/** Own progress: counter, status, score and note, saved together. */
+function WatchLanguageSelect({ id, label, value, onChange }) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-[11px] text-slate-400 mb-1">{label}</label>
+      <select id={id} className="input-field text-base sm:text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{t('Keine Angabe')}</option>
+        {withCurrent(EDITION_LANGUAGES, value).map((code) => <option key={code} value={code}>{languageName(code)}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** Own progress: counter, status, score, watched languages and note, saved together. */
 function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
   const ids = useId();
   const [episodes, setEpisodes] = useState(progress?.episodes_watched ?? 0);
   const [status, setStatus] = useState(progress?.status || 'Geplant'); // i18n-ignore: stored value
   const [score, setScore] = useState(progress?.score ? String(progress.score) : '');
   const [notes, setNotes] = useState(progress?.notes || '');
+  const [audio, setAudio] = useState(progress?.audio_language || '');
+  const [subtitle, setSubtitle] = useState(progress?.subtitle_language || '');
   useEffect(() => {
     setEpisodes(progress?.episodes_watched ?? 0);
     setStatus(progress?.status || 'Geplant'); // i18n-ignore: stored value
     setScore(progress?.score ? String(progress.score) : '');
     setNotes(progress?.notes || '');
+    setAudio(progress?.audio_language || '');
+    setSubtitle(progress?.subtitle_language || '');
   }, [progress]);
+  const movie = kindOf(anime) === 'movie';
+  const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
   const aired = airedEpisodes(anime);
   const airing = stillAiring(anime);
@@ -53,21 +72,24 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     if (status !== (progress?.status || 'Geplant')) change.status = status; // i18n-ignore: stored value
     if ((score ? Number(score) : null) !== (progress?.score ?? null)) change.score = score ? Number(score) : null;
     if ((notes.trim() || null) !== (progress?.notes ?? null)) change.notes = notes.trim() || null;
+    if ((audio || null) !== (progress?.audio_language ?? null)) change.audio_language = audio || null;
+    if ((subtitle || null) !== (progress?.subtitle_language ?? null)) change.subtitle_language = subtitle || null;
     if (!progress && !Object.keys(change).length) change.status = status;
     onSave(change);
   };
   return (
     <form onSubmit={save} className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <div>
+        {!movie && <div>
           <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired }) : t('Gesehene Folgen')}</label>
           <div className="flex items-center gap-1">
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => setEpisodes((n) => clamp(Number(n) - 1))}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             <input id={`${ids}-ep`} type="number" min="0" max={max} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}
               onChange={(e) => setEpisodes(e.target.value === '' ? '' : clamp(parseInt(e.target.value, 10) || 0))} />
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge mehr')} onClick={() => setEpisodes((n) => clamp(Number(n) + 1))}><Plus className="w-3.5 h-3.5" aria-hidden="true" /></button>
+            {episodeAt && <span className="text-xs font-mono text-slate-300 ml-1">{episodeAt}</span>}
           </div>
-        </div>
+        </div>}
         <div>
           <label htmlFor={`${ids}-status`} className="block text-[11px] text-slate-400 mb-1">{t('Status')}</label>
           <select id={`${ids}-status`} className="input-field text-base sm:text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -84,6 +106,8 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
             {Array.from({ length: 10 }, (_, i) => String(10 - i)).map((v) => <option key={v} value={v}>{v} / 10</option>)}
           </select>
         </div>
+        <WatchLanguageSelect id={`${ids}-audio`} label={t('Gesehen auf')} value={audio} onChange={setAudio} />
+        <WatchLanguageSelect id={`${ids}-subtitle`} label={t('Untertitel')} value={subtitle} onChange={setSubtitle} />
       </div>
       <div>
         <label htmlFor={`${ids}-notes`} className="block text-[11px] text-slate-400 mb-1">{t('Meine Notiz')}</label>
@@ -197,7 +221,10 @@ export default function AnimeDetailModal({
       action: {
         label: t('Rückgängig'),
         onClick: async () => {
-          const saved = await updateProgress(id, { status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes, restore: true });
+          const saved = await updateProgress(id, {
+            status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes,
+            audio_language: prev.audio_language ?? null, subtitle_language: prev.subtitle_language ?? null, restore: true
+          });
           if (saved && latest.current?.animeId === id) latest.current.load();
         }
       }
@@ -205,6 +232,7 @@ export default function AnimeDetailModal({
   });
 
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
+  const saveKind = (value) => run(async () => setDetail(await update(animeId, { kind: value })));
   const saveTitle = (e) => {
     e.preventDefault();
     run(async () => setDetail(await update(animeId, { title_de: titleDe.trim() || null })));
@@ -212,7 +240,9 @@ export default function AnimeDetailModal({
 
   const description = shortDescription(anime?.description);
   const stale = anime ? staleText(anime) : null;
-  const countdown = anime ? countdownText(anime.next_airing) : null;
+  const kind = anime ? kindOf(anime) : 'anime';
+  const countdown = anime ? countdownText(anime.next_airing, undefined, kind) : null;
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
   const relations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
   const next = continueTarget(anime);
@@ -253,18 +283,25 @@ export default function AnimeDetailModal({
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <dl className="space-y-1.5">
-                  <MetaRow label={t('Format')}>{[formatLabel(anime.format), anime.season_year].filter(Boolean).join(' · ') || null}</MetaRow>
-                  <MetaRow label={t('Status')}>{airingStatusLabel(anime.status)}</MetaRow>
-                  <MetaRow label={t('Folgen')}>{anime.episodes ? (anime.duration ? t('{episodes} à {duration} Min.', { episodes: anime.episodes, duration: anime.duration }) : `${anime.episodes}`) : null}</MetaRow>
-                  <MetaRow label={t('Nächste Folge')}>{countdown ? (anime.next_airing?.estimated ? t('{countdown} (geschätzt)', { countdown }) : `${countdown}`) : null}</MetaRow>
-                  <MetaRow label={t('Studio')}>{(anime.studios || []).join(', ') || null}</MetaRow>
-                  <MetaRow label={t('Genres')}>{(anime.genres || []).join(', ') || null}</MetaRow>
-                  <MetaRow label={t('Wertung')}>{anime.score ? `${anime.score} / 100` : null}</MetaRow>
-                  <MetaRow label={t('Reihe')}>
-                    {anime.manga ? <Link to={`/manga/${anime.manga.id}`} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{anime.manga.title}</Link> : null}
-                  </MetaRow>
-                </dl>
+                <div className="space-y-1.5">
+                  <dl className="space-y-1.5">
+                    <MetaRow label={t('Art')}>{kindLabel(kind)}</MetaRow>
+                    <MetaRow label={t('Format')}>{[formatLabel(anime.format), anime.season_year].filter(Boolean).join(' · ') || null}</MetaRow>
+                    <MetaRow label={t('Status')}>{airingStatusLabel(anime.status)}</MetaRow>
+                    {kind === 'anime' || (kind === 'tv' && !seasons.length) ? (
+                      <MetaRow label={t('Folgen')}>{anime.episodes ? (anime.duration ? t('{episodes} à {duration} Min.', { episodes: anime.episodes, duration: anime.duration }) : `${anime.episodes}`) : null}</MetaRow>
+                    ) : null}
+                    <MetaRow label={t('Nächste Folge')}>{countdown ? (anime.next_airing?.estimated ? t('{countdown} (geschätzt)', { countdown }) : `${countdown}`) : null}</MetaRow>
+                    <MetaRow label={t('Studio')}>{(anime.studios || []).join(', ') || null}</MetaRow>
+                    <MetaRow label={t('Genres')}>{(anime.genres || []).join(', ') || null}</MetaRow>
+                    <MetaRow label={t('Wertung')}>{anime.score ? `${anime.score} / 100` : null}</MetaRow>
+                    <MetaRow label={t('Reihe')}>
+                      {anime.manga ? <Link to={`/manga/${anime.manga.id}`} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{anime.manga.title}</Link> : null}
+                    </MetaRow>
+                  </dl>
+                  {kind === 'tv' && seasons.length > 0 && <p className="text-xs text-slate-200">{t('Staffeln: {n} · Folgen: {m}', { n: seasons.length, m: anime.episodes || 0 })}</p>}
+                  {kind === 'movie' && anime.duration ? <p className="text-xs text-slate-200">{t('Laufzeit: {n} Min.', { n: anime.duration })}</p> : null}
+                </div>
                 <div className="space-y-2">
                   {next && ( // i18n-ignore: continueTarget() returns the label translated
                     <a
@@ -282,6 +319,8 @@ export default function AnimeDetailModal({
                   <div className="flex flex-wrap gap-2">
                     {anime.urls?.anilist && <a href={anime.urls.anilist} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">AniList <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}
                     {anime.urls?.mal && <a href={anime.urls.mal} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">MyAnimeList <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}
+                    {anime.urls?.imdb && <a href={anime.urls.imdb} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">IMDb <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}
+                    {anime.urls?.tmdb && <a href={anime.urls.tmdb} target="_blank" rel="noreferrer noopener" className="btn-secondary text-xs inline-flex items-center gap-1">TMDB <ExternalLink className="w-3 h-3" aria-hidden="true" /></a>}
                   </div>
                   {stale && <p className="text-[11px] text-slate-400">{stale}</p>}
                   {canEdit && !anime.manual && (
@@ -315,7 +354,7 @@ export default function AnimeDetailModal({
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
                         <span className="font-semibold text-slate-100 w-28 truncate">{p.username}</span>
                         <span>{animeProgressLabel(p.status)}</span>
-                        <span className="font-mono">{progressText(p.episodes_watched, anime.episodes, aired)}</span>
+                        {kind !== 'movie' && <span className="font-mono">{seasonEpisodeText(anime, p.episodes_watched) || progressText(p.episodes_watched, anime.episodes, aired)}</span>}
                         {p.score ? <span>{p.score}/10</span> : null}
                       </li>
                     ))}
@@ -361,6 +400,14 @@ export default function AnimeDetailModal({
                       {sortedMangas.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
                     </select>
                   </div>
+                  {anime.manual && (
+                    <div>
+                      <label htmlFor={`${titleId}-kind`} className="block text-[11px] text-slate-400 mb-1">{t('Art')}</label>
+                      <select id={`${titleId}-kind`} className="input-field text-base sm:text-sm" value={kind} disabled={busy} onChange={(e) => saveKind(e.target.value)}>
+                        {ANIME_KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="sm:col-span-2 flex justify-end">
                     <button type="button" className="btn-secondary text-xs text-red-300 inline-flex items-center gap-1" onClick={doDelete} disabled={busy}>
                       <Trash className="w-3.5 h-3.5" aria-hidden="true" /> {t('Für alle löschen')}

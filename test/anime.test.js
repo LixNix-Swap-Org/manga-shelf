@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { startTestServer } = require('./helpers');
-const { fakeFetch, aniListFixtures, jikanFixtures } = require('./anime/helpers');
+const { fakeFetch, aniListFixtures, jikanFixtures, tmdbFixtures } = require('./anime/helpers');
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
 const realFetch = global.fetch;
@@ -18,7 +18,7 @@ let sources;
 
 test.before(async () => {
     ctx = await startTestServer();
-    sources = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    sources = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures, tmdb: tmdbFixtures });
     global.fetch = (url, init) => (String(url).startsWith(ctx.root) ? realFetch(url, init) : sources.fetch(url, init));
     admin = ctx.client();
     assert.equal((await admin('POST', '/setup', { username: 'admin', password: 'password123' })).status, 200);
@@ -297,11 +297,11 @@ test('CSV export: semicolons, BOM, formula guard, the caller\'s progress', async
     assert.match(res.headers.get('content-type'), /text\/csv/);
     assert.match(res.headers.get('content-disposition'), /manga-shelf-anime-\d{4}-\d{2}-\d{2}\.csv/);
     const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(await res.arrayBuffer());
-    assert.ok(text.startsWith('﻿Titel;Deutscher Titel;AniList-ID;MAL-ID;Format;Folgen;Status;Jahr;Studios;Genres;Mein Status;Gesehene Folgen;Bewertung;Notizen'));
+    assert.ok(text.startsWith('﻿Titel;Deutscher Titel;AniList-ID;MAL-ID;Format;Folgen;Status;Jahr;Studios;Genres;Mein Status;Gesehene Folgen;Bewertung;Notizen;Sprache (Ton);Sprache (Untertitel);Art\r\n'));
     assert.match(text, /'=HYPERLINK/);
     const frieren = text.split('\r\n').find((l) => l.includes('154587'));
     assert.match(frieren, /;52991;TV;28;FINISHED;2023;/);
-    assert.match(frieren, /;Schaue;2;;$/, 'progress row was recreated without a score');
+    assert.match(frieren, /;Schaue;2;;;;;anime$/, 'progress row was recreated without a score');
 });
 
 test('adaptations of a series and the sources state', async () => {
@@ -364,7 +364,7 @@ test('create with watched: one request adds the entry and the episode; above the
         ['Schaue', 3, url, null, 28]);
     assert.ok(db.prepare("SELECT 1 FROM anime_links WHERE anime_id = ? AND service = 'crunchyroll:season:1' AND external_id = 'GZZZZZZZ1:1'").get(res.body.id));
     const duplicate = await admin('POST', '/anime', { anilist_id: 154587, watched: { episode: 4 } });
-    assert.deepEqual([duplicate.status, duplicate.body.code, duplicate.body.id], [409, 'DUPLICATE', res.body.id]);
+    assert.deepEqual([duplicate.status, duplicate.body.code, duplicate.body.id, duplicate.body.error], [409, 'DUPLICATE', res.body.id, 'Dieser Anime ist schon in der Liste']);
 
     await mia('PUT', `/anime/${res.body.id}/progress`, { status: 'Geplant' });
     assert.equal((await admin('POST', '/anime/watch-sync/undo', { anime_id: res.body.id })).body.code, 'UNDO_EXPIRED', 'someone else has a row');
@@ -393,4 +393,81 @@ test('DELETE progress with ?decline=1 records the declines of the user whose row
     assert.deepEqual(declined('admin'), [], 'a confirmed season lifts it');
     await admin('DELETE', `/anime/${id}`);
     assert.deepEqual(declined('admin'), ['GABLEHN01:1'], 'deleting the entry declines its season links');
+});
+
+test('films and TV shows: search parameters, TMDb hits in the collection, create by tmdb_id, kinds, watched languages, CSV, stats', async () => {
+    const tmdbUrl = () => sources.calls.filter((c) => c.host === 'tmdb').at(-1).url;
+    assert.equal((await admin('GET', '/anime/search?q=Frieren&sources=anilist,kitsu')).status, 400);
+    assert.deepEqual([(await admin('GET', '/anime/search?q=Frieren&kind=serie')).body.code], ['BAD_REQUEST']);
+    const keyless = await admin('GET', '/anime/search?q=Frieren&kind=tv');
+    assert.deepEqual([keyless.status, keyless.body.results, keyless.body.sources_available], [200, [], ['anilist', 'mal']]);
+    assert.equal((await admin('PUT', '/auth/api-keys/tmdb', { secret: '0123456789abcdef0123456789abcdef' })).status, 200);
+    assert.equal((await admin('GET', '/anime/sources')).body.tmdb.available, true);
+
+    const ani = await admin('POST', '/anime', { anilist_id: 154587 });
+    assert.equal(ani.status, 201);
+    const shows = await admin('GET', '/anime/search?q=Frieren&kind=tv&language=en');
+    assert.deepEqual(shows.body.sources_used, ['tmdb']);
+    assert.match(tmdbUrl(), /language=en-US&page=1&api_key=/);
+    assert.equal(shows.body.results.find((r) => r.tmdb_id === 209867).in_collection_id, ani.body.id, 'the AniList entry of the same show');
+    assert.equal(shows.body.results.find((r) => r.tmdb_id === 300400).in_collection_id, null);
+    const all = await admin('GET', '/anime/search?q=Frieren');
+    assert.match(tmdbUrl(), /language=de-DE/, 'without a language: the user\'s locale, else German');
+    const folded = all.body.results.find((r) => r.anilist_id === 154587);
+    assert.deepEqual([folded.also_on, folded.folded_tmdb, folded.in_collection_id], [['tmdb'], { tmdb_kind: 'tv', tmdb_id: 209867 }, ani.body.id]);
+
+    assert.equal((await admin('POST', '/anime', { tmdb_id: 209867, tmdb_kind: 'season' })).status, 400);
+    assert.equal((await admin('POST', '/anime', { tmdb_kind: 'tv' })).status, 400);
+    assert.equal((await admin('POST', '/anime', { tmdb_id: 209867, tmdb_kind: 'tv', anilist_id: 154587 })).status, 400);
+    const show = await admin('POST', '/anime', { tmdb_id: 209867, tmdb_kind: 'tv', title: 'Frieren – Nach dem Ende der Reise' });
+    assert.equal(show.status, 201, JSON.stringify(show.body));
+    const s = show.body;
+    assert.deepEqual([s.kind, s.manual, s.tmdb_id, s.tmdb_kind, s.title, s.title_english, s.episodes, s.imdb_id, s.original_language, s.spoken_languages],
+        ['tv', false, 209867, 'tv', 'Frieren – Nach dem Ende der Reise', "Frieren: Beyond Journey's End", 38, 'tt22248376', 'ja', ['ja']]);
+    assert.deepEqual(s.seasons.map((x) => [x.season_number, x.episode_count]), [[1, 28], [2, 10], [3, 12]]);
+    assert.deepEqual([s.urls.tmdb, s.urls.imdb], ['https://www.themoviedb.org/tv/209867', 'https://www.imdb.com/title/tt22248376/']);
+    assert.equal(s.cover_image, 'https://image.tmdb.org/t/p/w342/dqZENchTd7lp5zht7BdlqM7RBhD.jpg', 'hotlinked, not copied');
+    assert.deepEqual([s.next_airing.episode, s.next_airing.estimated, s.watch.search_url], [39, true, null]);
+    const again = await admin('POST', '/anime', { tmdb_id: 209867, tmdb_kind: 'tv' });
+    assert.deepEqual([again.status, again.body.code, again.body.id, again.body.error], [409, 'DUPLICATE', s.id, 'Dieser Eintrag ist schon in der Liste']);
+    const unknown = await admin('POST', '/anime', { tmdb_id: 999999, tmdb_kind: 'movie' });
+    assert.deepEqual([unknown.status, unknown.body.error], [404, 'Eintrag bei TMDB nicht gefunden']);
+    assert.equal((await admin('GET', '/anime/search?q=Frieren&kind=tv')).body.results.find((r) => r.tmdb_id === 209867).in_collection_id, s.id);
+    assert.equal((await admin('PUT', `/anime/${s.id}`, { episodes: 40 })).status, 400);
+    assert.equal((await admin('PUT', `/anime/${s.id}`, { kind: 'movie' })).status, 400);
+    assert.equal((await admin('POST', `/anime/${s.id}/refresh`)).body.refreshed, true);
+
+    assert.deepEqual((await admin('PUT', `/anime/${s.id}/progress`, { status: 'Gesehen' })).body.episodes_watched, 38, 'between seasons');
+    db.prepare('UPDATE animes SET next_airing_episode = 30 WHERE id = ?').run(s.id);
+    assert.deepEqual([(await admin('PUT', `/anime/${s.id}/progress`, { status: 'Gesehen' })).body.code], ['STILL_AIRING']);
+    let progress = (await admin('PUT', `/anime/${s.id}/progress`, { audio_language: 'JA', subtitle_language: 'de' })).body;
+    assert.deepEqual([progress.audio_language, progress.subtitle_language], ['ja', 'de']);
+    assert.deepEqual([(await admin('PUT', `/anime/${s.id}/progress`, { audio_language: 'xx' })).body.code], ['LANGUAGE_INVALID']);
+    progress = (await admin('PUT', `/anime/${s.id}/progress`, { score: 8 })).body;
+    assert.deepEqual([progress.audio_language, progress.subtitle_language], ['ja', 'de'], 'kept when not sent');
+    progress = (await admin('PUT', `/anime/${s.id}/progress`, { subtitle_language: null })).body;
+    assert.deepEqual([progress.audio_language, progress.subtitle_language], ['ja', null]);
+    assert.equal((await admin('GET', '/anime')).body.find((e) => e.id === s.id).my_progress.audio_language, 'ja');
+
+    assert.equal((await admin('POST', '/anime', { title: 'Heimkino', kind: 'film' })).status, 400);
+    const film = (await admin('POST', '/anime', { title: 'Heimkino', kind: 'movie' })).body;
+    assert.deepEqual([film.kind, film.manual], ['movie', true]);
+    assert.equal((await admin('PUT', `/anime/${film.id}`, { kind: 'tv' })).body.kind, 'tv');
+    assert.equal((await admin('PUT', `/anime/${film.id}`, { kind: 'serie' })).status, 400);
+    await admin('PUT', `/anime/${film.id}`, { kind: 'movie' });
+
+    const { matchRows } = require('../core/handlers/anime');
+    const { createCtx } = require('../db');
+    const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
+    assert.deepEqual(matchRows(createCtx({ user: { id: adminId } })).filter((r) => r.id === s.id || r.id === film.id), [], 'Crunchyroll matching sees anime only');
+
+    const res = await realFetch(`${ctx.base}/export/anime.csv`, { headers: { Cookie: admin.cookie } });
+    const lines = new TextDecoder('utf-8', { ignoreBOM: true }).decode(await res.arrayBuffer()).split('\r\n');
+    assert.match(lines.find((l) => l.startsWith('Frieren – Nach dem Ende der Reise')), /;ja;;tv$/);
+    assert.match(lines.find((l) => l.startsWith('Heimkino')), /;;;movie$/);
+    const kinds = Object.fromEntries(db.prepare('SELECT kind, count(*) AS n FROM animes GROUP BY kind').all().map((r) => [r.kind, r.n]));
+    assert.deepEqual((await admin('GET', '/stats')).body.anime.by_kind, { anime: kinds.anime || 0, tv: kinds.tv || 0, movie: kinds.movie || 0 });
+
+    for (const id of [s.id, film.id, ani.body.id]) assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
+    assert.equal((await admin('DELETE', '/auth/api-keys/tmdb')).status, 200);
 });

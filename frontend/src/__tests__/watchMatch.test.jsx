@@ -172,6 +172,15 @@ describe('WatchMatchDialog', () => {
     expect(screen.getByTestId('watch-unmatched')).toBeTruthy();
   });
 
+  it("'Anderer Eintrag…' lists anime only, never a TV show or a film", async () => {
+    await seed([{ ...FRIEREN, candidates: [FRIEREN.candidates[0]] }]);
+    view({ list: [...LIST, entry({ id: 4, kind: 'tv', title: 'Breaking Bad' }), entry({ id: 5, kind: 'movie', title: 'Akira (Film)' })] });
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Anderer Eintrag…' }));
+    const select = within(dialog).getByLabelText('Anderer Eintrag');
+    expect([...select.options].map((o) => o.textContent)).toEqual(['–', 'Dandadan', 'Frieren 2nd Season']);
+  });
+
   it('episode above the total: "Als komplett gesehen markieren" sends complete', async () => {
     await seed([{ ...FRIEREN, episodes_watched: 30, episode: 30, candidates: [{ ...FRIEREN.candidates[0], score: 0.95 }] }]);
     const post = vi.spyOn(api, 'post')

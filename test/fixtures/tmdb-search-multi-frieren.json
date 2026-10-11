@@ -1,0 +1,71 @@
+{
+ "_note": "Hand-written from the documented TMDb API v3 shape of GET /3/search/multi (language=de-DE): movie, tv and person items with media_type and genre_ids. Not a recorded answer; the film and the documentary are made up.",
+ "page": 1,
+ "results": [
+  {
+   "adult": false,
+   "backdrop_path": "/96RT2A47UdzWlUfvIERFyBsLhL2.jpg",
+   "id": 209867,
+   "name": "Frieren – Nach dem Ende der Reise",
+   "original_language": "ja",
+   "original_name": "葬送のフリーレン",
+   "overview": "Nach zehn Jahren besiegt die Heldengruppe den Dämonenkönig. Die Elfe Frieren lebt weiter, als ihre Gefährten altern.",
+   "poster_path": "/dqZENchTd7lp5zht7BdlqM7RBhD.jpg",
+   "media_type": "tv",
+   "genre_ids": [16, 10759, 10765],
+   "popularity": 120.5,
+   "first_air_date": "2023-09-29",
+   "vote_average": 8.8,
+   "vote_count": 412,
+   "origin_country": ["JP"]
+  },
+  {
+   "adult": false,
+   "backdrop_path": null,
+   "id": 550123,
+   "title": "Frieren im Sommer",
+   "original_language": "de",
+   "original_title": "Frieren im Sommer",
+   "overview": "Ein Sommer an der Ostsee, der nicht warm werden will.",
+   "poster_path": "/frierenimsommer.jpg",
+   "media_type": "movie",
+   "genre_ids": [18],
+   "popularity": 3.2,
+   "release_date": "2019-06-20",
+   "video": false,
+   "vote_average": 6.4,
+   "vote_count": 0
+  },
+  {
+   "adult": false,
+   "id": 7001,
+   "name": "Frieren Beispiel",
+   "original_name": "Frieren Beispiel",
+   "media_type": "person",
+   "popularity": 0.6,
+   "gender": 0,
+   "known_for_department": "Acting",
+   "profile_path": null,
+   "known_for": []
+  },
+  {
+   "adult": false,
+   "backdrop_path": null,
+   "id": 300400,
+   "name": "Frieren – Leben im Eis",
+   "original_language": "de",
+   "original_name": "Frieren – Leben im Eis",
+   "overview": "Eine Dokumentarreihe über den Winter in der Arktis.",
+   "poster_path": null,
+   "media_type": "tv",
+   "genre_ids": [99],
+   "popularity": 1.1,
+   "first_air_date": "2021-01-10",
+   "vote_average": 7,
+   "vote_count": 3,
+   "origin_country": ["DE"]
+  }
+ ],
+ "total_pages": 1,
+ "total_results": 4
+}

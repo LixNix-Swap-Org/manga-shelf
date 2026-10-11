@@ -1,5 +1,5 @@
-// Anime metadata gateway: AniList and MyAnimeList (official API with a client id,
-// Jikan without) behind one budget, one queue and one cache. Personal keys go first for their owner, then the shared
+// Anime metadata gateway: AniList, MyAnimeList (official API with a client id,
+// Jikan without) and TMDb (films and TV shows, key only) behind one budget, one queue and one cache. Personal keys go first for their owner, then the shared
 // pool; a paused or broken source is replaced by the other one, then by the cache.
 const { HttpError, msg } = require('../errors');
 const { credentialsOf } = require('../sources/credentials');
@@ -13,14 +13,23 @@ const cache = require('./cache');
 const anilist = require('./anilist');
 const jikan = require('./jikan');
 const mal = require('./mal');
+const tmdb = require('./tmdb');
 const store = require('./store');
-const { foldUmlauts, searchKey, rankByTitle, mergeResults, mergeMeta, titleScore, allTitles } = require('./normalize');
+const { foldUmlauts, searchKey, rankByTitle, mergeResults, mergeMeta, titleScore, allTitles, foldTmdbHits } = require('./normalize');
 
 const MANUAL_REFRESH_MS = 60 * 1000;
 // once one source answered, the other gets this long before the answer goes out without it
 const SECOND_SOURCE_GRACE_MS = 2500;
+const SEARCH_GRACE_MS = 400;
+const SEARCH_TIMEOUT_MS = 5000;
+const SEARCH_SOURCES = ['anilist', 'mal', 'tmdb'];
+const KIND_SOURCES = { anime: ['anilist', 'mal'], tv: ['tmdb'], movie: ['tmdb'], all: SEARCH_SOURCES };
+const TMDB_LANGUAGES = {
+    de: 'de-DE', en: 'en-US', fr: 'fr-FR', es: 'es-ES', it: 'it-IT', 'pt-BR': 'pt-BR', nl: 'nl-NL', pl: 'pl-PL', ja: 'ja-JP', ko: 'ko-KR',
+    'zh-Hans': 'zh-CN', ru: 'ru-RU', tr: 'tr-TR'
+};
 const SEARCH_GROUP_MAX = 3;
-const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList', jikan: 'MyAnimeList (Jikan)' };
+const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList', jikan: 'MyAnimeList (Jikan)', tmdb: 'TMDB' };
 // a personal key is disabled after its second refused-looking answer within this window that the pool answered properly
 const SUSPECT_WINDOW_MS = 10 * 60 * 1000;
 const OWN_BACKGROUND_WAIT_MS = 60 * 1000;
@@ -40,6 +49,7 @@ function freshState() {
         groupers: new Map(),
         batchers: new Map(),
         manualRefresh: new Map(),
+        ownTmdbRefresh: new Map(),
         suspects: new Map(),
         refreshIds: new Set(),
         refreshOpen: null,
@@ -91,6 +101,7 @@ function bucketOptions(ctx, provider) {
     const cfg = settings(ctx);
     if (provider === 'anilist') return { perMinute: cfg.anilistRpm };
     if (provider === 'jikan') return { perMinute: cfg.jikanRpm, burst: { size: 3, perMs: 1000 } };
+    if (provider === 'tmdb') return { perMinute: cfg.tmdbRpm };
     return { perMinute: 60 };
 }
 
@@ -118,9 +129,9 @@ function accessesFor(ctx, provider, { userId, priority, ownOnly = false }) {
         const own = creds.get(userId, credProvider);
         if (own && own.secret) out.push({ bucket: `user:${userId}:${provider}`, credential: own, kind: 'own', userId });
     }
-    if (provider === 'mal') {
-        const inst = creds.instance('mal');
-        if (inst && inst.secret) out.push({ bucket: 'shared:mal', credential: inst, kind: 'shared' });
+    if (provider === 'mal' || provider === 'tmdb') {
+        const inst = creds.instance(provider);
+        if (inst && inst.secret) out.push({ bucket: `shared:${provider}`, credential: inst, kind: 'shared' });
     } else {
         out.push({ bucket: `shared:${provider}`, credential: null, kind: 'shared' });
     }
@@ -140,6 +151,8 @@ function accessesFor(ctx, provider, { userId, priority, ownOnly = false }) {
 const refusedLike = (err) => err.kind === 'bad' && [400, 401, 403].includes(err.status) && err.graphql === true;
 
 const unavailable = (provider, reason = 'unavailable') => new SourceError(reason, `${SOURCE_LABELS[provider] || provider} ist gerade nicht verfügbar`);
+const aborted = (provider) => new SourceError('network', `${SOURCE_LABELS[provider] || provider}: Anfrage abgebrochen`, { aborted: true });
+const isAborted = (err, signal) => Boolean((err && err.aborted) || (signal && signal.aborted));
 
 function spareAccesses(ctx, provider, userId) {
     const s = S();
@@ -193,13 +206,17 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
         if (first !== undefined && now - first <= SUSPECT_WINDOW_MS) disable(access, err);
         else s.suspects.set(access.bucket, now);
     };
+    const refused = new Set();
     for (const { access, deadlineMs } of plan) {
+        if (signal && signal.aborted) throw aborted(provider);
+        if (refused.has(access.bucket)) continue;
         if (!probe && !s.budget.available(access.bucket, options, nowMs(ctx))) {
             lastError = lastError || unavailable(provider);
             continue;
         }
         const got = await acquire(s.budget, access.bucket, options, priority, { now: () => nowMs(ctx), deadlineMs, probe, signal });
         if (!got) {
+            if (signal && signal.aborted) throw aborted(provider);
             lastError = lastError || unavailable(provider, 'busy');
             continue;
         }
@@ -236,6 +253,13 @@ async function call(ctx, provider, { priority = 'interactive', userId = null, si
                 disable(access, err);
                 continue;
             }
+            if (err.kind === 'auth' && provider === 'tmdb' && access.credential) {
+                refused.add(access.bucket);
+                creds.failed(null, provider, String(msg('TMDB lehnt den Schlüssel ab ({status})', { status: err.status || 401 })));
+                s.budget.drop(access.bucket);
+                logger().info('TMDB: instance key refused and disabled');
+                continue;
+            }
             if (err.isOutage) {
                 s.budget.failure(access.bucket, nowMs(ctx));
                 if (access.kind === 'own') continue;
@@ -258,6 +282,11 @@ function poolDown(ctx, provider) {
     return !s.budget.available(`shared:${provider}`, bucketOptions(ctx, provider), nowMs(ctx));
 }
 
+const circuitOf = (ctx, provider) => {
+    const state = S().budget.state(`shared:${provider}`, nowMs(ctx));
+    return state ? state.circuit : 'closed';
+};
+
 function grouperFor(ctx, userId) {
     const s = S();
     const own = userId && credentialsOf(ctx).get(userId, 'anilist');
@@ -270,7 +299,7 @@ function grouperFor(ctx, userId) {
                 let terms = null;
                 const result = await call(host, 'anilist', { priority: 'interactive', userId: own ? userId : null }, async (credential) => {
                     terms = seal();
-                    return searchTermsSplit(host, terms, credential);
+                    return searchTermsSplit(host, terms, credential, SEARCH_TIMEOUT_MS);
                 });
                 return result.metas.map((metas) => ({ metas, credential_used: result.credential_used }));
             }
@@ -280,17 +309,17 @@ function grouperFor(ctx, userId) {
 }
 
 /** AniList search of several terms; a "max query complexity" answer halves the group size and splits the request. */
-async function searchTermsSplit(ctx, terms, credential) {
+async function searchTermsSplit(ctx, terms, credential, timeoutMs) {
     try {
-        return await anilist.search(ctx, terms, { credential });
+        return await anilist.search(ctx, terms, { credential, timeoutMs });
     } catch (err) {
         if (!(err instanceof SourceError) || err.kind !== 'complexity' || terms.length < 2) throw err;
         const s = S();
         s.groupSize = Math.max(1, Math.floor(terms.length / 2));
         logger().info(`AniList: Suchgruppe zu komplex, ab jetzt höchstens ${s.groupSize} Begriffe je Anfrage`);
         const half = Math.ceil(terms.length / 2);
-        const a = await searchTermsSplit(ctx, terms.slice(0, half), credential);
-        const b = await searchTermsSplit(ctx, terms.slice(half), credential);
+        const a = await searchTermsSplit(ctx, terms.slice(0, half), credential, timeoutMs);
+        const b = await searchTermsSplit(ctx, terms.slice(half), credential, timeoutMs);
         return { metas: [...a.metas, ...b.metas], rate: b.rate || a.rate };
     }
 }
@@ -371,21 +400,22 @@ async function spareDetail(ctx, ids, { userId = null, timeoutMs, signal, beforeR
 }
 
 /** The MyAnimeList side: official API when a client id exists, Jikan otherwise and when the official API fails. */
-async function callMalSide(ctx, { priority = 'interactive', userId = null, probe = false } = {}, viaMal, viaJikan) {
+async function callMalSide(ctx, { priority = 'interactive', userId = null, probe = false, signal } = {}, viaMal, viaJikan) {
     const side = malSide(ctx, userId, priority);
     if (side === 'mal') {
         try {
-            return await call(ctx, 'mal', { priority, userId, probe }, viaMal);
+            return await call(ctx, 'mal', { priority, userId, probe, signal }, viaMal);
         } catch (err) {
-            if (!(err instanceof SourceError)) throw err;
+            if (!(err instanceof SourceError) || isAborted(err, signal)) throw err;
             logger().debug('MyAnimeList API failed, trying Jikan:', err.message);
         }
     }
-    return call(ctx, 'jikan', { priority, userId, probe }, viaJikan);
+    return call(ctx, 'jikan', { priority, userId, probe, signal }, viaJikan);
 }
 
-function malSideSearch(ctx, term, userId, limit, probe = false) {
-    return callMalSide(ctx, { userId, probe }, (credential) => mal.search(ctx, term, { limit, credential }), () => jikan.search(ctx, term, { limit }));
+function malSideSearch(ctx, term, userId, limit, probe = false, signal) {
+    const options = { limit, timeoutMs: SEARCH_TIMEOUT_MS, signal };
+    return callMalSide(ctx, { userId, probe, signal }, (credential) => mal.search(ctx, term, { ...options, credential }), () => jikan.search(ctx, term, options));
 }
 
 function enterInteractive(ctx) {
@@ -410,10 +440,10 @@ async function probeSources(ctx, attempts) {
 }
 
 /**
- * Promise.allSettled, but once the first promise fulfilled the others get `graceMs`; a slower one counts as
- * rejected with kind 'slow' (it keeps running, and its outcome still reaches the budget).
+ * Promise.allSettled, but once the first promise fulfilled (or from the start with `answered`) the others get `graceMs`;
+ * a slower one counts as rejected with kind 'slow' (it keeps running, and its outcome still reaches the budget).
  */
-function settleWithGrace(promises, graceMs = SECOND_SOURCE_GRACE_MS) {
+function settleWithGrace(promises, graceMs = SECOND_SOURCE_GRACE_MS, { answered = false } = {}) {
     return new Promise((resolve) => {
         const results = new Array(promises.length).fill(null);
         let pending = promises.length;
@@ -433,6 +463,7 @@ function settleWithGrace(promises, graceMs = SECOND_SOURCE_GRACE_MS) {
             else if (result.status === 'fulfilled' && !timer) timer = setTimeout(finish, graceMs);
         };
         if (!pending) finish();
+        else if (answered) timer = setTimeout(finish, graceMs);
         promises.forEach((promise, i) => {
             promise.then((value) => settle(i, { status: 'fulfilled', value }), (reason) => settle(i, { status: 'rejected', reason }));
         });
@@ -440,62 +471,188 @@ function settleWithGrace(promises, graceMs = SECOND_SOURCE_GRACE_MS) {
 }
 
 const failedOnlyByPause = (errors) => errors.length > 0 && errors.every((e) => e instanceof SourceError && (e.kind === 'unavailable' || e.kind === 'busy'));
+const isSlow = (err) => err instanceof SourceError && err.kind === 'slow';
+const lateFailure = (err) => logger().debug('Late source answer failed:', err && err.message);
+
+function logSourceErrors(text, errors, signal) {
+    const log = logger();
+    for (const err of errors) {
+        if (isAborted(err, signal)) log.debug(text, err && err.message);
+        else log.warn(text, err && err.message);
+    }
+}
+
+function searchSourcesFor(ctx, userId) {
+    const cfg = settings(ctx);
+    const keyed = (provider) => {
+        const creds = credentialsOf(ctx);
+        const own = userId ? creds.get(userId, provider) : null;
+        const instance = creds.instance(provider);
+        return Boolean((own && own.secret) || (instance && instance.secret));
+    };
+    return SEARCH_SOURCES.filter((name) => (name === 'tmdb' ? Boolean(cfg.tmdb) && keyed('tmdb') : Boolean(cfg[name])));
+}
+
+/** TMDb's language for a UI locale (en-US when unknown). */
+const tmdbLanguage = (locale) => TMDB_LANGUAGES[locale] || 'en-US';
+
+const searchRow = (value) => ({ metas: value.metas || [], provider: value.provider || null, credential_used: value.credential_used || 'shared' });
+
+function readSearchRows(ctx, search, { allowStale = false } = {}) {
+    const rows = {};
+    for (const name of search.asked) {
+        const row = cache.read(ctx, search.rowKey(name), { allowStale });
+        if (row && row.value && Array.isArray(row.value.metas)) rows[name] = row.value;
+    }
+    return rows;
+}
+
+const writeSearchRow = (ctx, search, name, row) => cache.write(ctx, search.rowKey(name), row, row.metas.length ? cache.TTL.search : cache.TTL.notFound);
+
+function animeResults(term, answers, limit, kind = 'all') {
+    const merged = mergeResults(answers.anilist ? answers.anilist.metas : [], answers.mal ? answers.mal.metas : []);
+    const { metas, rest } = foldTmdbHits(merged, answers.tmdb ? answers.tmdb.metas : []);
+    const ranked = rankByTitle(term, [...metas, ...rest]);
+    return (kind === 'all' ? ranked : ranked.filter((meta) => (meta.kind || 'anime') === kind)).slice(0, limit);
+}
+
+function sourcesDown(asked) {
+    if (asked.length === 2 && asked.includes('anilist') && asked.includes('mal')) {
+        return new HttpError(503, 'AniList und MyAnimeList sind gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
+    }
+    const names = asked.map((name) => SOURCE_LABELS[name] || name);
+    const text = names.length === 1
+        ? msg('{source} ist gerade nicht erreichbar. Bitte später erneut versuchen.', { source: names[0] })
+        : msg('{sources} sind gerade nicht erreichbar. Bitte später erneut versuchen.', { sources: names.join(', ') });
+    return new HttpError(503, text, 'SOURCES_UNAVAILABLE');
+}
+
+function animeAnswer(search, answers, exempt) {
+    return {
+        results: animeResults(search.term, answers, search.limit, search.kind),
+        sources_used: search.asked.filter((name) => answers[name]).map((name) => (name === 'mal' ? answers.mal.provider || 'jikan' : name)),
+        partial: search.asked.some((name) => !answers[name] && !(name === 'mal' && exempt)),
+        credential_used: (answers.anilist || answers.mal || answers.tmdb || {}).credential_used || 'shared'
+    };
+}
+
+function writeLegacyRow(ctx, search, answers) {
+    const body = {
+        results: animeResults(search.term, { anilist: answers.anilist, mal: answers.mal }, search.limit),
+        sources_used: ['anilist', ...(answers.mal ? [answers.mal.provider || 'jikan'] : [])],
+        partial: !answers.mal,
+        credential_used: answers.anilist.credential_used || 'shared'
+    };
+    cache.write(ctx, search.legacyKey, body, body.partial ? cache.TTL.partial : (body.results.length ? cache.TTL.search : cache.TTL.notFound));
+}
+
+function staleAnimeAnswer(ctx, search) {
+    const rows = readSearchRows(ctx, search, { allowStale: true });
+    if (Object.keys(rows).length) return { ...animeAnswer(search, rows, false), cached: true, partial: true };
+    if (search.asked.includes('anilist') && search.asked.includes('mal')) {
+        const legacy = cache.read(ctx, search.legacyKey, { allowStale: true });
+        if (legacy) return { ...legacy.value, cached: true, partial: true };
+    }
+    return null;
+}
+
+function animeSearchRunners(ctx, search, signal) {
+    const { term, terms, limit, userId } = search;
+    return {
+        anilist: (probe) => (probe ? probeAniListSearch(ctx, terms) : aniListSearch(ctx, terms, userId)),
+        mal: (probe) => (probe ? probeMalSearch(ctx, term, limit) : malSideSearch(ctx, term, userId, limit, false, signal)),
+        tmdb: (probe) => {
+            const own = probe ? undefined : signal;
+            return call(ctx, 'tmdb', { priority: 'interactive', userId: probe ? null : userId, probe, signal: own },
+                (credential) => tmdb.search(ctx, term, { language: search.tmdbLanguage, credential, timeoutMs: SEARCH_TIMEOUT_MS, signal: own }));
+        }
+    };
+}
+
+async function runAnimeSearch(ctx, search, signal) {
+    const generation = generationOf(ctx);
+    const answers = readSearchRows(ctx, search);
+    const fromRows = new Set(Object.keys(answers));
+    const malProvider = malSide(ctx, search.userId);
+    const exempt = search.asked.includes('mal') && circuitOf(ctx, malProvider) !== 'closed';
+    const runners = animeSearchRunners(ctx, search, signal);
+    const attempts = search.asked.filter((name) => !answers[name] && runners[name]).map((name) => ({ name, run: runners[name] }));
+    const promises = attempts.map((a) => a.run(false));
+    const settled = await settleWithGrace(promises, SEARCH_GRACE_MS, { answered: fromRows.size > 0 });
+    const errors = [];
+    const late = [];
+    settled.forEach((r, i) => {
+        if (r.status === 'fulfilled') answers[attempts[i].name] = searchRow(r.value);
+        else if (isSlow(r.reason)) late.push(attempts[i]);
+        else errors.push(r.reason);
+    });
+    for (const err of errors) if (!(err instanceof SourceError)) throw err;
+    if (!Object.keys(answers).length && failedOnlyByPause(errors)) {
+        const probed = await probeSources(ctx, attempts);
+        if (probed) answers[probed.name] = searchRow(probed.value);
+    }
+    if (!Object.keys(answers).length) {
+        const stale = staleAnimeAnswer(ctx, search);
+        if (stale) return stale;
+        logSourceErrors('Anime search failed:', errors, signal);
+        throw sourcesDown(search.asked);
+    }
+    for (const name of Object.keys(answers)) if (!fromRows.has(name)) writeSearchRow(ctx, search, name, answers[name]);
+    if (answers.anilist && search.asked.includes('mal')) writeLegacyRow(ctx, search, answers);
+    const current = { ...answers };
+    const merge = (name, value) => {
+        if (generationOf(ctx) !== generation) return;
+        try {
+            current[name] = searchRow(value);
+            writeSearchRow(ctx, search, name, current[name]);
+            if (current.anilist && search.asked.includes('mal')) writeLegacyRow(ctx, search, current);
+        } catch (err) {
+            logger().debug('Late anime search answer dropped:', err && err.message);
+        }
+    };
+    for (const attempt of late) promises[attempts.indexOf(attempt)].then((value) => merge(attempt.name, value), lateFailure);
+    if (search.asked.includes('mal') && !answers.mal && !late.some((a) => a.name === 'mal') && circuitOf(ctx, malProvider) === 'half-open') {
+        runners.mal(true).then((value) => merge('mal', value), lateFailure);
+    }
+    return { ...animeAnswer(search, answers, exempt), cached: search.asked.every((name) => fromRows.has(name)) };
+}
 
 /**
- * Anime search over both sources: { results, sources_used, cached, partial, credential_used }. Umlauts are folded
- * (AniList does not match "ü"); both spellings go out in one AniList request.
+ * Anime search over the asked sources (`sources` ∩ the kind's sources ∩ what the caller can use): { results, sources_used,
+ * cached, partial, credential_used, sources_available }. Every source answer has its own cache row; only sources
+ * without one are asked. Umlauts are folded (AniList does not match "ü"); both spellings go out in one AniList request.
  */
-async function searchAnime(ctx, q, { limit = 10 } = {}) {
+async function searchAnime(ctx, q, { limit = 10, sources, kind = 'all', language, signal = ctx.signal } = {}) {
     remember(ctx);
     const term = String(q || '').trim();
     const folded = foldUmlauts(term);
     const terms = folded !== term ? [term, folded] : [term];
-    const key = `anime:search:${searchKey(term)}:${limit}`;
-    const hit = cache.read(ctx, key);
-    if (hit) return { ...hit.value, cached: true };
-    const leave = enterInteractive(ctx);
+    const key = searchKey(term);
     const userId = ctx.user ? ctx.user.id : null;
+    const available = searchSourcesFor(ctx, userId);
+    const wanted = Array.isArray(sources) && sources.length ? sources : SEARCH_SOURCES;
+    const kindName = KIND_SOURCES[kind] ? kind : 'all';
+    const asked = SEARCH_SOURCES.filter((name) => wanted.includes(name) && KIND_SOURCES[kindName].includes(name) && available.includes(name));
+    if (!asked.length) return { results: [], sources_used: [], partial: false, cached: false, sources_available: available };
+    const tmdbLang = tmdbLanguage(language || 'de');
+    const search = {
+        term, terms, limit, asked, userId, kind: kindName, tmdbLanguage: tmdbLang,
+        legacyKey: `anime:search:${key}:${limit}`,
+        rowKey: (name) => (name === 'tmdb' ? `anime:search:tmdb:${tmdbLang}:${key}:${limit}` : `anime:search:${name}:${key}:${limit}`)
+    };
+    const rows = readSearchRows(ctx, search);
+    if (asked.every((name) => rows[name])) return { ...animeAnswer(search, rows, false), cached: true, sources_available: available };
+    const leave = enterInteractive(ctx);
     try {
-        return await S().coalescer.run(key, async () => {
-            const cfg = settings(ctx);
-            const attempts = [];
-            if (cfg.anilist) attempts.push({ name: 'anilist', run: (probe) => (probe ? probeAniListSearch(ctx, terms) : aniListSearch(ctx, terms, userId)) });
-            if (cfg.mal) attempts.push({ name: 'mal', run: (probe) => (probe ? probeMalSearch(ctx, term, limit) : malSideSearch(ctx, term, userId, limit)) });
-            const settled = await settleWithGrace(attempts.map((a) => a.run(false)));
-            const answers = {};
-            const errors = [];
-            settled.forEach((r, i) => {
-                if (r.status === 'fulfilled') answers[attempts[i].name] = r.value;
-                else errors.push(r.reason);
-            });
-            for (const err of errors) if (!(err instanceof SourceError)) throw err;
-            if (!Object.keys(answers).length && failedOnlyByPause(errors)) {
-                const probed = await probeSources(ctx, attempts);
-                if (probed) answers[probed.name] = probed.value;
-            }
-            if (!Object.keys(answers).length) {
-                const stale = cache.read(ctx, key, { allowStale: true });
-                if (stale) return { ...stale.value, cached: true, partial: true };
-                for (const err of errors) logger().warn('Anime search failed:', err.message);
-                throw new HttpError(503, 'AniList und MyAnimeList sind gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
-            }
-            const merged = mergeResults(answers.anilist ? answers.anilist.metas : [], answers.mal ? answers.mal.metas : []);
-            const body = {
-                results: rankByTitle(term, merged).slice(0, limit),
-                sources_used: Object.keys(answers).map((name) => (name === 'mal' ? answers.mal.provider || 'jikan' : name)),
-                partial: attempts.length > Object.keys(answers).length,
-                credential_used: answers.anilist ? answers.anilist.credential_used : (answers.mal ? answers.mal.credential_used : 'shared')
-            };
-            cache.write(ctx, key, body, body.partial ? cache.TTL.partial : (body.results.length ? cache.TTL.search : cache.TTL.notFound));
-            return { ...body, cached: false };
-        });
+        const body = await S().coalescer.run(`${search.legacyKey}|${asked.join(',')}|${kindName}|${tmdbLang}`, (runSignal) => runAnimeSearch(ctx, search, runSignal), { signal });
+        return { ...body, sources_available: available };
     } finally {
         leave();
     }
 }
 
 async function probeAniListSearch(ctx, terms) {
-    const result = await call(ctx, 'anilist', { priority: 'interactive', probe: true }, (credential) => anilist.search(ctx, terms, { credential }));
+    const result = await call(ctx, 'anilist', { priority: 'interactive', probe: true }, (credential) => anilist.search(ctx, terms, { credential, timeoutMs: SEARCH_TIMEOUT_MS }));
     return { metas: [].concat(...result.metas), credential_used: 'shared' };
 }
 
@@ -504,11 +661,66 @@ const probeMalSearch = (ctx, term, limit) => malSideSearch(ctx, term, null, limi
 /** Rejection of searchManga when no enabled source answered; every coalesced caller gets it. */
 const searchUnavailable = () => Object.assign(new Error('AniList und MyAnimeList haben nicht geantwortet'), { unavailable: true });
 
+async function runMangaSearch(ctx, search, signal) {
+    const { term, terms, key, limit, timeoutMs, userId } = search;
+    const cfg = settings(ctx);
+    const generation = generationOf(ctx);
+    const runAni = (probe) => call(ctx, 'anilist', { priority: 'interactive', userId, probe, signal },
+        (credential) => anilist.search(ctx, terms, { type: 'MANGA', perPage: limit, credential, timeoutMs, signal }))
+        .then((r) => dedupeById([].concat(...r.metas)));
+    const runJikan = (probe, own = signal) => call(ctx, 'jikan', { priority: 'interactive', userId, probe, signal: own },
+        async () => ({ list: await jikan.searchManga(ctx, term, { limit, timeoutMs, signal: own }) }))
+        .then((r) => r.list);
+    const attempts = [];
+    if (cfg.anilist) attempts.push({ name: 'anilist', run: runAni, exempt: false });
+    if (cfg.mal) attempts.push({ name: 'jikan', run: runJikan, exempt: circuitOf(ctx, 'jikan') !== 'closed' });
+    const promises = attempts.map((a) => a.run(false));
+    const settled = await settleWithGrace(promises, SEARCH_GRACE_MS);
+    const lists = {};
+    const errors = [];
+    const late = [];
+    settled.forEach((r, i) => {
+        if (r.status === 'fulfilled') lists[attempts[i].name] = r.value;
+        else if (isSlow(r.reason)) late.push(attempts[i]);
+        else errors.push(r.reason);
+    });
+    if (!Object.keys(lists).length && failedOnlyByPause(errors)) {
+        const probed = await probeSources(ctx, attempts);
+        if (probed) lists[probed.name] = probed.value;
+    }
+    logSourceErrors('Manga lookup source failed:', errors, signal);
+    const answered = Object.keys(lists).length;
+    if (attempts.length && !answered) throw searchUnavailable();
+    const write = (current) => {
+        const results = joinMangaHits(current.anilist || [], current.jikan || []);
+        const partial = attempts.some((a) => !a.exempt && !current[a.name]);
+        cache.write(ctx, key, results, partial ? cache.TTL.partial : (results.length ? cache.TTL.search : cache.TTL.notFound));
+        return results;
+    };
+    if (!answered) return [];
+    const results = write(lists);
+    const current = { ...lists };
+    const merge = (name, value) => {
+        if (generationOf(ctx) !== generation) return;
+        try {
+            current[name] = value;
+            write(current);
+        } catch (err) {
+            logger().debug('Late manga lookup answer dropped:', err && err.message);
+        }
+    };
+    for (const attempt of late) promises[attempts.indexOf(attempt)].then((value) => merge(attempt.name, value), lateFailure);
+    if (cfg.mal && !lists.jikan && !late.some((a) => a.name === 'jikan') && circuitOf(ctx, 'jikan') === 'half-open') {
+        runJikan(true, undefined).then((value) => merge('jikan', value), lateFailure);
+    }
+    return results;
+}
+
 /**
  * Manga search for the series lookup (AniList + Jikan) in the lookup shape. A failing source gives [] for itself;
  * when no enabled source answered it rejects with `err.unavailable`, so "no hits" stays distinguishable.
  */
-async function searchManga(ctx, q, { timeoutMs, limit = 5 } = {}) {
+async function searchManga(ctx, q, { timeoutMs, limit = 5, signal = ctx.signal } = {}) {
     remember(ctx);
     const term = String(q || '').trim();
     const folded = foldUmlauts(term);
@@ -525,36 +737,11 @@ async function searchManga(ctx, q, { timeoutMs, limit = 5 } = {}) {
     }
     const userId = ctx.user ? ctx.user.id : null;
     try {
-        return await S().coalescer.run(key, async () => {
-            const cfg = settings(ctx);
-            const attempts = [];
-            const runAni = (probe) => call(ctx, 'anilist', { priority: 'interactive', userId, probe }, (credential) => anilist.search(ctx, terms, { type: 'MANGA', perPage: limit, credential, timeoutMs }))
-                .then((r) => dedupeById([].concat(...r.metas)));
-            const runJikan = (probe) => call(ctx, 'jikan', { priority: 'interactive', userId, probe }, async () => ({ list: await jikan.searchManga(ctx, term, { limit, timeoutMs }) }))
-                .then((r) => r.list);
-            if (cfg.anilist) attempts.push({ name: 'anilist', run: runAni });
-            if (cfg.mal) attempts.push({ name: 'jikan', run: runJikan });
-            const settled = await settleWithGrace(attempts.map((a) => a.run(false)));
-            const lists = {};
-            const errors = [];
-            settled.forEach((r, i) => {
-                if (r.status === 'fulfilled') lists[attempts[i].name] = r.value;
-                else errors.push(r.reason);
-            });
-            if (!Object.keys(lists).length && failedOnlyByPause(errors)) {
-                const probed = await probeSources(ctx, attempts);
-                if (probed) lists[probed.name] = probed.value;
-            }
-            for (const err of errors) logger().warn('Manga lookup source failed:', err && err.message);
-            const results = joinMangaHits(lists.anilist || [], lists.jikan || []);
-            const answered = Object.keys(lists).length;
-            if (attempts.length && !answered) throw searchUnavailable();
-            if (answered) cache.write(ctx, key, results, answered < attempts.length ? cache.TTL.partial : (results.length ? cache.TTL.search : cache.TTL.notFound));
-            return results;
-        });
+        return await S().coalescer.run(key, (runSignal) => runMangaSearch(ctx, { term, terms, key, limit, timeoutMs, userId }, runSignal), { signal });
     } catch (err) {
         if (err && err.unavailable) throw err;
-        logger().warn('Manga lookup failed:', err && err.message);
+        if (isAborted(err, signal)) logger().debug('Manga lookup aborted');
+        else logger().warn('Manga lookup failed:', err && err.message);
         throw searchUnavailable();
     } finally {
         leave();
@@ -602,6 +789,7 @@ function batcherFor(kind) {
  */
 async function getAnime(ctx, ref, { priority = 'interactive', skipAniList = false } = {}) {
     remember(ctx);
+    if (ref.tmdb_id) return getTmdb(ctx, ref, { priority });
     const cfg = settings(ctx);
     const userId = ctx.user ? ctx.user.id : null;
     const errors = [];
@@ -640,7 +828,15 @@ async function getAnime(ctx, ref, { priority = 'interactive', skipAniList = fals
     return meta;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+async function getTmdb(ctx, ref, { priority = 'interactive', userId = ctx.user ? ctx.user.id : null, ownOnly = false } = {}) {
+    if (!settings(ctx).tmdb) throw unavailable('tmdb');
+    const result = await call(ctx, 'tmdb', { priority, userId, ownOnly }, (credential) => tmdb.byId(ctx, ref.tmdb_kind, ref.tmdb_id, { credential }));
+    return result.meta;
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const OWN_TMDB_AGE_MS = 14 * DAY_MS;
 const generationOf = (ctx) => (ctx.db && typeof ctx.db.generation === 'function' ? ctx.db.generation() : null);
 const reopened = (ctx, generation) => generationOf(ctx) !== generation;
 const reopenedError = () => new HttpError(503, 'Die Datenbank wurde während der Aktualisierung neu geöffnet (Wiederherstellung). Bitte erneut versuchen.');
@@ -651,6 +847,7 @@ const reopenedError = () => new HttpError(503, 'Die Datenbank wurde während der
  */
 async function refreshEntry(ctx, id, { priority = 'interactive', skipAniList = false, generation = generationOf(ctx) } = {}) {
     const row = ctx.db.prepare('SELECT * FROM animes WHERE id = ?').get(id);
+    if (row && row.tmdb_id) return (await refreshTmdbRow(ctx, row, { priority, generation })) === 'updated';
     if (!row || (!row.anilist_id && !row.mal_id)) return false;
     const meta = await getAnime(ctx, { anilist_id: row.anilist_id, mal_id: row.mal_id }, { priority, skipAniList });
     if (!meta) {
@@ -664,6 +861,42 @@ async function refreshEntry(ctx, id, { priority = 'interactive', skipAniList = f
     // AniList just said it does not know this MAL id
     if (!skipAniList) scheduleIdResolution(ctx, id);
     return true;
+}
+
+function tmdbBackgroundAccess(ctx) {
+    const creds = credentialsOf(ctx);
+    const inst = creds.instance('tmdb');
+    return Boolean((inst && inst.secret) || (creds.background('tmdb') || []).some((v) => v && v.secret));
+}
+
+async function refreshTmdbRow(ctx, row, { priority = 'refresh', generation = generationOf(ctx), ownUserId = null } = {}) {
+    const interactive = priority === 'interactive';
+    if (!settings(ctx).tmdb || (!interactive && !ownUserId && !tmdbBackgroundAccess(ctx))) {
+        if (interactive) throw unavailable('tmdb');
+        store.updateRow(ctx, row.id, { next_check_at: nowMs(ctx) + DAY_MS });
+        return 'skipped';
+    }
+    let meta;
+    try {
+        const options = ownUserId ? { priority, userId: ownUserId, ownOnly: true } : { priority, userId: interactive && ctx.user ? ctx.user.id : null };
+        meta = await getTmdb(ctx, row, options);
+    } catch (err) {
+        if (!(err instanceof SourceError)) throw err;
+        if (reopened(ctx, generation)) throw reopenedError();
+        store.updateRow(ctx, row.id, { next_check_at: nowMs(ctx) + HOUR_MS });
+        if (interactive) throw err;
+        logger().debug(`TMDB refresh of anime ${row.id} failed:`, err.message);
+        return 'failed';
+    }
+    if (reopened(ctx, generation)) throw reopenedError();
+    if (!meta) {
+        store.updateRow(ctx, row.id, { next_check_at: nowMs(ctx) + DAY_MS });
+        return 'missing';
+    }
+    const images = await store.freshImages(ctx, meta, row);
+    if (reopened(ctx, generation)) throw reopenedError();
+    store.applySnapshot(ctx, row.id, meta, images, { partial: !interactive });
+    return 'updated';
 }
 
 /** One id batch over AniList; a "max query complexity" answer splits it in halves (recursively). */
@@ -696,7 +929,27 @@ function idGroups(rows) {
  * Refreshes `rows` from the background share: AniList id batches, or one by one over MAL when AniList is off.
  * Stops (report.stopped) when AniList cannot serve, `shouldStop()` says so or the database was reopened.
  */
-async function refreshRows(ctx, rows, report, { generation, maxGroups = Infinity, pauseMs = 0, shouldStop = () => false, onMalOnlyMissing = () => {} } = {}) {
+async function refreshRows(ctx, rows, report, options = {}) {
+    const { generation, shouldStop = () => false } = options;
+    const sourceRows = rows.filter((row) => !row.tmdb_id);
+    if (sourceRows.length) await refreshSourceRows(ctx, sourceRows, report, options);
+    for (const row of rows.filter((r) => r.tmdb_id)) {
+        if (shouldStop()) break;
+        let outcome;
+        try {
+            outcome = await refreshTmdbRow(ctx, row, { priority: 'refresh', generation });
+        } catch (err) {
+            if (!reopened(ctx, generation)) throw err;
+            logger().info('Anime-Aktualisierung angehalten: die Datenbank wurde neu geöffnet');
+            report.stopped = true;
+            break;
+        }
+        if (outcome === 'updated') report.updated++;
+        else if (outcome === 'missing') report.missing++;
+    }
+}
+
+async function refreshSourceRows(ctx, rows, report, { generation, maxGroups = Infinity, pauseMs = 0, shouldStop = () => false, onMalOnlyMissing = () => {} } = {}) {
     if (!settings(ctx).anilist) {
         for (const row of rows) {
             if (shouldStop()) break;
@@ -765,7 +1018,7 @@ function scheduleMalRefresh(ctx, id) {
 /** Rows by id that still have a source id. */
 const rowsById = (ctx, ids) => ids
     .map((id) => ctx.db.prepare('SELECT * FROM animes WHERE id = ?').get(id))
-    .filter((row) => row && (row.anilist_id || row.mal_id));
+    .filter((row) => row && (row.anilist_id || row.mal_id || row.tmdb_id));
 
 function queueRefreshBatch(s, batch) {
     if (s.refreshOpen === batch) s.refreshOpen = null;
@@ -856,6 +1109,27 @@ async function manualRefresh(ctx, id) {
     }
 }
 
+/** Without an instance or volunteer TMDb key: refreshes a TMDb entry older than 14 days with the caller's own key (once a day). */
+function scheduleOwnTmdbRefresh(ctx, row) {
+    if (!row || !row.tmdb_id || !ctx.user || !settings(ctx).tmdb) return false;
+    const now = nowMs(ctx);
+    if (row.meta_fetched_at && now - row.meta_fetched_at < OWN_TMDB_AGE_MS) return false;
+    const userId = ctx.user.id;
+    const own = credentialsOf(ctx).get(userId, 'tmdb');
+    if (!own || !own.secret || tmdbBackgroundAccess(ctx)) return false;
+    const s = remember(ctx);
+    if (now - (s.ownTmdbRefresh.get(row.id) || 0) < DAY_MS) return false;
+    s.ownTmdbRefresh.set(row.id, now);
+    if (s.ownTmdbRefresh.size > 1000) s.ownTmdbRefresh.delete(s.ownTmdbRefresh.keys().next().value);
+    const generation = generationOf(ctx);
+    return s.background.add(`refresh-tmdb-own:${row.id}`, 'refresh', async () => {
+        const host = s.hostCtx;
+        const current = host.db.prepare('SELECT * FROM animes WHERE id = ?').get(row.id);
+        if (!current || !current.tmdb_id || reopened(host, generation)) return;
+        await refreshTmdbRow(host, current, { priority: 'refresh', generation, ownUserId: userId });
+    });
+}
+
 /**
  * Refreshes due entries (next_check_at reached) in groups of 50 over AniList's id_in; `onlyAiring` is the hourly run.
  * Stops when AniList cannot serve (sweeps wait instead of spending MAL); MAL-only entries are queued for one MAL refresh.
@@ -866,7 +1140,7 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
     try {
         const rows = ctx.db.prepare(`
             SELECT * FROM animes
-            WHERE next_check_at IS NOT NULL AND next_check_at <= ? AND (anilist_id IS NOT NULL OR mal_id IS NOT NULL)
+            WHERE next_check_at IS NOT NULL AND next_check_at <= ? AND (anilist_id IS NOT NULL OR mal_id IS NOT NULL OR tmdb_id IS NOT NULL)
             ${onlyAiring ? 'AND next_airing_at IS NOT NULL' : ''}
             ORDER BY next_check_at LIMIT 2000
         `).all(nowMs(ctx));
@@ -977,9 +1251,23 @@ function sourcesState(ctx) {
     };
     const anilistState = describe('anilist', cfg.anilist);
     const malState = describe(side, cfg.mal);
+    const tmdbInstance = creds.instance('tmdb');
+    const tmdbShared = Boolean(tmdbInstance && tmdbInstance.secret);
+    const tmdbState = describe('tmdb', cfg.tmdb);
+    const tmdbBudget = s.budget.state('shared:tmdb', now) || DEFAULT_STATE(bucketOptions(ctx, 'tmdb').perMinute);
+    const instanceStatus = creds.status ? creds.status(null, 'tmdb') : null;
     return {
-        anilist: anilistState,
-        mal: { ...malState, adapter: side },
+        anilist: { ...anilistState, available: Boolean(cfg.anilist) },
+        mal: { ...malState, adapter: side, available: Boolean(cfg.mal) },
+        tmdb: {
+            enabled: Boolean(cfg.tmdb),
+            name: SOURCE_LABELS.tmdb,
+            own: tmdbState.own,
+            key_disabled: tmdbState.key_disabled,
+            available: Boolean(cfg.tmdb && (tmdbState.own || tmdbShared)),
+            error: (instanceStatus && instanceStatus.last_error) || null,
+            ...(tmdbShared ? tmdbBudget : {})
+        },
         credential: {
             anilist: anilistState.own ? 'own' : 'shared',
             mal: malState.own ? 'own' : (side === 'mal' ? 'instance' : 'shared')
@@ -996,6 +1284,7 @@ async function validateCredential(ctx, provider, secret) {
         return { label: viewer.name || `AniList-Konto ${viewer.id}` };
     }
     if (provider === 'mal') return mal.check(ctx, secret);
+    if (provider === 'tmdb') return tmdb.check(ctx, secret);
     if (provider === 'google_books') {
         await requestJson(ctx, `https://www.googleapis.com/books/v1/volumes?q=isbn:9783551713629&key=${encodeURIComponent(secret)}`, {}, { label: 'Google Books' });
         return { label: `Schlüssel …${String(secret).slice(-4)}` };
@@ -1015,7 +1304,7 @@ function forgetAccess(userId, provider) {
 }
 
 module.exports = {
-    searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, refreshDue,
+    searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, scheduleOwnTmdbRefresh, refreshDue,
     adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
-    spareDetail, state: () => S(), MANUAL_REFRESH_MS
+    spareDetail, tmdbLanguage, state: () => S(), MANUAL_REFRESH_MS, SEARCH_GRACE_MS, SEARCH_SOURCES
 };

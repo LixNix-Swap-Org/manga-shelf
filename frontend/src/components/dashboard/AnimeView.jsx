@@ -4,8 +4,11 @@ import AnimeCard from './AnimeCard';
 import { formatCount, formatRelative } from '../../utils/format';
 import { WATCH_BUILD, useWatchUnmatched } from '../../app/watch/watchState';
 import {
-  ALL_FILTER, ANIME_FILTERS, ANIME_SORTS, NO_STATUS, filterAnime, filterCounts, slowHintAllowed, markSlowHint, listSyncKeyError
+  ALL_FILTER, ANIME_FILTERS, ANIME_SORTS, NO_STATUS, filterAnime, filterCounts, slowHintAllowed, markSlowHint, listSyncKeyError,
+  KIND_FILTERS, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY, kindFilterLabel, kindCounts, filterKindLanguage, audioLanguagesOf, hasOtherKinds,
+  readSetting, writeSetting
 } from '../../utils/animeHelpers';
+import { languageName } from '../../utils/editions';
 import { t } from '../../i18n/index.js';
 import { animeProgressLabel } from '../../utils/enumLabels.js';
 
@@ -68,7 +71,7 @@ function SourceHints({ sources, listSync, onOpenAccount }) {
         <p key={l.key} className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">{/* i18n-ignore: translated when the lines are built */}{l.text}</p>
       ))}
       {own && <p className="text-xs text-emerald-300 flex items-center gap-1.5"><KeyRound className="w-3.5 h-3.5" aria-hidden="true" /> {t('Suche läuft über deinen AniList-Zugang')}</p>}
-      {(sources?.anilist?.key_disabled || sources?.mal?.key_disabled) && (
+      {(sources?.anilist?.key_disabled || sources?.mal?.key_disabled || sources?.tmdb?.key_disabled) && (
         <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
           {t('Dein API-Schlüssel wurde vom Anbieter abgelehnt und ist pausiert.')}{' '}
           {onOpenAccount && <button type="button" className="underline font-semibold" onClick={onOpenAccount}>{t('Schlüssel prüfen')}</button>}
@@ -113,8 +116,23 @@ export default function AnimeView({
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState(ANIME_FILTERS[0]);
   const [sort, setSort] = useState('title');
-  const counts = useMemo(() => filterCounts(list), [list]);
-  const shown = useMemo(() => filterAnime(list, { search, filter, sort }), [list, search, filter, sort]);
+  const [kindChoice, setKindChoice] = useState(() => readSetting(KIND_FILTER_KEY, ALL_FILTER, (v) => KIND_FILTERS.includes(v)));
+  const [languageChoice, setLanguageChoice] = useState(() => readSetting(LANGUAGE_FILTER_KEY, ALL_FILTER));
+  const showKinds = useMemo(() => hasOtherKinds(list), [list]);
+  const languages = useMemo(() => audioLanguagesOf(list), [list]);
+  const kind = showKinds ? kindChoice : ALL_FILTER;
+  const language = languages.includes(languageChoice) ? languageChoice : ALL_FILTER;
+  const chooseKind = (next) => {
+    setKindChoice(next);
+    writeSetting(KIND_FILTER_KEY, next);
+  };
+  const chooseLanguage = (next) => {
+    setLanguageChoice(next);
+    writeSetting(LANGUAGE_FILTER_KEY, next);
+  };
+  const kinds = useMemo(() => kindCounts(list), [list]);
+  const counts = useMemo(() => filterCounts(filterKindLanguage(list, { kind, language })), [list, kind, language]);
+  const shown = useMemo(() => filterAnime(list, { search, filter, sort, kind, language }), [list, search, filter, sort, kind, language]);
   const offline = Boolean(user?.offline);
   // apps only: series of the Crunchyroll history the server could not map (always empty elsewhere)
   const unmatched = useUnmatched();
@@ -137,7 +155,7 @@ export default function AnimeView({
     <section aria-labelledby="anime-view-heading" className="pb-6">
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
         <h2 id="anime-view-heading" className="text-lg font-bold text-white flex items-center gap-2 shrink-0">
-          <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {t('Anime')}
+          <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {showKinds ? t('Anime & Serien') : t('Anime')}
         </h2>
         <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 flex-1 min-w-0 focus-within:ring-2 focus-within:ring-brand-400">
           <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
@@ -186,6 +204,35 @@ export default function AnimeView({
           )}
         </div>
       </div>
+
+      {(showKinds || languages.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          {showKinds && (
+            <div role="group" aria-label={t('Nach Art filtern')} className="flex gap-1.5 overflow-x-auto pb-1">
+              {KIND_FILTERS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={kind === k}
+                  onClick={() => chooseKind(k)}
+                  className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${kind === k ? 'bg-brand-600/30 border-brand-500/60 text-white' : 'border-slate-700 text-slate-300 hover:text-white'}`}
+                >
+                  {kindFilterLabel(k)} <span className="font-mono text-slate-400">{kinds[k] || 0}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {languages.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="anime-language" className="text-xs text-slate-400 whitespace-nowrap">{t('Sprache')}</label>
+              <select id="anime-language" className="input-field text-base sm:text-xs py-1.5 w-auto" value={language} onChange={(e) => chooseLanguage(e.target.value)}>
+                <option value={ALL_FILTER}>{t('Alle')}</option>
+                {languages.map((code) => <option key={code} value={code}>{languageName(code)}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
 
       <div role="group" aria-label={t('Nach meinem Status filtern')} className="flex gap-1.5 overflow-x-auto pb-1 mb-4">
         {ANIME_FILTERS.map((f) => (

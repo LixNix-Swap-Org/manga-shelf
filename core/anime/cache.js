@@ -1,4 +1,4 @@
-// Answer cache in api_cache (search results, adaptations, "not found") with a TTL per kind. Errors are never stored.
+// Answer cache in api_cache (search results, adaptations, ISBN books, "not found") with a TTL per kind. Errors are never stored.
 const MINUTE = 60 * 1000;
 
 const TTL = {
@@ -6,7 +6,9 @@ const TTL = {
     // answered by only one source: kept briefly, so the other one is asked again soon
     partial: 5 * MINUTE,
     notFound: 10 * MINUTE,
-    adaptations: 24 * 60 * MINUTE
+    adaptations: 24 * 60 * MINUTE,
+    isbnFound: 30 * 24 * 60 * MINUTE,
+    isbnNotFound: 24 * 60 * MINUTE
 };
 
 const MAX_ROWS = 2000;

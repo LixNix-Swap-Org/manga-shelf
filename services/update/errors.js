@@ -36,6 +36,11 @@ const UPDATE_TEXTS = {
     UPDATE_FAILED: 'Das Update ist fehlgeschlagen.'
 };
 
+const HTTP_ONLY_TEXTS = {
+    DOWNGRADE_NOT_AVAILABLE: 'Zurück zu dieser Version ist auf diesem Server nicht möglich.',
+    DATA_LOSS_NOT_CONFIRMED: 'Bitte bestätigen, dass die Änderungen seit dem Update verloren gehen.'
+};
+
 const FIXED_PARAMS = {
     UPDATE_INSTALL_OFF: { variable: 'UPDATE_INSTALL' },
     SIGSTORE_TRUST_UNAVAILABLE: { host: TUF_HOST }
@@ -72,6 +77,11 @@ function updateError(code, params, extra) {
     return new HttpError(STATUS[code] || 422, message, code, extra);
 }
 
+/** 409 HttpError of a code that is answered over HTTP only and never written to the state file. */
+function httpOnlyError(code, extra) {
+    return new HttpError(409, HTTP_ONLY_TEXTS[code], code, extra);
+}
+
 /** { code, message } of an error for the status answer; unknown errors become UPDATE_FAILED. */
 function errorSummary(err) {
     if (err && typeof err.code === 'string' && Object.prototype.hasOwnProperty.call(UPDATE_TEXTS, err.code)) {
@@ -87,4 +97,4 @@ function errorSummary(err) {
     return { code: 'UPDATE_FAILED', message: UPDATE_TEXTS.UPDATE_FAILED };
 }
 
-module.exports = { UPDATE_TEXTS, updateError, errorSummary };
+module.exports = { UPDATE_TEXTS, HTTP_ONLY_TEXTS, updateError, httpOnlyError, errorSummary };

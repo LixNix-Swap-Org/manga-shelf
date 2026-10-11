@@ -306,14 +306,14 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const onlineFocusRef = useRef(false);
 
   const shelfQuery = deferredSearch.trim();
-  const showOnline = lookupAvailable && onlineQuery !== '';
+  const showOnline = lookupAvailable && (onlineQuery !== '' || (onlinePending && searchScope.scope === 'online'));
   const searchExtras = useMemo(() => {
     if (!shelfQuery) return null;
     return {
       query: shelfQuery,
       renderSection: showOnline ? (embedded) => (
         <Suspense fallback={null}>
-          <OnlineResults query={onlineQuery} seq={onlineSeq} mangas={mangas} canEdit={canEdit} onAdd={openPrefilled} embedded={embedded} focusRequest={onlineFocusRef} />
+          <OnlineResults query={onlineQuery} seq={onlineSeq} mangas={mangas} canEdit={canEdit} onAdd={openPrefilled} embedded={embedded} focusRequest={onlineFocusRef} pending={onlinePending} typed={shelfQuery} />
         </Suspense>
       ) : null,
       onSearchOnline: lookupAvailable && !showOnline && !onlinePending && shelfQuery.length >= ONLINE_MIN_CHARS ? () => {
@@ -816,6 +816,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               initialMangaId={animeAdd.mangaId}
               initialQuery={animeAdd.query || ''}
               returnFocusRef={animeAdd.share ? shareDialogRef : undefined}
+              sources={anime.sources}
+              loadSources={anime.fetchSources}
+              animeOnly={Boolean(animeAdd.share) || matchSearch.current !== null}
             />
           )}
         </Suspense>

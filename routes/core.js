@@ -18,10 +18,19 @@ function send(res, result) {
     else res.json(result.body);
 }
 
+function countingHttp(http, outbound) {
+    const counted = (fn) => (typeof fn === 'function' ? (...args) => {
+        outbound.calls++;
+        return fn(...args);
+    } : fn);
+    return { ...http, fetch: counted(http.fetch), fetchText: counted(http.fetchText), fetchImage: counted(http.fetchImage) };
+}
+
 function adapt(row) {
     return async function coreHandler(req, res) {
         const ac = new AbortController();
         res.on('close', () => { if (!res.writableFinished) ac.abort(); });
+        const outbound = { calls: 0 };
         const ctx = createCtx({
             user: req.user || null,
             signal: ac.signal,
@@ -32,14 +41,18 @@ function adapt(row) {
                 return true;
             }
         });
+        ctx.http = countingHttp(ctx.http, outbound);
         let result;
         try {
             const input = (row.parse || defaultParse)({ params: req.params, query: req.query, body: req.body });
             result = await row.handler(ctx, input);
         } catch (err) {
-            if (err === ANSWERED) return;
+            if (err === ANSWERED || ac.signal.aborted) return;
             throw err;
+        } finally {
+            if (row.limit === 'lookup' && outbound.calls === 0) LIMITERS.lookup.refund(req);
         }
+        if (ac.signal.aborted) return;
         send(res, result);
     };
 }

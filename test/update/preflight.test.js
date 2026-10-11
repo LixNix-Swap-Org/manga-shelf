@@ -216,3 +216,33 @@ test('space: data and code volume are checked, NO_SPACE carries the numbers', ()
     assert.equal(zipNeed.dataNeeded, 50 * 1024 * 1024 + 2 * 1024 * 1024 + Math.ceil(1.2 * 1024 * 1024) + 100 * 1024 * 1024);
     assert.doesNotThrow(() => preflight.checkSpace({ ...args, freeBytes: () => null }), 'unknown free space never blocks');
 });
+
+test('space for a downgrade that replaces the database: three times the larger of the live and the source database on top', () => {
+    const dataDir = path.join(root, 'space-downgrade');
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'manga.db'), Buffer.alloc(1024 * 1024));
+    const args = { mode: 'pterodactyl', dataDir, codeDir: dataDir, assetSize: 0, freeBytes: () => 1e12 };
+    const plain = preflight.checkSpace(args).dataNeeded;
+    assert.equal(preflight.checkSpace({ ...args, sourceDbBytes: 4 * 1024 * 1024 }).dataNeeded, plain + 3 * 4 * 1024 * 1024);
+    assert.equal(preflight.checkSpace({ ...args, sourceDbBytes: 10 }).dataNeeded, plain + 3 * 1024 * 1024);
+});
+
+test('a downgrade that replaces the database: the size comes from the backup, db-check runs against the database out of it', sea, async () => {
+    const dir = path.join(root, `backup-copy-${n++}`);
+    fs.mkdirSync(dir, { recursive: true });
+    const db = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(4000)]);
+    const backup = path.join(dir, 'vor-update.zip');
+    fs.writeFileSync(backup, h.makeZip([{ name: 'manga.db', data: db }, { name: 'manifest.json', data: '{}' }]));
+    assert.equal(await preflight.databaseSizeInBackup(backup), db.length);
+    const empty = path.join(dir, 'empty.zip');
+    fs.writeFileSync(empty, h.makeZip([{ name: 'manifest.json', data: '{}' }]));
+    await assert.rejects(preflight.databaseSizeInBackup(empty), code('BAD_PACKAGE', 'backup_without_database'));
+
+    const copy = await preflight.backupDatabaseCopy(backup)(dir);
+    assert.deepEqual(fs.readFileSync(copy), db);
+    const s = seaSetup({ version: '3.1.0' });
+    assert.deepEqual(await preflight.seaPreflight({ ...s, version: '3.1.0', copyDatabase: preflight.backupDatabaseCopy(backup) }), { dbChecked: true });
+    assert.deepEqual(fs.readdirSync(s.workDir).filter((f) => f.startsWith('check-')), [], 'the extracted copy is removed');
+    fs.writeFileSync(backup, h.makeZip([{ name: 'manga.db', data: 'no database' }]));
+    await assert.rejects(preflight.seaPreflight({ ...seaSetup({ version: '3.1.0' }), version: '3.1.0', copyDatabase: preflight.backupDatabaseCopy(backup) }), code('PREFLIGHT_FAILED', 'db_check'));
+});

@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const zip = require('./zip');
+const swap = require('./swap');
 const { satisfiesRange, compareVersions } = require('./version');
 const { updateError } = require('./errors');
 const { MB } = require('./constants');
@@ -51,11 +52,12 @@ const sameVolume = (a, b) => {
     try { return fs.statSync(a).dev === fs.statSync(b).dev; } catch (e) { return false; }
 };
 
-/** Data volume: asset (twice for a binary: staged and its run copy) + 2 × database + backup estimate + 100 MB; code volume: asset + current code. */
-function checkSpace({ mode, dataDir, codeDir, execPath, assetSize, freeBytes = disk.freeBytes }) {
+/** Data volume: asset (twice for a binary: staged and its run copy) + 2 × database + backup estimate + 100 MB (+ 3 × the larger database when a downgrade replaces it); code volume: asset + current code. */
+function checkSpace({ mode, dataDir, codeDir, execPath, assetSize, freeBytes = disk.freeBytes, sourceDbBytes = null }) {
     const db = disk.fileSize(path.join(dataDir, 'manga.db')) + disk.fileSize(path.join(dataDir, 'manga.db-wal'));
     const assetCopies = mode === 'sea-user' ? 2 : 1;
-    const dataNeeded = assetCopies * assetSize + 2 * db + Math.ceil(1.2 * db) + MARGIN_BYTES;
+    const replaced = sourceDbBytes === null ? 0 : 3 * Math.max(db, sourceDbBytes);
+    const dataNeeded = assetCopies * assetSize + 2 * db + Math.ceil(1.2 * db) + MARGIN_BYTES + replaced;
     const codeBase = mode === 'pterodactyl' ? codeDir : path.dirname(execPath);
     const codeNeeded = assetSize + (mode === 'pterodactyl' ? currentTreeSize(codeDir) : disk.fileSize(execPath));
     const shared = sameVolume(dataDir, codeBase);
@@ -205,6 +207,27 @@ async function copyLiveDatabase(workDir) {
     return target;
 }
 
+/** Uncompressed size of manga.db in a backup ZIP; throws when the ZIP holds none. */
+async function databaseSizeInBackup(backupFile) {
+    const archive = await zip.openZip(backupFile);
+    try {
+        const entry = archive.entries.find((e) => e.name === 'manga.db');
+        if (!entry) throw updateError('BAD_PACKAGE', null, { reason: 'backup_without_database' });
+        return entry.uncompressedSize;
+    } finally {
+        await zip.closeZip(archive);
+    }
+}
+
+/** copyDatabase for the binary preflight that hands the db-check the database a downgrade will install: manga.db out of `backupFile`. */
+function backupDatabaseCopy(backupFile) {
+    return async (workDir) => {
+        const target = path.join(workDir, `check-${crypto.randomUUID()}.db`);
+        swap.extractDbSync(backupFile, target);
+        return target;
+    };
+}
+
 function removeCopy(copy) {
     if (!copy) return;
     for (const f of [copy, `${copy}-wal`, `${copy}-shm`, `${copy}-journal`]) {
@@ -251,4 +274,4 @@ async function runPreflight(options) {
     throw updateError('NOT_INSTALLABLE', null, { reason: options.mode || 'unknown' });
 }
 
-module.exports = { runPreflight, checkSpace, zipPreflight, seaPreflight, productionDeps, reportsVersion, currentTreeSize, childEnv, runChild, dbCheckTimeout, copyLiveDatabase };
+module.exports = { runPreflight, checkSpace, zipPreflight, seaPreflight, productionDeps, reportsVersion, currentTreeSize, childEnv, runChild, dbCheckTimeout, copyLiveDatabase, databaseSizeInBackup, backupDatabaseCopy };

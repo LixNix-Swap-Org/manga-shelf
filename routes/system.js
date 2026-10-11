@@ -191,7 +191,8 @@ function latestState() {
 
 const releaseSummary = (r) => ({
     version: r.version, tag: r.tag, published_at: r.published_at, url: r.html_url,
-    signed: r.signed, installable: r.installable, reason: r.reason, has_admin_notes: r.has_admin_notes
+    signed: r.signed, installable: r.installable, reason: r.reason, has_admin_notes: r.has_admin_notes,
+    ...(r.rollback ? { rollback: true } : {})
 });
 
 const releasesState = (view) => ({
@@ -287,6 +288,15 @@ function stagingInfo(status) {
     };
 }
 
+function rollbackState() {
+    try {
+        return updater.rollbackInfo({ view: update.releases });
+    } catch (err) {
+        log.warn('[Update] Stand für das Zurücksetzen nicht ermittelt:', err);
+        return null;
+    }
+}
+
 function updateState(now = Date.now()) {
     const enabled = updateCheckEnabled();
     if (!enabled) return { enabled, current: pkg.version, ...(update.result || NO_RESULT) };
@@ -300,7 +310,8 @@ function updateState(now = Date.now()) {
         ...releasesState(update.releases),
         staging: stagingInfo(status),
         status,
-        last: updater.lastResult()
+        last: updater.lastResult(),
+        rollback: rollbackState()
     };
 }
 
@@ -435,17 +446,26 @@ router.post('/system/update/check', requireAdmin, updateAvailable, checkLimiter,
 });
 
 router.post('/system/update/prepare', requireAdmin, updateAvailable, installAllowed, prepareLimiter, async (req, res) => {
-    const started = await updater.prepareUpdate({ version: req.body.version, userId: req.user.id });
-    log.info(`[Update] v${req.body.version} wird geladen und geprüft, angefordert durch ${audit(req)}`);
+    const downgrade = req.body.downgrade === true;
+    const started = await updater.prepareUpdate({ version: req.body.version, userId: req.user.id, downgrade });
+    log.info(`[Update] v${req.body.version} wird geladen und geprüft${downgrade ? ' (zurück)' : ''}, angefordert durch ${audit(req)}`);
     res.status(202).json(started);
 });
 
 router.post('/system/update/apply/:stagingId', requireAdmin, updateAvailable, installAllowed, applyLimiter, async (req, res) => {
+    const acceptDataLoss = req.body.accept_data_loss === true;
+    try {
+        updater.assertDataLossAccepted({ stagingId: req.params.stagingId, userId: req.user.id, acceptDataLoss });
+    } catch (err) {
+        applyLimiter.refund(req);
+        throw err;
+    }
     await confirmPassword(req, res, req.body.current_password);
     const accepted = updater.applyUpdate({
         stagingId: req.params.stagingId,
         userId: req.user.id,
-        audit: { username: req.user.username, authScheme: req.authScheme, ip: clientIp(req) }
+        audit: { username: req.user.username, authScheme: req.authScheme, ip: clientIp(req) },
+        acceptDataLoss
     });
     applyLimiter.refund(req);
     res.status(202).json(accepted);

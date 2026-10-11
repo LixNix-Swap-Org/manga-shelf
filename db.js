@@ -9,6 +9,8 @@ const schema = require('./core/schema');
 const { loadPublisherAliases } = require('./core/lib/publishers');
 const { msg } = require('./core/errors');
 const updateState = require('./services/update/state');
+const { recoverReplacedDatabase } = require('./services/update/dbRecovery');
+const appVersion = require('./package.json').version;
 
 // DATA_DIR allows isolated data directories (tests, custom volume layouts); default: ./data
 const dataDir = config.dataDir;
@@ -31,6 +33,8 @@ let currentDb = null;
 // bumped on every (re)open: a restore reopens the file and total_changes() starts again at 0 (utils/dataVersion.js)
 let connectionGeneration = 0;
 let lastMigrationReport = [];
+let lastSafetySnapshot = null;
+let downgradeChecked = false;
 
 const SAFETY_SNAPSHOT_PREFIX = 'vor-update';
 // same variable as the pre-update category of services/scheduler.js
@@ -62,8 +66,10 @@ function writePreMigrationSnapshot(conn, fromVersion, toVersion) {
         }
         const zip = new AdmZip();
         zip.addLocalFile(copy, '', 'manga.db');
-        fs.writeFileSync(target + '.part', zip.toBuffer());
+        const bytes = zip.toBuffer();
+        fs.writeFileSync(target + '.part', bytes);
         fs.renameSync(target + '.part', target);
+        lastSafetySnapshot = { file: filename, sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
     } catch (err) {
         try { fs.unlinkSync(target + '.part'); } catch (e) { /* never written */ }
         throw err;
@@ -72,17 +78,33 @@ function writePreMigrationSnapshot(conn, fromVersion, toVersion) {
             try { fs.unlinkSync(copy + suffix); } catch (e) { /* not there */ }
         }
     }
-    const held = updateState.heldBackup(dataDir);
+    const keep = keptByUpdate(conn);
+    if (!keep) return filename;
     const older = fs.readdirSync(backupsDir)
         .filter(f => f.startsWith(SAFETY_SNAPSHOT_PREFIX + '-') && SAFETY_SNAPSHOT_TIME.test(f))
         .sort((a, b) => SAFETY_SNAPSHOT_TIME.exec(b)[1].localeCompare(SAFETY_SNAPSHOT_TIME.exec(a)[1]))
         .slice(safetySnapshotKeep())
-        .filter(f => f !== held);
+        .filter(f => !keep.has(f) && !updateState.isDowngradeBackup(f));
     for (const name of older) {
         try { fs.unlinkSync(path.join(backupsDir, name)); } catch (e) { log.warn(`[Database] Could not delete old safety snapshot ${name}:`, e.message); }
     }
     return filename;
 }
+function settingOf(conn, key) {
+    try {
+        const row = conn.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
+        return row ? row.value : undefined;
+    } catch (e) {
+        return undefined;
+    }
+}
+
+function keptByUpdate(conn) {
+    if (typeof updateState.heldBackups !== 'function' || typeof updateState.versionRecord !== 'function' || typeof updateState.isDowngradeBackup !== 'function') return null;
+    const { hold, anchor } = updateState.heldBackups(dataDir, { version: appVersion, record: updateState.versionRecord((key) => settingOf(conn, key)) });
+    return new Set([...hold, ...(anchor ? [anchor] : [])]);
+}
+
 /**
  * The safety snapshot before pending migrations run, only for a database that already has users. Without it the
  * start stops before the first migration (the database stays as it is) unless MIGRATE_WITHOUT_SNAPSHOT is set.
@@ -269,6 +291,10 @@ function checkNewerSchema(conn, allowNewerSchema) {
 // (Re)opens the live database; currentDb is only assigned once schema and migrations succeeded, so a failed init is retried on next access.
 function initDb({ allowNewerSchema = false } = {}) {
     closeDb();
+    if (!downgradeChecked) {
+        recoverReplacedDatabase({ dataDir, version: appVersion, out: (line) => log.warn(line) });
+        downgradeChecked = true;
+    }
     assertNoPendingRollbackCopy();
 
     const conn = openRawDb(dbPath);
@@ -436,5 +462,7 @@ module.exports = {
     getConnectionGeneration: () => connectionGeneration,
     getInstanceId: () => instanceId,
     getLastMigrationReport: () => lastMigrationReport,
+    getLastSafetySnapshot: () => lastSafetySnapshot,
+    isDbOpen: () => currentDb !== null,
     createCtx
 };

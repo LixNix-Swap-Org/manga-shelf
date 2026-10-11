@@ -103,9 +103,13 @@ test('a seeded collection reads the same through Express and the in-memory core'
     const anime = (await both('ed', 'POST', '/anime', { title: 'Parität Anime', episodes: 12 })).id;
     await both('ed', 'POST', `/anime/${anime}/watched`, { episode: 4, url: 'https://www.crunchyroll.com/de/watch/GPARITY01/a-title', remember: { service: 'crunchyroll', external_id: 'GPARITY99' } });
     await both('ed', 'POST', '/anime/resolve-link', { url: 'https://www.crunchyroll.com/series/GPARITY99/paritaet-anime' });
+    await both('ed', 'PUT', `/anime/${anime}/progress`, { audio_language: 'ja', subtitle_language: 'de' });
+    const film = (await both('ed', 'POST', '/anime', { title: 'Parität Film', kind: 'movie' })).id;
+    await both('ed', 'PUT', `/anime/${film}`, { kind: 'tv' });
+    await both('ed', 'PUT', `/anime/${film}/progress`, { status: 'Gesehen', audio_language: 'en' });
 
     const reads = [
-        '/anime', `/anime/${anime}`, '/anime/sync', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
+        '/anime', `/anime/${anime}`, `/anime/${film}`, '/anime/sync', '/export/anime.csv', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
         '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
         '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
         '/maintenance/quality'

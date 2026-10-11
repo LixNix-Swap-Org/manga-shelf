@@ -6,17 +6,19 @@ import { apiFetch, assetImgProps, readJson, TIMEOUTS } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import { editionDefaults, editionLanguage, getDefaultLanguage, languageName } from '../../utils/editions';
-import { hitToForm, lookupSourceLabels } from '../../utils/lookupPrefill';
-import { matchHit, retryAfterSeconds, visibleHits } from '../../utils/onlineMatch';
+import { alsoOnLabels, hitToForm, lookupSourceLabels } from '../../utils/lookupPrefill';
+import { matchHit, provisionalHits, retryAfterSeconds, visibleHits } from '../../utils/onlineMatch';
+import { setCoverOrigin } from '../../utils/coverOrigin';
 import { serverText } from '../../i18n/serverText.js';
 import { t, tn } from '../../i18n/index.js';
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 const UNAVAILABLE_HOLD_MS = 30 * 1000;
 const LOADING = { status: 'loading', hits: [] };
 const entries = new Map();
 let running = null;
 let rateLimitedUntil = 0;
+let lastSettled = null;
 
 const cacheKey = (query, language) => `${language}|${query.toLowerCase()}`;
 
@@ -25,6 +27,7 @@ export function clearOnlineAnswers() {
   running?.controller.abort();
   running = null;
   rateLimitedUntil = 0;
+  lastSettled = null;
   entries.clear();
 }
 
@@ -54,9 +57,16 @@ function publish(entry, view, until) {
 
 const rateView = (until) => ({ status: 'error', hits: [], error: 'rate', seconds: Math.max(1, Math.ceil((until - Date.now()) / 1000)) });
 
-function settle(entry, result) {
+function rememberSettled(language, hits) {
+  lastSettled = { language, hits };
+}
+
+function settle(entry, result, language) {
   const now = Date.now();
   if (result.hits) {
+    rememberSettled(language, result.hits);
+    const cover = result.hits.find((hit) => hit?.source === 'manga_passion' && hit.cover_image)?.cover_image;
+    if (cover) setCoverOrigin(cover);
     publish(entry, { status: 'done', hits: result.hits }, now + CACHE_TTL_MS);
   } else if (result.error === 'rate') {
     rateLimitedUntil = now + result.seconds * 1000;
@@ -66,19 +76,23 @@ function settle(entry, result) {
   }
 }
 
+function dropRunning() {
+  if (!running) return;
+  running.controller.abort();
+  const dropped = entries.get(running.key);
+  if (dropped) dropped.seq = -1;
+  running = null;
+}
+
 function startLookup(key, entry, query, language) {
-  if (running) {
-    running.controller.abort();
-    const dropped = entries.get(running.key);
-    if (dropped) dropped.seq = -1;
-  }
+  dropRunning();
   const job = { key, controller: new AbortController() };
   running = job;
   publish(entry, LOADING, 0);
   const finish = (result) => {
     if (running !== job) return;
     running = null;
-    settle(entry, result);
+    settle(entry, result, language);
   };
   fetchHits(query, language, job.controller.signal).then(finish, () => finish({ error: 'other' }));
 }
@@ -91,7 +105,11 @@ function request(key, query, language, seq) {
   }
   entry.seq = seq;
   const now = Date.now();
-  if (now < entry.until && entry.view.error !== 'rate') return;
+  if (now < entry.until && entry.view.error !== 'rate') {
+    dropRunning();
+    if (entry.view.status === 'done') rememberSettled(language, entry.view.hits);
+    return;
+  }
   if (now < rateLimitedUntil) publish(entry, rateView(rateLimitedUntil), rateLimitedUntil);
   else startLookup(key, entry, query, language);
 }
@@ -99,13 +117,14 @@ function request(key, query, language, seq) {
 function useOnlineLookup(query, seq, language) {
   const key = cacheKey(query, language);
   const subscribe = useCallback((notify) => {
+    if (!query) return () => {};
     const entry = entryFor(key);
     entry.listeners.add(notify);
     return () => { entry.listeners.delete(notify); };
-  }, [key]);
+  }, [key, query]);
   const view = useSyncExternalStore(subscribe, () => entries.get(key)?.view ?? LOADING);
   useEffect(() => {
-    request(key, query, language, seq);
+    if (query) request(key, query, language, seq);
   }, [key, query, language, seq]);
   return view;
 }
@@ -122,18 +141,21 @@ function statusText(state, query) {
 }
 
 function SourceBadges({ hit }) {
-  if (hit.source === 'manga_passion') {
-    return (
-      <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[10px] font-bold shrink-0">
-        <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
-      </span>
-    );
-  }
-  return lookupSourceLabels(hit).map((label) => (
-    <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[10px] font-medium shrink-0">
-      <Globe className="w-3 h-3" aria-hidden="true" />{label}
-    </span>
-  ));
+  const mp = hit.source === 'manga_passion';
+  return (
+    <>
+      {mp && (
+        <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[10px] font-bold shrink-0">
+          <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
+        </span>
+      )}
+      {(mp ? alsoOnLabels(hit) : lookupSourceLabels(hit)).map((label) => (
+        <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[10px] font-medium shrink-0">
+          <Globe className="w-3 h-3" aria-hidden="true" />{label}
+        </span>
+      ))}
+    </>
+  );
 }
 
 function MatchNote({ match }) {
@@ -206,7 +228,7 @@ function HitCard({ hit, match, canEdit, onAdd }) {
 }
 
 /** Online lookup hits for `query` with their relation to the collection; `embedded` inside the empty-shelf panel. */
-export default function OnlineResults({ query, seq = 0, mangas = [], canEdit = false, onAdd, embedded = false, focusRequest = null }) {
+export default function OnlineResults({ query, seq = 0, mangas = [], canEdit = false, onAdd, embedded = false, focusRequest = null, pending = false, typed = '' }) {
   const language = getDefaultLanguage();
   const state = useOnlineLookup(query, seq, language);
   const headingId = useId();
@@ -218,14 +240,27 @@ export default function OnlineResults({ query, seq = 0, mangas = [], canEdit = f
     focusRef.current?.focus();
   }, [focusRequest]);
 
-  const hits = useMemo(() => visibleHits(state.hits), [state.hits]);
+  const hasQuery = Boolean(query);
+  const loading = hasQuery && state.status === 'loading';
+  const settled = lastSettled && lastSettled.language === language ? lastSettled.hits : null;
+  const provisional = hasQuery && (pending || loading) && settled !== null;
+  const filterText = String(typed ?? '').trim() || query;
+  const hits = useMemo(
+    () => (provisional ? provisionalHits(settled, filterText) : visibleHits(state.hits)),
+    [provisional, settled, filterText, state.hits]
+  );
   const matches = useMemo(() => hits.map((hit) => matchHit(hit, mangas, { language })), [hits, mangas, language]);
-  const loading = state.status === 'loading';
+  const showList = hasQuery && (provisional || !loading) && hits.length > 0;
+  const showSkeleton = loading && !provisional;
+  let status = statusText(state, query);
+  if (!hasQuery) status = t('Online-Suche läuft…');
+  else if (provisional) status = hits.length > 0 ? t('Wird aktualisiert…') : t('Online-Suche läuft…');
   const Wrapper = embedded ? 'div' : 'section';
+  const labelled = !embedded && hasQuery;
 
   return (
-    <Wrapper aria-labelledby={embedded ? undefined : headingId} aria-busy={loading || undefined} className={embedded ? 'text-left' : 'mt-8'}>
-      {!embedded && (
+    <Wrapper aria-labelledby={labelled ? headingId : undefined} aria-busy={loading || pending || undefined} className={embedded ? 'text-left' : 'mt-8'}>
+      {labelled && (
         <h2 id={headingId} ref={focusRef} tabIndex={-1} className="flex items-center gap-2 text-sm font-bold text-slate-200 mb-2 focus:outline-none">
           <Globe className="w-4 h-4 text-sky-400" aria-hidden="true" /> {t('Online-Treffer zu „{q}“', { q: query })}
         </h2>
@@ -235,16 +270,16 @@ export default function OnlineResults({ query, seq = 0, mangas = [], canEdit = f
         aria-live="polite"
         ref={embedded ? focusRef : undefined}
         tabIndex={embedded ? -1 : undefined}
-        className={`text-xs mb-3 focus:outline-none ${state.status === 'error' ? 'text-amber-300' : 'text-slate-400'}`}
+        className={`text-xs mb-3 focus:outline-none ${hasQuery && !provisional && state.status === 'error' ? 'text-amber-300' : 'text-slate-400'}`}
       >
-        {statusText(state, query)}
+        {status}
       </p>
-      {loading && (
+      {showSkeleton && (
         <div aria-hidden="true" className={`grid gap-3 ${embedded ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'}`}>
           {[0, 1, 2].map((i) => <div key={i} className="h-24 rounded-xl border border-slate-800 bg-slate-800/50 animate-pulse" />)}
         </div>
       )}
-      {!loading && hits.length > 0 && (
+      {showList && (
         <ul className={`grid gap-3 ${embedded ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'}`}>
           {hits.map((hit, i) => (
             <HitCard key={hit.id ?? `${hit.source}-${hit.title}-${i}`} hit={hit} match={matches[i]} canEdit={canEdit} onAdd={onAdd} />

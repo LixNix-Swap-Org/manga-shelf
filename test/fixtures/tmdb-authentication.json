@@ -1,0 +1,6 @@
+{
+ "_note": "Hand-written from the documented TMDb API v3 answer of GET /3/authentication for a valid key.",
+ "success": true,
+ "status_code": 1,
+ "status_message": "Success."
+}

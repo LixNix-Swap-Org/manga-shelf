@@ -4,37 +4,116 @@ const { qstr } = require('../lib/query');
 const { normalizeIsbn, isValidIsbn } = require('../lib/isbn');
 const { HttpError, badRequest, msg, payloadMsg } = require('../errors');
 const client = require('../mangaPassion/client');
-const { ANILIST_TIMEOUT_MS } = require('../anilist');
 const gateway = require('../anime/gateway');
+const cache = require('../anime/cache');
+const { titleScore } = require('../anime/normalize');
 const { lookupBookByIsbn, matchCollection } = require('../isbnLookup');
 const { fetchImage } = require('../lib/imageCheck');
+const { anySignal } = require('../lib/signals');
 const { normalizeLanguage, isMpLanguage, workKeyOfHit } = require('../lib/language');
 
 const log = (ctx) => ctx.log.child('lookup');
 
-const SOURCE_DEADLINE_MS = 12000;
+const SOURCE_DEADLINE_MS = 6000;
+const SEARCH_TIMEOUT_MS = 5000;
 const MAX_TERM_LENGTH = 100;
+const MAX_HITS = 10;
+const KEPT_MP_HITS = 3;
+const FOLD_SCORE = 0.95;
+const FOLD_FIELDS = ['author', 'alt_title', 'description', 'cover_image', 'tags', 'total_volumes'];
 // mutable for tests only
-const lookupTimings = { aniListTimeoutMs: ANILIST_TIMEOUT_MS, sourceDeadlineMs: SOURCE_DEADLINE_MS };
+const lookupTimings = { searchTimeoutMs: SEARCH_TIMEOUT_MS, sourceDeadlineMs: SOURCE_DEADLINE_MS };
 
-/** Resolves with `fallback` after `ms`, so one stuck source can never hold back the answer of the others. */
-function withDeadline(ctx, promise, ms, fallback, label) {
+/** Resolves with `fallback` after `ms` and aborts `controller`, so one stuck source can never hold back the others. */
+function withDeadline(ctx, promise, ms, fallback, label, controller) {
     let timer;
     const timeout = new Promise(resolve => {
         timer = setTimeout(() => {
             log(ctx).warn(`${label} lookup took longer than ${ms} ms, answering without it`);
+            controller.abort();
             resolve(fallback);
         }, ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+const titlesOf = (hit) => [hit.title, hit.alt_title, ...(Array.isArray(hit.alt_titles) ? hit.alt_titles : [])].filter(Boolean);
+const isEmpty = (value) => value === null || value === undefined || value === '';
+
+function idNumber(id, prefix) {
+    const m = new RegExp(`^${prefix}_(\\d+)$`).exec(String(id ?? ''));
+    return m ? Number(m[1]) : null;
+}
+
+function foldPairs(mpHits, gatewayHits) {
+    const matches = (mp, hit) => Boolean(mp.title) && titleScore(mp.title, titlesOf(hit)) >= FOLD_SCORE;
+    const pairs = new Map();
+    gatewayHits.forEach((hit, i) => {
+        if (hit.source !== 'anilist' && hit.source !== 'mal') return;
+        const targets = mpHits.map((mp, j) => j).filter((j) => matches(mpHits[j], hit));
+        if (targets.length !== 1) return;
+        const rival = gatewayHits.some((other, k) => k !== i && other.source === hit.source && matches(mpHits[targets[0]], other));
+        if (!rival) pairs.set(i, targets[0]);
+    });
+    for (const [i, j] of [...pairs]) {
+        if (gatewayHits[i].source !== 'mal') continue;
+        const ani = [...pairs].find(([k, target]) => target === j && gatewayHits[k].source === 'anilist');
+        if (ani && gatewayHits[ani[0]].mal_id) pairs.delete(i);
+    }
+    return pairs;
+}
+
+function foldInto(mp, folded) {
+    const ani = folded.find((hit) => hit.source === 'anilist');
+    const mal = folded.find((hit) => hit.source === 'mal');
+    const out = { ...mp };
+    for (const field of FOLD_FIELDS) {
+        if (!isEmpty(out[field])) continue;
+        const from = [ani, mal].find((hit) => hit && !isEmpty(hit[field]));
+        if (from) out[field] = from[field];
+    }
+    const names = [ani, mal].filter(Boolean).flatMap((hit) => [hit.source, ...(Array.isArray(hit.also_on) ? hit.also_on : [])]);
+    out.also_on = [...new Set(names)].filter((name) => name === 'anilist' || name === 'mal');
+    out.work_key = workKeyOfHit(ani || mal);
+    const anilistId = ani ? idNumber(ani.id, 'al') : null;
+    const malId = ani && ani.mal_id ? Number(ani.mal_id) : (mal ? idNumber(mal.id, 'mal') : null);
+    if (anilistId) out.anilist_id = anilistId;
+    if (malId) out.mal_id = malId;
+    return out;
+}
+
+/** Lookup hits folded into their Manga Passion edition, ranked by title and cut to 10 (up to 3 Manga Passion hits kept). */
+function rankLookupHits(query, mpHits, gatewayHits) {
+    const pairs = foldPairs(mpHits, gatewayHits);
+    const entries = mpHits.map((mp, j) => {
+        const folded = [...pairs].filter(([, target]) => target === j).map(([i]) => gatewayHits[i]);
+        return folded.length
+            ? { hit: foldInto(mp, folded), titles: [...titlesOf(mp), ...folded.flatMap(titlesOf)], mp: true }
+            : { hit: mp, titles: titlesOf(mp), mp: true };
+    });
+    gatewayHits.forEach((hit, i) => {
+        if (!pairs.has(i)) entries.push({ hit: { ...hit, work_key: workKeyOfHit(hit) }, titles: titlesOf(hit), mp: false });
+    });
+    const order = (a, b) => b.score - a.score || Number(b.mp) - Number(a.mp) || a.index - b.index;
+    const ranked = entries.map((entry, index) => ({ ...entry, index, score: titleScore(query, entry.titles) })).sort(order);
+    const top = ranked.slice(0, MAX_HITS);
+    for (const entry of ranked.filter((e) => e.mp && e.score > 0).slice(0, KEPT_MP_HITS)) {
+        if (top.includes(entry)) continue;
+        let lowest = -1;
+        for (let k = top.length - 1; k >= 0 && lowest < 0; k--) if (!top[k].mp) lowest = k;
+        if (lowest < 0) break;
+        top.splice(lowest, 1);
+        top.push(entry);
+    }
+    return top.sort(order).map((entry) => entry.hit);
+}
+
 const FAILED = Symbol('failed');
 const SOURCES_UNAVAILABLE = 'Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.';
 
 // Manga Passion (official German editions, only for ?language=de, the default) and the anime gateway (AniList,
-// MyAnimeList: budget, cache) in parallel, Manga Passion results first. 503 SOURCES_UNAVAILABLE when no source could be
-// asked, so "no hits" stays truthful. Gateway hits carry the work_key their editions share.
+// MyAnimeList: budget, cache) in parallel, folded and ranked. 503 SOURCES_UNAVAILABLE when no source could be asked, so
+// "no hits" stays truthful. Gateway hits carry the work_key their editions share.
 async function lookupManga(ctx, { query }) {
     const queryTerm = qstr(query.q);
     if (!queryTerm || !queryTerm.trim()) {
@@ -45,24 +124,29 @@ async function lookupManga(ctx, { query }) {
     const trimmed = queryTerm.trim().slice(0, MAX_TERM_LENGTH).trim();
 
     // one failing source never blocks the other
-    const deadline = lookupTimings.sourceDeadlineMs;
+    const { sourceDeadlineMs: deadline, searchTimeoutMs: timeoutMs } = lookupTimings;
     const failed = (label) => (err) => {
-        if (!err?.unavailable) log(ctx).warn(`${label} lookup error:`, err);
+        if (ctx.signal && ctx.signal.aborted) log(ctx).debug(`${label} lookup aborted`);
+        else if (!err?.unavailable) log(ctx).warn(`${label} lookup error:`, err);
         return FAILED;
     };
+    const branch = () => {
+        const controller = new AbortController();
+        return { controller, signal: anySignal([ctx.signal, controller.signal]) };
+    };
+    const mp = branch();
+    const gw = branch();
     const askMangaPassion = isMpLanguage(normalizeLanguage(qstr(query.language)));
     const [mpResults, gatewayResults] = await Promise.all([
         askMangaPassion
-            ? withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed).catch(failed('Manga Passion')), deadline, FAILED, 'Manga Passion')
+            ? withDeadline(ctx, client.searchMangaPassionForLookup(ctx, trimmed, { signal: mp.signal, requestTimeoutMs: timeoutMs }).catch(failed('Manga Passion')),
+                deadline, FAILED, 'Manga Passion', mp.controller)
             : Promise.resolve(FAILED),
-        withDeadline(ctx, gateway.searchManga(ctx, trimmed, { timeoutMs: lookupTimings.aniListTimeoutMs }).catch(failed('AniList/MyAnimeList')),
-            deadline, FAILED, 'AniList/MyAnimeList')
+        withDeadline(ctx, gateway.searchManga(ctx, trimmed, { timeoutMs, signal: gw.signal }).catch(failed('AniList/MyAnimeList')),
+            deadline, FAILED, 'AniList/MyAnimeList', gw.controller)
     ]);
     if (mpResults === FAILED && gatewayResults === FAILED) throw new HttpError(503, SOURCES_UNAVAILABLE, 'SOURCES_UNAVAILABLE');
-
-    // Manga Passion takes precedence (German publishers, correct German volume counts & covers)
-    const international = gatewayResults === FAILED ? [] : gatewayResults.map(hit => ({ ...hit, work_key: workKeyOfHit(hit) }));
-    return { body: [...(mpResults === FAILED ? [] : mpResults), ...international] };
+    return { body: rankLookupHits(trimmed, mpResults === FAILED ? [] : mpResults, gatewayResults === FAILED ? [] : gatewayResults) };
 }
 
 const UNREACHABLE_IMAGE = 'Bild-URL nicht erreichbar oder nicht erlaubt';
@@ -120,7 +204,27 @@ function withOwnership(ctx, volume, userId) {
     };
 }
 
-// German ISBN lookup: DNB -> K10plus -> Google Books, then the match against the collection
+function cacheIsbn(ctx, key, book, ttlMs) {
+    try {
+        cache.write(ctx, key, { book }, ttlMs);
+    } catch (err) {
+        log(ctx).debug('ISBN cache write failed:', err && err.message);
+    }
+}
+
+async function catalogueBook(ctx, cleanIsbn, isbn13) {
+    const key = `isbn:${isbn13}`;
+    const cached = cache.read(ctx, key);
+    if (cached && cached.value) return cached.value.book || null;
+    await ctx.limit('lookup');
+    let complete = false;
+    const book = await lookupBookByIsbn(ctx, cleanIsbn, { onSettled: (outcome) => { complete = Boolean(outcome && outcome.complete); } });
+    if (book) cacheIsbn(ctx, key, book, cache.TTL.isbnFound);
+    else if (complete) cacheIsbn(ctx, key, null, cache.TTL.isbnNotFound);
+    return book;
+}
+
+// German ISBN lookup: DNB and K10plus, then Google Books (cached), then the match against the collection
 async function lookupIsbn(ctx, { query }) {
     const rawIsbn = qstr(query.isbn);
     if (!rawIsbn || !rawIsbn.trim()) {
@@ -140,8 +244,7 @@ async function lookupIsbn(ctx, { query }) {
 
     // a volume of the collection with this ISBN is certain and needs no catalogue (also works without internet)
     const known = ctx.db.prepare('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1').get(isbn13);
-    if (!known) await ctx.limit('lookup');
-    const book = known ? null : await lookupBookByIsbn(ctx, cleanIsbn);
+    const book = known ? null : await catalogueBook(ctx, cleanIsbn, isbn13);
     if (!book && !known) {
         return {
             body: {
@@ -179,4 +282,4 @@ async function lookupIsbn(ctx, { query }) {
     };
 }
 
-module.exports = { lookupManga, lookupIsbn, uploadRemote, remoteImageError, lookupTimings };
+module.exports = { lookupManga, lookupIsbn, uploadRemote, remoteImageError, rankLookupHits, lookupTimings };

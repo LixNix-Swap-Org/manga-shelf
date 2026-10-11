@@ -18,8 +18,8 @@ const { SourceError } = require('../core/anime/request');
 const MIN_SECRET = 10;
 const MAX_SECRET = 4096;
 const USED_WRITE_GAP_MS = 60 * 1000;
-// MAL_CLIENT_ID and GOOGLE_BOOKS_KEY (utils/config.js)
-const ENV_KEYS = { mal: 'malClientId', google_books: 'googleBooksKey' };
+// MAL_CLIENT_ID, GOOGLE_BOOKS_KEY and TMDB_API_KEY (utils/config.js)
+const ENV_KEYS = { mal: 'malClientId', google_books: 'googleBooksKey', tmdb: 'tmdbApiKey' };
 
 const envSecret = (provider) => {
     const key = ENV_KEYS[provider];
@@ -71,7 +71,7 @@ function decrypt(row) {
     }
 }
 
-/** core/sources/credentials.js provider on top of the table (and MAL_CLIENT_ID / GOOGLE_BOOKS_KEY). */
+/** core/sources/credentials.js provider on top of the table (and MAL_CLIENT_ID / GOOGLE_BOOKS_KEY / TMDB_API_KEY). */
 const serverProvider = {
     get(userId, provider) {
         const row = rowFor(userId, provider);
@@ -109,6 +109,7 @@ const serverProvider = {
             .run(...(ok ? [now, now] : [now]), userId, provider);
     },
     status(userId, provider) {
+        if (userId === null && envSecret(provider)) return { configured: true, last_error: envFailure(provider) };
         const row = rowFor(userId, provider);
         return row ? { configured: true, last_error: row.last_error } : { configured: false, last_error: null };
     }
@@ -120,6 +121,7 @@ function registerServerSources() {
     animeSettings.configure({
         anilistRpm: config.animeAnilistRpm,
         jikanRpm: config.animeJikanRpm,
+        tmdbRpm: config.animeTmdbRpm,
         sources: config.animeSources
     });
 }
