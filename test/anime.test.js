@@ -215,6 +215,30 @@ test('watched from a shared link: never lowers, resume link and remembered serie
     assert.equal((await visitor('GET', `/anime/${id}`)).body.watch.next_url, 'https://www.crunchyroll.com/frieren-beyond-journeys-end/episode-1-the-journeys-end-911401');
 });
 
+test('single episodes: PUT progress with watched_episodes, the counter follows, "Weiter" points at the first gap', async () => {
+    const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
+    const before = { ...db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()) };
+    let res = await editor('PUT', `/anime/${id}/progress`, { watched_episodes: [3, 1] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual([res.body.status, res.body.episodes_watched, res.body.watched_episodes], ['Schaue', 2, [1, 3]]);
+    const entry = (await editor('GET', '/anime')).body.find((a) => a.id === id);
+    assert.deepEqual(entry.my_progress.watched_episodes, [1, 3]);
+    assert.match(entry.watch.next_url, /episode-2-/, 'the first unwatched episode, not the counter + 1');
+    assert.deepEqual((await editor('GET', `/anime/${id}`)).body.my_progress.watched_episodes, [1, 3]);
+    res = await editor('PUT', `/anime/${id}/progress`, { episodes_watched: 3 });
+    assert.deepEqual([res.body.episodes_watched, res.body.watched_episodes], [3, null], '+1 fills the gap, 1..3 is the plain counter');
+    for (const body of [{ watched_episodes: [0] }, { watched_episodes: [1.5] }, { watched_episodes: 'x' }, { watched_episodes: ['2'] }]) {
+        assert.equal((await editor('PUT', `/anime/${id}/progress`, body)).status, 400, JSON.stringify(body));
+    }
+    const above = await editor('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 29] });
+    assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
+    assert.equal((await visitor('PUT', `/anime/${id}/progress`, { watched_episodes: [1] })).status, 403);
+    const cols = Object.keys(before);
+    db.prepare(`UPDATE anime_progress SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE anime_id = ? AND user_id = ?`)
+        .run(...cols.map((c) => before[c]), id, kimId());
+});
+
+
 test('watched: previous progress for the undo, canonical episode links only, an episode above the total needs complete', async () => {
     const created = await editor('POST', '/anime', { title: 'Geteilte Staffel', episodes: 12 });
     assert.equal(created.status, 201, JSON.stringify(created.body));

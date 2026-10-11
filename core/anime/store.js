@@ -3,6 +3,7 @@
 const { fetchImage } = require('../lib/imageCheck');
 const { nextCheckAt, preferredTitle } = require('./normalize');
 const { SERVICES, isAllowedUrl, linkOf } = require('../watch/links');
+const episodeMarks = require('./episodes');
 
 const parseJson = (text, fallback) => {
     if (!text) return fallback;
@@ -202,7 +203,8 @@ const progressOf = (row) => (row ? {
     resume_url: row.resume_url ?? null,
     resume_episode: row.resume_episode ?? null,
     audio_language: row.audio_language ?? null,
-    subtitle_language: row.subtitle_language ?? null
+    subtitle_language: row.subtitle_language ?? null,
+    watched_episodes: episodeMarks.parseMarks(row.watched_episodes)
 } : null);
 
 /** The stored link lists of a row: { external_links, streaming_episodes } (arrays). */
@@ -219,7 +221,9 @@ function watchOf(row, progress, rememberedUrl = null) {
     const service = SERVICES[0];
     const { external_links: external, streaming_episodes: streaming } = linksOf(row);
     const watched = progress ? progress.episodes_watched || 0 : 0;
-    const next = streaming.find((e) => e.episode === watched + 1 && isAllowedUrl(e.url));
+    // the first episode not marked as watched (with single marks there may be a gap below the counter)
+    const nextEpisode = episodeMarks.nextUnwatched(episodeMarks.marksOf(progress));
+    const next = streaming.find((e) => e.episode === nextEpisode && isAllowedUrl(e.url));
     let nextUrl = next ? next.url : null;
     if (!nextUrl && progress && progress.resume_url && progress.resume_episode !== null && progress.resume_episode !== undefined
         && progress.resume_episode >= watched && isAllowedUrl(progress.resume_url)) nextUrl = progress.resume_url;

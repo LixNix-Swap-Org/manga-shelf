@@ -3,6 +3,7 @@ import { compareNatural, createSearch } from './search';
 import { formatRelative, formatTime } from './format';
 import { OFFLINE_SYNCED_EVENT, getClearGeneration } from './offlineStore';
 import links from '../../../core/watch/links.js';
+import episodeMarks from '../../../core/anime/episodes.js';
 import { t, tn } from '../i18n/index.js';
 
 // i18n
@@ -249,10 +250,14 @@ export function withProgress(anime, progress, user) {
  * The optimistic answer of a progress change, by the server's rules: counter clamped to a known episode count,
  * reaching it means "Gesehen", "Gesehen" fills the counter, a counter above 0 moves "Geplant" to "Schaue", choosing
  * "Geplant" alone resets the counter, a counter below the total (or with none) moves "Gesehen" back to "Schaue".
+ * `watched_episodes` (single episodes) sets the counter to their number; a counter change fills the first gaps or drops
+ * the highest marks (core/anime/episodes.js, like the server).
  */
 export function predictProgress(current, change, total) {
   const base = current || { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
-  const watched = change.episodes_watched;
+  const known = total > 0 ? total : null;
+  const marks = Array.isArray(change.watched_episodes) ? episodeMarks.cleanMarks(change.watched_episodes, known) : null;
+  const watched = marks ? marks.length : change.episodes_watched;
   let status = change.status ?? base.status;
   let episodes = watched ?? base.episodes_watched ?? 0;
   if (total > 0 && episodes > total) episodes = total;
@@ -273,6 +278,9 @@ export function predictProgress(current, change, total) {
   };
   if (change.audio_language !== undefined) next.audio_language = change.audio_language;
   if (change.subtitle_language !== undefined) next.subtitle_language = change.subtitle_language;
+  const marked = change.watched_episodes === null ? null : (marks || episodeMarks.parseMarks(base.watched_episodes));
+  const fitted = marked ? episodeMarks.fitMarks(episodeMarks.cleanMarks(marked, known), episodes) : null;
+  next.watched_episodes = fitted && !episodeMarks.isPlain(fitted) ? fitted : null;
   if (status !== 'Gesehen') next.finished_at = null;
   if (status === 'Geplant') next.started_at = null;
   // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
@@ -296,6 +304,37 @@ export function predictWatched(current, { episode, url = null }, total) {
   if (total > 0 && episodes >= total) status = 'Gesehen';
   else if (episodes > had && status !== 'Gesehen') status = 'Schaue';
   return { ...base, status, episodes_watched: episodes, resume_url: url, resume_episode: url ? Number(episode) || null : null };
+}
+
+/** The watched episodes of a progress answer: its single marks, else 1..episodes_watched. */
+export const watchedEpisodesOf = (progress) => episodeMarks.marksOf(progress);
+
+/**
+ * Sections of the episode grid: the seasons of a TV show (absolute numbers), else blocks of 100. `count` is the number of
+ * episodes to show; each section is { from, to, season }.
+ */
+export function episodeSections(anime, count, size = 100) {
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
+  const out = [];
+  if (kindOf(anime) === 'tv' && seasons.length) {
+    let before = 0;
+    for (const s of seasons) {
+      const n = Number(s.episode_count) || 0;
+      if (n > 0 && before < count) out.push({ from: before + 1, to: Math.min(before + n, count), season: s.season_number });
+      before += n;
+    }
+    if (before < count) out.push({ from: before + 1, to: count, season: null });
+    return out;
+  }
+  for (let from = 1; from <= count; from += size) out.push({ from, to: Math.min(from + size - 1, count), season: null });
+  return out;
+}
+
+/** How many episodes the grid shows: the known count, else the aired ones, else one past the highest watched. */
+export function episodeGridCount(anime, marks) {
+  if (anime?.episodes > 0) return anime.episodes;
+  const highest = marks.length ? marks[marks.length - 1] : 0;
+  return Math.max(airedEpisodes(anime) || 0, highest + 1);
 }
 
 const crunchyroll = () => links.SERVICES.find((s) => s.id === 'crunchyroll');

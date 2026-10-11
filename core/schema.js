@@ -576,6 +576,15 @@ function migrationList(log = silentLog) {
                 d.exec('ALTER TABLE user_api_credentials_new RENAME TO user_api_credentials;');
                 d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_api_credentials_owner ON user_api_credentials (COALESCE(user_id, 0), provider);');
             }
+        },
+        {
+            version: 29,
+            name: 'add_anime_watched_episodes',
+            up: (d) => {
+                // Single watched episodes per user (JSON array); NULL keeps the plain counter 1..episodes_watched
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('watched_episodes')) d.exec('ALTER TABLE anime_progress ADD COLUMN watched_episodes TEXT;');
+            }
         }
     ];
 }

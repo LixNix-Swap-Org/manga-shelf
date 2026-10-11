@@ -14,7 +14,8 @@ import { mainViewOf, searchForView } from '../Dashboard';
 import {
   countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache, clearAnimeCache,
   ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
-  shortDescription, progressPercent, airedEpisodes, stillAiring, seasonEpisodeText, sourceBadges, kindOf, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY
+  shortDescription, progressPercent, airedEpisodes, stillAiring, seasonEpisodeText, sourceBadges, kindOf, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY,
+  episodeSections, episodeGridCount, watchedEpisodesOf
 } from '../utils/animeHelpers';
 import { subscribe as subscribeToasts } from '../utils/notify';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
@@ -214,6 +215,26 @@ describe('animeHelpers', () => {
     expect(predictProgress(done, { episodes_watched: 12 }, 12)).toMatchObject({ status: 'Gesehen', finished_at: '2026-10-10' });
     expect(predictProgress(done, { score: 7 }, null)).toMatchObject({ status: 'Gesehen', episodes_watched: 12, finished_at: '2026-10-10' });
     expect(predictProgress({ ...done, status: 'Schaue', finished_at: null }, { status: 'Gesehen' }, 12)).toMatchObject({ status: 'Gesehen', episodes_watched: 12 });
+  });
+
+  it('single episodes: predicted like the server, sections per season or per 100, grid size without a total', () => {
+    const base = { status: 'Schaue', episodes_watched: 3, watched_episodes: [1, 2, 5] };
+    expect(watchedEpisodesOf(base)).toEqual([1, 2, 5]);
+    expect(watchedEpisodesOf({ episodes_watched: 2 })).toEqual([1, 2]);
+    let next = predictProgress(base, { watched_episodes: [1, 2, 5, 6] }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.status]).toEqual([4, [1, 2, 5, 6], 'Schaue']);
+    next = predictProgress(base, { episodes_watched: 4 }, 12);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([4, [1, 2, 3, 5]]);
+    next = predictProgress(base, { watched_episodes: [1, 2, 3] }, 12);
+    expect(next.watched_episodes).toBeNull();
+    next = predictProgress(base, { status: 'Gesehen' }, 12);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([12, null]);
+    expect(episodeSections({ kind: 'anime' }, 250).map((s) => [s.from, s.to])).toEqual([[1, 100], [101, 200], [201, 250]]);
+    expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }, { season_number: 2, episode_count: 10 }] }, 18))
+      .toEqual([{ from: 1, to: 8, season: 1 }, { from: 9, to: 18, season: 2 }]);
+    expect(episodeGridCount({ episodes: 12 }, [])).toBe(12);
+    expect(episodeGridCount({ episodes: null }, [1, 4])).toBe(5);
+    expect(episodeGridCount({ episodes: null, next_airing: { episode: 30, estimated: false } }, [1])).toBe(29);
   });
 
   it('a counter change by hand drops the remembered "Weiter" page; a shared episode never lowers the counter', () => {
@@ -834,6 +855,38 @@ describe('AnimeDetailModal', () => {
       } finally {
         stop();
       }
+    });
+
+    it('single episodes: the grid shows the watched ones and saves a tapped episode as the set of watched episodes', async () => {
+      const updateProgress = vi.fn(async () => ({ status: 'Schaue', episodes_watched: 8 }));
+      const fetchDetail = vi.fn(async () => entry());
+      openEditable(entry(), { updateProgress, fetchDetail });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Folgen 1–12' });
+      const cells = within(grid).getAllByRole('button');
+      expect(cells.map((b) => b.getAttribute('aria-pressed'))).toEqual([...Array(7).fill('true'), ...Array(5).fill('false')]);
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 9' }));
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2' }));
+      expect(within(grid).getByRole('button', { name: 'Folge 9' }).getAttribute('aria-pressed')).toBe('true');
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1));
+      expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 3, 4, 5, 6, 7, 9] });
+      await waitFor(() => expect(fetchDetail.mock.calls.length).toBeGreaterThan(1));
+    });
+
+    it('single episodes: "Alle im Abschnitt gesehen" marks the shown section; a film has no grid', async () => {
+      const updateProgress = vi.fn(async () => ({}));
+      const show = entry({ kind: 'tv', episodes: 20, seasons: [{ season_number: 1, episode_count: 10 }, { season_number: 2, episode_count: 10 }],
+        my_progress: { status: 'Schaue', episodes_watched: 12, score: null, notes: null } });
+      const { unmount } = openEditable(show, { updateProgress, fetchDetail: vi.fn(async () => show) });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Staffel 2 · Folgen 11–20' });
+      expect(within(grid).getByRole('button', { name: 'Staffel 2, Folge 3' }).textContent).toBe('3');
+      fireEvent.click(screen.getByRole('button', { name: 'Alle im Abschnitt gesehen' }));
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: Array.from({ length: 20 }, (_, i) => i + 1) }));
+      unmount();
+      openEditable(entry({ kind: 'movie', episodes: 1 }));
+      await act(async () => {});
+      expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
     });
 
     it('no undo when the removal failed', async () => {

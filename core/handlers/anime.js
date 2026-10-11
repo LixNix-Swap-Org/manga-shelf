@@ -9,6 +9,7 @@ const store = require('../anime/store');
 const listSync = require('../anime/listSync');
 const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
+const episodeMarks = require('../anime/episodes');
 const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
@@ -208,7 +209,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -429,6 +430,7 @@ function updateProgress(ctx, { params, body }) {
         watched = typeof v === 'number' ? v : (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
         if (!Number.isInteger(watched) || watched < 0 || watched > MAX_EPISODES) throw badRequest('Gesehene Folgen müssen eine ganze Zahl ab 0 sein');
     }
+    const marks = parseWatchedEpisodes(body.watched_episodes);
     const score = parseScore(body.score);
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const audio = cleanLanguage(body.audio_language);
@@ -439,10 +441,26 @@ function updateProgress(ctx, { params, body }) {
             throw badRequest(msg('Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“'), 'STILL_AIRING');
         }
         if (body.restore === true) syncState.liftDeclines(ctx, userId, declineKeys(ctx, userId, id));
-        return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes, audio_language: audio, subtitle_language: subtitle });
+        if (marks && anime.episodes > 0) {
+            const above = marks.find((n) => n > anime.episodes);
+            if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
+        }
+        return writeProgress(ctx, id, userId, {
+            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, score, notes, audio_language: audio, subtitle_language: subtitle
+        });
     });
     listSync.schedulePush(ctx, userId, id);
     return { body: store.progressOf(saved) };
+}
+
+/** `watched_episodes` of PUT progress: undefined (unchanged), null (back to the plain counter) or the watched episode numbers. */
+function parseWatchedEpisodes(value) {
+    if (value === undefined || value === null) return value;
+    if (!Array.isArray(value) || value.length > episodeMarks.MAX_MARKS
+        || !value.every((n) => Number.isInteger(n) && n >= 1 && n <= MAX_EPISODES)) {
+        throw badRequest(msg('Gesehene Folgen müssen eine Liste ganzer Zahlen ab 1 sein (höchstens {max})', { max: episodeMarks.MAX_MARKS }));
+    }
+    return episodeMarks.cleanMarks(value);
 }
 
 function cleanEpisode(value) {

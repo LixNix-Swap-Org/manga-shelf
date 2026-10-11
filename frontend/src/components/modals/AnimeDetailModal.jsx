@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, ExternalLink, Minus, Play, Plus, RefreshCw, Trash, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -11,7 +11,8 @@ import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
   PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
-  continueTarget, airedEpisodes, stillAiring, kindOf, kindLabel, seasonEpisodeText, ANIME_KINDS
+  continueTarget, airedEpisodes, stillAiring, kindOf, kindLabel, seasonEpisodeText, ANIME_KINDS, watchedEpisodesOf, episodeSections,
+  episodeGridCount
 } from '../../utils/animeHelpers';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
@@ -121,6 +122,122 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
   );
 }
 
+const SAVE_DELAY_MS = 600;
+
+const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
+
+/**
+ * Single episodes as toggles (aria-pressed). Taps are collected for a moment and saved as one set of watched episodes
+ * (PUT progress with watched_episodes); saves run one after another, closing the dialog saves at once.
+ */
+function EpisodeGrid({ anime, progress, onSave, disabled }) {
+  const ids = useId();
+  const serverMarks = useMemo(() => watchedEpisodesOf(progress), [progress]);
+  const [draft, setDraft] = useState(null);
+  const marks = draft ?? serverMarks;
+  const watched = useMemo(() => new Set(marks), [marks]);
+  const count = episodeGridCount(anime, marks);
+  const sections = useMemo(() => episodeSections(anime, count), [anime, count]);
+  const [picked, setPicked] = useState(null);
+  const firstOpen = useMemo(() => {
+    for (let n = 1; n <= count; n++) if (!watched.has(n)) return n;
+    return count;
+  }, [count, watched]);
+  const index = Math.min(picked ?? sectionOf(sections, firstOpen), sections.length - 1);
+  const section = sections[index];
+  const pending = useRef(null);
+  const timer = useRef(null);
+  const chain = useRef(Promise.resolve());
+  const saveRef = useRef(onSave);
+  saveRef.current = onSave;
+
+  const flush = useCallback(() => {
+    clearTimeout(timer.current);
+    timer.current = null;
+    const next = pending.current;
+    if (!next) return;
+    pending.current = null;
+    chain.current = chain.current
+      .then(() => saveRef.current(next))
+      .catch(() => {})
+      .finally(() => { if (!pending.current && !timer.current) setDraft(null); });
+  }, []);
+  useEffect(() => () => flush(), [flush]);
+
+  if (!section) return null;
+  const change = (next) => {
+    setDraft(next);
+    pending.current = next;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, SAVE_DELAY_MS);
+  };
+  const toggle = (n) => {
+    const set = new Set(marks);
+    if (set.has(n)) set.delete(n);
+    else set.add(n);
+    change([...set].sort((a, b) => a - b));
+  };
+  const numbers = [];
+  for (let n = section.from; n <= section.to; n++) numbers.push(n);
+  const allWatched = numbers.every((n) => watched.has(n));
+  const toggleSection = () => {
+    const set = new Set(marks);
+    for (const n of numbers) {
+      if (allWatched) set.delete(n);
+      else set.add(n);
+    }
+    change([...set].sort((a, b) => a - b));
+  };
+  const sectionLabel = (s) => (s.season !== null
+    ? t('Staffel {season} · Folgen {from}–{to}', { season: s.season, from: s.from, to: s.to })
+    : t('Folgen {from}–{to}', { from: s.from, to: s.to }));
+  const cellLabel = (n) => (section.season !== null
+    ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.from + 1 })
+    : t('Folge {n}', { n }));
+
+  return (
+    <div className="space-y-2">
+      <p id={`${ids}-hint`} className="text-[11px] text-slate-400">{t('Tippe eine Folge an, um sie als gesehen zu markieren oder die Markierung zu entfernen.')}</p>
+      <div className="flex flex-wrap items-end gap-2">
+        {sections.length > 1 && (
+          <div>
+            <label htmlFor={`${ids}-section`} className="block text-[11px] text-slate-400 mb-1">{t('Abschnitt')}</label>
+            <select id={`${ids}-section`} className="input-field text-base sm:text-sm" value={index} onChange={(e) => setPicked(Number(e.target.value))}>
+              {sections.map((s, i) => <option key={s.from} value={i}>{sectionLabel(s)}</option>)}
+            </select>
+          </div>
+        )}
+        <button type="button" className="btn-secondary text-xs" onClick={toggleSection} disabled={disabled}>
+          {allWatched ? t('Abschnitt zurücksetzen') : t('Alle im Abschnitt gesehen')}
+        </button>
+      </div>
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5" aria-label={sectionLabel(section)} aria-describedby={`${ids}-hint`}>
+        {numbers.map((n) => {
+          const on = watched.has(n);
+          const label = cellLabel(n);
+          return (
+            <li key={n}>
+              <button
+                type="button"
+                aria-pressed={on}
+                aria-label={label}
+                title={label}
+                disabled={disabled}
+                onClick={() => toggle(n)}
+                className={`w-full h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-xs font-mono border transition-colors ${on
+                  ? 'bg-brand-700 border-brand-500 text-white'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+              >
+                {section.season !== null ? n - section.from + 1 : n}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Detail of one anime: banner, metadata, description, relations (add or open), everybody's progress, my progress,
  * link to a series, refresh (60 s lock) and delete. `fallback` is the list entry (offline it is all there is).
@@ -223,13 +340,20 @@ export default function AnimeDetailModal({
         onClick: async () => {
           const saved = await updateProgress(id, {
             status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes,
-            audio_language: prev.audio_language ?? null, subtitle_language: prev.subtitle_language ?? null, restore: true
+            audio_language: prev.audio_language ?? null, subtitle_language: prev.subtitle_language ?? null,
+            ...(prev.watched_episodes !== undefined ? { watched_episodes: prev.watched_episodes } : {}), restore: true
           });
           if (saved && latest.current?.animeId === id) latest.current.load();
         }
       }
     });
   });
+
+  // a tap in the episode grid: no toast, the dialog reloads its detail so the counter and status follow
+  const saveEpisodes = async (marks) => {
+    const saved = await updateProgress(animeId, { watched_episodes: marks });
+    if (saved && latest.current?.animeId === animeId) await latest.current.load();
+  };
 
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
   const saveKind = (value) => run(async () => setDetail(await update(animeId, { kind: value })));
@@ -343,6 +467,13 @@ export default function AnimeDetailModal({
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
                   <OwnProgress anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy}
                     onRemove={onRemove} />
+                </section>
+              )}
+
+              {canEdit && kind !== 'movie' && (
+                <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-episodes`}>
+                  <h3 id={`${titleId}-episodes`} className="text-sm font-bold text-white mb-2">{t('Einzelne Folgen')}</h3>
+                  <EpisodeGrid key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveEpisodes} disabled={busy} />
                 </section>
               )}
 

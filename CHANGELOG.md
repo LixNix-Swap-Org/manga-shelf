@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Before updating
+- **Database migration 29** runs at the first start: `anime_progress.watched_episodes` (single watched episodes). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first.
+
+### Anime
+- **Single episodes:** the anime detail dialog shows an episode grid ("Einzelne Folgen"): tap an episode to mark it as watched or unwatched, by season for TV shows, in blocks of 100 otherwise, with a button for the whole section. The episode counter stays the number of watched episodes, so +1, statistics, the AniList sync and "Weiter" keep working (+1 fills the first gap, "Weiter" opens the first unwatched episode). Scripts: `PUT /api/anime/:id/progress` takes `watched_episodes` (a list of episode numbers), and the progress in the anime answers carries it (`null` = episodes 1 to `episodes_watched`).
+
 ## 3.3.0
 
 ### Before updating
@@ -121,7 +129,7 @@ State: base v2.19.1 (`f0c2a64`), the commits after it up to the tip of the branc
 - **`TRUST_PROXY` defaults to `loopback`.** Behind a proxy on another host enter its address (no hop count), in front of Pterodactyl/Docker only the gateway address of the Docker network (e.g. `loopback, 172.18.0.1`, never the whole subnet), and make the app port reachable only through the proxy.
 - **Every session ends once:** the signing key now lives in `data/secret.key` (no longer in the database and therefore in no backup).
 - **Import the Pterodactyl egg again** (install container with `ash`, installation without install scripts, variable `TRUST_PROXY`).
-- **Database migrations 12–28** run at the first start (migration 28 arrives with 3.3.0); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
+- **Database migrations 12–29** run at the first start (migration 28 arrives with 3.3.0, migration 29 with single anime episodes); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
 - **Migration 22 unifies known publisher spellings** in series and volumes (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga", "EMA" → "Egmont Manga", "TOKYOPOP GmbH" → "TOKYOPOP", appended legal forms of built-in publishers). Deleting an alias later does not undo that.
 - **Migration 27 turns the stored series languages into codes** ("Deutsch" → `de`, "English" → `en`, `en-US` → `en` with the region `US`). A text it does not recognise becomes `de` and is named in the start log ("unknown series languages set to 'de'"); check those series afterwards. Every existing series gets the currency `EUR`.
 - **No automatic way back:** going back to the old version only works by starting the old version and immediately restoring the backup `vor-update-…zip` (README, "Upgrading from v2.19.1"). Do not run the old version permanently on the new database: new "Gelesen" (read) volumes it writes are not converted by a later update any more.
