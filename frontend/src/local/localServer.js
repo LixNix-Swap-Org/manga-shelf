@@ -14,7 +14,7 @@ const MAX_SECRET = 4096;
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 // i18n
 export const NOT_LOCAL_TEXT = 'Im Modus ohne Server nicht verfügbar';
-const PROVIDER_HOSTS = { anilist: 'graphql.anilist.co', mal: 'api.myanimelist.net', google_books: 'www.googleapis.com' };
+const PROVIDER_HOSTS = { anilist: 'graphql.anilist.co', mal: 'api.myanimelist.net', google_books: 'www.googleapis.com', tmdb: 'api.themoviedb.org' };
 
 const json = (body, status = 200, headers = {}) => ({ status, body, headers: { 'Cache-Control': 'no-store', ...headers } });
 const notLocal = () => new HttpError(404, NOT_LOCAL_TEXT, 'NOT_AVAILABLE_LOCALLY');

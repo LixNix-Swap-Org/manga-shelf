@@ -50,7 +50,11 @@ export function watchStatusText(w) {
   if (!w) return '';
   if (w.phase === 'pending_start') return t('v{version} ist installiert und wartet auf den Start von Hand', { version: w.version });
   if (w.phase === 'slow') return t('Dauert länger als üblich');
-  if (w.phase === 'failed') return t('Update auf v{version} nicht installiert', { version: w.version });
+  if (w.phase === 'failed') {
+    return w.direction === 'downgrade'
+      ? t('Zurücksetzen auf v{version} nicht ausgeführt', { version: w.version })
+      : t('Update auf v{version} nicht installiert', { version: w.version });
+  }
   return t('Server startet neu auf v{version}', { version: w.version });
 }
 
@@ -61,7 +65,7 @@ function emit() {
   const w = current;
   snapshot = w ? {
     phase: w.phase, version: w.version, from: w.from, restart: w.restart, mode: w.mode, supervisor: w.supervisor,
-    command: w.command, elapsedMs: w.elapsedMs, error: w.error, result: w.result
+    command: w.command, elapsedMs: w.elapsedMs, error: w.error, result: w.result, direction: w.direction
   } : null;
   for (const listener of [...listeners]) listener();
 }
@@ -114,9 +118,11 @@ export async function probeHealth({ fetchImpl = (...args) => globalThis.fetch(..
   }
 }
 
+const directionOf = (w) => (w.direction === 'downgrade' ? { direction: 'downgrade' } : {});
+
 function finish(w, result) {
   clearTimeout(w.timer);
-  store(UPDATE_RESULT_KEY, { result, version: w.version, from: w.from });
+  store(UPDATE_RESULT_KEY, { result, version: w.version, from: w.from, ...directionOf(w) });
   store(UPDATE_WATCH_KEY, null);
   w.phase = 'done';
   w.result = result;
@@ -162,20 +168,21 @@ async function tick(w) {
   w.timer = setTimeout(() => tick(w), w.elapsedMs >= SLOW_AFTER_MS ? SLOW_POLL_MS : POLL_MS);
 }
 
-/** Waits for the restarted server (target version: reload with a toast; old version: rollback; failed status: stop). */
+/** Waits for the restarted server (target version: reload with a toast; old version: rollback; failed status: stop); direction 'upgrade' | 'downgrade'. */
 export function startUpdateWatch(
-  { version, from = null, restart = 'supervised', mode = null, supervisor = null, command = null, instanceId = null, acceptedAt } = {},
+  { version, from = null, restart = 'supervised', mode = null, supervisor = null, command = null, instanceId = null, acceptedAt, direction = 'upgrade' } = {},
   { fetchImpl = (...args) => globalThis.fetch(...args), reload = () => globalThis.location?.reload(), now = Date.now } = {}
 ) {
   stopUpdateWatch();
   const w = {
     version, from, restart, mode, supervisor, command, instanceId, acceptedAt: acceptedAt ?? now(),
+    direction: direction === 'downgrade' ? 'downgrade' : 'upgrade',
     phase: restart === 'manual' ? 'pending_start' : 'waiting', sawDown: false, elapsedMs: 0, error: null, result: null,
     timer: null, toastId: null, fetchImpl, reload, now
   };
   w.elapsedMs = Math.max(0, now() - w.acceptedAt);
   current = w;
-  store(UPDATE_WATCH_KEY, { version, from, restart, mode, supervisor, command, instanceId, acceptedAt: w.acceptedAt });
+  store(UPDATE_WATCH_KEY, { version, from, restart, mode, supervisor, command, instanceId, acceptedAt: w.acceptedAt, ...directionOf(w) });
   if (!views) showToast(w);
   emit();
   w.timer = setTimeout(() => tick(w), POLL_MS);

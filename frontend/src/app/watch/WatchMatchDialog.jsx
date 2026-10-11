@@ -4,7 +4,7 @@ import useDialogA11y from '../../hooks/useDialogA11y';
 import api, { TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
-import { displayTitle, formatYearLine } from '../../utils/animeHelpers';
+import { displayTitle, formatYearLine, isAnimeKind } from '../../utils/animeHelpers';
 import { aboveTotalText } from '../../utils/shareIntake';
 import { langFor } from '../../components/common/lang';
 import crunchyroll from '../../../../core/watch/crunchyroll.js';
@@ -111,7 +111,7 @@ function MatchStep({ item, list, ids, titleId, onDone, onSkip, onSearch }) {
   const [refused, setRefused] = useState(item.reason === 'episode_above_total' && candidates[0] ? { animeId: candidates[0].id, total: candidates[0].episodes || null } : null);
   const others = useMemo(() => {
     const shown = new Set(candidates.map((c) => c.id));
-    return list.filter((a) => !shown.has(a.id)).sort((a, b) => compareNatural(displayTitle(a), displayTitle(b)));
+    return list.filter((a) => !shown.has(a.id) && isAnimeKind(a)).sort((a, b) => compareNatural(displayTitle(a), displayTitle(b)));
   }, [list, candidates]);
 
   const entryOf = (key) => list.find((a) => a.id === key) || null;

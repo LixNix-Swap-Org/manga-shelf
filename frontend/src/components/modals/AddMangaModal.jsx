@@ -15,7 +15,7 @@ import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import { editionDefaults, isMpEdition } from '../../utils/editions';
-import { hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
+import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
 export { lookupSourceLabels };
 
@@ -521,11 +521,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        {item.source === 'manga_passion' ? (
+                        {item.source === 'manga_passion' && (
                           <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
                             <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
                           </span>
-                        ) : lookupSourceLabels(item).map((label) => (
+                        )}
+                        {(item.source === 'manga_passion' ? alsoOnLabels(item) : lookupSourceLabels(item)).map((label) => (
                           <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
                             <Globe className="w-3 h-3" aria-hidden="true" />{label}
                           </span>

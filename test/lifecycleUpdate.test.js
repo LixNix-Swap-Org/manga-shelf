@@ -297,6 +297,81 @@ test('the binary refuses a newer schema with exit 78 as well', posix, async () =
     assert.match(res.output, /Fehler: Die Datenbank .* hat Schema v\d+ und stammt aus einer neueren Version/);
 });
 
+function pendingRecoveryDataDir(prefix) {
+    const dataDir = tmp(prefix);
+    fs.chmodSync(dataDir, 0o700);
+    spawnSync(process.execPath, ['-e', "require('./db.js').closeDb()"], { cwd: ROOT, env: { ...process.env, DATA_DIR: dataDir, LOG_LEVEL: 'silent' } });
+    const { LATEST_SCHEMA_VERSION } = require('../core/schema');
+    const db = new DatabaseSync(path.join(dataDir, 'manga.db'));
+    db.prepare('DELETE FROM schema_migrations WHERE version = ?').run(LATEST_SCHEMA_VERSION);
+    db.close();
+    const fresh = `vor-update-v${pkg.version}-auf-v3.1.0-2026-10-11T10-00-00-000Z.zip`;
+    writeState(dataDir, {
+        phase: 'failed', error: 'UPDATE_FAILED', mode: 'sea-user', restart: 'supervised', from: pkg.version, to: '3.1.0', at: new Date().toISOString(), user: 1, pid: 1,
+        schema_before: LATEST_SCHEMA_VERSION, backup: { file: fresh, sha256: '0'.repeat(64) }, previous: { sha256: '0'.repeat(64) }, next: { sha256: '0'.repeat(64) },
+        attempts: 0, exec_path: path.join(dataDir, 'x'),
+        downgrade: {
+            undoes: { from: '3.1.0', to: pkg.version, at: 'x', backup: null, schema_before: LATEST_SCHEMA_VERSION - 1 },
+            db: { source: { file: 'source.zip', sha256: '0'.repeat(64) }, schema: LATEST_SCHEMA_VERSION - 1, replaced_at: 'x', kept: 'manga.db.v-kept', returned_at: null }
+        }
+    });
+    return { dataDir, fresh };
+}
+
+test('a database recovery after a downgrade that cannot finish stops index.js, the binary and admin.js with exit 74 and the way out', posix, async () => {
+    const { dataDir, fresh } = pendingRecoveryDataDir('manga-shelf-lc-74-');
+    const line = `[Update] Rückkehr zu v${pkg.version} nicht abgeschlossen: Backup fehlt: ${fresh}. Die Datenbank wird nicht geöffnet.`;
+    const server = await run([path.join(ROOT, 'index.js')], { env: { DATA_DIR: dataDir, PORT: '0' } });
+    assert.equal(server.code, 74, server.output);
+    assert.ok(server.output.includes(line), server.output);
+    assert.match(server.output, /manga\.db\.v-kept als manga\.db einsetzen \(die jetzige manga\.db samt manga\.db-wal und manga\.db-shm vorher umbenennen\)/);
+    assert.doesNotMatch(server.output, /Server is online/);
+
+    const binary = await run([path.join(ROOT, 'scripts', 'server-bin', 'entry.js'), '--port', '0', '--data-dir', dataDir, '--no-console'], {
+        env: { HOME: dataDir, MANGA_SHELF_CACHE_DIR: path.join(os.tmpdir(), `manga-shelf-lc-cache-${process.pid}`) }
+    });
+    assert.equal(binary.code, 74, binary.output);
+    assert.ok(binary.output.includes(line), binary.output);
+    assert.doesNotMatch(binary.output, /Fehler: \[Update\]/);
+
+    const admin = await run([path.join(ROOT, 'scripts', 'admin.js'), 'status'], { env: { DATA_DIR: dataDir, MANGA_SHELF_NO_LISTEN: '1' } });
+    assert.equal(admin.code, 74, admin.output);
+    assert.ok(admin.output.includes(line), admin.output);
+    assert.equal(readState(dataDir).downgrade.db.returned_at, null);
+});
+
+test('index.js records the running version once per version: app_version, and the one before as app_version_previous', posix, async () => {
+    const dataDir = tmp('manga-shelf-lc-record-');
+    spawnSync(process.execPath, ['-e', "require('./db.js').closeDb()"], { cwd: ROOT, env: { ...process.env, DATA_DIR: dataDir, LOG_LEVEL: 'silent' } });
+    const before = { version: '3.1.0', schema: 27, since: '2026-10-01T10:00:00.000Z', backup: null };
+    const db = new DatabaseSync(path.join(dataDir, 'manga.db'));
+    db.prepare("INSERT INTO app_settings (key, value) VALUES ('app_version', ?)").run(JSON.stringify(before));
+    db.close();
+    const record = () => {
+        const conn = new DatabaseSync(path.join(dataDir, 'manga.db'), { readOnly: true });
+        try {
+            const read = (key) => JSON.parse(conn.prepare('SELECT value FROM app_settings WHERE key = ?').get(key)?.value || 'null');
+            return { current: read('app_version'), previous: read('app_version_previous') };
+        } finally {
+            conn.close();
+        }
+    };
+    const startAndStop = async () => {
+        const port = await freePort();
+        const file = driver(tmp('manga-shelf-lc-record-run-'), { entry: path.join(ROOT, 'index.js'), after: 'process.kill(process.pid, "SIGTERM");' });
+        const res = await run([file], { env: { DATA_DIR: dataDir, PORT: String(port), TEST_PORT: String(port), FAKE_EXEC: process.execPath } });
+        assert.equal(res.code, 0, res.output);
+    };
+    await startAndStop();
+    const first = record();
+    assert.deepEqual(first.previous, before);
+    assert.equal(first.current.version, pkg.version);
+    assert.ok(Number.isInteger(first.current.schema) && first.current.since);
+    assert.equal(first.current.backup, null, 'no migration ran at this start');
+    await startAndStop();
+    assert.deepEqual(record(), first, 'the same version changes nothing');
+});
+
 test('shutdown aborts running update downloads before it waits for jobs', async () => {
     const lifecycle = require('../services/lifecycle');
     lifecycle.resetLifecycle();

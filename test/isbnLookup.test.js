@@ -75,20 +75,36 @@ test('parseMarc21Xml: only the first record is read (no fields mixed in from a s
     assert.equal(book.publisher, null);
 });
 
-test('lookupBookByIsbn: DNB first, then K10plus, then Google Books; null when nobody knows the book', async () => {
+test('lookupBookByIsbn: DNB and K10plus together, DNB wins, Google Books only after both; null when nobody knows the book', async () => {
     const dnb = marc(field('245', { a: 'Aus DNB', n: '3' }));
+    const k10book = marc(field('245', { a: 'Aus K10plus' }));
+    const outcomes = [];
+    const onSettled = (outcome) => outcomes.push(outcome.complete);
     const urls = [];
-    const book = await lookupBookByIsbn('9783551745811', { fetchText: async (u) => { urls.push(u); return dnb; } });
-    assert.equal(book.title, 'Aus DNB');
-    assert.equal(urls.length, 1);
-    assert.match(urls[0], /maximumRecords=1/);
+    const book = await lookupBookByIsbn('9783551745811', {
+        onSettled,
+        fetchText: async (u) => {
+            urls.push(u);
+            return u.includes('dnb.de') ? new Promise((resolve) => setTimeout(() => resolve(dnb), 30)) : k10book;
+        }
+    });
+    assert.equal(book.title, 'Aus DNB', 'DNB wins although K10plus answered first');
+    assert.equal(urls.length, 2, 'both catalogues asked at once');
+    assert.match(urls[0], /dnb\.de.*maximumRecords=1/);
+    assert.match(urls[1], /k10plus/);
 
-    const k10 = await lookupBookByIsbn('9783551745811', { fetchText: async (u) => { if (u.includes('dnb.de')) throw new Error('Timeout'); return marc(field('245', { a: 'Aus K10plus' })); } });
+    const k10 = await lookupBookByIsbn('9783551745811', { onSettled, fetchText: async (u) => { if (u.includes('dnb.de')) throw new Error('Timeout'); return k10book; } });
     assert.match(k10.source, /K10plus/);
 
+    const asked = [];
     const google = await lookupBookByIsbn('9783551745811', {
+        onSettled,
         fetchText: async (u) => {
-            if (u.includes('googleapis')) return JSON.stringify({ items: [{ volumeInfo: { title: 'Berserk 7', authors: ['Kentaro Miura'], publishedDate: '2020-05-01', publisher: 'Panini Manga' } }] });
+            asked.push(u);
+            if (u.includes('googleapis')) {
+                assert.equal(asked.length, 3, 'Google Books only after DNB and K10plus');
+                return JSON.stringify({ items: [{ volumeInfo: { title: 'Berserk 7', authors: ['Kentaro Miura'], publishedDate: '2020-05-01', publisher: 'Panini Manga' } }] });
+            }
             return '<empty/>';
         }
     });
@@ -96,8 +112,13 @@ test('lookupBookByIsbn: DNB first, then K10plus, then Google Books; null when no
     assert.equal(google.volume_number, '7');
     assert.equal(google.volume_number_known, true);
     assert.equal(google.release_year, 2020);
+    assert.deepEqual(outcomes, [true, true, true]);
 
-    assert.equal(await lookupBookByIsbn('9783551745811', { fetchText: async () => { throw new Error('offline'); } }), null);
+    outcomes.length = 0;
+    assert.equal(await lookupBookByIsbn('9783551745811', { onSettled, fetchText: async (u) => (u.includes('googleapis') ? '{}' : '<empty/>') }), null);
+    assert.equal(await lookupBookByIsbn('9783551745811', { onSettled, fetchText: async () => { throw new Error('offline'); } }), null);
+    assert.equal(await lookupBookByIsbn('9783551745811', { onSettled, fetchText: async (u) => { if (u.includes('googleapis')) throw new Error('Timeout'); return '<empty/>'; } }), null);
+    assert.deepEqual(outcomes, [true, false, false], 'complete only when every catalogue answered');
 });
 
 test('titleMatchScore: same words, word-boundary containment, no accidental matches', () => {

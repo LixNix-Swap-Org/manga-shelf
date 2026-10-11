@@ -288,8 +288,17 @@ test('quellen: table without keys, guide with links, the AniList link from the c
     const lines = [];
     await runCommand('quellen anleitung anilist', (text) => lines.push(text), { readLine: async () => '4242' });
     assert.ok(lines.includes('   https://anilist.co/api/v2/oauth/authorize?client_id=4242&response_type=token'));
-    assert.equal((await run('quellen anleitung kitsu')).ok, false);
+    const unknown = await run('quellen anleitung kitsu');
+    assert.equal(unknown.ok, false);
+    assert.match(unknown.text, /\(anilist, mal, tmdb, google_books\)/);
     assert.match((await run('hilfe')).text, /quellen/);
+
+    assert.match(table.text, /TMDB\s+Instanz\s+nicht hinterlegt/);
+    assert.match(table.text, /TMDB\s+Nutzer\s+kein Benutzer-Schlüssel/);
+    assert.match(table.text, /quellen anleitung <anilist\|mal\|tmdb\|google_books>/);
+    const tmdb = await run('quellen anleitung themoviedb');
+    assert.match(tmdb.text, /^TMDB: API-Schlüssel oder Lesezugriffstoken/);
+    assert.ok(tmdb.lines.includes('   https://www.themoviedb.org/settings/api'), tmdb.text);
 });
 
 test('quellen setzen: hidden input, format check before any request, live check, masked confirmation, secret never printed or logged', async (t) => {

@@ -171,7 +171,7 @@ async function runLocked(ctx, userId, row, priority) {
         const locals = new Map(ctx.db.prepare(`
             SELECT a.id, a.anilist_id, p.status, p.episodes_watched, p.updated_at
             FROM animes a LEFT JOIN anime_progress p ON p.anime_id = a.id AND p.user_id = ?
-            WHERE a.anilist_id IS NOT NULL
+            WHERE a.anilist_id IS NOT NULL AND a.kind = 'anime'
         `).all(userId).map((r) => [r.anilist_id, r]));
         ctx.db.transaction(() => {
             for (const remote of entries) {
@@ -218,8 +218,8 @@ function schedulePush(ctx, userId, animeId, { delayMs } = {}) {
     if (!ctx.user || ctx.user.id !== userId) return false;
     const row = syncRow(ctx, userId);
     if (!row || !row.enabled || !row.external_user_id) return false;
-    const anime = ctx.db.prepare('SELECT anilist_id FROM animes WHERE id = ?').get(animeId);
-    if (!anime || !anime.anilist_id || !credentialsOf(ctx).get(userId, SERVICE)) return false;
+    const anime = ctx.db.prepare('SELECT anilist_id, kind FROM animes WHERE id = ?').get(animeId);
+    if (!anime || !anime.anilist_id || anime.kind !== 'anime' || !credentialsOf(ctx).get(userId, SERVICE)) return false;
     const generation = gateway.generationOf(ctx);
     const key = `anilist-push:${userId}:${animeId}`;
     const state = runs();
@@ -243,7 +243,7 @@ async function pushOne(ctx, userId, animeId, generation) {
     const row = syncRow(ctx, userId);
     const local = ctx.db.prepare(`
         SELECT p.status, p.episodes_watched, p.updated_at, a.anilist_id FROM anime_progress p JOIN animes a ON a.id = p.anime_id
-        WHERE p.anime_id = ? AND p.user_id = ?
+        WHERE p.anime_id = ? AND p.user_id = ? AND a.kind = 'anime'
     `).get(animeId, userId);
     if (!row || !row.enabled || !row.external_user_id || !local || !local.anilist_id) return;
     let error = null;

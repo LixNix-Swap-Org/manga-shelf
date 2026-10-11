@@ -6,6 +6,7 @@ import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils
 import { notify } from '../../utils/notify';
 import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
 import ApiKeyCard from './ApiKeyCard';
+import TmdbAttribution from '../TmdbAttribution';
 import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
 import LanguageSelect from '../common/LanguageSelect';
 import { t } from '../../i18n/index.js';
@@ -277,6 +278,7 @@ function KeysTab({ isAdmin, canEdit }) {
           })}
         </div>
       )}
+      {keys.guideOf('tmdb') && <TmdbAttribution />}
     </div>
   );
 }

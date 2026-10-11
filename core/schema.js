@@ -548,6 +548,34 @@ function migrationList(log = silentLog) {
                 }
                 if (unknown.length) log.warn(`[Database Migration] v27: unknown series languages set to '${DEFAULT_LANGUAGE}': ${unknown.join(', ')}`);
             }
+        },
+        {
+            version: 28,
+            name: 'add_media_kinds_and_languages',
+            up: (d) => {
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('kind')) d.exec("ALTER TABLE animes ADD COLUMN kind TEXT NOT NULL DEFAULT 'anime';");
+                for (const [name, type] of [['tmdb_id', 'INTEGER'], ['tmdb_kind', 'TEXT'], ['imdb_id', 'TEXT'], ['original_language', 'TEXT'],
+                    ['spoken_languages', 'TEXT'], ['seasons', 'TEXT']]) {
+                    if (!animeCols.has(name)) d.exec(`ALTER TABLE animes ADD COLUMN ${name} ${type};`);
+                }
+                d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_animes_tmdb ON animes (tmdb_kind, tmdb_id);');
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('audio_language')) d.exec('ALTER TABLE anime_progress ADD COLUMN audio_language TEXT;');
+                if (!progressCols.has('subtitle_language')) d.exec('ALTER TABLE anime_progress ADD COLUMN subtitle_language TEXT;');
+                const table = d.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_api_credentials'").get();
+                if (!table || table.sql.includes("'tmdb'")) return;
+                const check = /(CHECK\s*\(\s*provider\s+IN\s*\()([^)]*)(\))/i;
+                const head = /^CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["`]?user_api_credentials["`]?/i;
+                if (!check.test(table.sql) || !head.test(table.sql)) throw new Error('user_api_credentials: unexpected table definition, provider check not found');
+                const ddl = table.sql.replace(check, (_, open, list, close) => `${open}${list},'tmdb'${close}`).replace(head, 'CREATE TABLE user_api_credentials_new');
+                const columns = d.prepare('PRAGMA table_info(user_api_credentials)').all().map(c => `"${c.name}"`).join(', ');
+                d.exec(ddl);
+                d.exec(`INSERT INTO user_api_credentials_new (${columns}) SELECT ${columns} FROM user_api_credentials;`);
+                d.exec('DROP TABLE user_api_credentials;');
+                d.exec('ALTER TABLE user_api_credentials_new RENAME TO user_api_credentials;');
+                d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_api_credentials_owner ON user_api_credentials (COALESCE(user_id, 0), provider);');
+            }
         }
     ];
 }

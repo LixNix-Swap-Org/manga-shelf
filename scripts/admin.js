@@ -92,8 +92,9 @@ if (require.main === module) {
         }
         process.exitCode = code;
     }, (err) => {
-        process.stderr.write(`Fehler: ${err.message}\n`);
-        process.exitCode = err && err.code === 'SCHEMA_NEWER' ? err.exitCode : 1;
+        const pending = err && err.code === 'DOWNGRADE_RECOVERY_PENDING';
+        process.stderr.write(pending ? `${err.message}\n` : `Fehler: ${err.message}\n`);
+        process.exitCode = err && (err.code === 'SCHEMA_NEWER' || pending) ? err.exitCode : 1;
     });
 }
 

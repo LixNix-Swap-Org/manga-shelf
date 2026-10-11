@@ -17,7 +17,7 @@ let db;
 let sources;
 
 test.before(async () => {
-    ctx = await startTestServer({ env: { MAL_CLIENT_ID: undefined, GOOGLE_BOOKS_KEY: undefined } });
+    ctx = await startTestServer({ env: { MAL_CLIENT_ID: undefined, GOOGLE_BOOKS_KEY: undefined, TMDB_API_KEY: undefined } });
     sources = fakeFetch({
         anilist: (body, init) => {
             if (body.query.includes('Viewer')) {
@@ -29,6 +29,9 @@ test.before(async () => {
         },
         jikan: jikanFixtures,
         mal: (path, init) => (init.headers['X-MAL-CLIENT-ID'] === CLIENT_ID ? json({ data: [] }) : json({ error: 'invalid_client' }, { status: 401 })),
+        tmdb: (path, init) => (path.includes(`api_key=${CLIENT_ID}`) || init.headers.Authorization === `Bearer ${TOKEN}`
+            ? json({ success: true, status_code: 1, status_message: 'Success.' })
+            : json({ success: false, status_code: 7, status_message: 'Invalid API key' }, { status: 401 })),
         other: (url) => (url.startsWith('https://www.googleapis.com/books/v1/volumes') ? json({ items: [] }) : undefined)
     });
     global.fetch = (url, init) => (String(url).startsWith(ctx.root) ? realFetch(url, init) : sources.fetch(url, init));
@@ -65,7 +68,7 @@ test('save with a successful live check: label from Viewer.name, encrypted, mask
     const res = await realFetch(`${ctx.base}/auth/api-keys`, { headers: { Cookie: kim.cookie } });
     assert.equal(res.headers.get('cache-control'), 'no-store');
     const list = await res.json();
-    assert.deepEqual(list.map((k) => k.provider), ['anilist', 'mal']);
+    assert.deepEqual(list.map((k) => k.provider), ['anilist', 'mal', 'tmdb']);
     assert.ok(!JSON.stringify(list).includes(TOKEN));
     assert.equal(list[1].configured, false);
 });
@@ -143,7 +146,7 @@ test('instance keys: admins only, environment wins and is shown as such, live ch
     const google = await admin('PUT', '/admin/api-keys/google_books', { secret: 'AIza' + 'x'.repeat(35) });
     assert.equal(google.status, 200);
     const list = await admin('GET', '/admin/api-keys');
-    assert.deepEqual(list.body.keys.map((k) => [k.provider, k.configured, k.from_env]), [['mal', true, false], ['google_books', true, false]]);
+    assert.deepEqual(list.body.keys.map((k) => [k.provider, k.configured, k.from_env]), [['mal', true, false], ['google_books', true, false], ['tmdb', false, false]]);
 
     const search = await kim('GET', '/anime/search?q=Berserk');
     assert.ok(search.body.sources_used.includes('mal'), 'the instance client id switches Jikan to the official API');
@@ -239,12 +242,17 @@ test('deleting a user removes their keys (ON DELETE CASCADE)', async () => {
 
 test('ANIME_* and the instance keys go through utils/config.js: typos warn at startup, the defaults apply', () => {
     const { readConfig } = require('../utils/config');
-    const typo = readConfig({ ANIME_SOURCES: 'anilst,jiakn', ANIME_ANILIST_RPM: 'dreißig', ANIME_JIKAN_RPM: '5000' });
-    assert.deepEqual(typo.values.animeSources, ['anilist', 'jikan']);
+    const typo = readConfig({ ANIME_SOURCES: 'anilst,jiakn', ANIME_ANILIST_RPM: 'dreißig', ANIME_JIKAN_RPM: '5000', ANIME_TMDB_RPM: '0' });
+    assert.deepEqual(typo.values.animeSources, ['anilist', 'jikan', 'tmdb']);
     assert.equal(typo.values.animeAnilistRpm, 30);
     assert.equal(typo.values.animeJikanRpm, 600);
-    assert.equal(typo.warnings.length, 3);
-    assert.match(typo.warnings.find(w => w.startsWith('ANIME_SOURCES')), /keine bekannte Quelle .*es gilt anilist,jikan/);
+    assert.equal(typo.values.animeTmdbRpm, 120);
+    assert.equal(typo.warnings.length, 4);
+    assert.match(typo.warnings.find(w => w.startsWith('ANIME_SOURCES')), /keine bekannte Quelle .*es gilt anilist,jikan,tmdb/);
+    const unset = readConfig({ ANIME_SOURCES: '  ' });
+    assert.deepEqual([unset.values.animeSources, unset.values.animeTmdbRpm, unset.values.tmdbApiKey, unset.warnings], [null, 120, null, []]);
+    assert.deepEqual(readConfig({ ANIME_SOURCES: 'anilist,tmdb', TMDB_API_KEY: ' k ' }).values.animeSources, ['anilist', 'tmdb']);
+    assert.equal(readConfig({ TMDB_API_KEY: ' k ' }).values.tmdbApiKey, 'k');
     const partly = readConfig({ ANIME_SOURCES: 'AniList, jiakn' });
     assert.deepEqual(partly.values.animeSources, ['anilist']);
     assert.match(partly.warnings[0], /unbekannte Quellen \(jiakn/);
@@ -257,7 +265,7 @@ test('ANIME_* and the instance keys go through utils/config.js: typos warn at st
     Object.assign(process.env, { ANIME_SOURCES: 'anilst,jikan', ANIME_ANILIST_RPM: '12' });
     try {
         registerServerSources();
-        assert.deepEqual(settings.settings({}), { anilistRpm: 12, jikanRpm: 60, anilist: false, mal: true });
+        assert.deepEqual(settings.settings({}), { anilistRpm: 12, jikanRpm: 60, tmdbRpm: 120, anilist: false, mal: true, tmdb: false });
     } finally {
         for (const key of ['ANIME_SOURCES', 'ANIME_ANILIST_RPM']) {
             if (saved[key] === undefined) delete process.env[key];
@@ -265,4 +273,31 @@ test('ANIME_* and the instance keys go through utils/config.js: typos warn at st
         }
         registerServerSources();
     }
+});
+
+test('TMDb keys: personal key or read token checked at /3/authentication, TMDB_API_KEY wins, a refused environment key shows in the sources row', async () => {
+    require('../routes/apiKeys').keyLimiter.reset();
+    const admin2 = ctx.client();
+    assert.equal((await admin2('POST', '/auth/login', { username: 'admin', password: 'password123' })).status, 200);
+    const token = await admin2('PUT', '/auth/api-keys/tmdb', { secret: TOKEN });
+    assert.deepEqual([token.status, token.body.label], [200, `Schlüssel …${TOKEN.slice(-4)}`]);
+    const refused = await admin2('PUT', '/admin/api-keys/tmdb', { secret: 'f'.repeat(32) });
+    assert.deepEqual([refused.status, refused.body.code, refused.body.error], [400, 'KEY_REJECTED', 'TMDB lehnt den Schlüssel ab (401)']);
+    assert.equal((await admin2('PUT', '/admin/api-keys/tmdb', { secret: CLIENT_ID })).status, 200);
+    assert.equal((await admin2('GET', '/anime/sources')).body.tmdb.available, true);
+
+    const { serverProvider } = require('../routes/apiKeys');
+    process.env.TMDB_API_KEY = 'e'.repeat(32);
+    try {
+        assert.deepEqual(serverProvider.instance('tmdb'), { secret: 'e'.repeat(32), fromEnv: true });
+        assert.deepEqual(serverProvider.status(null, 'tmdb'), { configured: true, last_error: null });
+        serverProvider.failed(null, 'tmdb', 'TMDB lehnt den Schlüssel ab (401)');
+        assert.deepEqual(serverProvider.status(null, 'tmdb'), { configured: true, last_error: 'TMDB lehnt den Schlüssel ab (401)' });
+        assert.equal((await admin2('GET', '/anime/sources')).body.tmdb.error, 'TMDB lehnt den Schlüssel ab (401)');
+        assert.equal((await admin2('GET', '/admin/api-keys/tmdb')).body.from_env, true);
+    } finally {
+        delete process.env.TMDB_API_KEY;
+    }
+    assert.equal((await admin2('DELETE', '/admin/api-keys/tmdb')).body.removed, true);
+    assert.equal((await admin2('DELETE', '/auth/api-keys/tmdb')).body.removed, true);
 });

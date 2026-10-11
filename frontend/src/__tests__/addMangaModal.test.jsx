@@ -248,7 +248,8 @@ describe('AddMangaModal: closing', () => {
         { id: 'mp_7', source: 'manga_passion', source_label: 'Manga Passion', title: 'Berserk (MP)', status: 'Laufend' },
         { id: 'mal_2', source: 'mal', source_label: 'MyAnimeList', title: 'Berserk (MAL)', status: 'Laufend' },
         { id: 'al_30002', source: 'anilist', title: 'Berserk', status: 'Laufend', also_on: ['mal'] },
-        { id: 'al_9', source: 'anilist', source_label: 'AniList', title: 'Berserk: Prototype', status: 'Abgeschlossen' }
+        { id: 'al_9', source: 'anilist', source_label: 'AniList', title: 'Berserk: Prototype', status: 'Abgeschlossen' },
+        { id: 'mp_8', source: 'manga_passion', source_label: 'Manga Passion', title: 'Berserk Deluxe', status: 'Laufend', also_on: ['anilist', 'mal', 'anilist'] }
       ])
     });
     renderModal();
@@ -264,6 +265,7 @@ describe('AddMangaModal: closing', () => {
     expect(await badges('Berserk (MAL)')).toEqual(['MyAnimeList']);
     expect(await badges('Berserk')).toEqual(['AniList', 'MyAnimeList']);
     expect(await badges('Berserk: Prototype')).toEqual(['AniList']);
+    expect(await badges('Berserk Deluxe')).toEqual(['Manga Passion', 'AniList', 'MyAnimeList']);
     const mp = (await screen.findByText('Berserk (MP)')).closest('button');
     expect(mp.querySelector('svg.lucide-library')).toBeTruthy();
     expect(mp.querySelector('svg.lucide-globe')).toBeNull();

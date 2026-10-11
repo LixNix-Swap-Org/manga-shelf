@@ -3,7 +3,7 @@ import { ClipboardPaste, Plus, RefreshCw, Tv, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { langFor } from '../common/lang';
 import { compareNatural } from '../../utils/search';
-import { displayTitle, formatLabel, progressText } from '../../utils/animeHelpers';
+import { displayTitle, formatLabel, progressText, isAnimeKind } from '../../utils/animeHelpers';
 import {
   aboveTotalText, displaySeriesTitle, knownEntry, progressBefore, raisesCounter, serviceLabel
 } from '../../utils/shareIntake';
@@ -60,7 +60,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
   const candidates = (answer.candidates || []).slice(0, MAX_CANDIDATES);
   const others = useMemo(() => {
     const shown = new Set((answer.candidates || []).slice(0, MAX_CANDIDATES).map((c) => c.id));
-    return list.filter((a) => !shown.has(a.id)).sort((a, b) => compareNatural(displayTitle(a), displayTitle(b)));
+    return list.filter((a) => !shown.has(a.id) && isAnimeKind(a)).sort((a, b) => compareNatural(displayTitle(a), displayTitle(b)));
   }, [list, answer.candidates]);
   const seriesTitle = displaySeriesTitle(answer, state.link);
   const title = entry ? displayTitle(entry) : (known?.title || seriesTitle || '');

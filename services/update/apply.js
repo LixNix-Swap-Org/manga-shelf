@@ -5,7 +5,7 @@ const { spawnSync } = require('child_process');
 const zip = require('./zip');
 const swap = require('./swap');
 const stateFile = require('./state');
-const { updateError, UPDATE_TEXTS } = require('./errors');
+const { updateError, httpOnlyError, UPDATE_TEXTS } = require('./errors');
 const { MB, RELEASE_MANIFEST } = require('./constants');
 const { openRegular, sha256Of, NOFOLLOW } = require('./verifiedFile');
 
@@ -192,6 +192,13 @@ function writeNewBinary({ execPath, stagedFile, fd, sha256, platform = process.p
     return next;
 }
 
+function downgradeJournal({ undoes, db }) {
+    return {
+        undoes: { from: undoes.from, to: undoes.to, at: undoes.at || null, backup: undoes.backup || null, schema_before: undoes.schema_before },
+        db: db ? { source: { file: db.source.file, sha256: db.source.sha256 }, schema: db.schema, replaced_at: null, kept: null, returned_at: null } : null
+    };
+}
+
 function defaultDeps() {
     const scheduler = require('../scheduler');
     return {
@@ -205,16 +212,33 @@ function defaultDeps() {
     };
 }
 
-/** Verified backup, update state and new code next to the old, all read through one handle of the staged file; resolves { state, releaseHold }. */
-async function prepareSwitch({ staged, install, from, dataDir, userId, deps = {}, onStep = () => {} }) {
+function holdOriginal(downgrade, d) {
+    const original = downgrade && downgrade.undoes && downgrade.undoes.backup;
+    const release = original && original.file ? d.holdSnapshot(original.file) : null;
+    const source = downgrade && downgrade.db && downgrade.db.source;
+    if (source) {
+        const file = path.join(d.backupsDir, source.file);
+        const st = swap.lstatOrNull(file);
+        if (!st || !st.isFile() || sha256File(file) !== source.sha256) {
+            if (release) release();
+            throw httpOnlyError('DOWNGRADE_NOT_AVAILABLE', { reason: st && st.isFile() ? 'backup_changed' : 'backup_missing' });
+        }
+    }
+    return release;
+}
+
+/** Verified backup, update state and new code next to the old, all read through one handle of the staged file; resolves { state, releaseHold }. A `downgrade` ({ undoes, db }) is journaled with the state. */
+async function prepareSwitch({ staged, install, from, dataDir, userId, downgrade = null, deps = {}, onStep = () => {} }) {
     const d = { ...defaultDeps(), ...deps };
     const to = staged.version;
     let state = null;
     let release = null;
+    let releaseOriginal = null;
     const handle = staged.handle || await openRegular(staged.file);
     try {
         onStep('verifying');
         if (await sha256Of(handle) !== staged.sha256) throw updateError('CHECKSUM_MISMATCH');
+        releaseOriginal = holdOriginal(downgrade, d);
         const previousState = stateFile.readState(dataDir);
         if (previousState && previousState.phase === 'started') swap.cleanupCode(previousState, { codeDir: install.codeDir, execPath: install.execPath });
 
@@ -242,7 +266,8 @@ async function prepareSwitch({ staged, install, from, dataDir, userId, deps = {}
             previous: { sha256: previousSha },
             next: { sha256: staged.sha256 },
             attempts: 0,
-            ...(install.mode === 'sea-user' ? { exec_path: install.execPath } : { code_dir: install.codeDir })
+            ...(install.mode === 'sea-user' ? { exec_path: install.execPath } : { code_dir: install.codeDir }),
+            ...(downgrade ? { downgrade: downgradeJournal(downgrade) } : {})
         });
 
         onStep('copying');
@@ -257,9 +282,11 @@ async function prepareSwitch({ staged, install, from, dataDir, userId, deps = {}
             throw updateError('NOT_INSTALLABLE', null, { reason: install.mode });
         }
         state = stateFile.writeState(dataDir, { ...state, ...extra, phase: 'ready-to-swap' });
-        return { state, releaseHold: release };
+        const holds = [release, releaseOriginal];
+        return { state, releaseHold: () => holds.forEach((fn) => fn && fn()) };
     } catch (err) {
         if (release) release();
+        if (releaseOriginal) releaseOriginal();
         if (state) {
             swap.cleanupCode(state, { codeDir: install.codeDir, execPath: install.execPath });
             try {

@@ -308,15 +308,16 @@ test('background refresh waits for AniList: a paused AniList stops the sweep', a
     assert.equal(http.count('jikan'), 0, 'sweeps never fall back to Jikan one by one');
 });
 
-test('a hanging second source costs at most the grace period, not its timeout', async () => {
+test('a hanging second source costs at most the 400 ms search grace, not its timeout', async () => {
     const http = fakeFetch({ anilist: aniListFixtures, jikan: () => new Promise(() => {}) });
     const ctx = ctxAs(memoryWith(http.fetch), 'ed');
     const started = Date.now();
     const result = await gateway.searchAnime(ctx, 'Frieren');
     const took = Date.now() - started;
+    assert.equal(gateway.SEARCH_GRACE_MS, 400);
     assert.deepEqual(result.sources_used, ['anilist']);
     assert.equal(result.partial, true);
-    assert.ok(took >= 2400 && took < 4000, `answered after ${took} ms`);
+    assert.ok(took >= 350 && took < 1500, `answered after ${took} ms`);
     const meta = await gateway.getAnime(ctx, { anilist_id: 154587 });
     assert.equal(meta.anilist_id, 154587, 'AniList alone when MyAnimeList hangs');
 });
@@ -449,4 +450,182 @@ test('an aborted caller signal is not an outage: the token is released, no failu
     }
     assert.equal(http.count('anilist'), 1, 'own key only, the pool is not tried; an aborted signal sends nothing');
     assert.equal(gateway.state().budget.state('user:2:anilist', Date.now()).circuit, 'closed');
+});
+
+const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const JIKAN_OPTIONS = { perMinute: 60, burst: { size: 3, perMs: 1000 } };
+const ttlOf = (core, key) => {
+    const row = core.conn.prepare('SELECT created_at, expires_at FROM api_cache WHERE cache_key = ?').get(key);
+    return row ? row.expires_at - row.created_at : null;
+};
+
+function openJikanCircuit(at) {
+    const budget = gateway.state().budget;
+    budget.available('shared:jikan', JIKAN_OPTIONS, at);
+    for (let i = 0; i < 3; i++) budget.failure('shared:jikan', at);
+}
+
+test('search: every source has its own cache row, only a source without one is asked', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    const ctx = ctxAs(memoryWith(http.fetch), 'ed');
+    const first = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual(first.sources_available, ['anilist', 'mal']);
+    for (const key of ['anime:search:anilist:frieren:10', 'anime:search:mal:frieren:10', 'anime:search:frieren:10']) assert.ok(cache.read(ctx, key), key);
+    assert.equal(cache.read(ctx, 'anime:search:mal:frieren:10').value.provider, 'jikan');
+
+    cache.remove(ctx, 'anime:search:mal:frieren:10');
+    const second = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual([http.count('anilist'), http.count('jikan')], [1, 2], 'AniList answered from its row');
+    assert.deepEqual([second.cached, second.partial, second.sources_used], [false, false, ['anilist', 'jikan']]);
+    assert.deepEqual(second.results.map((r) => r.anilist_id), first.results.map((r) => r.anilist_id));
+
+    const third = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual([third.cached, third.partial, http.calls.length], [true, false, 3]);
+});
+
+test('search: an answer after the grace is merged into the rows with the full TTL; a restore drops it', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: (p) => later(700).then(() => jikanFixtures(p)) });
+    const core = memoryWith(http.fetch);
+    const ctx = ctxAs(core, 'ed');
+    const first = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual([first.sources_used, first.partial], [['anilist'], true]);
+    assert.equal(ttlOf(core, 'anime:search:frieren:10'), cache.TTL.partial);
+    await later(700);
+    assert.ok(cache.read(ctx, 'anime:search:mal:frieren:10'), 'the late source wrote its row');
+    assert.equal(ttlOf(core, 'anime:search:frieren:10'), cache.TTL.search);
+    assert.deepEqual(cache.read(ctx, 'anime:search:frieren:10').value.sources_used, ['anilist', 'jikan']);
+    const again = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual([again.cached, again.partial, http.count('jikan')], [true, false, 1]);
+
+    let generation = 1;
+    const restored = { ...ctx, db: { ...ctx.db, generation: () => generation } };
+    await gateway.searchAnime(restored, 'Berserk');
+    generation = 2;
+    await later(700);
+    assert.equal(cache.read(ctx, 'anime:search:mal:berserk:10'), null, 'written before the restore: dropped');
+});
+
+test('search: the asked set is sources ∩ the kind ∩ what the caller can use; an empty set asks nobody', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    const ctx = ctxAs(memoryWith(http.fetch), 'ed');
+    for (const options of [{ sources: ['tmdb'] }, { kind: 'tv' }, { kind: 'movie', sources: ['anilist'] }]) {
+        assert.deepEqual(await gateway.searchAnime(ctx, 'Frieren', options),
+            { results: [], sources_used: [], partial: false, cached: false, sources_available: ['anilist', 'mal'] }, JSON.stringify(options));
+    }
+    assert.equal(http.calls.length, 0);
+
+    const aniOnly = await gateway.searchAnime(ctx, 'Frieren', { sources: ['anilist'], kind: 'anime' });
+    assert.deepEqual([aniOnly.sources_used, aniOnly.partial, http.count('jikan')], [['anilist'], false, 0]);
+    assert.equal(cache.read(ctx, 'anime:search:frieren:10'), null, 'no AniList+MyAnimeList row without MyAnimeList asked');
+    const malOnly = await gateway.searchAnime(ctx, 'Frieren', { sources: ['mal'] });
+    assert.deepEqual([malOnly.sources_used, http.count('anilist'), http.count('jikan')], [['jikan'], 1, 1]);
+    assert.equal(cache.read(ctx, 'anime:search:frieren:10'), null, 'never written without AniList');
+
+    const anilistOff = { ...ctx, config: { ...ctx.config, anime: { sources: ['anilist'] } } };
+    const narrowed = await gateway.searchAnime(anilistOff, 'Frieren');
+    assert.deepEqual([narrowed.sources_available, narrowed.sources_used, narrowed.cached], [['anilist'], ['anilist'], true]);
+});
+
+test('search: the stale fallback reads the rows of the asked sources, the AniList+MyAnimeList row only when both are asked', async () => {
+    const http = fakeFetch({ anilist: () => json({}, { status: 502 }), jikan: () => json({}, { status: 503 }) });
+    const core = memoryWith(http.fetch);
+    const ctx = ctxAs(core, 'ed');
+    const insert = core.conn.prepare('INSERT INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES (?, ?, ?, ?)');
+    insert.run('anime:search:frieren:10', JSON.stringify({ results: [{ title: { romaji: 'Alt' } }], sources_used: ['anilist', 'jikan'], partial: false }), 1, 2);
+    await assert.rejects(gateway.searchAnime(ctx, 'Frieren', { sources: ['anilist'] }), (err) => err.status === 503 && err.code === 'SOURCES_UNAVAILABLE');
+    insert.run('anime:search:anilist:frieren:10', JSON.stringify({ metas: [{ anilist_id: 1, title: { romaji: 'Frieren (alt)' } }], provider: null, credential_used: 'shared' }), 1, 2);
+    const stale = await gateway.searchAnime(ctx, 'Frieren', { sources: ['anilist'] });
+    assert.deepEqual([stale.cached, stale.partial, stale.sources_used], [true, true, ['anilist']]);
+    assert.equal(stale.results[0].title.romaji, 'Frieren (alt)');
+});
+
+test('search: an open MyAnimeList circuit is left out of partial; a half-open one gets one probe after the answer', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    const core = memoryWith(http.fetch);
+    const ctx = ctxAs(core, 'ed');
+    openJikanCircuit(Date.now());
+    const open = await gateway.searchAnime(ctx, 'Frieren');
+    assert.deepEqual([open.sources_used, open.partial, http.count('jikan')], [['anilist'], false, 0]);
+    await later(50);
+    assert.equal(http.count('jikan'), 0, 'no probe while the circuit is open');
+
+    gateway.state().budget.drop('shared:jikan');
+    openJikanCircuit(Date.now() - 61 * 1000);
+    const halfOpen = await gateway.searchAnime(ctx, 'Berserk');
+    assert.deepEqual([halfOpen.sources_used, halfOpen.partial], [['anilist'], false]);
+    await later(50);
+    assert.equal(http.count('jikan'), 1, 'one probe');
+    assert.ok(cache.read(ctx, 'anime:search:mal:berserk:10'), 'the probe answer is merged');
+    assert.equal(gateway.state().budget.state('shared:jikan', Date.now()).circuit, 'closed');
+});
+
+test('series lookup: hits carry alt_titles; Jikan after the grace upgrades the row; an open Jikan circuit keeps the full TTL', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: (p) => later(700).then(() => jikanFixtures(p)) });
+    const core = memoryWith(http.fetch);
+    const ctx = ctxAs(core, 'ed');
+    const first = await gateway.searchManga(ctx, 'Berserk');
+    assert.equal(first.find((r) => r.id === 'al_30002').also_on, undefined);
+    assert.deepEqual(first.find((r) => r.id === 'al_30002').alt_titles, ['Berserk', 'ベルセルク']);
+    assert.equal(ttlOf(core, 'manga:search:berserk'), cache.TTL.partial);
+    await later(700);
+    assert.equal(ttlOf(core, 'manga:search:berserk'), cache.TTL.search);
+    const merged = await gateway.searchManga(ctx, 'Berserk');
+    assert.deepEqual(merged.find((r) => r.id === 'al_30002').also_on, ['mal']);
+
+    const quick = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    const other = memoryWith(quick.fetch);
+    openJikanCircuit(Date.now());
+    await gateway.searchManga(ctxAs(other, 'ed'), 'Berserk');
+    assert.equal(quick.count('jikan'), 0);
+    assert.equal(ttlOf(other, 'manga:search:berserk'), cache.TTL.search);
+
+    const paused = fakeFetch({ anilist: rateLimited, jikan: jikanFixtures });
+    const third = memoryWith(paused.fetch);
+    await gateway.searchManga(ctxAs(third, 'ed'), 'Berserk');
+    await gateway.searchManga(ctxAs(third, 'ed'), 'Monster');
+    assert.equal(paused.count('anilist'), 1);
+    assert.equal(ttlOf(third, 'manga:search:monster'), cache.TTL.partial, 'a missing AniList answer is always partial');
+});
+
+test('series lookup: a half-open Jikan circuit gets one probe after AniList answered', async () => {
+    const http = fakeFetch({ anilist: aniListFixtures, jikan: jikanFixtures });
+    const core = memoryWith(http.fetch);
+    openJikanCircuit(Date.now() - 61 * 1000);
+    const results = await gateway.searchManga(ctxAs(core, 'ed'), 'Berserk');
+    assert.equal(results.some((r) => r.also_on), false);
+    await later(50);
+    assert.equal(http.count('jikan'), 1);
+    const upgraded = await gateway.searchManga(ctxAs(core, 'ed'), 'Berserk');
+    assert.deepEqual(upgraded.find((r) => r.id === 'al_30002').also_on, ['mal']);
+    assert.equal(ttlOf(core, 'manga:search:berserk'), cache.TTL.search);
+});
+
+test('series lookup: an aborted caller stops at once; the run and its request abort only when every caller aborted', async () => {
+    const signals = [];
+    const http = fakeFetch({
+        anilist: (body, init) => new Promise((resolve, reject) => {
+            signals.push(init.signal);
+            init.signal.addEventListener('abort', () => reject(init.signal.reason));
+        })
+    });
+    const core = memoryWith(http.fetch);
+    const ctx = { ...ctxAs(core, 'ed'), config: { ...core.ctx.config, anime: { sources: ['anilist'] } } };
+    const a = new AbortController();
+    const b = new AbortController();
+    const first = gateway.searchManga(ctx, 'Berserk', { signal: a.signal });
+    const second = gateway.searchManga(ctx, 'Berserk', { signal: b.signal });
+    await later(30);
+    assert.equal(gateway.state().users.count(2), 2);
+    a.abort();
+    await assert.rejects(first, (err) => err.unavailable === true);
+    assert.equal(gateway.state().users.count(2), 1, 'the aborted caller left its waiting slot');
+    assert.deepEqual([signals.length, signals[0].aborted], [1, false], 'the other caller still waits for the one request');
+    b.abort();
+    await assert.rejects(second, (err) => err.unavailable === true);
+    await later(10);
+    assert.equal(signals[0].aborted, true);
+    assert.equal(gateway.state().coalescer.size(), 0);
+    assert.equal(gateway.state().users.count(2), 0);
+    assert.equal(core.conn.prepare('SELECT count(*) AS n FROM api_cache').get().n, 0);
+    assert.equal(gateway.state().budget.state('shared:anilist', Date.now()).circuit, 'closed');
 });

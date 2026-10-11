@@ -371,7 +371,8 @@ router.get('/backups/:filename/download', requireAdmin, (req, res) => {
 router.delete('/backups/:filename', requireAdmin, refuseDuringUpdate, (req, res) => {
     const snapshot = findSnapshot(req.params.filename);
     if (!snapshot) return snapshotNotFound(res);
-    if (snapshot.filename === update.heldBackup()) {
+    const held = update.heldBackups();
+    if (held ? held.hold.includes(snapshot.filename) : snapshot.filename === update.heldBackup()) {
         return sendError(res, 409, 'Dieses Backup gehört zum laufenden Update und kann erst nach dessen Abschluss gelöscht werden.', 'BACKUP_HELD');
     }
     scheduler.deleteSnapshot(snapshot.filename);

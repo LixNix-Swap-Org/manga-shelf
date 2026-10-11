@@ -4,8 +4,9 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom';
 import OnlineResults, { clearOnlineAnswers } from '../components/dashboard/OnlineResults';
 import MangaCollectionGrid from '../components/dashboard/MangaCollectionGrid';
-import { matchHit, retryAfterSeconds, visibleHits } from '../utils/onlineMatch';
-import { hitToForm, lookupSourceLabels, releasedSoFar } from '../utils/lookupPrefill';
+import { matchHit, provisionalHits, retryAfterSeconds, visibleHits } from '../utils/onlineMatch';
+import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../utils/lookupPrefill';
+import { COVER_ORIGIN_KEY } from '../utils/coverOrigin';
 import { lookupSourceLabels as modalSourceLabels } from '../components/modals/AddMangaModal';
 import { setDefaultLanguage } from '../utils/editions';
 import { fakeResponse } from './fakeResponse';
@@ -45,6 +46,7 @@ const renderResults = (props = {}) => render(
 beforeEach(() => {
   clearOnlineAnswers();
   setDefaultLanguage('de');
+  try { localStorage.clear(); } catch (_) {}
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -168,7 +170,7 @@ describe('OnlineResults', () => {
     expect(onAdd.mock.calls[1][0].form).not.toHaveProperty('publisher');
   });
 
-  it('the same query is answered from memory within ten minutes; a failed one is asked again on the next submit', async () => {
+  it('the same query is answered from memory within a minute; a failed one is asked again on the next submit', async () => {
     stubLookup(answer(200, [MP_HIT]));
     const { rerender } = renderResults({ seq: 1 });
     await screen.findByText('1 online gefunden');
@@ -178,7 +180,7 @@ describe('OnlineResults', () => {
     expect(calls).toHaveLength(1);
 
     const now = Date.now();
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 10 * 60 * 1000 + 1);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 60 * 1000 + 1);
     rerender(<MemoryRouter><OnlineResults query="frieren" seq={4} mangas={[]} canEdit onAdd={vi.fn()} /></MemoryRouter>);
     await waitFor(() => expect(calls).toHaveLength(2));
     clock.mockRestore();
@@ -206,6 +208,31 @@ describe('OnlineResults', () => {
     await act(async () => { releaseFirst(answer(200, [MP_HIT, AL_HIT, { id: 'x', title: 'X' }])); });
     expect(screen.getByText('1 online gefunden')).toBeTruthy();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('a folded Manga Passion hit shows the sources folded into it after its own badge', async () => {
+    stubLookup(answer(200, [{ ...MP_HIT, source_label: 'Manga Passion', also_on: ['anilist', 'mal'], work_key: 'anilist:1' }]));
+    renderResults();
+    const [item] = await screen.findAllByRole('listitem');
+    const labels = [...item.querySelectorAll('span')].filter((el) => el.querySelector(':scope > svg.w-3')).map((el) => el.textContent);
+    expect(labels).toEqual(['Manga Passion', 'AniList', 'MyAnimeList']);
+    expect(item.querySelector('svg.lucide-library')).toBeTruthy();
+    expect(item.querySelectorAll('svg.lucide-globe')).toHaveLength(2);
+  });
+
+  it('records the origin of the first Manga Passion cover of each settled answer', async () => {
+    const other = { ...MP_HIT, id: 'mp_8', manga_passion_id: 8, cover_image: 'https://cdn2.example/b.jpg' };
+    stubLookup(answer(200, [{ ...AL_HIT, cover_image: 'https://anilist.example/a.jpg' }, { ...MP_HIT, cover_image: '' }, other]));
+    const view = renderResults({ seq: 1 });
+    await screen.findByText('3 online gefunden');
+    expect(localStorage.getItem(COVER_ORIGIN_KEY)).toBe('https://cdn2.example');
+    stubLookup(answer(200, [AL_HIT]));
+    view.rerender(<MemoryRouter><OnlineResults query="rosa" seq={2} mangas={[]} canEdit onAdd={vi.fn()} /></MemoryRouter>);
+    await screen.findByText('1 online gefunden');
+    expect(localStorage.getItem(COVER_ORIGIN_KEY)).toBe('https://cdn2.example');
+    stubLookup(answer(200, [MP_HIT]));
+    view.rerender(<MemoryRouter><OnlineResults query="frieren x" seq={3} mangas={[]} canEdit onAdd={vi.fn()} /></MemoryRouter>);
+    await waitFor(() => expect(localStorage.getItem(COVER_ORIGIN_KEY)).toBe('https://img.example'));
   });
 
   it('embedded in the empty panel it has no heading of its own', async () => {
@@ -303,6 +330,115 @@ describe('OnlineResults lookup memory', () => {
   });
 });
 
+describe('OnlineResults while typing', () => {
+  const DUNGEON = [
+    { id: 'mp_1', source: 'manga_passion', manga_passion_id: 1, title: 'Delicious in Dungeon', alt_titles: ['Dungeon Meshi'], author: 'Ryoko Kui', publisher: 'Egmont' },
+    { id: 'al_2', source: 'anilist', title: 'Tower Dungeon', author: 'Tsutomu Nihei' },
+    { id: 'al_3', source: 'anilist', title: 'Dungeon People', author: 'Sakana Toufu' }
+  ];
+  const section = (props = {}) => (
+    <MemoryRouter><OnlineResults query="dungeon" seq={1} mangas={[]} canEdit onAdd={vi.fn()} {...props} /></MemoryRouter>
+  );
+  const titles = () => screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+  const skeleton = () => document.querySelector('.animate-pulse');
+
+  it('keeps the last answer filtered by the typed text, marked as updating, until the new one arrives', async () => {
+    let release;
+    stubLookup(answer(200, DUNGEON), () => new Promise((resolve) => { release = resolve; }));
+    const view = render(section());
+    await screen.findByText('3 online gefunden');
+    view.rerender(section({ pending: true, typed: 'dungeon meshi' }));
+    expect(titles()).toEqual(['Delicious in Dungeon']);
+    expect(screen.getByRole('status').textContent).toBe('Wird aktualisiert…');
+    expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
+    expect(skeleton()).toBeNull();
+    expect(calls).toHaveLength(1);
+
+    view.rerender(section({ query: 'dungeon meshi', seq: 2, typed: 'dungeon meshi' }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(titles()).toEqual(['Delicious in Dungeon']);
+    expect(screen.getByRole('status').textContent).toBe('Wird aktualisiert…');
+    expect(skeleton()).toBeNull();
+
+    await act(async () => { release(answer(200, [DUNGEON[0], { id: 'al_9', source: 'anilist', title: 'Dungeon Meshi World Guide' }])); });
+    expect(screen.getByRole('status').textContent).toBe('2 online gefunden');
+    expect(titles()).toEqual(['Delicious in Dungeon', 'Dungeon Meshi World Guide']);
+  });
+
+  it('a remembered answer aborts the running lookup, so a late answer never replaces the list on screen', async () => {
+    const FRIEREN = [
+      { id: 'mp_7', source: 'manga_passion', title: 'Frieren' },
+      { id: 'mp_8', source: 'manga_passion', title: 'Frieren Deluxe' }
+    ];
+    let release;
+    const signals = [];
+    stubLookup(
+      answer(200, FRIEREN),
+      (url, init) => { signals.push(init.signal); return new Promise((resolve) => { release = resolve; }); }
+    );
+    const view = render(section({ query: 'frieren', typed: 'frieren' }));
+    await screen.findByText('2 online gefunden');
+    view.rerender(section({ query: 'frieren x', seq: 2, typed: 'frieren x' }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    view.rerender(section({ query: 'frieren', seq: 3, typed: 'frieren' }));
+    expect(await screen.findByText('2 online gefunden')).toBeTruthy();
+    expect(titles()).toEqual(['Frieren', 'Frieren Deluxe']);
+    expect(signals[0].aborted).toBe(true);
+
+    await act(async () => { release(answer(200, [{ id: 'al_5', source: 'anilist', title: 'Frieren Dx Something' }])); });
+    view.rerender(section({ query: 'frieren', seq: 3, pending: true, typed: 'frieren d' }));
+    expect(titles()).toEqual(['Frieren Deluxe']);
+    expect(screen.getByRole('status').textContent).toBe('Wird aktualisiert…');
+
+    view.rerender(section({ query: 'frieren x', seq: 4, typed: 'frieren x' }));
+    await waitFor(() => expect(calls).toHaveLength(3));
+  });
+
+  it('matches author and publisher too; when nothing is left the status line shows alone', async () => {
+    stubLookup(answer(200, DUNGEON));
+    const view = render(section());
+    await screen.findByText('3 online gefunden');
+    view.rerender(section({ pending: true, typed: 'nihei' }));
+    expect(titles()).toEqual(['Tower Dungeon']);
+    view.rerender(section({ pending: true, typed: 'egmont' }));
+    expect(titles()).toEqual(['Delicious in Dungeon']);
+    view.rerender(section({ pending: true, typed: 'frieren' }));
+    expect(titles()).toEqual([]);
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(skeleton()).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Online-Suche läuft…');
+  });
+
+  it('without a settled answer the skeleton shows while loading', () => {
+    stubLookup(() => new Promise(() => {}));
+    render(section({ pending: true, typed: 'dungeon m' }));
+    expect(skeleton()).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Online-Suche läuft…');
+  });
+
+  it('pending before the first query: only the status line, no heading, no skeleton and no lookup', async () => {
+    stubLookup(answer(200, DUNGEON));
+    const view = render(section({ query: '', seq: 0, pending: true, typed: 'dun' }));
+    expect(screen.getByRole('status').textContent).toBe('Online-Suche läuft…');
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(skeleton()).toBeNull();
+    await act(async () => {});
+    expect(calls).toEqual([]);
+    view.rerender(section({ query: 'dungeon', seq: 1, typed: 'dungeon' }));
+    expect(await screen.findByText('3 online gefunden')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Online-Treffer zu „dungeon“' })).toBeTruthy();
+  });
+
+  it('provisionalHits filters the visible hits by titles, alternative titles, author and publisher', () => {
+    expect(provisionalHits(DUNGEON, 'meshi').map((h) => h.id)).toEqual(['mp_1']);
+    expect(provisionalHits(DUNGEON, 'kui').map((h) => h.id)).toEqual(['mp_1']);
+    expect(provisionalHits(DUNGEON, 'dungeon').map((h) => h.id)).toEqual(['mp_1', 'al_2', 'al_3']);
+    expect(provisionalHits(DUNGEON, 'xyz')).toEqual([]);
+    expect(provisionalHits(null, 'dungeon')).toEqual([]);
+  });
+});
+
 describe('onlineMatch', () => {
   const mangas = [
     { id: 1, title: 'One Piece', manga_passion_id: 11, language: 'de' },
@@ -322,6 +458,20 @@ describe('onlineMatch', () => {
     expect(matchHit({ title: 'Naruto' }, mangas, { language: 'de' })).toBeNull();
     expect(matchHit({ manga_passion_id: 99, title: 'Naruto' }, mangas, { language: 'de' })).toBeNull();
     expect(matchHit({ title: 'Berserk' }, [], { language: 'de' })).toBeNull();
+  });
+
+  it('a Manga Passion hit owns by work key only a series without its own Manga Passion id', () => {
+    const editions = [
+      { id: 6, title: 'Frieren A', work_key: 'anilist:1', manga_passion_id: 70, language: 'de' },
+      { id: 7, title: 'Frieren B', work_key: 'anilist:1', language: 'de' },
+      { id: 8, title: 'Frieren EN', work_key: 'anilist:1', language: 'en' }
+    ];
+    const hit = { manga_passion_id: 71, work_key: 'anilist:1', title: 'Frieren Deluxe' };
+    expect(matchHit(hit, editions, { language: 'de' })).toEqual({ kind: 'owned', manga: editions[1] });
+    expect(matchHit(hit, [editions[0], editions[2]], { language: 'de' })).toEqual({ kind: 'otherEdition', manga: editions[0] });
+    expect(matchHit(hit, [editions[2]], { language: 'de' })).toEqual({ kind: 'otherEdition', manga: editions[2] });
+    expect(matchHit({ ...hit, manga_passion_id: 70 }, editions, { language: 'de' })).toEqual({ kind: 'owned', manga: editions[0] });
+    expect(matchHit({ work_key: 'anilist:1', title: 'X' }, editions, { language: 'de' })).toEqual({ kind: 'owned', manga: editions[0] });
   });
 
   it('a typo-only title hit (rank 3) and an author hit (rank 2) are not similar titles', () => {
@@ -356,6 +506,15 @@ describe('lookupPrefill', () => {
     });
     expect(hitToForm({ id: 'mal_5', source: 'mal', title: 'X' }, previous).work_key).toBe('mal:5');
     expect(hitToForm(MP_HIT, { ...previous, language: 'en' }).manga_passion_id).toBeNull();
+  });
+
+  it('keeps the work key of a folded Manga Passion hit; badges list only the folded sources', () => {
+    const folded = { ...MP_HIT, source_label: 'Manga Passion', also_on: ['anilist', 'mal'], work_key: 'anilist:1', anilist_id: 1 };
+    expect(hitToForm(folded, previous)).toMatchObject({ manga_passion_id: 7, work_key: 'anilist:1' });
+    expect(hitToForm(folded, previous)).not.toHaveProperty('anilist_id');
+    expect(alsoOnLabels(folded)).toEqual(['AniList', 'MyAnimeList']);
+    expect(alsoOnLabels(MP_HIT)).toEqual([]);
+    expect(alsoOnLabels(AL_HIT)).toEqual(['MyAnimeList']);
   });
 
   it('without a form it only names what the hit brings, so the dialog keeps its defaults for the rest', () => {

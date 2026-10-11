@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useApiKeys, listSyncProps } from '../components/modals/AccountModal';
 import ApiKeyCard from '../components/modals/ApiKeyCard';
+import TmdbAttribution from '../components/TmdbAttribution';
 import { INSECURE_STORAGE_TEXT } from '../local/credentials';
 import { WATCH_BUILD, watchAvailable } from './watch/watchState';
 import { t } from '../i18n/index.js';
@@ -52,6 +53,7 @@ export default function SourcesPanel({ headingLevel = 3 }) {
           <CrunchyrollCard headingLevel={headingLevel} />
         </Suspense>
       )}
+      {keys.guideOf('tmdb') && <TmdbAttribution />}
     </div>
   );
 }

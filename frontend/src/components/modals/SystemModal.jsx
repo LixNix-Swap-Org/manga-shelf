@@ -5,6 +5,7 @@ import api, { TIMEOUTS, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDateTime, formatNumber, formatRelative } from '../../utils/format';
 import ApiKeyCard from './ApiKeyCard';
+import TmdbAttribution from '../TmdbAttribution';
 import { Facts, Section } from '../system/SystemSection';
 import UpdateSection from '../system/UpdateSection';
 import { useApiKeys } from './AccountModal';
@@ -134,6 +135,7 @@ function SourcesSection({ info }) {
           })}
         </div>
       )}
+      {keys.guideOf('tmdb') && <TmdbAttribution />}
     </Section>
   );
 }

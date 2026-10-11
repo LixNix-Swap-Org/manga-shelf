@@ -6,7 +6,7 @@ import { compareVersions, isSelectable, README_UPDATING_URL, releaseLabel, relea
 const linkClass = 'inline-flex items-center gap-1 text-brand-300 underline';
 
 /** Every published release (newest first), the ones that cannot be chosen disabled with the reason in the text. */
-export default function VersionPicker({ releases, current, canInstall = true, selected, onSelect, disabled = false, action = null }) {
+export default function VersionPicker({ releases, current, canInstall = true, selected, onSelect, disabled = false, action = null, rollbackVersion = null }) {
   const id = useId();
   const sorted = sortReleases(releases);
   const chosen = sorted.find((r) => r.version === selected) || null;
@@ -44,7 +44,9 @@ export default function VersionPicker({ releases, current, canInstall = true, se
         </p>
       )}
       <p className="text-[11px] text-slate-400">
-        {t('Ältere Versionen lassen sich nicht per Klick installieren: Die Datenbank wird nur vorwärts migriert.')}{' '}
+        {rollbackVersion
+          ? t('Ältere Versionen lassen sich nicht per Klick installieren – nur die Version vor dem letzten Update („Zurück zu v{version}“).', { version: rollbackVersion })
+          : t('Ältere Versionen lassen sich nicht per Klick installieren: Die Datenbank wird nur vorwärts migriert.')}{' '}
         <a href={README_UPDATING_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>{t('Weg zurück (README)')}</a>
       </p>
     </div>

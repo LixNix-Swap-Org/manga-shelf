@@ -66,6 +66,14 @@ test('decorate: installed, older, unsigned, no_asset and installable', () => {
     const ok = decorate('3.2.0', signedAssets('3.2.0'));
     assert.equal(ok.installable, true);
     assert.equal(ok.reason, null);
+    assert.equal('rollback' in ok, false);
+});
+
+test('decorate: the target of going back gets rollback: true and stays older and not installable', () => {
+    const release = github.normalizeRelease(raw('v3.1.0', { assets: signedAssets('3.1.0') }));
+    const target = github.decorate(release, { current: '3.2.0', assetName: 'pterodactyl-manga-shelf.zip', rollbackTarget: '3.1.0' });
+    assert.deepEqual([target.rollback, target.reason, target.installable, target.signed], [true, 'older', false, true]);
+    assert.equal('rollback' in github.decorate(release, { current: '3.2.0', assetName: 'pterodactyl-manga-shelf.zip', rollbackTarget: '3.0.0' }), false);
 });
 
 test('admin notes: the "### Before updating" block up to the next heading', () => {

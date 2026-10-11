@@ -90,7 +90,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
     rerunMigration16();
     assert.equal(dbm.getConnectionGeneration(), generation + 1, 'reopening bumps the connection generation');
     const report = dbm.getLastMigrationReport();
-    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
+    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]);
     assert.equal(report[0].changes, db().prepare('SELECT count(*) AS n FROM mangas').get().n, 'the backfill touched every series');
     for (const row of db().prepare("SELECT m.owned_volumes AS stored, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS counted FROM mangas m").all()) {
         assert.equal(row.stored, row.counted);
@@ -98,7 +98,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
 
     const snapshots = safetySnapshots();
     assert.equal(snapshots.length, 1);
-    assert.match(snapshots[0], /^vor-update-v15-auf-v27-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
+    assert.match(snapshots[0], /^vor-update-v15-auf-v28-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
     const zip = new AdmZip(path.join(backupsDir, snapshots[0]));
     assert.deepEqual(zip.getEntries().map(e => e.entryName), ['manga.db']);
     const extracted = path.join(dataDir, 'temp', 'check.db');
@@ -151,7 +151,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'migrate-dry-run.js'), original], {
         encoding: 'utf8', env: { ...process.env, DATA_DIR: '', LOG_LEVEL: 'silent' }
     });
-    assert.match(out, /Schema:\s+v14 -> v27/);
+    assert.match(out, /Schema:\s+v14 -> v28/);
     assert.match(out, /v15 add_volumes_number_sort: [\d.]+ Zeilen geändert, \d+ ms/);
     assert.match(out, /v16 maintain_mangas_owned_volumes_by_triggers: /);
     assert.match(out, /v17 add_mangas_wish_priority: /);
@@ -164,6 +164,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     assert.match(out, /v25 add_anime_watch: /);
     assert.match(out, /v26 add_users_locale: /);
     assert.match(out, /v27 add_editions: /);
+    assert.match(out, /v28 add_media_kinds_and_languages: /);
     assert.match(out, /volumes\s+\d+ -> \d+/);
     assert.match(out, /integrity_check:\s+ok/);
     assert.match(out, /foreign_key_check: ok/);
@@ -209,7 +210,7 @@ test('no safety snapshot, no migration: the start stops unless MIGRATE_WITHOUT_S
         delete process.env.MIGRATE_WITHOUT_SNAPSHOT;
         failing.mock.restore();
     }
-    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
+    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]);
     assert.deepEqual(safetySnapshots(), before, 'migrated without a snapshot');
     assert.equal(require('../utils/config').readConfig({ MIGRATE_WITHOUT_SNAPSHOT: 'vielleicht' }).warnings.length, 1);
 });
@@ -389,7 +390,7 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         const warnings = [];
         const log = { debug() {}, info() {}, error() {}, warn: (...args) => warnings.push(args.join(' ')) };
         const report = schema.runSequentialMigrations(conn, { log });
-        assert.deepEqual(report.map(r => r.version), [27]);
+        assert.deepEqual(report.map(r => r.version), [27, 28]);
         const rows = conn.prepare('SELECT title, language, region, work_key, currency FROM mangas ORDER BY title').all().map(r => ({ ...r }));
         assert.deepEqual(rows.map(r => [r.title, r.language, r.region]), [
             ['A', 'de', null], ['B', 'en', null], ['C', 'en', null], ['D', 'ja', null], ['E', 'en', 'US'], ['F', 'de', null], ['G', 'de', null],
@@ -406,6 +407,73 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
         assert.equal(conn.prepare("SELECT region FROM mangas WHERE title = 'E'").get().region, 'US');
         assert.equal(conn.prepare("INSERT INTO mangas (title) VALUES ('neu') RETURNING currency").get().currency, 'EUR');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
+});
+
+test('migration 28 adds kinds, TMDb columns and watched languages and rebuilds user_api_credentials with tmdb, keeping every row', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'media.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        schema.applySchema(conn);
+        conn.exec(`
+            DELETE FROM schema_migrations WHERE version >= 28;
+            DROP INDEX idx_animes_tmdb;
+            ALTER TABLE animes DROP COLUMN kind;
+            ALTER TABLE animes DROP COLUMN tmdb_id;
+            ALTER TABLE animes DROP COLUMN tmdb_kind;
+            ALTER TABLE animes DROP COLUMN imdb_id;
+            ALTER TABLE animes DROP COLUMN original_language;
+            ALTER TABLE animes DROP COLUMN spoken_languages;
+            ALTER TABLE animes DROP COLUMN seasons;
+            ALTER TABLE anime_progress DROP COLUMN audio_language;
+            ALTER TABLE anime_progress DROP COLUMN subtitle_language;
+            DROP TABLE user_api_credentials;
+            CREATE TABLE user_api_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                provider TEXT NOT NULL CHECK (provider IN ('anilist','mal','google_books')),
+                secret_enc TEXT NOT NULL,
+                label TEXT,
+                last4 TEXT,
+                allow_background INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at INTEGER, last_ok_at INTEGER, last_error TEXT
+            );
+            CREATE UNIQUE INDEX idx_user_api_credentials_owner ON user_api_credentials (COALESCE(user_id, 0), provider);
+            INSERT INTO users (id, username, password_hash) VALUES (7, 'kim', 'x');
+            INSERT INTO animes (id, title, anilist_id) VALUES (3, 'Frieren', 154587);
+            INSERT INTO anime_progress (anime_id, user_id, episodes_watched) VALUES (3, 7, 4);
+            INSERT INTO user_api_credentials (id, user_id, provider, secret_enc, label, last4, allow_background, last_ok_at, last_error)
+                VALUES (5, 7, 'mal', 'enc-a', 'Client-ID …cdef', 'cdef', 1, 123, NULL), (9, NULL, 'google_books', 'enc-b', NULL, 'xxxx', 0, NULL, 'abgelehnt');
+        `);
+        assert.throws(() => conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'x')").run(), /CHECK constraint/);
+        const credentials = () => conn.prepare('SELECT * FROM user_api_credentials ORDER BY id').all().map(r => ({ ...r }));
+        const before = credentials();
+        const report = schema.runSequentialMigrations(conn);
+        assert.deepEqual(report.map(r => r.version), [28]);
+        assert.deepEqual(credentials(), before, 'every column of every row, ids included');
+        conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-c')").run();
+        assert.throws(() => conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-d')").run(), /UNIQUE/);
+        assert.throws(() => conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'kitsu', 'x')").run(), /CHECK constraint/);
+        assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_user_api_credentials_owner'").get());
+        conn.exec('DELETE FROM users WHERE id = 7');
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM user_api_credentials WHERE user_id = 7').get().n, 0, 'still cascades');
+
+        const anime = conn.prepare('SELECT kind, tmdb_id, tmdb_kind, imdb_id, original_language, spoken_languages, seasons FROM animes WHERE id = 3').get();
+        assert.deepEqual({ ...anime }, { kind: 'anime', tmdb_id: null, tmdb_kind: null, imdb_id: null, original_language: null, spoken_languages: null, seasons: null });
+        const progressCols = conn.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name);
+        assert.ok(progressCols.includes('audio_language') && progressCols.includes('subtitle_language'));
+        conn.exec("INSERT INTO animes (title, kind, tmdb_id, tmdb_kind) VALUES ('Film', 'movie', 7, 'movie'), ('Serie', 'tv', 7, 'tv')");
+        assert.throws(() => conn.exec("INSERT INTO animes (title, kind, tmdb_id, tmdb_kind) VALUES ('Doppelt', 'tv', 7, 'tv')"), /UNIQUE/);
+
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 28');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [28], 'a second run is harmless');
+        assert.equal(conn.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name LIKE 'user_api_credentials%'").get().n, 1);
     } finally {
         conn.close();
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });

@@ -116,6 +116,7 @@ function mangaLookupResult(m) {
         source_label: 'MyAnimeList',
         title: m.title_english || m.title,
         alt_title: m.title_japanese || m.title,
+        alt_titles: [...new Set([m.title, m.title_english, m.title_japanese].filter(Boolean))],
         author,
         publisher: null,
         description: cleanDescription(m.synopsis),

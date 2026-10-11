@@ -218,33 +218,43 @@ function bookFromGoogleBooks(gbData, cleanIsbn) {
     };
 }
 
-/** DNB -> K10plus -> Google Books; the first source with a result wins. `fetchText` is injectable for tests. */
-async function lookupBookByIsbn(ctx, cleanIsbn, { fetchText = ctx.http.fetchText } = {}) {
+/**
+ * DNB and K10plus together (DNB's book wins), Google Books only after both: book | null. `onSettled({ complete })` says
+ * whether every asked catalogue answered without error or timeout. `fetchText` is injectable for tests.
+ */
+async function lookupBookByIsbn(ctx, cleanIsbn, { fetchText = ctx.http.fetchText, onSettled = () => {} } = {}) {
     const isbn = encodeURIComponent(cleanIsbn);
+    let complete = true;
+    const catalogue = (url, source, label) => Promise.resolve()
+        .then(() => fetchText(url, 6000))
+        .then((xml) => parseMarc21Xml(xml, cleanIsbn, source))
+        .catch((err) => {
+            complete = false;
+            log(ctx).warn(`${label} request failed or timed out:`, err && err.message);
+            return null;
+        });
+    const settle = (book) => {
+        onSettled({ complete: Boolean(book) || complete });
+        return book;
+    };
 
-    try {
-        const xml = await fetchText(`https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${isbn}&recordSchema=MARC21-xml&maximumRecords=1`, 6000);
-        const book = parseMarc21Xml(xml, cleanIsbn, 'DNB (Deutsche Nationalbibliothek)');
-        if (book) return book;
-    } catch (err) {
-        log(ctx).warn('DNB request failed or timed out:', err.message);
-    }
-
-    try {
-        const xml = await fetchText(`https://sru.k10plus.de/opac-de-627?version=1.1&operation=searchRetrieve&recordSchema=marcxml&maximumRecords=1&query=pica.isb%3D${isbn}`, 6000);
-        const book = parseMarc21Xml(xml, cleanIsbn, 'K10plus (Gemeinsamer Bibliotheksverbund)');
-        if (book) return book;
-    } catch (err) {
-        log(ctx).warn('K10plus request failed or timed out:', err.message);
-    }
+    const dnb = catalogue(`https://services.dnb.de/sru/dnb?version=1.1&operation=searchRetrieve&query=isbn%3D${isbn}&recordSchema=MARC21-xml&maximumRecords=1`,
+        'DNB (Deutsche Nationalbibliothek)', 'DNB');
+    const k10plus = catalogue(`https://sru.k10plus.de/opac-de-627?version=1.1&operation=searchRetrieve&recordSchema=marcxml&maximumRecords=1&query=pica.isb%3D${isbn}`,
+        'K10plus (Gemeinsamer Bibliotheksverbund)', 'K10plus');
+    const fromDnb = await dnb;
+    if (fromDnb) return settle(fromDnb);
+    const fromK10plus = await k10plus;
+    if (fromK10plus) return settle(fromK10plus);
 
     try {
         const book = bookFromGoogleBooks(JSON.parse(await fetchGoogleBooks(ctx, fetchText, isbn)), cleanIsbn);
-        if (book) return book;
+        if (book) return settle(book);
     } catch (err) {
+        complete = false;
         log(ctx).warn('Google Books request failed:', err.message);
     }
-    return null;
+    return settle(null);
 }
 
 async function googleBooksKey(ctx) {

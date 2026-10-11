@@ -13,11 +13,18 @@ const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
 const syncState = require('../watch/syncState');
-const { titleScore } = require('../anime/normalize');
+const { titleScore, isTmdbAnime, yearOf, tmdbTwinScore } = require('../anime/normalize');
+const { isLanguageCode } = require('../lib/language');
+const { uiLocale, readProfile } = require('../lib/locales');
 
 const MAX_TITLE = 200;
 const MAX_NOTES = 4000;
 const MAX_EPISODES = 100000;
+const SEARCH_SOURCE_NAMES = gateway.SEARCH_SOURCES;
+const SEARCH_KINDS = ['anime', 'tv', 'movie', 'all'];
+const KINDS = ['anime', 'tv', 'movie'];
+const TMDB_KINDS = ['movie', 'tv'];
+const TMDB_LABEL = 'TMDB';
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -26,6 +33,7 @@ const ID_ERRORS = {
     id: 'Ungültige ID',
     anilist_id: 'Ungültige AniList-ID',
     mal_id: 'Ungültige MAL-ID',
+    tmdb_id: 'Ungültige TMDB-ID',
     manga_id: 'Ungültige Reihen-ID'
 };
 const TEXT_TYPE_ERRORS = {
@@ -132,20 +140,61 @@ function detailOf(ctx, id) {
     };
 }
 
+function searchSources(raw) {
+    const text = (qstr(raw) || '').trim();
+    if (!text) return undefined;
+    const names = [...new Set(text.split(',').map((name) => name.trim().toLowerCase()).filter(Boolean))];
+    if (!names.length) return undefined;
+    if (names.some((name) => !SEARCH_SOURCE_NAMES.includes(name))) {
+        throw badRequest(msg('Unbekannte Quelle (erlaubt: {allowed})', { allowed: SEARCH_SOURCE_NAMES.join(', ') }), 'BAD_REQUEST');
+    }
+    return names;
+}
+
+function searchKind(raw) {
+    const kind = (qstr(raw) || '').trim().toLowerCase();
+    if (!kind) return 'all';
+    if (!SEARCH_KINDS.includes(kind)) throw badRequest(msg('Unbekannte Art (erlaubt: {allowed})', { allowed: SEARCH_KINDS.join(', ') }), 'BAD_REQUEST');
+    return kind;
+}
+
+const searchLanguage = (ctx, raw) => uiLocale(qstr(raw)) || (ctx.user ? uiLocale(readProfile(ctx.db, ctx.user.id).locale) : null) || 'de';
+
+function collectionMatcher(ctx) {
+    const byAni = ctx.db.prepare('SELECT id FROM animes WHERE anilist_id = ?');
+    const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
+    const byTmdb = ctx.db.prepare('SELECT id FROM animes WHERE tmdb_kind = ? AND tmdb_id = ?');
+    let animeRows = null;
+    const titleTwin = (meta) => {
+        const year = yearOf(meta);
+        if (!year) return null;
+        if (!animeRows) {
+            animeRows = ctx.db.prepare("SELECT id, title, title_de, title_romaji, title_english, title_native, season_year, start_date FROM animes WHERE kind = 'anime'").all();
+        }
+        const twin = animeRows.find((row) => yearOf(row) === year
+            && tmdbTwinScore(meta, [row.title, row.title_de, row.title_romaji, row.title_english, row.title_native].filter(Boolean)) >= 0.9);
+        return twin ? twin.id : null;
+    };
+    return (meta) => (meta.anilist_id && byAni.get(meta.anilist_id)?.id)
+        || (meta.mal_id && byMal.get(meta.mal_id)?.id)
+        || (meta.tmdb_id && byTmdb.get(meta.tmdb_kind, meta.tmdb_id)?.id)
+        || (meta.folded_tmdb && byTmdb.get(meta.folded_tmdb.tmdb_kind, meta.folded_tmdb.tmdb_id)?.id)
+        || (isTmdbAnime(meta) && titleTwin(meta))
+        || null;
+}
+
 async function search(ctx, { query }) {
     const q = (qstr(query.q) || '').trim();
     if (q.length < 2 || q.length > 100) throw badRequest('Suchbegriff muss 2 bis 100 Zeichen lang sein');
     const limit = Math.min(20, Math.max(1, parseInt(qstr(query.limit), 10) || 10));
-    const result = await gateway.searchAnime(ctx, q, { limit });
-    const byAni = ctx.db.prepare('SELECT id FROM animes WHERE anilist_id = ?');
-    const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
+    const sources = searchSources(query.sources);
+    const kind = searchKind(query.kind);
+    const result = await gateway.searchAnime(ctx, q, { limit, sources, kind, language: searchLanguage(ctx, query.language) });
+    const inCollection = collectionMatcher(ctx);
     return {
         body: {
             ...result,
-            results: result.results.map((meta) => ({
-                ...meta,
-                in_collection_id: (meta.anilist_id && byAni.get(meta.anilist_id)?.id) || (meta.mal_id && byMal.get(meta.mal_id)?.id) || null
-            }))
+            results: result.results.map((meta) => ({ ...meta, in_collection_id: inCollection(meta) }))
         }
     };
 }
@@ -159,7 +208,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -191,10 +240,15 @@ function detail(ctx, { params }) {
     const id = parseId(params.id);
     const row = loadRow(ctx, id);
     if (store.isStale(row, nowMs(ctx))) gateway.scheduleRefresh(ctx, id);
+    gateway.scheduleOwnTmdbRefresh(ctx, row);
     return { body: detailOf(ctx, id) };
 }
 
-function duplicateOf(ctx, anilistId, malId) {
+function duplicateOf(ctx, anilistId, malId, tmdbRef = null) {
+    if (tmdbRef && tmdbRef.tmdb_id) {
+        const row = ctx.db.prepare('SELECT id FROM animes WHERE tmdb_kind = ? AND tmdb_id = ?').get(tmdbRef.tmdb_kind, tmdbRef.tmdb_id);
+        if (row) return row.id;
+    }
     if (anilistId) {
         const row = ctx.db.prepare('SELECT id FROM animes WHERE anilist_id = ?').get(anilistId);
         if (row) return row.id;
@@ -207,66 +261,94 @@ function duplicateOf(ctx, anilistId, malId) {
 }
 
 const ALREADY_THERE = 'Dieser Anime ist schon in der Liste';
+const ENTRY_ALREADY_THERE = 'Dieser Eintrag ist schon in der Liste';
 const WATCHED_PUSH_MS = 60 * 1000;
 
-/** AniList/MyAnimeList data of a new entry, fetched interactively: { meta, images }. */
+/** AniList/MyAnimeList or TMDb data of a new entry, fetched interactively: { meta, images }. */
 async function prepareExternal(ctx, ref) {
     let meta;
     try {
         meta = await gateway.getAnime(ctx, ref, { priority: 'interactive' });
     } catch (err) {
         if (err instanceof SourceError) {
+            if (ref.tmdb_id) throw new HttpError(503, msg('{source} ist gerade nicht erreichbar. Bitte später erneut versuchen.', { source: TMDB_LABEL }), 'SOURCES_UNAVAILABLE');
             throw new HttpError(503, 'AniList und MyAnimeList sind gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
         }
         throw err;
     }
-    if (!meta) throw notFound('Anime bei AniList/MyAnimeList');
+    if (!meta) {
+        if (ref.tmdb_id) throw notFound('Eintrag bei TMDB');
+        throw notFound('Anime bei AniList/MyAnimeList');
+    }
     return { meta, images: await store.freshImages(ctx, meta) };
 }
 
 /** Inserts a prepared entry with the adder's 'Geplant' row (synchronous, schedules nothing): { id, created }. */
 function insertPrepared(ctx, prepared) {
     const { meta } = prepared;
-    const existing = duplicateOf(ctx, meta.anilist_id, meta.mal_id);
+    const existing = duplicateOf(ctx, meta.anilist_id, meta.mal_id, meta.tmdb_id ? meta : null);
     if (existing) return { id: existing, created: false };
     const id = store.insertFromMeta(ctx, meta, prepared.images || {}, { manga_id: prepared.manga_id ?? null, title: prepared.title ?? null });
     writeProgress(ctx, id, ctx.user.id, { status: 'Geplant' });
     return { id, created: true };
 }
 
-/** From a search hit (anilist_id and/or mal_id, fetched interactively) or a manual entry (title, episodes). */
+function cleanKind(value) {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (!KINDS.includes(value)) throw badRequest(msg('Unbekannte Art (erlaubt: {allowed})', { allowed: KINDS.join(', ') }));
+    return value;
+}
+
+function tmdbRefOf(body, anilistId, malId) {
+    const tmdbId = optionalId(body.tmdb_id, 'tmdb_id');
+    const kindGiven = body.tmdb_kind !== undefined && body.tmdb_kind !== null && body.tmdb_kind !== '';
+    if (tmdbId === null && !kindGiven) return null;
+    if (tmdbId === null || !TMDB_KINDS.includes(body.tmdb_kind)) throw badRequest(msg('Ungültige TMDB-Art (erlaubt: {allowed})', { allowed: TMDB_KINDS.join(', ') }));
+    if (anilistId || malId) throw badRequest('Eine TMDB-ID lässt sich nicht mit einer AniList- oder MAL-ID kombinieren');
+    return { tmdb_id: tmdbId, tmdb_kind: body.tmdb_kind };
+}
+
+/** From a search hit (anilist_id and/or mal_id, or tmdb_id with tmdb_kind, fetched interactively) or a manual entry (title, episodes, kind). */
 async function create(ctx, { body }) {
     const anilistId = optionalId(body.anilist_id, 'anilist_id');
     const malId = optionalId(body.mal_id, 'mal_id');
+    const tmdbRef = tmdbRefOf(body, anilistId, malId);
     const mangaId = optionalId(body.manga_id, 'manga_id');
     if (mangaId !== null) mangaRef(ctx, mangaId);
     const watched = body.watched === undefined || body.watched === null ? null : readWatched(body.watched);
-    const existing = duplicateOf(ctx, anilistId, malId);
-    if (existing) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: existing });
+    const existing = duplicateOf(ctx, anilistId, malId, tmdbRef);
+    if (existing) {
+        if (tmdbRef) throw conflict(ENTRY_ALREADY_THERE, 'DUPLICATE', { id: existing });
+        throw conflict(ALREADY_THERE, 'DUPLICATE', { id: existing });
+    }
     const userId = ctx.user.id;
 
     let created;
-    if (!anilistId && !malId) {
+    if (!anilistId && !malId && !tmdbRef) {
         const title = cleanTitle(body.title, { required: true });
         const episodes = cleanEpisodes(body.episodes);
+        const kind = cleanKind(body.kind) || 'anime';
         const insert = ctx.db.prepare(`
-            INSERT INTO animes (title, episodes, manga_id, notes, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO animes (title, episodes, manga_id, notes, kind, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
         created = ctx.db.transaction(() => {
-            const id = Number(insert.run(title, episodes ?? null, mangaId, notes, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
+            const id = Number(insert.run(title, episodes ?? null, mangaId, notes, kind, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
             writeProgress(ctx, id, userId, { status: 'Geplant' });
             return { id, watched: watched ? applyWatched(ctx, id, userId, watched) : null };
         });
     } else {
-        const prepared = await prepareExternal(ctx, { anilist_id: anilistId, mal_id: malId });
+        const prepared = await prepareExternal(ctx, tmdbRef || { anilist_id: anilistId, mal_id: malId });
         const title = cleanTitle(body.title);
         created = ctx.db.transaction(() => {
             const inserted = insertPrepared(ctx, { ...prepared, manga_id: mangaId, title });
             if (!inserted.created) return { duplicate: inserted.id };
             return { id: inserted.id, watched: watched ? applyWatched(ctx, inserted.id, userId, watched) : null };
         });
-        if (created.duplicate) throw conflict(ALREADY_THERE, 'DUPLICATE', { id: created.duplicate });
+        if (created.duplicate) {
+            if (tmdbRef) throw conflict(ENTRY_ALREADY_THERE, 'DUPLICATE', { id: created.duplicate });
+            throw conflict(ALREADY_THERE, 'DUPLICATE', { id: created.duplicate });
+        }
     }
     listSync.schedulePush(ctx, userId, created.id, watched ? { delayMs: WATCHED_PUSH_MS } : undefined);
     if (anilistId || malId) gateway.scheduleIdResolution(ctx, created.id);
@@ -291,15 +373,36 @@ function update(ctx, { params, body }) {
         mangaRef(ctx, mangaId);
         columns.manga_id = mangaId;
     }
+    const sourced = Boolean(row.anilist_id || row.mal_id || row.tmdb_id);
     if (body.episodes !== undefined) {
-        if (row.anilist_id || row.mal_id) throw badRequest('Die Folgenzahl kommt von AniList/MyAnimeList und lässt sich nur bei manuellen Einträgen ändern');
+        if (sourced) throw badRequest('Die Folgenzahl kommt von der Quelle und lässt sich nur bei manuellen Einträgen ändern');
         columns.episodes = cleanEpisodes(body.episodes);
+    }
+    if (body.kind !== undefined) {
+        if (sourced) throw badRequest('Die Art kommt von der Quelle und lässt sich nur bei manuellen Einträgen ändern');
+        const kind = cleanKind(body.kind);
+        if (!kind) throw badRequest(msg('Unbekannte Art (erlaubt: {allowed})', { allowed: KINDS.join(', ') }));
+        columns.kind = kind;
     }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
     columns.updated_by = ctx.user.id;
     store.updateRow(ctx, id, columns);
     return { body: detailOf(ctx, id) };
+}
+
+function cleanLanguage(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const code = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (!isLanguageCode(code)) throw badRequest('Ungültiger Sprachcode (zwei Buchstaben, z. B. de)', 'LANGUAGE_INVALID');
+    return code;
+}
+
+function stillAiring(anime) {
+    const kind = anime.kind || 'anime';
+    if (kind === 'tv') return anime.next_airing_episode !== null && anime.episodes !== null && anime.next_airing_episode <= anime.episodes;
+    return kind === 'anime' && (anime.status === 'RELEASING' || anime.status === 'NOT_YET_RELEASED');
 }
 
 function parseScore(value) {
@@ -328,13 +431,15 @@ function updateProgress(ctx, { params, body }) {
     }
     const score = parseScore(body.score);
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
+    const audio = cleanLanguage(body.audio_language);
+    const subtitle = cleanLanguage(body.subtitle_language);
     const saved = ctx.db.transaction(() => {
         const anime = loadRow(ctx, id);
-        if (body.status === 'Gesehen' && body.restore !== true && (anime.status === 'RELEASING' || anime.status === 'NOT_YET_RELEASED')) {
+        if (body.status === 'Gesehen' && body.restore !== true && stillAiring(anime)) {
             throw badRequest(msg('Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“'), 'STILL_AIRING');
         }
         if (body.restore === true) syncState.liftDeclines(ctx, userId, declineKeys(ctx, userId, id));
-        return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes });
+        return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes, audio_language: audio, subtitle_language: subtitle });
     });
     listSync.schedulePush(ctx, userId, id);
     return { body: store.progressOf(saved) };
@@ -454,6 +559,7 @@ function matchRows(ctx) {
         SELECT a.id, a.title, a.title_de, a.title_romaji, a.title_english, a.title_native, a.episodes, a.external_links,
                p.status AS my_status, p.episodes_watched AS my_episodes
         FROM animes a LEFT JOIN anime_progress p ON p.anime_id = a.id AND p.user_id = ?
+        WHERE a.kind = 'anime'
         ORDER BY a.title COLLATE NOCASE, a.id
     `).all(ctx.user.id);
 }
@@ -688,7 +794,7 @@ function removeProgress(ctx, { params, query, body }) {
 async function refresh(ctx, { params }) {
     const id = parseId(params.id);
     const row = loadRow(ctx, id);
-    if (!row.anilist_id && !row.mal_id) throw badRequest('Manuelle Einträge ohne AniList-/MAL-ID lassen sich nicht aktualisieren');
+    if (!row.anilist_id && !row.mal_id && !row.tmdb_id) throw badRequest('Manuelle Einträge ohne AniList-/MAL-ID lassen sich nicht aktualisieren');
     const found = await gateway.manualRefresh(ctx, id);
     return { body: { ...detailOf(ctx, id), refreshed: found } };
 }
@@ -719,13 +825,15 @@ async function adaptations(ctx, { params }) {
 const CSV_COLUMNS = [
     ['title', 'Titel'], ['title_de', 'Deutscher Titel'], ['anilist_id', 'AniList-ID'], ['mal_id', 'MAL-ID'], ['format', 'Format'],
     ['episodes', 'Folgen'], ['status', 'Status'], ['season_year', 'Jahr'], ['studios', 'Studios'], ['genres', 'Genres'],
-    ['my_status', 'Mein Status'], ['my_episodes', 'Gesehene Folgen'], ['my_score', 'Bewertung'], ['notes', 'Notizen']
+    ['my_status', 'Mein Status'], ['my_episodes', 'Gesehene Folgen'], ['my_score', 'Bewertung'], ['notes', 'Notizen'],
+    ['my_audio_language', 'Sprache (Ton)'], ['my_subtitle_language', 'Sprache (Untertitel)'], ['kind', 'Art']
 ];
 
 /** Semicolon CSV with BOM and the formula guard of the collection export; progress columns are the caller's. */
 function exportCsv(ctx) {
     const rows = ctx.db.prepare(`
         SELECT a.*, p.status AS my_status, p.episodes_watched AS my_episodes, p.score AS my_score,
+               p.audio_language AS my_audio_language, p.subtitle_language AS my_subtitle_language,
                TRIM(COALESCE(a.notes, '') || CASE WHEN p.notes IS NOT NULL AND a.notes IS NOT NULL THEN char(10) ELSE '' END || COALESCE(p.notes, '')) AS all_notes
         FROM animes a LEFT JOIN anime_progress p ON p.anime_id = a.id AND p.user_id = ?
         ORDER BY a.title COLLATE NOCASE, a.id

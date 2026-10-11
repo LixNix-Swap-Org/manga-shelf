@@ -3,7 +3,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 
 /** Current password before a server-changing action: Enter submits, Escape cancels only this form, errors stay inline. */
-export default function PasswordConfirm({ username = '', busy = false, error = '', submitLabel, onSubmit, onCancel }) {
+export default function PasswordConfirm({ username = '', busy = false, error = '', submitLabel, icon: Icon = Download, blocked = false, onSubmit, onCancel }) {
   const ids = useId();
   const inputRef = useRef(null);
   const [password, setPassword] = useState('');
@@ -23,7 +23,7 @@ export default function PasswordConfirm({ username = '', busy = false, error = '
       className="space-y-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!busy && password) onSubmit(password);
+        if (!busy && !blocked && password) onSubmit(password);
       }}
       onKeyDown={(e) => {
         if (e.key !== 'Escape') return;
@@ -51,8 +51,8 @@ export default function PasswordConfirm({ username = '', busy = false, error = '
       <p id={hintId} className="text-[11px] text-slate-400">{t('Falsche Eingaben zählen zur Anmeldesperre deines Kontos.')}</p>
       {error && <p id={errorId} role="alert" className="text-xs text-rose-300">{error}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn-primary text-xs inline-flex items-center gap-1.5" disabled={busy || !password}>
-          {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Download className="w-3.5 h-3.5" aria-hidden="true" />} {submitLabel}
+        <button type="submit" className="btn-primary text-xs inline-flex items-center gap-1.5" disabled={busy || blocked || !password}>
+          {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Icon className="w-3.5 h-3.5" aria-hidden="true" />} {submitLabel}
         </button>
         <button type="button" className="btn-secondary text-xs" disabled={busy} onClick={onCancel}>{t('Abbrechen')}</button>
       </div>

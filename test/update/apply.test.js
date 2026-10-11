@@ -1,4 +1,5 @@
 process.env.LOG_LEVEL = 'silent';
+process.env.DATA_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'manga-shelf-apply-data-'));
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -10,7 +11,12 @@ const { openRegular } = require('../../services/update/verifiedFile');
 const h = require('../fixtures/update/helpers');
 
 const root = h.tmpDir();
-test.after(() => fs.rmSync(root, { recursive: true, force: true }));
+test.after(() => {
+    const cached = require.cache[require.resolve('../../db')];
+    if (cached) cached.exports.closeDb();
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
+});
 let n = 0;
 const fresh = (name) => {
     const dir = path.join(root, `${name}-${n++}`);

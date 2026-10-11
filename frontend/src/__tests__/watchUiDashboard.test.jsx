@@ -114,7 +114,7 @@ describe('Dashboard: "Anderen Anime suchen…" in the match dialog', () => {
     const match = await openMatch();
     const add = await openSearch(match);
     expect(within(add).getByLabelText('Titel suchen').value).toBe('The Apothecary Diaries');
-    expect(calls.some((c) => c.path === `/api/anime/search?q=${encodeURIComponent('The Apothecary Diaries')}`)).toBe(true);
+    expect(calls.some((c) => c.path === `/api/anime/search?q=${encodeURIComponent('The Apothecary Diaries')}&sources=anilist%2Cmal&kind=anime&language=de`)).toBe(true);
     expect(match.isConnected).toBe(true);
 
     fireEvent.click(within(add).getByRole('button', { name: /Hinzufügen/ }));

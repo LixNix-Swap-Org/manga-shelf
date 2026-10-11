@@ -195,7 +195,8 @@ async function cmdRollbackCleanup(arg, out) {
 }
 
 const PROVIDER_ALIASES = {
-    anilist: 'anilist', mal: 'mal', myanimelist: 'mal', google_books: 'google_books', 'google-books': 'google_books', googlebooks: 'google_books', google: 'google_books'
+    anilist: 'anilist', mal: 'mal', myanimelist: 'mal', google_books: 'google_books', 'google-books': 'google_books', googlebooks: 'google_books', google: 'google_books',
+    tmdb: 'tmdb', themoviedb: 'tmdb'
 };
 const SOURCES_NOTICE_KEY = 'sources_notice_shown';
 
@@ -253,19 +254,19 @@ function sourcesTable() {
         return `hinterlegt als ${entry.label || (entry.last4 ? `…${entry.last4}` : 'Schlüssel')}`;
     };
     for (const entry of apiKeys.listInstance()) {
-        row(guideFor(entry.provider).name, 'Instanz', describe(entry), formatAge(entry.last_ok_at), entry.provider === 'mal' ? poolUse('mal') : '–');
+        row(guideFor(entry.provider).name, 'Instanz', describe(entry), formatAge(entry.last_ok_at), entry.provider === 'google_books' ? '–' : poolUse(entry.provider));
     }
-    for (const provider of ['anilist', 'mal']) {
+    for (const provider of ['anilist', 'mal', 'tmdb']) {
         const counts = db.prepare('SELECT count(*) AS n, count(CASE WHEN last_error IS NOT NULL THEN 1 END) AS failed, max(last_ok_at) AS last_ok FROM user_api_credentials WHERE provider = ? AND user_id IS NOT NULL').get(provider);
         const text = counts.n ? `${counts.n} Benutzer mit eigenem Schlüssel${counts.failed ? ` (${counts.failed} mit Fehler)` : ''}` : 'kein Benutzer-Schlüssel';
-        row(guideFor(provider).name, 'Nutzer', text, formatAge(counts.last_ok), provider === 'anilist' ? poolUse('anilist') : poolUse('jikan'));
+        row(guideFor(provider).name, 'Nutzer', text, formatAge(counts.last_ok), provider === 'tmdb' ? '–' : poolUse(provider === 'anilist' ? 'anilist' : 'jikan'));
     }
     return lines;
 }
 
 function resolveProvider(word, out) {
     const provider = PROVIDER_ALIASES[String(word || '').toLowerCase()];
-    if (!provider) out(`Unbekannter Anbieter „${word || ''}“ (anilist, mal, google_books).`);
+    if (!provider) out(`Unbekannter Anbieter „${word || ''}“ (anilist, mal, tmdb, google_books).`);
     return provider || null;
 }
 
@@ -298,7 +299,7 @@ async function cmdSources(arg, out, { readSecret, readLine, visibleInput = false
     const action = (words[0] || '').toLowerCase();
     if (!action) {
         for (const line of sourcesTable()) out(line);
-        out('Schritte zum Schlüssel: "quellen anleitung <anilist|mal|google_books>", eintragen: "quellen setzen <anbieter>".');
+        out('Schritte zum Schlüssel: "quellen anleitung <anilist|mal|tmdb|google_books>", eintragen: "quellen setzen <anbieter>".');
         return true;
     }
     if (action === 'anleitung' || action === 'guide') {
@@ -385,7 +386,7 @@ const COMMANDS = [
     { names: ['passwort-reset', 'reset-password'], usage: 'passwort-reset <name>', text: 'Setzt ein zufälliges Passwort (im Terminal angezeigt, sonst als Datei im Datenordner)', run: cmdPasswordReset },
     { names: ['admin', 'promote'], usage: 'admin <name>', text: 'Macht <name> zum Administrator, nur wenn es keinen gibt', run: cmdPromote },
     { names: ['rollback-aufraeumen', 'rollback-cleanup'], usage: 'rollback-aufraeumen [bestaetigen]', text: 'Prüft manga.db und löscht danach eine liegengebliebene manga.db.bak', run: cmdRollbackCleanup },
-    { names: ['quellen', 'sources'], usage: 'quellen [anleitung|setzen|entfernen]', text: 'API-Schlüssel für AniList, MyAnimeList, Google Books: Zustand, Anleitung, setzen (verdeckt), entfernen', run: cmdSources, quietArgs: true }
+    { names: ['quellen', 'sources'], usage: 'quellen [anleitung|setzen|entfernen]', text: 'API-Schlüssel für AniList, MyAnimeList, TMDB, Google Books: Zustand, Anleitung, setzen (verdeckt), entfernen', run: cmdSources, quietArgs: true }
 ];
 
 // an unknown "command" may be a key typed at the wrong moment: never echo it in full

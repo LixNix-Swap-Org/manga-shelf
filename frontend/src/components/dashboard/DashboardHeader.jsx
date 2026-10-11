@@ -6,6 +6,7 @@ import BottomNav, { useIsNarrow } from '../common/BottomNav';
 import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
+import { getCoverOrigin } from '../../utils/coverOrigin';
 import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Globe, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { t } from '../../i18n/index.js';
@@ -110,6 +111,36 @@ function useBlurSearchOnScroll(searchInputRef, headerRef, typedRef) {
   }, [searchInputRef, headerRef, typedRef]);
 }
 
+function useCoverPreconnect(active, pending) {
+  const linkRef = useRef(null);
+  useEffect(() => {
+    const drop = () => {
+      linkRef.current?.remove();
+      linkRef.current = null;
+    };
+    if (!active) {
+      drop();
+      return;
+    }
+    if (!pending) return;
+    const origin = getCoverOrigin();
+    if (!origin) {
+      drop();
+      return;
+    }
+    if (!linkRef.current) {
+      linkRef.current = document.createElement('link');
+      linkRef.current.rel = 'preconnect';
+    }
+    linkRef.current.setAttribute('href', origin);
+    if (!linkRef.current.isConnected) document.head.appendChild(linkRef.current);
+  }, [active, pending]);
+  useEffect(() => () => {
+    linkRef.current?.remove();
+    linkRef.current = null;
+  }, []);
+}
+
 /** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational: state and handlers via props. */
 export default function DashboardHeader({
   activeMainView,
@@ -164,6 +195,7 @@ export default function DashboardHeader({
   const accountLabel = local ? t('Konto: API-Schlüssel') : t('Konto: Passwort und API-Schlüssel');
   const showScope = Boolean(searchScope) && !user?.offline;
   const searchOnline = showScope && searchScope.scope === 'online';
+  useCoverPreconnect(searchOnline, Boolean(searchScope?.pending));
   let searchPlaceholder = activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...');
   if (searchOnline) searchPlaceholder = t('Sammlung und online suchen…');
 

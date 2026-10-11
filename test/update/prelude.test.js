@@ -433,3 +433,99 @@ test('resolveDataDir: environment, then the .env in the working folder, then <co
     assert.equal(resolveDataDir({ codeDir: '/srv/app', env: { DATA_DIR: '/env/wins' }, cwd }), path.resolve('/env/wins'));
     assert.equal(resolveDataDir({ codeDir: '/srv/app', env: { DATA_DIR: '  ' }, cwd }), path.join('/srv/app', 'data'));
 });
+
+test('rolling_back on Pterodactyl with .update already gone and the previous package.json in place counts as reverted: rolled_back, exit 75', async () => {
+    const w = await pteroWorld();
+    const s = stateFile.readState(w.dataDir);
+    swap.revertCode(s, { codeDir: w.codeDir });
+    swap.cleanupCode(s, { codeDir: w.codeDir });
+    stateFile.patchState(w.dataDir, { phase: 'rolling_back', error: 'START_FAILED' });
+    const r = runChild('listen', w.opts);
+    assert.equal(r.status, 75, r.stderr);
+    assert.ok(r.stderr.includes(ROLLED_BACK_LINE));
+    assert.deepEqual(tree(w.codeDir), { index: 'old', version: '3.1.0', update: false });
+    const after = stateFile.readState(w.dataDir);
+    assert.equal(after.phase, 'rolled_back');
+    assert.equal(readDb(w.dbFile).version, 5, 'the database came back from the backup before the code');
+
+    const foreign = await pteroWorld();
+    const journal = stateFile.readState(foreign.dataDir);
+    swap.revertCode(journal, { codeDir: foreign.codeDir });
+    swap.cleanupCode(journal, { codeDir: foreign.codeDir });
+    fs.writeFileSync(path.join(foreign.codeDir, 'package.json'), JSON.stringify({ version: '3.1.0', files: ['index.js'], edited: true }));
+    stateFile.patchState(foreign.dataDir, { phase: 'rolling_back', error: 'START_FAILED' });
+    assert.equal(runChild('listen', foreign.opts).status, 74, 'a changed package.json is not taken for the reverted tree');
+});
+
+const FROZEN_CHILD = path.join(root, 'frozen-child.js');
+fs.writeFileSync(FROZEN_CHILD, fs.readFileSync(CHILD, 'utf8').replace(
+    JSON.stringify(path.join(__dirname, '..', '..', 'services', 'update', 'prelude.js')),
+    JSON.stringify(path.join(__dirname, '..', 'fixtures', 'update', 'prelude-v3.2.0', 'prelude.js'))
+));
+
+function runFrozen(scenario, opts, env = {}) {
+    const r = spawnSync(process.execPath, [FROZEN_CHILD, scenario], { env: { ...process.env, ...env, PRELUDE_OPTS: JSON.stringify(opts) }, encoding: 'utf8' });
+    const first = r.stdout.split('\n')[0];
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr, result: first ? JSON.parse(first) : null };
+}
+
+async function downgradeWorld() {
+    const data = dataWorld({ migrated: false });
+    const freshDb = path.join(data.dataDir, 'fresh.db');
+    makeDb(freshDb, [1, 2, 3, 4, 5, 6], 'newer');
+    const FRESH = 'vor-update-v3.3.0-auf-v3.2.0-2026-10-11T10-00-00-000Z.zip';
+    const freshZip = h.makeZip([{ name: 'manga.db', data: fs.readFileSync(freshDb) }]);
+    fs.writeFileSync(path.join(data.dataDir, 'backups', FRESH), freshZip);
+    fs.unlinkSync(freshDb);
+    const codeDir = fresh('code');
+    fs.writeFileSync(path.join(codeDir, 'package.json'), JSON.stringify({ version: '3.3.0', files: ['index.js'] }));
+    fs.writeFileSync(path.join(codeDir, 'index.js'), 'newer');
+    const zipFile = path.join(fresh('dl'), 'p.zip');
+    fs.writeFileSync(zipFile, h.makeZip([
+        { name: 'package.json', data: JSON.stringify({ version: '3.2.0', files: ['index.js'] }) },
+        { name: 'index.js', data: 'target' }
+    ]));
+    const unpacked = await apply.unpackRelease({ zipFile, codeDir });
+    const state = stateFile.writeState(data.dataDir, {
+        phase: 'swapping', mode: 'pterodactyl', restart: 'pterodactyl', from: '3.3.0', to: '3.2.0', at: '2026-10-11T10:00:00Z', user: 1, pid: 2 ** 22 + 12345,
+        schema_before: 6, backup: { file: FRESH, sha256: h.sha256hex(freshZip) }, attempts: 0, code_dir: codeDir, entries: unpacked.entries, removals: [],
+        previous: { sha256: swap.sha256FileSync(path.join(codeDir, 'package.json')) },
+        downgrade: {
+            undoes: { from: '3.2.0', to: '3.3.0', at: '2026-10-01T10:00:00Z', backup: data.backup, schema_before: 5 },
+            db: { source: data.backup, schema: 5, replaced_at: '2026-10-11T10:00:01Z', kept: 'manga.db.v3.3.0-2026-10-11T10-00-01-000Z', returned_at: null }
+        }
+    });
+    swap.swapForward(state, { codeDir });
+    stateFile.writeState(data.dataDir, { ...state, phase: 'swapped', swapped_at: '2026-10-11T10:00:02Z' });
+    return { ...data, codeDir, opts: { dataDir: data.dataDir, codeDir } };
+}
+
+test('the frozen v3.2.0 prelude counts, starts and confirms a downgrade journal like any update; the database stays', async () => {
+    const w = await downgradeWorld();
+    const r = runFrozen('listen', w.opts, { CONFIRM_NOW: '1' });
+    assert.equal(r.result.action, 'counted', r.stderr);
+    assert.match(r.stdout, /confirm=true/);
+    const s = stateFile.readState(w.dataDir);
+    assert.equal(s.phase, 'confirmed');
+    assert.equal(s.downgrade.db.returned_at, null);
+    assert.deepEqual(tree(w.codeDir), { index: 'target', version: '3.2.0', update: false });
+    assert.deepEqual(readDb(w.dbFile), { version: 5, marker: 'before update' });
+    assert.equal(require('../../services/update/dbRecovery').recoverReplacedDatabase({ dataDir: w.dataDir, version: '3.3.0', out: () => {} }).action, 'none', 'a confirmed downgrade is final');
+});
+
+test('the frozen v3.2.0 prelude reverts a failed downgrade without touching the database; the newer code then restores the fresh backup', async () => {
+    const w = await downgradeWorld();
+    const r = runFrozen('throw', w.opts);
+    assert.equal(r.result.action, 'counted', r.stderr);
+    assert.ok(r.stderr.includes(ROLLED_BACK_LINE));
+    assert.deepEqual(tree(w.codeDir), { index: 'newer', version: '3.3.0', update: false });
+    assert.deepEqual(readDb(w.dbFile), { version: 5, marker: 'before update' }, 'the target restores nothing: applied <= schema_before');
+    const s = stateFile.readState(w.dataDir);
+    assert.deepEqual([s.phase, s.db_restored], ['rolled_back', false]);
+    const out = [];
+    const done = require('../../services/update/dbRecovery').recoverReplacedDatabase({ dataDir: w.dataDir, version: '3.3.0', out: (line) => out.push(line) });
+    assert.equal(done.action, 'recovered');
+    assert.deepEqual(readDb(w.dbFile), { version: 6, marker: 'newer' });
+    assert.deepEqual(readDb(path.join(w.dataDir, done.kept)), { version: 5, marker: 'before update' });
+    assert.ok(stateFile.readState(w.dataDir).downgrade.db.returned_at);
+});

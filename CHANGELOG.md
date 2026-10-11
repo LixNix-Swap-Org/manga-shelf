@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.3.0
+
+### Before updating
+- **Database migration 28** runs at the first start: `animes.kind` and the TMDB columns, `anime_progress.audio_language` and `subtitle_language`, and the API key table accepts the provider `tmdb`. As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.2.0 cannot open the migrated database.
+- **Going back to 3.2.0 restores the backup from before the update, and everything changed since is lost** (new series and volumes, reading state, anime progress, shopping list, users and settings; images in `uploads/` stay). Where the server updates itself (Pterodactyl, a headless binary in a folder of your own), "Zurück zu v3.2.0" in System → Updates does this after you confirm the loss. For every other install type the steps in the README, "Updating → Going back", are manual for this step: the panel with the steps appears after the next update, because 3.3.0 is the first version that records the version before a change.
+- **New connections and variables:** with a TMDB key the server asks `api.themoviedb.org`; posters load from `image.tmdb.org` in the browser or app, never through the server. New optional variables `TMDB_API_KEY`, `ANIME_TMDB_RPM` and `UPDATE_DOWNGRADE`. A server that sets `ANIME_SOURCES` itself (for example `anilist,jikan`) has to add `tmdb` to get TMDB. Pterodactyl: import the egg again to get the `TMDB_API_KEY` variable (optional).
+
+### Search
+- **Faster online search:** 400 ms grace for a slow second source, late answers merged into the cache, aborted lookups stop upstream, cache hits no longer count against the lookup limit; romaji ranking and Manga Passion editions merged with their AniList/MyAnimeList entry; ISBN lookup asks DNB and K10plus in parallel and caches results.
+- **In the header search** the online lookup starts 350 ms after the last keystroke (was 600 ms), the hits of the previous search that still match what you typed stay on screen as "Wird aktualisiert…", and the browser connects to the cover server early. Scripts: `GET /api/lookup/manga` returns `alt_titles` for AniList and Jikan hits, and a folded Manga Passion hit carries `also_on`, `work_key`, `anilist_id` and `mal_id`; hits are ranked by title (ties: Manga Passion first) and cut to ten, keeping up to three Manga Passion hits.
+- **ISBN results are cached** (`isbn:<isbn13>`): a found book for 30 days, "not found" for one day and only when every catalogue answered without an error or timeout; a cached ISBN does not count against the lookup limit. Google Books is asked only after DNB and K10plus.
+
+### Films & TV
+- **TMDB as a source of the anime tab.** The add dialog searches films and TV shows next to anime (source chips "AniList", "MyAnimeList", "TMDB (Filme & Serien)", kind chips "Alle", "Anime", "Serien", "Filme"). TMDB needs a key, an instance key (`TMDB_API_KEY`, or account dialog → "Für alle (Instanz)") or a personal one; without any the TMDB chips are disabled with "Schlüssel hinterlegen". Stored films and shows are refreshed in the background only with an instance key or a personal key shared for background use; otherwise your own key refreshes them on "Aktualisieren" or when you open an entry older than 14 days.
+- **Entries:** one entry per TMDB show; the counter counts episodes across the regular seasons and shows as S×E, the next airing is by date, and a show between two seasons can be marked "Gesehen". A film has a status and its runtime but no counter. Japanese animation that AniList knows is folded into the AniList hit and stays under "Anime". Entries link to TMDB and, from the ID TMDB provides, to the title's IMDb page; IMDb is a link only, never a data source. Posters are hotlinked from TMDB and never copied to `uploads/`.
+- **Attribution:** the TMDB notice and mark appear where TMDB keys are managed, and README section 9 credits TMDB.
+- **Scripts:** `GET /api/anime/search` takes `sources` (`anilist`, `mal`, `tmdb`), `kind` (`anime`, `tv`, `movie`, `all`) and `language` and answers `sources_available`; `GET /api/anime/sources` gains `tmdb`; `POST /api/anime` takes `tmdb_id` with `tmdb_kind` (`movie` or `tv`) and, for manual entries, `kind`; entries carry `kind`, `tmdb_id`, `tmdb_kind`, `imdb_id`, `original_language`, `spoken_languages`, `seasons`, `urls.tmdb` and `urls.imdb`; `anime.by_kind` in `GET /api/stats`; the provider `tmdb` for API keys.
+
+### Anime
+- **Watched language:** per person and entry the language you watched in and the subtitle language ("Gesehen auf", "Untertitel"), shown as a pill on the card, filterable by "Sprache"; `PUT /api/anime/:id/progress` takes `audio_language` and `subtitle_language` (400 `LANGUAGE_INVALID`), the anime CSV gains "Sprache (Ton)", "Sprache (Untertitel)" and "Art".
+- **Filters and heading:** the anime tab filters by kind and shows "Anime & Serien" once it holds more than anime. The Crunchyroll history, share links and the AniList list sync only consider entries of kind anime.
+- **Search sources are independent:** every source has its own cache row, so one that is down or slow no longer holds back the others, and the dialog names the missing ones ("Gerade ohne …"). `GET /api/anime/search` also answers `sources_available`; with nothing to ask it answers an empty list instead of an error.
+
+### Updates
+- **Going back:** System → Updates offers "Zurück zu v…" for the version before the last in-app update (`UPDATE_DOWNGRADE`, default on); a replaced database is restored automatically when the newer version starts again. When the update changed the database schema, going back restores the backup from before the update, asks you to confirm the loss ("Ich habe verstanden, dass alle Änderungen seit … verloren gehen.") and the password, saves today's state first as `vor-update-v<new>-auf-v<old>-….zip` and keeps the live database as `manga.db.v<new>-<time>`. A failed attempt keeps the way back.
+- **Install types without a click** (Docker, packages, services, desktop, source, a hand-updated Pterodactyl or binary server) get the same panel with the steps for their install, from the update after 3.3.0 on.
+- **Backup protection:** the backup an update needs is protected from deletion until the new version has run for 10 minutes, and the one going back would restore stays out of the automatic cleanup until the next update; the backup written by a going back is never cleaned up automatically.
+- **Exit code 74** also means that a return to the newer version could not restore the replaced database; the server then does not open the database and the console names the files and the steps.
+- **Scripts:** `GET /api/system` gains `update.rollback` and `rollback: true` on the target's release; `POST /api/system/update/prepare` takes `downgrade: true` (409 `DOWNGRADE_NOT_AVAILABLE` with a `reason`) and `POST …/apply/:stagingId` takes `accept_data_loss` (409 `DATA_LOSS_NOT_CONFIRMED`); the status answer gains `downgrade` and `data_loss`.
+
+### Tests and documentation
+- Handler, gateway, updater and interface tests for all of the above; the TMDB fixtures in `test/fixtures/` are hand-written after TMDB's documented answers, not recorded. README: search speed, "Films & TV shows", watched language, "Going back", the new variables and credits; `AGENTS.md`: Case L, Gotcha 29, the updater contract (downgrade journal, recovery, hold and anchor).
+
 ## 3.2.0
 
 ### Added
@@ -88,7 +121,7 @@ State: base v2.19.1 (`f0c2a64`), the commits after it up to the tip of the branc
 - **`TRUST_PROXY` defaults to `loopback`.** Behind a proxy on another host enter its address (no hop count), in front of Pterodactyl/Docker only the gateway address of the Docker network (e.g. `loopback, 172.18.0.1`, never the whole subnet), and make the app port reachable only through the proxy.
 - **Every session ends once:** the signing key now lives in `data/secret.key` (no longer in the database and therefore in no backup).
 - **Import the Pterodactyl egg again** (install container with `ash`, installation without install scripts, variable `TRUST_PROXY`).
-- **Database migrations 12–27** run at the first start; before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
+- **Database migrations 12–28** run at the first start (migration 28 arrives with 3.3.0); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
 - **Migration 22 unifies known publisher spellings** in series and volumes (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga", "EMA" → "Egmont Manga", "TOKYOPOP GmbH" → "TOKYOPOP", appended legal forms of built-in publishers). Deleting an alias later does not undo that.
 - **Migration 27 turns the stored series languages into codes** ("Deutsch" → `de`, "English" → `en`, `en-US` → `en` with the region `US`). A text it does not recognise becomes `de` and is named in the start log ("unknown series languages set to 'de'"); check those series afterwards. Every existing series gets the currency `EUR`.
 - **No automatic way back:** going back to the old version only works by starting the old version and immediately restoring the backup `vor-update-…zip` (README, "Upgrading from v2.19.1"). Do not run the old version permanently on the new database: new "Gelesen" (read) volumes it writes are not converted by a later update any more.

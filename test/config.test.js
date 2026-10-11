@@ -97,3 +97,12 @@ test('UPDATE_INSTALL: on by default, a flag like UPDATE_CHECK, an unknown value 
     assert.deepEqual(odd.warnings, ['UPDATE_INSTALL="manchmal" ist unbekannt (erlaubt: true oder false), es gilt true']);
     withEnv({ UPDATE_INSTALL: 'off' }, () => assert.equal(require('../utils/config').config.updateInstall, false));
 });
+
+test('UPDATE_DOWNGRADE: on by default, a flag like UPDATE_INSTALL, an unknown value keeps it on with a warning', () => {
+    assert.equal(readConfig({}).values.updateDowngrade, true);
+    assert.deepEqual([readConfig({ UPDATE_DOWNGRADE: 'false' }).values.updateDowngrade, readConfig({ UPDATE_DOWNGRADE: ' nein ' }).values.updateDowngrade], [false, false]);
+    const odd = readConfig({ UPDATE_DOWNGRADE: 'vielleicht' });
+    assert.equal(odd.values.updateDowngrade, true);
+    assert.deepEqual(odd.warnings, ['UPDATE_DOWNGRADE="vielleicht" ist unbekannt (erlaubt: true oder false), es gilt true']);
+    withEnv({ UPDATE_DOWNGRADE: 'off' }, () => assert.equal(require('../utils/config').config.updateDowngrade, false));
+});

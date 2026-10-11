@@ -47,6 +47,16 @@
       "user_editable": true,
       "rules": "nullable|string|max:200",
       "field_type": "text"
+    },
+    {
+      "name": "TMDB API Key",
+      "description": "Optional key for films and TV shows in the anime tab (free for non-commercial use at themoviedb.org/settings/api: the 32-character API key or the read access token). Without a key there are no TMDB hits unless a user stores a personal key in the account dialog. Empty = not set.",
+      "env_variable": "TMDB_API_KEY",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:500",
+      "field_type": "text"
     }
   ]
 }

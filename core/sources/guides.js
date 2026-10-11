@@ -83,6 +83,25 @@ const GUIDES = [
         ],
         check: 'ISBN-Abfrage bei Google Books mit dem Schlüssel; Antwort 200 bedeutet gültig.',
         validity: 'Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.'
+    },
+    {
+        id: 'tmdb',
+        name: 'TMDB',
+        scope: 'both',
+        benefit: 'Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.',
+        secretLabel: 'API-Schlüssel oder Lesezugriffstoken',
+        secretHint: '32 Zeichen aus 0–9 und a–f, oder der lange Lesezugriffstoken (beginnt mit „ey“)',
+        pattern: '^(?:[0-9a-fA-F]{32}|[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)$',
+        minLength: 32,
+        formatError: 'Das sieht nicht wie ein TMDB-Schlüssel aus (32 Zeichen 0–9, a–f, oder der Lesezugriffstoken aus drei durch Punkte getrennten Teilen).',
+        warning: null,
+        steps: [
+            { text: 'Bei TMDB ein kostenloses Konto anlegen oder sich anmelden.', link: 'https://www.themoviedb.org/signup' },
+            { text: 'In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.', link: 'https://www.themoviedb.org/settings/api' },
+            { text: 'Den „API-Schlüssel“ oder den „API-Lesezugriffstoken“ kopieren, unten einfügen und „Prüfen & speichern“ drücken.' }
+        ],
+        check: 'Anfrage an /3/authentication mit dem Schlüssel; Antwort 200 bedeutet gültig.',
+        validity: 'Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.'
     }
 ];
 

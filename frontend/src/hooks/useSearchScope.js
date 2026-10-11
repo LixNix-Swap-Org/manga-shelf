@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const SEARCH_SCOPE_KEY = 'mangashelf_search_scope';
 export const ONLINE_MIN_CHARS = 3;
-export const ONLINE_DEBOUNCE_MS = 600;
+export const ONLINE_DEBOUNCE_MS = 350;
 
 const readScope = () => {
   try {

@@ -19,7 +19,7 @@ test('api_cache: values expire after their TTL, stale reads only on request, pru
     now += 2 * 24 * 60 * 60 * 1000;
     cache.prune(core.ctx);
     assert.equal(cache.read(core.ctx, 'k', { allowStale: true }), null, 'expired for over a day: gone');
-    assert.deepEqual(cache.TTL, { search: 3600000, partial: 300000, notFound: 600000, adaptations: 86400000 });
+    assert.deepEqual(cache.TTL, { search: 3600000, partial: 300000, notFound: 600000, adaptations: 86400000, isbnFound: 2592000000, isbnNotFound: 86400000 });
 });
 
 test('api_cache: remove drops one key', () => {

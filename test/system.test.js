@@ -321,7 +321,7 @@ test('GET /system: the update card gets install mode, releases with reasons, pro
     }));
     assert.deepEqual((await admin('GET', '/system')).body.update.last, {
         from: pkg.version, to: NEXT, at: '2026-10-10T10:05:00.000Z', result: 'rolled_back', error: 'START_FAILED',
-        backup: 'vor-update-v3.0.0-auf-v9.1.0-2026-10-10T10-00-00-000Z.zip'
+        backup: 'vor-update-v3.0.0-auf-v9.1.0-2026-10-10T10-00-00-000Z.zip', direction: 'upgrade'
     });
 });
 
@@ -506,6 +506,56 @@ test('prepare → download progress → ready; apply re-checks the password, ans
     assert.equal(shutdowns, 1);
     assert.equal(fs.readFileSync(path.join(u.codeDir, 'index.js'), 'utf8'), 'module.exports = "new";\n');
     assert.equal(update.heldBackup(), `vor-update-v${pkg.version}-auf-v${NEXT}-2026-10-10T10-00-00-000Z.zip`);
+    useUpdater();
+});
+
+test('going back: update.rollback and rollback: true, prepare { downgrade: true }, data loss confirmed before the password', async () => {
+    const download = deferred();
+    const u = useUpdater({ releases: [...PUBLISHED, rawRelease('3.1.0')] });
+    update.configureForTests({ verifier: { verifySums: () => download.promise.then(() => { throw new Error('discarded'); }), checkAsset: () => {} } });
+    const schema = (await admin('GET', '/system')).body.database.schema_version;
+    const source = `vor-update-v3.1.0-auf-v${pkg.version}-2026-10-01T10-00-00-000Z.zip`;
+    const sourceZip = h.makeZip([{ name: 'manga.db', data: 'database before the update' }]);
+    fs.writeFileSync(path.join(u.dataDir, 'backups', source), sourceZip);
+    const journal = {
+        format: 1, phase: 'confirmed', mode: 'pterodactyl', restart: 'pterodactyl', from: '3.1.0', to: pkg.version, at: '2026-10-01T10:00:00.000Z',
+        finished_at: '2026-10-01T10:10:00.000Z', user: 1, pid: 1, schema_before: schema, attempts: 0, code_dir: u.codeDir,
+        backup: { file: source, sha256: h.sha256hex(sourceZip) }, previous: { sha256: 'a'.repeat(64) }
+    };
+    fs.writeFileSync(path.join(u.dataDir, 'update-state.json'), JSON.stringify(journal));
+    const card = await systemUpdate();
+    assert.deepEqual(card.rollback, {
+        version: '3.1.0', current: pkg.version, available: true, reason: null, method: 'download',
+        schema: { then: schema, now: schema, changed: false }, backup: { file: source, at: '2026-10-01T10:00:00.000Z', present: true }, since: '2026-10-01T10:00:00.000Z'
+    });
+    const target = card.releases.find((r) => r.version === '3.1.0');
+    assert.deepEqual([target.rollback, target.reason, target.installable], [true, 'older', false]);
+    assert.equal('rollback' in card.releases.find((r) => r.version === NEXT), false);
+    assert.equal(card.last.direction, 'upgrade');
+
+    const refused = await admin('POST', '/system/update/prepare', { version: '3.0.9', downgrade: true });
+    assert.deepEqual([refused.status, refused.body], [409, { error: 'Zurück zu dieser Version ist auf diesem Server nicht möglich.', code: 'DOWNGRADE_NOT_AVAILABLE', reason: 'not_previous' }]);
+    assert.equal((await admin('POST', '/system/update/prepare', { version: '3.1.0' })).body.code, 'VERSION_NOT_NEWER', 'without the flag nothing older');
+
+    fs.writeFileSync(path.join(u.dataDir, 'update-state.json'), JSON.stringify({ ...journal, schema_before: schema - 1 }));
+    const started = await admin('POST', '/system/update/prepare', { version: '3.1.0', downgrade: true });
+    assert.equal(started.status, 202);
+    assert.deepEqual(Object.keys(started.body).sort(), ['downgrade', 'expires_at', 'staging_id']);
+    assert.equal(started.body.downgrade, true);
+    const status = (await admin('GET', '/system/update/status')).body;
+    assert.equal(status.downgrade, true);
+    assert.deepEqual(status.data_loss, { backup: source, at: '2026-10-01T10:00:00.000Z', schema_then: schema - 1, schema_now: schema });
+
+    const id = started.body.staging_id;
+    for (let i = 0; i < 4; i++) {
+        const lost = await raw(admin, 'POST', `/system/update/apply/${id}`, { current_password: 'falsch-falsch' });
+        assert.deepEqual([lost.status, lost.body], [409, { error: 'Bitte bestätigen, dass die Änderungen seit dem Update verloren gehen.', code: 'DATA_LOSS_NOT_CONFIRMED' }], `attempt ${i}: before the password and refunded`);
+    }
+    const busy = await raw(admin, 'POST', `/system/update/apply/${id}`, { current_password: 'password123', accept_data_loss: true });
+    assert.deepEqual([busy.status, busy.body.code], [409, 'NOT_INSTALLABLE'], 'confirmed: the password and the usual checks follow');
+    assert.equal((await admin('DELETE', `/system/update/staging/${id}`)).status, 200);
+    download.resolve();
+    fs.rmSync(path.join(u.dataDir, 'update-state.json'), { force: true });
     useUpdater();
 });
 

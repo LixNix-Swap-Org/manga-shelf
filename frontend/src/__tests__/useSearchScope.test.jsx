@@ -51,6 +51,7 @@ import useSearchScope, { SEARCH_SCOPE_KEY, ONLINE_DEBOUNCE_MS } from '../hooks/u
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import Dashboard from '../Dashboard';
 import { clearOnlineAnswers } from '../components/dashboard/OnlineResults';
+import { COVER_ORIGIN_KEY } from '../utils/coverOrigin';
 import { fakeResponse } from './fakeResponse';
 
 const EDITOR = { id: 1, username: 'anna', role: 'editor' };
@@ -97,7 +98,8 @@ describe('useSearchScope', () => {
     expect(renderHook(() => useSearchScope()).result.current.scope).toBe('collection');
   });
 
-  it('online scope: a typed query of three characters is looked up 600 ms after the last keystroke', () => {
+  it('online scope: a typed query of three characters is looked up 350 ms after the last keystroke', () => {
+    expect(ONLINE_DEBOUNCE_MS).toBe(350);
     vi.useFakeTimers();
     localStorage.setItem(SEARCH_SCOPE_KEY, 'online');
     const { result } = renderHook(() => useSearchScope());
@@ -207,8 +209,48 @@ const headerProps = (overrides = {}) => ({
   mobileMenuOpen: false, onLogout: vi.fn(), radarData: null, search: '', searchInputRef: { current: null },
   setMobileMenuOpen: vi.fn(), setSearch: vi.fn(), setView: vi.fn(), shoppingData: null, user: EDITOR, ...overrides
 });
-const scopeProps = (scope = 'collection') => ({
-  scope, setScope: vi.fn(), onTyped: vi.fn(), submitOnline: vi.fn(), clearOnline: vi.fn()
+const scopeProps = (scope = 'collection', pending = false) => ({
+  scope, pending, setScope: vi.fn(), onTyped: vi.fn(), submitOnline: vi.fn(), clearOnline: vi.fn()
+});
+
+describe('DashboardHeader cover preconnect', () => {
+  const links = () => [...document.head.querySelectorAll('link[rel="preconnect"]')];
+  const header = (scope, pending) => <DashboardHeader {...headerProps({ searchScope: scopeProps(scope, pending) })} />;
+
+  it('adds one preconnect to the stored cover origin once a lookup is pending in the online scope; removes it when the scope turns off', () => {
+    localStorage.setItem(COVER_ORIGIN_KEY, 'https://cdn.example');
+    const view = render(header('online', false));
+    expect(links()).toHaveLength(0);
+    view.rerender(header('online', true));
+    expect(links()).toHaveLength(1);
+    expect(links()[0].getAttribute('href')).toBe('https://cdn.example');
+    expect(links()[0].hasAttribute('crossorigin')).toBe(false);
+    view.rerender(header('online', false));
+    view.rerender(header('online', true));
+    expect(links()).toHaveLength(1);
+    view.rerender(header('collection', false));
+    expect(links()).toHaveLength(0);
+    view.rerender(header('collection', true));
+    expect(links()).toHaveLength(0);
+    view.rerender(header('online', true));
+    expect(links()).toHaveLength(1);
+    view.unmount();
+    expect(links()).toHaveLength(0);
+  });
+
+  it('without a stored origin, offline or with blocked storage there is no link', () => {
+    const view = render(header('online', true));
+    expect(links()).toHaveLength(0);
+    view.unmount();
+    localStorage.setItem(COVER_ORIGIN_KEY, 'https://cdn.example');
+    const offline = render(<DashboardHeader {...headerProps({ searchScope: scopeProps('online', true), user: { ...EDITOR, offline: true }, isOfflineMode: true })} />);
+    expect(links()).toHaveLength(0);
+    offline.unmount();
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    render(header('online', true));
+    expect(links()).toHaveLength(0);
+    spy.mockRestore();
+  });
 });
 
 describe('DashboardHeader scope button', () => {
@@ -344,6 +386,30 @@ describe('Dashboard: online lookups only for typed input', () => {
     expect(screen.getByRole('heading', { name: 'Nicht in deiner Sammlung' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Filter & Suche zurücksetzen/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Neue Reihe „rosa“ anlegen' })).toBeTruthy();
+  });
+
+  it('online scope: while the first query waits for the debounce only the status line shows', async () => {
+    localStorage.setItem(SEARCH_SCOPE_KEY, 'online');
+    stubFetch([{ id: 'al_9', source: 'anilist', title: 'Rosa Liebe' }]);
+    renderDashboard();
+    fireEvent.change(searchInput(), { target: { value: 'rosa' } });
+    const status = await screen.findByText('Online-Suche läuft…');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(screen.getByRole('heading', { name: 'Nicht in deiner Sammlung' })).toBeTruthy();
+    expect(status.parentElement.querySelector('.animate-pulse')).toBeNull();
+    expect(status.parentElement.querySelector('h2')).toBeNull();
+    expect(lookups).toEqual([]);
+    await settle();
+    expect(await screen.findByText('1 online gefunden')).toBeTruthy();
+    expect(lookups).toHaveLength(1);
+
+    fireEvent.change(searchInput(), { target: { value: 'rosa lie' } });
+    expect(await screen.findByText('Wird aktualisiert…')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: 'Rosa Liebe' })).toBeTruthy();
+    expect(lookups).toHaveLength(1);
+    await settle();
+    await waitFor(() => expect(lookups).toHaveLength(2));
+    expect(await screen.findByText('1 online gefunden')).toBeTruthy();
   });
 
   it('collection scope: typing never fetches, the row looks up once and keeps the scope', async () => {

@@ -4,13 +4,17 @@ import { isMpEdition, workKeyOfHit } from './editions';
 
 const SOURCE_LABELS = { anilist: 'AniList', mal: 'MyAnimeList' };
 const knownValue = (value) => (value && value !== 'Unbekannt' ? value : '');
+const ownLabel = (item) => item?.source_label || SOURCE_LABELS[item?.source];
 
 /** Badges of a non-Manga-Passion lookup hit: its own source, then the sources the server merged into it (also_on). */
 export function lookupSourceLabels(item) {
-  const own = item?.source_label || SOURCE_LABELS[item?.source];
+  const own = ownLabel(item);
   const merged = (Array.isArray(item?.also_on) ? item.also_on : []).map((source) => SOURCE_LABELS[source]).filter(Boolean);
   return [...new Set([own, ...merged].filter(Boolean))];
 }
+
+/** Badges of the sources the server folded into a hit (also_on), without the hit's own source. */
+export const alsoOnLabels = (item) => lookupSourceLabels(item).filter((label) => label !== ownLabel(item));
 
 /** The add form after applying a lookup hit to `base` (the current form, or at least its edition language). */
 export function hitToForm(hit, base = {}) {
@@ -26,7 +30,7 @@ export function hitToForm(hit, base = {}) {
     description: hit.description || base.description,
     cover_image: hit.cover_image || base.cover_image,
     manga_passion_id: isMpEdition(base) ? (hit.manga_passion_id || null) : null,
-    work_key: hit.source === 'manga_passion' ? null : (hit.work_key || workKeyOfHit(hit))
+    work_key: hit.source === 'manga_passion' ? (hit.work_key || null) : (hit.work_key || workKeyOfHit(hit))
   };
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== undefined));
 }

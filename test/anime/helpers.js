@@ -16,7 +16,7 @@ const json = (body, { status = 200, headers = {} } = {}) => new Response(JSON.st
 const offline = (url) => Object.assign(new TypeError(`fetch failed (offline in tests): ${url}`), { cause: { code: 'ENOTFOUND' } });
 
 /**
- * fetch that answers by `handlers` ({ anilist(body, init), jikan(path, init), mal(path, init) }); a handler returning
+ * fetch that answers by `handlers` ({ anilist(body, init), jikan(path, init), mal(path, init), tmdb(path, init) }); a handler returning
  * undefined, or a host without handler, fails like an unreachable host. `calls` records { host, url, body, headers }.
  */
 function fakeFetch(handlers = {}) {
@@ -39,6 +39,10 @@ function fakeFetch(handlers = {}) {
             host = 'mal';
             calls.push({ host, url: text, headers });
             result = handlers.mal && await handlers.mal(text.slice('https://api.myanimelist.net/v2'.length), init);
+        } else if (text.startsWith('https://api.themoviedb.org/3')) {
+            host = 'tmdb';
+            calls.push({ host, url: text, headers });
+            result = handlers.tmdb && await handlers.tmdb(text.slice('https://api.themoviedb.org/3'.length), init);
         } else {
             calls.push({ host, url: text, headers });
             result = handlers.other && await handlers.other(text, init);
@@ -77,6 +81,16 @@ function jikanFixtures(urlPath) {
     return undefined;
 }
 
+/** TMDb answers from the hand-written fixtures, by path. */
+function tmdbFixtures(urlPath) {
+    if (urlPath.startsWith('/search/multi?')) return json(fixture('tmdb-search-multi-frieren.json'));
+    if (urlPath.startsWith('/tv/209867?')) return json(fixture('tmdb-tv-209867.json'));
+    if (urlPath.startsWith('/movie/550123?')) return json(fixture('tmdb-movie-550123.json'));
+    if (urlPath.startsWith('/authentication')) return json(fixture('tmdb-authentication.json'));
+    if (/^\/(tv|movie)\/\d+\?/.test(urlPath)) return json({ success: false, status_code: 34, status_message: 'The resource you requested could not be found.' }, { status: 404 });
+    return undefined;
+}
+
 /** Memory core (test/core/harness.js) with `fetch` as ctx.http.fetch and a fresh gateway state. */
 function memoryWith(fetch, overrides = {}) {
     gateway.resetGatewayState();
@@ -98,4 +112,4 @@ function ctxAs(core, username) {
     return { ...core.ctx, user };
 }
 
-module.exports = { fixture, textFixture, json, fakeFetch, aniListFixtures, jikanFixtures, memoryWith, ctxAs, offline };
+module.exports = { fixture, textFixture, json, fakeFetch, aniListFixtures, jikanFixtures, tmdbFixtures, memoryWith, ctxAs, offline };

@@ -9,7 +9,7 @@ import {
 import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
 import { WATCH_BUILD, WATCH_SYNC_EVENT, watchAvailable } from '../app/watch/watchState';
 import useLatestRequest from './useLatestRequest';
-import { t } from '../i18n/index.js';
+import { getLanguage, t } from '../i18n/index.js';
 
 // i18n
 export const REFRESH_TEXTS = {
@@ -128,9 +128,16 @@ export default function useAnimeList({ user }) {
     } catch (_) { /* the hint line is optional */ }
   }, [beginSources, offline]);
 
-  /** { results, sources_used, partial, cached, credential_used } or throws ApiError (429 with retry_after). */
-  const search = useCallback(async (q, { signal } = {}) => {
-    const data = await api.get(`/api/anime/search?q=${encodeURIComponent(q)}`, { signal, timeout: TIMEOUTS.lookup, fallback: t('Suche fehlgeschlagen') });
+  /**
+   * { results, sources_used, partial, cached, credential_used, sources_available } or throws ApiError (429 with
+   * retry_after). `sources` (anilist, mal, tmdb) is sent only when not empty, `kind` only when not 'all'.
+   */
+  const search = useCallback(async (q, { signal, sources, kind } = {}) => {
+    let query = `q=${encodeURIComponent(q)}`;
+    if (Array.isArray(sources) && sources.length) query += `&sources=${encodeURIComponent(sources.join(','))}`;
+    if (kind && kind !== 'all') query += `&kind=${encodeURIComponent(kind)}`;
+    query += `&language=${encodeURIComponent(getLanguage())}`;
+    const data = await api.get(`/api/anime/search?${query}`, { signal, timeout: TIMEOUTS.lookup, fallback: t('Suche fehlgeschlagen') });
     fetchSources();
     return data;
   }, [fetchSources]);
@@ -149,7 +156,7 @@ export default function useAnimeList({ user }) {
     store(existing ? current.map((a) => (a.id === detail.id ? entry : a)) : [...current, entry]);
   }, [store]);
 
-  /** POST /api/anime from a search hit ({ anilist_id, mal_id }) or manual ({ title, episodes }); resolves with the detail. */
+  /** POST /api/anime from a search hit ({ anilist_id, mal_id } or { tmdb_id, tmdb_kind, title }) or manual ({ title, episodes, kind }); resolves with the detail. */
   const add = useCallback(async (body) => {
     const detail = await api.post('/api/anime', body, { timeout: TIMEOUTS.lookup, fallback: t('Anime konnte nicht hinzugefügt werden') });
     replaceEntry(detail);

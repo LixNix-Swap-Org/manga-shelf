@@ -12,6 +12,7 @@ const disk = require('../utils/disk');
 const updateLock = require('./update/lock');
 const updateState = require('./update/state');
 
+const APP_VERSION = require('../package.json').version;
 const backupsDir = path.join(dataDir, 'backups');
 if (!fs.existsSync(backupsDir)) {
     fs.mkdirSync(backupsDir, { recursive: true });
@@ -74,6 +75,27 @@ const isSnapshotHeld = (filename) => heldSnapshots.has(filename);
 
 /** The backup an update still needs (update-state.json), or null; pruning and DELETE leave it alone. */
 const updateBackup = () => updateState.heldBackup(dataDir);
+
+function setting(key) {
+    try {
+        const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
+        return row ? row.value : undefined;
+    } catch (e) {
+        return undefined;
+    }
+}
+
+/** { hold, anchor } of the updater (state.heldBackups for this version), or null while state.js lacks it. */
+function updateBackups() {
+    if (['heldBackups', 'versionRecord', 'isDowngradeBackup'].some((name) => typeof updateState[name] !== 'function')) return null;
+    return updateState.heldBackups(dataDir, { version: APP_VERSION, record: updateState.versionRecord(setting) });
+}
+
+function keptForUpdates(category) {
+    const held = updateBackups();
+    if (!held) return category === 'pre-update' ? null : new Set([updateBackup()].filter(Boolean));
+    return new Set([...held.hold, ...(held.anchor ? [held.anchor] : [])]);
+}
 
 const sidecarPath = (filename) => path.join(backupsDir, filename.replace(/\.zip$/, '.json'));
 
@@ -173,10 +195,11 @@ function pruneBackups(prefix, maxSnapshots = retentionFor(prefix)) {
     try {
         const entries = listSnapshots().filter(s => s.category === cat.category);
         const failed = new Set(entries.filter(s => s.verified === false).map(s => s.filename));
-        const forUpdate = updateBackup();
+        const forUpdates = keptForUpdates(cat.category);
+        if (!forUpdates) return;
         // an invalid retention keeps every good snapshot, failed ones are still cut down to the newest
         for (const name of selectForPruning(entries, maxSnapshots).filter(n => !keepAll || failed.has(n))) {
-            if (isSnapshotHeld(name) || name === forUpdate) {
+            if (isSnapshotHeld(name) || forUpdates.has(name) || (cat.category === 'pre-update' && updateState.isDowngradeBackup(name))) {
                 log.info('Keeping old snapshot while it is being restored or an update needs it:', name);
                 continue;
             }
@@ -574,6 +597,7 @@ module.exports = {
     holdSnapshot,
     isSnapshotHeld,
     updateBackup,
+    updateBackups,
     backupSchedule,
     localParts,
     needsDailyBackup,

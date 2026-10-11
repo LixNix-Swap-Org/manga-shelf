@@ -112,6 +112,34 @@ describe('Setup', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
   });
 
+  it('the sources step shows the TMDB notice when TMDB keys are offered', async () => {
+    const tmdb = { id: 'tmdb', name: 'TMDB', scope: 'both', benefit: 'Filme und Serien.', secretLabel: 'API-Schlüssel', secretHint: '32 Zeichen', pattern: '^[0-9a-fA-F]{32}$', minLength: 32, formatError: 'Kein TMDB-Schlüssel.', steps: [] };
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url === '/api/setup') return json(200, { success: true });
+      if (url === '/api/sources/guides') return json(200, [tmdb]);
+      if (url === '/api/admin/api-keys') return json(200, { keys: [{ provider: 'tmdb', configured: false, from_env: false, label: null, last4: null, last_ok_at: null, last_error: null }], users_with_keys: 0 });
+      return json(404, {});
+    }));
+    render(<Setup onComplete={vi.fn(async () => {})} />);
+    fillAndSubmit({ token: 'abcd-efgh-jkmn-pqrs' });
+    expect(await screen.findByRole('heading', { name: 'TMDB' })).toBeTruthy();
+    expect(screen.getByTestId('tmdb-attribution').textContent).toContain('Dieses Produkt verwendet die TMDB-API');
+  });
+
+  it('without TMDB keys on offer there is no TMDB notice', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url === '/api/setup') return json(200, { success: true });
+      if (url === '/api/sources/guides') return json(200, []);
+      if (url === '/api/admin/api-keys') return json(200, { keys: [], users_with_keys: 0 });
+      return json(404, {});
+    }));
+    render(<Setup onComplete={vi.fn(async () => {})} />);
+    fillAndSubmit({ token: 'abcd-efgh-jkmn-pqrs' });
+    await screen.findByRole('heading', { name: 'Quellen verbinden (später möglich)' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Überspringen' })).toBeTruthy());
+    expect(screen.queryByTestId('tmdb-attribution')).toBeNull();
+  });
+
   it('moves the focus to the "Quellen verbinden" heading when the form goes away', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url) => (url === '/api/setup' ? json(200, { success: true }) : json(404, {}))));
     render(<Setup onComplete={vi.fn(async () => {})} />);

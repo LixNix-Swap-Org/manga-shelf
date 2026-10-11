@@ -3,6 +3,9 @@ import { Tv } from 'lucide-react';
 import { formatCount, formatNumber } from '../../../utils/format';
 import { t, tn } from '../../../i18n/index.js';
 
+// i18n
+const KIND_TILES = [['anime', 'Anime'], ['tv', 'Serien'], ['movie', 'Filme']];
+
 /** Watch time as '3 Std. 20 Min.' / '2 Tage 4 Std.'. */
 export function watchTime(minutes) {
   const m = Math.max(0, Math.round(Number(minutes) || 0));
@@ -26,6 +29,8 @@ function Tile({ label, value }) {
 export default function AnimeStatsCard({ anime }) {
   const mineId = useId();
   if (!anime || !anime.total) return null;
+  const byKind = anime.by_kind || null;
+  const mixed = Boolean(byKind && ((byKind.tv || 0) + (byKind.movie || 0)) > 0);
   return (
     <div id="stats-anime" className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
       <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4 flex items-center gap-2">
@@ -44,6 +49,11 @@ export default function AnimeStatsCard({ anime }) {
           </dl>
         </div>
       </div>
+      {mixed && (
+        <dl className="grid grid-cols-3 gap-2 text-center mb-4" data-testid="stats-anime-kinds">
+          {KIND_TILES.map(([kind, label]) => <Tile key={kind} label={t(label)} value={byKind[kind]} />)}
+        </dl>
+      )}
       {anime.per_user?.length > 0 && (
         <ul className="space-y-1.5">
           {anime.per_user.map((u) => (

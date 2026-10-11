@@ -1,5 +1,6 @@
 import { seriesSearch } from './collectionHelpers';
 import { editionLanguage } from './editions';
+import { createSearch } from './search';
 
 export const MAX_ONLINE_HITS = 10;
 
@@ -15,9 +16,10 @@ export function matchHit(hit, mangas, { language } = {}) {
   }
   if (hit.work_key) {
     const editions = list.filter((m) => m.work_key && m.work_key === hit.work_key);
-    const own = editions.find((m) => editionLanguage(m) === language);
+    const sameLanguage = editions.filter((m) => editionLanguage(m) === language);
+    const own = hit.manga_passion_id ? sameLanguage.find((m) => !m.manga_passion_id) : sameLanguage[0];
     if (own) return { kind: 'owned', manga: own };
-    if (editions.length > 0) return { kind: 'otherEdition', manga: editions[0] };
+    if (editions.length > 0) return { kind: 'otherEdition', manga: sameLanguage[0] || editions[0] };
   }
   if (!hit.title) return null;
   let best = null;
@@ -35,6 +37,14 @@ export function matchHit(hit, mangas, { language } = {}) {
 
 /** The hits the online section shows: at most ten, in the order of the answer. */
 export const visibleHits = (hits) => (Array.isArray(hits) ? hits.filter((h) => h && typeof h === 'object').slice(0, MAX_ONLINE_HITS) : []);
+
+const hitSearch = createSearch((hit) => ({
+  primary: [hit.title, hit.alt_title, ...(Array.isArray(hit.alt_titles) ? hit.alt_titles : [])],
+  secondary: [hit.author, hit.publisher]
+}));
+
+/** The visible hits of an earlier answer that match the text typed since. */
+export const provisionalHits = (hits, typed) => hitSearch.filter(visibleHits(hits), typed);
 
 /** Seconds of a Retry-After header (delta seconds or an HTTP date), else `fallback`. */
 export function retryAfterSeconds(value, fallback = 60, now = Date.now()) {

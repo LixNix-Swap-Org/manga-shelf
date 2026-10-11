@@ -8,9 +8,24 @@ const USER_INTERACTIVE_MAX = 3;
 const BACKGROUND_MAX = 500;
 const PRIORITY_ORDER = { interactive: 0, refresh: 1, prefetch: 2 };
 
-const sleep = (ms) => new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
+const sleep = (ms, signal) => new Promise((resolve) => {
+    if (signal && signal.aborted) {
+        resolve();
+        return;
+    }
+    let onAbort = null;
+    const t = setTimeout(() => {
+        if (onAbort) signal.removeEventListener('abort', onAbort);
+        resolve();
+    }, ms);
     if (t && typeof t === 'object' && typeof t.unref === 'function') t.unref();
+    if (signal) {
+        onAbort = () => {
+            clearTimeout(t);
+            resolve();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+    }
 });
 
 /**
@@ -33,19 +48,54 @@ async function acquire(budget, key, options, priority, { now = () => Date.now(),
         if (t + Math.min(wait, 60000) > end) return false;
         waited = true;
         budget.noteWait(key, t);
-        await sleep(Math.max(25, Math.min(Number.isFinite(wait) ? wait : 5000, 60000)));
+        await sleep(Math.max(25, Math.min(Number.isFinite(wait) ? wait : 5000, 60000)), signal);
     }
 }
 
-/** Callers with the same key share one running promise. */
+const abortedError = () => Object.assign(new Error('aborted'), { name: 'AbortError', aborted: true });
+
+/** Callers with the same key share one run; its signal aborts once every joined caller's signal has aborted. */
 function createCoalescer() {
     const running = new Map();
+    const join = (key, entry, signal) => {
+        entry.callers++;
+        if (!signal) return entry.promise;
+        return new Promise((resolve, reject) => {
+            let done = false;
+            const onAbort = () => {
+                if (done) return;
+                done = true;
+                entry.gone++;
+                if (entry.gone === entry.callers) {
+                    if (running.get(key) === entry) running.delete(key);
+                    entry.controller.abort();
+                }
+                reject(abortedError());
+            };
+            const settle = (fn) => (value) => {
+                if (done) return;
+                done = true;
+                signal.removeEventListener('abort', onAbort);
+                fn(value);
+            };
+            entry.promise.then(settle(resolve), settle(reject));
+            if (signal.aborted) onAbort();
+            else signal.addEventListener('abort', onAbort);
+        });
+    };
     return {
-        run(key, fn) {
-            if (running.has(key)) return running.get(key);
-            const promise = Promise.resolve().then(fn).finally(() => running.delete(key));
-            running.set(key, promise);
-            return promise;
+        run(key, fn, { signal } = {}) {
+            let entry = running.get(key);
+            if (!entry) {
+                const controller = new AbortController();
+                entry = { controller, callers: 0, gone: 0, promise: null };
+                const own = entry;
+                entry.promise = Promise.resolve().then(() => fn(controller.signal)).finally(() => {
+                    if (running.get(key) === own) running.delete(key);
+                });
+                running.set(key, entry);
+            }
+            return join(key, entry, signal);
         },
         size: () => running.size
     };
