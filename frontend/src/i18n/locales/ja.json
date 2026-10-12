@@ -763,7 +763,6 @@
   "Drama": "ドラマ",
   "Drucken": "印刷",
   "Du": "あなた",
-  "Du bist bei Folge {n}": "{n}話まで視聴済み",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "すでに{episodes_watched}話まで進んでいます – 「続きから」のリンクだけ保存しますか？",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "すでに{episodes_watched}話まで進んでいるため、{number}話では何も変わりません。",
   "Du hast die neueste Version (v{version}).": "最新のバージョン(v{version})をお使いです。",
@@ -958,6 +957,8 @@
   },
   "Folge {episode} · {when}": "{episode}話 · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "この項目には{number}話がありません。",
+  "Folge {number} ist schon als gesehen markiert.": "{number}話にはすでに視聴済みの印が付いています。",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "{number}話にはすでに印が付いています – 「続きから」のリンクだけ保存しますか？",
   "Folge {n}": "{n}話",
   "Folgen": "話数",
   "Folgen (optional)": "話数(任意)",
@@ -1713,6 +1714,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "サーバーなし – コレクションはここにのみ保存されます",
   "Ohne Status": "ステータスなし",
   "Ohne Titel": "無題",
+  "Ohne Verknüpfung": "未紐づけ",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "リンクがないと、欠番チェックと発売日の取得はできません。",
   "Ohne Verlag": "出版社なし",
   "Ohne Zustand": "状態なし",
@@ -1801,6 +1803,7 @@
   "Registrierte Benutzer": "登録済みユーザー",
   "Reihe": "シリーズ",
   "Reihe anlegen": "シリーズを追加",
+  "Reihe für „{title}“ wählen": "「{title}」のシリーズを選択",
   "Reihe im Regal": "本棚のシリーズ",
   "Reihe löschen": "シリーズを削除",
   "Reihe manuell anlegen": "シリーズを手動で追加",
@@ -2788,6 +2791,9 @@
   },
   "{n} Extras|{n} Extras": {
     "other": "特典{n}件"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "other": "{n}話視聴済み"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "other": "{n}話未視聴"

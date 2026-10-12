@@ -776,7 +776,6 @@
   "Drama": "Drama",
   "Drucken": "Print",
   "Du": "You",
-  "Du bist bei Folge {n}": "You are at episode {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "You are already at episode {episodes_watched} – just remember the link for “Continue”?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "You are already at episode {episodes_watched}, episode {number} changes nothing.",
   "Du hast die neueste Version (v{version}).": "You have the latest version (v{version}).",
@@ -973,6 +972,8 @@
   },
   "Folge {episode} · {when}": "Episode {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "Episode {number} does not exist for this entry.",
+  "Folge {number} ist schon als gesehen markiert.": "Episode {number} is already marked as watched.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "Episode {number} is already marked – just remember the link for “Continue”?",
   "Folge {n}": "Episode {n}",
   "Folgen": "Episodes",
   "Folgen (optional)": "Episodes (optional)",
@@ -1739,6 +1740,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Without a server – the collection lives only here",
   "Ohne Status": "No status",
   "Ohne Titel": "Untitled",
+  "Ohne Verknüpfung": "Unlinked",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Without a link there is no gap check and no release dates.",
   "Ohne Verlag": "No publisher",
   "Ohne Zustand": "No condition",
@@ -1829,6 +1831,7 @@
   "Registrierte Benutzer": "Registered users",
   "Reihe": "Series",
   "Reihe anlegen": "Create series",
+  "Reihe für „{title}“ wählen": "Choose a series for “{title}”",
   "Reihe im Regal": "Series on the shelf",
   "Reihe löschen": "Delete series",
   "Reihe manuell anlegen": "Create series manually",
@@ -2842,6 +2845,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extras"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} episode watched",
+    "other": "{n} episodes watched"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "one": "{n} episode left",

@@ -763,7 +763,6 @@
   "Drama": "剧情",
   "Drucken": "打印",
   "Du": "你",
-  "Du bist bei Folge {n}": "你看到第 {n} 集",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "你已经看到第 {episodes_watched} 集——只记下“继续观看”的链接吗？",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "你已经看到第 {episodes_watched} 集，第 {number} 集不会带来任何变化。",
   "Du hast die neueste Version (v{version}).": "你已是最新版本（v{version}）。",
@@ -958,6 +957,8 @@
   },
   "Folge {episode} · {when}": "第 {episode} 集 · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "该条目没有第 {number} 集。",
+  "Folge {number} ist schon als gesehen markiert.": "第 {number} 集已经标记为已看。",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "第 {number} 集已经标记过了——只记下“继续观看”的链接吗？",
   "Folge {n}": "第 {n} 集",
   "Folgen": "集数",
   "Folgen (optional)": "集数（可选）",
@@ -1713,6 +1714,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "无服务器——收藏只保存在此处",
   "Ohne Status": "无状态",
   "Ohne Titel": "无标题",
+  "Ohne Verknüpfung": "未关联",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "没有关联就无法检查缺口，也没有发售日期。",
   "Ohne Verlag": "无出版社",
   "Ohne Zustand": "无品相",
@@ -1801,6 +1803,7 @@
   "Registrierte Benutzer": "已注册用户",
   "Reihe": "系列",
   "Reihe anlegen": "创建系列",
+  "Reihe für „{title}“ wählen": "为“{title}”选择系列",
   "Reihe im Regal": "书架上的系列",
   "Reihe löschen": "删除系列",
   "Reihe manuell anlegen": "手动创建系列",
@@ -2788,6 +2791,9 @@
   },
   "{n} Extras|{n} Extras": {
     "other": "{n} 个附赠"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "other": "已看 {n} 集"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "other": "还有 {n} 集"

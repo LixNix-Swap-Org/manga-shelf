@@ -789,7 +789,6 @@
   "Drama": "Drama",
   "Drucken": "Imprimir",
   "Du": "Você",
-  "Du bist bei Folge {n}": "Você está no episódio {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Você já está no episódio {episodes_watched} – guardar só o link de “Continuar”?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Você já está no episódio {episodes_watched}; o episódio {number} não muda nada.",
   "Du hast die neueste Version (v{version}).": "Você está com a versão mais recente (v{version}).",
@@ -988,6 +987,8 @@
   },
   "Folge {episode} · {when}": "Episódio {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "O episódio {number} não existe neste item.",
+  "Folge {number} ist schon als gesehen markiert.": "O episódio {number} já está marcado como assistido.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "O episódio {number} já está marcado – guardar só o link de “Continuar”?",
   "Folge {n}": "Episódio {n}",
   "Folgen": "Episódios",
   "Folgen (optional)": "Episódios (opcional)",
@@ -1765,6 +1766,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Sem servidor – a coleção fica só aqui",
   "Ohne Status": "Sem status",
   "Ohne Titel": "Sem título",
+  "Ohne Verknüpfung": "Não vinculados",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Sem vínculo, não há verificação de lacunas nem datas de lançamento.",
   "Ohne Verlag": "Sem editora",
   "Ohne Zustand": "Sem condição",
@@ -1857,6 +1859,7 @@
   "Registrierte Benutzer": "Usuários cadastrados",
   "Reihe": "Série",
   "Reihe anlegen": "Criar série",
+  "Reihe für „{title}“ wählen": "Escolher série para “{title}”",
   "Reihe im Regal": "Série na estante",
   "Reihe löschen": "Excluir série",
   "Reihe manuell anlegen": "Criar série manualmente",
@@ -2896,6 +2899,11 @@
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} episódio assistido",
+    "many": "{n} episódios assistidos",
+    "other": "{n} episódios assistidos"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "many": "{n} episódios pendentes",

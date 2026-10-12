@@ -776,7 +776,6 @@
   "Drama": "Drama",
   "Drucken": "Afdrukken",
   "Du": "Jij",
-  "Du bist bei Folge {n}": "Je zit bij aflevering {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Je bent al bij aflevering {episodes_watched} – alleen de link voor “Verder” onthouden?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Je bent al bij aflevering {episodes_watched}, aflevering {number} verandert niets.",
   "Du hast die neueste Version (v{version}).": "Je hebt de nieuwste versie (v{version}).",
@@ -973,6 +972,8 @@
   },
   "Folge {episode} · {when}": "Aflevering {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "Aflevering {number} bestaat niet bij dit item.",
+  "Folge {number} ist schon als gesehen markiert.": "Aflevering {number} is al als gezien gemarkeerd.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "Aflevering {number} is al gemarkeerd – alleen de link voor “Verder” onthouden?",
   "Folge {n}": "Aflevering {n}",
   "Folgen": "Afleveringen",
   "Folgen (optional)": "Afleveringen (optioneel)",
@@ -1739,6 +1740,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Zonder server – de collectie staat alleen hier",
   "Ohne Status": "Zonder status",
   "Ohne Titel": "Zonder titel",
+  "Ohne Verknüpfung": "Niet gekoppeld",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Zonder koppeling is er geen hiatencontrole en zijn er geen verschijningsdata.",
   "Ohne Verlag": "Zonder uitgever",
   "Ohne Zustand": "Zonder conditie",
@@ -1829,6 +1831,7 @@
   "Registrierte Benutzer": "Geregistreerde gebruikers",
   "Reihe": "Reeks",
   "Reihe anlegen": "Reeks aanmaken",
+  "Reihe für „{title}“ wählen": "Reeks kiezen voor “{title}”",
   "Reihe im Regal": "Reeks op de plank",
   "Reihe löschen": "Reeks verwijderen",
   "Reihe manuell anlegen": "Reeks handmatig aanmaken",
@@ -2842,6 +2845,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extra's"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} aflevering gezien",
+    "other": "{n} afleveringen gezien"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "one": "{n} aflevering open",

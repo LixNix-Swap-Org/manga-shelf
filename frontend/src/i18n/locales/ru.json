@@ -802,7 +802,6 @@
   "Drama": "Драма",
   "Drucken": "Печать",
   "Du": "Вы",
-  "Du bist bei Folge {n}": "Вы на эпизоде {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Вы уже на эпизоде {episodes_watched} — запомнить только ссылку для «Продолжить»?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Вы уже на эпизоде {episodes_watched}, эпизод {number} ничего не меняет.",
   "Du hast die neueste Version (v{version}).": "У вас установлена последняя версия (v{version}).",
@@ -1003,6 +1002,8 @@
   },
   "Folge {episode} · {when}": "Эпизод {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "Эпизода {number} в этой записи нет.",
+  "Folge {number} ist schon als gesehen markiert.": "Эпизод {number} уже отмечен как просмотренный.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "Эпизод {number} уже отмечен — запомнить только ссылку для «Продолжить»?",
   "Folge {n}": "Эпизод {n}",
   "Folgen": "Эпизоды",
   "Folgen (optional)": "Эпизоды (необязательно)",
@@ -1791,6 +1792,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Без сервера — коллекция хранится только здесь",
   "Ohne Status": "Без статуса",
   "Ohne Titel": "Без названия",
+  "Ohne Verknüpfung": "Несвязанные",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Без привязки нет проверки пропусков и дат выхода.",
   "Ohne Verlag": "Без издательства",
   "Ohne Zustand": "Без состояния",
@@ -1885,6 +1887,7 @@
   "Registrierte Benutzer": "Зарегистрированные пользователи",
   "Reihe": "Серия",
   "Reihe anlegen": "Создать серию",
+  "Reihe für „{title}“ wählen": "Выберите серию для «{title}»",
   "Reihe im Regal": "Серия на полке",
   "Reihe löschen": "Удалить серию",
   "Reihe manuell anlegen": "Создать серию вручную",
@@ -2950,6 +2953,12 @@
     "few": "{n} экстра",
     "many": "{n} экстра",
     "other": "{n} экстра"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} эпизод просмотрен",
+    "few": "{n} эпизода просмотрено",
+    "many": "{n} эпизодов просмотрено",
+    "other": "{n} эпизода просмотрено"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "few": "{n} эпизода не просмотрено",

@@ -789,7 +789,6 @@
   "Drama": "Drame",
   "Drucken": "Imprimer",
   "Du": "Toi",
-  "Du bist bei Folge {n}": "Vous en êtes à l’épisode {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Tu en es déjà à l'épisode {episodes_watched} – retenir seulement le lien pour « Continuer » ?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Tu en es déjà à l'épisode {episodes_watched}, l'épisode {number} ne change rien.",
   "Du hast die neueste Version (v{version}).": "Tu as la version la plus récente (v{version}).",
@@ -988,6 +987,8 @@
   },
   "Folge {episode} · {when}": "Épisode {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "L'épisode {number} n'existe pas pour cette entrée.",
+  "Folge {number} ist schon als gesehen markiert.": "L'épisode {number} est déjà marqué comme vu.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "L'épisode {number} est déjà marqué – retenir seulement le lien pour « Continuer » ?",
   "Folge {n}": "Épisode {n}",
   "Folgen": "Épisodes",
   "Folgen (optional)": "Épisodes (facultatif)",
@@ -1765,6 +1766,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Sans serveur – la collection n'existe qu'ici",
   "Ohne Status": "Sans statut",
   "Ohne Titel": "Sans titre",
+  "Ohne Verknüpfung": "Non reliés",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Sans lien, il n'y a ni vérification des lacunes ni dates de parution.",
   "Ohne Verlag": "Sans éditeur",
   "Ohne Zustand": "Sans état",
@@ -1857,6 +1859,7 @@
   "Registrierte Benutzer": "Utilisateurs enregistrés",
   "Reihe": "Série",
   "Reihe anlegen": "Créer la série",
+  "Reihe für „{title}“ wählen": "Choisir une série pour « {title} »",
   "Reihe im Regal": "Série sur l'étagère",
   "Reihe löschen": "Supprimer la série",
   "Reihe manuell anlegen": "Créer la série manuellement",
@@ -2896,6 +2899,11 @@
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} épisode vu",
+    "many": "{n} épisodes vus",
+    "other": "{n} épisodes vus"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "many": "{n} épisodes à voir",

@@ -776,7 +776,6 @@
   "Drama": "Drama",
   "Drucken": "Yazdır",
   "Du": "Sen",
-  "Du bist bei Folge {n}": "{n}. bölümdesin",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Zaten {episodes_watched}. bölümdesin – yalnızca “Devam” bağlantısı hatırlansın mı?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Zaten {episodes_watched}. bölümdesin, {number}. bölüm bir şeyi değiştirmez.",
   "Du hast die neueste Version (v{version}).": "En yeni sürümü kullanıyorsun (v{version}).",
@@ -973,6 +972,8 @@
   },
   "Folge {episode} · {when}": "{episode}. bölüm · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "Bu kayıtta {number}. bölüm yok.",
+  "Folge {number} ist schon als gesehen markiert.": "{number}. bölüm zaten izlendi olarak işaretli.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "{number}. bölüm zaten işaretli – yalnızca “Devam” bağlantısı hatırlansın mı?",
   "Folge {n}": "{n}. bölüm",
   "Folgen": "Bölümler",
   "Folgen (optional)": "Bölümler (isteğe bağlı)",
@@ -1739,6 +1740,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Sunucusuz – koleksiyon yalnızca burada durur",
   "Ohne Status": "Durumsuz",
   "Ohne Titel": "Başlıksız",
+  "Ohne Verknüpfung": "Bağlantısız",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Bağlantı olmadan boşluk kontrolü ve yayın tarihi olmaz.",
   "Ohne Verlag": "Yayıncısız",
   "Ohne Zustand": "Kondisyonsuz",
@@ -1829,6 +1831,7 @@
   "Registrierte Benutzer": "Kayıtlı kullanıcılar",
   "Reihe": "Seri",
   "Reihe anlegen": "Seri ekle",
+  "Reihe für „{title}“ wählen": "“{title}” için seri seç",
   "Reihe im Regal": "Rafta seri",
   "Reihe löschen": "Seriyi sil",
   "Reihe manuell anlegen": "Seriyi elle ekle",
@@ -2842,6 +2845,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} ekstra",
     "other": "{n} ekstra"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} bölüm izlendi",
+    "other": "{n} bölüm izlendi"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "one": "{n} bölüm kaldı",

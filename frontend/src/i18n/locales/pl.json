@@ -802,7 +802,6 @@
   "Drama": "Dramat",
   "Drucken": "Drukuj",
   "Du": "Ty",
-  "Du bist bei Folge {n}": "Jesteś przy odcinku {n}",
   "Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?": "Jesteś już przy odcinku {episodes_watched} – zapamiętać tylko link dla „Dalej”?",
   "Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.": "Jesteś już przy odcinku {episodes_watched}, odcinek {number} niczego nie zmienia.",
   "Du hast die neueste Version (v{version}).": "Masz najnowszą wersję (v{version}).",
@@ -1003,6 +1002,8 @@
   },
   "Folge {episode} · {when}": "Odcinek {episode} · {when}",
   "Folge {number} gibt es bei diesem Eintrag nicht.": "Odcinka {number} nie ma w tym wpisie.",
+  "Folge {number} ist schon als gesehen markiert.": "Odcinek {number} jest już oznaczony jako obejrzany.",
+  "Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?": "Odcinek {number} jest już oznaczony – zapamiętać tylko link dla „Dalej”?",
   "Folge {n}": "Odcinek {n}",
   "Folgen": "Odcinki",
   "Folgen (optional)": "Odcinki (opcjonalnie)",
@@ -1791,6 +1792,7 @@
   "Ohne Server – die Sammlung liegt nur hier": "Bez serwera – kolekcja jest tylko tutaj",
   "Ohne Status": "Bez statusu",
   "Ohne Titel": "Bez tytułu",
+  "Ohne Verknüpfung": "Niepowiązane",
   "Ohne Verknüpfung gibt es keine Lückenprüfung und keine Erscheinungstermine.": "Bez powiązania nie ma sprawdzania luk ani dat premier.",
   "Ohne Verlag": "Bez wydawcy",
   "Ohne Zustand": "Bez stanu",
@@ -1885,6 +1887,7 @@
   "Registrierte Benutzer": "Zarejestrowani użytkownicy",
   "Reihe": "Seria",
   "Reihe anlegen": "Utwórz serię",
+  "Reihe für „{title}“ wählen": "Wybierz serię dla „{title}”",
   "Reihe im Regal": "Seria na półce",
   "Reihe löschen": "Usuń serię",
   "Reihe manuell anlegen": "Utwórz serię ręcznie",
@@ -2950,6 +2953,12 @@
     "few": "{n} dodatki",
     "many": "{n} dodatków",
     "other": "{n} dodatku"
+  },
+  "{n} Folge gesehen|{n} Folgen gesehen": {
+    "one": "{n} odcinek obejrzany",
+    "few": "{n} odcinki obejrzane",
+    "many": "{n} odcinków obejrzanych",
+    "other": "{n} odcinka obejrzanego"
   },
   "{n} Folge offen|{n} Folgen offen": {
     "few": "{n} odcinki do obejrzenia",
