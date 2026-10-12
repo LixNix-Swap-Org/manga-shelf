@@ -30,7 +30,7 @@ function notes(state, env = process.env) {
         '### Signing',
         `- Windows (installer, portable .exe, server .exe): ${yes(state.windows, 'signed')}`,
         `- macOS (.dmg/.zip, server binary): ${yes(state.macos, state.notarize ? 'signed and notarized' : 'signed, not notarized')}`,
-        `- Android (APK/AAB): ${yes(state.android, 'signed')}${state.android ? '' : ' (APK with the debug key)'}`,
+        `- Android (APK/AAB): ${yes(state.android, 'signed')}${state.android ? '' : ' (APK with a new debug key on every release: uninstall the app before installing it)'}`,
         `- iPhone (IPA): ${yes(state.ios, iosSigned)}`,
         '- Linux (AppImage, .deb, .rpm, server binaries): unsigned, checksums in SHA256SUMS.txt',
         '- Docker image: signed keyless with cosign (if that step succeeded)'

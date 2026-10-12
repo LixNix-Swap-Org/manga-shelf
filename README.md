@@ -307,7 +307,7 @@ Unsigned builds: macOS "cannot be opened" → right click → Open (or `xattr -d
 
 ### Android and iPhone
 
-* **Android:** open `manga-shelf-<version>-android.apk` on the phone and allow installing from unknown sources. Without a release keystore the APK carries the debug key (sideloading only); a later update with the real key needs one uninstall, so export a backup in the app first. The `.aab` is for the Play Store (`-android-unsigned.aab` without the keystore).
+* **Android:** open `manga-shelf-<version>-android.apk` on the phone and allow installing from unknown sources. Without a release keystore every release signs the APK with a new debug key, so it cannot be installed over the previous one and the app has to be uninstalled first (export a backup in the app before). With the keystore secrets (section 7) every release installs over the previous one; the first signed release needs one last uninstall. The `.aab` is for the Play Store (`-android-unsigned.aab` without the keystore).
 * **iPhone/iPad:** sign `manga-shelf-<version>-ios-unsigned.ipa` yourself with AltStore, Sideloadly or Xcode and your Apple ID (seven days with a free account, then sign again). With certificates in the release there is a signed `manga-shelf-<version>-ios.ipa` instead. Re-signed builds may lose the share extension's App Group; then "Paste link" is the way to share episodes.
 * **First start:** "Use without a server" (collection only on the device), enter a server address, or scan the "Connect with app" QR code (footer of the web app, or the desktop app in server mode) with "QR-Code scannen" on the server screen of the app.
 * **Server addresses:** `https://…` anywhere, `http://…` only in the home network (private ranges, Tailscale `100.64.0.0/10`, names ending in `.local`, `.lan`, `.fritz.box`, `.home.arpa`, `.internal`).
@@ -485,7 +485,7 @@ npm run dev      # backend (node --watch) on :3000 and Vite on :5173; demo data 
 | `IOS_CERT_P12_BASE64`, `IOS_CERT_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64` | iOS distribution certificate and provisioning profile (with `APPLE_TEAM_ID`) |
 | `IOS_SHARE_PROVISIONING_PROFILE_BASE64` | optional: profile of the share extension `de.mangashelf.app.ShareToMangaShelf` (App Group `group.de.mangashelf.app` on both App IDs); without it the signed IPA has no share extension |
 
-base64 of a file: `base64 -i file.p12 | pbcopy` (macOS) or `base64 -w0 file.p12` (Linux). The repository variable `WATCH_CRUNCHYROLL` = `off` removes the Crunchyroll history from the app and desktop builds.
+The Android keystore is created once with `node scripts/create-android-key.js` in `mobile/` (needs `keytool` from a JDK): it writes `~/manga-shelf-release.keystore` and, next to it, the four `ANDROID_*` values in `….secrets.txt`; enter them as secrets, delete the text file and keep the keystore and its password safe, because only APKs with the same key install over each other. base64 of a file: `base64 -i file.p12 | pbcopy` (macOS) or `base64 -w0 file.p12` (Linux). The repository variable `WATCH_CRUNCHYROLL` = `off` removes the Crunchyroll history from the app and desktop builds.
 
 ### Language of tooling output
 
