@@ -141,6 +141,25 @@ describe('AnimeRadarView', () => {
     await waitFor(() => expect(select.disabled).toBe(false));
     expect(select.value).toBe('');
   });
+  it('asks the source once for the cover of an entry that has a source ID and no cover', async () => {
+    const onRefreshCover = vi.fn().mockResolvedValue({});
+    const list = [entry(901, { anilist_id: 5, cover_image: null }), entry(902, { anilist_id: 6, cover_image: '/uploads/a.jpg' }), entry(903, { cover_image: null })];
+    const { rerender } = render(<MemoryRouter><AnimeRadarView {...props} onRefreshCover={onRefreshCover} mangas={[]} list={list} /></MemoryRouter>);
+    await waitFor(() => expect(onRefreshCover).toHaveBeenCalledWith(901));
+    rerender(<MemoryRouter><AnimeRadarView {...props} onRefreshCover={onRefreshCover} mangas={[]} list={[...list]} /></MemoryRouter>);
+    expect(onRefreshCover).toHaveBeenCalledTimes(1);
+  });
+  it('remembers the attempt on the device', async () => {
+    const onRefreshCover = vi.fn().mockResolvedValue({});
+    const list = [entry(911, { anilist_id: 5, cover_image: null })];
+    const mount = () => render(<MemoryRouter><AnimeRadarView {...props} onRefreshCover={onRefreshCover} mangas={[]} list={list} /></MemoryRouter>);
+    const first = mount();
+    await waitFor(() => expect(onRefreshCover).toHaveBeenCalledTimes(1));
+    first.unmount();
+    const stored = JSON.parse(window.localStorage.getItem('mangashelf_cover_tried'));
+    expect(Object.keys(stored)).toContain('911');
+  });
+
   it('shows the entries without a link to readers without a select', () => {
     render(<MemoryRouter><AnimeRadarView {...props} canEdit={false} onLink={vi.fn()} mangas={[{ id: 7, title: 'Frieren' }]} list={[entry(2, { title: 'Frieren' }), entry(4, { title: 'Something else' })]} /></MemoryRouter>);
     fireEvent.click(screen.getByRole('tab', { name: 'Manga-Verknüpfung' }));

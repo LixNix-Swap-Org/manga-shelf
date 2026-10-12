@@ -12,7 +12,7 @@ import PersonalTimeline from '../components/dashboard/radar/PersonalTimeline';
 import PersonalSummary from '../components/dashboard/radar/PersonalSummary';
 import PersonalFilters from '../components/dashboard/radar/PersonalFilters';
 import { GERMAN_MONTHS } from '../utils/collectionHelpers';
-import { groupMpItemsByDate, localISODate } from '../utils/radarHelpers';
+import { groupMpItemsByDate, isReleasedDate, localISODate } from '../utils/radarHelpers';
 import { fakeResponse, htmlResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
 
@@ -292,7 +292,7 @@ describe('RadarTabs', () => {
 });
 
 const card = (over) => ({
-  id: 1, title: 'Berserk', volume_number: '42', publisher: 'Panini', date: '2026-10-02', price: 12, is_digital: false,
+  id: 1, title: 'Berserk', volume_number: '42', publisher: 'Panini', date: '2099-10-02', price: 12, is_digital: false,
   in_collection: true, user_manga_id: 4, match_kind: 'exact', user_volume_status: null, ...over
 });
 const renderTimeline = (props) => render(
@@ -332,6 +332,26 @@ describe('MpTimeline', () => {
     expect(screen.getByText('Gelesen')).toBeTruthy();
     expect(screen.getAllByText('Vorbestellen')).toHaveLength(1);
     expect(screen.getAllByLabelText('Band 43 von Berserk auf die Einkaufsliste')).toHaveLength(1);
+  });
+
+  it('a volume whose date has passed offers no pre-order, only the shopping list for volumes not yet on it', () => {
+    renderTimeline({ mpData: { items: [
+      card({ id: 1, volume_number: '5', date: '2000-01-05', in_collection: false, user_manga_id: null }),
+      card({ id: 2, volume_number: '6', date: '2000-01', user_volume_status: 'Fehlt' }),
+      card({ id: 3, volume_number: '7', date: '2099-01-05', in_collection: false, user_manga_id: null })
+    ] } });
+    expect(screen.queryByLabelText('Band 5 von Berserk vorbestellen')).toBeNull();
+    expect(screen.getByLabelText('Band 5 von Berserk auf die Einkaufsliste')).toBeTruthy();
+    expect(screen.queryByLabelText('Band 6 von Berserk vorbestellen')).toBeNull();
+    expect(screen.getByLabelText('Band 7 von Berserk vorbestellen')).toBeTruthy();
+  });
+
+  it('isReleasedDate: exact days before today and months before this month have passed', () => {
+    expect(isReleasedDate('2026-10-01', '2026-10-12')).toBe(true);
+    expect(isReleasedDate('2026-10-12', '2026-10-12')).toBe(false);
+    expect(isReleasedDate('2026-09', '2026-10-12')).toBe(true);
+    expect(isReleasedDate('2026-10', '2026-10-12')).toBe(false);
+    expect(isReleasedDate(null, '2026-10-12')).toBe(false);
   });
 
   it('every action names its volume and series; titles take two lines and keep the full title', () => {

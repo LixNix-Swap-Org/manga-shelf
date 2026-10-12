@@ -64,7 +64,7 @@ describe('volume view helpers', () => {
     expect(formatEuro('')).toBe('');
     expect(formatEuro('abc')).toBe('');
     expect(formatShortDate('2026-11-12')).toBe('12.11.2026');
-    expect(formatShortDate('2026-11')).toBe('11/2026');
+    expect(formatShortDate('2026-11')).toMatch(/^11[./]2026$/); // ICU data differs by Node version
     expect(formatShortDate('2026')).toBe('2026');
     expect(formatShortDate(null)).toBe('');
   });

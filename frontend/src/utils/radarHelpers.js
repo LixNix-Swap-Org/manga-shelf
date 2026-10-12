@@ -25,16 +25,24 @@ export const volumeStatusGroup = (status) => {
 export const isOrderedStatus = (status) => ORDERED_STATUSES.includes(status);
 
 /** Which import buttons a calendar card offers for the matched volume's status. */
-export const mpCardActions = (status) => {
+export const mpCardActions = (status, released = false) => {
   switch (volumeStatusGroup(status)) {
     case 'owned':
     case 'ordered':
       return { preorder: false, cart: false };
     case 'missing':
-      return { preorder: true, cart: false };
+      return { preorder: !released, cart: false };
     default:
-      return { preorder: true, cart: true };
+      return { preorder: !released, cart: true };
   }
+};
+
+/** True when a calendar date (YYYY-MM-DD, or YYYY-MM for a month-only date) lies before today (local day). */
+export const isReleasedDate = (date, today = localISODate()) => {
+  const text = String(date ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text < today;
+  if (/^\d{4}-\d{2}$/.test(text)) return text < today.slice(0, 7);
+  return false;
 };
 
 /** Status chips of the personal radar; every radar item belongs to exactly one non-ALL chip. */

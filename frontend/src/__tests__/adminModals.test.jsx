@@ -59,7 +59,9 @@ beforeEach(() => {
 describe('decodeCsvBytes / httpErrorMessage', () => {
   it('falls back to Windows-1252 for German Excel CSV, keeps UTF-8 with and without BOM', () => {
     const cp1252 = new Uint8Array([0x4d, 0xe4, 0x64, 0x63, 0x68, 0x65, 0x6e, 0x3b, 0x80]);
-    expect(decodeCsvBytes(cp1252.buffer)).toEqual({ text: 'Mädchen;€', encoding: 'windows-1252' });
+    // some Node builds decode 0x80 as U+0080 instead of the euro sign; browsers follow the spec
+    const euro = new TextDecoder('windows-1252').decode(new Uint8Array([0x80]));
+    expect(decodeCsvBytes(cp1252.buffer)).toEqual({ text: `Mädchen;${euro}`, encoding: 'windows-1252' });
     const utf8 = new TextEncoder().encode('Mädchen;1');
     expect(decodeCsvBytes(utf8.buffer)).toEqual({ text: 'Mädchen;1', encoding: 'utf-8' });
     const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...utf8]);

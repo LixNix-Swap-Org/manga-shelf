@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, CalendarClock, Link2, Unlink } from 'lucide-react';
+import { BookOpen, CalendarClock, Link2, Tv, Unlink } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import useTabList from '../../hooks/useTabList';
 import { countdownText, displayTitle, kindOf, mangaLinks, newEpisodes } from '../../utils/animeHelpers';
@@ -10,14 +10,40 @@ import { t, tn } from '../../i18n/index.js';
 
 const TABS = ['episodes', 'manga'];
 
-function Row({ children }) {
-  return <li className="glass-card rounded-2xl border border-slate-800 p-3 flex items-center gap-3">{children}</li>;
+// entries whose cover was already asked for: remembered per device for a week, so a source without a cover is not asked at every visit
+const COVER_TRIED_KEY = 'mangashelf_cover_tried';
+const COVER_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_COVER_LOOKUPS = 8;
+const coverTried = new Map();
+function loadCoverTried() {
+  if (coverTried.size) return coverTried;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(COVER_TRIED_KEY) || '{}');
+    const cutoff = Date.now() - COVER_RETRY_MS;
+    Object.entries(stored).forEach(([id, at]) => { if (Number(at) > cutoff) coverTried.set(Number(id), Number(at)); });
+  } catch (_) { /* storage unavailable: once per page session */ }
+  return coverTried;
+}
+function markCoverTried(id) {
+  coverTried.set(id, Date.now());
+  try { window.localStorage.setItem(COVER_TRIED_KEY, JSON.stringify(Object.fromEntries(coverTried))); } catch (_) { /* ignore */ }
+}
+const hasSource = (a) => Boolean(a.anilist_id || a.mal_id || a.tmdb_id);
+
+function Row({ children, action }) {
+  return (
+    <li className="glass-card rounded-2xl border border-slate-800 p-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex items-center gap-3 min-w-0 flex-1 basis-48">{children}</div>
+      {action}
+    </li>
+  );
 }
 
 function Thumb({ anime }) {
   return (
-    <div className="w-10 h-14 shrink-0 rounded-lg overflow-hidden bg-slate-900">
-      <CoverImage src={anime.cover_image} className="w-full h-full object-cover" />
+    <div className="w-12 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-900 border border-slate-800">
+      <CoverImage src={anime.cover_image} className="w-full h-full object-cover"
+        fallback={<div className="w-full h-full flex items-center justify-center text-slate-400"><Tv className="w-5 h-5" aria-hidden="true" /></div>} />
     </div>
   );
 }
@@ -92,7 +118,7 @@ function LinkSelect({ anime, shelf, busy, onPick }) {
   };
   return (
     <select value={value} disabled={busy} onChange={pick} onFocus={open} onPointerDown={open}
-      aria-label={t('Reihe für „{title}“ wählen', { title: displayTitle(anime) })} className="input-field mt-2 sm:max-w-xs disabled:opacity-60">
+      aria-label={t('Reihe für „{title}“ wählen', { title: displayTitle(anime) })} className="input-field mt-2 w-full sm:max-w-xs disabled:opacity-60">
       <option value="">{t('Reihe wählen…')}</option>
       {opened && shelf.map((manga) => <option key={manga.id} value={manga.id}>{manga.title}</option>)}
     </select>
@@ -115,18 +141,17 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
       {suggestions.length > 0 && (
         <Section title={t('Vorschläge')} count={suggestions.length}>
           {suggestions.map(({ anime, manga }) => (
-            <Row key={anime.id}>
+            <Row key={anime.id} action={canEdit && (
+              <button type="button" disabled={busy === anime.id} onClick={() => run(anime.id, manga.id)}
+                className="hit-44 shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-xs font-semibold disabled:opacity-60 max-[420px]:w-full">
+                <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> {t('Verknüpfen')}
+              </button>
+            )}>
               <Thumb anime={anime} />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-white line-clamp-2 break-words">{displayTitle(anime)}</p>
-                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{t('Passt zu „{title}“ im Regal', { title: manga.title })}</p>
+                <p className="text-xs text-slate-400 mt-0.5 line-clamp-2 break-words">{t('Passt zu „{title}“ im Regal', { title: manga.title })}</p>
               </div>
-              {canEdit && (
-                <button type="button" disabled={busy === anime.id} onClick={() => run(anime.id, manga.id)}
-                  className="hit-44 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-xs font-semibold disabled:opacity-60">
-                  <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> {t('Verknüpfen')}
-                </button>
-              )}
             </Row>
           ))}
         </Section>
@@ -134,12 +159,17 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
       {linked.length > 0 && (
         <Section title={t('Verknüpft')} count={linked.length}>
           {linked.map(({ anime, manga }) => (
-            <Row key={anime.id}>
+            <Row key={anime.id} action={canEdit && (
+              <button type="button" disabled={busy === anime.id} onClick={() => run(anime.id, null)} aria-label={t('Verknüpfung lösen')} title={t('Verknüpfung lösen')}
+                className="hit-44 shrink-0 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-60">
+                <Unlink className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}>
               <Thumb anime={anime} />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-white line-clamp-2 break-words">{displayTitle(anime)}</p>
                 {manga ? (
-                  <Link to={`/manga/${manga.id}`} className="text-xs text-sky-300 hover:underline inline-flex items-center gap-1.5 mt-0.5">
+                  <Link to={`/manga/${manga.id}`} className="text-xs text-sky-300 hover:underline inline-flex flex-wrap items-center gap-x-1.5 mt-0.5 break-words">
                     <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
                     {manga.title}
                     <span className="text-slate-400">· {manga.total_volumes > 0
@@ -148,12 +178,6 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
                   </Link>
                 ) : <p className="text-xs text-slate-400 mt-0.5">{t('Die Reihe ist nicht mehr in der Sammlung.')}</p>}
               </div>
-              {canEdit && (
-                <button type="button" disabled={busy === anime.id} onClick={() => run(anime.id, null)} aria-label={t('Verknüpfung lösen')} title={t('Verknüpfung lösen')}
-                  className="hit-44 shrink-0 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-60">
-                  <Unlink className="w-4 h-4" aria-hidden="true" />
-                </button>
-              )}
             </Row>
           ))}
         </Section>
@@ -178,16 +202,32 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
 }
 
 /** Tab "Anime-Radar": new episodes of my anime and the links between anime and series of the shelf. */
-export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, onOpen, onLink, onRetry, now = new Date() }) {
+export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, onOpen, onLink, onRetry, onRefreshCover, now = new Date() }) {
   const [tab, setTab] = useState('episodes');
+  // new entries from a source can arrive without a cover (background download pending or failed): ask the source once each
+  useEffect(() => {
+    if (!canEdit || !onRefreshCover) return undefined;
+    const tried = loadCoverTried();
+    const todo = list.filter((a) => !a.cover_image && hasSource(a) && !tried.has(a.id)).slice(0, MAX_COVER_LOOKUPS);
+    if (!todo.length) return undefined;
+    let cancelled = false;
+    (async () => {
+      for (const a of todo) {
+        if (cancelled) return;
+        markCoverTried(a.id);
+        try { await onRefreshCover(a.id); } catch (_) { /* stays without a cover; the detail dialog has "Aktualisieren" */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [list, canEdit, onRefreshCover]);
   const { tabListProps, tabProps, panelProps } = useTabList({ tabs: TABS, selected: tab, onSelect: setTab, prefix: 'anime-radar' });
   const labels = { episodes: t('Neue Folgen'), manga: t('Manga-Verknüpfung') };
   return (
     <div id="anime-radar-view">
       <h1 className="sr-only">{t('Anime-Radar')}</h1>
-      <div {...tabListProps} aria-label={t('Bereiche')} className="inline-flex gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
+      <div {...tabListProps} aria-label={t('Bereiche')} className="flex w-full sm:inline-flex sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
         {TABS.map((key) => (
-          <button key={key} {...tabProps(key)} className={`px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
+          <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
             {labels[key]}
           </button>
         ))}

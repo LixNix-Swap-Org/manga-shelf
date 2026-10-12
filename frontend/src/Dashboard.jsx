@@ -726,6 +726,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           canEdit={canEdit && !user?.offline}
           onOpen={handleOpenAnime}
           onLink={handleAnimeLink}
+          onRefreshCover={anime.refresh}
           onRetry={anime.fetchAnime}
         />
       </Suspense>

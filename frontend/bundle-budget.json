@@ -48,7 +48,7 @@
     "node_modules/@zxing/library/esm/index.js": 118869,
     "src/app/ServerScreen.jsx": 5810,
     "src/components/common/LiveScanner.jsx": 4929,
-    "src/components/dashboard/AnimeRadarView.jsx": 2693,
+    "src/components/dashboard/AnimeRadarView.jsx": 3216,
     "src/components/dashboard/CsvExchangeModal.jsx": 1639,
     "src/components/dashboard/OnlineResults.jsx": 4021,
     "src/components/detail/BatchAddModal.jsx": 3669,
