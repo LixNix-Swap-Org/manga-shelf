@@ -531,6 +531,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                             <Globe className="w-3 h-3" aria-hidden="true" />{label}
                           </span>
                         ))}
+                        {item.format_label && (
+                          <span className="inline-flex items-center bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">{item.format_label}</span>
+                        )}
                         {isApplying && (
                           <span className="flex items-center gap-1 text-[10px] text-brand-300">
                             <RefreshCw className="w-3 h-3 animate-spin" /> {t('Wird übernommen…')}

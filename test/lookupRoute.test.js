@@ -15,7 +15,7 @@ const timers = [];
 const MP_RESULT = { id: 'mp_1', source: 'manga_passion', title: 'Berserk' };
 const anilistBody = JSON.stringify({
     data: { Page: { media: [{
-        id: 7, title: { romaji: 'Berserk', english: 'Berserk', native: 'ベルセルク' }, status: 'FINISHED',
+        id: 7, title: { romaji: 'Berserk', english: 'Berserk', native: 'ベルセルク' }, status: 'FINISHED', format: 'NOVEL',
         description: 'The spy &lt;Twilight&gt; &amp; co.<br><br>\nNext &#8217;line&#8217; <i>x</i>'
     }] } }
 });
@@ -107,6 +107,8 @@ test('lookup/manga: a stuck Manga Passion search does not block the AniList resu
     assert.equal(res.body.length, 1);
     assert.equal(res.body[0].source, 'anilist');
     assert.equal(res.body[0].source_label, 'AniList', 'plain text: the badge icon is drawn by the frontend');
+    assert.equal(res.body[0].format, 'NOVEL');
+    assert.equal(res.body[0].format_label, 'Light Novel', 'a novel is told apart from the manga of the same title');
     assert.equal(res.body[0].description, 'The spy <Twilight> & co.\n\nNext ’line’ x');
 });
 

@@ -12,6 +12,9 @@
 ### Scan
 - **ISBN lookup:** the Open Library cover URLs that `GET /api/lookup/isbn` answers (DNB and K10plus hits, and Google Books hits without a thumbnail of their own) end in `?default=false`, so an ISBN Open Library has no cover for gives a failed image request instead of a 1×1 placeholder.
 
+### Search
+- **Format in the series search:** a hit that is a light novel or a one-shot carries the badge "Light Novel" or "One-Shot" next to its source, so the manga and the novel of the same title (Berserk of Gluttony) can be told apart in the shelf's online results and in the add dialog. Scripts: AniList and MyAnimeList hits of `GET /api/lookup/manga` carry `format` (the source's value) and `format_label` (`null` for a plain manga).
+
 ### Radar
 - **Calendar:** a volume of the Manga Passion calendar whose release date has already passed (an exact day before today, or a month before this month) no longer offers "Vorbestellen", because it cannot be pre-ordered any more; the shopping-list button stays for volumes that are not in the collection.
 
