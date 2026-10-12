@@ -13,6 +13,7 @@ const { notes, detectSigning } = require('../../scripts/release/signing');
 const { signingEnv, ANDROID_SECRETS, keytoolSha256, apksignerCerts, checkReleaseSignature } = require('../scripts/build-android');
 const { secretsFrom, artifactName } = require('../scripts/lib');
 const { iosSimulatorArgs, smokeArtifact } = require('../scripts/smoke');
+const createKey = require('../scripts/create-android-key');
 
 const MOBILE = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(MOBILE, rel), 'utf-8');
@@ -149,6 +150,31 @@ describe('signing', () => {
     assert.throws(() => checkReleaseSignature('DOES NOT VERIFY', null), /ohne Signatur/);
     const debug = 'Signer #1 certificate DN: C=US, O=Android, CN=Android Debug\nSigner #1 certificate SHA-256 digest: 00';
     assert.throws(() => checkReleaseSignature(debug, null), /Debug-Schlüssel/);
+  });
+
+  it('create-android-key: PKCS12 key without passwords on the command line, the four secrets in order', () => {
+    const args = createKey.keytoolArgs('/x/rel.keystore', 'manga-shelf');
+    assert.ok(args.includes('PKCS12'));
+    assert.ok(args.includes('-storepass:env') && args.includes('-keypass:env'));
+    assert.ok(!args.some((a) => /^pass:/.test(a)));
+    const lines = createKey.secretLines(Uint8Array.from([1, 2, 3]), 'manga-shelf', 'pw');
+    assert.deepEqual(lines, ['ANDROID_KEYSTORE_BASE64=AQID', 'ANDROID_KEYSTORE_PASSWORD=pw', 'ANDROID_KEY_ALIAS=manga-shelf', 'ANDROID_KEY_PASSWORD=pw']);
+    assert.equal(createKey.parseArgs([]).alias, 'manga-shelf');
+    assert.throws(() => createKey.parseArgs(['--alias', 'a b']), /Alias/);
+  });
+
+  it('create-android-key never replaces an existing keystore', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-key-'));
+    const out = path.join(dir, 'rel.keystore');
+    fs.writeFileSync(out, 'old');
+    assert.throws(() => createKey.createAndroidKey({ out, alias: 'manga-shelf' }), /existiert schon/);
+    assert.equal(fs.readFileSync(out, 'utf8'), 'old');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('an unsigned Android build warns in Actions and the release text says the APK cannot update the app', () => {
+    assert.match(read('scripts/build-android.js'), /::warning::\$\{UNSIGNED_CI_WARNING\}/);
+    assert.match(notes(detectSigning({})), /Android \(APK\/AAB\): unsigned \(APK with a new debug key on every release/);
   });
 
   it('signs only the App target and exports with the given profile', () => {

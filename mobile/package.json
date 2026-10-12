@@ -13,6 +13,7 @@
     "sync": "npm run build:web && cap sync",
     "doctor": "cap doctor",
     "build:android": "node scripts/build-android.js",
+    "android:key": "node scripts/create-android-key.js",
     "build:ios": "node scripts/build-ios.js",
     "smoke:android": "node scripts/smoke.js android",
     "smoke:ios": "node scripts/smoke.js ios",

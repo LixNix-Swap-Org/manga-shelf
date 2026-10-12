@@ -13,6 +13,8 @@ const { prepareWeb } = require('./prepare-web');
 const ANDROID_SECRETS = ['ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'];
 const ANDROID_DIR = path.join(MOBILE_DIR, 'android');
 const OUTPUTS = path.join(ANDROID_DIR, 'app', 'build', 'outputs');
+const UNSIGNED_CI_WARNING = 'Android-APK mit einem neuen Debug-Schlüssel signiert: sie lässt sich nicht über die installierte App installieren. '
+  + 'Einmal `node scripts/create-android-key.js` in mobile/ ausführen und die vier ANDROID_*-Secrets setzen.';
 
 /**
  * Environment for the signingConfigs block of android/app/build.gradle. Plain names: gradlew runs under /bin/sh, and
@@ -120,7 +122,11 @@ async function buildAndroid({ skipWeb = false, from = null, env = process.env } 
   if (!sdk) throw new Error('Kein Android SDK gefunden (ANDROID_HOME setzen)');
   const secrets = secretsFrom(env, ANDROID_SECRETS);
   const keystore = secrets ? writeSecretFile(path.join(MOBILE_DIR, 'build', 'signing', 'release.keystore'), secrets.ANDROID_KEYSTORE_BASE64) : null;
-  if (!secrets) console.log('[mobile] Keine Android-Signierschlüssel: APK mit Debug-Schlüssel, AAB unsigniert');
+  if (!secrets) {
+    console.log('[mobile] Keine Android-Signierschlüssel: APK mit Debug-Schlüssel, AAB unsigniert');
+    // a fresh runner has no ~/.android/debug.keystore, so every run signs with a new key and the APK cannot update the app
+    if (env.GITHUB_ACTIONS === 'true') console.log(`::warning::${UNSIGNED_CI_WARNING}`);
+  }
   let expected = null;
   try {
     if (secrets) expected = releaseCertSha256(keystore, secrets);
@@ -147,7 +153,7 @@ async function buildAndroid({ skipWeb = false, from = null, env = process.env } 
   return { signed: Boolean(secrets), files: [apkOut, aabOut] };
 }
 
-module.exports = { ANDROID_SECRETS, signingEnv, keytoolSha256, apksignerCerts, checkReleaseSignature, latestBuildTools, verifyApk, buildAndroid };
+module.exports = { ANDROID_SECRETS, UNSIGNED_CI_WARNING, signingEnv, keytoolSha256, apksignerCerts, checkReleaseSignature, latestBuildTools, verifyApk, buildAndroid };
 
 if (require.main === module) {
   buildAndroid(parseArgs(process.argv.slice(2)))
