@@ -324,8 +324,9 @@ export default function useAnimeList({ user }) {
     const change = previous
       ? {
         status: previous.status, episodes_watched: previous.episodes_watched || 0, restore: true,
-        // single watched episodes come back too (answers before this field carry none)
-        ...(previous.watched_episodes !== undefined ? { watched_episodes: previous.watched_episodes } : {})
+        // single watched episodes and their ratings come back too (answers before these fields carry none)
+        ...(previous.watched_episodes !== undefined ? { watched_episodes: previous.watched_episodes } : {}),
+        ...(previous.episode_scores !== undefined ? { episode_scores: previous.episode_scores } : {})
       }
       : null;
     if (listRef.current.some((a) => a.id === id)) return change ? Boolean(await updateProgress(id, change)) : removeFromMyList(id);

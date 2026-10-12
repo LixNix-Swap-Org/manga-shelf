@@ -17,6 +17,7 @@ import {
 import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
+import episodeMarks from '../../../../core/anime/episodes.js';
 import { t, tn } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -44,22 +45,36 @@ function WatchLanguageSelect({ id, label, value, onChange }) {
   );
 }
 
-/** Own progress: counter, status, score, watched languages and note, saved together. */
+/** The form values of a stored progress. */
+const formValues = (progress) => ({
+  episodes: progress?.episodes_watched ?? 0,
+  status: progress?.status || 'Geplant', // i18n-ignore: stored value
+  score: progress?.score ? String(progress.score) : '',
+  notes: progress?.notes || '',
+  audio: progress?.audio_language || '',
+  subtitle: progress?.subtitle_language || ''
+});
+
+/**
+ * Own progress: counter, status, score, watched languages and note, saved together. A new stored progress (a grid tap,
+ * a reload) only replaces the fields whose stored value changed, so an unsaved note or score survives it.
+ */
 function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
   const ids = useId();
-  const [episodes, setEpisodes] = useState(progress?.episodes_watched ?? 0);
-  const [status, setStatus] = useState(progress?.status || 'Geplant'); // i18n-ignore: stored value
-  const [score, setScore] = useState(progress?.score ? String(progress.score) : '');
-  const [notes, setNotes] = useState(progress?.notes || '');
-  const [audio, setAudio] = useState(progress?.audio_language || '');
-  const [subtitle, setSubtitle] = useState(progress?.subtitle_language || '');
+  const seeded = useRef(null);
+  if (seeded.current === null) seeded.current = formValues(progress);
+  const [episodes, setEpisodes] = useState(seeded.current.episodes);
+  const [status, setStatus] = useState(seeded.current.status);
+  const [score, setScore] = useState(seeded.current.score);
+  const [notes, setNotes] = useState(seeded.current.notes);
+  const [audio, setAudio] = useState(seeded.current.audio);
+  const [subtitle, setSubtitle] = useState(seeded.current.subtitle);
   useEffect(() => {
-    setEpisodes(progress?.episodes_watched ?? 0);
-    setStatus(progress?.status || 'Geplant'); // i18n-ignore: stored value
-    setScore(progress?.score ? String(progress.score) : '');
-    setNotes(progress?.notes || '');
-    setAudio(progress?.audio_language || '');
-    setSubtitle(progress?.subtitle_language || '');
+    const next = formValues(progress);
+    const last = seeded.current;
+    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle };
+    for (const [field, set] of Object.entries(setters)) if (next[field] !== last[field]) set(next[field]);
+    seeded.current = next;
   }, [progress]);
   const movie = kindOf(anime) === 'movie';
   const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
@@ -129,14 +144,17 @@ const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => e
 
 /**
  * Single episodes as toggles (aria-pressed). Taps are collected for a moment and saved as one set of watched episodes and
- * episode ratings (PUT progress with watched_episodes and episode_scores); saves run one after another, closing the
- * dialog saves at once. "Folgen bewerten" switches the taps to rating: an episode gets 1..10 and counts as watched with it;
- * unmarking an episode drops its rating.
+ * episode ratings of this grid's entry (onSave(id, { watched_episodes, episode_scores })); saves run one after another,
+ * closing the dialog saves at once. The taps stay on screen until no save waits or runs any more, then `onSettled(id)`
+ * reloads the dialog once; a failed save drops them together with the saves still queued. `onPendingChange(busy)` tells
+ * whether a save waits or runs. "Folgen bewerten" switches the taps to rating: the 1..10 picker opens above the cells,
+ * an episode gets a score and counts as watched with it; unmarking an episode drops its rating.
  */
-function EpisodeGrid({ anime, progress, onSave, disabled }) {
+function EpisodeGrid({ anime, progress, onSave, onSettled, onPendingChange, disabled }) {
   const ids = useId();
-  const serverMarks = useMemo(() => watchedEpisodesOf(progress), [progress]);
-  const serverScores = useMemo(() => episodeScoresOf(progress), [progress]);
+  const total = anime.episodes > 0 ? anime.episodes : null;
+  const serverMarks = useMemo(() => watchedEpisodesOf(progress, total), [progress, total]);
+  const serverScores = useMemo(() => episodeScoresOf(progress, total), [progress, total]);
   const [draft, setDraft] = useState(null);
   const marks = draft ? draft.marks : serverMarks;
   const scores = draft ? draft.scores : serverScores;
@@ -146,37 +164,90 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
   const [picked, setPicked] = useState(null);
   const [rating, setRating] = useState(false);
   const [ratingFor, setRatingFor] = useState(null);
+  const panelRef = useRef(null);
+  const returnTo = useRef(null);
   const firstOpen = useMemo(() => {
     for (let n = 1; n <= count; n++) if (!watched.has(n)) return n;
     return count;
   }, [count, watched]);
+  useEffect(() => {
+    setPicked((p) => (p === null || p < sections.length ? p : Math.max(0, sections.length - 1)));
+  }, [sections]);
   const index = Math.min(picked ?? sectionOf(sections, firstOpen), sections.length - 1);
   const section = sections[index];
+
   const pending = useRef(null);
   const timer = useRef(null);
+  const inFlight = useRef(0);
+  const round = useRef(0);
   const chain = useRef(Promise.resolve());
-  const saveRef = useRef(onSave);
-  saveRef.current = onSave;
+  const mounted = useRef(false);
+  const reported = useRef(false);
+  const handlers = useRef(null);
+  handlers.current = { onSave, onSettled, onPendingChange };
 
+  const report = useCallback(() => {
+    const busy = Boolean(timer.current || pending.current || inFlight.current);
+    if (mounted.current && busy !== reported.current) {
+      reported.current = busy;
+      handlers.current.onPendingChange?.(busy);
+    }
+    return busy;
+  }, []);
+  // the taps of a failed save are gone: the grid shows the stored state, queued saves of the same burst are skipped
+  const fail = useCallback(() => {
+    round.current += 1;
+    clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = null;
+    if (mounted.current) setDraft(null);
+  }, []);
   const flush = useCallback(() => {
     clearTimeout(timer.current);
     timer.current = null;
     const next = pending.current;
     if (!next) return;
     pending.current = null;
+    inFlight.current += 1;
+    const own = round.current;
     chain.current = chain.current
-      .then(() => saveRef.current(next))
-      .catch(() => {})
-      .finally(() => { if (!pending.current && !timer.current) setDraft(null); });
-  }, []);
-  useEffect(() => () => flush(), [flush]);
+      .then(() => (own === round.current ? handlers.current.onSave(next.id, next.change) : undefined))
+      .then((saved) => { if (saved === null) fail(); }, fail)
+      .finally(() => {
+        inFlight.current -= 1;
+        if (report() || !mounted.current) return;
+        setDraft(null);
+        handlers.current.onSettled?.(next.id);
+      });
+  }, [fail, report]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      flush();
+      if (reported.current) handlers.current.onPendingChange?.(false);
+      reported.current = false;
+      mounted.current = false;
+    };
+  }, [flush]);
+
+  // the picker takes the focus when it opens; a score or "Fertig" gives it back to the episode
+  useEffect(() => {
+    if (ratingFor !== null) {
+      const panel = panelRef.current;
+      (panel?.querySelector('[aria-pressed="true"]') || panel?.querySelector('button'))?.focus();
+    } else if (returnTo.current !== null) {
+      document.getElementById(`${ids}-ep-${returnTo.current}`)?.focus();
+      returnTo.current = null;
+    }
+  }, [ratingFor, ids]);
 
   if (!section) return null;
   const change = (nextMarks, nextScores) => {
     setDraft({ marks: nextMarks, scores: nextScores });
-    pending.current = { watched_episodes: nextMarks, episode_scores: nextScores };
+    pending.current = { id: anime.id, change: { watched_episodes: nextMarks, episode_scores: nextScores } };
     clearTimeout(timer.current);
     timer.current = setTimeout(flush, SAVE_DELAY_MS);
+    report();
   };
   const sorted = (set) => [...set].sort((a, b) => a - b);
   const toggle = (n) => {
@@ -197,6 +268,11 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
       set.add(n);
     }
     change(sorted(set), nextScores);
+    returnTo.current = n;
+    setRatingFor(null);
+  };
+  const closePicker = () => {
+    returnTo.current = ratingFor;
     setRatingFor(null);
   };
   const numbers = [];
@@ -219,7 +295,7 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
     return t('Folgen {from}–{to}', { from: s.from, to: s.to });
   };
   const episodeLabel = (n) => (section.relative
-    ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.from + 1 })
+    ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.start + 1 })
     : t('Folge {n}', { n }));
   const cellLabel = (n) => (scores[n] ? t('{episode}, Bewertung {score} von 10', { episode: episodeLabel(n), score: scores[n] }) : episodeLabel(n));
   const rated = Object.keys(scores).length;
@@ -247,42 +323,8 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
           <Star className="w-3.5 h-3.5" aria-hidden="true" /> {t('Folgen bewerten')}
         </button>
       </div>
-      {average !== null && (
-        <p className="text-xs text-slate-300">{tn('Ø {avg} aus {n} bewerteten Folge', 'Ø {avg} aus {n} bewerteten Folgen', rated, { avg: formatNumber(average, 1) })}</p>
-      )}
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5 pt-1" aria-label={sectionLabel(section)} aria-describedby={`${ids}-hint`}>
-        {numbers.map((n) => {
-          const on = watched.has(n);
-          const label = cellLabel(n);
-          const selected = rating && ratingFor === n;
-          return (
-            <li key={n}>
-              <button
-                type="button"
-                aria-pressed={rating ? undefined : on}
-                aria-expanded={rating ? selected : undefined}
-                aria-controls={rating ? `${ids}-rate` : undefined}
-                aria-label={label}
-                title={label}
-                disabled={disabled}
-                onClick={() => (rating ? setRatingFor(selected ? null : n) : toggle(n))}
-                className={`relative w-full h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-xs font-mono border transition-colors ${on
-                  ? 'bg-brand-700 border-brand-500 text-white'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'} ${selected ? 'ring-2 ring-amber-400' : ''}`}
-              >
-                {section.relative ? n - section.from + 1 : n}
-                {scores[n] && (
-                  <span aria-hidden="true" className="absolute -top-1.5 -right-1 min-w-[1rem] px-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-bold leading-4 font-sans">
-                    {scores[n]}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
       {rating && ratingFor !== null && (
-        <div id={`${ids}-rate`} role="group" aria-labelledby={`${ids}-rate-title`} className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 space-y-2">
+        <div ref={panelRef} id={`${ids}-rate`} role="group" aria-labelledby={`${ids}-rate-title`} className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 space-y-2">
           <p id={`${ids}-rate-title`} className="text-xs font-semibold text-slate-100">{t('{episode} bewerten', { episode: episodeLabel(ratingFor) })}</p>
           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
             {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
@@ -296,20 +338,63 @@ function EpisodeGrid({ anime, progress, onSave, disabled }) {
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
             {scores[ratingFor] && <button type="button" className="btn-secondary text-xs" disabled={disabled} onClick={() => rate(ratingFor, null)}>{t('Bewertung entfernen')}</button>}
-            <button type="button" className="btn-secondary text-xs" onClick={() => setRatingFor(null)}>{t('Fertig')}</button>
+            <button type="button" className="btn-secondary text-xs" onClick={closePicker}>{t('Fertig')}</button>
           </div>
         </div>
       )}
+      {average !== null && (
+        <p className="text-xs text-slate-300">{tn('Ø {avg} aus {n} bewerteten Folge', 'Ø {avg} aus {n} bewerteten Folgen', rated, { avg: formatNumber(average, 1) })}</p>
+      )}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5 pt-1" aria-label={sectionLabel(section)} aria-describedby={`${ids}-hint`}>
+        {numbers.map((n) => {
+          const on = watched.has(n);
+          const label = cellLabel(n);
+          const selected = rating && ratingFor === n;
+          return (
+            <li key={n}>
+              <button
+                type="button"
+                id={`${ids}-ep-${n}`}
+                aria-pressed={on}
+                aria-expanded={rating ? selected : undefined}
+                aria-controls={selected ? `${ids}-rate` : undefined}
+                aria-label={label}
+                title={label}
+                disabled={disabled}
+                onClick={() => (rating ? setRatingFor(selected ? null : n) : toggle(n))}
+                className={`relative w-full h-9 [@media(pointer:coarse)]:h-11 rounded-lg text-xs font-mono border transition-colors ${on
+                  ? 'bg-brand-700 border-brand-500 text-white'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'} ${selected ? 'ring-2 ring-amber-400' : ''}`}
+              >
+                {section.relative ? n - section.start + 1 : n}
+                {scores[n] && (
+                  <span aria-hidden="true" className="absolute -top-1.5 -right-1 min-w-[1rem] px-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-bold leading-4 font-sans">
+                    {scores[n]}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-/** Rows of the season editor from the stored seasons (or one season from episode 1). */
-const seasonRows = (custom) => (custom.length ? custom : [{ start: 1, name: null }]).map((s) => ({ start: String(s.start), name: s.name || '' }));
+/**
+ * Rows of the season editor: the seasons set by hand, else the TMDb seasons a TV show already stores (no request; the
+ * names stay empty), else one season from episode 1.
+ */
+function seasonRows(anime, custom) {
+  const stored = kindOf(anime) === 'tv' && Array.isArray(anime.seasons) ? episodeMarks.seasonsFromCounts(anime.seasons) : [];
+  const list = custom.length ? custom : stored.length ? stored : [{ start: 1, name: null }];
+  return list.map((s) => ({ start: String(s.start), name: (s.name || '').slice(0, episodeMarks.MAX_SEASON_NAME) }));
+}
 
 /**
  * Seasons set by hand for everybody (PUT /anime/:id with custom_seasons): the first episode of each season and an optional
  * name. "Vorschlag von TMDB laden" fills the rows from TMDb (needs a TMDB key); nothing is stored before "Speichern".
+ * A suggestion that arrives after "Abbrechen" is dropped; closing gives the focus back to "Staffeln bearbeiten".
  */
 function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
   const ids = useId();
@@ -318,14 +403,25 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
+  const request = useRef(0);
+  const openRef = useRef(null);
+  const focusNext = useRef(null);
   const total = anime.episodes > 0 ? anime.episodes : null;
+  const maxName = episodeMarks.MAX_SEASON_NAME;
+
+  useEffect(() => {
+    const target = focusNext.current;
+    if (!target) return;
+    focusNext.current = null;
+    (target === 'open' ? openRef.current : document.getElementById(target))?.focus();
+  }, [rows]);
 
   if (!rows) {
     return (
       <div className="flex flex-wrap items-center gap-2">
         {custom.length > 0 && <p className="text-xs text-slate-300">{tn('{n} eigene Staffel', '{n} eigene Staffeln', custom.length)}</p>}
-        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={disabled}
-          onClick={() => { setRows(seasonRows(custom)); setError(''); setNote(''); }}>
+        <button ref={openRef} type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={disabled}
+          onClick={() => { focusNext.current = `${ids}-name-0`; setRows(seasonRows(anime, custom)); setError(''); setNote(''); }}>
           <ListOrdered className="w-3.5 h-3.5" aria-hidden="true" /> {t('Staffeln bearbeiten')}
         </button>
       </div>
@@ -337,16 +433,29 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
     const last = Number(list[list.length - 1]?.start) || 0;
     return [...list, { start: String(last + 1), name: '' }];
   });
-  const removeRow = (i) => setRows((list) => list.filter((_, j) => j !== i));
-  const close = () => { setRows(null); setError(''); setNote(''); };
+  const removeRow = (i) => {
+    focusNext.current = `${ids}-name-${i - 1}`;
+    setRows((list) => list.filter((_, j) => j !== i));
+  };
+  const close = () => {
+    request.current += 1;
+    focusNext.current = 'open';
+    setRows(null);
+    setError('');
+    setNote('');
+    setLoading(false);
+  };
   const suggest = async () => {
+    request.current += 1;
+    const own = request.current;
     setLoading(true);
     setError('');
     setNote('');
     try {
       const answer = await loadSuggestion();
+      if (own !== request.current) return;
       if (answer?.seasons?.length) {
-        setRows(answer.seasons.map((s) => ({ start: String(s.start), name: s.name || '' })));
+        setRows(answer.seasons.map((s) => ({ start: String(s.start), name: (s.name || '').slice(0, maxName) })));
         setNote(tn('{n} Staffel von TMDB übernommen. Prüfen und speichern.', '{n} Staffeln von TMDB übernommen. Prüfen und speichern.', answer.seasons.length));
       } else if (answer?.reason === 'no_key') {
         setNote(t('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).'));
@@ -354,9 +463,9 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
         setNote(t('TMDB kennt für diesen Eintrag keine Staffeln.'));
       }
     } catch (err) {
-      if (!isAbortError(err)) setError(err.message);
+      if (own === request.current && !isAbortError(err)) setError(err.message);
     } finally {
-      setLoading(false);
+      if (own === request.current) setLoading(false);
     }
   };
   const save = async (e) => {
@@ -406,7 +515,7 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
             </div>
             <div className="flex-1 min-w-[8rem]">
               <label htmlFor={`${ids}-name-${i}`} className="block text-[11px] text-slate-400 mb-1">{t('Name (optional)')}</label>
-              <input id={`${ids}-name-${i}`} type="text" maxLength={80} className="input-field text-base sm:text-sm" value={r.name} disabled={disabled}
+              <input id={`${ids}-name-${i}`} type="text" maxLength={maxName} className="input-field text-base sm:text-sm" value={r.name} disabled={disabled}
                 onChange={(e) => setRow(i, 'name', e.target.value)} />
             </div>
             {i > 0 && (
@@ -448,6 +557,7 @@ export default function AnimeDetailModal({
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [gridBusy, setGridBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [titleDe, setTitleDe] = useState('');
   const [refreshLeft, setRefreshLeft] = useState(0);
@@ -541,7 +651,8 @@ export default function AnimeDetailModal({
           const saved = await updateProgress(id, {
             status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes,
             audio_language: prev.audio_language ?? null, subtitle_language: prev.subtitle_language ?? null,
-            ...(prev.watched_episodes !== undefined ? { watched_episodes: prev.watched_episodes } : {}), restore: true
+            ...(prev.watched_episodes !== undefined ? { watched_episodes: prev.watched_episodes } : {}),
+            ...(prev.episode_scores !== undefined ? { episode_scores: prev.episode_scores } : {}), restore: true
           });
           if (saved && latest.current?.animeId === id) latest.current.load();
         }
@@ -549,10 +660,16 @@ export default function AnimeDetailModal({
     });
   });
 
-  // a tap in the episode grid: no toast, the dialog reloads its detail so the counter and status follow
-  const saveEpisodes = async (change) => {
-    const saved = await updateProgress(animeId, change);
-    if (saved && latest.current?.animeId === animeId) await latest.current.load();
+  // a save of the episode grid, bound to the grid's entry: no toast; the dialog takes the answer (counter and status
+  // follow at once) only while it still shows that entry
+  const saveEpisodes = async (id, change) => {
+    const saved = await updateProgress(id, change);
+    if (saved && latest.current?.animeId === id) setDetail((d) => (d && d.id === id ? { ...d, my_progress: saved } : d));
+    return saved;
+  };
+  // the grid's saves are done: one reload, so "Weiter" and "Fortschritt aller" follow
+  const episodesSettled = (id) => {
+    if (latest.current?.animeId === id) latest.current.load();
   };
 
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
@@ -676,7 +793,7 @@ export default function AnimeDetailModal({
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
-                  <OwnProgress anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy}
+                  <OwnProgress key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy || gridBusy}
                     onRemove={onRemove} />
                 </section>
               )}
@@ -686,11 +803,11 @@ export default function AnimeDetailModal({
                   <h3 id={`${titleId}-episodes`} className="text-sm font-bold text-white mb-2">{t('Einzelne Folgen')}</h3>
                   {seasonSuggestion && (
                     <div className="mb-3">
-                      <SeasonEditor anime={anime} onSave={saveSeasons} loadSuggestion={loadSeasonSuggestion} disabled={busy} />
+                      <SeasonEditor key={anime.id} anime={anime} onSave={saveSeasons} loadSuggestion={loadSeasonSuggestion} disabled={busy} />
                     </div>
                   )}
-                  <EpisodeGrid key={`${anime.id}:${(anime.custom_seasons || []).map((c) => c.start).join(',')}`} anime={anime} progress={anime.my_progress}
-                    onSave={saveEpisodes} disabled={busy} />
+                  <EpisodeGrid key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveEpisodes} onSettled={episodesSettled}
+                    onPendingChange={setGridBusy} disabled={busy} />
                 </section>
               )}
 

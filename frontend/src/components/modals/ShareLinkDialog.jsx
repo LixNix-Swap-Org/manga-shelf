@@ -5,7 +5,7 @@ import { langFor } from '../common/lang';
 import { compareNatural } from '../../utils/search';
 import { displayTitle, formatLabel, progressText, isAnimeKind } from '../../utils/animeHelpers';
 import {
-  aboveTotalText, displaySeriesTitle, knownEntry, progressBefore, raisesCounter, serviceLabel
+  aboveTotalText, displaySeriesTitle, knownEntry, lastWatchedOf, progressBefore, raisesCounter, serviceLabel
 } from '../../utils/shareIntake';
 import { t } from '../../i18n/index.js';
 
@@ -71,9 +71,11 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
   // later seasons are often numbered on from the first one (Folge 29 of a 12-episode entry)
   const above = Boolean(chosenId) && valid && (total ? number > total : refused?.episode === number);
   const before = progressBefore(entry, known);
+  // the episode is watched already: only its link for "Weiter" can be remembered
   const ahead = chosenId && valid && !above && !raisesCounter(before, number);
-  // the server keeps the counter and ignores an older page, so only the current episode is worth remembering
-  const older = ahead && number < (before?.episodes_watched || 0);
+  // the server ignores an older page, so only the newest watched episode is worth remembering
+  const older = ahead && number < lastWatchedOf(before);
+  const marked = Array.isArray(before?.watched_episodes);
   const showEpisodeField = !answer.episode || above || episode !== String(answer.episode);
   const suggestion = canAdd && onCreate && !chosenId && Number.isInteger(answer.suggestion?.anilist_id) ? answer.suggestion : null;
 
@@ -202,9 +204,13 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
 
       {ahead && (
         <p className="text-sm text-slate-300">
-          {older
-            ? t('Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.', { episodes_watched: before.episodes_watched, number })
-            : t('Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?', { episodes_watched: before.episodes_watched })}
+          {marked
+            ? (older
+              ? t('Folge {number} ist schon als gesehen markiert.', { number })
+              : t('Folge {number} ist schon markiert – nur den Link für „Weiter“ merken?', { number }))
+            : (older
+              ? t('Du bist schon bei Folge {episodes_watched}, Folge {number} ändert nichts.', { episodes_watched: before.episodes_watched, number })
+              : t('Du bist schon bei Folge {episodes_watched} – nur den Link für „Weiter“ merken?', { episodes_watched: before.episodes_watched }))}
         </p>
       )}
       {error && <p id={`${ids}-confirm-error`} role="alert" className="text-xs text-rose-300">{error}</p>}

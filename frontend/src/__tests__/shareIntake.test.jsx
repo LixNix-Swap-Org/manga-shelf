@@ -273,6 +273,41 @@ describe('ShareLinkDialog', () => {
     expect(toasts.last()).toMatchObject({ message: 'Frieren: Link für „Weiter“ gemerkt', action: null });
   });
 
+  it('a row with single marks: an episode in a gap is offered, a marked one says so and only remembers the link; undo brings marks and ratings back', async () => {
+    const before = { status: 'Schaue', episodes_watched: 3, score: null, notes: null, watched_episodes: [1, 2, 10], episode_scores: { 2: 7 } };
+    const api = stubApi({
+      list: [entry({ my_progress: before })],
+      answer: answerOf({ episode: null, episode_source: null }),
+      watched: (body) => fakeResponse(200, {
+        anime_id: 1,
+        progress: { ...before, episodes_watched: 4, watched_episodes: [1, 2, body.episode, 10], resume_url: body.url, resume_episode: body.episode },
+        previous: before
+      })
+    });
+    await loadHarness();
+    act(() => { harness.share.start({ text: EPISODE_URL }); });
+    expect(await screen.findByRole('heading', { name: 'Frieren: welche Folge?' })).toBeTruthy();
+    const field = screen.getByLabelText('Folge');
+    fireEvent.change(field, { target: { value: '2' } });
+    expect(screen.getByText('Folge 2 ist schon als gesehen markiert.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ja, gesehen|Link merken/ })).toBeNull();
+    fireEvent.change(field, { target: { value: '10' } });
+    expect(screen.getByText('Folge 10 ist schon markiert – nur den Link für „Weiter“ merken?')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Link merken' })).toBeTruthy();
+    fireEvent.change(field, { target: { value: '3' } });
+    expect(screen.queryByText(/schon/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ja, gesehen' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.calls.find((c) => /watched/.test(c.url)).body).toEqual({ episode: 3, url: CANONICAL, remember: { service: 'crunchyroll', external_id: 'GG5H5XQX4' } });
+    expect(harness.anime.list[0].my_progress).toMatchObject({ episodes_watched: 4, watched_episodes: [1, 2, 3, 10] });
+    expect(toasts.last()).toMatchObject({ message: 'Frieren: Folge 3 gesehen', action: { label: 'Rückgängig' } });
+    await act(() => toasts.last().action.onClick());
+    expect(api.calls.at(-1)).toEqual({
+      method: 'PUT', url: '/api/anime/1/progress',
+      body: { status: 'Schaue', episodes_watched: 3, restore: true, watched_episodes: [1, 2, 10], episode_scores: { 2: 7 } }
+    });
+  });
+
   it('visitors and offline users get a short note and no request; a non-streaming text is left to the caller', async () => {
     const api = stubApi();
     const { unmount } = await loadHarness({ canEdit: false, user: { id: 1, username: 'v', role: 'visitor' } });

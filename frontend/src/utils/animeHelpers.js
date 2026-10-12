@@ -78,11 +78,22 @@ export function stillAiring(anime) {
   return kind === 'anime' && (anime?.status === 'RELEASING' || anime?.status === 'NOT_YET_RELEASED');
 }
 
-/** Season and episode of an absolute counter for a TV show with seasons ({ season, episode }); null for 0 or without seasons. */
+/**
+ * Season and episode of an absolute counter for a TV show with seasons ({ season, episode }); null for 0 or without seasons.
+ * Seasons set by hand win over the TMDb seasons (season = their position, episode counted from the season's first one),
+ * so the card, the form and the grid name the same season.
+ */
 export function seasonEpisode(anime, watched) {
   const n = Number(watched) || 0;
+  if (kindOf(anime) !== 'tv' || n <= 0) return null;
+  const custom = Array.isArray(anime?.custom_seasons) ? anime.custom_seasons.filter((s) => Number.isInteger(s?.start) && s.start >= 1) : [];
+  if (custom.length) {
+    let index = 0;
+    custom.forEach((s, i) => { if (s.start <= n) index = i; });
+    return { season: index + 1, episode: n - custom[index].start + 1 };
+  }
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
-  if (kindOf(anime) !== 'tv' || n <= 0 || !seasons.length) return null;
+  if (!seasons.length) return null;
   let before = 0;
   for (const s of seasons) {
     const count = Number(s.episode_count) || 0;
@@ -93,7 +104,7 @@ export function seasonEpisode(anime, watched) {
   return { season: last.season_number, episode: n - (before - (Number(last.episode_count) || 0)) };
 }
 
-/** 'S2E3' for a TV show with seasons, else null. */
+/** 'S2E3' for a TV show with seasons (set by hand or from TMDb), else null. */
 export function seasonEpisodeText(anime, watched) {
   const at = seasonEpisode(anime, watched);
   return at ? `S${at.season}E${at.episode}` : null;
@@ -247,19 +258,60 @@ export function withProgress(anime, progress, user) {
 }
 
 /**
+ * `progress` with the episodes of `list` marked as watched, by the server's rule (episodeMarks.withEpisodes): { marks, count }
+ * with `marks` null for the plain counter, which past MAX_MARKS runs up to the highest episode of the union.
+ */
+function markEpisodes(progress, list, known) {
+  const next = episodeMarks.withEpisodes(progress, list, known);
+  if (!next.watched_episodes) return { marks: null, count: next.episodes_watched };
+  const marks = episodeMarks.cleanMarks(next.watched_episodes, known);
+  return { marks, count: marks.length };
+}
+
+/**
  * The optimistic answer of a progress change, by the server's rules: counter clamped to a known episode count,
  * reaching it means "Gesehen", "Gesehen" fills the counter, a counter above 0 moves "Geplant" to "Schaue", choosing
  * "Geplant" alone resets the counter, a counter below the total (or with none) moves "Gesehen" back to "Schaue".
- * `watched_episodes` (single episodes) sets the counter to their number; a counter change fills the first gaps or drops
- * the highest marks (core/anime/episodes.js, like the server).
+ * `watched_episodes` (single episodes) sets the counter to their number, `add_episodes` adds episodes to the watched ones
+ * (never fewer than before); a counter change fills the first gaps or drops the highest marks (core/anime/episodes.js,
+ * like the server). A rated episode is a watched one: `episode_scores` marks the episodes it rates, and an episode that
+ * is not watched after the change loses its rating.
  */
 export function predictProgress(current, change, total) {
   const base = current || { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
   const known = total > 0 ? total : null;
-  const marks = Array.isArray(change.watched_episodes) ? episodeMarks.cleanMarks(change.watched_episodes, known) : null;
-  const watched = marks ? marks.length : change.episodes_watched;
+  const had = base.episodes_watched ?? 0;
+  const stored = episodeMarks.parseMarks(base.watched_episodes);
+  let marks = null;
+  let plain = change.watched_episodes === null;
+  let watched = change.episodes_watched;
+  if (Array.isArray(change.watched_episodes)) {
+    marks = episodeMarks.cleanMarks(change.watched_episodes, known);
+    watched = marks.length;
+  } else if (Array.isArray(change.add_episodes)) {
+    const added = markEpisodes(base, change.add_episodes, known);
+    if (added.count > had) {
+      marks = added.marks;
+      plain = !marks;
+      watched = added.count;
+    }
+  }
+  const scoresGiven = change.episode_scores !== undefined;
+  const scores = episodeMarks.cleanScores(scoresGiven ? change.episode_scores || {} : episodeMarks.parseScores(base.episode_scores), known);
+  if (scoresGiven) {
+    const count = known ? Math.min(watched ?? had, known) : watched ?? had;
+    const kept = plain ? null : marks || (stored ? episodeMarks.fitMarks(episodeMarks.cleanMarks(stored, known), count) : null);
+    const after = { episodes_watched: count, watched_episodes: kept };
+    const unwatched = Object.keys(scores).map(Number).filter((n) => !episodeMarks.isWatched(after, n));
+    if (unwatched.length) {
+      const added = markEpisodes(after, unwatched, known);
+      marks = added.marks;
+      plain = !marks;
+      watched = added.count;
+    }
+  }
   let status = change.status ?? base.status;
-  let episodes = watched ?? base.episodes_watched ?? 0;
+  let episodes = watched ?? had;
   if (total > 0 && episodes > total) episodes = total;
   if (change.status === 'Gesehen' && total > 0) episodes = total;
   if (watched !== undefined && change.status === undefined && total > 0 && episodes >= total) status = 'Gesehen';
@@ -269,6 +321,8 @@ export function predictProgress(current, change, total) {
     else status = 'Schaue';
   }
   if (watched !== undefined && change.status === undefined && status === 'Gesehen' && (!(total > 0) || episodes < total)) status = 'Schaue';
+  // added episodes come from watching (link, history): like there, a rise ends a pause
+  if (Array.isArray(change.add_episodes) && change.status === undefined && episodes > had && (status === 'Pausiert' || status === 'Abgebrochen')) status = 'Schaue';
   const next = {
     ...base,
     status,
@@ -278,14 +332,21 @@ export function predictProgress(current, change, total) {
   };
   if (change.audio_language !== undefined) next.audio_language = change.audio_language;
   if (change.subtitle_language !== undefined) next.subtitle_language = change.subtitle_language;
-  if (change.episode_scores !== undefined) next.episode_scores = change.episode_scores || {};
-  const marked = change.watched_episodes === null ? null : (marks || episodeMarks.parseMarks(base.watched_episodes));
+  const marked = plain ? null : (marks || stored);
   const fitted = marked ? episodeMarks.fitMarks(episodeMarks.cleanMarks(marked, known), episodes) : null;
-  next.watched_episodes = fitted && !episodeMarks.isPlain(fitted) ? fitted : null;
+  next.watched_episodes = fitted && fitted.length === episodes && !episodeMarks.isPlain(fitted) ? fitted : null;
+  if (scoresGiven || base.episode_scores !== undefined) {
+    const rated = {};
+    for (const [n, score] of Object.entries(scores)) if (episodeMarks.isWatched(next, Number(n))) rated[n] = score;
+    next.episode_scores = rated;
+  }
   if (status !== 'Gesehen') next.finished_at = null;
   if (status === 'Geplant') next.started_at = null;
-  // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
-  if (episodes !== (base.episodes_watched ?? 0)) {
+  if (change.resume_url !== undefined && (watched !== undefined || change.episodes_watched === undefined)) {
+    next.resume_url = change.resume_url;
+    next.resume_episode = change.resume_url ? change.resume_episode ?? watched ?? null : null;
+  } else if (episodes !== had) {
+    // any other change of the counter makes the remembered "Weiter" page stale (the server clears it too)
     next.resume_url = null;
     next.resume_episode = null;
   }
@@ -294,21 +355,40 @@ export function predictProgress(current, change, total) {
 
 /**
  * The optimistic answer of "Ja, gesehen" (POST /anime/:id/watched): the counter never goes down, the shared page is
- * the new "Weiter" target, raising the counter moves Geplant/Pausiert/Abgebrochen to "Schaue".
+ * the new "Weiter" target, raising the counter moves Geplant/Pausiert/Abgebrochen to "Schaue". A plain counter means
+ * "watched up to the episode"; with single marks only the episode itself is added (above a known total: all of them).
  */
 export function predictWatched(current, { episode, url = null }, total) {
   const base = current || { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
   const had = base.episodes_watched || 0;
-  let episodes = Math.max(had, Number(episode) || 0);
+  const number = Number(episode) || 0;
+  const stored = episodeMarks.parseMarks(base.watched_episodes);
+  let episodes = Math.max(had, number);
+  let marks = null;
+  if (stored && !(total > 0 && number > total)) {
+    const added = markEpisodes(base, [number], total > 0 ? total : null);
+    episodes = Math.max(had, added.count);
+    marks = added.marks && !episodeMarks.isPlain(added.marks) ? added.marks : null;
+  }
   if (total > 0 && episodes > total) episodes = total;
   let status = base.status;
   if (total > 0 && episodes >= total) status = 'Gesehen';
   else if (episodes > had && status !== 'Gesehen') status = 'Schaue';
-  return { ...base, status, episodes_watched: episodes, resume_url: url, resume_episode: url ? Number(episode) || null : null };
+  const next = { ...base, status, episodes_watched: episodes, resume_url: url, resume_episode: url ? number || null : null };
+  if (stored) next.watched_episodes = marks;
+  return next;
 }
 
-/** The ratings of single episodes of a progress answer: { episode: score } (empty without any). */
-export const episodeScoresOf = (progress) => episodeMarks.parseScores(progress?.episode_scores);
+/**
+ * The ratings of single episodes of a progress answer: { episode: score } (empty without any). Only watched episodes up
+ * to a known `total` count (a rated episode is a watched one), so the grid never sends a stale rating back.
+ */
+export function episodeScoresOf(progress, total = null) {
+  const scores = episodeMarks.cleanScores(episodeMarks.parseScores(progress?.episode_scores), total > 0 ? total : null);
+  const out = {};
+  for (const [n, score] of Object.entries(scores)) if (episodeMarks.isWatched(progress, Number(n))) out[n] = score;
+  return out;
+}
 
 /** The average of the ratings of single episodes, or null without any. */
 export function averageEpisodeScore(scores) {
@@ -316,27 +396,32 @@ export function averageEpisodeScore(scores) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-/** The watched episodes of a progress answer: its single marks, else 1..episodes_watched. */
-export const watchedEpisodesOf = (progress) => episodeMarks.marksOf(progress);
-
 /**
- * Sections of the episode grid: the seasons set by hand (custom_seasons, absolute episode numbers, `name` may be null),
- * else the regular TMDb seasons of a TV show (numbered within the season, `relative`), else blocks of `size` episodes.
- * Each section is { from, to, season, name, relative }; `season` is null for a plain block.
+ * The watched episodes of a progress answer: its single marks, else 1..episodes_watched. Marks above a known `total`
+ * (left from before the count went down) are left out, so the grid never sends them.
  */
-export function episodeSections(anime, count, size = 100) {
-  const custom = Array.isArray(anime?.custom_seasons) ? anime.custom_seasons : [];
+export const watchedEpisodesOf = (progress, total = null) => episodeMarks.cleanMarks(episodeMarks.marksOf(progress), total > 0 ? total : null);
+
+/** A season of `seasonsOf` in blocks of at most `size` episodes: every block keeps the season and its first episode (`start`). */
+function inBlocks(season, size) {
   const out = [];
-  if (custom.length) {
-    custom.forEach((s, i) => {
-      const from = s.start;
-      const to = Math.min(i + 1 < custom.length ? custom[i + 1].start - 1 : count, count);
-      if (from <= count && from <= to) out.push({ from, to, season: i + 1, name: s.name || null, relative: false });
-    });
-    if (out.length) return out;
-  }
+  for (let from = season.from; from <= season.to; from += size) out.push({ ...season, from, to: Math.min(from + size - 1, season.to), start: season.from });
+  return out;
+}
+
+/** The seasons of the grid before the cut into blocks: by hand, else TMDb's for a TV show, else one run of `count`. */
+function seasonsOf(anime, count) {
+  const custom = Array.isArray(anime?.custom_seasons) ? anime.custom_seasons : [];
+  const tv = kindOf(anime) === 'tv';
+  const out = [];
+  custom.forEach((s, i) => {
+    const from = s.start;
+    const to = Math.min(i + 1 < custom.length ? custom[i + 1].start - 1 : count, count);
+    if (from <= count && from <= to) out.push({ from, to, season: i + 1, name: s.name || null, relative: tv });
+  });
+  if (out.length) return out;
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
-  if (kindOf(anime) === 'tv' && seasons.length) {
+  if (tv && seasons.length) {
     let before = 0;
     for (const s of seasons) {
       const n = Number(s.episode_count) || 0;
@@ -346,8 +431,19 @@ export function episodeSections(anime, count, size = 100) {
     if (before < count) out.push({ from: before + 1, to: count, season: null, name: null, relative: false });
     return out;
   }
-  for (let from = 1; from <= count; from += size) out.push({ from, to: Math.min(from + size - 1, count), season: null, name: null, relative: false });
-  return out;
+  return count >= 1 ? [{ from: 1, to: count, season: null, name: null, relative: false }] : [];
+}
+
+/**
+ * Sections of the episode grid: the seasons set by hand (custom_seasons, `name` may be null), else the regular TMDb seasons
+ * of a TV show, else blocks of `size` episodes. The seasons of a TV show are numbered within the season (`relative`, like
+ * seasonEpisode), an anime's seasons by hand keep the absolute episode numbers.
+ * A season longer than `size` is cut into blocks of `size` that keep its name and number. Each section is
+ * { from, to, season, name, relative, start } with the absolute range and the season's first episode `start`;
+ * `season` is null for a plain block.
+ */
+export function episodeSections(anime, count, size = 100) {
+  return seasonsOf(anime, count).flatMap((season) => inBlocks(season, size));
 }
 
 /** How many episodes the grid shows: the known count, else the aired ones, else one past the highest watched. */
@@ -483,35 +579,49 @@ export function shortDescription(text, max = 420) {
 const FOLLOWED_STATUSES = ['Schaue', 'Geplant'];
 const isFollowed = (anime) => FOLLOWED_STATUSES.includes(anime?.my_progress?.status);
 
+/** How many of the episodes 1..`aired` are not watched: against the single marks of a progress, else its counter. */
+function unwatchedUpTo(progress, aired) {
+  const marks = episodeMarks.parseMarks(progress?.watched_episodes);
+  const watched = marks ? marks.filter((n) => n <= aired).length : Math.min(Number(progress?.episodes_watched) || 0, aired);
+  return Math.max(0, aired - watched);
+}
+
 /**
- * "Neue Folgen": the entries on my list (Schaue, Geplant) with a known next airing, soonest first, plus the ones with
- * episodes that are already out but not watched. A film or an entry without an airing date never appears under
- * `upcoming`; `behind` needs a known number of aired episodes (the episode count of a finished show, else the confirmed
- * next airing - 1). Pure: `now` is a Date.
+ * "Neue Folgen": the entries on my list (Schaue, Geplant) with a known next airing, soonest first (`upcoming`), and the
+ * "Schaue" entries that still air with aired episodes I have not watched (`behind`, `missing` counts them by the marks).
+ * `behind` needs a confirmed (not estimated) next airing: its episode counts as aired once its time has passed, else the
+ * one before it. A finished show stays out (the Anime tab's "Schaue" filter lists it), a film never appears. `behind` is
+ * sorted by the next airing, soonest first, then by the most missing episodes. Pure: `now` is a Date.
  */
 export function newEpisodes(list, now = new Date()) {
   const upcoming = [];
   const behind = [];
   (list || []).forEach((anime) => {
     if (!isFollowed(anime) || kindOf(anime) === 'movie') return;
-    const watched = anime.my_progress.episodes_watched || 0;
     const next = anime.next_airing;
     if (next && next.at && countdownText(next, now, kindOf(anime))) upcoming.push(anime);
-    const aired = next && next.episode > 1 ? next.episode - 1 : (anime.status === 'FINISHED' && anime.episodes > 0 ? anime.episodes : null);
-    if (aired != null && aired > watched && anime.my_progress.status === 'Schaue') behind.push({ anime, missing: aired - watched });
+    if (anime.my_progress.status !== 'Schaue' || !next || next.estimated || !next.at || !(next.episode > 0)) return;
+    const aired = next.at * 1000 <= now.getTime() ? next.episode : next.episode - 1;
+    const missing = unwatchedUpTo(anime.my_progress, aired);
+    if (missing > 0) behind.push({ anime, missing });
   });
   upcoming.sort((a, b) => a.next_airing.at - b.next_airing.at);
-  behind.sort((a, b) => b.missing - a.missing || displayTitle(a.anime).localeCompare(displayTitle(b.anime)));
+  behind.sort((a, b) => a.anime.next_airing.at - b.anime.next_airing.at || b.missing - a.missing
+    || displayTitle(a.anime).localeCompare(displayTitle(b.anime)));
   return { upcoming, behind };
 }
 
-const titleKey = (value) => foldText(value).replace(/[^a-z0-9]+/g, ' ').trim();
+const titleKey = (value) => foldText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** One title key starts with the other as whole words, the shorter one at least 5 characters long. */
+const titlePrefix = (a, b) => Math.min(a.length, b.length) >= 5 && (a.startsWith(`${b} `) || b.startsWith(`${a} `));
 
 /**
  * "Anime mit Manga verknüpfen": entries linked to a series of the shelf (`linked`, with the series row), entries
- * without a link that name a series of the shelf (`suggestions`: the titles fold to the same text, or one starts with the
- * other and is at least 5 characters long) and the rest. Linked entries whose series is not on the shelf (deleted,
- * not loaded) stay in `linked` with `manga: null`.
+ * without a link that name a series of the shelf (`suggestions`: a series whose title folds to the same text wins over
+ * one whose title starts with the other, see `titlePrefix`; letters and digits of every script count) and the rest
+ * (`unlinked`). Linked entries whose series is not on the shelf (deleted, not loaded) stay in `linked` with
+ * `manga: null`. Every list is sorted by title.
  */
 export function mangaLinks(list, mangas) {
   const rows = (mangas || []).map((manga) => ({ manga, keys: [manga.title, manga.alt_title].map(titleKey).filter(Boolean) }));
@@ -524,11 +634,16 @@ export function mangaLinks(list, mangas) {
       linked.push({ anime, manga: byId.get(anime.manga_id) || null });
       return;
     }
-    const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji].map(titleKey).filter(Boolean);
-    const hit = rows.find((row) => row.keys.some((a) => keys.some((b) => a === b || (Math.min(a.length, b.length) >= 5 && (a.startsWith(`${b} `) || b.startsWith(`${a} `))))));
+    const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native].map(titleKey).filter(Boolean);
+    const hit = rows.find((row) => row.keys.some((a) => keys.includes(a)))
+      || rows.find((row) => row.keys.some((a) => keys.some((b) => titlePrefix(a, b))));
     if (hit) suggestions.push({ anime, manga: hit.manga });
     else unlinked.push(anime);
   });
   const byTitle = (a, b) => displayTitle(a.anime).localeCompare(displayTitle(b.anime));
-  return { linked: linked.sort(byTitle), suggestions: suggestions.sort(byTitle), unlinked };
+  return {
+    linked: linked.sort(byTitle),
+    suggestions: suggestions.sort(byTitle),
+    unlinked: unlinked.sort((a, b) => displayTitle(a).localeCompare(displayTitle(b)))
+  };
 }
