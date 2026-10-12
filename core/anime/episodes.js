@@ -1,7 +1,8 @@
 // Per-episode marks of one user's progress (anime_progress.watched_episodes). NULL means the plain counter: episodes
 // 1..episodes_watched count as watched. A JSON array lists the watched episode numbers when they are not just 1..n.
-// episodes_watched always equals the number of marked episodes, so stats, +1 and the AniList push keep using the counter.
-// Pure functions, shared by core/anime/progress.js and the frontend's optimistic progress (utils/animeHelpers.js).
+// episodes_watched always equals the number of watched episodes (stats, CSV, "x / y"); AniList gets the unbroken run from
+// episode 1 (watermark). More than MAX_MARKS marks are never stored: such a row falls back to the plain counter up to its
+// highest watched episode. Pure functions, shared by core/anime/progress.js and the frontend (utils/animeHelpers.js).
 
 const MAX_MARKS = 5000;
 
@@ -37,13 +38,14 @@ function parseMarks(stored) {
     }
 }
 
-/** The watched episodes of a progress row or answer: its marks, else 1..episodes_watched. */
+const countOf = (progress) => (progress ? Math.max(0, Number(progress.episodes_watched) || 0) : 0);
+const marksIn = (progress) => (progress ? parseMarks(progress.watched_episodes) : null);
+
+/** The watched episodes of a progress row or answer: its marks, else 1..episodes_watched (at most MAX_MARKS of them). */
 function marksOf(progress) {
-    if (!progress) return [];
-    const marks = parseMarks(progress.watched_episodes);
+    const marks = marksIn(progress);
     if (marks) return marks;
-    const count = Number(progress.episodes_watched) || 0;
-    return range(1, Math.min(count, MAX_MARKS));
+    return range(1, Math.min(countOf(progress), MAX_MARKS));
 }
 
 /** True when the marks are exactly 1..n (then nothing needs to be stored). */
@@ -69,11 +71,6 @@ function fitMarks(marks, count) {
     return out.sort((a, b) => a - b);
 }
 
-/** Marks plus every episode from 1 to `episode` ("watched up to episode N" from a link, the history sync or AniList). */
-function throughEpisode(marks, episode) {
-    return cleanMarks(marks.concat(range(1, Math.min(Number(episode) || 0, MAX_MARKS))));
-}
-
 /** The first episode not marked as watched. */
 function nextUnwatched(marks) {
     let n = 1;
@@ -84,14 +81,91 @@ function nextUnwatched(marks) {
     return n;
 }
 
+/** True when episode `n` counts as watched: one of the marks, else 1..episodes_watched. */
+function isWatched(progress, n) {
+    if (!Number.isInteger(n) || n < 1 || !progress) return false;
+    const stored = progress.watched_episodes;
+    const marks = Array.isArray(stored) ? stored : marksIn(progress);
+    return marks ? marks.includes(n) : n <= countOf(progress);
+}
+
+/** The first episode not watched: the first gap in the marks, else episodes_watched + 1. */
+function firstUnwatched(progress) {
+    const marks = marksIn(progress);
+    return marks ? nextUnwatched(marks) : countOf(progress) + 1;
+}
+
+/** The last episode of the unbroken run from episode 1 (what AniList calls progress); 0 when episode 1 is not watched. */
+const watermark = (progress) => firstUnwatched(progress) - 1;
+
+/** The highest watched episode, 0 without any. */
+function lastWatched(progress) {
+    const marks = marksIn(progress);
+    if (!marks) return countOf(progress);
+    return marks.length ? marks[marks.length - 1] : 0;
+}
+
+/**
+ * { episodes_watched, watched_episodes } for sorted, unique marks: 1..n becomes the plain counter (null), more than
+ * MAX_MARKS the plain counter up to the highest mark (never below `floor`).
+ */
+function fromMarks(marks, floor = 0) {
+    if (marks.length > MAX_MARKS) return { episodes_watched: Math.max(floor, marks[marks.length - 1]), watched_episodes: null };
+    return { episodes_watched: marks.length, watched_episodes: isPlain(marks) ? null : marks };
+}
+
+/** The progress after marking `list` as watched as { episodes_watched, watched_episodes }; never removes an episode. */
+function withEpisodes(progress, list, total = null) {
+    const count = countOf(progress);
+    const marks = marksIn(progress);
+    const fresh = cleanMarks(list, total).filter((n) => (marks ? !marks.includes(n) : n > count));
+    if (!fresh.length) return { episodes_watched: marks ? marks.length : count, watched_episodes: marks && !isPlain(marks) ? marks : null };
+    if (marks) return fromMarks(cleanMarks(marks.concat(fresh)), count);
+    if (count + fresh.length > MAX_MARKS) return { episodes_watched: Math.max(count, fresh[fresh.length - 1]), watched_episodes: null };
+    return fromMarks(range(1, count).concat(fresh));
+}
+
+/** The marks after marking `list` as watched (the union; a plain row counts as 1..n), cleaned to `total`. */
+function addEpisodes(progress, list, total = null) {
+    const next = withEpisodes(progress, list, total);
+    if (next.watched_episodes) return cleanMarks(next.watched_episodes, total);
+    return range(1, total > 0 ? Math.min(next.episodes_watched, total) : next.episodes_watched);
+}
+
+/** The progress after "watched up to episode N" (1..N added, nothing removed) as { episodes_watched, watched_episodes }. */
+function withThrough(progress, episode) {
+    const through = Math.max(0, Number(episode) || 0);
+    const count = countOf(progress);
+    const marks = marksIn(progress);
+    if (!marks) return { episodes_watched: Math.max(count, through), watched_episodes: null };
+    const above = marks.filter((n) => n > through);
+    if (through + above.length > MAX_MARKS) return { episodes_watched: Math.max(count, through, above.length ? above[above.length - 1] : 0), watched_episodes: null };
+    return fromMarks(range(1, through).concat(above));
+}
+
+/**
+ * The progress with exactly `count` watched episodes as { episodes_watched, watched_episodes }: the highest marks are
+ * dropped or the lowest unwatched episodes added; above MAX_MARKS the plain counter (up to the highest mark).
+ */
+function withCount(progress, count) {
+    const marks = marksIn(progress);
+    if (!marks) return { episodes_watched: count, watched_episodes: null };
+    if (marks.length >= count) return fromMarks(marks.slice(0, Math.max(0, count)));
+    if (count > MAX_MARKS) return { episodes_watched: Math.max(count, marks.length ? marks[marks.length - 1] : 0), watched_episodes: null };
+    return fromMarks(fitMarks(marks, count));
+}
+
 // Ratings of single episodes (anime_progress.episode_scores): a JSON object episode number -> score 1..10, NULL = none.
-// Independent of the marks: rating an episode does not mark it, unmarking keeps the rating (the grid drops it itself).
+// A rated episode is a watched one: writeProgress marks the episodes a change rates and drops the ratings of episodes that
+// are not watched after the change. Keys are canonical episode numbers ("7", never "07").
+
+const EPISODE_KEY = /^(0|[1-9]\d*)$/;
 
 /** Episode -> score with whole episodes from 1 (up to `total` when known) and whole scores 1..10; anything else is dropped. */
 function cleanScores(scores, total = null) {
     const out = {};
     if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return out;
-    const keys = Object.keys(scores).filter((k) => /^\d+$/.test(k)).map(Number).sort((a, b) => a - b);
+    const keys = Object.keys(scores).filter((k) => EPISODE_KEY.test(k)).map(Number).sort((a, b) => a - b);
     for (const episode of keys) {
         const score = scores[episode];
         if (episode < 1 || (total > 0 && episode > total)) continue;
@@ -157,10 +231,15 @@ function seasonsFromCounts(seasons) {
     for (const s of Array.isArray(seasons) ? seasons : []) {
         const count = Number(s && s.episode_count) || 0;
         if (count <= 0) continue;
-        out.push({ start, name: s.name || null, episodes: count, season_number: s.season_number ?? null });
+        const name = typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, MAX_SEASON_NAME) : null;
+        out.push({ start, name, episodes: count, season_number: s.season_number ?? null });
         start += count;
     }
     return out;
 }
 
-module.exports = { MAX_MARKS, MAX_SEASONS, MAX_SEASON_NAME, cleanSeasons, parseSeasons, seasonsFromCounts, cleanScores, parseScores, storedScores, cleanMarks, parseMarks, marksOf, isPlain, storedMarks, fitMarks, throughEpisode, nextUnwatched };
+module.exports = {
+    MAX_MARKS, MAX_SEASONS, MAX_SEASON_NAME, EPISODE_KEY, cleanSeasons, parseSeasons, seasonsFromCounts, cleanScores, parseScores, storedScores, cleanMarks,
+    parseMarks, marksOf, isPlain, storedMarks, fitMarks, nextUnwatched, isWatched, firstUnwatched, watermark, lastWatched, addEpisodes,
+    fromMarks, withEpisodes, withThrough, withCount
+};

@@ -451,7 +451,10 @@ function commit(ctx, { service, items, skip, platform, proposals, generation }) 
     for (const [animeId, list] of perAnime) {
         const p = rowOf(animeId);
         const stored = readProgress(ctx, animeId, uid);
-        const plan = crunchyroll.planProgress(list, { episodes: p.row.episodes, episodes_watched: stored ? stored.episodes_watched : 0, resume_url: stored ? stored.resume_url : null });
+        const plan = crunchyroll.planProgress(list, {
+            episodes: p.row.episodes, episodes_watched: stored ? stored.episodes_watched : 0, resume_url: stored ? stored.resume_url : null,
+            watched_episodes: stored ? stored.watched_episodes : null
+        });
         if (plan && plan.above_total) {
             for (const item of list) unmatched.push(unmatchedOf(item, 'episode_above_total', [candidateOf(p)]));
             continue;
@@ -481,8 +484,8 @@ function commit(ctx, { service, items, skip, platform, proposals, generation }) 
 }
 
 // Applies the caller's history items: matched entries only move forward (monotonic, "Gesehen" at the known total, resume link =
-// next episode); the rest returns as unmatched with candidates. Always the caller's own progress; with AniList list sync on,
-// applied entries are pushed like +1.
+// next episode; a row with single marks gets the items' episodes added, crunchyroll.planProgress); the rest returns as
+// unmatched with candidates. Always the caller's own progress; with AniList list sync on, applied entries are pushed like +1.
 async function sync(ctx, { body }) {
     const { service, items, skip, autoAdd, platform } = readBody(body);
     const uid = ctx.user.id;

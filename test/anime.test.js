@@ -218,22 +218,28 @@ test('watched from a shared link: never lowers, resume link and remembered serie
 test('episode ratings: PUT progress with episode_scores, answered in the list and the detail, validated', async () => {
     const id = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
     const before = { ...db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()) };
+    assert.deepEqual([before.episodes_watched, before.watched_episodes], [2, null]);
     let res = await editor('PUT', `/anime/${id}/progress`, { episode_scores: { 7: 9, 2: 6 } });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.deepEqual(res.body.episode_scores, { 2: 6, 7: 9 });
-    assert.equal(res.body.episodes_watched, before.episodes_watched, 'ratings leave the counter alone');
+    assert.deepEqual([res.body.episodes_watched, res.body.watched_episodes], [3, [1, 2, 7]], 'a rated episode is a watched one, the counter follows');
     assert.deepEqual((await editor('GET', '/anime')).body.find((a) => a.id === id).my_progress.episode_scores, { 2: 6, 7: 9 });
     assert.deepEqual((await editor('GET', `/anime/${id}`)).body.my_progress.episode_scores, { 2: 6, 7: 9 });
     res = await editor('PUT', `/anime/${id}/progress`, { notes: 'x' });
     assert.deepEqual(res.body.episode_scores, { 2: 6, 7: 9 }, 'kept by other changes');
     for (const body of [{ episode_scores: [8] }, { episode_scores: 'x' }, { episode_scores: { 0: 5 } }, { episode_scores: { 1: 0 } },
-        { episode_scores: { 1: 11 } }, { episode_scores: { 1: 7.5 } }, { episode_scores: { a: 5 } }, { episode_scores: { 1: '5' } }]) {
+        { episode_scores: { 1: 11 } }, { episode_scores: { 1: 7.5 } }, { episode_scores: { a: 5 } }, { episode_scores: { 1: '5' } },
+        { episode_scores: { '07': 5 } }, { episode_scores: { '007': 5, 2: 6 } }]) {
         assert.equal((await editor('PUT', `/anime/${id}/progress`, body)).status, 400, JSON.stringify(body));
     }
     const above = await editor('PUT', `/anime/${id}/progress`, { episode_scores: { 29: 5 } });
     assert.deepEqual([above.status, above.body.code, above.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 28]);
+    assert.deepEqual(db.prepare('SELECT episode_scores FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, kimId()).episode_scores,
+        JSON.stringify({ 2: 6, 7: 9 }), 'a refused body changes nothing');
+    res = await editor('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 2] });
+    assert.deepEqual([res.body.episodes_watched, res.body.episode_scores], [2, { 2: 6 }], 'an unmarked episode loses its rating');
     res = await editor('PUT', `/anime/${id}/progress`, { episode_scores: null });
-    assert.deepEqual(res.body.episode_scores, {});
+    assert.deepEqual([res.body.episode_scores, res.body.episodes_watched], [{}, 2]);
     assert.equal((await visitor('PUT', `/anime/${id}/progress`, { episode_scores: { 1: 5 } })).status, 403);
     const cols = Object.keys(before);
     db.prepare(`UPDATE anime_progress SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE anime_id = ? AND user_id = ?`)
@@ -284,6 +290,53 @@ test('single episodes: PUT progress with watched_episodes, the counter follows, 
         .run(...cols.map((c) => before[c]), id, kimId());
 });
 
+
+test('watched on a row with single marks: only that episode is added, previous carries marks and ratings, the undo restores them', async () => {
+    const created = await editor('POST', '/anime', { title: 'Einzelne Folgen', episodes: 12 });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.id;
+    const link = (n) => `https://www.crunchyroll.com/watch/GEINZEL0${String(n).padStart(2, '0')}/folge-${n}`;
+    let res = await editor('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 2, 10], episode_scores: { 10: 7 } });
+    assert.deepEqual([res.body.episodes_watched, res.body.watched_episodes], [3, [1, 2, 10]]);
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 3, url: link(3) });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual([res.body.progress.episodes_watched, res.body.progress.watched_episodes, res.body.progress.resume_url, res.body.progress.resume_episode],
+        [4, [1, 2, 3, 10], link(3), 3], 'no gap below the episode is filled');
+    assert.deepEqual([res.body.previous.episodes_watched, res.body.previous.watched_episodes, res.body.previous.episode_scores], [3, [1, 2, 10], { 10: 7 }]);
+    const previous = res.body.previous;
+    assert.equal((await editor('GET', `/anime/${id}`)).body.watch.next_url, null, 'a watched episode below the highest one is no "Weiter" target');
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 2 });
+    assert.deepEqual([res.body.progress.episodes_watched, res.body.progress.resume_url], [4, link(3)], 'an episode already marked changes nothing');
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 11, url: link(11) });
+    assert.deepEqual([res.body.progress.episodes_watched, res.body.progress.watched_episodes], [5, [1, 2, 3, 10, 11]]);
+    assert.equal((await editor('GET', `/anime/${id}`)).body.watch.next_url, link(11), 'the highest watched episode keeps its link');
+
+    res = await editor('PUT', `/anime/${id}/progress`, {
+        status: previous.status, episodes_watched: previous.episodes_watched, watched_episodes: previous.watched_episodes,
+        episode_scores: previous.episode_scores, restore: true
+    });
+    assert.deepEqual([res.body.episodes_watched, res.body.watched_episodes, res.body.episode_scores], [3, [1, 2, 10], { 10: 7 }], 'the undo restores marks and ratings');
+    res = await editor('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 4, watched_episodes: null, restore: true });
+    assert.deepEqual([res.body.episodes_watched, res.body.watched_episodes, res.body.episode_scores], [4, null, {}], 'back to the plain counter');
+    await editor('PUT', `/anime/${id}/progress`, { watched_episodes: [2, 5] });
+    res = await editor('POST', `/anime/${id}/watched`, { episode: 29, complete: true });
+    assert.deepEqual([res.body.progress.status, res.body.progress.episodes_watched, res.body.progress.watched_episodes], ['Gesehen', 12, null],
+        'complete still means the whole entry');
+    await editor('DELETE', `/anime/${id}`);
+});
+
+test('seasons set by hand on a manual entry: checked against the episode count the same PUT stores', async () => {
+    const created = await editor('POST', '/anime', { title: 'Staffeln von Hand', episodes: 12 });
+    const id = created.body.id;
+    let res = await editor('PUT', `/anime/${id}`, { episodes: 40, custom_seasons: [{ start: 1 }, { start: 30, name: 'Teil 2' }] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual([res.body.episodes, res.body.custom_seasons], [40, [{ start: 1, name: null }, { start: 30, name: 'Teil 2' }]]);
+    res = await editor('PUT', `/anime/${id}`, { episodes: 20, custom_seasons: [{ start: 1 }, { start: 30 }] });
+    assert.deepEqual([res.status, res.body.code, res.body.episodes], [400, 'EPISODE_ABOVE_TOTAL', 20]);
+    res = await editor('PUT', `/anime/${id}`, { episodes: null, custom_seasons: [{ start: 1 }, { start: 90 }] });
+    assert.equal(res.status, 200, 'no count, no limit');
+    await editor('DELETE', `/anime/${id}`);
+});
 
 test('watched: previous progress for the undo, canonical episode links only, an episode above the total needs complete', async () => {
     const created = await editor('POST', '/anime', { title: 'Geteilte Staffel', episodes: 12 });

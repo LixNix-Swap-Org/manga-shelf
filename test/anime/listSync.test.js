@@ -88,6 +88,40 @@ test('pull and push: higher count wins, status follows, entries outside the list
     assert.deepEqual(state.last_report, { pulled: 1, pushed: 1, not_in_list: 1 });
 });
 
+test('single marks: AniList gets the unbroken run from episode 1, a pull adds 1..N and the next push sends that run', async () => {
+    let remote = { mediaId: 154587, status: 'CURRENT', progress: 0, updatedAt: 1759300000 };
+    const handler = (body) => {
+        const q = body.query;
+        if (q.includes('SaveMediaListEntry')) remote = { ...remote, progress: body.variables.p, status: body.variables.s };
+        if (q.includes('MediaListCollection')) return json({ data: { MediaListCollection: { lists: [{ entries: [remote] }] } } });
+        if (q.includes('MediaList(')) return json({ data: { MediaList: remote } });
+        return aniListFixtures(body);
+    };
+    const { ed, core, http, ids, mine } = setup({ handler });
+    core.conn.prepare("UPDATE anime_progress SET episodes_watched = 3, watched_episodes = '[1,2,10]' WHERE anime_id = ? AND user_id = 2").run(ids.frieren);
+    const writes = () => anilistCalls(http).filter((c) => c.body.query.includes('SaveMediaListEntry')).map((c) => c.body.variables);
+    listSync.setPushDelay(20);
+    const runAgain = () => {
+        gateway.state().listSync.lastRun.clear();
+        return ed('POST', '/anime/sync/run', {});
+    };
+    await ed('PUT', '/anime/sync', { anilist: { enabled: true } });
+    await runAgain();
+    assert.deepEqual(writes(), [{ m: 154587, p: 2, s: 'CURRENT' }], 'episodes 1-2, not the count 3');
+
+    remote = { ...remote, progress: 6, updatedAt: 1759400000 };
+    const pulled = await runAgain();
+    assert.deepEqual([pulled.body.anilist.pulled, pulled.body.anilist.pushed], [1, 0]);
+    assert.deepEqual([mine(ids.frieren).episodes_watched, JSON.parse(mine(ids.frieren).watched_episodes)], [7, [1, 2, 3, 4, 5, 6, 10]]);
+    await runAgain();
+    assert.equal(writes().length, 1, 'the count 7 is not pushed over AniList\'s 6');
+
+    assert.equal((await ed('PUT', `/anime/${ids.frieren}/progress`, { status: 'Pausiert' })).status, 200);
+    await waitUntil(() => writes().length === 2);
+    await gateway.state().background.idle();
+    assert.deepEqual(writes()[1], { m: 154587, p: 6, s: 'PAUSED' });
+});
+
 test('decide: tie on progress goes to the newer side; a rewatch is never overwritten', () => {
     const local = { status: 'Schaue', episodes_watched: 5, updated_at: '2025-10-01 12:00:00' };
     const at = Date.parse('2025-10-01T12:00:00Z') / 1000;

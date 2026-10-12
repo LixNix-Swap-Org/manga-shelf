@@ -1,5 +1,5 @@
-// The one progress rule of the anime tab: PUT progress, "Folge gesehen" from a shared link and the AniList pull all
-// write through writeProgress, so clamping, automatic status and dates never differ between them.
+// The one progress rule of the anime tab: PUT progress, "Folge gesehen" from a shared link, the history sync and the AniList
+// pull all write through writeProgress, so clamping, automatic status and dates never differ between them.
 const { zonedToday } = require('../radar');
 const episodeMarks = require('./episodes');
 
@@ -14,13 +14,47 @@ function today(ctx) {
 
 const readProgress = (ctx, animeId, userId) => ctx.db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(animeId, userId);
 
+/**
+ * The watched episodes after a change as { now, next }: `now` the stored ones ({ episodes_watched, watched_episodes }, the
+ * plain counter when the change sends `watched_episodes: null`), `next` the new ones or null when the change leaves them
+ * alone. Order: the change's own marks or counter, then the episodes it rates, then a lowered counter.
+ */
+function watchedAfter(current, change, total, monotonic) {
+    const now = change.watched_episodes === null
+        ? { episodes_watched: current.episodes_watched, watched_episodes: null }
+        : { episodes_watched: current.episodes_watched, watched_episodes: episodeMarks.parseMarks(current.watched_episodes) };
+    const counter = change.episodes_watched === undefined ? undefined : (total !== null ? Math.min(change.episodes_watched, total) : change.episodes_watched);
+    let next = null;
+    let lowered = null;
+    if (Array.isArray(change.watched_episodes)) {
+        next = episodeMarks.fromMarks(episodeMarks.cleanMarks(change.watched_episodes, total));
+    } else if (Array.isArray(change.add_episodes)) {
+        const fresh = episodeMarks.cleanMarks(change.add_episodes, total).filter((n) => !episodeMarks.isWatched(now, n));
+        if (fresh.length) next = episodeMarks.withEpisodes(now, fresh, total);
+    } else if (counter !== undefined && monotonic && now.watched_episodes) {
+        if (episodeMarks.watermark(now) < counter) next = episodeMarks.withThrough(now, counter);
+    } else if (counter !== undefined && monotonic) {
+        if (change.episodes_watched >= now.episodes_watched) next = { episodes_watched: change.episodes_watched, watched_episodes: null };
+    } else if (counter !== undefined) {
+        if (counter < now.episodes_watched) lowered = counter;
+        else next = episodeMarks.withCount(now, counter);
+    }
+    const rated = change.episode_scores ? Object.keys(episodeMarks.cleanScores(change.episode_scores, total)).map(Number) : [];
+    const unwatched = rated.filter((n) => !episodeMarks.isWatched(next || now, n));
+    if (unwatched.length) next = episodeMarks.withEpisodes(next || now, unwatched, total);
+    if (lowered !== null) next = episodeMarks.withCount(next || now, lowered);
+    return { now, next };
+}
+
 // Writes one user's progress in the caller's transaction; returns the stored row, or null without the entry. Clamped to the
 // episode count (reaching it means "Gesehen", above 0 "Geplant" becomes "Schaue"); `monotonic` never lowers it, a rise moves
 // "Pausiert"/"Abgebrochen" to "Schaue". A counter change without a new resume_url drops the resume link.
-// `watched_episodes` (array) sets the single watched episodes and with them the counter; `null` drops them back to the plain
-// counter. A monotonic counter (link, history sync, AniList) adds 1..N to existing marks; any other counter change fills the
-// lowest unwatched episodes or drops the highest marks (core/anime/episodes.js). `episode_scores` (object episode -> 1..10)
-// replaces the ratings of single episodes, `null` removes them; ratings above a known episode count are dropped.
+// Watched episodes (core/anime/episodes.js): `watched_episodes` (array) sets them and with them the counter, `null` goes back
+// to the plain counter; `add_episodes` (array) marks more episodes and never removes one (shared link and history sync on a
+// row with marks); a monotonic counter means "watched up to N" and adds 1..N to the marks; any other counter change fills the
+// lowest unwatched episodes or drops the highest marks. A rated episode is a watched one: the episodes `episode_scores` rates
+// are marked (a lowered counter in the same change still wins), and ratings of episodes not watched afterwards are dropped.
+// `episode_scores` (object episode -> 1..10) replaces the ratings, `null` removes them; above a known episode count dropped.
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
     const anime = ctx.db.prepare('SELECT id, episodes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;
@@ -29,20 +63,8 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
         || { status: 'Geplant', episodes_watched: 0, score: null, notes: null, started_at: null, finished_at: null, resume_url: null, resume_episode: null,
             audio_language: null, subtitle_language: null, watched_episodes: null, episode_scores: null };
     const total = anime.episodes > 0 ? anime.episodes : null;
-    const currentMarks = episodeMarks.parseMarks(current.watched_episodes);
-    let watched = change.episodes_watched;
-    let marks = null;
-    if (Array.isArray(change.watched_episodes)) {
-        marks = episodeMarks.cleanMarks(change.watched_episodes, total);
-        watched = marks.length;
-    } else if (monotonic && watched !== undefined && currentMarks) {
-        marks = episodeMarks.throughEpisode(currentMarks, total !== null ? Math.min(watched, total) : watched);
-        watched = marks.length;
-    }
-    if (monotonic && watched !== undefined && watched < current.episodes_watched) {
-        watched = undefined;
-        marks = null;
-    }
+    const { now, next } = watchedAfter(current, change, total, monotonic);
+    const watched = next ? next.episodes_watched : undefined;
     const day = today(ctx);
     let status = change.status ?? current.status;
     let episodes = watched ?? current.episodes_watched;
@@ -56,6 +78,9 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
         else status = 'Schaue';
     }
     if (watched !== undefined && change.status === undefined && status === 'Gesehen' && (total === null || episodes < total)) status = 'Schaue';
+    const marks = episodeMarks.parseMarks((next || now).watched_episodes);
+    const final = episodeMarks.withCount({ episodes_watched: episodes, watched_episodes: marks && episodeMarks.cleanMarks(marks, total) }, episodes);
+    episodes = final.episodes_watched;
     const startedAt = status === 'Geplant' ? null : (current.started_at || (episodes > 0 ? day : null));
     const finishedAt = status === 'Gesehen' ? (current.status === 'Gesehen' && current.finished_at ? current.finished_at : day) : null;
     let resumeUrl = current.resume_url ?? null;
@@ -68,10 +93,10 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
         resumeUrl = null;
         resumeEpisode = null;
     }
-    const marked = change.watched_episodes === null ? null : (marks || currentMarks);
-    const marksColumn = marked ? episodeMarks.storedMarks(episodeMarks.fitMarks(episodeMarks.cleanMarks(marked, total), episodes)) : null;
-    const scores = change.episode_scores === undefined ? episodeMarks.parseScores(current.episode_scores) : (change.episode_scores || {});
-    const scoresColumn = episodeMarks.storedScores(episodeMarks.cleanScores(scores, total));
+    const scores = episodeMarks.cleanScores(change.episode_scores === undefined ? episodeMarks.parseScores(current.episode_scores) : (change.episode_scores || {}), total);
+    for (const key of Object.keys(scores)) if (!episodeMarks.isWatched(final, Number(key))) delete scores[key];
+    const marksColumn = episodeMarks.storedMarks(final.watched_episodes);
+    const scoresColumn = episodeMarks.storedScores(scores);
     const audio = change.audio_language === undefined ? current.audio_language ?? null : change.audio_language;
     const subtitle = change.subtitle_language === undefined ? current.subtitle_language ?? null : change.subtitle_language;
     ctx.db.prepare(`

@@ -2,6 +2,7 @@
 // (transport and secret storage stay in the app shell), plus the item rules the watch-sync handler checks again.
 // Unofficial interface: every shape here may change without notice, so a break stays local to this table.
 const links = require('./links');
+const episodeMarks = require('../anime/episodes');
 
 const BASE = 'https://www.crunchyroll.com';
 // the app sends at most page_size 100 from each of the two history calls
@@ -331,8 +332,9 @@ function parseHistoryResponse(response) {
 const syncBody = (items) => ({ service: 'crunchyroll', items: mergeItems(items).slice(0, MAX_ITEMS) });
 
 // What one entry gets from its items: never backwards, at most the known total (more -> above_total, nothing written), resume
-// link only when it shows the next episode. `existing`: { episodes, episodes_watched, resume_url } of the caller (0 without a row).
-// Returns { change } | { above_total: true } | null (nothing to do).
+// link only when it shows the next episode. `existing`: { episodes, episodes_watched, resume_url, watched_episodes } of the
+// caller (0 without a row). A plain row reads an item as "watched up to N"; a row with single marks only gets the episodes
+// the items stand for (add_episodes), so a gap below them stays open. Returns { change } | { above_total: true } | null.
 function planProgress(items, existing) {
     const current = existing || {};
     const total = current.episodes > 0 ? current.episodes : null;
@@ -344,6 +346,8 @@ function planProgress(items, existing) {
         if (!best || count > best.count || (count === best.count && item.resume_url && !best.item.resume_url)) best = { item, count };
     }
     if (!best) return null;
+    const marks = episodeMarks.parseMarks(current.watched_episodes);
+    if (marks) return planMarks(items, { episodes_watched: have, watched_episodes: marks }, best, total);
     // an entry already at its total (e.g. confirmed as complete) stays as it is
     if (total !== null && best.count > total) return have >= total ? null : { above_total: true, count: best.count };
     if (best.count < have) return null;
@@ -352,6 +356,18 @@ function planProgress(items, existing) {
     const resumeUrl = resumeFits ? item.resume_url : null;
     if (count === have && (!resumeUrl || resumeUrl === current.resume_url)) return null;
     return { change: { episodes_watched: count, resume_url: resumeUrl, resume_episode: resumeFits ? item.resume_episode : null } };
+}
+
+/** planProgress for a row with single marks: the episodes of the items that are not watched yet, plus the best item's link. */
+function planMarks(items, watched, best, total) {
+    const fresh = episodeMarks.cleanMarks(items.map(watchedCount)).filter((n) => !episodeMarks.isWatched(watched, n));
+    if (!fresh.length) return null;
+    if (total !== null && best.count > total) return watched.episodes_watched >= total ? null : { above_total: true, count: best.count };
+    const after = episodeMarks.withEpisodes(watched, fresh, total);
+    const { item } = best;
+    const resumeFits = Boolean(item.resume_url) && Number.isInteger(item.resume_episode) && !episodeMarks.isWatched(after, item.resume_episode)
+        && (total === null || item.resume_episode <= total);
+    return { change: { add_episodes: fresh, resume_url: resumeFits ? item.resume_url : null, resume_episode: resumeFits ? item.resume_episode : null } };
 }
 
 const ORDINALS = { second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, zweite: 2, dritte: 3, vierte: 4, 'fünfte': 5 };

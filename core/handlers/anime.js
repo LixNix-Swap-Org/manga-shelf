@@ -386,7 +386,7 @@ function update(ctx, { params, body }) {
         columns.kind = kind;
     }
     if (body.custom_seasons !== undefined) {
-        const seasons = parseCustomSeasons(body.custom_seasons, row.episodes);
+        const seasons = parseCustomSeasons(body.custom_seasons, columns.episodes !== undefined ? columns.episodes : row.episodes);
         columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
     }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
@@ -512,7 +512,7 @@ function parseEpisodeScores(value) {
     const keys = Object.keys(value);
     if (keys.length > episodeMarks.MAX_MARKS) throw invalid();
     for (const key of keys) {
-        const episode = /^\d+$/.test(key) ? Number(key) : NaN;
+        const episode = episodeMarks.EPISODE_KEY.test(key) ? Number(key) : NaN;
         const score = value[key];
         if (!Number.isInteger(episode) || episode < 1 || episode > MAX_EPISODES || !Number.isInteger(score) || score < 1 || score > 10) throw invalid();
     }
@@ -569,12 +569,19 @@ function readWatched(body) {
     return { episode, url, remember: cleanRemember(value.remember), complete: value.complete === true };
 }
 
-/** "Folge N gesehen" in the caller's transaction (never lower, resume link, remembered links): { saved, previous, total }. */
+/**
+ * "Folge N gesehen" in the caller's transaction (never lower, resume link, remembered links): { saved, previous, total }.
+ * A plain row reads it as "watched up to N"; a row with single marks gets episode N added (an episode past the total with
+ * `complete` still means the whole entry).
+ */
 function applyWatched(ctx, id, userId, { episode, url, remember, complete }) {
     const anime = loadRow(ctx, id);
-    if (anime.episodes > 0 && episode > anime.episodes && !complete) throw episodeAboveTotal(episode, anime.episodes);
+    const above = anime.episodes > 0 && episode > anime.episodes;
+    if (above && !complete) throw episodeAboveTotal(episode, anime.episodes);
     const before = readProgress(ctx, id, userId) || null;
-    const change = url ? { episodes_watched: episode, resume_url: url, resume_episode: episode } : { episodes_watched: episode };
+    const single = !above && Boolean(before && episodeMarks.parseMarks(before.watched_episodes));
+    const change = single ? { add_episodes: [episode] } : { episodes_watched: episode };
+    if (url) Object.assign(change, { resume_url: url, resume_episode: episode });
     const row = writeProgress(ctx, id, userId, change, { monotonic: true });
     if (remember) {
         ctx.db.prepare(`

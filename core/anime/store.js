@@ -216,19 +216,20 @@ const linksOf = (row) => ({
 });
 
 /**
- * Where "Weiter" leads for one user: next_url (streaming episode episodes_watched+1, else a resume link that is not
- * older than the counter), series_url (service link from AniList, else the remembered one) and search_url.
+ * Where "Weiter" leads for one user: next_url (streaming episode of the first unwatched episode, else a resume link whose
+ * episode is not watched or is the highest watched one), series_url (service link from AniList, else the remembered one)
+ * and search_url.
  */
 function watchOf(row, progress, rememberedUrl = null) {
     const service = SERVICES[0];
     const { external_links: external, streaming_episodes: streaming } = linksOf(row);
-    const watched = progress ? progress.episodes_watched || 0 : 0;
-    // the first episode not marked as watched (with single marks there may be a gap below the counter)
-    const nextEpisode = episodeMarks.nextUnwatched(episodeMarks.marksOf(progress));
+    const watched = progress ? { episodes_watched: progress.episodes_watched, watched_episodes: episodeMarks.parseMarks(progress.watched_episodes) } : null;
+    const nextEpisode = episodeMarks.firstUnwatched(watched);
     const next = streaming.find((e) => e.episode === nextEpisode && isAllowedUrl(e.url));
     let nextUrl = next ? next.url : null;
-    if (!nextUrl && progress && progress.resume_url && progress.resume_episode !== null && progress.resume_episode !== undefined
-        && progress.resume_episode >= watched && isAllowedUrl(progress.resume_url)) nextUrl = progress.resume_url;
+    const resumeEpisode = progress ? progress.resume_episode : null;
+    if (!nextUrl && progress && progress.resume_url && Number.isInteger(resumeEpisode) && isAllowedUrl(progress.resume_url)
+        && (!episodeMarks.isWatched(watched, resumeEpisode) || resumeEpisode === episodeMarks.lastWatched(watched))) nextUrl = progress.resume_url;
     const site = external.find((l) => String(l.site || '').toLowerCase() === service.externalLinkSite.toLowerCase() && isAllowedUrl(l.url));
     const fromSite = site ? (linkOf(site.url) || { url: site.url }).url : null;
     const remembered = rememberedUrl && isAllowedUrl(rememberedUrl) ? rememberedUrl : null;

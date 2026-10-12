@@ -152,6 +152,30 @@ test('progress rules: never backwards, a rise leaves Pausiert, Gesehen at the to
     assert.equal(progressOf(core, short).episodes_watched, 2);
 });
 
+test('a row with single marks gets only the episodes of the history; a plain row keeps "watched up to N"', async () => {
+    const core = newCore();
+    const marked = addAnime(core, { title: 'Probe Lücken', episodes: 12 });
+    const plain = addAnime(core, { title: 'Probe Zähler', episodes: 12 });
+    const link = core.conn.prepare('INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, ?, ?, NULL)');
+    link.run(marked, cr.seasonServiceOf('crunchyroll', 1), 'GPROBE0001:1');
+    link.run(marked, cr.seasonServiceOf('crunchyroll', 2), 'GPROBE0001:2');
+    link.run(plain, cr.seasonServiceOf('crunchyroll', 1), 'GPROBE0002:1');
+    setProgress(core, plain, 'ed', 'Schaue', 2);
+    const ed = core.client('ed');
+    assert.equal((await ed('PUT', `/anime/${marked}/progress`, { watched_episodes: [1, 2, 10] })).status, 200);
+    const body = { service: 'crunchyroll', items: [
+        item({ external_id: 'GPROBE0001', season: 1, episode: 3 }), item({ external_id: 'GPROBE0001', season: 2, episode: 10 }),
+        item({ external_id: 'GPROBE0002', season: 1, episode: 5 })
+    ] };
+    const res = await ed('POST', '/anime/watch-sync', body);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.applied, [{ anime_id: marked, episodes_watched: 4, status: 'Schaue' }, { anime_id: plain, episodes_watched: 5, status: 'Schaue' }]);
+    assert.deepEqual([progressOf(core, marked).episodes_watched, JSON.parse(progressOf(core, marked).watched_episodes)], [4, [1, 2, 3, 10]], 'the gap 4..9 stays open');
+    assert.deepEqual([progressOf(core, plain).episodes_watched, progressOf(core, plain).watched_episodes], [5, null]);
+    const again = await ed('POST', '/anime/watch-sync', body);
+    assert.deepEqual(ran(again.body), { applied: [], unmatched: [], unchanged: 2, added: [] }, 'episodes already marked change nothing');
+});
+
 test('roles and input: editors only, always the caller\'s own progress, bad bodies 400', async () => {
     const core = newCore();
     const id = addAnime(core, { title: 'Kern Eigen', episodes: 12 });
