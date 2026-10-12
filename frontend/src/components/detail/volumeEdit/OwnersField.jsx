@@ -5,7 +5,7 @@ import { notify } from '../../../utils/notify';
 import { t } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
 
-const hasKey = (obj, key) => Boolean(obj) && Object.hasOwn(obj, key);
+const hasKey = (obj, key) => Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
 
 /**
  * Body that reverses one owners answer: an un-own comes back with the removed row's price and date, a buy goes again;
