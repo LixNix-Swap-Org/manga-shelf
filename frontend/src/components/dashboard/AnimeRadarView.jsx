@@ -10,9 +10,24 @@ import { t, tn } from '../../i18n/index.js';
 
 const TABS = ['episodes', 'manga'];
 
-// entries whose cover was already asked for in this page session (a failed or empty answer is not repeated)
-const coverTried = new Set();
+// entries whose cover was already asked for: remembered per device for a week, so a source without a cover is not asked at every visit
+const COVER_TRIED_KEY = 'mangashelf_cover_tried';
+const COVER_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_COVER_LOOKUPS = 8;
+const coverTried = new Map();
+function loadCoverTried() {
+  if (coverTried.size) return coverTried;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(COVER_TRIED_KEY) || '{}');
+    const cutoff = Date.now() - COVER_RETRY_MS;
+    Object.entries(stored).forEach(([id, at]) => { if (Number(at) > cutoff) coverTried.set(Number(id), Number(at)); });
+  } catch (_) { /* storage unavailable: once per page session */ }
+  return coverTried;
+}
+function markCoverTried(id) {
+  coverTried.set(id, Date.now());
+  try { window.localStorage.setItem(COVER_TRIED_KEY, JSON.stringify(Object.fromEntries(coverTried))); } catch (_) { /* ignore */ }
+}
 const hasSource = (a) => Boolean(a.anilist_id || a.mal_id || a.tmdb_id);
 
 function Row({ children, action }) {
@@ -192,13 +207,14 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, o
   // new entries from a source can arrive without a cover (background download pending or failed): ask the source once each
   useEffect(() => {
     if (!canEdit || !onRefreshCover) return undefined;
-    const todo = list.filter((a) => !a.cover_image && hasSource(a) && !coverTried.has(a.id)).slice(0, MAX_COVER_LOOKUPS);
+    const tried = loadCoverTried();
+    const todo = list.filter((a) => !a.cover_image && hasSource(a) && !tried.has(a.id)).slice(0, MAX_COVER_LOOKUPS);
     if (!todo.length) return undefined;
     let cancelled = false;
     (async () => {
       for (const a of todo) {
         if (cancelled) return;
-        coverTried.add(a.id);
+        markCoverTried(a.id);
         try { await onRefreshCover(a.id); } catch (_) { /* stays without a cover; the detail dialog has "Aktualisieren" */ }
       }
     })();
