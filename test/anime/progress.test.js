@@ -110,3 +110,122 @@ test('unknown entry: null, nothing written', () => {
     assert.equal(saveProgress(core.ctx, 999, 2, { episodes_watched: 1 }), null);
     assert.equal(core.conn.prepare('SELECT count(*) AS n FROM anime_progress').get().n, 0);
 });
+
+test('single episodes: the marks set the counter, gaps stay, Gesehen and Geplant fill or clear them', () => {
+    const { save } = setup(12);
+    let row = save({ watched_episodes: [5, 1, 2, 2, 40] });
+    assert.deepEqual([row.status, row.episodes_watched, JSON.parse(row.watched_episodes)], ['Schaue', 3, [1, 2, 5]], 'sorted, unique, above the total dropped');
+    row = save({ watched_episodes: [1, 2, 3] });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [3, null], '1..n is the plain counter again');
+    save({ watched_episodes: [2, 4] });
+    row = save({ status: 'Gesehen' });
+    assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null]);
+    row = save({ watched_episodes: [1, 3] });
+    assert.deepEqual([row.status, row.episodes_watched], ['Schaue', 2], 'below the total Gesehen becomes Schaue');
+    row = save({ status: 'Geplant' });
+    assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Geplant', 0, null]);
+    row = save({ watched_episodes: range(1, 12) });
+    assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null], 'every episode marked means Gesehen');
+});
+
+test('episode ratings: a rating marks its episode, unmarking drops the rating, above the total dropped, null clears them', () => {
+    const { save } = setup(12);
+    let row = save({ episode_scores: { 3: 8, 1: 10, 40: 5, 2: 11, 4: 7.5 } });
+    assert.deepEqual(JSON.parse(row.episode_scores), { 1: 10, 3: 8 }, 'whole scores 1..10 within the episode count only');
+    assert.deepEqual([row.status, row.episodes_watched, JSON.parse(row.watched_episodes)], ['Schaue', 2, [1, 3]], 'a rated episode is a watched one');
+    row = save({ notes: 'x' });
+    assert.deepEqual(JSON.parse(row.episode_scores), { 1: 10, 3: 8 }, 'other changes keep the ratings');
+    row = save({ watched_episodes: [1, 2] });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes, JSON.parse(row.episode_scores)], [2, null, { 1: 10 }], 'an unmarked episode loses its rating');
+    row = save({ watched_episodes: [1, 2], episode_scores: { 1: 10, 5: 6 } });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes), JSON.parse(row.episode_scores)], [3, [1, 2, 5], { 1: 10, 5: 6 }],
+        'a rating in the same change marks the episode');
+    row = save({ episode_scores: { 2: 7 } });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes), JSON.parse(row.episode_scores)], [3, [1, 2, 5], { 2: 7 }],
+        'replacing the ratings never unmarks');
+    row = save({ episode_scores: {} });
+    assert.equal(row.episode_scores, null, 'an empty object stores NULL');
+    save({ episode_scores: { 5: 6 } });
+    row = save({ episode_scores: null });
+    assert.deepEqual([row.episode_scores, row.episodes_watched], [null, 3]);
+});
+
+test('episode ratings: a lowered counter drops the ratings above it, Geplant drops all, a rise keeps them', () => {
+    const { save } = setup(12);
+    save({ episodes_watched: 6, episode_scores: { 2: 9, 6: 4 } });
+    let row = save({ episodes_watched: 8 });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.episode_scores)], [8, { 2: 9, 6: 4 }]);
+    row = save({ episodes_watched: 4 });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.episode_scores)], [4, { 2: 9 }]);
+    row = save({ episodes_watched: 3, episode_scores: { 2: 9, 10: 5 } });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes, JSON.parse(row.episode_scores)], [3, null, { 2: 9 }], 'the lowered counter wins');
+    row = save({ episodes_watched: 5, episode_scores: { 2: 9, 10: 5 } });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes), JSON.parse(row.episode_scores)], [6, [1, 2, 3, 4, 5, 10], { 2: 9, 10: 5 }],
+        'a rise fills the counter, the rated episode comes on top');
+    row = save({ status: 'Geplant' });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes, row.episode_scores], [0, null, null]);
+});
+
+test('add_episodes: the union with the marks, never lower; nothing new keeps the counter but takes the resume link', () => {
+    const { save } = setup(12);
+    save({ watched_episodes: [1, 2, 10] });
+    let row = save({ add_episodes: [3, 10, 40] }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes)], [4, [1, 2, 3, 10]], 'above the total dropped');
+    row = save({ add_episodes: [2], resume_url: URL7, resume_episode: 2 }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes), row.resume_url, row.resume_episode], [4, [1, 2, 3, 10], URL7, 2]);
+    row = save({ add_episodes: [5] }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, row.resume_url], [5, null], 'a new mark without a link drops the old one');
+    save({ status: 'Pausiert' });
+    row = save({ add_episodes: [4, 6, 7, 8, 9, 11, 12] }, { monotonic: true });
+    assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null], 'every episode marked means Gesehen');
+
+    const plain = setup(12);
+    plain.save({ episodes_watched: 3 });
+    row = plain.save({ add_episodes: [5] }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes)], [4, [1, 2, 3, 5]], 'a plain row counts as 1..n');
+    row = plain.save({ add_episodes: [4] }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [5, null]);
+});
+
+test('more than MAX_MARKS marks fall back to the plain counter up to the highest episode', () => {
+    const { save } = setup(null);
+    save({ watched_episodes: [1, 3] });
+    let row = save({ episodes_watched: 6000 });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [6000, null], 'a counter change above the cap');
+    save({ episodes_watched: 5000 });
+    row = save({ add_episodes: [5002] }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [5002, null], 'a union above the cap');
+    save({ watched_episodes: [2, 9000] });
+    row = save({ episodes_watched: 6000 }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [9000, null], '"watched up to N" above the cap');
+    save({ watched_episodes: [2] });
+    row = save({ episodes_watched: 5000, episode_scores: { 7000: 8 } });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes, JSON.parse(row.episode_scores)], [7000, null, { 7000: 8 }], 'a rating above the cap');
+});
+
+test('single episodes: +1 fills the first gap, lowering drops the highest marks, null goes back to the counter', () => {
+    const { save } = setup(12);
+    save({ watched_episodes: [1, 2, 5] });
+    let row = save({ episodes_watched: 4 });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes)], [4, [1, 2, 3, 5]]);
+    row = save({ episodes_watched: 2 });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [2, null]);
+    save({ watched_episodes: [3, 7] });
+    row = save({ episodes_watched: 5, watched_episodes: null });
+    assert.deepEqual([row.episodes_watched, row.watched_episodes], [5, null]);
+});
+
+test('single episodes: a monotonic "watched up to N" adds 1..N and never removes a mark', () => {
+    const { save } = setup(12);
+    save({ watched_episodes: [1, 2, 10] });
+    let row = save({ episodes_watched: 5, resume_url: URL7, resume_episode: 5 }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, JSON.parse(row.watched_episodes), row.resume_url], [6, [1, 2, 3, 4, 5, 10], URL7]);
+    row = save({ episodes_watched: 2, resume_url: 'https://www.crunchyroll.com/watch/OLDER0001/x', resume_episode: 2 }, { monotonic: true });
+    assert.deepEqual([row.episodes_watched, row.resume_url], [6, URL7], 'an episode already covered changes nothing, not even the link');
+    row = save({ episodes_watched: 30 }, { monotonic: true });
+    assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null]);
+});
+
+function range(from, to) {
+    return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+}

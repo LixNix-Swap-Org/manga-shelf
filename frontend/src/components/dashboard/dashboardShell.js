@@ -5,7 +5,7 @@ import { payloadText, serverText } from '../../i18n/serverText.js';
 // Vite always defines it; the guard keeps tests that render without Vite's define working.
 export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
-export const MAIN_VIEWS = ['shelf', 'shopping', 'radar', 'anime'];
+export const MAIN_VIEWS = ['shelf', 'shopping', 'radar', 'anime', 'episodes'];
 
 const readView = (search) => {
   try {

@@ -1,6 +1,7 @@
 // A shared or pasted streaming link: detection over core/watch/links.js (the same table the server parses with), the
 // resolve-link call and the clipboard read of "Link einfügen". The dialog flow lives in hooks/useShareIntake.js.
 import links from '../../../core/watch/links.js';
+import episodeMarks from '../../../core/anime/episodes.js';
 import api, { TIMEOUTS } from './api';
 import { t, tn } from '../i18n/index.js';
 
@@ -50,11 +51,26 @@ export function knownEntry(answer, id) {
   return (answer.candidates || []).find((c) => c.id === id) || null;
 }
 
-/** The progress before a share for the dialog's hint: the server's view of the entry first, else the list entry. */
+/**
+ * The progress before a share for the dialog's hint: the server's view of the entry first, else the list entry. The single
+ * marks (`watched_episodes`, null for a plain counter) come from the list entry; the server's view carries none, so they
+ * count only while the list entry has the same number of watched episodes.
+ */
 export function progressBefore(entry, known) {
-  if (known) return known.my_status ? { status: known.my_status, episodes_watched: known.my_episodes || 0 } : null;
-  if (entry) return entry.my_progress ? { status: entry.my_progress.status, episodes_watched: entry.my_progress.episodes_watched || 0 } : null;
-  return null;
+  const mine = entry?.my_progress || null;
+  const marks = Array.isArray(mine?.watched_episodes) ? mine.watched_episodes : null;
+  if (known) {
+    if (!known.my_status) return null;
+    const count = known.my_episodes || 0;
+    return { status: known.my_status, episodes_watched: count, watched_episodes: marks && (mine.episodes_watched || 0) === count ? marks : null };
+  }
+  return mine ? { status: mine.status, episodes_watched: mine.episodes_watched || 0, watched_episodes: marks } : null;
+}
+
+/** The highest watched episode of a progress before a share: its highest mark, else the counter. */
+export function lastWatchedOf(before) {
+  const marks = Array.isArray(before?.watched_episodes) ? before.watched_episodes : null;
+  return marks ? marks.reduce((a, b) => Math.max(a, b), 0) : before?.episodes_watched || 0;
 }
 
 /** True when the save changed the progress (else only the "Weiter" link was remembered). */
@@ -78,8 +94,8 @@ export function displaySeriesTitle(answer, link) {
 
 export const aboveTotalText = (episode, total) => tn('Folge {episode} liegt über den {n} Folgen dieses Eintrags.', 'Folge {episode} liegt über den {n} Folgen dieses Eintrags.', total, { episode, n: total });
 
-/** True when the shared episode raises the counter (else the dialog offers "Link merken"). */
-export const raisesCounter = (before, episode) => Number(episode) > (before?.episodes_watched || 0);
+/** True when the shared episode is not watched yet, so saving it raises the counter (else the dialog offers "Link merken"). */
+export const raisesCounter = (before, episode) => !episodeMarks.isWatched(before, Number(episode));
 
 /**
  * Clipboard text, read only inside the click of "Link einfügen"; '' when the API is missing or refused (plain-http

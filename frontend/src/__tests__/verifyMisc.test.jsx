@@ -98,7 +98,7 @@ describe('touch targets of 44 px', () => {
 
   it('main view tabs grow to 44 px on touch screens', () => {
     render(<MainViewSwitcher activeMainView="collection" onSelectView={vi.fn()} mangaCount={1} shoppingData={null} radarData={null} />);
-    for (const id of ['btn-nav-shelf', 'btn-nav-shopping', 'btn-nav-radar', 'btn-nav-anime']) {
+    for (const id of ['btn-nav-shelf', 'btn-nav-shopping', 'btn-nav-radar', 'btn-nav-anime', 'btn-nav-episodes']) {
       expect(classes(document.getElementById(id))).toContain('[@media(pointer:coarse)]:py-3.5');
     }
   });

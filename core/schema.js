@@ -576,6 +576,33 @@ function migrationList(log = silentLog) {
                 d.exec('ALTER TABLE user_api_credentials_new RENAME TO user_api_credentials;');
                 d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_api_credentials_owner ON user_api_credentials (COALESCE(user_id, 0), provider);');
             }
+        },
+        {
+            version: 29,
+            name: 'add_anime_watched_episodes',
+            up: (d) => {
+                // Single watched episodes per user (JSON array); NULL keeps the plain counter 1..episodes_watched
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('watched_episodes')) d.exec('ALTER TABLE anime_progress ADD COLUMN watched_episodes TEXT;');
+            }
+        },
+        {
+            version: 30,
+            name: 'add_anime_episode_scores',
+            up: (d) => {
+                // Ratings of single episodes per user (JSON object episode -> 1..10); NULL = none
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('episode_scores')) d.exec('ALTER TABLE anime_progress ADD COLUMN episode_scores TEXT;');
+            }
+        },
+        {
+            version: 31,
+            name: 'add_anime_custom_seasons',
+            up: (d) => {
+                // Seasons set by hand per entry (JSON [{ start, name }]); NULL = TMDb seasons or blocks of 100
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('custom_seasons')) d.exec('ALTER TABLE animes ADD COLUMN custom_seasons TEXT;');
+            }
         }
     ];
 }

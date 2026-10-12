@@ -15,7 +15,8 @@ const jikan = require('./jikan');
 const mal = require('./mal');
 const tmdb = require('./tmdb');
 const store = require('./store');
-const { foldUmlauts, searchKey, rankByTitle, mergeResults, mergeMeta, titleScore, allTitles, foldTmdbHits } = require('./normalize');
+const { foldUmlauts, searchKey, rankByTitle, mergeResults, mergeMeta, titleScore, allTitles, foldTmdbHits, isTmdbAnime, yearOf, tmdbTwinScore } = require('./normalize');
+const { seasonsFromCounts } = require('./episodes');
 
 const MANUAL_REFRESH_MS = 60 * 1000;
 // once one source answered, the other gets this long before the answer goes out without it
@@ -834,6 +835,38 @@ async function getTmdb(ctx, ref, { priority = 'interactive', userId = ctx.user ?
     return result.meta;
 }
 
+/**
+ * TMDb seasons for an entry (its own TMDb show, else the best Japanese animation TV hit whose titles match at 0.9 or more,
+ * the nearest start year first) with names in the UI language: { seasons: [{ start, name, episodes, season_number }],
+ * reason: null | 'no_key' | 'not_found', tmdb_id }. Needs a TMDb key of the caller or the instance.
+ */
+async function tmdbSeasons(ctx, row, { language = 'de', userId = ctx.user ? ctx.user.id : null } = {}) {
+    const none = (reason) => ({ seasons: [], reason, tmdb_id: null });
+    if (!searchSourcesFor(ctx, userId).includes('tmdb')) return none('no_key');
+    const lang = tmdbLanguage(language);
+    let tmdbId = row.tmdb_kind === 'tv' && row.tmdb_id ? row.tmdb_id : null;
+    if (!tmdbId) {
+        if (row.tmdb_kind === 'movie') return none('not_found');
+        const titles = [row.title, row.title_de, row.title_romaji, row.title_english, row.title_native].filter(Boolean);
+        const term = row.title_english || row.title_romaji || row.title;
+        if (!term) return none('not_found');
+        const found = await call(ctx, 'tmdb', { userId }, (credential) => tmdb.search(ctx, term, { language: lang, credential, timeoutMs: SEARCH_TIMEOUT_MS }));
+        const year = yearOf(row);
+        const distance = (meta) => (year && yearOf(meta) ? Math.abs(yearOf(meta) - year) : 99);
+        const best = (found.metas || [])
+            .filter((meta) => meta.tmdb_kind === 'tv' && ((row.kind || 'anime') !== 'anime' || isTmdbAnime(meta)))
+            .map((meta) => ({ meta, score: tmdbTwinScore(meta, titles) }))
+            .filter((hit) => hit.score >= 0.9)
+            .sort((a, b) => distance(a.meta) - distance(b.meta) || b.score - a.score)[0];
+        tmdbId = best ? best.meta.tmdb_id : null;
+    }
+    if (!tmdbId) return none('not_found');
+    const result = await call(ctx, 'tmdb', { userId }, async (credential) => ({ seasons: await tmdb.seasonList(ctx, tmdbId, { language: lang, credential }) }));
+    // a season that starts after the known episode count (not aired yet) cannot be stored
+    const seasons = seasonsFromCounts(result.seasons).filter((season) => !(row.episodes > 0) || season.start <= row.episodes);
+    return seasons.length ? { seasons, reason: null, tmdb_id: tmdbId } : none('not_found');
+}
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const OWN_TMDB_AGE_MS = 14 * DAY_MS;
@@ -1306,5 +1339,5 @@ function forgetAccess(userId, provider) {
 module.exports = {
     searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, scheduleOwnTmdbRefresh, refreshDue,
     adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
-    spareDetail, tmdbLanguage, state: () => S(), MANUAL_REFRESH_MS, SEARCH_GRACE_MS, SEARCH_SOURCES
+    spareDetail, tmdbLanguage, tmdbSeasons, state: () => S(), MANUAL_REFRESH_MS, SEARCH_GRACE_MS, SEARCH_SOURCES
 };

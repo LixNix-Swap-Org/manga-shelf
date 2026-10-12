@@ -324,13 +324,15 @@ describe('DashboardHeader', () => {
     expect(badge.parentElement.className).toContain('min-w-0');
   });
 
-  it('the menu is a named navigation landmark and its radar entry goes through setView', () => {
+  it('the menu is a named navigation landmark and its radar entries go through setView', () => {
     const { props } = renderHeader({ mobileMenuOpen: true });
     const menu = screen.getByRole('navigation', { name: 'Menü' });
     expect(menu.id).toBe('mobile-menu-drawer');
     fireEvent.click(document.getElementById('btn-mobile-menu-radar'));
     expect(props.setView).toHaveBeenLastCalledWith('radar');
     expect(props.setMobileMenuOpen).toHaveBeenCalledWith(false);
+    fireEvent.click(document.getElementById('btn-mobile-menu-episodes'));
+    expect(props.setView).toHaveBeenCalledWith('episodes');
   });
 
   it('app build: the connection pill reports the state of a server, the device collection only names device and profile', () => {

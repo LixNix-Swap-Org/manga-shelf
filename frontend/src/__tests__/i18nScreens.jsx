@@ -52,6 +52,8 @@ export const SCREENS = [
   { name: 'radar-calendar', url: '/?view=radar' },
   { name: 'radar-personal', url: '/?view=radar', step: () => fireEvent.click(document.getElementById('radar-tab-personal') || document.querySelectorAll('[role="tab"]')[1]) },
   { name: 'anime', url: '/?view=anime' },
+  { name: 'anime-radar', url: '/?view=episodes' },
+  { name: 'anime-radar-manga', url: '/?view=episodes', step: () => fireEvent.click(document.getElementById('anime-radar-tab-manga') || document.querySelectorAll('[role="tab"]')[1]) },
   { name: 'detail', url: `/manga/${ID}` },
   { name: 'stats', url: '/?view=stats' },
   { name: 'stats-publishers', url: '/?view=stats', step: clickTab('[role="dialog"] [role="group"] button', 1) },

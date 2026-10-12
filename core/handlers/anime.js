@@ -9,6 +9,7 @@ const store = require('../anime/store');
 const listSync = require('../anime/listSync');
 const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
+const episodeMarks = require('../anime/episodes');
 const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
@@ -208,7 +209,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -384,11 +385,47 @@ function update(ctx, { params, body }) {
         if (!kind) throw badRequest(msg('Unbekannte Art (erlaubt: {allowed})', { allowed: KINDS.join(', ') }));
         columns.kind = kind;
     }
+    if (body.custom_seasons !== undefined) {
+        const seasons = parseCustomSeasons(body.custom_seasons, columns.episodes !== undefined ? columns.episodes : row.episodes);
+        columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
+    }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
     columns.updated_by = ctx.user.id;
     store.updateRow(ctx, id, columns);
     return { body: detailOf(ctx, id) };
+}
+
+const seasonsError = () => badRequest(msg('Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})',
+    { max: episodeMarks.MAX_SEASONS, max_name: episodeMarks.MAX_SEASON_NAME }));
+
+/** custom_seasons of PUT /anime/:id: null or [] clears them, else [{ start, name }] starting at episode 1, ascending. */
+function parseCustomSeasons(value, episodes) {
+    if (value === null) return null;
+    if (!Array.isArray(value) || value.length > episodeMarks.MAX_SEASONS) throw seasonsError();
+    if (!value.length) return null;
+    let last = 0;
+    for (const item of value) {
+        const ok = item && typeof item === 'object' && Number.isInteger(item.start) && item.start > last && item.start <= MAX_EPISODES
+            && (item.name === undefined || item.name === null || (typeof item.name === 'string' && item.name.trim().length <= episodeMarks.MAX_SEASON_NAME));
+        if (!ok || (last === 0 && item.start !== 1)) throw seasonsError();
+        last = item.start;
+    }
+    if (episodes > 0 && last > episodes) throw episodeAboveTotal(last, episodes);
+    return episodeMarks.cleanSeasons(value);
+}
+
+/** GET /anime/:id/season-suggestion: the TMDb seasons of the entry (or of its TMDb twin) as [{ start, name, episodes }]. */
+async function seasonSuggestion(ctx, { params, query }) {
+    const id = parseId(params.id);
+    const row = loadRow(ctx, id);
+    if (row.kind === 'movie') return { body: { seasons: [], reason: 'not_found' } };
+    try {
+        return { body: await gateway.tmdbSeasons(ctx, row, { language: searchLanguage(ctx, query.language) }) };
+    } catch (err) {
+        if (!(err instanceof SourceError)) throw err;
+        throw new HttpError(503, msg('{source} ist gerade nicht erreichbar. Bitte später erneut versuchen.', { source: TMDB_LABEL }), 'SOURCES_UNAVAILABLE');
+    }
 }
 
 function cleanLanguage(value) {
@@ -429,7 +466,9 @@ function updateProgress(ctx, { params, body }) {
         watched = typeof v === 'number' ? v : (typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
         if (!Number.isInteger(watched) || watched < 0 || watched > MAX_EPISODES) throw badRequest('Gesehene Folgen müssen eine ganze Zahl ab 0 sein');
     }
+    const marks = parseWatchedEpisodes(body.watched_episodes);
     const score = parseScore(body.score);
+    const episodeScores = parseEpisodeScores(body.episode_scores);
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const audio = cleanLanguage(body.audio_language);
     const subtitle = cleanLanguage(body.subtitle_language);
@@ -439,10 +478,45 @@ function updateProgress(ctx, { params, body }) {
             throw badRequest(msg('Läuft noch – „Gesehen“ geht erst nach der letzten Folge; nimm „Schaue“'), 'STILL_AIRING');
         }
         if (body.restore === true) syncState.liftDeclines(ctx, userId, declineKeys(ctx, userId, id));
-        return writeProgress(ctx, id, userId, { status: body.status, episodes_watched: watched, score, notes, audio_language: audio, subtitle_language: subtitle });
+        if (marks && anime.episodes > 0) {
+            const above = marks.find((n) => n > anime.episodes);
+            if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
+        }
+        if (episodeScores && anime.episodes > 0) {
+            const above = Object.keys(episodeScores).map(Number).find((n) => n > anime.episodes);
+            if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
+        }
+        return writeProgress(ctx, id, userId, {
+            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle
+        });
     });
     listSync.schedulePush(ctx, userId, id);
     return { body: store.progressOf(saved) };
+}
+
+/** `watched_episodes` of PUT progress: undefined (unchanged), null (back to the plain counter) or the watched episode numbers. */
+function parseWatchedEpisodes(value) {
+    if (value === undefined || value === null) return value;
+    if (!Array.isArray(value) || value.length > episodeMarks.MAX_MARKS
+        || !value.every((n) => Number.isInteger(n) && n >= 1 && n <= MAX_EPISODES)) {
+        throw badRequest(msg('Gesehene Folgen müssen eine Liste ganzer Zahlen ab 1 sein (höchstens {max})', { max: episodeMarks.MAX_MARKS }));
+    }
+    return episodeMarks.cleanMarks(value);
+}
+
+/** `episode_scores` of PUT progress: undefined (unchanged), null (no ratings) or an object episode number -> whole score 1..10. */
+function parseEpisodeScores(value) {
+    if (value === undefined || value === null) return value;
+    const invalid = () => badRequest(msg('Folgen-Bewertungen müssen Folgennummern ab 1 mit ganzen Zahlen von 1 bis 10 sein (höchstens {max})', { max: episodeMarks.MAX_MARKS }));
+    if (typeof value !== 'object' || Array.isArray(value)) throw invalid();
+    const keys = Object.keys(value);
+    if (keys.length > episodeMarks.MAX_MARKS) throw invalid();
+    for (const key of keys) {
+        const episode = episodeMarks.EPISODE_KEY.test(key) ? Number(key) : NaN;
+        const score = value[key];
+        if (!Number.isInteger(episode) || episode < 1 || episode > MAX_EPISODES || !Number.isInteger(score) || score < 1 || score > 10) throw invalid();
+    }
+    return episodeMarks.cleanScores(value);
 }
 
 function cleanEpisode(value) {
@@ -495,12 +569,19 @@ function readWatched(body) {
     return { episode, url, remember: cleanRemember(value.remember), complete: value.complete === true };
 }
 
-/** "Folge N gesehen" in the caller's transaction (never lower, resume link, remembered links): { saved, previous, total }. */
+/**
+ * "Folge N gesehen" in the caller's transaction (never lower, resume link, remembered links): { saved, previous, total }.
+ * A plain row reads it as "watched up to N"; a row with single marks gets episode N added (an episode past the total with
+ * `complete` still means the whole entry).
+ */
 function applyWatched(ctx, id, userId, { episode, url, remember, complete }) {
     const anime = loadRow(ctx, id);
-    if (anime.episodes > 0 && episode > anime.episodes && !complete) throw episodeAboveTotal(episode, anime.episodes);
+    const above = anime.episodes > 0 && episode > anime.episodes;
+    if (above && !complete) throw episodeAboveTotal(episode, anime.episodes);
     const before = readProgress(ctx, id, userId) || null;
-    const change = url ? { episodes_watched: episode, resume_url: url, resume_episode: episode } : { episodes_watched: episode };
+    const single = !above && Boolean(before && episodeMarks.parseMarks(before.watched_episodes));
+    const change = single ? { add_episodes: [episode] } : { episodes_watched: episode };
+    if (url) Object.assign(change, { resume_url: url, resume_episode: episode });
     const row = writeProgress(ctx, id, userId, change, { monotonic: true });
     if (remember) {
         ctx.db.prepare(`
@@ -854,6 +935,6 @@ function exportCsv(ctx) {
 
 module.exports = {
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
-    removeProgress, refresh, remove, adaptations, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
+    removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
     duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

@@ -101,6 +101,7 @@ const routes = [
     { method: 'POST', path: '/anime/:id/watched', role: 'editor', handler: anime.markWatched },
     { method: 'DELETE', path: '/anime/:id/progress', role: 'editor', handler: anime.removeProgress },
     { method: 'POST', path: '/anime/:id/refresh', role: 'editor', handler: anime.refresh },
+    { method: 'GET', path: '/anime/:id/season-suggestion', role: 'editor', limit: 'lookup', handler: anime.seasonSuggestion },
     { method: 'GET', path: '/mangas/:id/adaptations', role: 'auth', limit: 'lookup', handler: anime.adaptations },
     { method: 'GET', path: '/export/anime.csv', role: 'auth', handler: anime.exportCsv },
     { method: 'GET', path: '/sources/guides', role: 'auth', handler: guidesHandler }

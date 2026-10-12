@@ -171,6 +171,10 @@ export default function useAnimeList({ user }) {
 
   const fetchDetail = useCallback((id, { signal } = {}) => api.get(`/api/anime/${id}`, { signal, fallback: t('Anime konnte nicht geladen werden') }), []);
 
+  // TMDb seasons as a suggestion for the season editor ({ seasons, reason, tmdb_id }); names in the UI language
+  const seasonSuggestion = useCallback((id) => api.get(`/api/anime/${id}/season-suggestion?language=${encodeURIComponent(getLanguage())}`,
+    { timeout: TIMEOUTS.lookup, fallback: t('Staffeln konnten nicht geladen werden') }), []);
+
   // `watch` (the "Weiter" target) is computed by the server from the progress: after a change it is read again
   const refreshWatch = useCallback(async (id) => {
     try {
@@ -317,7 +321,14 @@ export default function useAnimeList({ user }) {
    * Works without the entry in the list (not loaded yet or from an old cache).
    */
   const undoWatched = useCallback(async (id, previous) => {
-    const change = previous ? { status: previous.status, episodes_watched: previous.episodes_watched || 0, restore: true } : null;
+    const change = previous
+      ? {
+        status: previous.status, episodes_watched: previous.episodes_watched || 0, restore: true,
+        // single watched episodes and their ratings come back too (answers before these fields carry none)
+        ...(previous.watched_episodes !== undefined ? { watched_episodes: previous.watched_episodes } : {}),
+        ...(previous.episode_scores !== undefined ? { episode_scores: previous.episode_scores } : {})
+      }
+      : null;
     if (listRef.current.some((a) => a.id === id)) return change ? Boolean(await updateProgress(id, change)) : removeFromMyList(id);
     try {
       if (change) await api.put(`/api/anime/${id}/progress`, change, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
@@ -357,7 +368,7 @@ export default function useAnimeList({ user }) {
 
   return {
     list, loaded, loading, error, cacheAt, fromCache, sources, listSync, watchLast,
-    fetchAnime, fetchSources, syncList, refreshList, search, adaptations, add, update, fetchDetail, updateProgress, markWatched, undoWatched,
+    fetchAnime, fetchSources, syncList, refreshList, search, adaptations, add, update, fetchDetail, seasonSuggestion, updateProgress, markWatched, undoWatched,
     undoCreated, removeFromMyList, remove, refresh
   };
 }

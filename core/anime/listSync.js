@@ -1,11 +1,14 @@
-// Opt-in sync of a user's progress with their own AniList list: the higher episode count wins and the status follows
-// it, updatedAt decides a tie, nothing ever goes backwards. Only the user's own token is used (gateway ownOnly).
+// Opt-in sync of a user's progress with their own AniList list: AniList's progress is "watched up to episode N", so it is
+// compared with the unbroken run of watched episodes from episode 1 (the watermark, core/anime/episodes.js), not with the
+// count of single marks. The higher one wins and the status follows it, updatedAt decides a tie, nothing ever goes
+// backwards. Only the user's own token is used (gateway ownOnly).
 const { HttpError } = require('../errors');
 const { credentialsOf } = require('../sources/credentials');
 const { SourceError } = require('./request');
 const gateway = require('./gateway');
 const anilist = require('./anilist');
 const { writeProgress, sqlNow } = require('./progress');
+const { watermark } = require('./episodes');
 
 const SERVICE = 'anilist';
 const RUN_MIN_MS = 60 * 1000;
@@ -101,14 +104,14 @@ const localSeconds = (sqlTime) => {
 };
 
 /**
- * 'pull', 'push' or null for one AniList entry against the local progress row (null when there is none). A rewatch
- * (REPEATING) is never pushed over and never lowers anything.
+ * 'pull', 'push' or null for one AniList entry against the local progress row (null when there is none); the local side
+ * counts with its watermark. A rewatch (REPEATING) is never pushed over and never lowers anything.
  */
 function decide(remote, local) {
     const remoteStatus = TO_LOCAL[remote.status] || null;
     if (!local || !local.status) return remoteStatus ? 'pull' : null;
     const rp = remote.progress || 0;
-    const lp = local.episodes_watched || 0;
+    const lp = watermark(local);
     if (rp > lp) return 'pull';
     if (rp < lp) return remote.status === 'REPEATING' ? null : 'push';
     if (!remoteStatus || remoteStatus === local.status || remote.status === 'REPEATING') return null;
@@ -169,7 +172,7 @@ async function runLocked(ctx, userId, row, priority) {
     const pushes = [];
     if (entries) {
         const locals = new Map(ctx.db.prepare(`
-            SELECT a.id, a.anilist_id, p.status, p.episodes_watched, p.updated_at
+            SELECT a.id, a.anilist_id, p.status, p.episodes_watched, p.watched_episodes, p.updated_at
             FROM animes a LEFT JOIN anime_progress p ON p.anime_id = a.id AND p.user_id = ?
             WHERE a.anilist_id IS NOT NULL AND a.kind = 'anime'
         `).all(userId).map((r) => [r.anilist_id, r]));
@@ -182,10 +185,10 @@ async function runLocked(ctx, userId, row, priority) {
                 }
                 const action = decide(remote, local.status ? local : null);
                 if (action === 'push') {
-                    pushes.push({ mediaId: remote.mediaId, progress: local.episodes_watched, status: TO_REMOTE[local.status] });
+                    pushes.push({ mediaId: remote.mediaId, progress: watermark(local), status: TO_REMOTE[local.status] });
                 } else if (action === 'pull') {
                     const status = TO_LOCAL[remote.status];
-                    const change = (remote.progress || 0) > (local.episodes_watched || 0) ? { episodes_watched: remote.progress, status } : { status };
+                    const change = (remote.progress || 0) > watermark(local) ? { episodes_watched: remote.progress, status } : { status };
                     const saved = writeProgress(ctx, local.id, userId, change, { monotonic: true });
                     if (saved && (!local.status || saved.status !== local.status || saved.episodes_watched !== local.episodes_watched)) report.pulled++;
                 }
@@ -242,7 +245,7 @@ async function pushOne(ctx, userId, animeId, generation) {
     if (gateway.generationOf(ctx) !== generation) return;
     const row = syncRow(ctx, userId);
     const local = ctx.db.prepare(`
-        SELECT p.status, p.episodes_watched, p.updated_at, a.anilist_id FROM anime_progress p JOIN animes a ON a.id = p.anime_id
+        SELECT p.status, p.episodes_watched, p.watched_episodes, p.updated_at, a.anilist_id FROM anime_progress p JOIN animes a ON a.id = p.anime_id
         WHERE p.anime_id = ? AND p.user_id = ? AND a.kind = 'anime'
     `).get(animeId, userId);
     if (!row || !row.enabled || !row.external_user_id || !local || !local.anilist_id) return;
@@ -250,10 +253,11 @@ async function pushOne(ctx, userId, animeId, generation) {
     try {
         const { entry } = await ownCall(ctx, userId, 'interactive', (credential) => anilist.listEntry(ctx, row.external_user_id, local.anilist_id, { credential }));
         const status = entry && entry.status === 'REPEATING' && local.status === 'Schaue' ? 'REPEATING' : TO_REMOTE[local.status];
-        const ahead = !entry || local.episodes_watched > entry.progress
-            || (local.episodes_watched === entry.progress && TO_LOCAL[entry.status] !== local.status && localSeconds(local.updated_at) > (entry.updatedAt || 0));
+        const progress = watermark(local);
+        const ahead = !entry || progress > entry.progress
+            || (progress === entry.progress && TO_LOCAL[entry.status] !== local.status && localSeconds(local.updated_at) > (entry.updatedAt || 0));
         if (!ahead) return;
-        await ownCall(ctx, userId, 'interactive', (credential) => anilist.saveListEntry(ctx, { mediaId: local.anilist_id, progress: local.episodes_watched, status }, { credential }));
+        await ownCall(ctx, userId, 'interactive', (credential) => anilist.saveListEntry(ctx, { mediaId: local.anilist_id, progress, status }, { credential }));
     } catch (err) {
         if (!(err instanceof SourceError)) throw err;
         error = errorText(err);

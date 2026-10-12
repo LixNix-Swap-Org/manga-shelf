@@ -166,6 +166,22 @@ test('planProgress: never backwards, the total caps, the resume link only for th
     assert.equal(cr.planProgress([], {}), null);
 });
 
+test('planProgress on a row with single marks: only the items\' episodes are added, the link only for an unwatched episode', () => {
+    const item = (episode, fully, resume = null) => cr.cleanItem({ external_id: 'GTESTSER01', episode, fully_watched: fully, resume_url: resume, resume_episode: resume ? (fully ? episode + 1 : episode) : null });
+    const ep5 = 'https://www.crunchyroll.com/watch/GTESTEP005/x';
+    const ep11 = 'https://www.crunchyroll.com/watch/GTESTEP011/x';
+    const marks = { episodes: 12, episodes_watched: 3, watched_episodes: '[1,2,10]', resume_url: null };
+    assert.deepEqual(cr.planProgress([item(3, true), item(10, true)], marks), { change: { add_episodes: [3], resume_url: null, resume_episode: null } });
+    assert.equal(cr.planProgress([item(10, true), item(2, true)], marks), null, 'every episode already marked: nothing to do');
+    assert.deepEqual(cr.planProgress([item(5, false, ep5)], marks), { change: { add_episodes: [4], resume_url: ep5, resume_episode: 5 } },
+        'the episode in progress stands for the one before it; its link points at an unwatched episode');
+    assert.deepEqual(cr.planProgress([item(10, true, ep11)], { ...marks, watched_episodes: [1, 2, 11] }).change, { add_episodes: [10], resume_url: null, resume_episode: null },
+        'a link to an episode already watched is not kept');
+    assert.deepEqual(cr.planProgress([item(14, true)], marks), { above_total: true, count: 14 });
+    assert.deepEqual(cr.planProgress([item(5, true)], { episodes: 12, episodes_watched: 3, watched_episodes: null }).change,
+        { episodes_watched: 5, resume_url: null, resume_episode: null }, 'a plain row still reads "watched up to N"');
+});
+
 test('season helpers: titles name a season, season links are keyed per series and season', () => {
     const cases = [[['Sousou no Frieren 2nd Season'], 2], [['Frieren'], 1], [['Shingeki no Kyojin Season 3'], 3], [['Mushoku Tensei: Second Season'], 2],
         [['Spy x Family 2. Staffel'], 2], [['Dr. Stone', 'Dr. Stone: Staffel 3'], 3], [['Kaguya-sama', 'Kaguya-sama: zweite Staffel'], 2], [['Season of Love'], 1]];

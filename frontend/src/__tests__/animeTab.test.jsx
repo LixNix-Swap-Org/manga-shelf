@@ -14,7 +14,8 @@ import { mainViewOf, searchForView } from '../Dashboard';
 import {
   countdownText, progressText, plusOneDisabled, filterAnime, filterCounts, predictProgress, readAnimeCache, writeAnimeCache, clearAnimeCache,
   ANIME_CACHE_KEY, ANIME_META_KEY, staleText, continueTarget, predictWatched, listSyncDue, markListSync, LIST_SYNC_INTERVAL_MS,
-  shortDescription, progressPercent, airedEpisodes, stillAiring, seasonEpisodeText, sourceBadges, kindOf, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY
+  shortDescription, progressPercent, airedEpisodes, stillAiring, seasonEpisodeText, sourceBadges, kindOf, KIND_FILTER_KEY, LANGUAGE_FILTER_KEY,
+  episodeSections, episodeGridCount, watchedEpisodesOf, episodeScoresOf
 } from '../utils/animeHelpers';
 import { subscribe as subscribeToasts } from '../utils/notify';
 import { OFFLINE_SYNCED_EVENT } from '../utils/offlineStore';
@@ -214,6 +215,97 @@ describe('animeHelpers', () => {
     expect(predictProgress(done, { episodes_watched: 12 }, 12)).toMatchObject({ status: 'Gesehen', finished_at: '2026-10-10' });
     expect(predictProgress(done, { score: 7 }, null)).toMatchObject({ status: 'Gesehen', episodes_watched: 12, finished_at: '2026-10-10' });
     expect(predictProgress({ ...done, status: 'Schaue', finished_at: null }, { status: 'Gesehen' }, 12)).toMatchObject({ status: 'Gesehen', episodes_watched: 12 });
+  });
+
+  it('single episodes: predicted like the server, sections per season or per 100, grid size without a total', () => {
+    const base = { status: 'Schaue', episodes_watched: 3, watched_episodes: [1, 2, 5] };
+    expect(watchedEpisodesOf(base)).toEqual([1, 2, 5]);
+    expect(watchedEpisodesOf({ episodes_watched: 2 })).toEqual([1, 2]);
+    let next = predictProgress(base, { watched_episodes: [1, 2, 5, 6] }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.status]).toEqual([4, [1, 2, 5, 6], 'Schaue']);
+    next = predictProgress(base, { episodes_watched: 4 }, 12);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([4, [1, 2, 3, 5]]);
+    next = predictProgress(base, { watched_episodes: [1, 2, 3] }, 12);
+    expect(next.watched_episodes).toBeNull();
+    next = predictProgress(base, { status: 'Gesehen' }, 12);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([12, null]);
+    expect(episodeSections({ kind: 'anime' }, 250).map((s) => [s.from, s.to])).toEqual([[1, 100], [101, 200], [201, 250]]);
+    expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }, { season_number: 2, episode_count: 10 }] }, 18))
+      .toEqual([{ from: 1, to: 8, season: 1, name: null, relative: true, start: 1 }, { from: 9, to: 18, season: 2, name: null, relative: true, start: 9 }]);
+    const onePiece = { kind: 'anime', custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: null }, { start: 1200, name: 'Zu spät' }] };
+    expect(episodeSections(onePiece, 135)).toEqual([
+      { from: 1, to: 61, season: 1, name: 'East Blue', relative: false, start: 1 },
+      { from: 62, to: 135, season: 2, name: null, relative: false, start: 62 }
+    ]);
+    expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }], custom_seasons: [{ start: 1, name: 'A' }] }, 8))
+      .toEqual([{ from: 1, to: 8, season: 1, name: 'A', relative: true, start: 1 }], 'seasons set by hand win over TMDb');
+    // a TV show numbers the cells of its seasons by hand within the season, like the S×E badge of the card
+    const show = { kind: 'tv', seasons: [{ season_number: 1, episode_count: 20 }], custom_seasons: [{ start: 1, name: 'Pilot' }, { start: 6, name: null }] };
+    expect(episodeSections(show, 20)).toEqual([
+      { from: 1, to: 5, season: 1, name: 'Pilot', relative: true, start: 1 },
+      { from: 6, to: 20, season: 2, name: null, relative: true, start: 6 }
+    ]);
+    expect(seasonEpisodeText(show, 8)).toBe('S2E3');
+    // a season longer than 100 episodes comes in blocks that keep its name or number and count within the season
+    expect(episodeSections({ kind: 'anime', custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] }, 300)
+      .map((s) => [s.name, s.from, s.to, s.start])).toEqual([['East Blue', 1, 61, 1], ['Alabasta', 62, 161, 62], ['Alabasta', 162, 261, 62], ['Alabasta', 262, 300, 62]]);
+    expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 5 }, { season_number: 2, episode_count: 150 }] }, 155)
+      .map((s) => [s.season, s.from, s.to, s.start, s.relative])).toEqual([[1, 1, 5, 1, true], [2, 6, 105, 6, true], [2, 106, 155, 6, true]]);
+    expect(episodeGridCount({ episodes: 12 }, [])).toBe(12);
+    expect(episodeGridCount({ episodes: null }, [1, 4])).toBe(5);
+    expect(episodeGridCount({ episodes: null, next_airing: { episode: 30, estimated: false } }, [1])).toBe(29);
+  });
+
+  it('a rated episode is a watched one: ratings mark their episodes, an episode that stops being watched loses its rating', () => {
+    let next = predictProgress(null, { episode_scores: { 3: 8, 1: 10 } }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.status, next.episode_scores]).toEqual([2, [1, 3], 'Schaue', { 1: 10, 3: 8 }]);
+    const rated = { status: 'Schaue', episodes_watched: 5, score: null, notes: null, watched_episodes: null, episode_scores: { 2: 7, 5: 9 } };
+    next = predictProgress(rated, { episodes_watched: 3 }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.episode_scores]).toEqual([3, null, { 2: 7 }]);
+    expect(predictProgress(rated, { status: 'Geplant' }, 12)).toMatchObject({ episodes_watched: 0, episode_scores: {} });
+    expect(predictProgress(rated, { notes: 'gut' }, 12).episode_scores).toEqual({ 2: 7, 5: 9 });
+    next = predictProgress(rated, { watched_episodes: [1, 2, 3], episode_scores: { 2: 7, 5: 9 } }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.episode_scores]).toEqual([4, [1, 2, 3, 5], { 2: 7, 5: 9 }]);
+    next = predictProgress(rated, { watched_episodes: [1, 2, 3] }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.episode_scores]).toEqual([3, null, { 2: 7 }]);
+  });
+
+  it('added episodes join the watched ones without filling the gaps; past MAX_MARKS the row keeps a plain counter', () => {
+    const gaps = { status: 'Pausiert', episodes_watched: 3, score: null, notes: null, watched_episodes: [1, 2, 10] };
+    let next = predictProgress(gaps, { add_episodes: [3, 10] }, 12);
+    expect([next.episodes_watched, next.watched_episodes, next.status]).toEqual([4, [1, 2, 3, 10], 'Schaue']);
+    next = predictProgress({ status: 'Schaue', episodes_watched: 5 }, { add_episodes: [8] }, 12);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([6, [1, 2, 3, 4, 5, 8]]);
+    expect(predictProgress(gaps, { add_episodes: [2] }, 12)).toMatchObject({ episodes_watched: 3, watched_episodes: [1, 2, 10], status: 'Pausiert' });
+    next = predictProgress({ status: 'Schaue', episodes_watched: 5000 }, { add_episodes: [5003] }, null);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([5003, null]);
+    // like withEpisodes on the server: the plain counter runs to the highest episode of the union, existing marks included
+    const even = { status: 'Schaue', episodes_watched: 5000, score: null, notes: null, watched_episodes: Array.from({ length: 5000 }, (_, i) => 2 * (i + 1)) };
+    next = predictProgress(even, { add_episodes: [1] }, null);
+    expect([next.episodes_watched, next.watched_episodes]).toEqual([10000, null]);
+    expect(predictWatched(even, { episode: 1 }, null)).toMatchObject({ episodes_watched: 10000, watched_episodes: null });
+  });
+
+  it('marks and ratings above a known total stay out of the grid; only ratings of watched episodes count', () => {
+    const stale = { status: 'Schaue', episodes_watched: 3, watched_episodes: [1, 2, 14], episode_scores: { 2: 6, 4: 9, 14: 8 } };
+    expect(watchedEpisodesOf(stale, 12)).toEqual([1, 2]);
+    expect(watchedEpisodesOf(stale, null)).toEqual([1, 2, 14]);
+    expect(episodeScoresOf(stale, 12)).toEqual({ 2: 6 });
+    expect(episodeScoresOf(stale)).toEqual({ 2: 6, 14: 8 });
+    expect(episodeScoresOf({ episodes_watched: 4, episode_scores: { 4: 9, 5: 3 } }, 12)).toEqual({ 4: 9 });
+    expect(episodeScoresOf(null)).toEqual({});
+  });
+
+  it('a shared episode on a row with single marks adds that episode only; past the total it completes the entry', () => {
+    const gaps = { status: 'Schaue', episodes_watched: 3, score: null, notes: null, watched_episodes: [1, 2, 10], episode_scores: { 10: 8 } };
+    const url = 'https://www.crunchyroll.com/watch/E5F6G7H8';
+    expect(predictWatched(gaps, { episode: 3, url }, 12))
+      .toMatchObject({ status: 'Schaue', episodes_watched: 4, watched_episodes: [1, 2, 3, 10], resume_url: url, resume_episode: 3, episode_scores: { 10: 8 } });
+    expect(predictWatched(gaps, { episode: 2 }, 12)).toMatchObject({ episodes_watched: 3, watched_episodes: [1, 2, 10] });
+    expect(predictWatched({ ...gaps, watched_episodes: [1, 2, 4] }, { episode: 3 }, 12)).toMatchObject({ episodes_watched: 4, watched_episodes: null });
+    expect(predictWatched(gaps, { episode: 29 }, 12)).toMatchObject({ status: 'Gesehen', episodes_watched: 12, watched_episodes: null });
+    expect(predictWatched({ status: 'Schaue', episodes_watched: 3 }, { episode: 6 }, 12)).toMatchObject({ episodes_watched: 6 });
+    expect(predictWatched({ status: 'Schaue', episodes_watched: 3 }, { episode: 6 }, 12).watched_episodes).toBeUndefined();
   });
 
   it('a counter change by hand drops the remembered "Weiter" page; a shared episode never lowers the counter', () => {
@@ -686,6 +778,26 @@ describe('useAnimeList', () => {
     expect(calls.filter((c) => c.startsWith('DELETE'))).toEqual(['DELETE /api/anime/1/progress?decline=1', 'DELETE /api/anime/2/progress']);
   });
 
+  it('the share undo sends the single marks and their ratings back, with the entry in the list and without it', async () => {
+    const bodies = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      if (url === '/api/anime') return fakeResponse(200, [entry()]);
+      if (/\/progress$/.test(url) && init.method === 'PUT') {
+        bodies.push([url, JSON.parse(init.body)]);
+        return fakeResponse(200, { status: 'Schaue', episodes_watched: 3, score: null, notes: null, watched_episodes: [1, 2, 5], episode_scores: { 5: 9 } });
+      }
+      return fakeResponse(404, {});
+    }));
+    const { result } = renderHook(() => useAnimeList({ user: { id: 1, username: 'anna', role: 'editor' } }));
+    await act(() => result.current.fetchAnime());
+    const previous = { status: 'Schaue', episodes_watched: 3, watched_episodes: [1, 2, 5], episode_scores: { 5: 9 } };
+    await act(() => result.current.undoWatched(1, previous));
+    expect(result.current.list[0].my_progress).toMatchObject({ watched_episodes: [1, 2, 5], episode_scores: { 5: 9 } });
+    await act(() => result.current.undoWatched(4, previous));
+    const body = { status: 'Schaue', episodes_watched: 3, restore: true, watched_episodes: [1, 2, 5], episode_scores: { 5: 9 } };
+    expect(bodies).toEqual([['/api/anime/1/progress', body], ['/api/anime/4/progress', body]]);
+  });
+
   it('offline: the stored list, no request', async () => {
     writeAnimeCache([entry({ title: 'Gespeichert' })], 1);
     const fetchMock = vi.fn();
@@ -799,21 +911,25 @@ describe('AnimeDetailModal', () => {
       expect(updateProgress).toHaveBeenCalledWith(1, { episodes_watched: 3 });
     });
 
-    it('"Von meiner Liste entfernen" offers to undo with the removed progress', async () => {
+    it('"Von meiner Liste entfernen" offers to undo with the removed progress, single marks and ratings included', async () => {
       const shown = [];
       const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
       const updateProgress = vi.fn(async () => ({ status: 'Schaue' }));
       const removeFromMyList = vi.fn(async () => true);
-      const fetchDetail = vi.fn(async () => onePiece());
+      const marked = () => ({ ...onePiece(), my_progress: { ...onePiece().my_progress, episodes_watched: 3, watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 } } });
+      const fetchDetail = vi.fn(async () => marked());
       try {
-        openEditable(onePiece(), { updateProgress, removeFromMyList, fetchDetail });
+        openEditable(marked(), { updateProgress, removeFromMyList, fetchDetail });
         await act(async () => {});
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Von meiner Liste entfernen' })); });
         expect(removeFromMyList).toHaveBeenCalledWith(1, { decline: true });
         expect(shown.map((toast) => [toast.kind, toast.message, toast.action?.label])).toEqual([['success', 'Von deiner Liste entfernt', 'Rückgängig']]);
         const loads = fetchDetail.mock.calls.length;
         await act(async () => { await shown[0].action.onClick(); });
-        expect(updateProgress).toHaveBeenCalledWith(1, { status: 'Schaue', episodes_watched: 12, score: 9, notes: 'Arc 3', audio_language: 'ja', subtitle_language: 'de', restore: true });
+        expect(updateProgress).toHaveBeenCalledWith(1, {
+          status: 'Schaue', episodes_watched: 3, score: 9, notes: 'Arc 3', audio_language: 'ja', subtitle_language: 'de',
+          watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 }, restore: true
+        });
         expect(fetchDetail.mock.calls.length).toBe(loads + 1);
       } finally {
         stop();
@@ -834,6 +950,287 @@ describe('AnimeDetailModal', () => {
       } finally {
         stop();
       }
+    });
+
+    it('single episodes: the grid shows the watched ones and saves a tapped episode as the set of watched episodes', async () => {
+      const updateProgress = vi.fn(async () => ({ status: 'Schaue', episodes_watched: 8 }));
+      const fetchDetail = vi.fn(async () => entry());
+      openEditable(entry(), { updateProgress, fetchDetail });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Folgen 1–12' });
+      const cells = within(grid).getAllByRole('button');
+      expect(cells.map((b) => b.getAttribute('aria-pressed'))).toEqual([...Array(7).fill('true'), ...Array(5).fill('false')]);
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 9' }));
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2' }));
+      expect(within(grid).getByRole('button', { name: 'Folge 9' }).getAttribute('aria-pressed')).toBe('true');
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(1), { timeout: 3000 });
+      expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 3, 4, 5, 6, 7, 9], episode_scores: {} });
+      await waitFor(() => expect(fetchDetail.mock.calls.length).toBeGreaterThan(1), { timeout: 3000 });
+    });
+
+    it('single episodes: "Alle im Abschnitt gesehen" marks the shown section; a film has no grid', async () => {
+      const updateProgress = vi.fn(async () => ({}));
+      const show = entry({ kind: 'tv', episodes: 20, seasons: [{ season_number: 1, episode_count: 10 }, { season_number: 2, episode_count: 10 }],
+        my_progress: { status: 'Schaue', episodes_watched: 12, score: null, notes: null } });
+      const { unmount } = openEditable(show, { updateProgress, fetchDetail: vi.fn(async () => show) });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Staffel 2 · Folgen 11–20' });
+      expect(within(grid).getByRole('button', { name: 'Staffel 2, Folge 3' }).textContent).toBe('3');
+      fireEvent.click(screen.getByRole('button', { name: 'Alle im Abschnitt gesehen' }));
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: Array.from({ length: 20 }, (_, i) => i + 1), episode_scores: {} }), { timeout: 3000 });
+      unmount();
+      openEditable(entry({ kind: 'movie', episodes: 1 }));
+      await act(async () => {});
+      expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
+    });
+
+    it('episode ratings: "Folgen bewerten" rates a tapped episode, marks it watched and shows the average; unmarking drops the rating', async () => {
+      let rated = entry({ my_progress: { status: 'Schaue', episodes_watched: 3, score: null, notes: null, episode_scores: { 2: 7 } } });
+      const updateProgress = vi.fn(async (id, change) => {
+        rated = { ...rated, my_progress: { ...rated.my_progress, episodes_watched: change.watched_episodes.length, ...change } };
+        return rated.my_progress;
+      });
+      openEditable(rated, { updateProgress, fetchDetail: vi.fn(async () => rated) });
+      await act(async () => {});
+      const grid = screen.getByRole('list', { name: 'Folgen 1–12' });
+      expect(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' })).toBeTruthy();
+      expect(screen.getByText('Ø 7 aus 1 bewerteten Folge')).toBeTruthy();
+      const mode = screen.getByRole('button', { name: 'Folgen bewerten' });
+      fireEvent.click(mode);
+      expect(mode.getAttribute('aria-pressed')).toBe('true');
+      // the watched state stays on the cells in rating mode
+      expect(within(grid).getByRole('button', { name: 'Folge 1' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 6' }));
+      const panel = screen.getByRole('group', { name: 'Folge 6 bewerten' });
+      const six = within(grid).getByRole('button', { name: 'Folge 6' });
+      expect([six.getAttribute('aria-pressed'), six.getAttribute('aria-expanded'), six.getAttribute('aria-controls')]).toEqual(['false', 'true', panel.id]);
+      expect(within(grid).getByRole('button', { name: 'Folge 1' }).getAttribute('aria-expanded')).toBe('false');
+      // the picker sits above the cells and takes the focus; a score gives it back to the episode
+      expect(panel.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(document.activeElement).toBe(within(panel).getByRole('button', { name: '1' }));
+      fireEvent.click(within(panel).getByRole('button', { name: '9' }));
+      expect(screen.queryByRole('group', { name: 'Folge 6 bewerten' })).toBeNull();
+      expect(document.activeElement).toBe(within(grid).getByRole('button', { name: 'Folge 6, Bewertung 9 von 10' }));
+      expect(screen.getByText('Ø 8 aus 2 bewerteten Folgen')).toBeTruthy();
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 2, 3, 6], episode_scores: { 2: 7, 6: 9 } }), { timeout: 3000 });
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' }));
+      const again = screen.getByRole('group', { name: 'Folge 2 bewerten' });
+      expect(document.activeElement).toBe(within(again).getByRole('button', { name: '7' }));
+      fireEvent.click(within(again).getByRole('button', { name: 'Fertig' }));
+      expect(document.activeElement).toBe(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' }));
+      fireEvent.click(mode);
+      fireEvent.click(within(grid).getByRole('button', { name: 'Folge 2, Bewertung 7 von 10' }));
+      await waitFor(() => expect(updateProgress).toHaveBeenLastCalledWith(1, { watched_episodes: [1, 3, 6], episode_scores: { 6: 9 } }), { timeout: 3000 });
+    });
+
+    const deferredSaves = () => {
+      const saves = [];
+      const updateProgress = vi.fn((id, change) => new Promise((resolve) => { saves.push({ change, resolve }); }));
+      return { saves, updateProgress };
+    };
+    const gridCell = (name, n) => within(screen.getByRole('list', { name })).getByRole('button', { name: `Folge ${n}` });
+
+    it('single episodes: a tap while a save runs stays on screen and goes into the next save; the burst ends with one reload', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      let stored = { status: 'Schaue', episodes_watched: 7, score: null, notes: null, watched_episodes: null, episode_scores: {} };
+      const { saves, updateProgress } = deferredSaves();
+      const answer = (i) => {
+        const { change } = saves[i];
+        stored = { ...stored, episodes_watched: change.watched_episodes.length, watched_episodes: change.watched_episodes, episode_scores: change.episode_scores };
+        saves[i].resolve(stored);
+      };
+      const fetchDetail = vi.fn(async () => entry({ my_progress: stored }));
+      openEditable(entry({ my_progress: stored }), { updateProgress, fetchDetail });
+      await act(async () => {});
+      const pressed = (n) => gridCell('Folgen 1–12', n).getAttribute('aria-pressed');
+      fireEvent.click(gridCell('Folgen 1–12', 9));
+      await act(async () => { vi.advanceTimersByTime(600); });
+      expect(updateProgress).toHaveBeenCalledTimes(1);
+      fireEvent.click(gridCell('Folgen 1–12', 10));
+      await act(async () => { vi.advanceTimersByTime(600); });
+      expect(updateProgress).toHaveBeenCalledTimes(1);
+      expect([pressed(9), pressed(10)]).toEqual(['true', 'true']);
+      await act(async () => { answer(0); });
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledTimes(2));
+      expect(updateProgress).toHaveBeenLastCalledWith(1, { watched_episodes: [1, 2, 3, 4, 5, 6, 7, 9, 10], episode_scores: {} });
+      expect([pressed(9), pressed(10)]).toEqual(['true', 'true']);
+      expect(fetchDetail).toHaveBeenCalledTimes(1);
+      await act(async () => { answer(1); });
+      await waitFor(() => expect(fetchDetail).toHaveBeenCalledTimes(2));
+      expect([pressed(8), pressed(9), pressed(10)]).toEqual(['false', 'true', 'true']);
+    });
+
+    it('single episodes: a failed save drops the taps and reloads the detail', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const updateProgress = vi.fn(async () => null);
+      const fetchDetail = vi.fn(async () => entry());
+      openEditable(entry(), { updateProgress, fetchDetail });
+      await act(async () => {});
+      fireEvent.click(gridCell('Folgen 1–12', 9));
+      expect(gridCell('Folgen 1–12', 9).getAttribute('aria-pressed')).toBe('true');
+      await act(async () => { vi.advanceTimersByTime(600); });
+      await waitFor(() => expect(fetchDetail).toHaveBeenCalledTimes(2));
+      expect(gridCell('Folgen 1–12', 9).getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('a grid tap keeps an unsaved note and score; the counter and the status follow the grid', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      let stored = { status: 'Geplant', episodes_watched: 0, score: null, notes: null };
+      const updateProgress = vi.fn(async (id, change) => {
+        stored = { ...stored, status: 'Schaue', episodes_watched: change.watched_episodes.length, watched_episodes: null, episode_scores: change.episode_scores };
+        return stored;
+      });
+      const fetchDetail = vi.fn(async () => entry({ my_progress: stored }));
+      openEditable(entry({ my_progress: stored }), { updateProgress, fetchDetail });
+      await act(async () => {});
+      fireEvent.change(screen.getByLabelText('Meine Notiz'), { target: { value: 'Spannend' } });
+      fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '8' } });
+      fireEvent.click(gridCell('Folgen 1–12', 1));
+      await act(async () => { vi.advanceTimersByTime(600); });
+      await waitFor(() => expect(fetchDetail).toHaveBeenCalledTimes(2));
+      expect(screen.getByLabelText('Meine Notiz').value).toBe('Spannend');
+      expect(screen.getByLabelText('Bewertung').value).toBe('8');
+      expect(screen.getByLabelText('Gesehene Folgen (von 12)').value).toBe('1');
+      expect(screen.getByLabelText('Status').value).toBe('Schaue');
+    });
+
+    it('while a grid save waits or runs, "Von meiner Liste entfernen" and "Fortschritt speichern" wait too', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { saves, updateProgress } = deferredSaves();
+      openEditable(entry(), { updateProgress, fetchDetail: vi.fn(async () => entry()) });
+      await act(async () => {});
+      const waiting = () => ['Von meiner Liste entfernen', 'Fortschritt speichern'].map((name) => screen.getByRole('button', { name }).disabled);
+      expect(waiting()).toEqual([false, false]);
+      fireEvent.click(gridCell('Folgen 1–12', 9));
+      expect(waiting()).toEqual([true, true]);
+      await act(async () => { vi.advanceTimersByTime(600); });
+      expect(updateProgress).toHaveBeenCalledTimes(1);
+      expect(waiting()).toEqual([true, true]);
+      await act(async () => { saves[0].resolve({ status: 'Schaue', episodes_watched: 8, watched_episodes: [1, 2, 3, 4, 5, 6, 7, 9], episode_scores: {} }); });
+      await waitFor(() => expect(waiting()).toEqual([false, false]));
+    });
+
+    it('single episodes: stored marks and ratings above a lowered total are never sent back', async () => {
+      const stale = entry({ my_progress: { status: 'Schaue', episodes_watched: 3, score: null, notes: null, watched_episodes: [1, 2, 14], episode_scores: { 2: 5, 14: 6 } } });
+      const updateProgress = vi.fn(async () => ({}));
+      openEditable(stale, { updateProgress, fetchDetail: vi.fn(async () => stale) });
+      await act(async () => {});
+      expect(within(screen.getByRole('list', { name: 'Folgen 1–12' })).getByRole('button', { name: 'Folge 2, Bewertung 5 von 10' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(gridCell('Folgen 1–12', 3));
+      await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 2, 3], episode_scores: { 2: 5 } }), { timeout: 3000 });
+    });
+
+    it('a waiting tap is saved for its own entry when the dialog switches to another anime; the season editor starts over', async () => {
+      const updateProgress = vi.fn(async () => ({}));
+      const second = entry({ id: 2, title: 'Frieren 2', my_progress: null });
+      const fetchDetail = vi.fn(async (id) => (id === 2 ? second : entry()));
+      const props = {
+        isOpen: true, onClose: vi.fn(), canEdit: true, fetchDetail, updateProgress, removeFromMyList: vi.fn(), update: vi.fn(), seasonSuggestion: vi.fn(),
+        refresh: vi.fn(), remove: vi.fn(), onAdd: vi.fn(), onOpenAnime: vi.fn()
+      };
+      const { rerender } = render(<MemoryRouter><AnimeDetailModal {...props} animeId={1} fallback={entry()} /></MemoryRouter>);
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      expect(screen.getAllByLabelText('Ab Folge')).toHaveLength(1);
+      fireEvent.click(gridCell('Folgen 1–12', 9));
+      rerender(<MemoryRouter><AnimeDetailModal {...props} animeId={2} fallback={second} /></MemoryRouter>);
+      await act(async () => {});
+      expect(updateProgress).toHaveBeenCalledTimes(1);
+      expect(updateProgress).toHaveBeenCalledWith(1, { watched_episodes: [1, 2, 3, 4, 5, 6, 7, 9], episode_scores: {} });
+      expect(gridCell('Folgen 1–12', 9).getAttribute('aria-pressed')).toBe('false');
+      expect(screen.queryAllByLabelText('Ab Folge')).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Staffeln bearbeiten' })).toBeTruthy();
+    });
+
+    it('seasons: a long season comes in blocks of 100; saving seasons keeps a waiting tap on screen and in the save', async () => {
+      vi.useFakeTimers();
+      let current = entry({ episodes: 300, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
+      const update = vi.fn(async (id, body) => { current = { ...current, custom_seasons: body.custom_seasons || [] }; return current; });
+      const updateProgress = vi.fn(async () => ({}));
+      openEditable(current, { update, updateProgress, seasonSuggestion: vi.fn(), fetchDetail: vi.fn(async () => current) });
+      await act(async () => {});
+      fireEvent.click(gridCell('Folgen 1–100', 75));
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      fireEvent.change(screen.getAllByLabelText('Name (optional)')[0], { target: { value: 'East Blue' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Staffel hinzufügen' }));
+      fireEvent.change(screen.getAllByLabelText('Ab Folge')[1], { target: { value: '62' } });
+      fireEvent.change(screen.getAllByLabelText('Name (optional)')[1], { target: { value: 'Alabasta' } });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
+      expect(update).toHaveBeenCalledWith(1, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
+      expect([...screen.getByLabelText('Abschnitt').options].map((o) => o.textContent))
+        .toEqual(['East Blue · Folgen 1–61', 'Alabasta · Folgen 62–161', 'Alabasta · Folgen 162–261', 'Alabasta · Folgen 262–300']);
+      expect(gridCell('Alabasta · Folgen 62–161', 75).getAttribute('aria-pressed')).toBe('true');
+      expect(updateProgress).not.toHaveBeenCalled();
+      await act(async () => { vi.advanceTimersByTime(600); });
+      expect(updateProgress).toHaveBeenCalledTimes(1);
+      expect(updateProgress.mock.calls[0][1].watched_episodes).toEqual([...Array.from({ length: 70 }, (_, i) => i + 1), 75]);
+    });
+
+    it('seasons: a TV show starts from its stored TMDb seasons without a request; a suggestion after "Abbrechen" is dropped; names stop at 80 characters', async () => {
+      let answer;
+      const seasonSuggestion = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+      const tv = entry({ kind: 'tv', episodes: 19, seasons: [{ season_number: 1, episode_count: 9 }, { season_number: 2, episode_count: 10 }] });
+      openEditable(tv, { seasonSuggestion, fetchDetail: vi.fn(async () => tv) });
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      expect(screen.getAllByLabelText('Ab Folge').map((input) => input.value)).toEqual(['1', '10']);
+      expect(screen.getAllByLabelText('Name (optional)').map((input) => input.value)).toEqual(['', '']);
+      expect(seasonSuggestion).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(screen.getAllByLabelText('Name (optional)')[0]);
+      fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      const seasons = [{ start: 1, name: 'Staffel 1' }, { start: 10, name: 'x'.repeat(100) }];
+      await act(async () => { answer({ seasons, reason: null }); });
+      expect(screen.queryAllByLabelText('Ab Folge')).toHaveLength(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' }));
+      await act(async () => { answer({ seasons, reason: null }); });
+      const names = screen.getAllByLabelText('Name (optional)');
+      expect(names.map((input) => input.value.length)).toEqual([9, 80]);
+      expect(names[1].getAttribute('maxLength')).toBe('80');
+    });
+
+    it('seasons: "Vorschlag von TMDB laden" fills the editor, saving stores them for everybody and the grid follows the names', async () => {
+      let current = entry({ episodes: 135, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
+      const update = vi.fn(async (id, body) => { current = { ...current, custom_seasons: body.custom_seasons || [] }; return current; });
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Arabasta', episodes: 74 }], reason: null, tmdb_id: 37854 }));
+      openEditable(current, { update, seasonSuggestion, fetchDetail: vi.fn(async () => current) });
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' })); });
+      expect(seasonSuggestion).toHaveBeenCalledWith(1);
+      expect(screen.getByRole('status').textContent).toBe('2 Staffeln von TMDB übernommen. Prüfen und speichern.');
+      const names = screen.getAllByLabelText('Name (optional)');
+      expect(names.map((input) => input.value)).toEqual(['East Blue', 'Arabasta']);
+      fireEvent.change(names[1], { target: { value: 'Alabasta' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Staffel hinzufügen' }));
+      fireEvent.change(screen.getAllByLabelText('Ab Folge')[2], { target: { value: '200' } });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
+      expect(screen.getByRole('alert').textContent).toBe('Jede Staffel muss nach der vorigen beginnen, die erste bei Folge 1 und keine nach Folge 135.');
+      fireEvent.click(screen.getByRole('button', { name: 'Staffel 3 entfernen' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
+      expect(update).toHaveBeenCalledWith(1, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
+      const grid = await screen.findByRole('list', { name: 'Alabasta · Folgen 62–135' });
+      expect(within(grid).getByRole('button', { name: 'Folge 71' }).textContent).toBe('71');
+      expect(screen.getByText('2 eigene Staffeln')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Eigene Staffeln entfernen' })); });
+      expect(update).toHaveBeenLastCalledWith(1, { custom_seasons: null });
+      expect(await screen.findByRole('list', { name: 'Folgen 1–100' })).toBeTruthy();
+    });
+
+    it('seasons: without a TMDB key the suggestion says so; without the prop there is no editor', async () => {
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [], reason: 'no_key', tmdb_id: null }));
+      const { unmount } = openEditable(entry(), { seasonSuggestion });
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' })); });
+      expect(screen.getByRole('status').textContent).toBe('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).');
+      unmount();
+      openEditable(entry());
+      await act(async () => {});
+      expect(screen.queryByRole('button', { name: 'Staffeln bearbeiten' })).toBeNull();
     });
 
     it('no undo when the removal failed', async () => {
@@ -886,6 +1283,11 @@ describe('films and TV shows', () => {
     expect(seasonEpisodeText(show(), 0)).toBeNull();
     expect(seasonEpisodeText(show({ seasons: [] }), 4)).toBeNull();
     expect(seasonEpisodeText(entry(), 4)).toBeNull();
+    // seasons set by hand win, so the card, the form and the grid name the same season
+    const custom = [{ start: 1, name: 'Teil 1' }, { start: 6, name: null }, { start: 15, name: 'Finale' }];
+    expect([5, 6, 12, 19].map((n) => seasonEpisodeText(show({ custom_seasons: custom }), n))).toEqual(['S1E5', 'S2E1', 'S2E7', 'S3E5']);
+    expect(seasonEpisodeText(show({ seasons: [], custom_seasons: custom }), 7)).toBe('S2E2');
+    expect(seasonEpisodeText(entry({ custom_seasons: custom }), 7)).toBeNull();
     expect(stillAiring(show({ next_airing: { episode: 19, at: 1798985760, estimated: true } }))).toBe(true);
     expect(stillAiring(show({ next_airing: { episode: 20, at: 1798985760, estimated: true } }))).toBe(false);
     expect(stillAiring(show({ next_airing: null }))).toBe(false);
