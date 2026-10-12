@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Creates the Android release keystore once and prints the four repository secrets build-android.js needs. Without
-// them every CI build signs with a fresh debug key, and Android refuses to install the next APK over the previous one.
+// Creates the Android release keystore once and writes the four repository secrets build-android.js needs to
+// <out>.secrets.txt. Without them every CI build signs with a fresh debug key, and Android refuses to install the next
+// APK over the previous one.
 //   node scripts/create-android-key.js [--out <file>] [--alias <name>]
 const crypto = require('crypto');
 const fs = require('fs');
@@ -49,13 +50,20 @@ function createAndroidKey({ out, alias }) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const password = crypto.randomBytes(24).toString('base64url');
   const env = { ...process.env, MANGASHELF_STORE_PASSWORD: password };
-  run('keytool', keytoolArgs(out, alias), { env, quiet: true });
-  fs.chmodSync(out, 0o600);
-  const listing = execFileSync('keytool', ['-list', '-v', '-keystore', out, '-alias', alias, '-storepass:env', 'MANGASHELF_STORE_PASSWORD'],
-    { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
-  const sha256 = keytoolSha256(listing);
-  fs.writeFileSync(secretsFile, secretLines(fs.readFileSync(out), alias, password).join('\n') + '\n', { mode: 0o600 });
-  return { out, secretsFile, sha256 };
+  try {
+    run('keytool', keytoolArgs(out, alias), { env, quiet: true });
+    fs.chmodSync(out, 0o600);
+    const listing = execFileSync('keytool', ['-list', '-v', '-keystore', out, '-alias', alias, '-storepass:env', 'MANGASHELF_STORE_PASSWORD'],
+      { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const sha256 = keytoolSha256(listing);
+    if (!sha256) throw new Error('keytool nennt keinen SHA-256-Fingerabdruck für den neuen Schlüssel');
+    fs.writeFileSync(secretsFile, secretLines(fs.readFileSync(out), alias, password).join('\n') + '\n', { mode: 0o600, flag: 'wx' });
+    return { out, secretsFile, sha256 };
+  } catch (err) {
+    // a key from this run has signed nothing yet, so a failed run leaves no keystore without its password behind
+    for (const file of [secretsFile, out]) fs.rmSync(file, { force: true });
+    throw err;
+  }
 }
 
 if (require.main === module) {
