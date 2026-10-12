@@ -288,7 +288,8 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
  */
 export function isSeriesComplete(m) {
   const total = Number(m?.total_volumes) || 0;
-  return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) >= total;
+  const target = Math.max(total, Number(m?.max_regular_number) || 0);
+  return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) >= target;
 }
 
 // i18n

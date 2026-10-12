@@ -152,7 +152,7 @@ export const gapVolumeNumber = (gap) => {
 
 /**
  * Collection progress of a series. Only regular volumes count (schuber and extras are "+N"); above a known total the
- * target grows with the highest owned number so a stale total never shows "21 / 18", without a total there is no
+ * target grows with the highest existing regular number (missing ones too) so a stale total never shows "21 / 18", without a total there is no
  * target (total 0, pct null). Incomplete never 100 %, started never 0 %.
  */
 export const getSeriesProgress = ({ regular_owned, max_regular_number, total_volumes, owned_volumes, extras_owned }) => {
@@ -172,6 +172,8 @@ export const getSeriesProgress = ({ regular_owned, max_regular_number, total_vol
 /** The getSeriesProgress input for the volumes of one series (same rules as GET /api/mangas). */
 export const getVolumeProgressCounts = (volumes) => {
   const owned = (volumes || []).filter(v => v.status === 'Vorhanden');
+  // the highest regular number of any status: a missing volume 4 keeps "3 / 3" from being complete
+  const maxExisting = (volumes || []).reduce((max, v) => Math.max(max, regularVolumeNumber(v) ?? 0), 0);
   const regularNumbers = new Set();
   let extras = 0;
   for (const v of owned) {
@@ -181,7 +183,7 @@ export const getVolumeProgressCounts = (volumes) => {
   }
   return {
     regular_owned: regularNumbers.size,
-    max_regular_number: [...regularNumbers].reduce((max, n) => Math.max(max, n), 0),
+    max_regular_number: maxExisting,
     extras_owned: extras,
     owned_volumes: owned.length
   };

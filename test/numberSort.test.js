@@ -12,15 +12,16 @@ const OLD_IS_REGULAR = `(COALESCE(v.type, 'volume') = 'volume' AND ${OLD_VOLUME_
 const OLD_LIST_AGGREGATES = `
     SELECT m.id,
            COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND ${OLD_IS_REGULAR} THEN CAST(${OLD_VOLUME_NO} AS INTEGER) END) as regular_owned,
-           MAX(CASE WHEN v.status = 'Vorhanden' AND ${OLD_IS_REGULAR} THEN CAST(${OLD_VOLUME_NO} AS INTEGER) END) as max_regular_number,
+           MAX(CASE WHEN ${OLD_IS_REGULAR} THEN CAST(${OLD_VOLUME_NO} AS INTEGER) END) as max_regular_number,
            COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND NOT ${OLD_IS_REGULAR} THEN v.id END) as extras_owned
     FROM mangas m LEFT JOIN volumes v ON m.id = v.manga_id GROUP BY m.id`;
-// Complete series: a stored total and at least that many distinct regular numbers owned
+// Complete series: a stored total and at least as many distinct regular numbers owned as the target (the total, or the highest existing regular number)
 const SPEC_A2_COMPLETED = `
     SELECT count(*) AS count FROM mangas m
     WHERE COALESCE(m.total_volumes, 0) > 0
       AND (SELECT COUNT(DISTINCT CAST(${OLD_VOLUME_NO} AS INTEGER)) FROM volumes v
-           WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${OLD_IS_REGULAR}) >= m.total_volumes`;
+           WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${OLD_IS_REGULAR})
+          >= MAX(m.total_volumes, COALESCE((SELECT MAX(CAST(${OLD_VOLUME_NO} AS INTEGER)) FROM volumes v WHERE v.manga_id = m.id AND ${OLD_IS_REGULAR}), 0))`;
 const OLD_VOLUME_ORDER = `
     CASE
         WHEN COALESCE(type, 'volume') = 'volume' AND (volume_number = '0' OR CAST(volume_number AS REAL) > 0) THEN 1
@@ -102,6 +103,8 @@ test('triggers: changing volume_number updates number_sort, other columns leave 
     db.prepare('UPDATE volumes SET number_sort = 77 WHERE id = ?').run(id);
     db.prepare("UPDATE volumes SET price = 7.5, status = 'Fehlt', notes = 'x' WHERE id = ?").run(id);
     assert.equal(numberSortOf(id), 77);
+    // the hand-written 77 would now count as the highest existing number in the list aggregates of later tests
+    db.prepare('DELETE FROM volumes WHERE id = ?').run(id);
 });
 
 test('GET /mangas, /stats and the detail order are unchanged against the old expressions', async () => {
@@ -126,6 +129,9 @@ test('GET /mangas, /stats and the detail order are unchanged against the old exp
     const staleTotal = createManga('Fixture E', { total_volumes: 3 });
     for (const n of ['1', '2', '5']) insertVolume(staleTotal, n);
 
+    const done = createManga('Fixture F', { total_volumes: 2 });
+    for (const n of ['1', '2']) insertVolume(done, n);
+
     const old = new Map(db.prepare(OLD_LIST_AGGREGATES).all().map(r => [r.id, r]));
     const list = (await editor('GET', '/mangas')).body;
     assert.ok(list.length >= 3);
@@ -135,11 +141,11 @@ test('GET /mangas, /stats and the detail order are unchanged against the old exp
             [ref.regular_owned, ref.max_regular_number, ref.extras_owned], `list row ${row.title}`);
     }
     const rowA = list.find(r => r.id === Number(a));
-    assert.deepEqual([rowA.regular_owned, rowA.max_regular_number, rowA.extras_owned], [14, 14, 6]);
+    assert.deepEqual([rowA.regular_owned, rowA.max_regular_number, rowA.extras_owned], [14, 15, 6]);
 
     const stats = (await editor('GET', '/stats')).body.summary;
     assert.equal(stats.completed_series, db.prepare(SPEC_A2_COMPLETED).get().count);
-    assert.ok(stats.completed_series >= 2);
+    assert.ok(stats.completed_series >= 1);
 
     for (const id of [a, b, c]) {
         const detail = (await editor('GET', `/mangas/${id}`)).body;
