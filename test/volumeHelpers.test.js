@@ -358,8 +358,10 @@ test('getSeriesProgress / getVolumeProgressCounts: a duplicate regular volume is
     const volumes = [owned('1'), owned('2'), owned('Band 2'), owned('3'), owned('3'), owned('Schuber 1', 'schuber'), owned('Starter 1'),
         { volume_number: '4', status: 'Fehlt' }];
     const counts = getVolumeProgressCounts(volumes);
-    assert.deepEqual(counts, { regular_owned: 3, max_regular_number: 3, extras_owned: 2, owned_volumes: 7 });
+    assert.deepEqual(counts, { regular_owned: 3, max_regular_number: 4, extras_owned: 2, owned_volumes: 7 });
     assert.deepEqual(getSeriesProgress({ ...counts, total_volumes: 5 }), { owned: 3, total: 5, extras: 2, pct: 60 });
+    // a missing volume 4 above a total of 3 raises the target: 3 / 4, not complete
+    assert.deepEqual(getSeriesProgress({ ...counts, total_volumes: 3 }), { owned: 3, total: 4, extras: 2, pct: 75 });
 });
 
 test('getVolumeDisplayTitle: "Band" only in front of a number', async () => {

@@ -43,10 +43,12 @@ describe('useCollectionFilters', () => {
       { id: 2, title: 'B', status: 'Laufend', total_volumes: 3, owned_volumes: 5, regular_owned: 4, max_regular_number: 5 },
       { id: 3, title: 'C', status: 'Laufend', total_volumes: null, owned_volumes: 1, regular_owned: 1, max_regular_number: 1 },
       { id: 4, title: 'D', status: 'Laufend', total_volumes: 0, owned_volumes: 4, regular_owned: 4, max_regular_number: 4 },
-      { id: 5, title: 'E', status: 'Abgeschlossen', total_volumes: 10, owned_volumes: 10, regular_owned: 9, extras_owned: 1 }
+      { id: 5, title: 'E', status: 'Abgeschlossen', total_volumes: 10, owned_volumes: 10, regular_owned: 9, extras_owned: 1 },
+      // volume 4 exists but is missing: the target is 4, not the stored total of 3
+      { id: 6, title: 'F', status: 'Laufend', total_volumes: 3, owned_volumes: 3, regular_owned: 3, max_regular_number: 4, missing_count: 1 }
     ];
     const { result } = renderHook(() => useCollectionFilters(list));
-    expect(result.current.completedSeries).toBe(2);
+    expect(result.current.completedSeries).toBe(1);
   });
 
   it('filters and sort apply and are remembered in localStorage', () => {

@@ -253,8 +253,9 @@ test('isSeriesComplete: spec A2, a known total and that many regular volumes own
         { id: 4, status: 'Laufend', total_volumes: 3, owned_volumes: 4, regular_owned: 4, max_regular_number: 5 },
         { id: 5, status: 'Laufend', total_volumes: null, owned_volumes: 2, regular_owned: 2, max_regular_number: 2 }
     ];
-    assert.deepEqual(list.map(isSeriesComplete), [false, false, true, true, false]);
-    assert.equal(getCollectionTotals(list).completedSeries, 2);
+    // #4 owns 4 regular volumes but the highest existing number is 5: the target is 5, so it is not complete
+    assert.deepEqual(list.map(isSeriesComplete), [false, false, true, false, false]);
+    assert.equal(getCollectionTotals(list).completedSeries, 1);
 });
 
 test('wishlist: chip counts wished series (server flag first), filter shows only them', async () => {

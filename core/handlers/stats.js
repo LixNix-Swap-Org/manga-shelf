@@ -86,13 +86,16 @@ function derivedStartDate(ctx, now) {
 
 /**
  * Completely collected (not release status), like isSeriesComplete in the frontend: total_volumes > 0 and the number of
- * distinct regular owned numbers (regular_owned of the series list) reaches total_volumes.
+ * distinct regular owned numbers (regular_owned of the series list) reaches the target: total_volumes, or the
+ * highest existing regular number when that is higher (a missing volume above the total keeps the series open).
  */
 const COMPLETED_SERIES_SQL = `
     SELECT count(*) AS count FROM mangas m
     WHERE m.total_volumes > 0
       AND (SELECT COUNT(DISTINCT v.number_sort) FROM volumes v
-           WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${regularNumberedSql('v')}) >= m.total_volumes
+           WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${regularNumberedSql('v')})
+          >= MAX(m.total_volumes, COALESCE((SELECT MAX(v.number_sort) FROM volumes v
+           WHERE v.manga_id = m.id AND ${regularNumberedSql('v')}), 0))
 `;
 
 const EFF_PUB = "COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt')";

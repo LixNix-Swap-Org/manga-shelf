@@ -147,8 +147,18 @@ test('completed_series: total_volumes > 0 and the distinct regular owned numbers
 
     const stale = await newSeries('Veraltete Gesamtzahl', { total_volumes: 3, status: 'Laufend' });
     for (const n of ['1', '2', '5']) await addVolume(stale, n);
-    await expectCompleted(1, 'three distinct regular numbers reach a total of 3');
+    await expectCompleted(0, 'the highest existing number 5 raises the target above the stale total of 3');
+    for (const n of ['3', '4']) await addVolume(stale, n);
+    await expectCompleted(1, 'owning 1..5 reaches the target');
     base += 1;
+
+    const missingAbove = await newSeries('Band 4 fehlt', { total_volumes: 3, status: 'Laufend' });
+    for (const n of ['1', '2', '3']) await addVolume(missingAbove, n);
+    await expectCompleted(1, '1..3 against a total of 3 complete the series');
+    base += 1;
+    await addVolume(missingAbove, '4', { status: 'Fehlt' });
+    await expectCompleted(-1, 'a missing volume 4 above the total of 3 keeps it open');
+    base -= 1;
 
     const dup = await newSeries('Doppelt', { total_volumes: 3, status: 'Laufend' });
     await addVolume(dup, '1');
@@ -167,9 +177,9 @@ test('completed_series: total_volumes > 0 and the distinct regular owned numbers
     await expectCompleted(1, 'storing the total completes it');
 });
 
-test('completed_series equals the series of GET /mangas with total_volumes > 0 && regular_owned >= total_volumes', async () => {
+test('completed_series equals the series of GET /mangas with total_volumes > 0 && regular_owned >= the target', async () => {
     const list = (await admin('GET', '/mangas')).body;
-    const expected = list.filter(m => m.total_volumes > 0 && m.regular_owned >= m.total_volumes).length;
+    const expected = list.filter(m => m.total_volumes > 0 && m.regular_owned >= Math.max(m.total_volumes, m.max_regular_number || 0)).length;
     assert.ok(expected >= 3);
     assert.equal((await getStats()).summary.completed_series, expected);
 });

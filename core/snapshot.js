@@ -38,7 +38,7 @@ function listMangas(ctx, userId, { volumeSearch = false } = {}) {
                    COALESCE(SUM(v.price), 0) as full_value,
                    COUNT(DISTINCT v.id) as volume_count,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND ${REGULAR} THEN v.number_sort END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
-                   MAX(CASE WHEN v.status = 'Vorhanden' AND ${REGULAR} THEN v.number_sort END) as max_regular_number,
+                   MAX(CASE WHEN ${REGULAR} THEN v.number_sort END) as max_regular_number, -- highest existing regular number, any status: a missing volume 4 keeps 3 of 3 from being complete
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND NOT ${REGULAR} THEN v.id END) as extras_owned,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN vr.volume_id END) as read_volume_count${volumeSearch ? `,
                    ${VOLUME_SEARCH_SQL} as volume_search` : ''}
