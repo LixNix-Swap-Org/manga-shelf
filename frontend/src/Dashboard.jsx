@@ -210,7 +210,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       anime.fetchSources();
       anime.syncList();
     }
-    if (activeMainView === 'episodes') anime.fetchAnime();
+    if (activeMainView === 'episodes') {
+      anime.fetchAnime();
+      anime.syncList();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount and on an offline change
   }, [user?.offline]);
 
@@ -240,7 +243,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     }
     if (view === 'episodes') {
       anime.fetchAnime();
-      anime.fetchSources();
+      anime.syncList();
     }
     if (view === 'radar') {
       fetchReleaseRadar();
@@ -509,7 +512,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, [anime.updateProgress]); // eslint-disable-line react-hooks/exhaustive-deps -- the action is stable
   const handleAnimeLink = useCallback(async (id, mangaId) => {
     try { await anime.update(id, { manga_id: mangaId }); } catch (err) { notify.error(err); }
-  }, [anime.update]);
+  }, [anime.update]); // eslint-disable-line react-hooks/exhaustive-deps -- the action is stable
   const handleOpenAnime = useCallback((entry) => setAnimeDetailId(entry.id), []);
 
   const handleOpenUsersModal = () => {

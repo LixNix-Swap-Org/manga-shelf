@@ -11,7 +11,7 @@ const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2 min-[380px
 const HINT_CLASS = 'hidden lg:flex min-w-0 items-center gap-2 text-xs text-slate-400';
 
 /** Full label from sm on, a short one below; phones also drop the count pills (the bottom navigation shows them), so the
- * four tabs fit 360 px. */
+ * five tabs fit 360 px. */
 const Label = ({ full, short }) => (
   <>
     <span className="hidden sm:inline">{full}</span>

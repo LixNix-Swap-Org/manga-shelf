@@ -5,6 +5,7 @@ import CoverImage from '../common/CoverImage';
 import useTabList from '../../hooks/useTabList';
 import { countdownText, displayTitle, kindOf, mangaLinks, newEpisodes } from '../../utils/animeHelpers';
 import { formatCount } from '../../utils/format';
+import { compareNatural } from '../../utils/search';
 import { t, tn } from '../../i18n/index.js';
 
 const TABS = ['episodes', 'manga'];
@@ -53,7 +54,7 @@ function EpisodesTab({ list, now, onOpen }) {
                   {countdownText(anime.next_airing, now, kindOf(anime))}
                   {anime.next_airing.estimated && <span className="text-slate-400">{t('(geschätzt)')}</span>}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">{t('Du bist bei Folge {n}', { n: anime.my_progress.episodes_watched || 0 })}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{tn('{n} Folge gesehen', '{n} Folgen gesehen', anime.my_progress.episodes_watched || 0)}</p>
               </div>
             </Row>
           ))}
@@ -76,14 +77,37 @@ function EpisodesTab({ list, now, onOpen }) {
   );
 }
 
+/**
+ * "Reihe wählen…" over the shelf: picking a series links the entry; the choice stays visible while the link is saved.
+ * The shelf's options appear once the select is used, so a long list without links does not hold rows × series options.
+ */
+function LinkSelect({ anime, shelf, busy, onPick }) {
+  const [value, setValue] = useState('');
+  const [opened, setOpened] = useState(false);
+  const open = () => setOpened(true);
+  const pick = (e) => {
+    if (!e.target.value) return;
+    setValue(e.target.value);
+    onPick(Number(e.target.value)).finally(() => setValue(''));
+  };
+  return (
+    <select value={value} disabled={busy} onChange={pick} onFocus={open} onPointerDown={open}
+      aria-label={t('Reihe für „{title}“ wählen', { title: displayTitle(anime) })} className="input-field mt-2 sm:max-w-xs disabled:opacity-60">
+      <option value="">{t('Reihe wählen…')}</option>
+      {opened && shelf.map((manga) => <option key={manga.id} value={manga.id}>{manga.title}</option>)}
+    </select>
+  );
+}
+
 function MangaTab({ list, mangas, canEdit, onLink }) {
-  const { linked, suggestions } = useMemo(() => mangaLinks(list, mangas), [list, mangas]);
+  const { linked, suggestions, unlinked } = useMemo(() => mangaLinks(list, mangas), [list, mangas]);
+  const shelf = useMemo(() => [...(mangas || [])].sort((a, b) => compareNatural(a.title, b.title)), [mangas]);
   const [busy, setBusy] = useState(null);
   const run = async (id, mangaId) => {
     setBusy(id);
     try { await onLink(id, mangaId); } finally { setBusy(null); }
   };
-  if (!linked.length && !suggestions.length) {
+  if (!linked.length && !suggestions.length && !unlinked.length) {
     return <Empty>{t('Noch keine Verknüpfung. Verknüpfe einen Anime im Detaildialog mit einer Reihe deiner Sammlung, oder lege ihn über „Anime-Adaption“ an der Reihe an.')}</Empty>;
   }
   return (
@@ -119,7 +143,7 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
                     <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
                     {manga.title}
                     <span className="text-slate-400">· {manga.total_volumes > 0
-                      ? `${manga.regular_owned ?? manga.owned_volumes ?? 0} / ${formatCount(manga.total_volumes, 'Band', 'Bände')}`
+                      ? t('{owned} von {volumes}', { owned: manga.regular_owned ?? manga.owned_volumes ?? 0, volumes: formatCount(manga.total_volumes, 'Band', 'Bänden') })
                       : formatCount(manga.owned_volumes || 0, 'Band', 'Bände')}</span>
                   </Link>
                 ) : <p className="text-xs text-slate-400 mt-0.5">{t('Die Reihe ist nicht mehr in der Sammlung.')}</p>}
@@ -130,6 +154,21 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
                   <Unlink className="w-4 h-4" aria-hidden="true" />
                 </button>
               )}
+            </Row>
+          ))}
+        </Section>
+      )}
+      {unlinked.length > 0 && (
+        <Section title={t('Ohne Verknüpfung')} count={unlinked.length}>
+          {unlinked.map((anime) => (
+            <Row key={anime.id}>
+              <Thumb anime={anime} />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-white line-clamp-2 break-words">{displayTitle(anime)}</p>
+                {canEdit && shelf.length > 0 && (
+                  <LinkSelect anime={anime} shelf={shelf} busy={busy === anime.id} onPick={(mangaId) => run(anime.id, mangaId)} />
+                )}
+              </div>
             </Row>
           ))}
         </Section>

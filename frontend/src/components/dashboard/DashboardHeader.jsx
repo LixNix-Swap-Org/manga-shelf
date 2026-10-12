@@ -7,7 +7,7 @@ import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
 import { getCoverOrigin } from '../../utils/coverOrigin';
-import { BookOpen, Calendar, ChartColumn, CloudUpload, Download, FileSpreadsheet, Globe, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
+import { BookOpen, Calendar, CalendarClock, ChartColumn, CloudUpload, Download, FileSpreadsheet, Globe, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { t } from '../../i18n/index.js';
 
@@ -532,6 +532,18 @@ export default function DashboardHeader({
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-fuchsia-200 border-fuchsia-500/30"
             >
               <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" /> {t('Anime')}
+            </button>
+
+            <button
+              id="btn-mobile-menu-episodes"
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setView('episodes');
+              }}
+              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-200 border-amber-500/30"
+            >
+              <CalendarClock className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Anime-Radar')}
             </button>
 
             {canEdit && (

@@ -89,7 +89,8 @@ describe('bottom navigation on phones', () => {
     const drawer = document.getElementById('mobile-menu-drawer');
     expect(drawer.closest('header')).toBeNull();
     expect(drawer.className).toContain('fixed');
-    expect(within(drawer).getByRole('button', { name: /Anime/ })).toBeTruthy();
+    expect(within(drawer).getByRole('button', { name: /^Anime$/ })).toBeTruthy();
+    expect(within(drawer).getByRole('button', { name: /^Anime-Radar$/ })).toBeTruthy();
 
     fireEvent.click(document.getElementById('btn-mobile-radar'));
     expect(screen.getByTestId('view').textContent).toBe('radar');
