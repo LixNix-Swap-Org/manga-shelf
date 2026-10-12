@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
-import { formatReleaseDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
+import { formatReleaseDate, isReleasedDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
 import { Package, Calendar, Star, RefreshCw, BookOpen, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
 import { formatCount, formatEuro } from '../../../utils/format';
 import CoverImage from '../../common/CoverImage';
@@ -230,7 +230,7 @@ export default function MpTimeline({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-4">
                 {group.items.map(item => {
                   const isOwned = volumeStatusGroup(item.user_volume_status) === 'owned';
-                  const actions = mpCardActions(item.user_volume_status);
+                  const actions = mpCardActions(item.user_volume_status, isReleasedDate(item.date));
                   const busy = importingMpIds.has(item.id);
                   const volumeName = t('{volume} von {title}', { volume: getVolumeDisplayTitle(item), title: item.title });
 
