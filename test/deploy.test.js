@@ -172,12 +172,14 @@ describe('Docker image', () => {
 
   test('multi-arch: only the runtime stage runs per target platform; labels, data folder and port are declared', () => {
     const stages = [...dockerfile.matchAll(/^FROM (--platform=\S+ )?\S+ AS (\S+)/gm)].map(m => ({ platform: m[1], name: m[2] }));
-    assert.deepEqual(stages.map(s => s.name), ['frontend-builder', 'backend-files', 'runner']);
-    assert.equal(stages[0].platform, '--platform=$BUILDPLATFORM ');
-    assert.equal(stages[1].platform, '--platform=$BUILDPLATFORM ');
-    assert.equal(stages[2].platform, undefined, 'the runtime stage must be built for the target platform');
+    assert.deepEqual(stages.map(s => s.name), ['frontend-builder', 'backend-files', 'backend-deps', 'runner']);
+    for (const stage of stages.slice(0, 3)) assert.equal(stage.platform, '--platform=$BUILDPLATFORM ', `${stage.name} runs on the build platform`);
+    assert.equal(stages[3].platform, undefined, 'the runtime stage must be built for the target platform');
+    const deps = dockerfile.slice(dockerfile.indexOf('AS backend-deps'), dockerfile.indexOf('AS runner'));
+    assert.match(deps, /npm ci --omit=dev --ignore-scripts/, 'production dependencies are installed once on the build platform (pure JavaScript, no QEMU)');
     const runner = dockerfile.slice(dockerfile.indexOf('AS runner'));
-    assert.match(runner, /npm ci --omit=dev --ignore-scripts/, 'production dependencies are installed in the target platform stage');
+    assert.doesNotMatch(runner, /npm ci/, 'the target platform stage only copies');
+    assert.match(runner, /^COPY --from=backend-deps \/deps\/node_modules \.\/node_modules$/m);
     assert.match(runner, /org\.opencontainers\.image\.version="\$\{VERSION\}"/);
     assert.match(runner, /org\.opencontainers\.image\.source="https:\/\/github\.com\/LixNix-Swap-Org\/manga-shelf"/);
     assert.match(runner, /DATA_DIR=\/app\/data/);
