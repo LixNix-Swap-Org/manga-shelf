@@ -292,7 +292,7 @@ describe('RadarTabs', () => {
 });
 
 const card = (over) => ({
-  id: 1, title: 'Berserk', volume_number: '42', publisher: 'Panini', date: '2026-10-02', price: 12, is_digital: false,
+  id: 1, title: 'Berserk', volume_number: '42', publisher: 'Panini', date: '2999-10-02', price: 12, is_digital: false,
   in_collection: true, user_manga_id: 4, match_kind: 'exact', user_volume_status: null, ...over
 });
 const renderTimeline = (props) => render(
