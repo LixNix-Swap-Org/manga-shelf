@@ -106,6 +106,8 @@ async function searchManga(ctx, term, { limit = 5, timeoutMs, signal } = {}) {
     return (Array.isArray(json.data) ? json.data : []).filter((m) => m && m.title).map(mangaLookupResult);
 }
 
+const TYPE_LABELS = { 'Light Novel': 'Light Novel', Novel: 'Light Novel', 'One-shot': 'One-Shot' };
+
 function mangaLookupResult(m) {
     const status = m.status === 'Finished' ? 'Abgeschlossen' : m.status === 'On Hiatus' ? 'Pausiert' : m.status === 'Discontinued' ? 'Abgebrochen' : 'Laufend';
     const author = Array.isArray(m.authors) && m.authors[0] ? m.authors[0].name : null;
@@ -114,6 +116,8 @@ function mangaLookupResult(m) {
         manga_passion_id: null,
         source: 'mal',
         source_label: 'MyAnimeList',
+        format: m.type || null,
+        format_label: TYPE_LABELS[m.type] || null,
         title: m.title_english || m.title,
         alt_title: m.title_japanese || m.title,
         alt_titles: [...new Set([m.title, m.title_english, m.title_japanese].filter(Boolean))],

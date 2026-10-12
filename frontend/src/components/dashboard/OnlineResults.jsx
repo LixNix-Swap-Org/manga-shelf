@@ -154,6 +154,9 @@ function SourceBadges({ hit }) {
           <Globe className="w-3 h-3" aria-hidden="true" />{label}
         </span>
       ))}
+      {hit.format_label && (
+        <span className="inline-flex items-center bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-px rounded text-[10px] font-medium shrink-0">{hit.format_label}</span>
+      )}
     </>
   );
 }

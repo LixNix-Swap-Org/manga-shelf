@@ -18,6 +18,8 @@ function cleanAniListDescription(raw) {
     return text || null;
 }
 
+const FORMAT_LABELS = { NOVEL: 'Light Novel', ONE_SHOT: 'One-Shot' };
+
 function mapAniListMedia(m) {
     let author = null;
     if (m.staff?.edges) {
@@ -39,6 +41,8 @@ function mapAniListMedia(m) {
         manga_passion_id: null,
         source: 'anilist',
         source_label: 'AniList',
+        format: m.format || null,
+        format_label: FORMAT_LABELS[m.format] || null,
         title: m.title?.english || m.title?.romaji,
         alt_title: m.title?.native || m.title?.romaji,
         alt_titles: [...new Set([m.title?.romaji, m.title?.english, m.title?.native].filter(Boolean))],
