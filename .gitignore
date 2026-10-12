@@ -30,6 +30,9 @@ ssl/
 *.key
 *.crt
 *.p12
+*.keystore
+*.jks
+*.secrets.txt
 *.pfx
 
 # Logs

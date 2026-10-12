@@ -163,12 +163,47 @@ describe('signing', () => {
     assert.throws(() => createKey.parseArgs(['--alias', 'a b']), /Alias/);
   });
 
-  it('create-android-key never replaces an existing keystore', () => {
+  it('create-android-key never replaces an existing keystore or secrets file', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-key-'));
     const out = path.join(dir, 'rel.keystore');
     fs.writeFileSync(out, 'old');
     assert.throws(() => createKey.createAndroidKey({ out, alias: 'manga-shelf' }), /existiert schon/);
     assert.equal(fs.readFileSync(out, 'utf8'), 'old');
+    fs.rmSync(out);
+    fs.writeFileSync(`${out}.secrets.txt`, 'old');
+    assert.throws(() => createKey.createAndroidKey({ out, alias: 'manga-shelf' }), /existiert schon/);
+    assert.ok(!fs.existsSync(out), 'nothing created next to an existing secrets file');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const hasKeytool = (() => {
+    try { execFileSync('keytool', ['-help'], { stdio: 'ignore' }); return true; } catch (_) { return false; }
+  })();
+
+  it('create-android-key writes a PKCS12 key and the four secrets with mode 0600', { skip: hasKeytool ? false : 'keytool not installed' }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-key-'));
+    const out = path.join(dir, 'rel.keystore');
+    const result = createKey.createAndroidKey({ out, alias: 'manga-shelf' });
+    assert.match(result.sha256, /^[0-9a-f]{64}$/);
+    for (const file of [out, result.secretsFile]) assert.equal(fs.statSync(file).mode & 0o777, 0o600, file);
+    const lines = fs.readFileSync(result.secretsFile, 'utf8').trim().split('\n');
+    assert.deepEqual(lines.map((l) => l.split('=')[0]), ['ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']);
+    assert.equal(lines[1].slice('ANDROID_KEYSTORE_PASSWORD='.length), lines[3].slice('ANDROID_KEY_PASSWORD='.length));
+    assert.equal(Buffer.from(lines[0].slice('ANDROID_KEYSTORE_BASE64='.length), 'base64').equals(fs.readFileSync(out)), true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('create-android-key leaves nothing behind when keytool cannot list the new key', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-key-'));
+    const out = path.join(dir, 'sub', 'rel.keystore');
+    const env = process.env.PATH;
+    process.env.PATH = dir;
+    try {
+      assert.throws(() => createKey.createAndroidKey({ out, alias: 'manga-shelf' }));
+    } finally {
+      process.env.PATH = env;
+    }
+    assert.ok(!fs.existsSync(out) && !fs.existsSync(`${out}.secrets.txt`), 'no orphaned keystore');
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
