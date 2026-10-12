@@ -1,6 +1,6 @@
 # Manga Shelf: multi-arch image (linux/amd64, linux/arm64), published as ghcr.io/lixnix-swap-org/manga-shelf
-# by .github/workflows/release.yml. Frontend and file staging run on the build platform (their output is the same
-# for every architecture); only the runtime stage runs per target platform.
+# by .github/workflows/release.yml. Frontend, production dependencies and file staging run on the build platform
+# (their output is the same for every architecture); only the runtime stage runs per target platform.
 
 # ===================================================
 # Stage 1: Build the React / Vite Frontend
@@ -26,7 +26,17 @@ COPY . .
 RUN node scripts/stage-backend.js /backend
 
 # ===================================================
-# Stage 3: Production Node.js Runtime for Express Backend
+# Stage 3: Production dependencies (pure JavaScript, identical for every architecture). Installed on the build
+# platform: npm under QEMU emulation of the arm64 target crashes now and then with "Illegal instruction".
+# ===================================================
+FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24 AS backend-deps
+WORKDIR /deps
+COPY package*.json ./
+# Install production dependencies exactly as locked; none of them needs an install script
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+# ===================================================
+# Stage 4: Production Node.js Runtime for Express Backend
 # ===================================================
 FROM node:22.23.3-alpine3.24 AS runner
 WORKDIR /app
@@ -46,9 +56,8 @@ ENV NODE_ENV=production \
 
 RUN apk add --no-cache su-exec
 
-# Install production dependencies exactly as locked; none of them needs an install script
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+COPY --from=backend-deps /deps/node_modules ./node_modules
 
 COPY --from=backend-files /backend/ ./
 
