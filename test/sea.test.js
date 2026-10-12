@@ -533,7 +533,7 @@ describe('permissions (acl.js)', () => {
         }
     });
 
-    test('Unix .env rules: owner, g+w/o+w, a folder others may change, a sticky folder', { skip: process.platform === 'win32' }, () => {
+    test('Unix .env rules: owner, g+w/o+w, a folder others may change, a sticky folder', { skip: process.platform === 'win32' || process.getuid?.() === 0 ? 'needs a non-root user' : false }, () => {
         const dir = tmpDir('ms-env-unix-');
         try {
             const file = path.join(dir, '.env');
