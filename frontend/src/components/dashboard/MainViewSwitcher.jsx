@@ -1,7 +1,7 @@
 import { Library, ShoppingCart, Calendar, Tv, CalendarClock } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 
-const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2 min-[380px]:px-2.5 sm:px-4 py-2 [@media(pointer:coarse)]:py-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
+const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-1.5 min-[430px]:px-2.5 sm:px-4 py-2 [@media(pointer:coarse)]:py-3.5 rounded-xl text-[11px] min-[430px]:text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
   active
     ? 'bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow-lg shadow-brand-500/25'
     : 'text-slate-400 hover:text-white'
@@ -11,7 +11,7 @@ const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-2 min-[380px
 const HINT_CLASS = 'hidden lg:flex min-w-0 items-center gap-2 text-xs text-slate-400';
 
 /** Full label from sm on, a short one below; phones also drop the count pills (the bottom navigation shows them), so the
- * five tabs fit 360 px. */
+ * five tabs fit 360 px. The Anime-Radar tab keeps its full name on phones; the tab text shrinks below 430 px instead. */
 const Label = ({ full, short }) => (
   <>
     <span className="hidden sm:inline">{full}</span>
@@ -92,8 +92,7 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
             className={tabClass(activeMainView === 'episodes')}
           >
             <CalendarClock className="w-4 h-4 text-amber-400 hidden sm:block" aria-hidden="true" />
-            {/* i18n-ignore: both props are translated */}
-            <Label full={t('Anime-Radar')} short={t('Folgen')} />
+            <span>{t('Anime-Radar')}</span>
           </button>
         </nav>
 
