@@ -17,6 +17,8 @@ import { joinTags, splitTags, tagKey } from '../../utils/tags';
 import { rich } from '../../i18n/react.jsx';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import { t as tr, tn } from '../../i18n/index.js';
+import ConfirmDialog from '../modals/ConfirmDialog';
+import { seriesDeleteConfirmText } from '../../hooks/useMangaData';
 
 // i18n
 const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
@@ -189,6 +191,7 @@ export default function MangaHeroCard({
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const inRouter = useInRouterContext();
   const ids = useId();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const coverUrl = heroCoverUrl({ manga, formData, editing });
   const authors = splitAuthors(manga.author);
   const seriesTags = splitTags(manga.tags);
@@ -611,7 +614,7 @@ export default function MangaHeroCard({
                       </button>
                       <button 
                         id="btn-delete-manga"
-                        onClick={handleDeleteManga} 
+                        onClick={() => setConfirmDeleteOpen(true)} 
                         className="btn-danger text-xs flex items-center gap-1.5 py-2 px-3"
                         title={tr('Reihe löschen')}
                         aria-label={tr('Reihe löschen')}
@@ -764,6 +767,19 @@ export default function MangaHeroCard({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDeleteOpen}
+        title={tr('Reihe löschen')}
+        message={seriesDeleteConfirmText(manga?.title || '')}
+        confirmLabel={tr('Löschen')}
+        cancelLabel={tr('Abbrechen')}
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          handleDeleteManga(true);
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

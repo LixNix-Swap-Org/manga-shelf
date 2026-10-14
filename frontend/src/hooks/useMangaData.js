@@ -376,9 +376,9 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     if (list) writeCache(ownerRef.current, LIST_KEY, list.data.filter((m) => String(m.id) !== String(id)));
   };
 
-  const handleDeleteManga = async () => {
+  const handleDeleteManga = async (confirmed = false) => {
     if (!canEdit || !manga) return;
-    if (!confirm(seriesDeleteConfirmText(manga.title))) return;
+    if (!confirmed && !confirm(seriesDeleteConfirmText(manga.title))) return;
     const { title } = manga;
     const seriesId = id;
     try {
@@ -389,7 +389,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
         syncOfflineCopy({ force: true });
-        navigate('/');
+        navigate('/', { replace: true });
         // the page is gone by then: a restored series opens again
         notifyTrashed(`„${title}“`, trashId, (ok) => {
           if (!ok) return;

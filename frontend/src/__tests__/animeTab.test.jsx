@@ -911,6 +911,24 @@ describe('AnimeDetailModal', () => {
       expect(updateProgress).toHaveBeenCalledWith(1, { episodes_watched: 3 });
     });
 
+    it('closing with unsaved notes asks for confirmation and cancels close if confirm rejected', async () => {
+      const onClose = vi.fn();
+      openEditable(onePiece(), { onClose });
+      await act(async () => {});
+      const notesInput = screen.getByLabelText('Meine Notiz');
+      fireEvent.change(notesInput, { target: { value: 'Neue ungespeicherte Notiz' } });
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(confirmSpy).toHaveBeenCalledWith('Ungespeicherte Änderungen verwerfen?');
+      expect(onClose).not.toHaveBeenCalled();
+
+      confirmSpy.mockReturnValue(true);
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(onClose).toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
     it('"Von meiner Liste entfernen" offers to undo with the removed progress, single marks and ratings included', async () => {
       const shown = [];
       const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
