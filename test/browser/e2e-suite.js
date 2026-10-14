@@ -113,6 +113,7 @@ async function runTestSuite() {
 
     const deleted = waitForApi(page, 'DELETE', /^\/api\/users\/\d+$/);
     await clickSelector(page, 'button[title*="autotest_user"]');
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await deleted).ok(), 'deleting the user failed');
     await page.waitForFunction(() => !document.querySelector('button[title*="autotest_user"]'), { timeout: 10000 });
     const users = await apiOk(page, 'GET', '/api/users');
