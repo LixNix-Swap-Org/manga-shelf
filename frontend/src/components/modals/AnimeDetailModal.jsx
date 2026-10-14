@@ -18,6 +18,7 @@ import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
 import episodeMarks from '../../../../core/anime/episodes.js';
+import ConfirmDialog from './ConfirmDialog';
 import { t, tn } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -59,7 +60,7 @@ const formValues = (progress) => ({
  * Own progress: counter, status, score, watched languages and note, saved together. A new stored progress (a grid tap,
  * a reload) only replaces the fields whose stored value changed, so an unsaved note or score survives it.
  */
-function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
+function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange }) {
   const ids = useId();
   const seeded = useRef(null);
   if (seeded.current === null) seeded.current = formValues(progress);
@@ -76,6 +77,19 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     for (const [field, set] of Object.entries(setters)) if (next[field] !== last[field]) set(next[field]);
     seeded.current = next;
   }, [progress]);
+
+  const isDirty = Boolean(
+    (episodes !== '' && Number(episodes) !== (progress?.episodes_watched ?? 0)) ||
+    status !== (progress?.status || 'Geplant') ||
+    (score ? Number(score) : null) !== (progress?.score ?? null) ||
+    (notes.trim() || null) !== (progress?.notes ?? null) ||
+    (audio || null) !== (progress?.audio_language ?? null) ||
+    (subtitle || null) !== (progress?.subtitle_language ?? null)
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
   const movie = kindOf(anime) === 'movie';
   const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
@@ -561,11 +575,25 @@ export default function AnimeDetailModal({
   const [expanded, setExpanded] = useState(false);
   const [titleDe, setTitleDe] = useState('');
   const [refreshLeft, setRefreshLeft] = useState(0);
+  const [progressDirty, setProgressDirty] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const begin = useLatestRequest();
   const hasFallback = useRef(Boolean(fallback));
   hasFallback.current = Boolean(fallback);
   const titleId = useId();
-  const dialogRef = useDialogA11y(isOpen, { onClose });
+
+  const anime = detail || fallback;
+  const isTitleDirty = Boolean(anime && titleDe.trim() !== (anime.title_de || '').trim());
+  const isDirty = progressDirty || isTitleDirty;
+
+  const requestClose = useCallback(() => {
+    if (isDirty) {
+      if (!confirm(t('Ungespeicherte Änderungen verwerfen?'))) return;
+    }
+    onClose();
+  }, [isDirty, onClose]);
+
+  const dialogRef = useDialogA11y(isOpen, { onClose: requestClose });
   const latest = useRef(null);
 
   const load = useCallback(async () => {
@@ -589,7 +617,6 @@ export default function AnimeDetailModal({
     load();
   }, [isOpen, load]);
 
-  const anime = detail || fallback;
   useEffect(() => { setTitleDe(anime?.title_de || ''); }, [anime?.title_de]);
 
   useEffect(() => {
@@ -630,7 +657,11 @@ export default function AnimeDetailModal({
   });
 
   const doDelete = () => {
-    if (!confirm(t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) }))) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    setDeleteConfirmOpen(false);
     run(async () => {
       await remove(animeId);
       notify.success(t('Anime gelöscht'));
@@ -707,14 +738,14 @@ export default function AnimeDetailModal({
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') requestClose(); }}
       className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
     >
       <div className="dialog-box glass-panel max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden">
         <div className="relative h-28 sm:h-40 bg-slate-900">
           {anime?.banner_image && <CoverImage src={anime.banner_image} className="w-full h-full object-cover opacity-70" />}
-          <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
+          <button type="button" onClick={requestClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -794,7 +825,7 @@ export default function AnimeDetailModal({
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
                   <OwnProgress key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy || gridBusy}
-                    onRemove={onRemove} />
+                    onRemove={onRemove} onDirtyChange={setProgressDirty} />
                 </section>
               )}
 
@@ -884,6 +915,16 @@ export default function AnimeDetailModal({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={t('Anime löschen')}
+        message={t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) })}
+        confirmLabel={t('Löschen')}
+        cancelLabel={t('Abbrechen')}
+        busy={busy}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   );
 }

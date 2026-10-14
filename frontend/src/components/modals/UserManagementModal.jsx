@@ -396,7 +396,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
           </h3>
 
           <form onSubmit={handleCreateUser} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor={`${fieldId}-name`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                   {t('Benutzername')}
@@ -432,13 +432,13 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label htmlFor={`${fieldId}-role`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                   {t('Rolle')}
                 </label>
                 <select
                   id={`${fieldId}-role`}
-                  className="input-field bg-slate-950 text-base sm:text-xs py-2"
+                  className="input-field bg-slate-950 text-base sm:text-xs py-2 w-full"
                   value={newUser.role}
                   onChange={e => {
                     setNewUser({ ...newUser, role: e.target.value });

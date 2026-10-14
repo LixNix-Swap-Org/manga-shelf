@@ -53,6 +53,7 @@ const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
 const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
+const ConfirmDialog = lazy(() => import('./components/modals/ConfirmDialog'));
 
 // i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime', episodes: 'Anime-Radar' };
@@ -447,14 +448,18 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setShowAddModal(true);
   }, [canEdit]);
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   // stable for the memoised grid
   afterDeleteRef.current = () => {
     fetchShoppingList();
     if (!user?.offline) fetchReleaseRadar();
   };
-  const onDeleteManga = useCallback(async (e, id, title) => {
-    if (await handleDeleteManga(e, id, title)) afterDeleteRef.current();
-  }, [handleDeleteManga]);
+  const onDeleteManga = useCallback((e, id, title) => {
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+    setDeleteTarget({ id, title });
+  }, []);
 
   const handleOpenPasswordModal = () => {
     setAccountTab('password');
@@ -910,6 +915,25 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               if (!user?.offline) fetchReleaseRadar();
             }}
+          />
+        )}
+
+        {deleteTarget && (
+          <ConfirmDialog
+            isOpen
+            title={t('Manga löschen')}
+            message={t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title: deleteTarget.title })}
+            confirmLabel={t('Löschen')}
+            cancelLabel={t('Abbrechen')}
+            isDanger={true}
+            onConfirm={async () => {
+              const target = deleteTarget;
+              setDeleteTarget(null);
+              if (target && (await handleDeleteManga(null, target.id, target.title, true))) {
+                afterDeleteRef.current();
+              }
+            }}
+            onCancel={() => setDeleteTarget(null)}
           />
         )}
       </Suspense>
