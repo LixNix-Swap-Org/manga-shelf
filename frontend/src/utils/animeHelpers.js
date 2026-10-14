@@ -616,6 +616,20 @@ const titleKey = (value) => foldText(value).replace(/[^\p{L}\p{N}]+/gu, ' ').tri
 /** One title key starts with the other as whole words, the shorter one at least 5 characters long. */
 const titlePrefix = (a, b) => Math.min(a.length, b.length) >= 5 && (a.startsWith(`${b} `) || b.startsWith(`${a} `));
 
+const SHARED_WORD_MIN = 7;
+
+/**
+ * Weakest match: a whole word of at least 7 letters or digits that both titles contain ("Frieren" in
+ * "Frieren – Nach dem Ende der Reise" and "Frieren: Beyond Journey's End"). Only counts when exactly one series
+ * of the shelf shares such a word, so a generic word never picks a series by chance.
+ */
+function sharedWordHit(rows, animeKeys) {
+  const words = new Set(animeKeys.flatMap((key) => key.split(' ')).filter((w) => w.length >= SHARED_WORD_MIN));
+  if (!words.size) return null;
+  const hits = rows.filter((row) => row.keys.some((key) => key.split(' ').some((w) => words.has(w))));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /**
  * "Anime mit Manga verknüpfen": entries linked to a series of the shelf (`linked`, with the series row), entries
  * without a link that name a series of the shelf (`suggestions`: a series whose title folds to the same text wins over
@@ -636,7 +650,8 @@ export function mangaLinks(list, mangas) {
     }
     const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native].map(titleKey).filter(Boolean);
     const hit = rows.find((row) => row.keys.some((a) => keys.includes(a)))
-      || rows.find((row) => row.keys.some((a) => keys.some((b) => titlePrefix(a, b))));
+      || rows.find((row) => row.keys.some((a) => keys.some((b) => titlePrefix(a, b))))
+      || sharedWordHit(rows, keys);
     if (hit) suggestions.push({ anime, manga: hit.manga });
     else unlinked.push(anime);
   });
