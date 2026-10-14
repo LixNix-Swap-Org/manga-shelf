@@ -110,8 +110,7 @@ const cardSelector = async (page) => {
         await page.waitForFunction((title) => document.querySelector('[role="dialog"]')?.innerText.includes(title), { timeout: 5000 }, TITLE);
         const removed = waitForApi(page, 'DELETE', `/api/anime/${id}`);
         await clickText(page, 'Für alle löschen', { within: '[role="dialog"]' });
-        const confirmBtn = await page.$('#confirm-dialog-confirm');
-        if (confirmBtn) await confirmBtn.click().catch(() => {});
+        await clickSelector(page, '#confirm-dialog-confirm');
         assert.equal((await removed).status(), 200);
         await waitForToast(page, 'Anime gelöscht', { kind: 'success' });
         await page.waitForFunction((sel) => !document.querySelector(sel), { timeout: 5000 }, card);

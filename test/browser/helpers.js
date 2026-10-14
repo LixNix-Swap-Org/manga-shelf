@@ -36,26 +36,6 @@ function watchPage(page) {
         window.addEventListener(event, e => {
             if (e.detail && e.detail.kind === 'error') console.info(prefix + e.detail.message);
         });
-        const autoConfirm = () => {
-            const btn = document.getElementById('confirm-dialog-confirm');
-            if (btn && !btn.disabled && !btn.dataset.autoConfirmed) {
-                btn.dataset.autoConfirmed = 'true';
-                setTimeout(() => {
-                    try { btn.click(); } catch (e) {}
-                }, 20);
-            }
-        };
-        const obs = new MutationObserver(autoConfirm);
-        const attach = () => {
-            if (document.body) {
-                obs.observe(document.body, { childList: true, subtree: true });
-            } else {
-                window.addEventListener('DOMContentLoaded', () => {
-                    if (document.body) obs.observe(document.body, { childList: true, subtree: true });
-                }, { once: true });
-            }
-        };
-        attach();
     }, NOTIFY_EVENT, TOAST_LOG_PREFIX).catch(() => {});
     page.on('pageerror', err => {
         console.error('  [Page Exception]:', err.message);

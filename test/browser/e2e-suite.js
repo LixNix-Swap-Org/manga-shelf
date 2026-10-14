@@ -338,8 +338,7 @@ async function runTestSuite() {
     console.log('\n--- TEST 7: Delete Created Manga ---');
     const removed = waitForApi(page, 'DELETE', `/api/mangas/${mangaId}`);
     await clickSelector(page, 'button[title="Reihe löschen"]');
-    const confirmBtn = await page.$('#confirm-dialog-confirm');
-    if (confirmBtn) await confirmBtn.click().catch(() => {});
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await removed).ok(), 'deleting the series failed');
     await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
     assert.equal((await api(page, 'GET', `/api/mangas/${mangaId}`)).status, 404, 'the deleted series is still served');
