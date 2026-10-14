@@ -567,6 +567,7 @@
   "Dein Profil": "내 프로필",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "내 비밀번호는 오른쪽 위의 자물쇠 아이콘(“계정: 비밀번호 및 API 키”, “비밀번호” 탭)에서 변경해요.",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "이 주소에서 다시 로그인한 뒤에야 로그인 정보가 이 주소로 전송돼요. 직접 링크를 열었을 때만 추가해 주세요.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "입력한 내용이 아직 저장되지 않았으며 사라집니다.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "내 컬렉션에는 {db_total}권으로 되어 있어요 (대개 AniList의 원작 기준 권수). 독일어판은 {official_total}권이에요.",
   "Deine Sammlung ist noch leer": "컬렉션이 아직 비어 있어요",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "세션이 만료되었거나 유효하지 않아요. 페이지를 새로고침하고 다시 로그인해 주세요.",

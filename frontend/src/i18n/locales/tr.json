@@ -580,6 +580,7 @@
   "Dein Profil": "Profilin",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "Kendi parolanı sağ üstteki kilit simgesinden değiştirirsin (“Hesap: parola ve API anahtarları”, “Parola” sekmesi).",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "Girişin, orada yeniden oturum açana kadar bu adrese gönderilmez. Adresi yalnızca bağlantıyı kendin açtıysan ekle.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "Girdiğiniz bilgiler henüz kaydedilmedi ve kaybolacak.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "Koleksiyonun {db_total} cilt gösteriyor (çoğunlukla AniList’teki orijinal sayım). Almanca baskı {official_total} ciltten oluşuyor.",
   "Deine Sammlung ist noch leer": "Koleksiyonun henüz boş",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "Oturumun sona erdi veya geçersiz. Lütfen sayfayı yeniden yükle ve giriş yap.",

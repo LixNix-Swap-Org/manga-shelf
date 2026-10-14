@@ -593,6 +593,7 @@
   "Dein Profil": "Seu perfil",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "Para alterar a sua própria senha, use o ícone de cadeado no canto superior direito (“Conta: senha e chaves de API”, aba “Senha”).",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "Seu login só será enviado a este endereço depois que você entrar novamente nele. Adicione-o somente se você mesmo abriu o link.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "Suas alterações ainda não foram salvas e serão perdidas.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "Sua coleção indica {db_total} volumes (muitas vezes a contagem original do AniList). A edição alemã tem {official_total} volumes.",
   "Deine Sammlung ist noch leer": "Sua coleção ainda está vazia",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "Sua sessão expirou ou é inválida. Recarregue a página e entre novamente.",

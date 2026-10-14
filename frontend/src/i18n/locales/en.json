@@ -580,6 +580,7 @@
   "Dein Profil": "Your profile",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "You change your own password with the lock icon at the top right (“Account: password and API keys”, tab “Password”).",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "Your sign-in is only sent to this address after you have signed in there again. Only add it if you opened the link yourself.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "Your input has not been saved yet and will be lost.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "Your collection lists {db_total} volumes (often the original AniList count). The German edition has {official_total} volumes.",
   "Deine Sammlung ist noch leer": "Your collection is still empty",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "Your session has expired or is invalid. Please reload the page and sign in.",
