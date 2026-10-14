@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
@@ -26,13 +27,14 @@ export default function ConfirmDialog({
 
   if (!isOpen) return null;
 
-  return (
+  // portal: inside a glass-panel (backdrop-filter) or a scrolling dialog a fixed overlay only covers that ancestor
+  return createPortal(
     <div
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      aria-describedby={descId}
+      aria-describedby={message ? descId : undefined}
       tabIndex={-1}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !busy) {
@@ -43,7 +45,7 @@ export default function ConfirmDialog({
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) onCancel();
       }}
-      className="outline-none dialog-overlay z-[70] bg-black/80 backdrop-blur-md animate-fade-in flex items-center justify-center p-4"
+      className="outline-none dialog-overlay z-[68] bg-black/80 backdrop-blur-md animate-fade-in flex items-center justify-center p-4"
     >
       <div className="dialog-box glass-panel max-w-md w-full rounded-2xl p-6 border border-slate-700/80 shadow-2xl animate-scale-in">
         <div className="flex items-start gap-4">
@@ -58,9 +60,11 @@ export default function ConfirmDialog({
             <h3 id={titleId} className="text-base font-bold text-white tracking-tight">
               {title}
             </h3>
-            <p id={descId} className="text-sm text-slate-300 mt-2 whitespace-pre-line leading-relaxed">
-              {message}
-            </p>
+            {message && (
+              <p id={descId} className="text-sm text-slate-300 mt-2 whitespace-pre-line leading-relaxed">
+                {message}
+              </p>
+            )}
           </div>
         </div>
 
@@ -70,6 +74,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
+            data-autofocus
             className="btn-secondary text-xs px-4 py-2"
           >
             {cancelLabel}
@@ -84,12 +89,12 @@ export default function ConfirmDialog({
                 ? 'btn-danger text-xs px-4 py-2 font-semibold'
                 : 'btn-primary text-xs px-4 py-2 font-semibold'
             }
-            autoFocus
           >
             {confirmLabel}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
