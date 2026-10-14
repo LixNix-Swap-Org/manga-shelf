@@ -9,6 +9,7 @@ import { prepareImagesForUpload } from '../utils/imageResize';
 import { UPLOAD_CANCELLED, notifyTrashed, volumeDeleteConfirmText } from './useVolumeActions';
 import { getVolumeDisplayTitle } from '../utils/volumeHelpers';
 import { t, tn } from '../i18n/index.js';
+import { askConfirm } from '../components/modals/askConfirm';
 import { payloadText, serverText } from '../i18n/serverText.js';
 
 /**
@@ -300,7 +301,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     if (e) e.stopPropagation();
     if (!canEdit) return;
     const vol = activeVolume && String(activeVolume.id) === String(volId) ? activeVolume : null;
-    if (!confirm(volumeDeleteConfirmText(vol))) return;
+    if (!(await askConfirm(volumeDeleteConfirmText(vol), { title: t('Band löschen') }))) return;
     setFormError('');
     const result = await deleteVolumeRequest(volId, { signal: signal() });
     if (result.aborted) return;

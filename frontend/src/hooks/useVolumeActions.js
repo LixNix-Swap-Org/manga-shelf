@@ -7,6 +7,7 @@ import { prepareImageForUpload } from '../utils/imageResize';
 import { submitChange, applyChangeToCaches } from '../utils/outbox';
 import { applyVolumeChange } from '../utils/volumePatch';
 import { t, tn } from '../i18n/index.js';
+import { askConfirm } from '../components/modals/askConfirm';
 import { serverText } from '../i18n/serverText.js';
 
 /** Error text of a failed response: the JSON `error`, else the fallback (proxies answer 502/504/413 with HTML). */
@@ -436,7 +437,7 @@ export default function useVolumeActions({
       : (volumes || []).find(v => String(v.id) === String(volOrId))
         || (activeVolume && String(activeVolume.id) === String(volOrId) ? activeVolume : null);
     const volId = typeof volOrId === 'object' ? volOrId.id : volOrId;
-    if (!confirm(volumeDeleteConfirmText(vol))) return;
+    if (!(await askConfirm(volumeDeleteConfirmText(vol), { title: t('Band löschen') }))) return;
     let res;
     try {
       res = await apiFetch(`/api/volumes/${volId}`, { method: 'DELETE' });

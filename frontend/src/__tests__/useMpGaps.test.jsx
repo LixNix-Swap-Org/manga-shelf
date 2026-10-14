@@ -211,6 +211,7 @@ describe('useMpGaps', () => {
       await act(async () => { await result.current.fetchMpGaps(); });
       let pending;
       act(() => { pending = result.current.handleBatchFillGaps('Fehlt'); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
       const importCall = fetchMock.mock.calls.find(([url]) => String(url).includes('batch-import'));
       await act(async () => { await vi.advanceTimersByTimeAsync(TIMEOUTS.long - 1000); });
       expect(importCall[1].signal.aborted).toBe(false);
