@@ -567,6 +567,7 @@
   "Dein Profil": "你的个人资料",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "要更改自己的密码，请点击右上角的锁形图标（“账户：密码和 API 密钥”，“密码”标签页）。",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "只有在那里重新登录之后，你的登录信息才会发送到这个地址。只有当你自己打开过该链接时才添加它。",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "您输入的内容尚未保存，将会丢失。",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "你的收藏标注共 {db_total} 卷（通常是 AniList 的原版卷数）。德文版共 {official_total} 卷。",
   "Deine Sammlung ist noch leer": "你的收藏还是空的",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "你的会话已过期或无效。请刷新页面并重新登录。",

@@ -593,6 +593,7 @@
   "Dein Profil": "Ton profil",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "Tu changes ton propre mot de passe avec l'icône de cadenas en haut à droite (« Compte : mot de passe et clés API », onglet « Mot de passe »).",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "Ta connexion n'est envoyée à cette adresse qu'après que tu t'y es reconnecté. Ajoute-la seulement si tu as ouvert le lien toi-même.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "Vos saisies n'ont pas encore été enregistrées et seront perdues.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "Ta collection indique {db_total} tomes (souvent le décompte d'origine d'AniList). L'édition allemande compte {official_total} tomes.",
   "Deine Sammlung ist noch leer": "Ta collection est encore vide",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "Ta session a expiré ou n'est pas valide. Recharge la page et connecte-toi.",

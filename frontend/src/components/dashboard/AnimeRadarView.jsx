@@ -224,7 +224,7 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, o
   const labels = { episodes: t('Neue Folgen'), manga: t('Manga-Verknüpfung') };
   return (
     <div id="anime-radar-view">
-      <h1 className="sr-only">{t('Anime-Radar')}</h1>
+      <h2 className="sr-only">{t('Anime-Radar')}</h2>
       <div {...tabListProps} aria-label={t('Bereiche')} className="flex w-full sm:inline-flex sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
         {TABS.map((key) => (
           <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>

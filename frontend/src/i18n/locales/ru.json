@@ -606,6 +606,7 @@
   "Dein Profil": "Ваш профиль",
   "Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).": "Свой пароль вы меняете значком замка вверху справа («Аккаунт: пароль и ключи API», вкладка «Пароль»).",
   "Deine Anmeldung wird erst an diese Adresse gesendet, nachdem du dich dort neu angemeldet hast. Füge sie nur hinzu, wenn du den Link selbst geöffnet hast.": "Ваши данные для входа будут отправлены на этот адрес только после того, как вы войдёте там заново. Добавляйте его, только если вы сами открыли эту ссылку.",
+  "Deine Eingaben wurden noch nicht gespeichert und gehen verloren.": "Введённые данные ещё не сохранены и будут потеряны.",
   "Deine Sammlung gibt {db_total} Bände an (oft AniList-Originalzählung). Die deutsche Edition umfasst {official_total} Bände.": "В вашей коллекции указано томов: {db_total} (часто это оригинальное число из AniList). В немецком издании томов: {official_total}.",
   "Deine Sammlung ist noch leer": "Ваша коллекция пока пуста",
   "Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.": "Сессия истекла или недействительна. Обновите страницу и войдите.",
