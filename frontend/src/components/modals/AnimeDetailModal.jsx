@@ -578,6 +578,7 @@ export default function AnimeDetailModal({
   const [refreshLeft, setRefreshLeft] = useState(0);
   const [progressDirty, setProgressDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const begin = useLatestRequest();
   const hasFallback = useRef(Boolean(fallback));
   hasFallback.current = Boolean(fallback);
@@ -589,7 +590,8 @@ export default function AnimeDetailModal({
 
   const requestClose = useCallback(() => {
     if (isDirty) {
-      if (!confirm(t('Ungespeicherte Änderungen verwerfen?'))) return;
+      setDiscardOpen(true);
+      return;
     }
     onClose();
   }, [isDirty, onClose]);
@@ -925,6 +927,15 @@ export default function AnimeDetailModal({
         busy={busy}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={discardOpen}
+        title={t('Ungespeicherte Änderungen verwerfen?')}
+        confirmLabel={t('Verwerfen')}
+        cancelLabel={t('Abbrechen')}
+        isDanger={false}
+        onConfirm={() => { setDiscardOpen(false); onClose(); }}
+        onCancel={() => setDiscardOpen(false)}
       />
     </div>
   );

@@ -6,6 +6,9 @@
 - **Database migrations 29 to 31** run at the first start: `anime_progress.watched_episodes` (single watched episodes), `anime_progress.episode_scores` (ratings of single episodes) and `animes.custom_seasons` (seasons set by hand). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.3.0 cannot open the migrated database.
 - **Going back to 3.3.0 restores the backup from before the update, and everything changed since is lost** (new series and volumes, reading state, anime progress, shopping list, users and settings; images in `uploads/` stay). Where the server updates itself (Pterodactyl, a headless binary in a folder of your own), "Zurück zu v3.3.0" in System → Updates does this after you confirm the loss. Every other install type gets the panel with the steps in the same place, because 3.3.0 already records the version before a change; the steps are also in the README, "Updating → Going back".
 
+### Dialogs
+- **Confirmation dialog:** it is drawn into `document.body`, so it dims and blocks the whole screen on the series page and inside the anime dialog (before: only the series card or the scrolled dialog). It focuses "Abbrechen" first, and closing the anime dialog with unsaved changes asks in the same dialog instead of the browser's `confirm()`.
+
 ### Collection
 - **"Komplett" and progress:** a series is only complete, and shows 100 %, when you own every regular volume up to the highest one that exists in it. With "Gesamtbände: 3" and a missing volume 4 the card now reads "3 / 4" (75 %) instead of "3 / 3", the series counts for "Mit Lücken" and not for "Komplett". Scripts: `max_regular_number` in `GET /api/mangas` is now the highest regular number of any status (before: owned only), and `completed_series` in `GET /api/stats` follows the same target.
 
