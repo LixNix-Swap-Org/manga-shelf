@@ -78,13 +78,14 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange })
     seeded.current = next;
   }, [progress]);
 
+  const currentInitial = formValues(progress);
   const isDirty = Boolean(
-    (episodes !== '' && Number(episodes) !== (progress?.episodes_watched ?? 0)) ||
-    status !== (progress?.status || 'Geplant') ||
-    (score ? Number(score) : null) !== (progress?.score ?? null) ||
-    (notes.trim() || null) !== (progress?.notes ?? null) ||
-    (audio || null) !== (progress?.audio_language ?? null) ||
-    (subtitle || null) !== (progress?.subtitle_language ?? null)
+    (episodes !== '' && Number(episodes) !== currentInitial.episodes) ||
+    status !== currentInitial.status ||
+    (score ? String(score) : '') !== currentInitial.score ||
+    (notes.trim() || '') !== currentInitial.notes.trim() ||
+    (audio || '') !== currentInitial.audio ||
+    (subtitle || '') !== currentInitial.subtitle
   );
 
   useEffect(() => {
@@ -917,7 +918,7 @@ export default function AnimeDetailModal({
       </div>
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
-        title={t('Anime löschen')}
+        title={t('Für alle löschen')}
         message={t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) })}
         confirmLabel={t('Löschen')}
         cancelLabel={t('Abbrechen')}
