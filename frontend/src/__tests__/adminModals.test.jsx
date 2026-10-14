@@ -149,6 +149,7 @@ describe('BackupRestoreModal', () => {
     });
     renderBackup();
     fireEvent.click(await screen.findByRole('button', { name: `Snapshot ${name} löschen` }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Löschen' }));
     await waitFor(() => expect(screen.queryByText(name)).toBeNull());
     expect(screen.queryByRole('alert')).toBeNull();
     expect(toasts.messages('error')).toEqual([]);
@@ -617,12 +618,14 @@ describe('UserManagementModal', () => {
 
     const deleteButton = await screen.findByTitle('Benutzer "erika" löschen');
     fireEvent.click(deleteButton);
-    expect(window.confirm.mock.calls[0][0]).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über/);
+    expect((await screen.findByRole('dialog', { name: 'Benutzer erika löschen' })).textContent).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über/);
+    fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Fehler beim Löschen des Benutzers');
     expect(screen.getByRole('status').textContent).toBe('');
     expect(toasts.messages('error')).toEqual([]);
 
     fireEvent.click(screen.getByTitle('Benutzer "erika" löschen'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Löschen' }));
     expect((await screen.findByRole('status')).textContent).toBe('Benutzer "erika" wurde gelöscht.');
     expect(screen.queryByText('erika')).toBeNull();
   });
