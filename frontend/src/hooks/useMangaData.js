@@ -389,7 +389,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
         syncOfflineCopy({ force: true });
-        navigate('/');
+        navigate('/', { replace: true });
         // the page is gone by then: a restored series opens again
         notifyTrashed(`„${title}“`, trashId, (ok) => {
           if (!ok) return;

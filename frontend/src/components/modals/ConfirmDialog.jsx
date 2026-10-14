@@ -14,13 +14,15 @@ export default function ConfirmDialog({
   confirmLabel = t('Löschen'),
   cancelLabel = t('Abbrechen'),
   variant = 'danger',
+  isDanger,
   busy = false,
   onConfirm,
   onCancel
 }) {
+  const effectiveVariant = isDanger !== undefined ? (isDanger ? 'danger' : 'primary') : variant;
   const titleId = useId();
   const descId = useId();
-  const dialogRef = useDialogA11y(isOpen, { onClose: onCancel });
+  const dialogRef = useDialogA11y(isOpen, { onClose: onCancel, history: false });
 
   if (!isOpen) return null;
 
@@ -46,7 +48,7 @@ export default function ConfirmDialog({
       <div className="dialog-box glass-panel max-w-md w-full rounded-2xl p-6 border border-slate-700/80 shadow-2xl animate-scale-in">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 shrink-0">
-            {variant === 'danger' ? (
+            {effectiveVariant === 'danger' ? (
               <Trash2 className="w-5 h-5" aria-hidden="true" />
             ) : (
               <AlertTriangle className="w-5 h-5" aria-hidden="true" />
@@ -78,7 +80,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             disabled={busy}
             className={
-              variant === 'danger'
+              effectiveVariant === 'danger'
                 ? 'btn-danger text-xs px-4 py-2 font-semibold'
                 : 'btn-primary text-xs px-4 py-2 font-semibold'
             }
