@@ -6,6 +6,7 @@ import { formatDay } from '../../utils/format';
 import { parseUtcTimestamp } from './statsFormat';
 import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
+import ConfirmDialog from './ConfirmDialog';
 
 const MIN_PASSWORD_LENGTH = 8;
 const EMPTY_USER = { username: '', password: '', role: 'editor' };
@@ -317,8 +318,9 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
     }
   };
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const handleDeleteUser = async (target) => {
-    if (!confirm(t('Möchtest du den Benutzer "{username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über.', { username: target.username }))) return;
     showResult('');
     setPending(target.id, 'delete');
     try {
@@ -596,7 +598,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                         {!isSelf && (
                           <button
                             type="button"
-                            onClick={() => handleDeleteUser(u)}
+                            onClick={() => setDeleteTarget(u)}
                             disabled={Boolean(pending)}
                             className="hit-44 p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
                             title={t('Benutzer "{username}" löschen', { username: u.username })}
@@ -700,6 +702,20 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
         </div>
 
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title={t('Benutzer {username} löschen', { username: deleteTarget?.username ?? '' })}
+        message={t('Möchtest du den Benutzer "{username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über.', { username: deleteTarget?.username ?? '' })}
+        confirmLabel={t('Löschen')}
+        cancelLabel={t('Abbrechen')}
+        onConfirm={() => {
+          const target = deleteTarget;
+          setDeleteTarget(null);
+          if (target) handleDeleteUser(target);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

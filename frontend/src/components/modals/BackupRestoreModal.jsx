@@ -17,6 +17,7 @@ import { useDownloadRunning } from '../../app/useDownload';
 import { t as tr, tn } from '../../i18n/index.js';
 import { rich } from '../../i18n/react.jsx';
 import { payloadText } from '../../i18n/serverText.js';
+import ConfirmDialog from './ConfirmDialog';
 
 const RELOAD_DELAY_MS = 2000;
 // i18n
@@ -85,6 +86,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const [restoreSuccess, setRestoreSuccess] = useState('');
   const [warning, setWarning] = useState('');
   const [undo, setUndo] = useState(null);
+  const [snapshotToDelete, setSnapshotToDelete] = useState(null);
   const [serverBackups, setServerBackups] = useState([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [backupsLoadError, setBackupsLoadError] = useState('');
@@ -326,7 +328,6 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   };
 
   const handleDeleteSnapshot = async (filename) => {
-    if (!confirm(tr('Snapshot "{filename}" wirklich dauerhaft vom Server löschen?', { filename }))) return;
     clearMessages();
     try {
       const res = await apiFetch(`/api/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
@@ -575,7 +576,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                     snapshots={serverBackups}
                     disabled={locked}
                     onRestore={(filename) => inspect({ filename })}
-                    onDelete={handleDeleteSnapshot}
+                    onDelete={setSnapshotToDelete}
                   />
                 )}
               </div>
@@ -692,6 +693,20 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={snapshotToDelete !== null}
+        title={tr('Löschen')}
+        message={tr('Snapshot "{filename}" wirklich dauerhaft vom Server löschen?', { filename: snapshotToDelete ?? '' })}
+        confirmLabel={tr('Löschen')}
+        cancelLabel={tr('Abbrechen')}
+        onConfirm={() => {
+          const filename = snapshotToDelete;
+          setSnapshotToDelete(null);
+          if (filename) handleDeleteSnapshot(filename);
+        }}
+        onCancel={() => setSnapshotToDelete(null)}
+      />
     </div>
   );
 }
