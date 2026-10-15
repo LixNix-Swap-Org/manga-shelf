@@ -106,10 +106,10 @@ function remove(ctx, { params }) {
     const id = shelfId(params);
     access.requireShelf(ctx, id, 'owner');
     const row = ctx.db.prepare('SELECT * FROM shelves WHERE id = ?').get(id);
+    if (row.is_default) throw conflict('Das Standard-Regal lässt sich nicht löschen', 'SHELF_DEFAULT');
     if (ctx.db.prepare('SELECT 1 FROM mangas WHERE shelf_id = ? LIMIT 1').get(id)) {
         throw conflict('Das Regal ist nicht leer. Reihen zuerst verschieben oder löschen.', 'SHELF_NOT_EMPTY');
     }
-    if (row.is_default) throw conflict('Das Standard-Regal lässt sich nicht löschen', 'SHELF_DEFAULT');
     ctx.db.prepare('DELETE FROM shelves WHERE id = ?').run(id);
     return { body: { success: true } };
 }

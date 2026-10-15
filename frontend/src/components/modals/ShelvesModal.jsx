@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Library, Trash2, UserPlus } from 'lucide-react';
 import ToolDialog from './ToolDialog';
+import ConfirmDialog from './ConfirmDialog';
 import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount } from '../../utils/format';
@@ -26,6 +27,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   const [newMember, setNewMember] = useState('');
   const [newRole, setNewRole] = useState('viewer');
   const [busy, setBusy] = useState(false);
+  const [shelfToDelete, setShelfToDelete] = useState(null);
   const nameId = useId();
   const memberId = useId();
   const roleId = useId();
@@ -95,8 +97,17 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   });
 
   const removeShelf = (shelf) => {
-    if (!window.confirm(t('Regal „{name}“ wirklich löschen?', { name: shelf.name }))) return;
-    run(() => api.del(`/api/shelves/${shelf.id}`), t('Regal gelöscht')).then(() => setOpen(null));
+    setShelfToDelete(shelf);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!shelfToDelete) return;
+    const target = shelfToDelete;
+    const res = await run(() => api.del(`/api/shelves/${target.id}`), t('Regal gelöscht'));
+    setShelfToDelete(null);
+    if (res) {
+      setOpen(null);
+    }
   };
 
   const current = shelves?.find((s) => s.id === open) || null;
@@ -164,6 +175,18 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
           </li>
         ))}
       </ul>
+      {shelfToDelete && (
+        <ConfirmDialog
+          isOpen={Boolean(shelfToDelete)}
+          title={t('Regal löschen')}
+          message={t('Regal „{name}“ wirklich löschen?', { name: shelfToDelete.name })}
+          confirmLabel={t('Löschen')}
+          cancelLabel={t('Abbrechen')}
+          busy={busy}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShelfToDelete(null)}
+        />
+      )}
     </ToolDialog>
   );
 }

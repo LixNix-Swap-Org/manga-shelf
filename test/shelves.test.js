@@ -108,7 +108,9 @@ test('shelves: create, rename, delete only when empty, the default shelf stays',
     assert.equal((await ben('DELETE', `/mangas/${id}`)).status, 200);
     assert.equal((await ben('DELETE', `/shelves/${made.body.id}`)).status, 200);
     const home = (await admin('GET', '/shelves')).body.shelves[0];
-    assert.equal((await admin('DELETE', `/shelves/${home.id}`)).status, 409);
+    const delHome = await admin('DELETE', `/shelves/${home.id}`);
+    assert.equal(delHome.status, 409);
+    assert.equal(delHome.body.code, 'SHELF_DEFAULT');
     assert.equal((await anna('POST', '/mangas', { title: 'Wrong', shelf_id: home.id })).status, 404);
 });
 
