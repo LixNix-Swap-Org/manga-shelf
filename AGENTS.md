@@ -754,6 +754,7 @@ Roles: `public` (no sign-in), `auth` (`requireAuth`), `editor` (`requireEditor`)
 
 | Method | Path | Role | Description |
 | :--- | :--- | :--- | :--- |
+| GET | `/api/users/directory` | editor | every account as `{ id, username }` (no roles, no hashes), so that shelf owners can pick members |
 | GET | `/api/shelves` | auth | the shelves of the caller: `id`, `name`, `description`, `color`, `is_default`, `role` (`owner`/`editor`/`viewer`; read-only accounts are capped at `viewer`), `series_count`, `member_count` |
 | POST | `/api/shelves` | editor | create a shelf `{ name, description?, color? }`; the caller becomes its owner (201) |
 | GET | `/api/shelves/:id` | auth | one shelf with `members` (`user_id`, `username`, `role`); a shelf the caller does not belong to answers 404 |

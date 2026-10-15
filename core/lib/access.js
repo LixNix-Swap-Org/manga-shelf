@@ -38,7 +38,7 @@ function roleOfGlobal(user) {
 function ensureMembership(ctx) {
     const user = ctx.user;
     if (!user) return;
-    const key = `${ctx.db.generation()}:${user.id}`;
+    const key = `${typeof ctx.db.generation === 'function' ? ctx.db.generation() : 0}:${user.id}`;
     const cache = memberships.get(ctx.db) || new Map();
     memberships.set(ctx.db, cache);
     if (cache.get(user.id) === key) return;

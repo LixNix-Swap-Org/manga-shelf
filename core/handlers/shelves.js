@@ -1,6 +1,6 @@
 // Shelves = collections with members (owner / editor / viewer): GET/POST /shelves, GET/PUT/DELETE /shelves/:id,
 // members under /shelves/:id/members, and PUT /mangas/:id/shelf to move a series.
-const { HttpError, badRequest, notFound, conflict } = require('../errors');
+const { HttpError, msg, badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const access = require('../lib/access');
 
@@ -14,14 +14,14 @@ function shelfId(params) {
     return id;
 }
 
-function cleanText(value, max, label, { required = false } = {}) {
+function cleanText(value, max, tooLong, { required = false } = {}) {
     if (value === undefined) return undefined;
     const text = typeof value === 'string' ? value.trim() : '';
     if (!text) {
         if (required) throw badRequest('Name fehlt');
         return null;
     }
-    if (text.length > max) throw badRequest(`${label} ist zu lang`);
+    if (text.length > max) throw badRequest(tooLong);
     return text;
 }
 
@@ -70,8 +70,8 @@ function detail(ctx, { params }) {
 
 function create(ctx, { body }) {
     access.ensureMembership(ctx);
-    const name = cleanText(body.name, MAX_NAME, 'Der Name', { required: true });
-    const description = cleanText(body.description, MAX_DESCRIPTION, 'Die Beschreibung') ?? null;
+    const name = cleanText(body.name, MAX_NAME, msg('Der Name ist zu lang'), { required: true });
+    const description = cleanText(body.description, MAX_DESCRIPTION, msg('Die Beschreibung ist zu lang')) ?? null;
     const color = cleanColor(body.color) || '#6366f1';
     const id = ctx.db.transaction(() => {
         const info = ctx.db.prepare('INSERT INTO shelves (name, description, color, owner_user_id, is_default) VALUES (?, ?, ?, ?, 0)').run(name, description, color, ctx.user.id);
@@ -86,8 +86,8 @@ function create(ctx, { body }) {
 function update(ctx, { params, body }) {
     const id = shelfId(params);
     access.requireShelf(ctx, id, 'owner');
-    const name = cleanText(body.name, MAX_NAME, 'Der Name', { required: body.name !== undefined });
-    const description = cleanText(body.description, MAX_DESCRIPTION, 'Die Beschreibung');
+    const name = cleanText(body.name, MAX_NAME, msg('Der Name ist zu lang'), { required: body.name !== undefined });
+    const description = cleanText(body.description, MAX_DESCRIPTION, msg('Die Beschreibung ist zu lang'));
     const color = cleanColor(body.color);
     const sets = [];
     const values = [];
@@ -183,4 +183,9 @@ function moveManga(ctx, { params, body }) {
     return { body: { success: true, id: mangaId, shelf_id: target } };
 }
 
-module.exports = { list, detail, create, update, remove, addMember, setMemberRole, removeMember, moveManga };
+function directory(ctx) {
+  const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
+  return { body: { users } };
+}
+
+module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, moveManga };

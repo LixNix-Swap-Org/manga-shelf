@@ -139,7 +139,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter,
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves,
     otherCurrencyTotals
   } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
@@ -626,6 +626,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableLanguages={availableLanguages}
           languageFilter={languageFilter}
           setLanguageFilter={setLanguageFilter}
+          availableShelves={availableShelves}
+          shelfFilter={shelfFilter}
+          setShelfFilter={setShelfFilter}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid

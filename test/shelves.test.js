@@ -139,3 +139,11 @@ test('shelves: moving a series needs editor rights in both shelves; trash and lo
     assert.equal(found.body.matched_volume ?? null, null);
     assert.ok(own.id);
 });
+
+test('shelves: the user directory lists names only and is closed to guests', async () => {
+    const res = await anna('GET', '/users/directory');
+    assert.equal(res.status, 200);
+    assert.ok(res.body.users.some(u => u.username === 'ben'));
+    assert.deepEqual(Object.keys(res.body.users[0]).sort(), ['id', 'username']);
+    assert.equal((await guest('GET', '/users/directory')).status, 403);
+});
