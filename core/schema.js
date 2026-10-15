@@ -652,6 +652,18 @@ function migrationList(log = silentLog) {
                     WHEN NEW.shelf_id IS NULL BEGIN UPDATE mangas SET shelf_id = 1 WHERE id = NEW.id; END;
                 `);
             }
+        },
+        {
+            version: 33,
+            name: 'add_anime_rating_visibility',
+            up: (d) => {
+                // Who sees a user's rating of a shared anime entry: public (named), anonymous or private
+                const progressCols = new Set(d.prepare('PRAGMA table_info(anime_progress)').all().map(c => c.name));
+                if (!progressCols.has('rating_visibility')) d.exec("ALTER TABLE anime_progress ADD COLUMN rating_visibility TEXT NOT NULL DEFAULT 'public';");
+                if (!progressCols.has('public_comment')) d.exec('ALTER TABLE anime_progress ADD COLUMN public_comment TEXT;');
+                const userCols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!userCols.has('default_anime_visibility')) d.exec("ALTER TABLE users ADD COLUMN default_anime_visibility TEXT NOT NULL DEFAULT 'public';");
+            }
         }
     ];
 }

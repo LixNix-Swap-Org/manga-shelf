@@ -11,6 +11,7 @@ const listSync = require('../anime/listSync');
 const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
 const episodeMarks = require('../anime/episodes');
+const community = require('../anime/community');
 const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
@@ -141,10 +142,12 @@ function detailOf(ctx, id) {
         })),
         manga: row.manga_id ? visibleManga(ctx, row.manga_id) : null,
         my_progress: store.progressOf(mine),
-        // a resume link is where one user stopped watching; the others only see the counter
+        // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
+        // an anonymous rating still counts in `community` but carries no name here
         progress: progress.map((p) => (p === mine
             ? { ...store.progressOf(p), username: p.username }
-            : { ...store.progressOf(p), resume_url: null, resume_episode: null, username: p.username }))
+            : { ...community.othersView(store.progressOf(p), p), username: p.username })),
+        community: { ...community.summarize(progress), episodes: community.episodeCommunity(progress) }
     };
 }
 
@@ -216,7 +219,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, p.rating_visibility, p.public_comment, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -227,6 +230,7 @@ function list(ctx) {
     }
     const now = nowMs(ctx);
     const userId = ctx.user ? ctx.user.id : null;
+    const communities = community.communityByAnime(progress);
     const remembered = rememberedLinks(ctx);
     let queued = 0;
     const body = rows.map((row) => {
@@ -238,6 +242,7 @@ function list(ctx) {
             ...entry,
             watch: store.watchOf(row, mine, remembered.get(row.id)),
             my_progress: store.progressOf(mine),
+            community: communities.get(row.id) || { average: null, count: 0, watchers: 0 },
             progress_users: all.map((p) => ({ user_id: p.user_id, username: p.username, status: p.status, episodes_watched: p.episodes_watched }))
         };
     });
@@ -250,6 +255,15 @@ function detail(ctx, { params }) {
     if (store.isStale(row, nowMs(ctx))) gateway.scheduleRefresh(ctx, id);
     gateway.scheduleOwnTmdbRefresh(ctx, row);
     return { body: detailOf(ctx, id) };
+}
+
+/** GET /anime/:id/ratings – the community ratings of an entry as the caller may see them. */
+function ratings(ctx, { params }) {
+    const id = parseId(params.id);
+    loadRow(ctx, id);
+    const rows = progressRows(ctx, id);
+    const viewer = ctx.user ? ctx.user.id : null;
+    return { body: { anime_id: id, ...community.ratingsOf(rows, viewer), episodes: community.episodeCommunity(rows) } };
 }
 
 function duplicateOf(ctx, anilistId, malId, tmdbRef = null) {
@@ -479,6 +493,9 @@ function updateProgress(ctx, { params, body }) {
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const audio = cleanLanguage(body.audio_language);
     const subtitle = cleanLanguage(body.subtitle_language);
+    const visibility = community.parseVisibility(body.rating_visibility);
+    if (visibility === null) throw badRequest('Ungültige Sichtbarkeit (public, anonymous oder private)');
+    const publicComment = body.public_comment === undefined ? undefined : cleanOptionalText(body.public_comment, 'public_comment', community.MAX_COMMENT);
     const saved = ctx.db.transaction(() => {
         const anime = loadRow(ctx, id);
         if (body.status === 'Gesehen' && body.restore !== true && stillAiring(anime)) {
@@ -494,7 +511,8 @@ function updateProgress(ctx, { params, body }) {
             if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
         }
         return writeProgress(ctx, id, userId, {
-            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle
+            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle,
+            rating_visibility: visibility, public_comment: publicComment
         });
     });
     listSync.schedulePush(ctx, userId, id);
@@ -941,6 +959,7 @@ function exportCsv(ctx) {
 }
 
 module.exports = {
+    ratings,
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
     removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
     duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS

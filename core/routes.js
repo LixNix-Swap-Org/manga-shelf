@@ -106,6 +106,7 @@ const routes = [
     { method: 'PUT', path: '/anime/sync', role: 'editor', handler: anime.syncUpdate },
     { method: 'POST', path: '/anime/sync/run', role: 'editor', handler: anime.syncRun },
     { method: 'GET', path: '/anime/:id', role: 'auth', handler: anime.detail },
+    { method: 'GET', path: '/anime/:id/ratings', role: 'auth', handler: anime.ratings },
     { method: 'PUT', path: '/anime/:id', role: 'editor', handler: anime.update },
     { method: 'DELETE', path: '/anime/:id', role: 'editor', handler: anime.remove },
     { method: 'PUT', path: '/anime/:id/progress', role: 'editor', handler: anime.updateProgress },
