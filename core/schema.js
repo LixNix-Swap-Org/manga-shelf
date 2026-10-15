@@ -603,6 +603,51 @@ function migrationList(log = silentLog) {
                 const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
                 if (!animeCols.has('custom_seasons')) d.exec('ALTER TABLE animes ADD COLUMN custom_seasons TEXT;');
             }
+        },
+        {
+            version: 32,
+            name: 'add_shelves',
+            up: (d) => {
+                // Shelves = collections with members. Everything that exists moves into shelf 1; every account joins it.
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS shelves (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        color TEXT NOT NULL DEFAULT '#6366f1',
+                        owner_user_id INTEGER,
+                        is_default INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS shelf_members (
+                        shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+                        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (shelf_id, user_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_shelf_members_user ON shelf_members (user_id);
+                `);
+                const cols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!cols.has('shelf_id')) d.exec('ALTER TABLE mangas ADD COLUMN shelf_id INTEGER;');
+                if (!d.prepare('SELECT 1 FROM shelves WHERE id = 1').get()) {
+                    const owner = d.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get()
+                        || d.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
+                    d.prepare("INSERT INTO shelves (id, name, owner_user_id, is_default) VALUES (1, 'Sammlung', ?, 1)").run(owner ? owner.id : null);
+                }
+                d.exec("UPDATE mangas SET shelf_id = 1 WHERE shelf_id IS NULL;");
+                d.exec(`
+                    INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role)
+                    SELECT 1, id, CASE role WHEN 'admin' THEN 'owner' WHEN 'editor' THEN 'editor' ELSE 'viewer' END FROM users;
+                    CREATE INDEX IF NOT EXISTS idx_mangas_shelf ON mangas (shelf_id);
+                `);
+                // a series is always in a shelf; new rows without one land in shelf 1 until the handler names it
+                d.exec(`
+                    CREATE TRIGGER IF NOT EXISTS trg_mangas_shelf_default AFTER INSERT ON mangas
+                    WHEN NEW.shelf_id IS NULL BEGIN UPDATE mangas SET shelf_id = 1 WHERE id = NEW.id; END;
+                `);
+            }
         }
     ];
 }

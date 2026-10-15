@@ -1,5 +1,6 @@
 // Series list, series detail and the offline snapshot: the read shapes of GET /mangas, /mangas/:id, /offline-snapshot.
 const { regularNumberedSql, volumeOrderSql } = require('./lib/volumeNumber');
+const access = require('./lib/access');
 
 // Series per block of the offline snapshot; between blocks other requests get the event loop. Tests lower it.
 const options = { chunkSize: 200 };
@@ -25,12 +26,13 @@ const VOLUME_SEARCH_SQL = `(SELECT SUBSTR(GROUP_CONCAT(t, char(10)), 1, ${VOLUME
  * Series list with aggregates for the dashboard (also the snapshot's `mangas`), without detail-only columns.
  * wished (0|1): wish_priority set and no volume owned. { volumeSearch: true } adds volume_search (snapshot only).
  */
-function listMangas(ctx, userId, { volumeSearch = false } = {}) {
+function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.accessibleShelfIds(ctx) } = {}) {
+    const scope = access.inShelves('m.shelf_id', shelfIds);
     return ctx.db.prepare(`
             SELECT m.id, m.title, m.alt_title, m.author, m.publisher, m.language, m.status, m.tags, m.total_volumes,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
-                   m.collecting, m.region, m.work_key, m.currency,
+                   m.collecting, m.region, m.work_key, m.currency, m.shelf_id,
                    COUNT(DISTINCT CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
                    COUNT(DISTINCT CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
                    CASE WHEN m.wish_priority IS NOT NULL AND COUNT(CASE WHEN v.status = 'Vorhanden' THEN 1 END) = 0 THEN 1 ELSE 0 END as wished,
@@ -45,18 +47,20 @@ function listMangas(ctx, userId, { volumeSearch = false } = {}) {
             FROM mangas m
             LEFT JOIN volumes v ON m.id = v.manga_id
             LEFT JOIN volume_reads vr ON v.id = vr.volume_id AND vr.user_id = ?
+            WHERE ${scope.sql}
             GROUP BY m.id
             ORDER BY m.title ASC
-        `).all(userId);
+        `).all(userId, ...scope.params);
 }
 
 /** GET /mangas/volume-search: [{ id, volume_search }] by series id, only series with something to search. */
-function listVolumeSearch(ctx) {
+function listVolumeSearch(ctx, shelfIds = access.accessibleShelfIds(ctx)) {
+    const scope = access.inShelves('m.shelf_id', shelfIds);
     return ctx.db.prepare(`
-            SELECT id, volume_search FROM (SELECT m.id, ${VOLUME_SEARCH_SQL} AS volume_search FROM mangas m)
+            SELECT id, volume_search FROM (SELECT m.id, ${VOLUME_SEARCH_SQL} AS volume_search FROM mangas m WHERE ${scope.sql})
             WHERE volume_search IS NOT NULL
             ORDER BY id
-        `).all();
+        `).all(...scope.params);
 }
 
 /** volumes.* without the internal number_sort, in table order (the API shape of a volume). */
@@ -82,7 +86,7 @@ const USERS_SQL = 'SELECT id, username, role FROM users ORDER BY id ASC';
 // other editions of a work (same work_key): what the edition switcher shows
 const EDITIONS_SELECT = `
         SELECT m.id, m.title, m.language, m.region, m.currency, m.publisher, m.cover_image, m.owned_volumes,
-               (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count, m.work_key
+               (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count, m.work_key, m.shelf_id
         FROM mangas m`;
 const EDITIONS_ORDER = 'ORDER BY m.language, m.id';
 
@@ -91,13 +95,14 @@ function editionsOf(manga, rows) {
     if (!manga.work_key) return [];
     return rows.filter(r => r.work_key === manga.work_key && r.id !== manga.id)
         .sort((a, b) => (a.language < b.language ? -1 : a.language > b.language ? 1 : a.id - b.id))
-        .map(({ work_key, ...edition }) => edition);
+        .map(({ work_key, shelf_id, ...edition }) => edition);
 }
 
 /** GET /mangas/:id `editions`: the other series sharing the work key of `manga`. */
 function loadEditions(ctx, manga) {
     if (!manga.work_key) return [];
-    return editionsOf(manga, ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key = ? ${EDITIONS_ORDER}`).all(manga.work_key));
+    const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx));
+    return editionsOf(manga, ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key = ? AND ${scope.sql} ${EDITIONS_ORDER}`).all(manga.work_key, ...scope.params));
 }
 
 function groupBy(rows, key) {
@@ -182,7 +187,7 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
 /** Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id; null if missing. */
 function loadMangaDetail(ctx, mangaId, userId) {
     const manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
-    if (!manga) return null;
+    if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) return null;
     const volumes = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id = ? ORDER BY ${volumeOrderSql('v')}, v.id ASC`).all(mangaId);
     const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.rowid`).all(mangaId);
     const owners = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id = ? ORDER BY vo.created_at, vo.rowid`).all(mangaId);
@@ -203,13 +208,16 @@ function assertSameConnection(ctx, generation) {
  */
 async function buildOfflineSnapshot(ctx, user) {
     const generation = ctx.db.generation();
-    const mangas = listMangas(ctx, user.id, { volumeSearch: true });
+    const shelfIds = access.accessibleShelfIds(ctx);
+    const mangas = listMangas(ctx, user.id, { volumeSearch: true, shelfIds });
     await ctx.yield();
     assertSameConnection(ctx, generation);
 
-    const series = ctx.db.prepare('SELECT * FROM mangas ORDER BY id').all();
+    const shelfScope = access.inShelves('shelf_id', shelfIds);
+    const series = ctx.db.prepare(`SELECT * FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
     const users = ctx.db.prepare(USERS_SQL).all();
-    const editionsByWork = groupBy(ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key IS NOT NULL ${EDITIONS_ORDER}`).all(), 'work_key');
+    const editionScope = access.inShelves('m.shelf_id', shelfIds);
+    const editionsByWork = groupBy(ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key IS NOT NULL AND ${editionScope.sql} ${EDITIONS_ORDER}`).all(...editionScope.params), 'work_key');
     const volumesStmt = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id BETWEEN ? AND ? ORDER BY v.manga_id, ${volumeOrderSql('v')}, v.id ASC`);
     const readsStmt = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vr.volume_id, vr.read_at, vr.rowid`);
     const ownersStmt = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vo.volume_id, vo.created_at, vo.rowid`);

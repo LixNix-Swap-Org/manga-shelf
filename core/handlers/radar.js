@@ -6,6 +6,7 @@ const { SHOPPING_SERIES } = require('./shopping');
 const { sha256Hex, buildCalendar } = require('../ical');
 const { inferVolumeType } = require('../lib/volumeType');
 const { qstr } = require('../lib/query');
+const access = require('../lib/access');
 const { HttpError } = require('../errors');
 const { MP_LANGUAGE, DEFAULT_LANGUAGE } = require('../lib/language');
 
@@ -21,7 +22,8 @@ const RADAR_WHERE = `((
         AND SUBSTR(TRIM(v.release_date), 1, 7) >= ?))
     AND (COALESCE(m.collecting, 'aktiv') != 'abgebrochen' OR v.status IN ('Vorbestellt', 'Bestellt')))`;
 
-function releaseRadar(ctx) {
+function releaseRadar(ctx, { query = {} } = {}) {
+    const scope = access.inShelves('m.shelf_id', access.requestedShelfIds(ctx, query.shelf_id));
     const today = zonedToday(ctx.now(), ctx.config.appTimeZone);
     const radarVols = ctx.db.prepare(`
         SELECT 
@@ -35,7 +37,7 @@ function releaseRadar(ctx) {
             COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') as effective_publisher
         FROM volumes v
         JOIN mangas m ON v.manga_id = m.id
-        WHERE ${RADAR_WHERE}
+        WHERE ${RADAR_WHERE} AND ${scope.sql}
         ORDER BY 
             CASE WHEN v.release_date IS NOT NULL AND TRIM(v.release_date) != '' THEN 0 ELSE 1 END ASC,
             CASE 
@@ -46,7 +48,7 @@ function releaseRadar(ctx) {
             m.title ASC,
             COALESCE(v.number_sort, 999999) ASC,
             v.volume_number ASC
-    `).all(monthKeyOf(today));
+    `).all(monthKeyOf(today), ...scope.params);
 
     // the client reads groups[].items; the flat copy only doubled the body
     const radar = buildReleaseRadar(radarVols, today);
@@ -56,36 +58,38 @@ function releaseRadar(ctx) {
 
 // Badge counts of the dashboard without loading the shopping list and the radar: the same numbers as their
 // total_missing, total_releases and preordered_count.
-function dashboardSummary(ctx) {
-    const missing = ctx.db.prepare(`SELECT count(*) AS c FROM volumes v JOIN mangas m ON v.manga_id = m.id WHERE v.status = 'Fehlt' AND ${SHOPPING_SERIES}`).get().c;
+function dashboardSummary(ctx, { query = {} } = {}) {
+    const scope = access.inShelves('m.shelf_id', access.requestedShelfIds(ctx, query.shelf_id));
+    const missing = ctx.db.prepare(`SELECT count(*) AS c FROM volumes v JOIN mangas m ON v.manga_id = m.id WHERE v.status = 'Fehlt' AND ${SHOPPING_SERIES} AND ${scope.sql}`).get(...scope.params).c;
     const radar = ctx.db.prepare(`
         SELECT count(*) AS total, sum(CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN 1 ELSE 0 END) AS preordered
-        FROM volumes v JOIN mangas m ON v.manga_id = m.id WHERE ${RADAR_WHERE}
-    `).get(monthKeyOf(zonedToday(ctx.now(), ctx.config.appTimeZone)));
+        FROM volumes v JOIN mangas m ON v.manga_id = m.id WHERE ${RADAR_WHERE} AND ${scope.sql}
+    `).get(monthKeyOf(zonedToday(ctx.now(), ctx.config.appTimeZone)), ...scope.params);
     return { body: { total_missing: missing, total_releases: radar.total, preordered_count: radar.preordered || 0 } };
 }
 
 // The Manga Passion calendar lists German editions only: series and volumes in other languages never match it
-const loadUserMangas = (ctx) => ctx.db.prepare(`
+const loadUserMangas = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.manga_passion_id, m.wish_priority, m.collecting,
            (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS owned_count
-    FROM mangas m WHERE COALESCE(m.language, ?) = ? ORDER BY m.id
-`).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
-const loadUserVolumes = (ctx) => ctx.db.prepare(`
+    FROM mangas m WHERE COALESCE(m.language, ?) = ? AND ${scope.sql} ORDER BY m.id
+`).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
+const loadUserVolumes = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.price, v.release_date, v.manga_passion_volume_id
     FROM volumes v JOIN mangas m ON m.id = v.manga_id
-    WHERE COALESCE(v.language, m.language, ?) = ? ORDER BY v.id
-`).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
+    WHERE COALESCE(v.language, m.language, ?) = ? AND ${scope.sql} ORDER BY v.id
+`).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
 
 // Preorders whose date in the Manga Passion calendar has changed since (postponements)
 async function dateChanges(ctx) {
+    const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx));
     const pending = ctx.db.prepare(`
         SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.release_date, m.title AS manga_title
         FROM volumes v JOIN mangas m ON m.id = v.manga_id
         WHERE v.status IN ('Vorbestellt', 'Erscheint bald', 'Bestellt')
           AND v.release_date IS NOT NULL AND TRIM(v.release_date) != ''
-          AND COALESCE(v.language, m.language, ?) = ?
-    `).all(DEFAULT_LANGUAGE, MP_LANGUAGE);
+          AND COALESCE(v.language, m.language, ?) = ? AND ${scope.sql}
+    `).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params);
     const months = monthsToCheck(pending, zonedToday(ctx.now(), ctx.config.appTimeZone));
     const results = await releases.fetchMonthsForCheck(ctx, months);
     const matcher = buildMatcher(loadUserMangas(ctx), loadUserVolumes(ctx));
@@ -166,6 +170,8 @@ function calendarFeed(ctx, { query }) {
     if (!(found.entry.last_used_at > nowMs - FEED_USED_WRITE_GAP_MS)) {
         ctx.db.prepare('UPDATE app_settings SET value = ? WHERE key = ?').run(JSON.stringify({ ...found.entry, last_used_at: nowMs }), found.key);
     }
+    const feedUser = ctx.db.prepare('SELECT id, role FROM users WHERE id = ?').get(found.entry.user_id);
+    const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds({ ...ctx, user: feedUser }));
     const today = zonedToday(ctx.now(), ctx.config.appTimeZone);
     const from = isoDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - FEED_PAST_DAYS));
     const rows = ctx.db.prepare(`
@@ -173,9 +179,9 @@ function calendarFeed(ctx, { query }) {
                m.title AS manga_title, m.currency,
                COALESCE(NULLIF(TRIM(v.publisher), ''), NULLIF(TRIM(m.publisher), ''), 'Unbekannt') AS effective_publisher
         FROM volumes v JOIN mangas m ON v.manga_id = m.id
-        WHERE ${RADAR_WHERE} AND TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND TRIM(v.release_date) >= ?
+        WHERE ${RADAR_WHERE} AND TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND TRIM(v.release_date) >= ? AND ${scope.sql}
         ORDER BY TRIM(v.release_date), m.title COLLATE NOCASE, COALESCE(v.number_sort, 999999), v.id
-    `).all(monthKeyOf(today), from);
+    `).all(monthKeyOf(today), from, ...scope.params);
     const instance = ctx.db.prepare("SELECT value FROM app_settings WHERE key = 'instance_id'").get();
     const domain = instance && instance.value ? `${instance.value}.manga-shelf` : 'manga-shelf';
     const events = rows.map(row => ({

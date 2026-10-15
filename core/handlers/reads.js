@@ -1,5 +1,6 @@
 // Reading state per user: toggle, read up to volume X, personal reading statistics.
-const { resolveTargetUser } = require('../lib/access');
+const access = require('../lib/access');
+const { resolveTargetUser } = access;
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parseFlag, isValidReadAt } = require('../lib/validate');
 
@@ -45,7 +46,7 @@ function batchRead(ctx, { body }) {
     const readAt = body.read_at;
     if (!isBlank(readAt) && !isValidReadAt(readAt)) throw badRequest('Ungültiger Lesezeitpunkt (erwartet: JJJJ-MM-TT HH:MM:SS, UTC)');
     const targetUserId = resolveTargetUser(ctx, user_id);
-    if (!ctx.db.prepare('SELECT 1 FROM mangas WHERE id = ?').get(mId)) throw notFound('Manga');
+    access.mangaAccess(ctx, mId, 'viewer');
 
     const volumes = ctx.db.prepare("SELECT id, volume_number, type FROM volumes WHERE manga_id = ? AND status = 'Vorhanden'").all(mId);
     const targetVols = volumes.filter(v => {
@@ -87,15 +88,16 @@ function userStats(ctx, { params }) {
     const user = ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
     if (!user) throw notFound('Benutzer');
 
+    const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx));
     const readVolumes = ctx.db.prepare(`
         SELECT strftime('%Y-%m-%dT%H:%M:%SZ', vr.read_at) AS read_at, v.id, v.volume_number, v.type, v.notes, v.pages,
                m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
         FROM volume_reads vr
         JOIN volumes v ON vr.volume_id = v.id
         JOIN mangas m ON v.manga_id = m.id
-        WHERE vr.user_id = ? AND v.status = 'Vorhanden'
+        WHERE vr.user_id = ? AND v.status = 'Vorhanden' AND ${scope.sql}
         ORDER BY vr.read_at DESC, v.id DESC
-    `).all(userId);
+    `).all(userId, ...scope.params);
 
     const totalVolumes = readVolumes.length;
     const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);

@@ -645,6 +645,7 @@ New migrations are **appended** to the array in `migrationList()` in `core/schem
 | 29 | `add_anime_watched_episodes` | `anime_progress.watched_episodes` (TEXT, JSON array of watched episode numbers; NULL = the plain counter 1..`episodes_watched`) |
 | 30 | `add_anime_episode_scores` | `anime_progress.episode_scores` (TEXT, JSON object episode number → score 1–10; NULL = no ratings) |
 | 31 | `add_anime_custom_seasons` | `animes.custom_seasons` (TEXT, JSON array `[{ start, name }]` of seasons set by hand; NULL = TMDb seasons or blocks of 100) |
+| 32 | `add_shelves` | `shelves`, `shelf_members` (owner/editor/viewer), `mangas.shelf_id`; every series into shelf 1, every account a member of it (role from the global role), trigger fills a missing `shelf_id` with 1 |
 
 ### Performance indexes
 * `idx_volumes_manga_id` on `volumes (manga_id)`, `idx_volumes_status` on `volumes (status)`, `idx_volumes_isbn` on `volumes (isbn)` (deliberately not UNIQUE), `idx_volumes_manga_number` on `volumes (manga_id, type, number_sort)`.

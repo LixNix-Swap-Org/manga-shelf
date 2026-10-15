@@ -21,6 +21,7 @@ const cleanup = require('./handlers/cleanup');
 const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
 const { HttpError, AUTH_TEXTS } = require('./errors');
+const access = require('./lib/access');
 
 const routes = [
     { method: 'GET', path: '/mangas', role: 'auth', conditional: true, handler: mangas.list },
@@ -106,6 +107,30 @@ const routes = [
     { method: 'GET', path: '/export/anime.csv', role: 'auth', handler: anime.exportCsv },
     { method: 'GET', path: '/sources/guides', role: 'auth', handler: guidesHandler }
 ];
+
+// Shelf access in front of the handlers: a series or volume of a shelf the caller does not belong to answers 404, a
+// viewer who writes gets 403. Lists filter by shelf inside their handlers; bodies with several ids check them there.
+const GUARDS = [
+    { re: /^\/mangas\/(?!volume-search$)(\d+)(\/|$)/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, row.method === 'GET' ? 'viewer' : 'editor') },
+    { re: /^\/volumes\/(\d+)\/read$/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'viewer') },
+    { re: /^\/volumes\/(\d+)(\/|$)/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'editor') }
+];
+
+for (const row of routes) {
+    const guard = GUARDS.find(g => g.re.test(row.path.replace(/:id/g, '1')));
+    const bodyManga = row.method === 'POST' && (row.path === '/volumes' || row.path === '/volumes/batch');
+    if (!guard && !bodyManga) continue;
+    const handler = row.handler;
+    row.handler = (ctx, input) => {
+        if (guard) {
+            const id = guard.re.exec(row.path.replace(/:id/g, String(input.params.id)));
+            if (id && input.params.id !== undefined && /^\d+$/.test(String(input.params.id))) guard.check(ctx, input, row, input.params.id);
+        } else if (input.body && input.body.manga_id !== undefined) {
+            access.mangaAccess(ctx, input.body.manga_id, 'editor');
+        }
+        return handler(ctx, input);
+    };
+}
 
 const defaultParse = ({ params, query, body }) => ({ params: params || {}, query: query || {}, body: body || {} });
 
