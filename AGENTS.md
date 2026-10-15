@@ -389,6 +389,7 @@ manga-shelf/
 │       │   ├── dataCache.js      # in-memory copies of the server answers per user with ETag
 │       │   ├── shoppingQueue.js  # localToday, sendPurchase, status mapping (the old queue is moved into the outbox)
 │       │   ├── storageKeys.js    # localStorage keys that clearOfflineData deletes (anime cache)
+│       │   ├── shelfScope.js     # shelfQuery(): the shelf chosen in the toolbar as ?shelf_id= for statistics and trash
 │       │   ├── viewState.js      # view states of the tab (scroll positions, page count), clearViewState
 │       │   ├── volumeHelpers.js  # display names, type/edition logic, progress, gap map, publisher names (setPublisherNames)
 │       │   ├── volumeFormHelpers.js # buildVolumeForm, applyLookupToForm (autofill rules)

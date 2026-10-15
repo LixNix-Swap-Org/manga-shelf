@@ -1,3 +1,4 @@
+import { shelfQuery } from '../../utils/shelfScope';
 import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, RotateCcw, Trash2 } from 'lucide-react';
 import ToolDialog from './ToolDialog';
@@ -31,7 +32,7 @@ export default function TrashModal({ onClose, user, onChanged }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setData(await api.get('/api/trash'));
+      setData(await api.get(`/api/trash${shelfQuery()}`));
     } catch (e) {
       setError(e?.message || t('Papierkorb konnte nicht geladen werden.'));
     }

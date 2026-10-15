@@ -1,3 +1,4 @@
+import { shelfQuery } from '../../utils/shelfScope';
 import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
 import { TrendingUp, Coins, BuildingComplex, BookCheck, X, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library } from 'lucide-react';
 import SpendingCard from './SpendingCard';
@@ -64,7 +65,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
     setLoadingStats(true);
     setStatsError(null);
     try {
-      const res = await apiFetch('/api/stats', { signal });
+      const res = await apiFetch(`/api/stats${shelfQuery()}`, { signal });
       if (!isCurrent()) return;
       if (!res.ok) {
         const message = await readApiError(res, t('Statistiken konnten nicht geladen werden'));
