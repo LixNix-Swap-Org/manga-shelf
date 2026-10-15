@@ -6,7 +6,7 @@ import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
 import { langFor } from '../common/lang';
 import { openLinkOutside } from '../../app/openExternal';
-import { isAbortError } from '../../utils/api';
+import api, { isAbortError } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
@@ -557,6 +557,34 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
   );
 }
 
+/** Named community ratings of one entry as the caller may see them (anonymous ones without a name). */
+function CommunityRatings({ animeId, version }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    if (!animeId) return undefined;
+    const controller = new AbortController();
+    api.get(`/api/anime/${animeId}/ratings`, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setRows(Array.isArray(data?.ratings) ? data.ratings : []); })
+      .catch(() => { if (!controller.signal.aborted) setRows([]); });
+    return () => controller.abort();
+  }, [animeId, version]);
+  const shown = rows.filter((r) => r.score || r.comment);
+  if (!shown.length) return null;
+  return (
+    <ul className="space-y-1 mb-3" aria-label={t('Bewertungen')}>
+      {shown.map((r, i) => (
+        <li key={r.user_id || `anon-${i}`} className="text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">{r.username || t('Anonym')}</span>
+          {r.own && <span className="text-slate-400"> ({t('du')})</span>}
+          {r.score ? <span> {r.score}/10</span> : null}
+          {r.visibility === 'private' && <span className="text-slate-400"> · {t('privat')}</span>}
+          {r.comment && <span className="block text-slate-400 break-words">„{r.comment}“</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Detail of one anime: banner, metadata, description, relations (add or open), everybody's progress, my progress,
  * link to a series, refresh (60 s lock) and delete. `fallback` is the list entry (offline it is all there is).
@@ -828,6 +856,7 @@ export default function AnimeDetailModal({
                   {anime.community?.count > 0 && (
                     <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { count: anime.community.count, average: formatNumber(anime.community.average, 1) })}</p>
                   )}
+                  <CommunityRatings animeId={anime.id} version={`${anime.community?.count || 0}:${anime.my_progress?.score || 0}:${anime.my_progress?.rating_visibility || ''}`} />
                   <ul className="space-y-1">
                     {(anime.progress || anime.progress_users).map((p) => (
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
