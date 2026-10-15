@@ -356,7 +356,7 @@ manga-shelf/
 │       │   ├── useCollectionFilters.js # search, status/publisher/collecting/author/genre/language filters, sorting, grouping, view (localStorage + URL), publisher names
 │       │   ├── useSearchScope.js # search scope of the header (collection or online, per device) and the typed-only online query (onTyped with a 350 ms debounce and pending, submitOnline, clearOnline)
 │       │   ├── useShoppingList.js # shopping list, quick buy via the outbox, buyingIds, shoppingError
-│       │   ├── useShelfViewer.js # true while the user only views the series' shelf (viewer): hides the edit controls on the detail page
+│       │   ├── useShelfViewer.js # true while the user only views the shelf of the series (viewer): hides the edit controls on the detail page (the server answers 403 anyway)
 │       │   ├── useReleaseRadar.js # release radar and monthly calendar (radarError/mpError, request sequence)
 │       │   ├── useAnimeList.js   # anime list, source state (fetched when the add dialog opens), search parameters, optimistic progress, offline copy, markWatched/undoWatched/undoCreated, AniList sync on load, refreshList (refresh button), last watch object
 │       │   ├── useShareIntake.js # share flow: notices, read the link, confirmation or suggestion (create), markWatched, undo, queue for further links (FIFO)
