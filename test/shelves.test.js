@@ -149,3 +149,55 @@ test('shelves: the user directory lists names only and is closed to guests', asy
     assert.deepEqual(Object.keys(res.body.users[0]).sort(), ['id', 'username']);
     assert.equal((await guest('GET', '/users/directory')).status, 403);
 });
+
+test('shelves: user creation modes - personal, share_same, and share_mutual', async () => {
+    // 1. Personal shelf (default when shelf_mode is personal or separate_shelf: true)
+    const userA = ctx.client();
+    const resA = await admin('POST', '/users', { username: 'user_a', password: 'password123', role: 'editor', shelf_mode: 'personal' });
+    assert.equal(resA.status, 200);
+    await userA('POST', '/auth/login', { username: 'user_a', password: 'password123' });
+    const shelvesA = (await userA('GET', '/shelves')).body.shelves;
+    assert.equal(shelvesA.length, 1);
+    assert.equal(shelvesA[0].role, 'owner');
+
+    // 2. share_same as viewer: joins user_a's shelf as viewer
+    const userB = ctx.client();
+    const resB = await admin('POST', '/users', {
+        username: 'user_b',
+        password: 'password123',
+        role: 'editor',
+        shelf_mode: 'share_same',
+        share_with_user_id: resA.body.user.id,
+        share_role: 'viewer'
+    });
+    assert.equal(resB.status, 200);
+    await userB('POST', '/auth/login', { username: 'user_b', password: 'password123' });
+    const shelvesB = (await userB('GET', '/shelves')).body.shelves;
+    assert.equal(shelvesB.length, 1);
+    assert.equal(shelvesB[0].id, shelvesA[0].id);
+    assert.equal(shelvesB[0].role, 'viewer');
+    assert.equal((await userB('POST', '/mangas', { title: 'Forbidden', shelf_id: shelvesB[0].id })).status, 403);
+
+    // 3. share_mutual: user_c gets personal shelf AND both user_a and user_c share each other's shelves
+    const userC = ctx.client();
+    const resC = await admin('POST', '/users', {
+        username: 'user_c',
+        password: 'password123',
+        role: 'editor',
+        shelf_mode: 'share_mutual',
+        share_with_user_id: resA.body.user.id,
+        share_role: 'editor'
+    });
+    assert.equal(resC.status, 200);
+    await userC('POST', '/auth/login', { username: 'user_c', password: 'password123' });
+    const shelvesC = (await userC('GET', '/shelves')).body.shelves;
+    assert.equal(shelvesC.length, 2);
+    assert.ok(shelvesC.some(s => s.role === 'owner'));
+    assert.ok(shelvesC.some(s => s.id === shelvesA[0].id && s.role === 'editor'));
+
+    // User A now also sees User C's shelf
+    const shelvesANew = (await userA('GET', '/shelves')).body.shelves;
+    assert.equal(shelvesANew.length, 2);
+    assert.ok(shelvesANew.some(s => s.role === 'editor'));
+});
+

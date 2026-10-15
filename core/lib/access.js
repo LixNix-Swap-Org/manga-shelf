@@ -65,6 +65,56 @@ function createPersonalShelf(db, userId) {
     return Number(info.lastInsertRowid);
 }
 
+function userPrimaryShelf(db, userId) {
+    const id = Number(userId);
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+    const owned = db.prepare(`
+        SELECT s.id FROM shelves s
+        JOIN shelf_members sm ON sm.shelf_id = s.id AND sm.user_id = ?
+        ORDER BY (sm.role = 'owner') DESC, s.is_default DESC, s.id ASC
+        LIMIT 1
+    `).get(id);
+    return owned ? owned.id : null;
+}
+
+function setupUserShelf(db, newUser, options = {}) {
+    const role = (options.share_role === 'viewer' || newUser.role === 'visitor' || newUser.role === 'guest') ? 'viewer' : 'editor';
+    const targetUserId = (options.share_with_user_id !== undefined && options.share_with_user_id !== null && options.share_with_user_id !== '')
+        ? Number(options.share_with_user_id)
+        : null;
+    const mode = options.shelf_mode || (options.separate_shelf === false ? 'household' : 'personal');
+
+    if (mode === 'share_same' && targetUserId) {
+        const targetShelfId = userPrimaryShelf(db, targetUserId);
+        if (targetShelfId) {
+            db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(targetShelfId, newUser.id, role);
+            return { shelfId: targetShelfId, mode: 'share_same' };
+        }
+    }
+
+    if (mode === 'share_mutual' && targetUserId) {
+        const newShelfId = createPersonalShelf(db, newUser.id);
+        const targetShelfId = userPrimaryShelf(db, targetUserId);
+        if (targetShelfId) {
+            db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(targetShelfId, newUser.id, role);
+            db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(newShelfId, targetUserId, 'editor');
+        }
+        return { shelfId: newShelfId, mode: 'share_mutual' };
+    }
+
+    if (mode === 'household') {
+        const home = db.prepare('SELECT s.id FROM shelves s WHERE s.is_default = 1 ORDER BY s.id LIMIT 1').get();
+        if (home) {
+            db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(home.id, newUser.id, role);
+            return { shelfId: home.id, mode: 'household' };
+        }
+    }
+
+    // Default: 'personal' -> gets an own shelf
+    const personalShelfId = createPersonalShelf(db, newUser.id);
+    return { shelfId: personalShelfId, mode: 'personal' };
+}
+
 /** Role of the caller in a shelf ('owner' | 'editor' | 'viewer' | null). A read-only account never writes. */
 function shelfRole(ctx, shelfId) {
     if (!ctx.user) return 'owner';
@@ -172,6 +222,6 @@ function scopedCtx(ctx, shelfIds) {
 
 module.exports = {
     scopeSql, scopedCtx,
-    resolveTargetUser, ROLE_WEIGHT, ensureMembership, createPersonalShelf, shelfRole, requireShelf, accessibleShelfIds, requestedShelfIds,
+    resolveTargetUser, ROLE_WEIGHT, ensureMembership, createPersonalShelf, userPrimaryShelf, setupUserShelf, shelfRole, requireShelf, accessibleShelfIds, requestedShelfIds,
     inShelves, targetShelfId, mangaAccess, volumeAccess, roleOfGlobal
 };

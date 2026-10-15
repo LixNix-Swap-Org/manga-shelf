@@ -279,8 +279,11 @@ router.post('/users', requireAdmin, async (req, res) => {
     if (!result) return usernameTaken();
     {
         const created = { id: Number(result.lastInsertRowid), username: cleanUsername, role: cleanRole };
-        if (req.body && req.body.separate_shelf === true) access.createPersonalShelf(db, created.id);
-        else access.ensureMembership(createCtx({ user: created }));
+        if (req.body && (req.body.shelf_mode || req.body.separate_shelf !== undefined)) {
+            access.setupUserShelf(db, created, req.body);
+        } else {
+            access.ensureMembership(createCtx({ user: created }));
+        }
     }
     log.info('Benutzer angelegt', { ...auditFields(req), user: cleanUsername, role: cleanRole });
 
