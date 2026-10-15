@@ -826,7 +826,7 @@ export default function AnimeDetailModal({
                 <section className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{t('Fortschritt aller')}</h3>
                   {anime.community?.count > 0 && (
-                    <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { average: formatNumber(anime.community.average, 1) })}</p>
+                    <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { count: anime.community.count, average: formatNumber(anime.community.average, 1) })}</p>
                   )}
                   <ul className="space-y-1">
                     {(anime.progress || anime.progress_users).map((p) => (
