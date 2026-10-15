@@ -18,6 +18,7 @@ const watch = require('./handlers/watch');
 const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
 const cleanup = require('./handlers/cleanup');
+const shelves = require('./handlers/shelves');
 const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
 const { HttpError, AUTH_TEXTS } = require('./errors');
@@ -35,6 +36,15 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
+    { method: 'GET', path: '/shelves', role: 'auth', handler: shelves.list },
+    { method: 'POST', path: '/shelves', role: 'editor', handler: shelves.create },
+    { method: 'GET', path: '/shelves/:id', role: 'auth', handler: shelves.detail },
+    { method: 'PUT', path: '/shelves/:id', role: 'editor', handler: shelves.update },
+    { method: 'DELETE', path: '/shelves/:id', role: 'editor', handler: shelves.remove },
+    { method: 'POST', path: '/shelves/:id/members', role: 'editor', handler: shelves.addMember },
+    { method: 'PUT', path: '/shelves/:id/members/:userId', role: 'editor', handler: shelves.setMemberRole },
+    { method: 'DELETE', path: '/shelves/:id/members/:userId', role: 'auth', handler: shelves.removeMember },
     { method: 'GET', path: '/mangas/:id/gaps', role: 'auth', handler: mangaPassion.gaps },
     { method: 'POST', path: '/mangas/:id/sync-edition', role: 'editor', handler: mangaPassion.syncEdition },
     { method: 'POST', path: '/mangas/:id/batch-import-gaps', role: 'editor', handler: mangaPassion.batchImportGaps },

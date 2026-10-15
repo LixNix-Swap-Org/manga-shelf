@@ -3,6 +3,8 @@ const { wishedSummary } = require('./wishlist');
 const { regularNumberedSql } = require('../lib/volumeNumber');
 const { animeStats } = require('../anime/stats');
 const { badRequest, notFound } = require('../errors');
+const access = require('../lib/access');
+const { qstr } = require('../lib/query');
 
 /** Last `count` months (YYYY-MM) up to and including `now`, oldest first. */
 function lastMonthKeys(now, count) {
@@ -199,7 +201,9 @@ function currencyStats(ctx) {
 const round1 = (n) => Math.round(n * 10) / 10;
 const avgOrNull = (n) => (n === null || n === undefined ? null : round2(n));
 
-function stats(ctx) {
+function stats(realCtx, { query } = {}) {
+    const shelfIds = access.requestedShelfIds(realCtx, qstr(query && query.shelf_id));
+    const ctx = access.scopedCtx(realCtx, shelfIds);
     const totalSeriesRow = ctx.db.prepare('SELECT count(*) as count FROM mangas').get();
     const totalSeries = totalSeriesRow ? totalSeriesRow.count : 0;
 
@@ -298,7 +302,7 @@ function stats(ctx) {
         unpriced: s.unpriced
     }));
 
-    const wishedRow = wishedSummary(ctx);
+    const wishedRow = wishedSummary(realCtx, shelfIds);
 
     const summary = {
         total_series: totalSeries,
@@ -403,7 +407,8 @@ function continueReading(ctx, userId) {
  * GET /stats/reading?user_id=: monthly reads, backlog curve, this vs last year, streaks, "Weiterlesen" list.
  * Reads without a date count as read but stay out of every timeline (unknown_date).
  */
-function reading(ctx, { query }) {
+function reading(realCtx, { query }) {
+    const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(query.shelf_id)));
     const raw = query.user_id;
     const userId = raw === undefined || raw === '' ? ctx.user.id : Number(raw);
     if (!Number.isSafeInteger(userId) || userId <= 0) throw badRequest('Ungültige user_id');

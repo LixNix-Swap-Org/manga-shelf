@@ -2,7 +2,8 @@
 // (core/anime/gateway.js), adaptations of a series, the CSV export, shared streaming links and the AniList list sync.
 const { qstr } = require('../lib/query');
 const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../errors');
-const { resolveTargetUser } = require('../lib/access');
+const access = require('../lib/access');
+const { resolveTargetUser } = access;
 const { escapeCell } = require('../csvExchange');
 const gateway = require('../anime/gateway');
 const store = require('../anime/store');
@@ -85,11 +86,17 @@ function cleanEpisodes(value) {
     return n;
 }
 
+/** { id, title } of a series in a shelf the caller can see, else null (a link into a foreign shelf stays invisible). */
+function visibleManga(ctx, mangaId) {
+    const manga = ctx.db.prepare('SELECT id, title, shelf_id FROM mangas WHERE id = ?').get(mangaId);
+    return manga && access.accessibleShelfIds(ctx).includes(manga.shelf_id) ? { id: manga.id, title: manga.title } : null;
+}
+
 function mangaRef(ctx, mangaId) {
     if (mangaId === null) return null;
-    const manga = ctx.db.prepare('SELECT id, title FROM mangas WHERE id = ?').get(mangaId);
-    if (!manga) throw notFound('Reihe');
-    return manga;
+    const manga = ctx.db.prepare('SELECT id, title, shelf_id FROM mangas WHERE id = ?').get(mangaId);
+    if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) throw notFound('Reihe');
+    return { id: manga.id, title: manga.title };
 }
 
 const loadRow = (ctx, id) => {
@@ -132,7 +139,7 @@ function detailOf(ctx, id) {
             ...r,
             in_collection_id: (r.anilist_id && byAni.get(r.anilist_id)?.id) || (r.mal_id && byMal.get(r.mal_id)?.id) || null
         })),
-        manga: row.manga_id ? ctx.db.prepare('SELECT id, title FROM mangas WHERE id = ?').get(row.manga_id) || null : null,
+        manga: row.manga_id ? visibleManga(ctx, row.manga_id) : null,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching; the others only see the counter
         progress: progress.map((p) => (p === mine
@@ -898,8 +905,8 @@ function remove(ctx, { params }) {
 
 async function adaptations(ctx, { params }) {
     const id = parseId(params.id);
-    const manga = ctx.db.prepare('SELECT id, title, alt_title FROM mangas WHERE id = ?').get(id);
-    if (!manga) throw notFound('Reihe');
+    const manga = ctx.db.prepare('SELECT id, title, alt_title, shelf_id FROM mangas WHERE id = ?').get(id);
+    if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) throw notFound('Reihe');
     return { body: await gateway.adaptationsOf(ctx, manga) };
 }
 

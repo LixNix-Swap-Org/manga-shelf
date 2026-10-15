@@ -1,4 +1,5 @@
 // "Sammlung aufräumen": GET /maintenance/quality (data-quality checks), POST /maintenance/fix (the safe fixes).
+const access = require('../lib/access');
 const { badRequest } = require('../errors');
 const { isValidIsbn } = require('../lib/isbn');
 const { normalizePublisher, isKnownPublisher } = require('../lib/publishers');
@@ -89,7 +90,8 @@ function todayString(ctx) {
 }
 
 /** Counts plus up to 50 entries per check; `fix` names the POST /maintenance/fix action a check offers. */
-function quality(ctx) {
+function quality(realCtx) {
+    const ctx = access.scopedCtx(realCtx, access.accessibleShelfIds(realCtx));
     const today = todayString(ctx);
     const checks = [
         duplicateTitles(ctx),
@@ -126,7 +128,8 @@ const FIXES = {
 };
 
 /** { check: 'legacy_read' | 'normalize_publishers' } -> { success, changed }. */
-function fix(ctx, { body }) {
+function fix(realCtx, { body }) {
+    const ctx = access.scopedCtx(realCtx, access.accessibleShelfIds(realCtx, 'editor'));
     const run = Object.prototype.hasOwnProperty.call(FIXES, body.check) ? FIXES[body.check] : null;
     if (!run) throw badRequest('Unbekannte Korrektur', 'FIX_UNKNOWN');
     let changed = 0;

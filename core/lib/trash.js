@@ -20,10 +20,10 @@ function volumeParts(ctx, volumeIds) {
     return { owners, reads };
 }
 
-function insertTrash(ctx, { kind, refId, mangaId, title, payload }) {
+function insertTrash(ctx, { kind, refId, mangaId, title, payload, shelfId }) {
     const result = ctx.db.prepare(`
-        INSERT INTO trash (kind, ref_id, manga_id, title, payload, deleted_by, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(kind, refId, mangaId, title, JSON.stringify(payload), ctx.user?.id ?? null, sqlTimestamp(ctx.now()));
+        INSERT INTO trash (kind, ref_id, manga_id, title, payload, deleted_by, deleted_at, shelf_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(kind, refId, mangaId, title, JSON.stringify(payload), ctx.user?.id ?? null, sqlTimestamp(ctx.now()), shelfId ?? 1);
     return Number(result.lastInsertRowid);
 }
 
@@ -45,7 +45,7 @@ function moveMangaToTrash(ctx, mangaId) {
     const animeIds = ctx.db.prepare('SELECT id FROM animes WHERE manga_id = ? ORDER BY id').all(manga.id).map(r => r.id);
     const trashId = insertTrash(ctx, {
         kind: 'manga', refId: manga.id, mangaId: manga.id, title: manga.title,
-        payload: { manga, volumes, owners, reads, anime_ids: animeIds }
+        payload: { manga, volumes, owners, reads, anime_ids: animeIds }, shelfId: manga.shelf_id
     });
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);
@@ -56,11 +56,11 @@ function moveMangaToTrash(ctx, mangaId) {
 function moveVolumeToTrash(ctx, volumeId) {
     const volume = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?').get(volumeId);
     if (!volume) return null;
-    const series = ctx.db.prepare('SELECT title FROM mangas WHERE id = ?').get(volume.manga_id);
+    const series = ctx.db.prepare('SELECT title, shelf_id FROM mangas WHERE id = ?').get(volume.manga_id);
     const { owners, reads } = volumeParts(ctx, [volume.id]);
     const trashId = insertTrash(ctx, {
         kind: 'volume', refId: volume.id, mangaId: volume.manga_id, title: series?.title || '',
-        payload: { volume, owners, reads }
+        payload: { volume, owners, reads }, shelfId: series?.shelf_id
     });
     deleteVolumeRows(ctx, volume.id);
     return trashId;

@@ -7,6 +7,8 @@ const { addOwner, syncOwnersWithStatus, markRead, OWNED_STATUS } = require('../l
 const { HttpError, badRequest, msg } = require('../errors');
 const { DEFAULT_CURRENCY, DEFAULT_LANGUAGE, isManualWorkKey, manualWorkKey } = require('../lib/language');
 const { readProfile } = require('../lib/locales');
+const access = require('../lib/access');
+const { qstr } = require('../lib/query');
 
 const DRY_RUN_ROLLBACK = Symbol('dry-run');
 const MAX_IMPORT_ROWS = 20000;
@@ -50,9 +52,10 @@ const EXPORT_ORDER = 'ORDER BY m.title COLLATE NOCASE, m.id, COALESCE(v.number_s
  * All series and volumes as CSV, built in blocks of series so a large collection does not hold the event loop.
  * A database reopened meanwhile (restore) fails the export instead of mixing two databases.
  */
-async function exportCsv(ctx) {
+async function exportCsv(ctx, { query } = {}) {
     const generation = ctx.db.generation();
-    const order = ctx.db.prepare('SELECT id FROM mangas ORDER BY title COLLATE NOCASE, id').all().map(r => r.id);
+    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id)));
+    const order = ctx.db.prepare(`SELECT id FROM mangas WHERE ${scope.sql} ORDER BY title COLLATE NOCASE, id`).all(...scope.params).map(r => r.id);
     const statements = new Map();
     const prepared = (n) => {
         if (!statements.has(n)) {
@@ -105,13 +108,14 @@ function importCsv(ctx, { body }) {
     }
     const { records, errors, warnings, columns } = mapCsvRows(rows);
     const dryRun = isDryRun(body.dry_run);
+    const shelfId = access.targetShelfId(ctx, body.shelf_id);
     const bySeriesPublisher = columns.includes('series_publisher');
     // with a "Sprache" column, same-title editions in different languages stay apart
     const byLanguage = columns.includes('series_language');
 
     // Load titles, volumes and users once and compare in JS: SQLite LOWER() folds only ASCII (Ä would stay Ä)
     const seriesByTitle = new Map();
-    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas ORDER BY id').all()) {
+    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas WHERE shelf_id = ? ORDER BY id').all(shelfId)) {
         const key = matchKey(m.title);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE });
@@ -121,7 +125,7 @@ function importCsv(ctx, { body }) {
     const knownVolumes = new Set();
     // stored volumes once more by their own spelling: "3" as plain number, "Band 3" by its label
     const knownLabels = new Set();
-    for (const v of ctx.db.prepare("SELECT manga_id, COALESCE(type, 'volume') AS type, volume_number FROM volumes").all()) {
+    for (const v of ctx.db.prepare("SELECT manga_id, COALESCE(type, 'volume') AS type, volume_number FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id = ?)").all(shelfId)) {
         knownVolumes.add(volumeKey(v.manga_id, v.type, v.volume_number));
         knownLabels.add(labelKey(v.manga_id, v.type, v.volume_number));
     }
@@ -229,8 +233,8 @@ function importCsv(ctx, { body }) {
 
     const insertManga = ctx.db.prepare(`
         INSERT INTO mangas (title, author, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
-                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
@@ -274,7 +278,7 @@ function importCsv(ctx, { body }) {
                 r.series, r.author, publisher, language, meta.status || 'Laufend', meta.alt_title ?? null,
                 meta.tags ?? null, meta.total_volumes ?? null, meta.description ?? null, meta.cover_image ?? null,
                 meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id,
-                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key)
+                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId
             ).lastInsertRowid);
         const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
         const key = matchKey(r.series);

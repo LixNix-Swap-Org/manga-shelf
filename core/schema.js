@@ -637,6 +637,10 @@ function migrationList(log = silentLog) {
                     d.prepare("INSERT INTO shelves (id, name, owner_user_id, is_default) VALUES (1, 'Sammlung', ?, 1)").run(owner ? owner.id : null);
                 }
                 d.exec("UPDATE mangas SET shelf_id = 1 WHERE shelf_id IS NULL;");
+                // the trash remembers the shelf of what it holds, so it is only listed to that shelf's members
+                const trashCols = new Set(d.prepare('PRAGMA table_info(trash)').all().map(c => c.name));
+                if (!trashCols.has('shelf_id')) d.exec('ALTER TABLE trash ADD COLUMN shelf_id INTEGER;');
+                d.exec("UPDATE trash SET shelf_id = 1 WHERE shelf_id IS NULL;");
                 d.exec(`
                     INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role)
                     SELECT 1, id, CASE role WHEN 'admin' THEN 'owner' WHEN 'editor' THEN 'editor' ELSE 'viewer' END FROM users;

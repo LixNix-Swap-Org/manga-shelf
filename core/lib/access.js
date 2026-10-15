@@ -145,7 +145,33 @@ function volumeAccess(ctx, volumeId, minRole = 'viewer') {
     }
 }
 
+const SQL_WORDS = /^(WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|GROUP|ORDER|LIMIT|HAVING|UNION|AND|OR|USING|SET)$/i;
+
+/**
+ * Rewrites `FROM|JOIN mangas [alias]` and `volumes [alias]` of an aggregate query into subselects that only see the
+ * given shelves (ids are inlined integers). Lets the statistics queries stay as they are.
+ */
+function scopeSql(sql, shelfIds) {
+    const list = shelfIds.length ? shelfIds.map(n => Number(n)).filter(Number.isSafeInteger).join(',') || '-1' : '-1';
+    const mangas = `(SELECT * FROM mangas WHERE shelf_id IN (${list}))`;
+    const volumes = `(SELECT * FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id IN (${list})))`;
+    return sql.replace(/\b(FROM|JOIN)\s+(mangas|volumes)\b(?:\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi, (all, kw, table, alias) => {
+        const sub = table.toLowerCase() === 'mangas' ? mangas : volumes;
+        if (alias && !SQL_WORDS.test(alias)) return `${kw} ${sub} ${alias}`;
+        const rest = alias ? ` ${alias}` : '';
+        return `${kw} ${sub} ${table}${rest}`;
+    });
+}
+
+/** A ctx whose db.prepare sees only the given shelves (see scopeSql). */
+function scopedCtx(ctx, shelfIds) {
+    const db = Object.create(ctx.db);
+    db.prepare = (sql) => ctx.db.prepare(scopeSql(sql, shelfIds));
+    return { ...ctx, db };
+}
+
 module.exports = {
+    scopeSql, scopedCtx,
     resolveTargetUser, ROLE_WEIGHT, ensureMembership, createPersonalShelf, shelfRole, requireShelf, accessibleShelfIds, requestedShelfIds,
     inShelves, targetShelfId, mangaAccess, volumeAccess, roleOfGlobal
 };

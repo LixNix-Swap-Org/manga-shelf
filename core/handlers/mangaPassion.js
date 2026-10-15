@@ -1,5 +1,6 @@
 // Manga Passion actions: gap check and import, edition sync and search, volume autofill and lookup, the monthly
 // calendar and the 1-click import of a calendar entry.
+const access = require('../lib/access');
 const { normalizePublisher } = require('../lib/publishers');
 const { qstr } = require('../lib/query');
 const { normalizeIsbn } = require('../lib/isbn');
@@ -154,6 +155,7 @@ async function volumeLookup(ctx, { query }) {
     if (!volumeNumber && !isbn && !url && !mpVolumeId) {
         throw badRequest('Band-Nummer, ISBN oder URL erforderlich');
     }
+    if (mangaId) access.mangaAccess(ctx, mangaId, 'viewer');
     const series = mangaId ? ctx.db.prepare('SELECT language FROM mangas WHERE id = ?').get(mangaId) : null;
     if (series) {
         // a stored volume with its own language (an English volume in a German series) is no German edition either
@@ -323,6 +325,8 @@ async function importRelease(ctx, { body }) {
     if (parsed.notFound) throw notFound('Manga');
     const { effStatus, price, releaseDate, volNumStr, type, editionId, mpVolumeId, volumeTitle, publisher, cleanTitle } = parsed;
     let { mangaId } = parsed;
+    const seriesShelf = mangaId ? access.mangaAccess(ctx, mangaId, 'editor') : null;
+    const shelfId = seriesShelf || access.targetShelfId(ctx, body && body.shelf_id);
 
     if (mangaId) {
         const series = ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id, language FROM mangas WHERE id = ?').get(mangaId);
@@ -350,15 +354,15 @@ async function importRelease(ctx, { body }) {
         let seriesCreated = false;
         if (!mangaId) {
             const existing = releases.findSeriesForImport(
-                ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE COALESCE(language, ?) = ? ORDER BY id').all(DEFAULT_LANGUAGE, MP_LANGUAGE), cleanTitle, editionId
+                ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE shelf_id = ? AND COALESCE(language, ?) = ? ORDER BY id').all(shelfId, DEFAULT_LANGUAGE, MP_LANGUAGE), cleanTitle, editionId
             );
             if (existing) {
                 mangaId = existing.id;
             } else {
                 const insManga = ctx.db.prepare(`
-                    INSERT INTO mangas (title, author, tags, publisher, cover_image, manga_passion_id, language, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Laufend', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                `).run(cleanTitle, editionMeta.author ?? null, editionMeta.tags ?? null, publisher, coverImage, editionId, MP_LANGUAGE);
+                    INSERT INTO mangas (title, author, tags, publisher, cover_image, manga_passion_id, language, status, shelf_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                `).run(cleanTitle, editionMeta.author ?? null, editionMeta.tags ?? null, publisher, coverImage, editionId, MP_LANGUAGE, shelfId);
                 mangaId = Number(insManga.lastInsertRowid);
                 seriesCreated = true;
             }
