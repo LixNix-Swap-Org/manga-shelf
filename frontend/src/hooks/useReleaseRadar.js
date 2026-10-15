@@ -21,7 +21,9 @@ const errorText = async (res, fallback) => {
 };
 
 /** Release radar: personal pre-orders / upcoming volumes and the Manga-Passion monthly calendar. */
-export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline = false }) {
+export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline = false, shelfFilter = 'ALL' }) {
+  const shelfRef = useRef(shelfFilter);
+  shelfRef.current = shelfFilter;
   const [radarData, setRadarData] = useState(null);
   const [loadingRadar, setLoadingRadar] = useState(false);
   const [radarError, setRadarError] = useState(null);
@@ -56,7 +58,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
     const { signal, isCurrent } = beginRadarRequest();
     setLoadingRadar(true);
     try {
-      const res = await apiFetch('/api/release-radar', { signal });
+      const res = await apiFetch(`/api/release-radar${shelfRef.current !== 'ALL' ? `?shelf_id=${encodeURIComponent(shelfRef.current)}` : ''}`, { signal });
       if (!isCurrent()) return;
       if (!res.ok) {
         const message = await errorText(res, t(RADAR_LOAD_ERROR));

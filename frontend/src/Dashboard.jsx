@@ -156,7 +156,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
     fetchShoppingList, handleQuickBuy, syncPendingPurchases
-  } = useShoppingList({ user, setNetworkOffline, fetchMangas });
+  } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter });
 
   const {
     radarData, loadingRadar, radarError, radarPublisherFilter, setRadarPublisherFilter, radarStatusFilter, setRadarStatusFilter,
@@ -165,7 +165,16 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     mpPublisherFilter, setMpPublisherFilter, mpPrintOnly, setMpPrintOnly, mpMySeriesOnly, setMpMySeriesOnly, importingMpIds,
     fetchReleaseRadar, handleMarkDelivered, fetchMangaPassionReleases,
     handlePrevMonth, handleNextMonth, handleCurrentMonth, handleImportMangaPassion
-  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline) });
+  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline), shelfFilter });
+
+  const shelfSeen = useRef(shelfFilter);
+  useEffect(() => {
+    if (shelfSeen.current === shelfFilter) return;
+    shelfSeen.current = shelfFilter;
+    if (activeMainView === 'shopping') fetchShoppingList();
+    if (activeMainView === 'radar' && !user?.offline) fetchReleaseRadar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to a changed shelf
+  }, [shelfFilter]);
 
   const anime = useAnimeList({ user });
   const activeViewRef = useRef(activeMainView);
