@@ -249,6 +249,7 @@
   "Auf v{latest} aktualisieren": "更新到 v{latest}",
   "Auf v{version} fällt es unter die Aufbewahrung der Update-Backups (BACKUP_KEEP_PRE_UPDATE) – bei Bedarf herunterladen.": "在 v{version} 中，该备份受更新备份保留设置（BACKUP_KEEP_PRE_UPDATE）约束——需要时请下载。",
   "Auf {count} anpassen": "改为 {count}",
+  "Aufräumen": "整理",
   "Aufräumen fehlgeschlagen": "清理失败",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "清理已被锁定：无法读取某个备份快照的图片列表。",
   "Aus CSV importieren": "从 CSV 导入",
@@ -790,6 +791,7 @@
   "Du kannst dein eigenes Administratorkonto nicht löschen": "不能删除你自己的管理员账户",
   "Du wirst abgemeldet.": "你将被退出登录。",
   "Du wirst danach abgemeldet.": "之后你将被退出登录。",
+  "Dubletten & Qualität prüfen": "检查重复项与质量",
   "Durchschnitt pro Monat über {count}": "{count} 的月均值",
   "Durchschnittspreis": "平均价格",
   "Edition auf Manga-Passion nicht gefunden": "在 Manga Passion 上未找到该版本",
@@ -1063,6 +1065,7 @@
   "Geliefert": "已送达",
   "Gelöscht {date}": "删除于 {date}",
   "Gelöscht {date} von {name}": "{name} 于 {date} 删除",
+  "Gelöschte Bände wiederherstellen": "恢复已删除的卷",
   "Gelöschte Einträge": "已删除的条目",
   "Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.|Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.": {
     "other": "已删除的系列和卷在 {n} 天内可以恢复，包括拥有和阅读状态。"
@@ -1844,6 +1847,7 @@
   "Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe": "搁板：每个系列一层木板的多行书架",
   "Regale": "书架",
   "Regale konnten nicht geladen werden.": "无法加载书架。",
+  "Regale verwalten & freigeben": "管理与共享书架",
   "Region": "地区",
   "Registrierte Benutzer": "已注册用户",
   "Reihe": "系列",
@@ -2356,6 +2360,7 @@
   "Verlag suchen…": "搜索出版社…",
   "Verlag: {effectivePublisher}": "出版社：{effectivePublisher}",
   "Verlag: {publisher}": "出版社：{publisher}",
+  "Verlage": "出版社",
   "Verlage außerhalb der Verlagsliste": "不在出版社列表中的出版社",
   "Verlage filtern": "筛选出版社",
   "Verlage in alter Schreibweise": "使用旧写法的出版社",
@@ -2366,6 +2371,7 @@
   "Verlage werden geladen…": "正在加载出版社…",
   "Verlage zusammenführen": "合并出版社",
   "Verlage zusammenführen…": "合并出版社…",
+  "Verlags-Aliase vereinheitlichen": "统一出版社别名",
   "Verlagsdiagramm": "出版社图表",
   "Verlagsverteilung & Sammlungsanteile": "出版社分布和收藏占比",
   "Verlag|Verlage": {
@@ -2452,6 +2458,8 @@
   "Weniger anzeigen": "收起",
   "Werden beim Scannen im Laden nicht erkannt.": "在店里扫描时无法识别。",
   "Werkzeuge": "工具",
+  "Werkzeuge & Regale": "工具与书架",
+  "Werkzeuge: Regale, Aufräumen, Papierkorb": "工具：书架、整理、回收站",
   "Wert": "价值",
   "Wert des {n} erfassten Bands (jeder Status)|Gesamtwert aller {n} erfassten Bände (jeder Status)": {
     "other": "所有 {n} 个已登记卷的总价值（任意状态）"

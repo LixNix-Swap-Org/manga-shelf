@@ -249,6 +249,7 @@
   "Auf v{latest} aktualisieren": "v{latest}にアップデート",
   "Auf v{version} fällt es unter die Aufbewahrung der Update-Backups (BACKUP_KEEP_PRE_UPDATE) – bei Bedarf herunterladen.": "v{version}では、このバックアップはアップデート前バックアップの保持設定(BACKUP_KEEP_PRE_UPDATE)の対象になります – 必要ならダウンロードしてください。",
   "Auf {count} anpassen": "{count}に変更",
+  "Aufräumen": "整理",
   "Aufräumen fehlgeschlagen": "整理に失敗しました",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "整理はロックされています: バックアップのスナップショットの画像リストを読み取れません。",
   "Aus CSV importieren": "CSVからインポート",
@@ -790,6 +791,7 @@
   "Du kannst dein eigenes Administratorkonto nicht löschen": "自分の管理者アカウントは削除できません",
   "Du wirst abgemeldet.": "サインアウトされます。",
   "Du wirst danach abgemeldet.": "その後、サインアウトされます。",
+  "Dubletten & Qualität prüfen": "重複と品質をチェック",
   "Durchschnitt pro Monat über {count}": "{count}あたりの月平均",
   "Durchschnittspreis": "平均価格",
   "Edition auf Manga-Passion nicht gefunden": "Manga Passionで版が見つかりません",
@@ -1063,6 +1065,7 @@
   "Geliefert": "配達済み",
   "Gelöscht {date}": "{date}に削除",
   "Gelöscht {date} von {name}": "{date}に{name}が削除",
+  "Gelöschte Bände wiederherstellen": "削除した巻を復元",
   "Gelöschte Einträge": "削除済みの項目",
   "Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.|Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.": {
     "other": "削除したシリーズと巻は、所持状況と既読状況ごと{n}日間は復元できます。"
@@ -1844,6 +1847,7 @@
   "Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe": "棚板: シリーズごとに木の棚板がある複数段の本棚",
   "Regale": "本棚",
   "Regale konnten nicht geladen werden.": "本棚を読み込めませんでした。",
+  "Regale verwalten & freigeben": "棚の管理と共有",
   "Region": "地域",
   "Registrierte Benutzer": "登録済みユーザー",
   "Reihe": "シリーズ",
@@ -2356,6 +2360,7 @@
   "Verlag suchen…": "出版社を検索…",
   "Verlag: {effectivePublisher}": "出版社: {effectivePublisher}",
   "Verlag: {publisher}": "出版社: {publisher}",
+  "Verlage": "出版社",
   "Verlage außerhalb der Verlagsliste": "出版社リストにない出版社",
   "Verlage filtern": "出版社を絞り込み",
   "Verlage in alter Schreibweise": "古い表記の出版社",
@@ -2366,6 +2371,7 @@
   "Verlage werden geladen…": "出版社を読み込み中…",
   "Verlage zusammenführen": "出版社を統合",
   "Verlage zusammenführen…": "出版社を統合…",
+  "Verlags-Aliase vereinheitlichen": "出版社の別名を統一",
   "Verlagsdiagramm": "出版社グラフ",
   "Verlagsverteilung & Sammlungsanteile": "出版社の分布とコレクションの割合",
   "Verlag|Verlage": {
@@ -2452,6 +2458,8 @@
   "Weniger anzeigen": "表示を減らす",
   "Werden beim Scannen im Laden nicht erkannt.": "店頭でのスキャンでは認識されません。",
   "Werkzeuge": "ツール",
+  "Werkzeuge & Regale": "ツールと棚",
+  "Werkzeuge: Regale, Aufräumen, Papierkorb": "ツール：棚、整理、ごみ箱",
   "Wert": "評価額",
   "Wert des {n} erfassten Bands (jeder Status)|Gesamtwert aller {n} erfassten Bände (jeder Status)": {
     "other": "登録済みの全{n}巻の合計評価額(ステータス問わず)"

@@ -249,6 +249,7 @@
   "Auf v{latest} aktualisieren": "v{latest} 버전으로 업데이트",
   "Auf v{version} fällt es unter die Aufbewahrung der Update-Backups (BACKUP_KEEP_PRE_UPDATE) – bei Bedarf herunterladen.": "v{version}에서는 이 백업이 업데이트 백업 보관 설정(BACKUP_KEEP_PRE_UPDATE)의 적용을 받아요 – 필요하면 다운로드해 두세요.",
   "Auf {count} anpassen": "{count}(으)로 맞추기",
+  "Aufräumen": "정리",
   "Aufräumen fehlgeschlagen": "정리에 실패했어요",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "정리할 수 없어요: 백업 스냅샷의 이미지 목록을 읽을 수 없어요.",
   "Aus CSV importieren": "CSV에서 가져오기",
@@ -790,6 +791,7 @@
   "Du kannst dein eigenes Administratorkonto nicht löschen": "내 관리자 계정은 삭제할 수 없어요",
   "Du wirst abgemeldet.": "로그아웃돼요.",
   "Du wirst danach abgemeldet.": "이후 로그아웃돼요.",
+  "Dubletten & Qualität prüfen": "중복 및 품질 확인",
   "Durchschnitt pro Monat über {count}": "{count} 기준 월평균",
   "Durchschnittspreis": "평균 가격",
   "Edition auf Manga-Passion nicht gefunden": "Manga Passion에서 판을 찾을 수 없어요",
@@ -1063,6 +1065,7 @@
   "Geliefert": "수령함",
   "Gelöscht {date}": "{date} 삭제",
   "Gelöscht {date} von {name}": "{date} {name}님이 삭제",
+  "Gelöschte Bände wiederherstellen": "삭제한 권 복원",
   "Gelöschte Einträge": "삭제된 항목",
   "Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.|Gelöschte Reihen und Bände bleiben {n} Tage wiederherstellbar, mit Besitz und Lesestand.": {
     "other": "삭제한 시리즈와 권은 보유 및 읽음 상태와 함께 {n}일 동안 복원할 수 있어요."
@@ -1844,6 +1847,7 @@
   "Regalbretter: Mehrzeiliges Bücherregal mit Holzplanken pro Reihe": "책장 선반: 시리즈마다 나무 선반이 있는 여러 줄 책장",
   "Regale": "책장",
   "Regale konnten nicht geladen werden.": "책장을 불러오지 못했습니다.",
+  "Regale verwalten & freigeben": "책장 관리 및 공유",
   "Region": "지역",
   "Registrierte Benutzer": "등록된 사용자",
   "Reihe": "시리즈",
@@ -2356,6 +2360,7 @@
   "Verlag suchen…": "출판사 검색…",
   "Verlag: {effectivePublisher}": "출판사: {effectivePublisher}",
   "Verlag: {publisher}": "출판사: {publisher}",
+  "Verlage": "출판사",
   "Verlage außerhalb der Verlagsliste": "출판사 목록에 없는 출판사",
   "Verlage filtern": "출판사 필터",
   "Verlage in alter Schreibweise": "이전 표기의 출판사",
@@ -2366,6 +2371,7 @@
   "Verlage werden geladen…": "출판사를 불러오는 중…",
   "Verlage zusammenführen": "출판사 병합",
   "Verlage zusammenführen…": "출판사 병합…",
+  "Verlags-Aliase vereinheitlichen": "출판사 별칭 통일",
   "Verlagsdiagramm": "출판사 차트",
   "Verlagsverteilung & Sammlungsanteile": "출판사 분포 & 컬렉션 비율",
   "Verlag|Verlage": {
@@ -2452,6 +2458,8 @@
   "Weniger anzeigen": "간략히 보기",
   "Werden beim Scannen im Laden nicht erkannt.": "매장에서 스캔할 때 인식되지 않아요.",
   "Werkzeuge": "도구",
+  "Werkzeuge & Regale": "도구 및 책장",
+  "Werkzeuge: Regale, Aufräumen, Papierkorb": "도구: 책장, 정리, 휴지통",
   "Wert": "가치",
   "Wert des {n} erfassten Bands (jeder Status)|Gesamtwert aller {n} erfassten Bände (jeder Status)": {
     "other": "등록된 {n}권의 가치 (모든 상태)"
