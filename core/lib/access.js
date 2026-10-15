@@ -60,7 +60,10 @@ function ensureMembership(ctx) {
 }
 
 function createPersonalShelf(db, userId) {
-    const info = db.prepare('INSERT INTO shelves (name, owner_user_id, is_default, color) VALUES (?, ?, 0, ?)').run(DEFAULT_SHELF_NAME, userId, SHELF_COLOR);
+    // "Sammlung von <name>" keeps several personal shelves apart in the shelf filter and the shelves dialog.
+    const owner = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+    const name = owner && owner.username ? `${DEFAULT_SHELF_NAME} von ${owner.username}` : DEFAULT_SHELF_NAME;
+    const info = db.prepare('INSERT INTO shelves (name, owner_user_id, is_default, color) VALUES (?, ?, 0, ?)').run(name, userId, SHELF_COLOR);
     db.prepare("INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, 'owner')").run(Number(info.lastInsertRowid), userId);
     return Number(info.lastInsertRowid);
 }

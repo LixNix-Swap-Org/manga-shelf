@@ -37,6 +37,7 @@ test('shelves: separate accounts start with an own empty shelf, the first admin 
     assert.equal(adminShelves[0].role, 'owner');
     const own = await myShelf(anna);
     assert.equal(own.role, 'owner');
+    assert.equal(own.name, 'Sammlung von anna');
     assert.equal(own.series_count, 0);
     assert.notEqual(own.id, adminShelves[0].id);
 });
