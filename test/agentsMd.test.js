@@ -10,7 +10,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-agentsmd-'));
 process.env.DATA_DIR = dataDir;
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 
-const AGENTS = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+const AGENTS = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
 
 // runtime data and build output that never lives in the repository
 const GENERATED_PREFIXES = [
