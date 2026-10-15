@@ -159,6 +159,7 @@ export default function MangaHeroCard({
   editLookupResults,
   editing,
   isOffline,
+  viewerShelf = false,
   formData,
   handleCoverUpload,
   handleDeleteManga,
@@ -621,7 +622,7 @@ export default function MangaHeroCard({
                     </>
                   ) : (
                     <span className="text-xs bg-slate-800/80 text-slate-400 px-3 py-1.5 rounded-xl border border-slate-700/60 font-medium">
-                      {isOffline ? tr('Nur Leseansicht (Offline)') : tr('Nur Leseansicht (Gast)')}
+                      {isOffline ? tr('Nur Leseansicht (Offline)') : viewerShelf ? tr('Nur Leseansicht (Betrachter)') : tr('Nur Leseansicht (Gast)')}
                     </span>
                   )}
                 </div>

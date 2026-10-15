@@ -1690,6 +1690,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "画像ファイル(JPG、PNG、WebP、GIF、AVIF)のみ使用できます",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "ファイルとして保存できるのはバイト列またはBlobのみです",
   "Nur Bände ({count})": "巻のみ({count})",
+  "Nur Leseansicht (Betrachter)": "閲覧専用（閲覧者）",
   "Nur Leseansicht (Gast)": "閲覧のみ(ゲスト)",
   "Nur Leseansicht (Offline)": "閲覧のみ(オフライン)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "閲覧のみ: 版を変更できるのは編集者だけです。",

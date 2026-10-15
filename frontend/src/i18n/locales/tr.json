@@ -1717,6 +1717,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "Yalnızca görsel dosyalarına (JPG, PNG, WebP, GIF, AVIF) izin verilir",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "Yalnızca baytlar veya blob'lar dosya olarak kaydedilebilir",
   "Nur Bände ({count})": "Yalnızca ciltler ({count})",
+  "Nur Leseansicht (Betrachter)": "Salt okunur (izleyici)",
   "Nur Leseansicht (Gast)": "Yalnızca görüntüleme (misafir)",
   "Nur Leseansicht (Offline)": "Yalnızca görüntüleme (çevrimdışı)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "Yalnızca görüntüleme: baskıyı yalnızca editörler değiştirebilir.",

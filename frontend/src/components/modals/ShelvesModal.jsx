@@ -128,7 +128,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
                     <li key={m.user_id} className="flex items-center gap-2 text-sm">
                       <span className="flex-1 truncate text-slate-200">{m.username}</span>
                       {shelf.role === 'owner' ? (
-                        <select className="input-field w-auto text-xs py-1" value={m.role} aria-label={`${m.username}: ${t('Rolle')}`} onChange={(e) => setRole(m, e.target.value)} disabled={busy}>
+                        <select className="input-field !w-auto shrink-0 text-xs py-1" value={m.role} aria-label={`${m.username}: ${t('Rolle')}`} onChange={(e) => setRole(m, e.target.value)} disabled={busy}>
                           {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]()}</option>)}
                         </select>
                       ) : <span className="text-xs text-slate-400">{ROLE_LABEL[m.role]?.() || m.role}</span>}

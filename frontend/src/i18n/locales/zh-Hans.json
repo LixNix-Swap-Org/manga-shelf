@@ -1690,6 +1690,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "仅允许图片文件（JPG、PNG、WebP、GIF、AVIF）",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "只有字节数据或 Blob 才能保存为文件",
   "Nur Bände ({count})": "仅单行本（{count}）",
+  "Nur Leseansicht (Betrachter)": "仅查看（查看者）",
   "Nur Leseansicht (Gast)": "只读视图（访客）",
   "Nur Leseansicht (Offline)": "只读视图（离线）",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "只读视图：只有编辑者可以更改版本。",

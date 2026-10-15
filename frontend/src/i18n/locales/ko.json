@@ -1690,6 +1690,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "이미지 파일(JPG, PNG, WebP, GIF, AVIF)만 허용돼요",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "바이트나 Blob만 파일로 저장할 수 있어요",
   "Nur Bände ({count})": "권만 ({count})",
+  "Nur Leseansicht (Betrachter)": "읽기 전용 (보기 권한)",
   "Nur Leseansicht (Gast)": "읽기 전용 (게스트)",
   "Nur Leseansicht (Offline)": "읽기 전용 (오프라인)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "읽기 전용: 편집자만 판을 변경할 수 있어요.",

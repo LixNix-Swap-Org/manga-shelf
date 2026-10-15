@@ -448,6 +448,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
         {/* Hero Card */}
         <MangaHeroCard
           isOffline={isOffline}
+          viewerShelf={viewerHere}
           applyEditLookupResult={applyEditLookupResult}
           canEdit={canEdit}
           completionPct={completionPct}

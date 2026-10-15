@@ -1744,6 +1744,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "Seuls les fichiers image (JPG, PNG, WebP, GIF, AVIF) sont autorisés",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "Seuls des octets ou des blobs peuvent être enregistrés comme fichier",
   "Nur Bände ({count})": "Tomes seuls ({count})",
+  "Nur Leseansicht (Betrachter)": "Lecture seule (lecteur)",
   "Nur Leseansicht (Gast)": "Lecture seule (invité)",
   "Nur Leseansicht (Offline)": "Lecture seule (hors ligne)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "Lecture seule : seuls les contributeurs peuvent modifier l'édition.",

@@ -1717,6 +1717,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "Only image files (JPG, PNG, WebP, GIF, AVIF) are allowed",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "Only bytes or blobs can be saved as a file",
   "Nur Bände ({count})": "Volumes only ({count})",
+  "Nur Leseansicht (Betrachter)": "Read-only view (viewer)",
   "Nur Leseansicht (Gast)": "View only (guest)",
   "Nur Leseansicht (Offline)": "View only (offline)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "View only: only editors can change the edition.",

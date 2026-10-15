@@ -1771,6 +1771,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "Разрешены только файлы изображений (JPG, PNG, WebP, GIF, AVIF)",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "Сохранить как файл можно только байты или blob",
   "Nur Bände ({count})": "Только тома ({count})",
+  "Nur Leseansicht (Betrachter)": "Только просмотр (наблюдатель)",
   "Nur Leseansicht (Gast)": "Только просмотр (гость)",
   "Nur Leseansicht (Offline)": "Только просмотр (офлайн)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "Только просмотр: менять издание могут только редакторы.",

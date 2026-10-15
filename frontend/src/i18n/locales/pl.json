@@ -1771,6 +1771,7 @@
   "Nur Bilddateien (JPG, PNG, WebP, GIF, AVIF) sind erlaubt": "Dozwolone są tylko pliki graficzne (JPG, PNG, WebP, GIF, AVIF)",
   "Nur Bytes oder Blobs lassen sich als Datei speichern": "Jako plik można zapisać tylko bajty lub bloby",
   "Nur Bände ({count})": "Tylko tomy ({count})",
+  "Nur Leseansicht (Betrachter)": "Tylko odczyt (obserwator)",
   "Nur Leseansicht (Gast)": "Tylko podgląd (gość)",
   "Nur Leseansicht (Offline)": "Tylko podgląd (offline)",
   "Nur Leseansicht: Nur Bearbeiter können die Edition ändern.": "Tylko podgląd: wydanie mogą zmieniać tylko edytorzy.",
