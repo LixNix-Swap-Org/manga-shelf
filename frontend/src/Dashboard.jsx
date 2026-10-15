@@ -53,6 +53,10 @@ const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
 const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
+const TrashModal = lazy(() => import('./components/modals/TrashModal'));
+const PublishersModal = lazy(() => import('./components/modals/PublishersModal'));
+const ShelvesModal = lazy(() => import('./components/modals/ShelvesModal'));
+const CleanupModal = lazy(() => import('./components/modals/CleanupModal'));
 
 // i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime', episodes: 'Anime-Radar' };
@@ -114,6 +118,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [activeToolModal, setActiveToolModal] = useState(null); // 'shelves' | 'trash' | 'cleanup' | 'publishers' | null
 
   const { isInstallable, isInstalledApp, handleInstallClick } = usePwaInstall();
 
@@ -301,6 +306,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   useDashboardKeyboard({
     showAddModal, setShowAddModal, closeAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
     showRestoreModal, setShowRestoreModal, showPasswordModal, setShowPasswordModal,
+    activeToolModal, closeToolModal: () => setActiveToolModal(null),
     mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
   });
 
@@ -528,6 +534,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setShowUsersModal(true);
   };
 
+  const handleOpenTool = useCallback((tool) => {
+    setActiveToolModal(tool);
+  }, []);
+
   const handleOpenRestoreModal = () => {
     setShowRestoreModal(true);
   };
@@ -549,6 +559,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         handleOpenRestoreModal={handleOpenRestoreModal}
         handleOpenStats={handleOpenStats}
         handleOpenUsersModal={handleOpenUsersModal}
+        handleOpenTool={handleOpenTool}
         headingRef={headingRef}
         handleOpenPasswordModal={handleOpenPasswordModal}
         isInstallable={isInstallable}
@@ -921,6 +932,63 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchMangas();
               fetchShoppingList();
               if (!user?.offline) fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {activeToolModal === 'shelves' && (
+          <ShelvesModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {activeToolModal === 'trash' && (
+          <TrashModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {activeToolModal === 'cleanup' && (
+          <CleanupModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+            onNavigate={(to) => {
+              setActiveToolModal(null);
+              navigate(to);
+            }}
+            onOpenPublishers={user?.role === 'admin' ? () => setActiveToolModal('publishers') : undefined}
+          />
+        )}
+
+        {activeToolModal === 'publishers' && (
+          <PublishersModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
             }}
           />
         )}
