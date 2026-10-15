@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
-import { TrendingUp, Coins, BuildingComplex, BookCheck, X, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge } from 'lucide-react';
+import { TrendingUp, Coins, BuildingComplex, BookCheck, X, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library } from 'lucide-react';
 import SpendingCard from './SpendingCard';
 import OwnerStatsCard from './OwnerStatsCard';
 import KpiCards from './stats/KpiCards';
@@ -18,6 +18,7 @@ import { t } from '../../i18n/index.js';
 const ReadingOverTime = lazy(() => import('./stats/ReadingOverTime'));
 const TrashModal = lazy(() => import('./TrashModal'));
 const PublishersModal = lazy(() => import('./PublishersModal'));
+const ShelvesModal = lazy(() => import('./ShelvesModal'));
 const CleanupModal = lazy(() => import('./CleanupModal'));
 
 // i18n
@@ -48,7 +49,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
   const [savingStartDate, setSavingStartDate] = useState(false);
   const [startDateError, setStartDateError] = useState(null);
   const [statsTab, setStatsTab] = useState('overview'); // 'overview' | 'publishers' | 'reading' | 'timeline'
-  const [tool, setTool] = useState(null); // null | 'trash' | 'cleanup' | 'publishers'
+  const [tool, setTool] = useState(null); // null | 'trash' | 'cleanup' | 'publishers' | 'shelves'
   const [toolChanged, setToolChanged] = useState(false);
   const [detailedReaderStats, setDetailedReaderStats] = useState(null);
   const beginReaderRequest = useLatestRequest(); // the newest click wins when reader details load out of order
@@ -359,6 +360,9 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             <button id="btn-open-cleanup" type="button" onClick={() => setTool('cleanup')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
               <BrushCleaning className="w-3.5 h-3.5" aria-hidden="true" /> {t('Sammlung aufräumen')}
             </button>
+            <button id="btn-open-shelves" type="button" onClick={() => setTool('shelves')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
+              <Library className="w-3.5 h-3.5" aria-hidden="true" /> {t('Regale')}
+            </button>
             {user?.role === 'admin' && (
               <button id="btn-open-publishers" type="button" onClick={() => setTool('publishers')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
                 <GitMerge className="w-3.5 h-3.5" aria-hidden="true" /> {t('Verlage zusammenführen')}
@@ -388,6 +392,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
         onOpenPublishers={user?.role === 'admin' ? () => setTool('publishers') : undefined}
       />
     )}
+    {tool === 'shelves' && <ShelvesModal onClose={closeTool} user={user} onChanged={toolChangedData} />}
     {tool === 'publishers' && <PublishersModal onClose={closeTool} user={user} onChanged={toolChangedData} />}
     </Suspense>
     </>

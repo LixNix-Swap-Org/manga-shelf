@@ -497,6 +497,7 @@ manga-shelf/
 │               ├── stats/        # KpiCards, TopSeriesCard, PublisherTab, ReadingTab, ReadingOverTime, AnimeStatsCard, EditionsCard (languages and other currencies)
 │               ├── statsFormat.js # formatting of the statistics (wrappers around utils/format.js), cssPct
 │               ├── SpendingCard.jsx # spending by purchase date
+│               ├── ShelvesModal.jsx # shelves: list, create, rename, members and roles (statistics tools)
 │               ├── OwnerStatsCard.jsx # ownership per user
 │               ├── SystemModal.jsx # admin "System" (the Updates card is components/system/UpdateSection.jsx)
 │               ├── ToolDialog.jsx # wrapper of the tool dialogs

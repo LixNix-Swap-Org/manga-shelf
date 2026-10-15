@@ -52,6 +52,7 @@ const formValues = (progress) => ({
   score: progress?.score ? String(progress.score) : '',
   notes: progress?.notes || '',
   audio: progress?.audio_language || '',
+  visibility: progress?.rating_visibility || '',
   subtitle: progress?.subtitle_language || ''
 });
 
@@ -69,10 +70,11 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
   const [notes, setNotes] = useState(seeded.current.notes);
   const [audio, setAudio] = useState(seeded.current.audio);
   const [subtitle, setSubtitle] = useState(seeded.current.subtitle);
+  const [visibility, setVisibility] = useState(seeded.current.visibility);
   useEffect(() => {
     const next = formValues(progress);
     const last = seeded.current;
-    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle };
+    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle, visibility: setVisibility };
     for (const [field, set] of Object.entries(setters)) if (next[field] !== last[field]) set(next[field]);
     seeded.current = next;
   }, [progress]);
@@ -91,6 +93,7 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     if ((notes.trim() || null) !== (progress?.notes ?? null)) change.notes = notes.trim() || null;
     if ((audio || null) !== (progress?.audio_language ?? null)) change.audio_language = audio || null;
     if ((subtitle || null) !== (progress?.subtitle_language ?? null)) change.subtitle_language = subtitle || null;
+    if (visibility && visibility !== (progress?.rating_visibility || '')) change.rating_visibility = visibility;
     if (!progress && !Object.keys(change).length) change.status = status;
     onSave(change);
   };
@@ -121,6 +124,14 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
           <select id={`${ids}-score`} className="input-field text-base sm:text-sm" value={score} onChange={(e) => setScore(e.target.value)}>
             <option value="">–</option>
             {Array.from({ length: 10 }, (_, i) => String(10 - i)).map((v) => <option key={v} value={v}>{v} / 10</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${ids}-visibility`} className="block text-[11px] text-slate-400 mb-1">{t('Meine Bewertung sehen')}</label>
+          <select id={`${ids}-visibility`} className="input-field text-base sm:text-sm" value={visibility || 'public'} onChange={(e) => setVisibility(e.target.value)}>
+            <option value="public">{t('Alle mit Namen')}</option>
+            <option value="anonymous">{t('Alle anonym')}</option>
+            <option value="private">{t('Nur ich')}</option>
           </select>
         </div>
         <WatchLanguageSelect id={`${ids}-audio`} label={t('Gesehen auf')} value={audio} onChange={setAudio} />
@@ -814,6 +825,9 @@ export default function AnimeDetailModal({
               {(anime.progress || anime.progress_users || []).length > 0 && (
                 <section className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{t('Fortschritt aller')}</h3>
+                  {anime.community?.count > 0 && (
+                    <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { average: formatNumber(anime.community.average, 1) })}</p>
+                  )}
                   <ul className="space-y-1">
                     {(anime.progress || anime.progress_users).map((p) => (
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
