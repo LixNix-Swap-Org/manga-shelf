@@ -84,7 +84,8 @@ manga-shelf/
 │   │   ├── watch.js              # POST /anime/watch-sync (match the history results of the device, apply them monotonically, add new shows automatically; throttle 30 s per user) and POST /anime/watch-sync/undo
 │   │   ├── trash.js              # GET /trash, POST /trash/:id/restore, DELETE /trash(/:id); purgeTrash() for the scheduler
 │   │   ├── publishers.js         # GET /publishers, POST /publishers/merge, DELETE /publishers/aliases/:alias
-│   │   └── cleanup.js            # GET /maintenance/quality, POST /maintenance/fix
+│   │   ├── cleanup.js            # GET /maintenance/quality, POST /maintenance/fix
+│   │   └── shelves.js            # shelves and members: GET/POST /shelves, GET/PUT/DELETE /shelves/:id, /shelves/:id/members, PUT /mangas/:id/shelf
 │   ├── mangaPassion/             # Manga Passion integration, every function takes ctx as its first argument
 │   │   ├── client.js             # API calls (timeout, budget), 12 h cache, edition search, edition data, cover download
 │   │   ├── classify.js           # scoreEdition, classifyOfficialVolume, findRegularVolume, matchSchuberVolume, cleanOfficialDate, isConfidentMatch
@@ -107,6 +108,7 @@ manga-shelf/
 │   │   ├── store.js              # animes rows: applySnapshot (partial), cover only for a new source URL (TMDb posters stay hotlinked), KEEP_WHEN_EMPTY, kind and TMDb identity columns, watchOf (the "Weiter" chain from the first unwatched episode), linksOf
 │   │   ├── progress.js           # the one progress rule: writeProgress (in the transaction of the caller), saveProgress, monotonic, audio and subtitle language, single watched episodes (add_episodes) and their ratings (a rated episode is a watched one)
 │   │   ├── episodes.js           # single watched episodes, ratings and seasons (anime_progress.watched_episodes and episode_scores, animes.custom_seasons): parseMarks, cleanMarks, marksOf, fitMarks, isWatched, firstUnwatched, watermark, lastWatched, addEpisodes, withEpisodes, withThrough, withCount (pure, also imported by the frontend)
+│   │   ├── community.js          # who sees which rating of a shared entry: visibility (public/anonymous/private), othersView, community average and count, ratingsOf, episodeCommunity
 │   │   ├── listSync.js           # AniList list sync only with the own token: pull, push (both by the watermark, the unbroken run of watched episodes), throttle, runDue (scheduler), onCredentialChanged, onRoleChanged
 │   │   ├── settings.js           # ANIME_ANILIST_RPM / ANIME_JIKAN_RPM / ANIME_TMDB_RPM / ANIME_SOURCES (ctx.config.anime)
 │   │   └── stats.js              # anime block of GET /stats (status counts for the caller only, by_kind over the shared list)
@@ -128,7 +130,7 @@ manga-shelf/
 │       ├── volumeType.js         # inferVolumeType / type logic (counterpart in the frontend, a test keeps both in sync)
 │       ├── isbn.js               # normalizeIsbn, isValidIsbn
 │       ├── query.js              # qstr(): read query values safely
-│       ├── access.js             # resolveTargetUser (another user_id only for admins)
+│       ├── access.js             # resolveTargetUser (another user_id only for admins); shelves: ensureMembership, requireShelf, accessibleShelfIds/requestedShelfIds, inShelves, targetShelfId, mangaAccess/volumeAccess, scopeSql/scopedCtx (restrict aggregate SQL to shelves)
 │       ├── imageCheck.js         # magic bytes (detectImageExt), fetchImage
 │       ├── md5.js                # MD5 for cover file names (without crypto)
 │       ├── signals.js            # timeoutSignal, anySignal (instead of AbortSignal.timeout/any)
@@ -247,6 +249,7 @@ manga-shelf/
 │       ├── release.yml           # workflow_dispatch only (never workflow_call: the signer identity names this file); the only workflow with write permissions; the job sign signs SHA256SUMS.txt keyless
 │       └── codeql.yml            # CodeQL (security-extended)
 ├── test/                         # node:test tests (npm test) and browser tests
+│   ├── shelves.test.js           # shelves: isolation, sharing roles, members rules, moving a series, trash and ISBN lookup per shelf
 │   ├── agentsMd.test.js          # checks AGENTS.md against the code: paths, migrations, console commands, endpoints
 │   ├── docs.test.js              # docs drift: .env.example, README variable table (§5) and anchors, manual ZIP list = "files", egg/compose, nginx template
 │   ├── userLocale.test.js        # users.locale/default_language: /auth/me, PUT /auth/profile (codes, guests, foreign origin)
@@ -353,6 +356,7 @@ manga-shelf/
 │       │   ├── useCollectionFilters.js # search, status/publisher/collecting/author/genre/language filters, sorting, grouping, view (localStorage + URL), publisher names
 │       │   ├── useSearchScope.js # search scope of the header (collection or online, per device) and the typed-only online query (onTyped with a 350 ms debounce and pending, submitOnline, clearOnline)
 │       │   ├── useShoppingList.js # shopping list, quick buy via the outbox, buyingIds, shoppingError
+│       │   ├── useShelfViewer.js # true while the user only views the shelf of the series (viewer): hides the edit controls on the detail page (the server answers 403 anyway)
 │       │   ├── useReleaseRadar.js # release radar and monthly calendar (radarError/mpError, request sequence)
 │       │   ├── useAnimeList.js   # anime list, source state (fetched when the add dialog opens), search parameters, optimistic progress, offline copy, markWatched/undoWatched/undoCreated, AniList sync on load, refreshList (refresh button), last watch object
 │       │   ├── useShareIntake.js # share flow: notices, read the link, confirmation or suggestion (create), markWatched, undo, queue for further links (FIFO)
@@ -385,6 +389,7 @@ manga-shelf/
 │       │   ├── dataCache.js      # in-memory copies of the server answers per user with ETag
 │       │   ├── shoppingQueue.js  # localToday, sendPurchase, status mapping (the old queue is moved into the outbox)
 │       │   ├── storageKeys.js    # localStorage keys that clearOfflineData deletes (anime cache)
+│       │   ├── shelfScope.js     # shelfQuery(): the shelf chosen in the toolbar as ?shelf_id= for statistics and trash
 │       │   ├── viewState.js      # view states of the tab (scroll positions, page count), clearViewState
 │       │   ├── volumeHelpers.js  # display names, type/edition logic, progress, gap map, publisher names (setPublisherNames)
 │       │   ├── volumeFormHelpers.js # buildVolumeForm, applyLookupToForm (autofill rules)
@@ -494,6 +499,7 @@ manga-shelf/
 │               ├── stats/        # KpiCards, TopSeriesCard, PublisherTab, ReadingTab, ReadingOverTime, AnimeStatsCard, EditionsCard (languages and other currencies)
 │               ├── statsFormat.js # formatting of the statistics (wrappers around utils/format.js), cssPct
 │               ├── SpendingCard.jsx # spending by purchase date
+│               ├── ShelvesModal.jsx # shelves: list, create, rename, members and roles (statistics tools)
 │               ├── OwnerStatsCard.jsx # ownership per user
 │               ├── SystemModal.jsx # admin "System" (the Updates card is components/system/UpdateSection.jsx)
 │               ├── ToolDialog.jsx # wrapper of the tool dialogs
@@ -645,6 +651,8 @@ New migrations are **appended** to the array in `migrationList()` in `core/schem
 | 29 | `add_anime_watched_episodes` | `anime_progress.watched_episodes` (TEXT, JSON array of watched episode numbers; NULL = the plain counter 1..`episodes_watched`) |
 | 30 | `add_anime_episode_scores` | `anime_progress.episode_scores` (TEXT, JSON object episode number → score 1–10; NULL = no ratings) |
 | 31 | `add_anime_custom_seasons` | `animes.custom_seasons` (TEXT, JSON array `[{ start, name }]` of seasons set by hand; NULL = TMDb seasons or blocks of 100) |
+| 32 | `add_shelves` | `shelves`, `shelf_members` (owner/editor/viewer), `mangas.shelf_id`; every series into shelf 1, every account a member of it (role from the global role), trigger fills a missing `shelf_id` with 1 |
+| 33 | `add_anime_rating_visibility` | `anime_progress.rating_visibility` (`public` \| `anonymous` \| `private`, default `public`), `anime_progress.public_comment`, `users.default_anime_visibility` (default of new ratings, set with `PUT /api/auth/profile`) |
 
 ### Performance indexes
 * `idx_volumes_manga_id` on `volumes (manga_id)`, `idx_volumes_status` on `volumes (status)`, `idx_volumes_isbn` on `volumes (isbn)` (deliberately not UNIQUE), `idx_volumes_manga_number` on `volumes (manga_id, type, number_sort)`.
@@ -744,6 +752,23 @@ Roles: `public` (no sign-in), `auth` (`requireAuth`), `editor` (`requireEditor`)
 | GET | `/api/volumes/lookup` | editor, lookup | metadata of a volume via Manga Passion (`manga_id`, `volume_number`, also an MP URL or ID); 409 `MP_LANGUAGE` when the series or its stored volume of that number has a language other than `de`; editors only because covers are downloaded into `uploads/`; without a volume number "Keine Daten für …" names the ISBN or URL |
 | GET | `/api/users/:id/stats` | auth | personal reading statistics (only `Vorhanden`; `read_at` ISO UTC) |
 
+### Shelves (core)
+
+| Method | Path | Role | Description |
+| :--- | :--- | :--- | :--- |
+| GET | `/api/users/directory` | editor | every account as `{ id, username }` (no roles, no hashes), so that shelf owners can pick members |
+| GET | `/api/shelves` | auth | the shelves of the caller: `id`, `name`, `description`, `color`, `is_default`, `role` (`owner`/`editor`/`viewer`; read-only accounts are capped at `viewer`), `series_count`, `member_count` |
+| POST | `/api/shelves` | editor | create a shelf `{ name, description?, color? }`; the caller becomes its owner (201) |
+| GET | `/api/shelves/:id` | auth | one shelf with `members` (`user_id`, `username`, `role`); a shelf the caller does not belong to answers 404 |
+| PUT | `/api/shelves/:id` | editor (owner of the shelf) | rename / describe / colour |
+| DELETE | `/api/shelves/:id` | editor (owner of the shelf) | only an empty shelf (409 `SHELF_NOT_EMPTY`), never the default shelf (409 `SHELF_DEFAULT`) |
+| POST | `/api/shelves/:id/members` | editor (owner of the shelf) | `{ username | user_id, role }` adds a member (409 `SHELF_MEMBER_EXISTS`) |
+| PUT | `/api/shelves/:id/members/:userId` | editor (owner of the shelf) | `{ role }`; the last owner cannot be demoted (409 `SHELF_LAST_OWNER`) |
+| DELETE | `/api/shelves/:id/members/:userId` | auth | an owner removes anyone, everybody may leave; the last owner cannot go (409 `SHELF_LAST_OWNER`) |
+| PUT | `/api/mangas/:id/shelf` | editor | `{ shelf_id }` moves the series with its volumes; editor rights in both shelves |
+
+Everything else that lists or sums series (`/mangas`, `/mangas/volume-search`, `/tags`, `/offline-snapshot`, `/stats`, `/stats/reading`, `/shopping-list`, `/release-radar`, `/dashboard-summary`, `/trash`, `/export/csv`) takes an optional `?shelf_id=<n>` (a shelf the caller does not belong to is 404; omitted = every shelf of the caller); `POST /api/mangas`, `POST /api/import/csv` and `POST /api/manga-passion/import` take `shelf_id` in the body (default: the caller's own shelf). Ids of a foreign shelf answer 404, a viewer who writes 403; server admins see no foreign shelves. `POST /api/users` takes `separate_shelf: true` to give the new account an empty shelf of its own instead of the household shelf.
+
 ### Statistics, settings, maintenance (core)
 
 | Method | Path | Role | Description |
@@ -792,6 +817,7 @@ Roles: `public` (no sign-in), `auth` (`requireAuth`), `editor` (`requireEditor`)
 | GET | `/api/anime` | auth | shared list with `my_progress` (with `resume_url`/`resume_episode`, `audio_language`/`subtitle_language`), `progress_users`, per entry `kind` (`anime`\|`tv`\|`movie`), `tmdb_id`, `tmdb_kind`, `imdb_id`, `original_language`, `spoken_languages`, `seasons`, `urls.tmdb`/`urls.imdb`, `stale` (stale entries are refreshed in the background) and per entry `watch: { next_url, series_url, search_url }` for the caller |
 | POST | `/api/anime` | editor | from a search hit (`anilist_id`/`mal_id`, or `tmdb_id` with `tmdb_kind` `movie`\|`tv`; a TMDb pair together with an AniList or MAL ID is 400) or manual (`title`, `episodes`, `kind` `anime`\|`tv`\|`movie`, default `anime`); the client sends the hit's localised title as `title`, so refreshes never change it; `manga_id` optional; 409 `DUPLICATE` (also by `tmdb_kind` + `tmdb_id`, with `id`); the adder gets a progress row "Geplant" in the same transaction (then `listSync.schedulePush`), the answer carries `my_progress`. Optional `watched: { episode, url?, remember?, complete? }` (the rules of `POST …/watched`, checked before AniList is asked; `EPISODE_ABOVE_TOTAL` rolls the new entry back): the 201 answer adds `watched: { progress, previous: null, entry_episodes }` and the AniList push waits 60 s instead of 2 s; after a 409 `DUPLICATE` the client assigns to the existing entry through `…/watched` |
 | GET | `/api/anime/:id` | auth | detail with relations, `manga`, `my_progress`, `progress` (other users' rows without `resume_url`/`resume_episode`), `external_links`, `streaming_episodes`, `watch` |
+| GET | `/api/anime/:id/ratings` | auth | community ratings of an entry as the caller may see them: `{ anime_id, summary { average, count, watchers }, ratings[] { user_id, username, score, comment, visibility, own }, episodes }`; anonymous ratings carry no name, private ones only show to their owner |
 | PUT | `/api/anime/:id` | editor | `title`, `title_de`, `notes`, `manga_id`; `episodes` and `kind` (`anime`\|`tv`\|`movie`) only for manual entries (400 for an entry with an AniList, MyAnimeList or TMDb ID); `custom_seasons` for every entry: `[{ start, name? }]` with the first season at episode 1 and ascending starts, names ≤ 80 characters, at most 200 (else 400; a start above the episode count 400 `EPISODE_ABOVE_TOTAL`, counted against the new `episodes` when the same request changes it), `null` or `[]` clears them; every anime answer carries `custom_seasons` (`[]` without) |
 | GET | `/api/anime/:id/season-suggestion` | editor, lookup | TMDb seasons as a suggestion for the season editor (`?language=` like the search): `{ seasons: [{ start, name, episodes, season_number }], reason, tmdb_id }`, `reason` `no_key` (no TMDb key of the caller or the instance) or `not_found` with `seasons: []`; stores nothing; 503 `SOURCES_UNAVAILABLE` when TMDb does not answer |
 | DELETE | `/api/anime/:id` | editor | entry + progress rows; records the caller's Crunchyroll declines for the entry's keys (its `added`/`matched` pairs and season links) and those of every other user whose sync added it |

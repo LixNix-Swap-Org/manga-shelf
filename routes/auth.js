@@ -27,6 +27,7 @@ const { purchaseDateFromRemainingOwners } = require('../utils/owners');
 const { revokeFeedTokens } = require('../core/handlers/radar');
 const listSync = require('../core/anime/listSync');
 const { parseProfileBody, saveProfile, readProfile } = require('../core/lib/locales');
+const access = require('../core/lib/access');
 
 const ROLES = ['admin', 'editor', 'visitor', 'guest'];
 const ROLE_ERROR = msg('Ungültige Rolle (erlaubt: {allowed})', { allowed: ROLES.join(', ') });
@@ -133,6 +134,7 @@ router.post('/setup', setupLimiter, async (req, res) => {
     const result = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, 'admin');
     const newUserId = Number(result.lastInsertRowid);
     generatedSetupToken = null;
+    access.ensureMembership(createCtx({ user: { id: newUserId, username: cleanUsername, role: 'admin' } }));
 
     const session = issueSession(req, res, { id: newUserId, username: cleanUsername, role: 'admin', password_changed_at: null });
     res.json({ success: true, user: { id: newUserId, username: cleanUsername, role: 'admin' }, ...session });
@@ -275,6 +277,14 @@ router.post('/users', requireAdmin, async (req, res) => {
         throw err;
     }
     if (!result) return usernameTaken();
+    {
+        const created = { id: Number(result.lastInsertRowid), username: cleanUsername, role: cleanRole };
+        if (req.body && (req.body.shelf_mode || req.body.separate_shelf !== undefined)) {
+            access.setupUserShelf(db, created, req.body);
+        } else {
+            access.ensureMembership(createCtx({ user: created }));
+        }
+    }
     log.info('Benutzer angelegt', { ...auditFields(req), user: cleanUsername, role: cleanRole });
 
     res.json({

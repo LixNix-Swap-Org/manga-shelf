@@ -7,6 +7,7 @@ const client = require('../mangaPassion/client');
 const gateway = require('../anime/gateway');
 const cache = require('../anime/cache');
 const { titleScore } = require('../anime/normalize');
+const access = require('../lib/access');
 const { lookupBookByIsbn, matchCollection } = require('../isbnLookup');
 const { fetchImage } = require('../lib/imageCheck');
 const { anySignal } = require('../lib/signals');
@@ -243,7 +244,8 @@ async function lookupIsbn(ctx, { query }) {
     const isbn13 = normalizeIsbn(cleanIsbn);
 
     // a volume of the collection with this ISBN is certain and needs no catalogue (also works without internet)
-    const known = ctx.db.prepare('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1').get(isbn13);
+    const mine = access.scopedCtx(ctx, access.accessibleShelfIds(ctx));
+    const known = mine.db.prepare('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1').get(isbn13);
     const book = known ? null : await catalogueBook(ctx, cleanIsbn, isbn13);
     if (!book && !known) {
         return {
@@ -256,7 +258,7 @@ async function lookupIsbn(ctx, { query }) {
     }
 
     const bookData = book || { title: '', volume_number: '1', volume_number_known: false, source: 'Sammlung' };
-    const match = matchCollection(ctx.db, bookData, isbn13);
+    const match = matchCollection(mine.db, bookData, isbn13);
     if (match.number_in_title) {
         // "Eyeshield 21": the number belongs to the series name, the catalogue did not say which volume this is
         bookData.volume_number = '1';

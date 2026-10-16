@@ -4,6 +4,8 @@ const { parsePositiveInt } = require('../lib/validate');
 const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
+const access = require('../lib/access');
+const { qstr } = require('../lib/query');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('../lib/language');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -22,6 +24,20 @@ const purgeDate = (deletedAt) => {
     return Number.isNaN(time) ? null : new Date(time + TRASH_RETENTION_DAYS * DAY_MS).toISOString().slice(0, 10);
 };
 
+/** The entry, 404 unless the caller belongs to its shelf with at least `minRole`. */
+function loadEntry(ctx, params, minRole) {
+    const id = entryId(params);
+    const entry = ctx.db.prepare('SELECT * FROM trash WHERE id = ?').get(id);
+    if (!entry) throw notFound('Papierkorb-Eintrag');
+    try {
+        access.requireShelf(ctx, entry.shelf_id, minRole);
+    } catch (err) {
+        if (err.status === 404) throw notFound('Papierkorb-Eintrag');
+        throw err;
+    }
+    return entry;
+}
+
 function entryId(params) {
     const id = parsePositiveInt(params.id);
     if (!id) throw badRequest('Ungültige Papierkorb-ID');
@@ -29,11 +45,13 @@ function entryId(params) {
 }
 
 /** Entries newest first with what the dialog shows; the payload itself stays on the server. */
-function list(ctx) {
+function list(ctx, { query } = {}) {
+    const scope = access.inShelves('t.shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id)));
     const rows = ctx.db.prepare(`
         SELECT t.*, u.username AS deleted_by_name FROM trash t LEFT JOIN users u ON u.id = t.deleted_by
+        WHERE ${scope.sql}
         ORDER BY t.deleted_at DESC, t.id DESC
-    `).all();
+    `).all(...scope.params);
     const seriesExists = ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE id = ?');
     const trashedSeries = new Set(rows.filter(r => r.kind === 'manga').map(r => r.ref_id));
     const items = rows.map((row) => {
@@ -135,6 +153,8 @@ function restoreManga(ctx, entry, payload) {
     const edition = { language: (language && language.language) || DEFAULT_LANGUAGE, region: manga.region || (language && language.region) || null };
     // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries
     edition.work_key = manga.work_key && ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key) ? manga.work_key : null;
+    const shelfLive = manga.shelf_id && ctx.db.prepare('SELECT 1 AS ok FROM shelves WHERE id = ?').get(manga.shelf_id);
+    edition.shelf_id = shelfLive ? manga.shelf_id : access.targetShelfId(ctx);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || []);
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
@@ -162,9 +182,8 @@ function restoreVolume(ctx, entry, payload) {
 
 /** Puts a series or volume back with its original ids, owners and reads (users deleted meanwhile are left out). */
 function restore(ctx, { params }) {
-    const id = entryId(params);
-    const entry = ctx.db.prepare('SELECT * FROM trash WHERE id = ?').get(id);
-    if (!entry) throw notFound('Papierkorb-Eintrag');
+    const entry = loadEntry(ctx, params, 'editor');
+    const id = entry.id;
     const payload = parsePayload(entry);
     ctx.db.transaction(() => {
         if (entry.kind === 'manga') restoreManga(ctx, entry, payload);
@@ -175,13 +194,14 @@ function restore(ctx, { params }) {
 }
 
 function remove(ctx, { params }) {
-    const id = entryId(params);
-    if (ctx.db.prepare('DELETE FROM trash WHERE id = ?').run(id).changes === 0) throw notFound('Papierkorb-Eintrag');
+    const entry = loadEntry(ctx, params, 'editor');
+    ctx.db.prepare('DELETE FROM trash WHERE id = ?').run(entry.id);
     return { body: { success: true } };
 }
 
-function empty(ctx) {
-    const removed = ctx.db.prepare('DELETE FROM trash').run().changes;
+function empty(ctx, { query } = {}) {
+    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id), 'owner'));
+    const removed = ctx.db.prepare(`DELETE FROM trash WHERE ${scope.sql}`).run(...scope.params).changes;
     return { body: { success: true, removed } };
 }
 

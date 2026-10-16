@@ -248,7 +248,7 @@ export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
 
 // Search, filters and sort of the series list (tags: AND). A search ranks title-prefix, title, other-field and typo
 // hits in that order; the chosen sort orders each group.
-export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [], languageFilter = 'ALL' }) => {
+export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [], languageFilter = 'ALL', shelfFilter = 'ALL' }) => {
   const query = prepareQuery(search);
   const tags = parseTagFilter(tagFilter);
   const publisherKey = publisherFilter && publisherFilter !== 'ALL' ? normalizePubName(publisherFilter).toLowerCase() : null;
@@ -277,6 +277,7 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
       if (authorFilter && !matchesAuthor(m, authorFilter)) return false;
       if (tags.length && !hasAllTags(m, tags)) return false;
       if (languageFilter && languageFilter !== 'ALL' && editionLanguage(m) !== languageFilter) return false;
+      if (shelfFilter && shelfFilter !== 'ALL' && String(m.shelf_id) !== String(shelfFilter)) return false;
       return true;
     })
     .sort(query ? (a, b) => ranks.get(a) - ranks.get(b) || compare(a, b) : compare);
@@ -416,4 +417,11 @@ export const getOtherCurrencyTotals = (mangas, valueOf = (m) => m.total_value) =
     sums.set(currency, (sums.get(currency) || 0) + value);
   }
   return [...sums].map(([currency, value]) => ({ currency, value })).sort((a, b) => b.value - a.value);
+};
+
+/** The shelves the list rows belong to ([{ id, count }], biggest first); rows without a shelf_id (old caches) are left out. */
+export const getAvailableShelves = (mangas) => {
+  const counts = new Map();
+  for (const m of mangas) if (m.shelf_id != null) counts.set(m.shelf_id, (counts.get(m.shelf_id) || 0) + 1);
+  return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id - b.id);
 };

@@ -75,6 +75,8 @@ async function cacheRemoteCover(url) {
 export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [shelves, setShelves] = useState([]);
+  const [shelfId, setShelfId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
@@ -321,7 +323,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             language: form.language,
             region: form.region || null,
             currency: form.currency,
-            ...(form.work_key ? { work_key: form.work_key } : {})
+            ...(form.work_key ? { work_key: form.work_key } : {}),
+            ...(shelfId ? { shelf_id: Number(shelfId) } : {})
           }
         });
         const data = await readJson(res);
@@ -353,6 +356,15 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
   const cancelCoverUpload = () => uploadAbortRef.current?.abort();
   useEffect(() => () => uploadAbortRef.current?.abort(), []);
+
+  // only a person with more than one shelf to write to gets the choice
+  useEffect(() => {
+    let alive = true;
+    apiFetch('/api/shelves').then(readJson).then((data) => {
+      if (alive && Array.isArray(data?.shelves)) setShelves(data.shelves.filter(s => s.role !== 'viewer'));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
@@ -632,6 +644,16 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               />
             </div>
           </div>
+
+          {shelves.length > 1 && (
+            <div>
+              <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Regal')}</label>
+              <select id={`${ids}-shelf`} className="input-field" value={shelfId} onChange={e => setShelfId(e.target.value)}>
+                <option value="">{t('Standard (mein erstes Regal)')}</option>
+                {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <EditionFields
             idPrefix={`${ids}-edition`}
