@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { Library, Trash2, UserPlus } from 'lucide-react';
+import { Library, Pencil, Trash2, UserPlus } from 'lucide-react';
 import ToolDialog from './ToolDialog';
 import ConfirmDialog from './ConfirmDialog';
 import api from '../../utils/api';
@@ -28,6 +28,14 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   const [newRole, setNewRole] = useState('viewer');
   const [busy, setBusy] = useState(false);
   const [shelfToDelete, setShelfToDelete] = useState(null);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [directory, setDirectory] = useState([]);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('#6366f1');
+  const [renaming, setRenaming] = useState(false);
+  const listId = useId();
+  const renameId = useId();
+  const colorId = useId();
   const nameId = useId();
   const memberId = useId();
   const roleId = useId();
@@ -46,8 +54,15 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   const openShelf = async (shelf) => {
     setOpen(shelf.id);
     setMembers([]);
+    setRenaming(false);
+    setEditName(shelf.name);
+    setEditColor(shelf.color || '#6366f1');
     try {
       setMembers((await api.get(`/api/shelves/${shelf.id}`)).members || []);
+      if (shelf.role === 'owner') {
+        const dir = await api.get('/api/users/directory').catch(() => null);
+        setDirectory(dir?.users || []);
+      }
     } catch (e) {
       notify.error(e);
     }
@@ -90,11 +105,27 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
     setMembers(res.members || []);
   });
 
+  const saveShelf = (e) => {
+    e.preventDefault();
+    if (!editName.trim() || open === null) return;
+    run(() => api.put(`/api/shelves/${open}`, { name: editName.trim(), color: editColor }), t('Regal gespeichert'))
+      .then((res) => { if (res !== null) setRenaming(false); });
+  };
+
   const removeMember = (member) => run(async () => {
     const res = await api.del(`/api/shelves/${open}/members/${member.user_id}`);
     if (member.user_id === user?.id) setOpen(null);
     else setMembers(res.members || []);
   });
+
+  const handleConfirmRemove = async () => {
+    const target = memberToRemove;
+    if (!target) return;
+    await removeMember(target);
+    setMemberToRemove(null);
+  };
+
+  const candidates = directory.filter((u) => !members.some((m) => m.user_id === u.id));
 
   const removeShelf = (shelf) => {
     setShelfToDelete(shelf);
@@ -133,6 +164,20 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
             </button>
             {current?.id === shelf.id && (
               <div className="px-3 pb-3 space-y-3">
+                {shelf.role === 'owner' && (renaming ? (
+                  <form onSubmit={saveShelf} className="flex flex-wrap items-center gap-2">
+                    <label htmlFor={renameId} className="sr-only">{t('Name des Regals')}</label>
+                    <input id={renameId} className="input-field flex-1 min-w-[8rem]" value={editName} maxLength={80} onChange={(e) => setEditName(e.target.value)} />
+                    <label htmlFor={colorId} className="sr-only">{t('Farbe')}</label>
+                    <input id={colorId} type="color" className="h-9 w-10 shrink-0 rounded-lg bg-transparent" value={editColor} onChange={(e) => setEditColor(e.target.value)} />
+                    <button type="submit" className="btn-primary text-xs px-3 py-2" disabled={busy || !editName.trim()}>{t('Speichern')}</button>
+                    <button type="button" className="btn-secondary text-xs px-3 py-2" onClick={() => setRenaming(false)} disabled={busy}>{t('Abbrechen')}</button>
+                  </form>
+                ) : (
+                  <button type="button" className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setRenaming(true)} disabled={busy}>
+                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" /> {t('Umbenennen')}
+                  </button>
+                ))}
                 <h3 className="text-xs font-bold text-slate-300">{t('Mitglieder')}</h3>
                 <ul className="space-y-1.5">
                   {members.map((m) => (
@@ -144,7 +189,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
                         </select>
                       ) : <span className="text-xs text-slate-400">{ROLE_LABEL[m.role]?.() || m.role}</span>}
                       {(shelf.role === 'owner' || m.user_id === user?.id) && (
-                        <button type="button" className="hit-44 text-slate-400 hover:text-red-300 p-1" onClick={() => removeMember(m)} disabled={busy}
+                        <button type="button" className="hit-44 text-slate-400 hover:text-red-300 p-1" onClick={() => setMemberToRemove(m)} disabled={busy}
                           aria-label={`${m.username}: ${t('Entfernen')}`} title={t('Entfernen')}>
                           <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>
@@ -156,7 +201,10 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
                   <>
                     <form onSubmit={addMember} className="flex flex-wrap gap-2">
                       <label htmlFor={memberId} className="sr-only">{t('Benutzername')}</label>
-                      <input id={memberId} className="input-field flex-1 min-w-[8rem]" value={newMember} onChange={(e) => setNewMember(e.target.value)} placeholder={t('Benutzername')} />
+                      <input id={memberId} className="input-field flex-1 min-w-[8rem]" value={newMember} onChange={(e) => setNewMember(e.target.value)} placeholder={t('Benutzername')} list={listId} autoComplete="off" />
+                      <datalist id={listId}>
+                        {candidates.map((u) => <option key={u.id} value={u.username} />)}
+                      </datalist>
                       <label htmlFor={roleId} className="sr-only">{t('Rolle')}</label>
                       <select id={roleId} className="input-field w-auto" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                         {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]()}</option>)}
@@ -175,6 +223,20 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
           </li>
         ))}
       </ul>
+      {memberToRemove && (
+        <ConfirmDialog
+          isOpen
+          title={t('Mitglied entfernen')}
+          message={memberToRemove.user_id === user?.id
+            ? t('Du verlierst den Zugriff auf dieses Regal. Wirklich verlassen?')
+            : t('„{name}“ aus diesem Regal entfernen?', { name: memberToRemove.username })}
+          confirmLabel={t('Entfernen')}
+          cancelLabel={t('Abbrechen')}
+          busy={busy}
+          onConfirm={handleConfirmRemove}
+          onCancel={() => setMemberToRemove(null)}
+        />
+      )}
       {shelfToDelete && (
         <ConfirmDialog
           isOpen={Boolean(shelfToDelete)}
