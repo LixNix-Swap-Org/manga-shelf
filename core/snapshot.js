@@ -82,6 +82,31 @@ const OWNERS_SELECT = `
         JOIN users u ON vo.user_id = u.id`;
 
 const USERS_SQL = 'SELECT id, username, role FROM users ORDER BY id ASC';
+const MEMBERS_SQL = 'SELECT shelf_id, user_id FROM shelf_members';
+
+/** shelf id -> Set of member user ids */
+function loadMembers(ctx) {
+    const byShelf = new Map();
+    for (const r of ctx.db.prepare(MEMBERS_SQL).all()) {
+        if (!byShelf.has(r.shelf_id)) byShelf.set(r.shelf_id, new Set());
+        byShelf.get(r.shelf_id).add(r.user_id);
+    }
+    return byShelf;
+}
+
+/**
+ * Readers and owners of a series are the members of its shelf, the caller, and anyone who already read or owns one of
+ * its volumes (a removed member's history stays visible). Other accounts of the server never show up.
+ */
+function usersOfSeries(users, members, manga, userId, volumes, readsByVolume, ownersByVolume) {
+    const keep = new Set(members.get(manga.shelf_id) || []);
+    keep.add(userId);
+    for (const v of volumes) {
+        for (const r of readsByVolume.get(v.id) || []) keep.add(r.user_id);
+        for (const o of ownersByVolume.get(v.id) || []) keep.add(o.user_id);
+    }
+    return users.filter(u => keep.has(u.id));
+}
 
 // other editions of a work (same work_key): what the edition switcher shows
 const EDITIONS_SELECT = `
@@ -192,7 +217,10 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.rowid`).all(mangaId);
     const owners = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id = ? ORDER BY vo.created_at, vo.rowid`).all(mangaId);
     const users = ctx.db.prepare(USERS_SQL).all();
-    return buildMangaDetail(manga, volumes, groupBy(reads, 'volume_id'), groupBy(owners, 'volume_id'), users, userId, loadEditions(ctx, manga));
+    const readsByVolume = groupBy(reads, 'volume_id');
+    const ownersByVolume = groupBy(owners, 'volume_id');
+    const scoped = usersOfSeries(users, loadMembers(ctx), manga, userId, volumes, readsByVolume, ownersByVolume);
+    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga));
 }
 
 function assertSameConnection(ctx, generation) {
@@ -216,6 +244,7 @@ async function buildOfflineSnapshot(ctx, user) {
     const shelfScope = access.inShelves('shelf_id', shelfIds);
     const series = ctx.db.prepare(`SELECT * FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
     const users = ctx.db.prepare(USERS_SQL).all();
+    const members = loadMembers(ctx);
     const editionScope = access.inShelves('m.shelf_id', shelfIds);
     const editionsByWork = groupBy(ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key IS NOT NULL AND ${editionScope.sql} ${EDITIONS_ORDER}`).all(...editionScope.params), 'work_key');
     const volumesStmt = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id BETWEEN ? AND ? ORDER BY v.manga_id, ${volumeOrderSql('v')}, v.id ASC`);
@@ -236,7 +265,9 @@ async function buildOfflineSnapshot(ctx, user) {
         const readsByVolume = groupBy(readsStmt.all(from, to), 'volume_id');
         const ownersByVolume = groupBy(ownersStmt.all(from, to), 'volume_id');
         for (const m of block) {
-            details[m.id] = buildMangaDetail(m, volumesByManga.get(m.id) || [], readsByVolume, ownersByVolume, users, user.id,
+            const volumes = volumesByManga.get(m.id) || [];
+            details[m.id] = buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
+                usersOfSeries(users, members, m, user.id, volumes, readsByVolume, ownersByVolume), user.id,
                 editionsOf(m, editionsByWork.get(m.work_key) || []));
         }
     }

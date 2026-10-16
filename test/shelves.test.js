@@ -202,3 +202,41 @@ test('shelves: user creation modes - personal, share_same, and share_mutual', as
     assert.ok(shelvesANew.some(s => s.role === 'editor'));
 });
 
+
+let outsiderClient;
+const outsider = async (...args) => {
+    if (!outsiderClient) {
+        assert.equal((await admin('POST', '/users', { username: 'carl', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+        outsiderClient = ctx.client();
+        assert.equal((await outsiderClient('POST', '/auth/login', { username: 'carl', password: 'password123' })).status, 200);
+    }
+    return outsiderClient(...args);
+};
+
+test('shelves: malformed ids cannot slip past the shelf guard', async () => {
+    const id = (await anna('POST', '/mangas', { title: 'Guarded' })).body.id;
+    const vol = (await anna('POST', '/volumes', { manga_id: id, volume_number: '1' })).body.id;
+    for (const bad of [`${id}x`, `+${id}`, `%20${id}`, `${id}.0`]) {
+        assert.equal((await outsider('GET', `/mangas/${bad}/gaps`)).status, 404, `gaps ${bad}`);
+        assert.equal((await outsider('GET', `/mangas/${bad}`)).status, 404, `detail ${bad}`);
+        assert.equal((await outsider('POST', `/volumes/${bad}/read`, { read: true })).status, 404, `read ${bad}`);
+        assert.equal((await outsider('POST', `/volumes/${bad}/owners`, { owned: true })).status, 404, `owners ${bad}`);
+        assert.equal((await outsider('PUT', `/volumes/${bad}`, { notes: 'x' })).status, 404, `put ${bad}`);
+    }
+    assert.equal((await outsider('GET', `/mangas/${id}/gaps`)).status, 404);
+    assert.equal((await anna('GET', `/mangas/${id}`)).status, 200);
+    assert.ok(vol);
+});
+
+test('shelves: readers and owners of a series are the shelf members, not every account', async () => {
+    const id = (await anna('POST', '/mangas', { title: 'Members Only' })).body.id;
+    const names = async (client) => (await client('GET', `/mangas/${id}`)).body.reader_stats.map(r => r.username).sort();
+    const initial = await names(anna);
+    assert.ok(!initial.includes('admin') && !initial.includes('carl'), 'accounts outside the shelf stay out');
+    assert.deepEqual((await anna('GET', '/offline-snapshot')).body.details[id].reader_stats.map(r => r.username).sort(), initial);
+    const shelf = await myShelf(anna);
+    const before = await names(anna);
+    assert.ok(!before.includes('carl'));
+    await anna('POST', `/shelves/${shelf.id}/members`, { username: 'carl', role: 'viewer' });
+    assert.deepEqual(await names(anna), [...before, 'carl'].sort());
+});

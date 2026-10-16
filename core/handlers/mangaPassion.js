@@ -44,7 +44,9 @@ async function gaps(ctx, { params, query }) {
         editionId = toEditionId(rawEdition);
         if (!editionId) throw badRequest('Ungültige edition_id');
     }
-    const canEdit = ['admin', 'editor'].includes(ctx.user.role);
+    // the role in the series' shelf decides, not the global one: a viewer of a foreign shelf must not store anything
+    const shelfId = access.mangaAccess(ctx, mangaId, 'viewer');
+    const canEdit = access.ROLE_WEIGHT[access.shelfRole(ctx, shelfId)] >= access.ROLE_WEIGHT.editor;
     const forceRefresh = canEdit && qstr(query.force_refresh) === 'true';
     const target = editionId || ctx.db.prepare('SELECT manga_passion_id FROM mangas WHERE id = ?').get(mangaId).manga_passion_id;
     if (forceRefresh || !target || !client.editionCached(ctx, target)) await ctx.limit('lookup');

@@ -21,7 +21,7 @@ const cleanup = require('./handlers/cleanup');
 const shelves = require('./handlers/shelves');
 const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
-const { HttpError, AUTH_TEXTS } = require('./errors');
+const { HttpError, AUTH_TEXTS, notFound } = require('./errors');
 const access = require('./lib/access');
 
 const routes = [
@@ -135,8 +135,11 @@ for (const row of routes) {
     const handler = row.handler;
     row.handler = (ctx, input) => {
         if (guard) {
-            const id = guard.re.exec(row.path.replace(/:id/g, String(input.params.id)));
-            if (id && input.params.id !== undefined && /^\d+$/.test(String(input.params.id))) guard.check(ctx, input, row, input.params.id);
+            // "1x" or "+1" would skip the check and still reach a handler that parses it to 1
+            if (input.params.id !== undefined) {
+                if (!/^\d+$/.test(String(input.params.id))) throw notFound(row.path.startsWith('/volumes') ? 'Band' : 'Manga');
+                guard.check(ctx, input, row, input.params.id);
+            }
         } else if (input.body && input.body.manga_id !== undefined) {
             access.mangaAccess(ctx, input.body.manga_id, 'editor');
         }
