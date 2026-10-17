@@ -294,3 +294,54 @@ test('shelves: leaving or being removed takes ownership and reading marks of tha
     assert.equal(two.status, 'Vorhanden');
     assert.equal(volumes.some(v => (v.read_users || []).some(r => r.user_id === benId)), false, 'ben reading marks are gone');
 });
+
+test('shelves: losing the last shelf creates a personal shelf instead of auto-joining the household shelf', async () => {
+    const dora = ctx.client();
+    const doraId = (await admin('POST', '/users', { username: 'dora', password: 'password123', role: 'editor', separate_shelf: true })).body.user.id;
+    await dora('POST', '/auth/login', { username: 'dora', password: 'password123' });
+    const doraShelf = await myShelf(dora);
+    const annaShelf = await myShelf(anna);
+    await anna('POST', `/shelves/${annaShelf.id}/members`, { username: 'dora', role: 'editor' });
+    assert.equal((await dora('DELETE', `/shelves/${doraShelf.id}`)).status, 200);
+    assert.equal((await anna('DELETE', `/shelves/${annaShelf.id}/members/${doraId}`)).status, 200);
+    const after = (await dora('GET', '/shelves')).body.shelves;
+    assert.equal(after.length, 1, 'dora gets a fresh personal shelf');
+    assert.equal(after[0].is_default, false, 'dora is not placed into the default household shelf');
+    assert.equal(after[0].role, 'owner');
+    assert.deepEqual((await dora('GET', '/mangas')).body, [], 'dora cannot see household series');
+});
+
+test('shelves: moving a series strips marks of non-target members and moves trashed volumes along', async () => {
+    const own = await myShelf(anna);
+    const target = (await anna('POST', '/shelves', { name: 'Archiv' })).body;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    const id = (await anna('POST', '/mangas', { title: 'Umzugs-Reihe', shelf_id: own.id })).body.id;
+    const v1 = (await anna('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    const v2 = (await anna('POST', '/volumes', { manga_id: id, volume_number: '2', status: 'Vorhanden' })).body.id;
+    assert.equal((await ben('POST', `/volumes/${v1}/owners`, { owned: true })).status, 200);
+    assert.equal((await ben('POST', `/volumes/${v1}/read`, { read: true })).status, 200);
+    const trashId = (await anna('DELETE', `/volumes/${v2}`)).body.trash_id;
+    assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: target.id })).status, 200);
+    const detail = (await anna('GET', `/mangas/${id}`)).body;
+    assert.equal(detail.shelf_id, target.id);
+    const vol1 = detail.volumes.find(v => v.id === v1);
+    assert.equal(vol1.owners.length, 0, 'ben is not a member of Archiv, so his ownership is removed');
+    assert.equal(vol1.status, 'Fehlt');
+    assert.equal((vol1.read_users || []).some(r => r.user_id === benId), false, 'ben reading mark is removed');
+    assert.equal((await ben('GET', '/trash')).body.items.some(t => t.id === trashId), false, 'trashed volume moved to target shelf');
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
+
+test('shelves: maintenance fix only modifies series in the caller editable shelves', async () => {
+    const { db } = require('../db');
+    const annaSeries = (await anna('POST', '/mangas', { title: 'Anna Publisher' })).body.id;
+    const benSeries = (await ben('POST', '/mangas', { title: 'Ben Publisher' })).body.id;
+    db.prepare('UPDATE mangas SET publisher = ? WHERE id = ?').run('Tokyopop', annaSeries);
+    db.prepare('UPDATE mangas SET publisher = ? WHERE id = ?').run('Tokyopop', benSeries);
+    const res = await anna('POST', '/maintenance/fix', { check: 'normalize_publishers' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.changed, 1);
+    assert.equal((await anna('GET', `/mangas/${annaSeries}`)).body.publisher, 'TOKYOPOP');
+    assert.equal((await ben('GET', `/mangas/${benSeries}`)).body.publisher, 'Tokyopop', 'ben shelf is untouched by anna maintenance fix');
+});
+

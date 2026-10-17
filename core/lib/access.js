@@ -208,11 +208,17 @@ function scopeSql(sql, shelfIds) {
     const list = shelfIds.length ? shelfIds.map(n => Number(n)).filter(Number.isSafeInteger).join(',') || '-1' : '-1';
     const mangas = `(SELECT * FROM mangas WHERE shelf_id IN (${list}))`;
     const volumes = `(SELECT * FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id IN (${list})))`;
-    return sql.replace(/\b(FROM|JOIN)\s+(mangas|volumes)\b(?:\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi, (all, kw, table, alias) => {
+    const scopedSelect = sql.replace(/\b(FROM|JOIN)\s+(mangas|volumes)\b(?:\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi, (all, kw, table, alias) => {
         const sub = table.toLowerCase() === 'mangas' ? mangas : volumes;
         if (alias && !SQL_WORDS.test(alias)) return `${kw} ${sub} ${alias}`;
         const rest = alias ? ` ${alias}` : '';
         return `${kw} ${sub} ${table}${rest}`;
+    });
+    return scopedSelect.replace(/\bUPDATE\s+(mangas|volumes)\b([\s\S]*?)\bWHERE\s+([\s\S]+)$/i, (all, table, mid, cond) => {
+        const filter = table.toLowerCase() === 'mangas'
+            ? `shelf_id IN (${list})`
+            : `manga_id IN (SELECT id FROM mangas WHERE shelf_id IN (${list}))`;
+        return `UPDATE ${table}${mid}WHERE ${filter} AND (${cond})`;
     });
 }
 

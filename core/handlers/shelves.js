@@ -111,7 +111,19 @@ function remove(ctx, { params }) {
     if (ctx.db.prepare('SELECT 1 FROM mangas WHERE shelf_id = ? LIMIT 1').get(id)) {
         throw conflict('Das Regal ist nicht leer. Reihen zuerst verschieben oder löschen.', 'SHELF_NOT_EMPTY');
     }
-    ctx.db.prepare('DELETE FROM shelves WHERE id = ?').run(id);
+    const members = ctx.db.prepare('SELECT user_id FROM shelf_members WHERE shelf_id = ?').all(id).map(r => r.user_id);
+    ctx.db.transaction(() => {
+        ctx.db.prepare('DELETE FROM shelves WHERE id = ?').run(id);
+        for (const userId of members) {
+            if (!ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)) {
+                access.createPersonalShelf(ctx.db, userId);
+            }
+        }
+        const fallbackShelf = access.userPrimaryShelf(ctx.db, ctx.user.id);
+        if (fallbackShelf) {
+            ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE shelf_id = ?').run(fallbackShelf, id);
+        }
+    });
     return { body: { success: true } };
 }
 
@@ -187,6 +199,9 @@ function removeMember(ctx, { params }) {
     ctx.db.transaction(() => {
         ctx.db.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').run(id, userId);
         forgetMarks(ctx, id, userId);
+        if (!ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)) {
+            access.createPersonalShelf(ctx.db, userId);
+        }
     });
     return { body: { success: true, members: own ? undefined : membersOf(ctx, id) } };
 }
@@ -200,7 +215,19 @@ function moveManga(ctx, { params, body }) {
     const target = parsePositiveInt(body.shelf_id);
     if (!target) throw badRequest('Ungültiges Regal');
     access.requireShelf(ctx, target, 'editor');
-    ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
+    ctx.db.transaction(() => {
+        ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
+        ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
+        const inManga = 'SELECT id FROM volumes WHERE manga_id = ?';
+        const targetMembers = 'SELECT user_id FROM shelf_members WHERE shelf_id = ?';
+        const owned = ctx.db.prepare(`SELECT DISTINCT volume_id FROM volume_owners WHERE volume_id IN (${inManga}) AND user_id NOT IN (${targetMembers})`).all(mangaId, target).map(r => r.volume_id);
+        ctx.db.prepare(`DELETE FROM volume_owners WHERE volume_id IN (${inManga}) AND user_id NOT IN (${targetMembers})`).run(mangaId, target);
+        ctx.db.prepare(`DELETE FROM volume_reads WHERE volume_id IN (${inManga}) AND user_id NOT IN (${targetMembers})`).run(mangaId, target);
+        for (const volumeId of owned) {
+            purchaseDateFromRemainingOwners(ctx.db, volumeId);
+            syncStatusWithOwners(ctx.db, volumeId);
+        }
+    });
     return { body: { success: true, id: mangaId, shelf_id: target } };
 }
 

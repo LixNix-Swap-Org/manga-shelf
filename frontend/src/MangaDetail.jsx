@@ -28,7 +28,7 @@ import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
 import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
-import useShelfViewer from './hooks/useShelfViewer';
+import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
 import { rich } from './i18n/react.jsx';
 
@@ -141,7 +141,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   } = useMangaData({ id, user, canEdit: baseCanEdit, onUnauthorized });
 
   // A viewer of the series' shelf reads only (the server answers 403 anyway)
-  const viewerHere = useShelfViewer(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline);
+  const { viewer: viewerHere, movableShelves } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline);
   const canEdit = baseCanEdit && !viewerHere;
   const canToggle = Boolean(canEdit || (isOffline && ['admin', 'editor'].includes(user?.realRole)));
 
@@ -449,6 +449,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
         <MangaHeroCard
           isOffline={isOffline}
           viewerShelf={viewerHere}
+          movableShelves={movableShelves}
           applyEditLookupResult={applyEditLookupResult}
           canEdit={canEdit}
           completionPct={completionPct}

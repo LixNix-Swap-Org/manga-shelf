@@ -162,6 +162,7 @@ export default function MangaHeroCard({
   editing,
   isOffline,
   viewerShelf = false,
+  movableShelves = [],
   formData,
   handleCoverUpload,
   handleDeleteManga,
@@ -484,6 +485,22 @@ export default function MangaHeroCard({
               value={formData}
               onChange={(patch) => setFormData({ ...formData, ...patch })}
             />
+
+            {movableShelves.length > 1 && (
+              <div>
+                <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Regal')}</label>
+                <select
+                  id={`${ids}-shelf`}
+                  className="input-field bg-slate-950"
+                  value={formData.shelf_id || String(manga.shelf_id || '')}
+                  onChange={e => setFormData({ ...formData, shelf_id: e.target.value })}
+                >
+                  {movableShelves.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
