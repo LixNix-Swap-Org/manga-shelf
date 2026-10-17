@@ -2773,6 +2773,7 @@
   "privat": "privato",
   "schon im Regal": "già sullo scaffale",
   "schon zurückgesetzt": "già tornato indietro",
+  "shelf-role::Besitzer": "Proprietario",
   "short::Neuheiten": "Novità",
   "sichtbaren": "visibili",
   "täglich ab {hour} Uhr ({timeZone})": "ogni giorno dalle {hour} ({timeZone})",
