@@ -171,11 +171,12 @@ function removeMember(ctx, { params }) {
     return { body: { success: true, members: own ? undefined : membersOf(ctx, id) } };
 }
 
-/** PUT /mangas/:id/shelf { shelf_id }: the series (and so its volumes) moves; needs editor rights in both shelves. */
+/** PUT /mangas/:id/shelf { shelf_id }: the series (and so its volumes) moves; needs the owner role in the shelf it leaves and editor rights in the target. */
 function moveManga(ctx, { params, body }) {
     const mangaId = parsePositiveInt(params.id);
     if (!mangaId) throw notFound('Manga');
-    access.mangaAccess(ctx, mangaId, 'editor');
+    // an editor of somebody else's shelf must not be able to take its series away from the owners
+    access.mangaAccess(ctx, mangaId, 'owner');
     const target = parsePositiveInt(body.shelf_id);
     if (!target) throw badRequest('Ungültiges Regal');
     access.requireShelf(ctx, target, 'editor');
