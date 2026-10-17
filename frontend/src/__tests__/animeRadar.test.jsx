@@ -84,6 +84,16 @@ describe('mangaLinks', () => {
     expect(mangaLinks([entry(1, { title: 'Frieren Extra Stories' })], [shelf[1]]).suggestions.map((s) => s.manga.id)).toEqual([2]);
   });
 
+  it('falls back to one long word both titles share, but only for a single series', () => {
+    const shelf = [{ id: 1, title: 'Frieren – Nach dem Ende der Reise' }, { id: 2, title: 'Dragon Ball' }];
+    const hit = mangaLinks([entry(1, { title: 'Frieren: Beyond Journey’s End' })], shelf);
+    expect(hit.suggestions.map((s) => s.manga.id)).toEqual([1]);
+    // a short word ("Dragon") never counts, and two series with the same long word are ambiguous
+    expect(mangaLinks([entry(2, { title: 'Dragon Quest' })], shelf).unlinked.map((a) => a.id)).toEqual([2]);
+    const twins = [{ id: 1, title: 'Frieren – Nach dem Ende der Reise' }, { id: 3, title: 'Frieren Anthology' }];
+    expect(mangaLinks([entry(4, { title: 'Frieren: Beyond Journey’s End 2' })], twins).unlinked.map((a) => a.id)).toEqual([4]);
+  });
+
   it('matches titles in other scripts', () => {
     const shelf = [{ id: 1, title: 'Kusuriya no Hitorigoto', alt_title: '薬屋のひとりごと' }, { id: 2, title: 'Поднятие уровня в одиночку' }];
     const list = [
