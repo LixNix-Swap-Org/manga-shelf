@@ -7,10 +7,14 @@ const MAX_COMMENT = 500;
 
 const visibilityOf = (row) => (row && VISIBILITIES.includes(row.rating_visibility) ? row.rating_visibility : 'public');
 
-/** A progress row as somebody else may see it: no notes, no resume link, rating only when public. */
+/**
+ * A progress row as somebody else may see it: no notes, no resume link, rating only when public. The visibility itself
+ * is not shown either, so nobody learns that a user rated anonymously or privately.
+ */
 function othersView(progress, row) {
     const visibility = visibilityOf(row);
-    const out = { ...progress, notes: null, resume_url: null, resume_episode: null, rating_visibility: visibility };
+    const out = { ...progress, notes: null, resume_url: null, resume_episode: null };
+    delete out.rating_visibility;
     if (visibility !== 'public') {
         out.score = null;
         out.episode_scores = {};

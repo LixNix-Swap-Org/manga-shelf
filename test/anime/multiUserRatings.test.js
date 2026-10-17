@@ -46,6 +46,8 @@ test('ratings follow their visibility and notes stay private', async () => {
     const annaRow = detail.progress.find((p) => p.username === 'anna');
     assert.equal(annaRow.score, null);
     assert.equal(annaRow.notes, null);
+    assert.equal('rating_visibility' in annaRow, false, 'the visibility of others stays hidden');
+    assert.equal('public_comment' in annaRow ? annaRow.public_comment : null, null);
     assert.equal(detail.community.average, 9);
 
     const list = (await ben('GET', '/anime')).body.find((x) => x.id === id);
