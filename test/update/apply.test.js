@@ -452,6 +452,7 @@ test('prepareSwitch reads the ZIP through the verified handle, not through the p
     const handle = await openRegular(zipFile);
     const planted = `${zipFile}.planted`;
     fs.writeFileSync(planted, h.makeZip(NEW_ENTRIES.map((e) => (e.name === 'index.js' ? { ...e, data: 'planted index' } : e))));
+    if (process.platform === 'win32') fs.renameSync(zipFile, `${zipFile}.old`);
     fs.renameSync(planted, zipFile);
     const dataDir = fresh('data');
     const { deps } = backupDeps(dataDir);

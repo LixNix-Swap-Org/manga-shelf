@@ -61,8 +61,8 @@ export function readBackupZip(bytes) {
   let files;
   try {
     files = unzipSync(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-  } catch (_) {
-    throw new Error(t('Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden'));
+  } catch (err) {
+    throw new Error(t('Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden'), { cause: err });
   }
   const dbName = Object.keys(files)
     .filter((n) => (n === 'manga.db' || n.endsWith('/manga.db')) && !isJunkPath(n))

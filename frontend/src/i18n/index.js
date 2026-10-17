@@ -150,7 +150,7 @@ function commit(code, nextCatalog, env) {
  */
 export async function setLanguage(code, { persist = true, env } = {}) {
   const next = isAvailable(code) ? code : SOURCE_LANGUAGE;
-  let nextCatalog = null;
+  let nextCatalog;
   try {
     nextCatalog = await loadCatalog(next);
   } catch (err) {

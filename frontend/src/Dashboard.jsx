@@ -374,7 +374,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     }
     showScanToast('info', t('ISBN {isbn} wird gesucht...', { isbn: scannedCode }), { duration: 0 });
     let res;
-    let data = null;
+    let data;
     try {
       res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`, { timeout: TIMEOUTS.lookup });
       data = await readJson(res); // a proxy 502/504 answers with HTML

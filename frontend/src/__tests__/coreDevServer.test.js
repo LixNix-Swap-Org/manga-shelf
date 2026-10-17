@@ -6,6 +6,7 @@ import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
+import { pathToFileURL } from 'url';
 import { createServer } from 'vite';
 import { cjsToEsm, isCoreCommonjs } from '../../vite.config.js';
 
@@ -15,8 +16,9 @@ const requireCjs = createRequire(import.meta.url);
 
 /** Imports the files with Node's own ESM loader (no Vite, no Vitest) and prints each module's export names. */
 function importInNode(files) {
-  const script = `const out = {};
-for (const f of ${JSON.stringify(files)}) { const m = await import(f); out[f] = { named: Object.keys(m).filter((k) => k !== 'default' && k !== '__cjsModule').sort(), defaultKeys: Object.keys(m.default).sort() }; }
+  const script = `import { pathToFileURL } from 'url';
+const out = {};
+for (const f of ${JSON.stringify(files)}) { const m = await import(pathToFileURL(f).href); out[f] = { named: Object.keys(m).filter((k) => k !== 'default' && k !== '__cjsModule').sort(), defaultKeys: Object.keys(m.default).sort() }; }
 console.log(JSON.stringify(out));`;
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
   if (run.status !== 0) throw new Error(run.stderr);
@@ -72,7 +74,7 @@ describe('CommonJS core in the dev server', () => {
       const file = path.join(cycle, name);
       fs.writeFileSync(file, cjsToEsm(fs.readFileSync(file, 'utf8'), file));
     }
-    const run = spawnSync(process.execPath, ['--input-type=module', '-e', `const m = await import(${JSON.stringify(path.join(cycle, 'a.js'))}); console.log(m.default.fromB(), m.default.seenByB());`], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', `const m = await import(${JSON.stringify(pathToFileURL(path.join(cycle, 'a.js')).href)}); console.log(m.default.fromB(), m.default.seenByB());`], { encoding: 'utf8' });
     expect(run.stderr).toBe('');
     expect(run.stdout.trim()).toBe('2 0');
   });

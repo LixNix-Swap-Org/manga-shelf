@@ -10,7 +10,11 @@ const { readConfig } = require('../utils/config');
 const scheduler = require('../services/scheduler');
 const { zonedToday } = require('../services/radar');
 
-test.after(() => fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }));
+test.after(() => {
+    const cached = require.cache[require.resolve('../db')];
+    if (cached) cached.exports.closeDb();
+    fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
+});
 
 function withEnv(vars, fn) {
     const saved = Object.fromEntries(Object.keys(vars).map(k => [k, process.env[k]]));

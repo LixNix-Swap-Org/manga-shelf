@@ -50,7 +50,7 @@ const volumeSearchLoads = new Map();
 
 async function fetchVolumeSearch(owner) {
   const entry = readCache(owner, VOLUME_SEARCH_KEY);
-  let res = null;
+  let res;
   try {
     res = await apiFetch('/api/mangas/volume-search', { headers: revalidateHeaders(entry) });
   } catch (_) {
