@@ -2817,6 +2817,7 @@
   "privat": "prywatna",
   "schon im Regal": "już na półce",
   "schon zurückgesetzt": "już cofnięto",
+  "shelf-role::Besitzer": "Właściciel",
   "short::Neuheiten": "Nowości",
   "sichtbaren": "widocznych",
   "täglich ab {hour} Uhr ({timeZone})": "codziennie od {hour}:00 ({timeZone})",

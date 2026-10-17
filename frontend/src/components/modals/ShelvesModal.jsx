@@ -5,11 +5,11 @@ import ConfirmDialog from './ConfirmDialog';
 import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount } from '../../utils/format';
-import { t } from '../../i18n/index.js';
+import { t, tc } from '../../i18n/index.js';
 
 const ROLES = ['owner', 'editor', 'viewer'];
 const ROLE_LABEL = {
-  owner: () => t('Besitzer'),
+  owner: () => tc('shelf-role', 'Besitzer'),
   editor: () => t('Bearbeiter'),
   viewer: () => t('Leser')
 };

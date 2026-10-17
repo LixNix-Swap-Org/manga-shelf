@@ -2729,6 +2729,7 @@
   "privat": "privé",
   "schon im Regal": "al op de plank",
   "schon zurückgesetzt": "al teruggedraaid",
+  "shelf-role::Besitzer": "Eigenaar",
   "short::Neuheiten": "Nieuw",
   "sichtbaren": "zichtbare",
   "täglich ab {hour} Uhr ({timeZone})": "dagelijks vanaf {hour}:00 ({timeZone})",

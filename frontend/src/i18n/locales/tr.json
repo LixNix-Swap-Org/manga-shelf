@@ -2729,6 +2729,7 @@
   "privat": "özel",
   "schon im Regal": "zaten rafta",
   "schon zurückgesetzt": "zaten geri alınmış",
+  "shelf-role::Besitzer": "Sahibi",
   "short::Neuheiten": "Yeni",
   "sichtbaren": "görünen",
   "täglich ab {hour} Uhr ({timeZone})": "her gün {hour}:00 itibarıyla ({timeZone})",
