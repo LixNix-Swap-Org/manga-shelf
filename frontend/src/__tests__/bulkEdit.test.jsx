@@ -1,6 +1,6 @@
 // Covers bulk editing of volumes and its supporting hook.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 vi.mock('../utils/offlineStore', () => ({
@@ -87,15 +87,15 @@ describe('BulkActionBar', () => {
     expect(p.onApply).toHaveBeenLastCalledWith({ read: { read: false, user_id: 9 } }, 'als ungelesen markiert');
   });
 
-  it('delete asks first; the visible-selection button switches to clearing', () => {
+  it('delete asks first; the visible-selection button switches to clearing', async () => {
     const confirmDelete = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     const p = props({ confirmDelete });
     const { rerender } = render(<BulkActionBar {...p} />);
     fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
+    await waitFor(() => expect(confirmDelete).toHaveBeenCalledWith(bulkDeleteConfirmText(3)));
     expect(p.onApply).not.toHaveBeenCalled();
-    expect(confirmDelete).toHaveBeenCalledWith(bulkDeleteConfirmText(3));
     fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
-    expect(p.onApply).toHaveBeenCalledWith({ delete: true }, 'gelöscht');
+    await waitFor(() => expect(p.onApply).toHaveBeenCalledWith({ delete: true }, 'gelöscht'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Alle sichtbaren (5)' }));
     expect(p.onSelectAllVisible).toHaveBeenCalled();

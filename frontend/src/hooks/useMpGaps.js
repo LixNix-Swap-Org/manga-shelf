@@ -5,6 +5,7 @@ import { notify, notifyResponseError } from '../utils/notify';
 import { formatCount } from '../utils/format';
 import { deleteVolumeRequest } from '../components/detail/volumeEdit/editorUtils';
 import { t, tn } from '../i18n/index.js';
+import { askConfirm } from '../components/modals/askConfirm';
 import { payloadText, serverText } from '../i18n/serverText.js';
 import { statusLabel } from '../utils/enumLabels';
 import { isMpEdition } from '../utils/editions';
@@ -72,7 +73,7 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
   // Never sends a guessed edition_id: the server only fills from the linked edition and asks for a confirmation otherwise
   const handleBatchAutofillManga = async () => {
     if (!canEdit) return;
-    if (!confirm(t('Möchtest du alle fehlenden Erscheinungsdaten, Jahre, Seitenzahlen und Preise für die Bände dieser Reihe automatisch ausfüllen?'))) return;
+    if (!(await askConfirm(t('Möchtest du alle fehlenden Erscheinungsdaten, Jahre, Seitenzahlen und Preise für die Bände dieser Reihe automatisch ausfüllen?'), { danger: false }))) return;
 
     setBatchAutofilling(true);
     try {
@@ -83,7 +84,7 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
           notify.error(payloadText(data, 'message') || t('Bitte zuerst die Manga-Passion-Edition bestätigen.'));
           return;
         }
-        if (!confirm(t('{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?', { reason: payloadText(data, 'message') || t('Die Manga-Passion-Edition ist nicht bestätigt.'), edition: suggested.title || suggested.id }))) return;
+        if (!(await askConfirm(t('{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?', { reason: payloadText(data, 'message') || t('Die Manga-Passion-Edition ist nicht bestätigt.'), edition: suggested.title || suggested.id }), { danger: false }))) return;
         if (!(await handleSelectMpEdition(suggested))) return;
         ({ ok, data } = await runAutofill());
       }
@@ -187,7 +188,7 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
       return;
     }
     const edition = mpGapData?.matched ? mpGapData.edition : null;
-    if (!confirm(gapFillConfirmText(labels, targetStatus, edition?.title, { extras: extrasOnly }))) return;
+    if (!(await askConfirm(gapFillConfirmText(labels, targetStatus, edition?.title, { extras: extrasOnly }), { danger: false }))) return;
     const requestedFor = id;
     setFillingGapLoading(true);
     try {
