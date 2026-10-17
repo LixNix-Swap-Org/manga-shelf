@@ -259,3 +259,16 @@ test('shelves: deleting an account hands its shelves to the deleting admin, empt
     assert.equal((await admin('GET', `/mangas/${seriesId}`)).status, 200);
     assert.ok(adminId);
 });
+
+test('shelves: only an owner of the source shelf can move a series out of it', async () => {
+    const own = await myShelf(anna);
+    const benShelf = await myShelf(ben);
+    const id = (await anna('POST', '/mangas', { title: 'Bleibt hier' })).body.id;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    assert.equal((await ben('PUT', `/mangas/${id}/shelf`, { shelf_id: benShelf.id })).status, 403, 'an editor member cannot take it away');
+    assert.equal((await anna('GET', `/mangas/${id}`)).status, 200, 'the series stays in the owner shelf');
+    await ben('POST', `/shelves/${benShelf.id}/members`, { username: 'anna', role: 'editor' });
+    assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: benShelf.id })).status, 200, 'the owner can move it');
+    await ben('DELETE', `/shelves/${benShelf.id}/members/${annaId}`);
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
