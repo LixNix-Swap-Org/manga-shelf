@@ -2,11 +2,13 @@
 const { msg, badRequest, notFound } = require('../errors');
 const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases, isKnownPublisher } = require('../lib/publishers');
 
+const access = require('../lib/access');
 const MAX_NAME = 300;
 const MAX_FROM = 50;
 
 /** Every stored spelling with its series and volume counts, plus the stored aliases. */
-function list(ctx) {
+function list(realCtx) {
+    const ctx = access.scopedCtx(realCtx, access.accessibleShelfIds(realCtx));
     const byName = new Map();
     const add = (name, field, count) => {
         const entry = byName.get(name) || { name, series_count: 0, volume_count: 0 };

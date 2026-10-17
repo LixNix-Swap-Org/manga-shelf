@@ -5,6 +5,7 @@ const { createCtx, withUser, dbFromConnection } = require('../../core/ctx');
 const { applySchema } = require('../../core/schema');
 const { dispatch } = require('../../core/routes');
 const { errorAnswer } = require('../../core/errors');
+const { ensureMembership } = require('../../core/lib/access');
 
 const USERS = [
     { id: 1, username: 'admin', role: 'admin' },
@@ -83,6 +84,8 @@ function createMemoryCore(overrides = {}) {
         config: { appTimeZone: 'Europe/Berlin', appVersion: 'test' },
         ...overrides
     });
+    // the server gives every account its shelf membership when it is created; do the same, in id order
+    for (const u of USERS) ensureMembership({ ...ctx, user: { id: u.id, username: u.username, role: u.role } });
 
     async function request(user, method, url, body) {
         try {

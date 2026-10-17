@@ -482,7 +482,7 @@ describe('UserManagementModal', () => {
     expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
     await screen.findByText(/Benutzer "redakteur" erfolgreich angelegt/);
-    expect(posts[0]).toEqual({ username: 'redakteur', password: 'langes-passwort', role: 'editor' });
+    expect(posts[0]).toEqual({ username: 'redakteur', password: 'langes-passwort', role: 'editor', shelf_mode: 'personal' });
 
     fill('chefin');
     fireEvent.change(screen.getByRole('combobox', { name: 'Rolle' }), { target: { value: 'admin' } });
@@ -502,7 +502,7 @@ describe('UserManagementModal', () => {
     fireEvent.change(field, { target: { value: 'richtig-123' } });
     fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
     await screen.findByText(/Benutzer "chefin" erfolgreich angelegt/);
-    expect(posts[2]).toEqual({ username: 'chefin', password: 'langes-passwort', role: 'admin', current_password: 'richtig-123' });
+    expect(posts[2]).toEqual({ username: 'chefin', password: 'langes-passwort', role: 'admin', current_password: 'richtig-123', shelf_mode: 'personal' });
     expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
   });
 

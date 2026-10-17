@@ -332,6 +332,50 @@ function DefaultLanguageField({ offline }) {
   );
 }
 
+/** Who sees the ratings you give to shared anime (users.default_anime_visibility); single ratings can differ. */
+function DefaultVisibilityField({ offline }) {
+  const id = useId();
+  const [value, setValue] = useState('public');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    apiFetch('/api/auth/me').then(readJson).then((data) => {
+      if (alive && data?.default_anime_visibility) setValue(data.default_anime_visibility);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async (next) => {
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { default_anime_visibility: next } });
+      const data = await readJson(res);
+      if (!res.ok) {
+        notify.error(serverText(data) || t('Speichern fehlgeschlagen'));
+        return;
+      }
+      setValue(data?.user?.default_anime_visibility || next);
+    } catch (_) {
+      notify.error(t('Netzwerkfehler – bitte erneut versuchen.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-4 border-t border-slate-800">
+      <label htmlFor={`${id}-visibility`} className="block text-xs font-semibold text-slate-300">{t('Sichtbarkeit deiner Anime-Bewertungen')}</label>
+      <select id={`${id}-visibility`} className="input-field bg-slate-950" value={value} disabled={saving || offline} onChange={(e) => save(e.target.value)}>
+        <option value="public">{t('Alle mit Namen')}</option>
+        <option value="anonymous">{t('Alle anonym')}</option>
+        <option value="private">{t('Nur ich')}</option>
+      </select>
+      <p className="text-xs text-slate-400">{t('Gilt für neue Bewertungen. Bei jedem Anime lässt sich das einzeln ändern. Notizen sieht nie jemand außer dir.')}</p>
+    </div>
+  );
+}
+
 /** UI language of this account; the switch remounts the page, the dialog reopens on this tab. */
 function LanguageTab({ offline = false }) {
   return (
@@ -341,6 +385,7 @@ function LanguageTab({ offline = false }) {
       </p>
       <LanguageSelect beforeChange={() => markReopenAccount('language')} />
       <DefaultLanguageField offline={offline} />
+      <DefaultVisibilityField offline={offline} />
     </div>
   );
 }

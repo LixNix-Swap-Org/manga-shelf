@@ -33,6 +33,10 @@ function parseProfileBody(body) {
         if (!isLanguageCode(raw)) throw badRequest('Ungültiger Sprachcode (zwei Buchstaben, z. B. de)', 'LANGUAGE_INVALID');
         out.default_language = raw;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'default_anime_visibility')) {
+        if (!['public', 'anonymous', 'private'].includes(body.default_anime_visibility)) throw badRequest('Ungültige Sichtbarkeit (public, anonymous oder private)', 'BAD_REQUEST');
+        out.default_anime_visibility = body.default_anime_visibility;
+    }
     if (!Object.keys(out).length) throw badRequest('Keine Änderung angegeben');
     return out;
 }
@@ -46,8 +50,12 @@ function saveProfile(db, userId, fields) {
 
 /** { locale, default_language } of a user; defaults when the row is missing. */
 function readProfile(db, userId) {
-    const row = db.prepare('SELECT locale, default_language FROM users WHERE id = ?').get(userId);
-    return { locale: row ? row.locale ?? null : null, default_language: (row && row.default_language) || 'de' };
+    const row = db.prepare('SELECT locale, default_language, default_anime_visibility FROM users WHERE id = ?').get(userId);
+    return {
+        locale: row ? row.locale ?? null : null,
+        default_language: (row && row.default_language) || 'de',
+        default_anime_visibility: (row && row.default_anime_visibility) || 'public'
+    };
 }
 
 module.exports = { UI_LOCALES, uiLocale, parseProfileBody, saveProfile, readProfile };

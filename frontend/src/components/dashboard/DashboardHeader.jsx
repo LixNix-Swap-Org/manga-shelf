@@ -7,7 +7,7 @@ import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
 import { getCoverOrigin } from '../../utils/coverOrigin';
-import { BookOpen, Calendar, CalendarClock, ChartColumn, CloudUpload, Download, FileSpreadsheet, Globe, Lock, LogOut, Menu, Plus, Search, Server, Tv, Users, X } from 'lucide-react';
+import { BookOpen, BrushCleaning, Calendar, CalendarClock, ChartColumn, ChevronDown, CloudUpload, Download, FileSpreadsheet, GitMerge, Globe, Library, LogOut, Menu, Plus, Search, Server, Settings, Trash2, Tv, Users, Wrench, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { t } from '../../i18n/index.js';
 
@@ -152,6 +152,7 @@ export default function DashboardHeader({
   handleOpenPasswordModal,
   handleOpenRestoreModal,
   handleOpenStats,
+  handleOpenTool,
   handleOpenUsersModal,
   headingRef,
   isInstallable,
@@ -186,6 +187,8 @@ export default function DashboardHeader({
   // the system page lives here so the admin menu needs no new prop; rendered into body (the header's backdrop filter
   // would anchor a fixed dialog)
   const [systemOpen, setSystemOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef(null);
   // without a server: no users, snapshots or system page; the backup entry exports/imports a ZIP on the device
   const local = isLocalMode();
   const showSystemEntry = isAdmin && !local && !user?.offline;
@@ -198,6 +201,24 @@ export default function DashboardHeader({
   useCoverPreconnect(searchOnline, Boolean(searchScope?.pending));
   let searchPlaceholder = activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...');
   if (searchOnline) searchPlaceholder = t('Sammlung und online suchen…');
+
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const onDocClick = (e) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target)) {
+        setToolsOpen(false);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setToolsOpen(false);
+    };
+    document.addEventListener('pointerdown', onDocClick);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onDocClick);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [toolsOpen]);
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -364,6 +385,102 @@ export default function DashboardHeader({
             <span>{t('Statistiken')}<span className="hidden 2xl:inline"> {t('& Finanzen')}</span></span>
           </button>
 
+          <div ref={toolsRef} className="relative">
+            <button 
+              id="btn-open-tools"
+              type="button"
+              onClick={() => setToolsOpen(prev => !prev)}
+              aria-expanded={toolsOpen}
+              aria-haspopup="true"
+              className="btn-secondary flex items-center gap-1.5 text-xs text-sky-200 hover:text-white border-sky-500/30 hover:bg-sky-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
+              title={t('Werkzeuge: Regale, Aufräumen, Papierkorb')}
+            >
+              <Wrench className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
+              <span>{t('Werkzeuge')}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${toolsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>
+
+            {toolsOpen && (
+              <div
+                id="tools-dropdown-menu"
+                role="menu"
+                aria-orientation="vertical"
+                aria-labelledby="btn-open-tools"
+                className="absolute right-0 top-full mt-2 w-72 rounded-2xl glass-panel border border-slate-700/80 bg-slate-950/95 backdrop-blur-xl p-2 shadow-2xl z-50 animate-fade-in divide-y divide-slate-800/80"
+              >
+                <div className="py-1 space-y-1">
+                  <button
+                    id="btn-menu-shelves"
+                    role="menuitem"
+                    type="button"
+                    onClick={() => { setToolsOpen(false); handleOpenTool?.('shelves'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <Library className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white group-hover:text-teal-300 transition-colors">{t('Regale')}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{t('Regale verwalten & freigeben')}</p>
+                    </div>
+                  </button>
+
+                  <button
+                    id="btn-menu-cleanup"
+                    role="menuitem"
+                    type="button"
+                    onClick={() => { setToolsOpen(false); handleOpenTool?.('cleanup'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <BrushCleaning className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors">{t('Sammlung aufräumen')}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{t('Dubletten & Qualität prüfen')}</p>
+                    </div>
+                  </button>
+
+                  <button
+                    id="btn-menu-trash"
+                    role="menuitem"
+                    type="button"
+                    onClick={() => { setToolsOpen(false); handleOpenTool?.('trash'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white group-hover:text-rose-300 transition-colors">{t('Papierkorb')}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{t('Gelöschte Bände wiederherstellen')}</p>
+                    </div>
+                  </button>
+                </div>
+
+                {isAdmin && (
+                  <div className="pt-2 pb-1">
+                    <button
+                      id="btn-menu-publishers"
+                      role="menuitem"
+                      type="button"
+                      onClick={() => { setToolsOpen(false); handleOpenTool?.('publishers'); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0 group-hover:scale-105 transition-transform">
+                        <GitMerge className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white group-hover:text-purple-300 transition-colors">{t('Verlage zusammenführen')}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{t('Verlags-Aliase vereinheitlichen')}</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {canEdit && (
             <button 
               id="btn-open-add-manga"
@@ -461,7 +578,7 @@ export default function DashboardHeader({
               title={accountLabel}
               aria-label={accountLabel}
             >
-              <Lock className="w-4 h-4" />
+              <Settings className="w-4 h-4" />
             </button>
           )}
 
@@ -615,6 +732,49 @@ export default function DashboardHeader({
             </button>
           )}
 
+          <div className="pt-2 border-t border-slate-800/80">
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2 px-1">{t('Werkzeuge & Regale')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                id="btn-mobile-menu-shelves"
+                type="button"
+                onClick={() => runFromMenu(() => handleOpenTool?.('shelves'))}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-teal-300 border-teal-500/30"
+              >
+                <Library className="w-4 h-4 text-teal-400" aria-hidden="true" /> {t('Regale')}
+              </button>
+
+              <button
+                id="btn-mobile-menu-cleanup"
+                type="button"
+                onClick={() => runFromMenu(() => handleOpenTool?.('cleanup'))}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-300 border-amber-500/30"
+              >
+                <BrushCleaning className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Aufräumen')}
+              </button>
+
+              <button
+                id="btn-mobile-menu-trash"
+                type="button"
+                onClick={() => runFromMenu(() => handleOpenTool?.('trash'))}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-rose-300 border-rose-500/30"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" aria-hidden="true" /> {t('Papierkorb')}
+              </button>
+
+              {isAdmin && (
+                <button
+                  id="btn-mobile-menu-publishers"
+                  type="button"
+                  onClick={() => runFromMenu(() => handleOpenTool?.('publishers'))}
+                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-purple-300 border-purple-500/30"
+                >
+                  <GitMerge className="w-4 h-4 text-purple-400" aria-hidden="true" /> {t('Verlage')}
+                </button>
+              )}
+            </div>
+          </div>
+
           {!user?.offline && (
             <button
               id="btn-mobile-menu-password"
@@ -622,7 +782,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleOpenPasswordModal)}
               className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
             >
-              <Lock className="w-4 h-4 text-brand-400" /> {t('Konto & Sprache')}
+              <Settings className="w-4 h-4 text-brand-400" /> {t('Konto & Sprache')}
             </button>
           )}
 

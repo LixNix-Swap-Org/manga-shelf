@@ -6,7 +6,8 @@ const {
     purchaseDateFromRemainingOwners
 } = require('../lib/owners');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
-const { resolveTargetUser } = require('../lib/access');
+const access = require('../lib/access');
+const { resolveTargetUser } = access;
 const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
@@ -566,8 +567,10 @@ function bulk(ctx, { body }) {
     if (!remove && !changes) throw badRequest('Keine Änderung angegeben');
     if ('status' in set.value && owners) throw badRequest('Status und Besitzer bitte getrennt ändern');
 
-    const select = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?');
-    const rows = ids.value.map((id) => select.get(id)).filter(Boolean);
+    const select = ctx.db.prepare('SELECT v.*, m.shelf_id AS _shelf_id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.id = ?');
+    const editable = new Set(access.accessibleShelfIds(ctx, 'editor'));
+    // a volume of a shelf the caller may not edit counts as unknown (404 rule)
+    const rows = ids.value.map((id) => select.get(id)).filter((v) => v && editable.has(v._shelf_id)).map(({ _shelf_id, ...v }) => v);
     const found = new Set(rows.map((v) => v.id));
     const missing = ids.value.filter((id) => !found.has(id));
     if (rows.length === 0) throw notFound('Band');

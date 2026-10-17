@@ -122,11 +122,11 @@ test('GET /lookup/isbn without a hit: message unchanged plus message_msg', async
     const { lookupIsbn } = require('../core/handlers/lookup');
     const quiet = { warn() {}, info() {}, error() {}, debug() {} };
     const fake = {
-        db: { prepare: () => ({ get: () => undefined }) },
+        db: { prepare: () => ({ get: () => undefined, all: () => [] }) },
         limit: async () => {},
         http: { fetchText: async () => { throw new Error('offline'); } },
         log: { child: () => quiet },
-        user: { id: 1, role: 'admin' }
+        user: null
     };
     const { body } = await lookupIsbn(fake, { query: { isbn: '9783161484100' } });
     assert.equal(body.found, false);

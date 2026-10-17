@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useId } from 'react';
-import { Users, UserPlus, Shield, User, Lock, X, Trash, KeyRound, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, Shield, User, Lock, X, Trash, KeyRound, RefreshCw, Library } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, rememberToken } from '../../utils/api';
 import { formatDay } from '../../utils/format';
@@ -9,7 +9,14 @@ import { serverText } from '../../i18n/serverText.js';
 import ConfirmDialog from './ConfirmDialog';
 
 const MIN_PASSWORD_LENGTH = 8;
-const EMPTY_USER = { username: '', password: '', role: 'editor' };
+const EMPTY_USER = {
+  username: '',
+  password: '',
+  role: 'editor',
+  shelf_mode: 'personal',
+  share_with_user_id: '',
+  share_role: 'editor'
+};
 // i18n
 const SESSION_EXPIRED = 'Deine Sitzung ist abgelaufen oder ungültig. Bitte lade die Seite neu und melde dich an.';
 // i18n
@@ -176,6 +183,11 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       return;
     }
 
+    if (newUser.shelf_mode !== 'personal' && !newUser.share_with_user_id) {
+      showResult(t('Bitte wähle einen Benutzer zum Teilen aus.'));
+      return;
+    }
+
     const confirming = newUser.role === 'admin';
     if (confirming && !createConfirm) {
       showResult('');
@@ -183,13 +195,22 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       return;
     }
 
+    const payload = {
+      username: newUser.username.trim(),
+      password: newUser.password,
+      role: newUser.role,
+      shelf_mode: newUser.shelf_mode,
+      share_with_user_id: newUser.shelf_mode !== 'personal' ? newUser.share_with_user_id : undefined,
+      share_role: newUser.shelf_mode !== 'personal' ? newUser.share_role : undefined
+    };
+
     setCreatingUser(true);
     showResult('');
 
     try {
       const res = await apiFetch('/api/users', {
         method: 'POST',
-        body: confirming ? { ...newUser, current_password: createConfirm } : newUser
+        body: confirming ? { ...payload, current_password: createConfirm } : payload
       });
       const data = await readJson(res);
       if (res.ok) {
@@ -453,6 +474,102 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
                   <option value="admin">{t('Administrator (Vollzugriff)')}</option>
                 </select>
               </div>
+            </div>
+
+            <div className="pt-3 pb-1 border-t border-slate-800/80 space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Library className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" />
+                  {t('Sammlung / Regal-Zuordnung')}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${newUser.shelf_mode === 'personal' ? 'bg-brand-500/15 border-brand-500/50 text-slate-100 shadow-sm' : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-700'}`}>
+                    <input
+                      type="radio"
+                      name="shelf_mode"
+                      value="personal"
+                      checked={newUser.shelf_mode === 'personal'}
+                      onChange={() => setNewUser({ ...newUser, shelf_mode: 'personal' })}
+                      className="mt-0.5 text-brand-600 focus:ring-brand-500"
+                    />
+                    <div className="min-w-0">
+                      <span className="font-semibold block text-white">{t('Eigenes Regal')}</span>
+                      <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">{t('Startet mit einer separaten, leeren Sammlung (Standard)')}</span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${newUser.shelf_mode === 'share_same' ? 'bg-brand-500/15 border-brand-500/50 text-slate-100 shadow-sm' : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-700'}`}>
+                    <input
+                      type="radio"
+                      name="shelf_mode"
+                      value="share_same"
+                      checked={newUser.shelf_mode === 'share_same'}
+                      onChange={() => setNewUser({ ...newUser, shelf_mode: 'share_same' })}
+                      className="mt-0.5 text-brand-600 focus:ring-brand-500"
+                    />
+                    <div className="min-w-0">
+                      <span className="font-semibold block text-white">{t('Dasselbe Regal teilen')}</span>
+                      <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">{t('Nutzt die bestehende Sammlung eines anderen Benutzers')}</span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${newUser.shelf_mode === 'share_mutual' ? 'bg-brand-500/15 border-brand-500/50 text-slate-100 shadow-sm' : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-700'}`}>
+                    <input
+                      type="radio"
+                      name="shelf_mode"
+                      value="share_mutual"
+                      checked={newUser.shelf_mode === 'share_mutual'}
+                      onChange={() => setNewUser({ ...newUser, shelf_mode: 'share_mutual' })}
+                      className="mt-0.5 text-brand-600 focus:ring-brand-500"
+                    />
+                    <div className="min-w-0">
+                      <span className="font-semibold block text-white">{t('Gegenseitig freigeben')}</span>
+                      <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">{t('Eigenes Regal behalten + Zugriff auf die Sammlung des Partners')}</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {newUser.shelf_mode !== 'personal' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/80 border border-slate-800 animate-fade-in">
+                  <div>
+                    <label htmlFor={`${fieldId}-share-user`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      {t('Benutzer zum Teilen')}
+                    </label>
+                    <select
+                      id={`${fieldId}-share-user`}
+                      className="input-field bg-slate-900 text-base sm:text-xs py-1.5"
+                      value={newUser.share_with_user_id}
+                      onChange={e => setNewUser({ ...newUser, share_with_user_id: e.target.value })}
+                      required
+                    >
+                      <option value="">{t('Benutzer auswählen...')}</option>
+                      {usersList.map(u => (
+                        <option key={u.id} value={u.id}>{u.username} ({roleLabel(u.role)})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor={`${fieldId}-share-role`} className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      {t('Rechte im geteilten Regal')}
+                    </label>
+                    <select
+                      id={`${fieldId}-share-role`}
+                      className="input-field bg-slate-900 text-base sm:text-xs py-1.5"
+                      value={newUser.role === 'visitor' ? 'viewer' : newUser.share_role}
+                      disabled={newUser.role === 'visitor'}
+                      onChange={e => setNewUser({ ...newUser, share_role: e.target.value })}
+                    >
+                      <option value="editor">{t('Bearbeiter (Schreib- & Leserechte)')}</option>
+                      <option value="viewer">{t('Leser / Gast (Reiner Lesezugriff)')}</option>
+                    </select>
+                    {newUser.role === 'visitor' && (
+                      <p className="text-[10px] text-slate-400 mt-1">{t('Als Gast immer auf reinen Lesezugriff beschränkt.')}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {newUser.role === 'admin' && (

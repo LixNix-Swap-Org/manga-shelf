@@ -52,7 +52,9 @@ const pendingPurchaseIds = (id) => new Set(getOutbox().list(outboxScope(id)).fil
  * Shopping list (missing volumes) with offline cache and quick buy. Purchases go through the outbox: made while the
  * server is unreachable they are kept per user and sent later. `user` has `offline: true` in App's offline mode.
  */
-export default function useShoppingList({ user, setNetworkOffline, fetchMangas }) {
+export default function useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter = 'ALL' }) {
+  const shelfRef = useRef(shelfFilter);
+  shelfRef.current = shelfFilter;
   const userId = user?.id ?? null;
   const [shoppingData, setShoppingData] = useState(() => withoutVolumes(readShoppingCache(), pendingPurchaseIds(userId)));
   const [loadingShopping, setLoadingShopping] = useState(false);
@@ -142,7 +144,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas }
     setLoadingShopping(true);
     try {
       const id = await resolveUserId();
-      const res = await apiFetch('/api/shopping-list?include_others=1');
+      const res = await apiFetch(`/api/shopping-list?include_others=1${shelfRef.current !== 'ALL' ? `&shelf_id=${encodeURIComponent(shelfRef.current)}` : ''}`);
       if (!res.ok) {
         if (generation === getClearGeneration()) {
           setShoppingError(shoppingErrorKind(res.status));
