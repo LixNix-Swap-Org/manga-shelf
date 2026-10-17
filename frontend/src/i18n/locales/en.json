@@ -2735,6 +2735,7 @@
   "privat": "private",
   "schon im Regal": "already on the shelf",
   "schon zurückgesetzt": "already rolled back",
+  "shelf-role::Besitzer": "Owner",
   "short::Neuheiten": "New",
   "sichtbaren": "visible",
   "täglich ab {hour} Uhr ({timeZone})": "daily from {hour}:00 ({timeZone})",

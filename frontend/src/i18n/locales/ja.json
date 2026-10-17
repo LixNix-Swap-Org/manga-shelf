@@ -2691,6 +2691,7 @@
   "privat": "非公開",
   "schon im Regal": "すでに本棚にあります",
   "schon zurückgesetzt": "すでに元に戻し済み",
+  "shelf-role::Besitzer": "オーナー",
   "short::Neuheiten": "新刊",
   "sichtbaren": "表示中の",
   "täglich ab {hour} Uhr ({timeZone})": "毎日{hour}時から({timeZone})",

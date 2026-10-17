@@ -2691,6 +2691,7 @@
   "privat": "私密",
   "schon im Regal": "已在书架上",
   "schon zurückgesetzt": "已回退过",
+  "shelf-role::Besitzer": "所有者",
   "short::Neuheiten": "新刊",
   "sichtbaren": "可见项",
   "täglich ab {hour} Uhr ({timeZone})": "每天 {hour}:00 起（{timeZone}）",

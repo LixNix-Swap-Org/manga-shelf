@@ -2823,6 +2823,7 @@
   "privat": "личная",
   "schon im Regal": "уже на полке",
   "schon zurückgesetzt": "уже возвращено",
+  "shelf-role::Besitzer": "Владелец",
   "short::Neuheiten": "Новинки",
   "sichtbaren": "видимые",
   "täglich ab {hour} Uhr ({timeZone})": "ежедневно с {hour} ч ({timeZone})",

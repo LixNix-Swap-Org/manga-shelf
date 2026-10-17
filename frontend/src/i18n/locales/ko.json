@@ -2691,6 +2691,7 @@
   "privat": "비공개",
   "schon im Regal": "이미 책장에 있음",
   "schon zurückgesetzt": "이미 되돌림",
+  "shelf-role::Besitzer": "소유자",
   "short::Neuheiten": "신간",
   "sichtbaren": "표시된",
   "täglich ab {hour} Uhr ({timeZone})": "매일 {hour}시부터 ({timeZone})",

@@ -15,6 +15,7 @@
 - **Shelf checks:** an id like `1x` or `+1` in a series or volume path answers 404 instead of skipping the shelf check; the gap check stores an edition link only for editors and owners of the series' shelf; readers and owners of a series are the shelf's members (and anyone who already read or owns one of its volumes), not every account.
 - **Shelves dialog:** shelf owners can rename a shelf and change its colour, pick new members from a list of the accounts (instead of typing the name blind), and are asked before a member is removed or they leave a shelf.
 - **Header at 1280 px:** the "Werkzeuge" button shows only its icon below the 2xl width (the name stays as its label) and the search box may shrink to 150 px, so the desktop header with the install button no longer runs past the window and "Abmelden" stays visible.
+- **Shelf role label:** the owner of a shelf is called "Owner" (not "Owners") in the shelves dialog in English, and likewise in the other languages.
 - **"Komplett" and progress:** a series is only complete, and shows 100 %, when you own every regular volume up to the highest one that exists in it. With "Gesamtbände: 3" and a missing volume 4 the card now reads "3 / 4" (75 %) instead of "3 / 3", the series counts for "Mit Lücken" and not for "Komplett". Scripts: `max_regular_number` in `GET /api/mangas` is now the highest regular number of any status (before: owned only), and `completed_series` in `GET /api/stats` follows the same target.
 
 ### Scan
