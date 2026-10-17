@@ -931,9 +931,10 @@ export default function AnimeDetailModal({
       <ConfirmDialog
         isOpen={discardOpen}
         title={t('Ungespeicherte Änderungen verwerfen?')}
+        message={t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.')}
         confirmLabel={t('Verwerfen')}
         cancelLabel={t('Abbrechen')}
-        isDanger={false}
+        isDanger
         onConfirm={() => { setDiscardOpen(false); onClose(); }}
         onCancel={() => setDiscardOpen(false)}
       />
