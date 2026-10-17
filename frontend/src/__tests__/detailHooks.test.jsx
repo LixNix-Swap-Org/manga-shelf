@@ -1050,6 +1050,20 @@ describe('useMangaData: edit form', () => {
     expect(result.current.editing).toBe(false);
   });
 
+  it('save with a changed shelf_id moves the series via PUT /api/mangas/:id/shelf', async () => {
+    const { result, fetchMock } = await loaded(async () => res(200, { ...SERVER, shelf_id: 1 }));
+    act(() => result.current.startEditing());
+    act(() => result.current.setFormData(prev => ({ ...prev, shelf_id: 2 })));
+    fetchMock.mockClear();
+    fetchMock.mockImplementation(async (url, opts) => (opts?.method === 'PUT' ? res(200, { id: 7, shelf_id: 2 }) : res(200, { ...SERVER, shelf_id: 2 })));
+    await act(() => result.current.handleUpdate({ preventDefault() {} }));
+    const puts = fetchMock.mock.calls.filter(c => c[1]?.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    expect(puts[0][0]).toBe('/api/mangas/7/shelf');
+    expect(bodyOf(puts[0])).toEqual({ shelf_id: 2 });
+    expect(result.current.editing).toBe(false);
+  });
+
   it('save sends manga_passion_id when the user changed it, and shows a 400 text', async () => {
     const { result, fetchMock } = await loaded();
     act(() => result.current.startEditing());

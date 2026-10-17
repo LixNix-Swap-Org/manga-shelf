@@ -6,7 +6,7 @@ import useLatestRequest from '../../hooks/useLatestRequest';
 import CoverImage from '../common/CoverImage';
 import { langFor } from '../common/lang';
 import { openLinkOutside } from '../../app/openExternal';
-import { isAbortError } from '../../utils/api';
+import api, { isAbortError } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
@@ -18,6 +18,7 @@ import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
 import episodeMarks from '../../../../core/anime/episodes.js';
+import ConfirmDialog from './ConfirmDialog';
 import { t, tn } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -52,6 +53,7 @@ const formValues = (progress) => ({
   score: progress?.score ? String(progress.score) : '',
   notes: progress?.notes || '',
   audio: progress?.audio_language || '',
+  visibility: progress?.rating_visibility || '',
   subtitle: progress?.subtitle_language || ''
 });
 
@@ -59,7 +61,7 @@ const formValues = (progress) => ({
  * Own progress: counter, status, score, watched languages and note, saved together. A new stored progress (a grid tap,
  * a reload) only replaces the fields whose stored value changed, so an unsaved note or score survives it.
  */
-function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
+function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange }) {
   const ids = useId();
   const seeded = useRef(null);
   if (seeded.current === null) seeded.current = formValues(progress);
@@ -69,13 +71,29 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
   const [notes, setNotes] = useState(seeded.current.notes);
   const [audio, setAudio] = useState(seeded.current.audio);
   const [subtitle, setSubtitle] = useState(seeded.current.subtitle);
+  const [visibility, setVisibility] = useState(seeded.current.visibility);
   useEffect(() => {
     const next = formValues(progress);
     const last = seeded.current;
-    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle };
+    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle, visibility: setVisibility };
     for (const [field, set] of Object.entries(setters)) if (next[field] !== last[field]) set(next[field]);
     seeded.current = next;
   }, [progress]);
+
+  const currentInitial = formValues(progress);
+  const isDirty = Boolean(
+    (episodes !== '' && Number(episodes) !== currentInitial.episodes) ||
+    status !== currentInitial.status ||
+    (score ? String(score) : '') !== currentInitial.score ||
+    (notes.trim() || '') !== currentInitial.notes.trim() ||
+    (audio || '') !== currentInitial.audio ||
+    (subtitle || '') !== currentInitial.subtitle ||
+    (visibility || '') !== currentInitial.visibility
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
   const movie = kindOf(anime) === 'movie';
   const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
@@ -91,6 +109,7 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     if ((notes.trim() || null) !== (progress?.notes ?? null)) change.notes = notes.trim() || null;
     if ((audio || null) !== (progress?.audio_language ?? null)) change.audio_language = audio || null;
     if ((subtitle || null) !== (progress?.subtitle_language ?? null)) change.subtitle_language = subtitle || null;
+    if (visibility && visibility !== (progress?.rating_visibility || '')) change.rating_visibility = visibility;
     if (!progress && !Object.keys(change).length) change.status = status;
     onSave(change);
   };
@@ -121,6 +140,14 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
           <select id={`${ids}-score`} className="input-field text-base sm:text-sm" value={score} onChange={(e) => setScore(e.target.value)}>
             <option value="">–</option>
             {Array.from({ length: 10 }, (_, i) => String(10 - i)).map((v) => <option key={v} value={v}>{v} / 10</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${ids}-visibility`} className="block text-[11px] text-slate-400 mb-1">{t('Meine Bewertung sehen')}</label>
+          <select id={`${ids}-visibility`} className="input-field text-base sm:text-sm" value={visibility || 'public'} onChange={(e) => setVisibility(e.target.value)}>
+            <option value="public">{t('Alle mit Namen')}</option>
+            <option value="anonymous">{t('Alle anonym')}</option>
+            <option value="private">{t('Nur ich')}</option>
           </select>
         </div>
         <WatchLanguageSelect id={`${ids}-audio`} label={t('Gesehen auf')} value={audio} onChange={setAudio} />
@@ -546,6 +573,34 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
   );
 }
 
+/** Named community ratings of one entry as the caller may see them (anonymous ones without a name). */
+function CommunityRatings({ animeId, version }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    if (!animeId) return undefined;
+    const controller = new AbortController();
+    api.get(`/api/anime/${animeId}/ratings`, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setRows(Array.isArray(data?.ratings) ? data.ratings : []); })
+      .catch(() => { if (!controller.signal.aborted) setRows([]); });
+    return () => controller.abort();
+  }, [animeId, version]);
+  const shown = rows.filter((r) => r.score || r.comment);
+  if (!shown.length) return null;
+  return (
+    <ul className="space-y-1 mb-3" aria-label={t('Bewertungen')}>
+      {shown.map((r, i) => (
+        <li key={r.user_id || `anon-${i}`} className="text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">{r.username || t('Anonym')}</span>
+          {r.own && <span className="text-slate-400"> ({t('du')})</span>}
+          {r.score ? <span> {r.score}/10</span> : null}
+          {r.visibility === 'private' && <span className="text-slate-400"> · {t('privat')}</span>}
+          {r.comment && <span className="block text-slate-400 break-words">„{r.comment}“</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Detail of one anime: banner, metadata, description, relations (add or open), everybody's progress, my progress,
  * link to a series, refresh (60 s lock) and delete. `fallback` is the list entry (offline it is all there is).
@@ -561,11 +616,27 @@ export default function AnimeDetailModal({
   const [expanded, setExpanded] = useState(false);
   const [titleDe, setTitleDe] = useState('');
   const [refreshLeft, setRefreshLeft] = useState(0);
+  const [progressDirty, setProgressDirty] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const begin = useLatestRequest();
   const hasFallback = useRef(Boolean(fallback));
   hasFallback.current = Boolean(fallback);
   const titleId = useId();
-  const dialogRef = useDialogA11y(isOpen, { onClose });
+
+  const anime = detail || fallback;
+  const isTitleDirty = Boolean(anime && titleDe.trim() !== (anime.title_de || '').trim());
+  const isDirty = progressDirty || isTitleDirty;
+
+  const requestClose = useCallback(() => {
+    if (isDirty) {
+      setDiscardOpen(true);
+      return;
+    }
+    onClose();
+  }, [isDirty, onClose]);
+
+  const dialogRef = useDialogA11y(isOpen, { onClose: requestClose });
   const latest = useRef(null);
 
   const load = useCallback(async () => {
@@ -589,7 +660,6 @@ export default function AnimeDetailModal({
     load();
   }, [isOpen, load]);
 
-  const anime = detail || fallback;
   useEffect(() => { setTitleDe(anime?.title_de || ''); }, [anime?.title_de]);
 
   useEffect(() => {
@@ -630,7 +700,11 @@ export default function AnimeDetailModal({
   });
 
   const doDelete = () => {
-    if (!confirm(t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) }))) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    setDeleteConfirmOpen(false);
     run(async () => {
       await remove(animeId);
       notify.success(t('Anime gelöscht'));
@@ -707,14 +781,14 @@ export default function AnimeDetailModal({
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') requestClose(); }}
       className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
     >
       <div className="dialog-box glass-panel max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden">
         <div className="relative h-28 sm:h-40 bg-slate-900">
           {anime?.banner_image && <CoverImage src={anime.banner_image} className="w-full h-full object-cover opacity-70" />}
-          <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
+          <button type="button" onClick={requestClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -794,7 +868,7 @@ export default function AnimeDetailModal({
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
                   <OwnProgress key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy || gridBusy}
-                    onRemove={onRemove} />
+                    onRemove={onRemove} onDirtyChange={setProgressDirty} />
                 </section>
               )}
 
@@ -814,6 +888,10 @@ export default function AnimeDetailModal({
               {(anime.progress || anime.progress_users || []).length > 0 && (
                 <section className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{t('Fortschritt aller')}</h3>
+                  {anime.community?.count > 0 && (
+                    <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { count: anime.community.count, average: formatNumber(anime.community.average, 1) })}</p>
+                  )}
+                  <CommunityRatings animeId={anime.id} version={`${anime.community?.count || 0}:${anime.my_progress?.score || 0}:${anime.my_progress?.rating_visibility || ''}`} />
                   <ul className="space-y-1">
                     {(anime.progress || anime.progress_users).map((p) => (
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
@@ -884,6 +962,26 @@ export default function AnimeDetailModal({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={t('Für alle löschen')}
+        message={t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) })}
+        confirmLabel={t('Löschen')}
+        cancelLabel={t('Abbrechen')}
+        busy={busy}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={discardOpen}
+        title={t('Ungespeicherte Änderungen verwerfen?')}
+        message={t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.')}
+        confirmLabel={t('Verwerfen')}
+        cancelLabel={t('Abbrechen')}
+        isDanger
+        onConfirm={() => { setDiscardOpen(false); onClose(); }}
+        onCancel={() => setDiscardOpen(false)}
+      />
     </div>
   );
 }

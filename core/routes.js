@@ -18,9 +18,11 @@ const watch = require('./handlers/watch');
 const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
 const cleanup = require('./handlers/cleanup');
+const shelves = require('./handlers/shelves');
 const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
-const { HttpError, AUTH_TEXTS } = require('./errors');
+const { HttpError, AUTH_TEXTS, notFound } = require('./errors');
+const access = require('./lib/access');
 
 const routes = [
     { method: 'GET', path: '/mangas', role: 'auth', conditional: true, handler: mangas.list },
@@ -34,6 +36,16 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
+    { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
+    { method: 'GET', path: '/shelves', role: 'auth', handler: shelves.list },
+    { method: 'POST', path: '/shelves', role: 'editor', handler: shelves.create },
+    { method: 'GET', path: '/shelves/:id', role: 'auth', handler: shelves.detail },
+    { method: 'PUT', path: '/shelves/:id', role: 'editor', handler: shelves.update },
+    { method: 'DELETE', path: '/shelves/:id', role: 'editor', handler: shelves.remove },
+    { method: 'POST', path: '/shelves/:id/members', role: 'editor', handler: shelves.addMember },
+    { method: 'PUT', path: '/shelves/:id/members/:userId', role: 'editor', handler: shelves.setMemberRole },
+    { method: 'DELETE', path: '/shelves/:id/members/:userId', role: 'auth', handler: shelves.removeMember },
     { method: 'GET', path: '/mangas/:id/gaps', role: 'auth', handler: mangaPassion.gaps },
     { method: 'POST', path: '/mangas/:id/sync-edition', role: 'editor', handler: mangaPassion.syncEdition },
     { method: 'POST', path: '/mangas/:id/batch-import-gaps', role: 'editor', handler: mangaPassion.batchImportGaps },
@@ -95,6 +107,7 @@ const routes = [
     { method: 'PUT', path: '/anime/sync', role: 'editor', handler: anime.syncUpdate },
     { method: 'POST', path: '/anime/sync/run', role: 'editor', handler: anime.syncRun },
     { method: 'GET', path: '/anime/:id', role: 'auth', handler: anime.detail },
+    { method: 'GET', path: '/anime/:id/ratings', role: 'auth', handler: anime.ratings },
     { method: 'PUT', path: '/anime/:id', role: 'editor', handler: anime.update },
     { method: 'DELETE', path: '/anime/:id', role: 'editor', handler: anime.remove },
     { method: 'PUT', path: '/anime/:id/progress', role: 'editor', handler: anime.updateProgress },
@@ -106,6 +119,33 @@ const routes = [
     { method: 'GET', path: '/export/anime.csv', role: 'auth', handler: anime.exportCsv },
     { method: 'GET', path: '/sources/guides', role: 'auth', handler: guidesHandler }
 ];
+
+// Shelf access in front of the handlers: a series or volume of a shelf the caller does not belong to answers 404, a
+// viewer who writes gets 403. Lists filter by shelf inside their handlers; bodies with several ids check them there.
+const GUARDS = [
+    { re: /^\/mangas\/(?!volume-search$)(\d+)(\/|$)/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, row.method === 'GET' ? 'viewer' : 'editor') },
+    { re: /^\/volumes\/(\d+)\/read$/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'viewer') },
+    { re: /^\/volumes\/(\d+)(\/|$)/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'editor') }
+];
+
+for (const row of routes) {
+    const guard = GUARDS.find(g => g.re.test(row.path.replace(/:id/g, '1')));
+    const bodyManga = row.method === 'POST' && (row.path === '/volumes' || row.path === '/volumes/batch');
+    if (!guard && !bodyManga) continue;
+    const handler = row.handler;
+    row.handler = (ctx, input) => {
+        if (guard) {
+            // "1x" or "+1" would skip the check and still reach a handler that parses it to 1
+            if (input.params.id !== undefined) {
+                if (!/^\d+$/.test(String(input.params.id))) throw notFound(row.path.startsWith('/volumes') ? 'Band' : 'Manga');
+                guard.check(ctx, input, row, input.params.id);
+            }
+        } else if (input.body && input.body.manga_id !== undefined) {
+            access.mangaAccess(ctx, input.body.manga_id, 'editor');
+        }
+        return handler(ctx, input);
+    };
+}
 
 const defaultParse = ({ params, query, body }) => ({ params: params || {}, query: query || {}, body: body || {} });
 

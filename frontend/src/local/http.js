@@ -77,7 +77,7 @@ export function createBrowserHttp({ fetchImpl = (...args) => globalThis.fetch(..
       }
       return await read(res);
     } catch (err) {
-      if (controller.signal.aborted) throw new Error('Timeout'); // i18n-ignore
+      if (controller.signal.aborted) throw new Error('Timeout', { cause: err }); // i18n-ignore
       throw err;
     } finally {
       clearTimeout(timer);
@@ -94,7 +94,7 @@ export function createBrowserHttp({ fetchImpl = (...args) => globalThis.fetch(..
     }, { errorBody: true, quiet }),
     async fetchImage(url) {
       let parsed;
-      try { parsed = new URL(url); } catch (_) { throw new Error('Ungültige Bild-URL'); } // i18n-ignore
+      try { parsed = new URL(url); } catch (err) { throw new Error('Ungültige Bild-URL', { cause: err }); } // i18n-ignore
       if (parsed.protocol !== 'https:') throw new Error('Nur https-Adressen sind für Bilder erlaubt'); // i18n-ignore
       return withTimeout(url, IMAGE_TIMEOUT_MS, async (res) => {
         if (Number(res.headers.get('content-length')) > MAX_IMAGE_BYTES) throw new Error('Das Bild ist zu groß'); // i18n-ignore

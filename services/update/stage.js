@@ -38,8 +38,12 @@ function removeDir(dir) {
 
 function closeHandle(rec) {
     if (!rec.handle) return;
-    rec.handle.close().catch(() => {});
+    const h = rec.handle;
+    const dir = rec.dir;
     rec.handle = null;
+    h.close().catch(() => {}).finally(() => {
+        if (current !== rec) removeDir(dir);
+    });
 }
 
 function folderProblem(dir, uid) {

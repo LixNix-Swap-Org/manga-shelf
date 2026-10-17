@@ -99,17 +99,24 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
     const scoresColumn = episodeMarks.storedScores(scores);
     const audio = change.audio_language === undefined ? current.audio_language ?? null : change.audio_language;
     const subtitle = change.subtitle_language === undefined ? current.subtitle_language ?? null : change.subtitle_language;
+    let visibility = change.rating_visibility === undefined ? current.rating_visibility : change.rating_visibility;
+    if (!visibility) {
+        const u = ctx.db.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = ?').get(userId);
+        visibility = (u && u.v) || 'public';
+    }
+    const comment = change.public_comment === undefined ? current.public_comment ?? null : change.public_comment;
     ctx.db.prepare(`
         INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, notes, started_at, finished_at, updated_at, resume_url, resume_episode,
-            audio_language, subtitle_language, watched_episodes, episode_scores)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            audio_language, subtitle_language, watched_episodes, episode_scores, rating_visibility, public_comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (anime_id, user_id) DO UPDATE SET status = excluded.status, episodes_watched = excluded.episodes_watched,
             score = excluded.score, notes = excluded.notes, started_at = excluded.started_at, finished_at = excluded.finished_at,
             updated_at = excluded.updated_at, resume_url = excluded.resume_url, resume_episode = excluded.resume_episode,
             audio_language = excluded.audio_language, subtitle_language = excluded.subtitle_language,
-            watched_episodes = excluded.watched_episodes, episode_scores = excluded.episode_scores
+            watched_episodes = excluded.watched_episodes, episode_scores = excluded.episode_scores,
+            rating_visibility = excluded.rating_visibility, public_comment = excluded.public_comment
     `).run(animeId, userId, status, episodes, change.score === undefined ? current.score : change.score,
-        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn);
+        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn, visibility, comment);
     return readProgress(ctx, animeId, userId);
 }
 

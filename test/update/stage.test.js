@@ -113,6 +113,7 @@ test('openVerified: one handle of the downloaded file, kept only when its bytes 
     const handle = await stage.openVerified(rec, h.sha256hex(Buffer.from('verified bytes')));
     assert.equal(rec.handle, handle);
     fs.writeFileSync(`${stage.assetPath(rec)}.swap`, 'planted bytes');
+    if (process.platform === 'win32') fs.renameSync(stage.assetPath(rec), `${stage.assetPath(rec)}.old`);
     fs.renameSync(`${stage.assetPath(rec)}.swap`, stage.assetPath(rec));
     assert.equal(await sha256Of(handle), h.sha256hex(Buffer.from('verified bytes')));
     stage.discard(rec.id);

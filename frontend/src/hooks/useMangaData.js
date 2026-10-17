@@ -39,6 +39,7 @@ export function buildFormData(data) {
     description: data.description || '',
     cover_image: data.cover_image || '',
     manga_passion_id: data.manga_passion_id || null,
+    shelf_id: data.shelf_id ? String(data.shelf_id) : '',
     wish: normalizeWishPriority(data.wish_priority) !== null,
     wish_priority: String(normalizeWishPriority(data.wish_priority) ?? DEFAULT_WISH_PRIORITY)
   };
@@ -50,7 +51,7 @@ export const lookupMangaUrl = (title, language) =>
 
 /** PUT body of the edit form: the wishlist toggle and its priority become wish_priority (null = not wished). */
 export function updateBody(changed, form) {
-  const { wish, wish_priority: _priority, ...body } = changed;
+  const { wish, wish_priority: _priority, shelf_id: _shelfId, ...body } = changed;
   if (wish !== undefined || _priority !== undefined) {
     body.wish_priority = form.wish ? Number(form.wish_priority) : null;
   }
@@ -339,29 +340,42 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!canEdit) return;
-    const body = updateBody(changedFormFields(formBaseRef.current, formData), formData);
+    const changed = changedFormFields(formBaseRef.current, formData);
+    const nextShelfId = changed.shelf_id !== undefined && Number(changed.shelf_id) > 0 ? Number(changed.shelf_id) : null;
+    const body = updateBody(changed, formData);
+    const hasBodyChanges = Object.keys(body).length > 0;
     const closeForm = () => {
       editSessionRef.current++;
       editingRef.current = false;
       setEditingState(false);
       resetLookup();
     };
-    if (Object.keys(body).length === 0) {
+    if (!hasBodyChanges && !nextShelfId) {
       closeForm();
       seedForm(mangaRef.current);
       return;
     }
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
-      if (res.ok) {
-        closeForm();
-        await fetchManga();
-      } else if (res.status === 401) {
-        handleUnauthorized();
-      } else {
-        await notifyResponseError(res, t('Fehler beim Speichern'));
+      if (nextShelfId) {
+        const shelfRes = await apiFetch(`/api/mangas/${id}/shelf`, { method: 'PUT', body: { shelf_id: nextShelfId } });
+        if (!shelfRes.ok) {
+          if (shelfRes.status === 401) handleUnauthorized();
+          else await notifyResponseError(shelfRes, t('Fehler beim Speichern'));
+          return;
+        }
+        dropCache(ownerRef.current, LIST_KEY);
       }
+      if (hasBodyChanges) {
+        const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
+        if (!res.ok) {
+          if (res.status === 401) handleUnauthorized();
+          else await notifyResponseError(res, t('Fehler beim Speichern'));
+          return;
+        }
+      }
+      closeForm();
+      await fetchManga();
     } catch (err) {
       notify.error(err);
     } finally {
@@ -376,9 +390,9 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     if (list) writeCache(ownerRef.current, LIST_KEY, list.data.filter((m) => String(m.id) !== String(id)));
   };
 
-  const handleDeleteManga = async () => {
+  const handleDeleteManga = async (confirmed = false) => {
     if (!canEdit || !manga) return;
-    if (!confirm(seriesDeleteConfirmText(manga.title))) return;
+    if (!confirmed && !confirm(seriesDeleteConfirmText(manga.title))) return;
     const { title } = manga;
     const seriesId = id;
     try {
@@ -389,7 +403,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
         syncOfflineCopy({ force: true });
-        navigate('/');
+        navigate('/', { replace: true });
         // the page is gone by then: a restored series opens again
         notifyTrashed(`„${title}“`, trashId, (ok) => {
           if (!ok) return;

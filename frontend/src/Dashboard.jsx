@@ -53,6 +53,11 @@ const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
 const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
+const ConfirmDialog = lazy(() => import('./components/modals/ConfirmDialog'));
+const TrashModal = lazy(() => import('./components/modals/TrashModal'));
+const PublishersModal = lazy(() => import('./components/modals/PublishersModal'));
+const ShelvesModal = lazy(() => import('./components/modals/ShelvesModal'));
+const CleanupModal = lazy(() => import('./components/modals/CleanupModal'));
 
 // i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime', episodes: 'Anime-Radar' };
@@ -114,6 +119,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [activeToolModal, setActiveToolModal] = useState(null); // 'shelves' | 'trash' | 'cleanup' | 'publishers' | null
 
   const { isInstallable, isInstalledApp, handleInstallClick } = usePwaInstall();
 
@@ -139,7 +145,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter,
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves,
     otherCurrencyTotals
   } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
@@ -156,7 +162,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
     fetchShoppingList, handleQuickBuy, syncPendingPurchases
-  } = useShoppingList({ user, setNetworkOffline, fetchMangas });
+  } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter });
 
   const {
     radarData, loadingRadar, radarError, radarPublisherFilter, setRadarPublisherFilter, radarStatusFilter, setRadarStatusFilter,
@@ -165,7 +171,16 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     mpPublisherFilter, setMpPublisherFilter, mpPrintOnly, setMpPrintOnly, mpMySeriesOnly, setMpMySeriesOnly, importingMpIds,
     fetchReleaseRadar, handleMarkDelivered, fetchMangaPassionReleases,
     handlePrevMonth, handleNextMonth, handleCurrentMonth, handleImportMangaPassion
-  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline) });
+  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline), shelfFilter });
+
+  const shelfSeen = useRef(shelfFilter);
+  useEffect(() => {
+    if (shelfSeen.current === shelfFilter) return;
+    shelfSeen.current = shelfFilter;
+    if (activeMainView === 'shopping') fetchShoppingList();
+    if (activeMainView === 'radar' && !user?.offline) fetchReleaseRadar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to a changed shelf
+  }, [shelfFilter]);
 
   const anime = useAnimeList({ user });
   const activeViewRef = useRef(activeMainView);
@@ -292,6 +307,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   useDashboardKeyboard({
     showAddModal, setShowAddModal, closeAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
     showRestoreModal, setShowRestoreModal, showPasswordModal, setShowPasswordModal,
+    activeToolModal, closeToolModal: () => setActiveToolModal(null),
     mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
   });
 
@@ -358,7 +374,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     }
     showScanToast('info', t('ISBN {isbn} wird gesucht...', { isbn: scannedCode }), { duration: 0 });
     let res;
-    let data = null;
+    let data;
     try {
       res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`, { timeout: TIMEOUTS.lookup });
       data = await readJson(res); // a proxy 502/504 answers with HTML
@@ -447,14 +463,18 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setShowAddModal(true);
   }, [canEdit]);
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   // stable for the memoised grid
   afterDeleteRef.current = () => {
     fetchShoppingList();
     if (!user?.offline) fetchReleaseRadar();
   };
-  const onDeleteManga = useCallback(async (e, id, title) => {
-    if (await handleDeleteManga(e, id, title)) afterDeleteRef.current();
-  }, [handleDeleteManga]);
+  const onDeleteManga = useCallback((e, id, title) => {
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
+    setDeleteTarget({ id, title });
+  }, []);
 
   const handleOpenPasswordModal = () => {
     setAccountTab('password');
@@ -519,6 +539,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setShowUsersModal(true);
   };
 
+  const handleOpenTool = useCallback((tool) => {
+    setActiveToolModal(tool);
+  }, []);
+
   const handleOpenRestoreModal = () => {
     setShowRestoreModal(true);
   };
@@ -540,6 +564,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         handleOpenRestoreModal={handleOpenRestoreModal}
         handleOpenStats={handleOpenStats}
         handleOpenUsersModal={handleOpenUsersModal}
+        handleOpenTool={handleOpenTool}
         headingRef={headingRef}
         handleOpenPasswordModal={handleOpenPasswordModal}
         isInstallable={isInstallable}
@@ -626,6 +651,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableLanguages={availableLanguages}
           languageFilter={languageFilter}
           setLanguageFilter={setLanguageFilter}
+          availableShelves={availableShelves}
+          shelfFilter={shelfFilter}
+          setShelfFilter={setShelfFilter}
         />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
@@ -909,6 +937,82 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchMangas();
               fetchShoppingList();
               if (!user?.offline) fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {deleteTarget && (
+          <ConfirmDialog
+            isOpen
+            title={t('Manga löschen')}
+            message={t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title: deleteTarget.title })}
+            confirmLabel={t('Löschen')}
+            cancelLabel={t('Abbrechen')}
+            isDanger={true}
+            onConfirm={async () => {
+              const target = deleteTarget;
+              setDeleteTarget(null);
+              if (target && (await handleDeleteManga(null, target.id, target.title, true))) {
+                afterDeleteRef.current();
+              }
+            }}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
+
+        {activeToolModal === 'shelves' && (
+          <ShelvesModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {activeToolModal === 'trash' && (
+          <TrashModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+          />
+        )}
+
+        {activeToolModal === 'cleanup' && (
+          <CleanupModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
+            }}
+            onNavigate={(to) => {
+              setActiveToolModal(null);
+              navigate(to);
+            }}
+            onOpenPublishers={user?.role === 'admin' ? () => setActiveToolModal('publishers') : undefined}
+          />
+        )}
+
+        {activeToolModal === 'publishers' && (
+          <PublishersModal
+            onClose={() => setActiveToolModal(null)}
+            user={user}
+            onChanged={() => {
+              loadPublisherNames({ force: true });
+              fetchMangas();
+              fetchShoppingList();
+              fetchReleaseRadar();
             }}
           />
         )}

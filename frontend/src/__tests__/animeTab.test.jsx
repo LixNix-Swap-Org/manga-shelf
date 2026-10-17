@@ -911,6 +911,26 @@ describe('AnimeDetailModal', () => {
       expect(updateProgress).toHaveBeenCalledWith(1, { episodes_watched: 3 });
     });
 
+    it('closing with unsaved notes asks in a dialog, keeps the dialog on cancel and closes on discard', async () => {
+      const onClose = vi.fn();
+      openEditable(onePiece(), { onClose });
+      await act(async () => {});
+      const notesInput = screen.getByLabelText('Meine Notiz');
+      fireEvent.change(notesInput, { target: { value: 'Neue ungespeicherte Notiz' } });
+
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+      expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+      expect(onClose).toHaveBeenCalled();
+    });
+
     it('"Von meiner Liste entfernen" offers to undo with the removed progress, single marks and ratings included', async () => {
       const shown = [];
       const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });

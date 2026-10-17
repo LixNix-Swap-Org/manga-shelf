@@ -119,7 +119,8 @@ function detectInstallMode(deps = {}) {
         return { mode: 'sea-user', canInstall: true, reason: null, ...base, assetName, restart };
     }
     if (env.P_SERVER_UUID) {
-        const tree = ['index.js', 'package.json'].every((f) => fsx.existsSync(path.join(codeDir, f)));
+        const p = platform === 'win32' ? path.win32 : path.posix;
+        const tree = ['index.js', 'package.json'].every((f) => fsx.existsSync(p.join(codeDir, f)));
         if (!tree || !writable(fsx, codeDir)) return no('pterodactyl', 'code_not_writable', { assetName: ZIP_ASSET });
         return { mode: 'pterodactyl', canInstall: true, reason: null, ...base, assetName: ZIP_ASSET, restart: 'pterodactyl' };
     }

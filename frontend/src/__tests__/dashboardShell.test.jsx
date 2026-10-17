@@ -219,6 +219,41 @@ describe('DashboardHeader', () => {
     expect(document.getElementById('btn-open-csv')).toBeNull();
   });
 
+  it('offers the tools dropdown on desktop and tools entries in the mobile drawer', () => {
+    const handleOpenTool = vi.fn();
+    const { rerender } = renderHeader({ handleOpenTool, mobileMenuOpen: true, user: { id: 1, username: 'anna', role: 'editor' } });
+
+    // Desktop Werkzeuge dropdown
+    const toolsBtn = document.getElementById('btn-open-tools');
+    expect(toolsBtn).toBeTruthy();
+    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
+
+    fireEvent.click(toolsBtn);
+    expect(document.getElementById('tools-dropdown-menu')).toBeTruthy();
+    expect(document.getElementById('btn-menu-shelves')).toBeTruthy();
+    expect(document.getElementById('btn-menu-cleanup')).toBeTruthy();
+    expect(document.getElementById('btn-menu-trash')).toBeTruthy();
+    expect(document.getElementById('btn-menu-publishers')).toBeNull();
+
+    fireEvent.click(document.getElementById('btn-menu-shelves'));
+    expect(handleOpenTool).toHaveBeenCalledWith('shelves');
+    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
+
+    // Mobile drawer items
+    expect(document.getElementById('btn-mobile-menu-shelves')).toBeTruthy();
+    expect(document.getElementById('btn-mobile-menu-cleanup')).toBeTruthy();
+    expect(document.getElementById('btn-mobile-menu-trash')).toBeTruthy();
+    expect(document.getElementById('btn-mobile-menu-publishers')).toBeNull();
+
+    // Admin sees publishers in both
+    rerender(<DashboardHeader {...headerProps({ handleOpenTool, mobileMenuOpen: true, user: { id: 2, username: 'admin', role: 'admin' } })} />);
+    fireEvent.click(document.getElementById('btn-open-tools'));
+    expect(document.getElementById('btn-menu-publishers')).toBeTruthy();
+    expect(document.getElementById('btn-mobile-menu-publishers')).toBeTruthy();
+    fireEvent.click(document.getElementById('btn-menu-publishers'));
+    expect(handleOpenTool).toHaveBeenCalledWith('publishers');
+  });
+
   it('without a server (local mode) users and system are hidden, "Backups" opens the device backup and logout closes the collection', async () => {
     mode.local = true;
     const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true, mobileMenuOpen: true });

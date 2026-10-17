@@ -164,11 +164,11 @@ export default function useMangaList({ user, canEdit, onRestored }) {
    * Returns true when the series was deleted, so the caller can refresh dependent views (badges). The series goes to
    * the trash; the toast offers "Rückgängig" (POST /api/trash/:id/restore).
    */
-  const handleDeleteManga = useCallback(async (e, id, title) => {
+  const handleDeleteManga = useCallback(async (e, id, title, confirmed = false) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     if (!canEditRef.current) return false;
-    if (!confirm(t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title }))) {
+    if (!confirmed && !confirm(t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title }))) {
       return false;
     }
 

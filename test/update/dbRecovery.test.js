@@ -367,9 +367,10 @@ test('with the frozen v3.2.0 prelude, state, swap and constants cached under the
     const live = path.join(ROOT, 'services', 'update');
     const res = child(w.dataDir, `
 const Module = require('module');
+const path = require('path');
 for (const name of ['constants', 'state', 'swap', 'prelude']) {
-    const frozen = require(${JSON.stringify(FROZEN)} + '/' + name + '.js');
-    const file = ${JSON.stringify(live)} + '/' + name + '.js';
+    const frozen = require(path.join(${JSON.stringify(FROZEN)}, name + '.js'));
+    const file = path.join(${JSON.stringify(live)}, name + '.js');
     const m = new Module(file, module);
     m.filename = file;
     m.loaded = true;

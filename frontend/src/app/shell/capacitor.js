@@ -46,7 +46,7 @@ export function createServerStorage(bridge) {
         continue;
       }
       const { tokenRef: _ref, ...server } = entry;
-      let secret = null;
+      let secret;
       try { secret = JSON.parse(await SecureStorage.getItem(TOKEN_PREFIX + server.id) || 'null'); } catch (_) { secret = null; }
       merged.push(secret?.token ? { ...server, token: secret.token, ...(secret.tokenOrigins ? { tokenOrigins: secret.tokenOrigins } : {}) } : server);
     }

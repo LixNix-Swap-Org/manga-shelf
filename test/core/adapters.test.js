@@ -9,6 +9,7 @@ const { applySchema, LATEST_SCHEMA_VERSION } = require('../../core/schema');
 const { dispatch } = require('../../core/routes');
 const { errorAnswer } = require('../../core/errors');
 const { connectionFromSqlJs } = require('../../core/adapters/sqljs');
+const { ensureMembership } = require('../../core/lib/access');
 const { runScenarios } = require('./runScenarios');
 const { USERS, offlineHttp } = require('./harness');
 
@@ -48,6 +49,8 @@ async function createCore(kind) {
     const insert = conn.prepare('INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)');
     for (const u of USERS) insert.run(u.id, u.username, 'not-a-hash', u.role);
     const ctx = createCtx({ db: dbFromConnection(conn), files: memoryFiles(), http: offlineHttp(), config: { appTimeZone: 'Europe/Berlin', appVersion: 'test' } });
+    // the server gives every account its shelf membership when it is created; do the same, in id order
+    for (const u of USERS) ensureMembership({ ...ctx, user: { id: u.id, username: u.username, role: u.role } });
     async function request(user, method, url, body) {
         try {
             const res = await dispatch(withUser(ctx, user), { method, url, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) });

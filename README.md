@@ -272,6 +272,8 @@ The interface switches between five tabs: shelf, shopping list, release radar, a
 * **Backups and restore** (admins): see [section 6](#backups-and-restore).
 * **Trash:** deleted series and volumes can be restored for 30 days (statistics dialog → Trash).
 * **Tidy up:** "Merge publishers" unifies spellings, editable tags, "Tidy up collection" lists incomplete or contradictory entries with one-click fixes.
+* **Shelves:** the household shelf is shared by default. Editors can create more shelves, add members as owner, editor or viewer (statistics dialog → Shelves), and admins can give a new account a shelf of its own (`separate_shelf`). Other people's shelves are invisible, even to server admins. The shelf list has a shelf filter once you see more than one.
+* **Anime ratings:** each rating is public, anonymous or private (default in the account dialog, changeable per anime); the anime detail shows the community average. Notes stay private.
 * **Users and roles:** Admin, Editor, Guest; "End all sessions"; "Connect with app" shows a QR code for the phone apps.
 * **System page** (admins): version, releases and updates ([Updating](#updating)), storage, database, backups, orphaned images, load of the external sources.
 * **Installable web app (PWA)** with a readable offline copy and an offline outbox.

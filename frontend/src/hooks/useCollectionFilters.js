@@ -6,7 +6,7 @@ import { publisherNamesVersion, setPublisherNames, subscribePublisherNames } fro
 import {
   getAvailablePublishers, getFilterCounts, filterAndSortMangas, getCollectionTotals, getStatusTabs,
   sanitizePublisherFilter, isStatusFilter, isSortOption, isCollectFilter, isGroupOption, getCollectCounts, groupMangas,
-  readFilterParams, writeFilterParams, getAvailableTags, parseTagFilter, formatTagFilter, withVolumeSearch, isLanguageFilter, getOtherCurrencyTotals
+  readFilterParams, writeFilterParams, getAvailableTags, parseTagFilter, formatTagFilter, withVolumeSearch, isLanguageFilter, getOtherCurrencyTotals, getAvailableShelves
 } from '../utils/collectionHelpers';
 import { availableLanguages as collectLanguages } from '../utils/editions';
 
@@ -50,7 +50,7 @@ const volumeSearchLoads = new Map();
 
 async function fetchVolumeSearch(owner) {
   const entry = readCache(owner, VOLUME_SEARCH_KEY);
-  let res = null;
+  let res;
   try {
     res = await apiFetch('/api/mangas/volume-search', { headers: revalidateHeaders(entry) });
   } catch (_) {
@@ -112,6 +112,7 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   const [tagFilter, setTagFilter] = useState(() => parseTagFilter(fromUrl.tags ?? readStored('localStorage', TAG_FILTER_KEY, '')));
   const tagKey = formatTagFilter(tagFilter);
   const [languageFilter, setLanguageFilter] = useState(() => fromUrl.lang ?? readStored('localStorage', LANGUAGE_FILTER_KEY, 'ALL', isLanguageFilter));
+  const [shelfFilter, setShelfFilter] = useState(() => readStored('localStorage', 'mangashelf_shelf_filter', 'ALL'));
   const [sortBy, setSortBy] = useState(() => fromUrl.sort ?? readStored('localStorage', 'mangashelf_sort_by', 'title_asc', isSortOption));
   const [groupBy, setGroupBy] = useState(() => fromUrl.group ?? readStored('localStorage', 'mangashelf_group_by', 'none', isGroupOption));
   const [viewMode, setViewMode] = useState(() => readStored('localStorage', 'mangashelf_view_mode', 'grid', (v) => v === 'grid' || v === 'list'));
@@ -139,6 +140,7 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   useEffect(() => { writeStored('localStorage', 'mangashelf_collect_filter', collectFilter); }, [collectFilter]);
   useEffect(() => { writeStored('localStorage', TAG_FILTER_KEY, tagKey); }, [tagKey]);
   useEffect(() => { writeStored('localStorage', LANGUAGE_FILTER_KEY, languageFilter); }, [languageFilter]);
+  useEffect(() => { writeStored('localStorage', 'mangashelf_shelf_filter', shelfFilter); }, [shelfFilter]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_sort_by', sortBy); }, [sortBy]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_group_by', groupBy); }, [groupBy]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_view_mode', viewMode); }, [viewMode]);
@@ -183,6 +185,19 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   const availablePublishers = useMemo(() => getAvailablePublishers(mangas), [mangas, publisherNames]);
   const availableTags = useMemo(() => getAvailableTags(mangas), [mangas]);
   const availableLanguages = useMemo(() => collectLanguages(mangas), [mangas]);
+  // shelves: the chip shows only when the rows come from more than one; names load once from GET /api/shelves
+  const shelfCounts = useMemo(() => getAvailableShelves(mangas), [mangas]);
+  const [shelfNames, setShelfNames] = useState({});
+  useEffect(() => {
+    if (shelfCounts.length < 2 || shelfNames.loaded) return undefined;
+    let alive = true;
+    apiFetch('/api/shelves').then(readJson).then((data) => {
+      if (!alive || !Array.isArray(data?.shelves)) return;
+      setShelfNames({ loaded: true, ...Object.fromEntries(data.shelves.map((s) => [s.id, s.name])) });
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [shelfCounts.length, shelfNames.loaded]);
+  const availableShelves = useMemo(() => shelfCounts.map((s) => ({ ...s, name: shelfNames[s.id] || `#${s.id}` })), [shelfCounts, shelfNames]);
 
   // an empty list is not checked: before the first load it would wipe a valid remembered filter
   useEffect(() => {
@@ -196,15 +211,21 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
     if (!availableLanguages.some((l) => l.code === languageFilter)) setLanguageFilter('ALL');
   }, [loading, mangas.length, availableLanguages, languageFilter]);
 
+  // a remembered shelf the user no longer sees would hide the whole shelf
+  useEffect(() => {
+    if (loading || mangas.length === 0 || shelfFilter === 'ALL') return;
+    if (!shelfCounts.some((s) => String(s.id) === shelfFilter)) setShelfFilter('ALL');
+  }, [loading, mangas.length, shelfCounts, shelfFilter]);
+
   const filterCounts = useMemo(() => getFilterCounts(mangas), [mangas]);
   const collectCounts = useMemo(() => getCollectCounts(mangas), [mangas]);
   const statusTabs = useMemo(() => getStatusTabs(filterCounts, statusFilter), [filterCounts, statusFilter]);
   const { filtered, groups } = useMemo(() => {
-    const list = filterAndSortMangas(searchable, { search: deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagFilter: tagKey, languageFilter });
+    const list = filterAndSortMangas(searchable, { search: deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagFilter: tagKey, languageFilter, shelfFilter });
     const sections = groupMangas(list, groupBy);
     return { filtered: sections.length > 1 ? sections.flatMap(s => s.items) : list, groups: sections };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- publisherNames as above
-  }, [searchable, deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagKey, languageFilter, groupBy, publisherNames]);
+  }, [searchable, deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagKey, languageFilter, shelfFilter, groupBy, publisherNames]);
   const totalSeries = mangas.length;
   const { totalOwnedVolumes, totalCollectionValue, completedSeries } = useMemo(() => getCollectionTotals(mangas), [mangas]);
   const otherCurrencyTotals = useMemo(() => getOtherCurrencyTotals(mangas), [mangas]);
@@ -212,7 +233,7 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   return {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy, viewMode, setViewMode,
     collectFilter, setCollectFilter, authorFilter, setAuthorFilter, tagFilter, setTagFilter, availableTags, groupBy, setGroupBy,
-    languageFilter, setLanguageFilter, availableLanguages, otherCurrencyTotals,
+    languageFilter, setLanguageFilter, availableLanguages, shelfFilter, setShelfFilter, availableShelves, otherCurrencyTotals,
     collectCounts, groups, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries
   };
 }

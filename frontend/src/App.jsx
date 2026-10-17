@@ -18,6 +18,7 @@ import { announceUpdateOutcome } from './utils/updateWatcher';
 import AppErrorBoundary from './AppErrorBoundary';
 import { clearViewState, endViewSession, startViewSession } from './utils/viewState';
 import Toaster from './components/common/Toaster';
+import ConfirmHost from './components/modals/askConfirm';
 import OfflineBanner from './components/common/OfflineBanner';
 import {
   MESSAGES, STARTUP_TIMEOUT_MS, readJson, isLogoutPending, markLogoutPending,
@@ -736,6 +737,7 @@ function App() {
     <>
       <Fragment key={language}>{content}</Fragment>
       <Toaster />
+      <ConfirmHost />
     </>
   );
 }

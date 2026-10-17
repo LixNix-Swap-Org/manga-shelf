@@ -28,6 +28,7 @@ import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
 import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
+import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
 import { rich } from './i18n/react.jsx';
 
@@ -124,11 +125,10 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const addVolumeRef = useRef(null);
 
   // Role permissions (visitor / guest are read-only)
-  const canEdit = user && (user.role === 'admin' || user.role === 'editor');
+  const baseCanEdit = user && (user.role === 'admin' || user.role === 'editor');
 
   const isOffline = Boolean(user?.offline);
   // offline the app makes every user a visitor; editors can still record read/owned toggles (queued in the outbox)
-  const canToggle = Boolean(canEdit || (isOffline && ['admin', 'editor'].includes(user?.realRole)));
 
   const {
     manga, loading, notFound, loadError, refreshError, clearRefreshError,
@@ -138,7 +138,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
     applyEditLookupResult, handleEditLookup,
     fetchManga, handleUpdate, handleDeleteManga, handleCoverUpload, cancelCoverUpload, patchManga,
     canFillTags, fillingTags, handleFillTags
-  } = useMangaData({ id, user, canEdit, onUnauthorized });
+  } = useMangaData({ id, user, canEdit: baseCanEdit, onUnauthorized });
+
+  // A viewer of the series' shelf reads only (the server answers 403 anyway)
+  const { viewer: viewerHere, movableShelves } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline);
+  const canEdit = baseCanEdit && !viewerHere;
+  const canToggle = Boolean(canEdit || (isOffline && ['admin', 'editor'].includes(user?.realRole)));
 
   const volumes = useMemo(() => manga?.volumes || [], [manga?.volumes]);
 
@@ -443,6 +448,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
         {/* Hero Card */}
         <MangaHeroCard
           isOffline={isOffline}
+          viewerShelf={viewerHere}
+          movableShelves={movableShelves}
           applyEditLookupResult={applyEditLookupResult}
           canEdit={canEdit}
           completionPct={completionPct}

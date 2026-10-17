@@ -113,6 +113,7 @@ async function runTestSuite() {
 
     const deleted = waitForApi(page, 'DELETE', /^\/api\/users\/\d+$/);
     await clickSelector(page, 'button[title*="autotest_user"]');
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await deleted).ok(), 'deleting the user failed');
     await page.waitForFunction(() => !document.querySelector('button[title*="autotest_user"]'), { timeout: 10000 });
     const users = await apiOk(page, 'GET', '/api/users');
@@ -316,6 +317,7 @@ async function runTestSuite() {
     const ownedBefore = byNumber(await getVolumes(page, mangaId), '2');
     const bulkDelete = waitForApi(page, 'POST', '/api/volumes/bulk');
     await clickSelector(page, '#btn-bulk-delete');
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await bulkDelete).ok(), 'bulk delete failed');
     volumes = await getVolumes(page, mangaId);
     assert.equal(byNumber(volumes, '2'), undefined, 'Band 2 survived the bulk delete');
@@ -337,7 +339,8 @@ async function runTestSuite() {
     // TEST 7: Delete the series
     console.log('\n--- TEST 7: Delete Created Manga ---');
     const removed = waitForApi(page, 'DELETE', `/api/mangas/${mangaId}`);
-    await clickSelector(page, 'button[title="Reihe löschen"]');
+    await clickSelector(page, '#btn-delete-manga, button[title="Reihe löschen"]');
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await removed).ok(), 'deleting the series failed');
     await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
     assert.equal((await api(page, 'GET', `/api/mangas/${mangaId}`)).status, 404, 'the deleted series is still served');

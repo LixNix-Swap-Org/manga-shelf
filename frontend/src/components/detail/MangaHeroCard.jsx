@@ -17,6 +17,8 @@ import { joinTags, splitTags, tagKey } from '../../utils/tags';
 import { rich } from '../../i18n/react.jsx';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import { t as tr, tn } from '../../i18n/index.js';
+import ConfirmDialog from '../modals/ConfirmDialog';
+import { seriesDeleteConfirmText } from '../../hooks/useMangaData';
 
 // i18n
 const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
@@ -159,6 +161,8 @@ export default function MangaHeroCard({
   editLookupResults,
   editing,
   isOffline,
+  viewerShelf = false,
+  movableShelves = [],
   formData,
   handleCoverUpload,
   handleDeleteManga,
@@ -189,6 +193,7 @@ export default function MangaHeroCard({
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const inRouter = useInRouterContext();
   const ids = useId();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const coverUrl = heroCoverUrl({ manga, formData, editing });
   const authors = splitAuthors(manga.author);
   const seriesTags = splitTags(manga.tags);
@@ -481,6 +486,22 @@ export default function MangaHeroCard({
               onChange={(patch) => setFormData({ ...formData, ...patch })}
             />
 
+            {movableShelves.length > 1 && (
+              <div>
+                <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Regal')}</label>
+                <select
+                  id={`${ids}-shelf`}
+                  className="input-field bg-slate-950"
+                  value={formData.shelf_id || String(manga.shelf_id || '')}
+                  onChange={e => setFormData({ ...formData, shelf_id: e.target.value })}
+                >
+                  {movableShelves.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                 <input
@@ -611,7 +632,7 @@ export default function MangaHeroCard({
                       </button>
                       <button 
                         id="btn-delete-manga"
-                        onClick={handleDeleteManga} 
+                        onClick={() => setConfirmDeleteOpen(true)} 
                         className="btn-danger text-xs flex items-center gap-1.5 py-2 px-3"
                         title={tr('Reihe löschen')}
                         aria-label={tr('Reihe löschen')}
@@ -621,7 +642,7 @@ export default function MangaHeroCard({
                     </>
                   ) : (
                     <span className="text-xs bg-slate-800/80 text-slate-400 px-3 py-1.5 rounded-xl border border-slate-700/60 font-medium">
-                      {isOffline ? tr('Nur Leseansicht (Offline)') : tr('Nur Leseansicht (Gast)')}
+                      {isOffline ? tr('Nur Leseansicht (Offline)') : viewerShelf ? tr('Nur Leseansicht (Betrachter)') : tr('Nur Leseansicht (Gast)')}
                     </span>
                   )}
                 </div>
@@ -764,6 +785,19 @@ export default function MangaHeroCard({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDeleteOpen}
+        title={tr('Reihe löschen')}
+        message={seriesDeleteConfirmText(manga?.title || '')}
+        confirmLabel={tr('Löschen')}
+        cancelLabel={tr('Abbrechen')}
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          handleDeleteManga(true);
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }
