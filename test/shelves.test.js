@@ -240,3 +240,16 @@ test('shelves: readers and owners of a series are the shelf members, not every a
     await anna('POST', `/shelves/${shelf.id}/members`, { username: 'carl', role: 'viewer' });
     assert.deepEqual(await names(anna), [...before, 'carl'].sort());
 });
+
+test('shelves: only an owner of the source shelf can move a series out of it', async () => {
+    const own = await myShelf(anna);
+    const benShelf = await myShelf(ben);
+    const id = (await anna('POST', '/mangas', { title: 'Bleibt hier' })).body.id;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    assert.equal((await ben('PUT', `/mangas/${id}/shelf`, { shelf_id: benShelf.id })).status, 403, 'an editor member cannot take it away');
+    assert.equal((await anna('GET', `/mangas/${id}`)).status, 200, 'the series stays in the owner shelf');
+    await ben('POST', `/shelves/${benShelf.id}/members`, { username: 'anna', role: 'editor' });
+    assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: benShelf.id })).status, 200, 'the owner can move it');
+    await ben('DELETE', `/shelves/${benShelf.id}/members/${annaId}`);
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
