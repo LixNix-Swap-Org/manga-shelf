@@ -316,6 +316,7 @@ async function runTestSuite() {
     const ownedBefore = byNumber(await getVolumes(page, mangaId), '2');
     const bulkDelete = waitForApi(page, 'POST', '/api/volumes/bulk');
     await clickSelector(page, '#btn-bulk-delete');
+    await clickSelector(page, '#confirm-dialog-confirm');
     assert.ok((await bulkDelete).ok(), 'bulk delete failed');
     volumes = await getVolumes(page, mangaId);
     assert.equal(byNumber(volumes, '2'), undefined, 'Band 2 survived the bulk delete');

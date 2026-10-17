@@ -5,6 +5,7 @@ import { localDateString } from '../../hooks/useVolumeActions';
 import { t } from '../../i18n/index.js';
 import { rich } from '../../i18n/react.jsx';
 import { statusLabel } from '../../utils/enumLabels.js';
+import { askConfirm } from '../modals/askConfirm.jsx';
 
 // i18n
 export const BULK_STATUSES = ['Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 'Bestellt'];
@@ -35,7 +36,7 @@ export const bulkDeleteConfirmText = (count) => t('{count} wirklich löschen? De
 // handleBulkEdit shows it as given. `readerId` is the reader whose "Gelesen" state changes (the selected reader when allowed).
 export default function BulkActionBar({
   count, visibleCount, allVisibleSelected, onSelectAllVisible, onClear, onClose, onApply, busy = false, userId, readerId, currency = 'EUR',
-  confirmDelete = (text) => window.confirm(text)
+  confirmDelete = (text) => askConfirm(text, { confirmLabel: t('Löschen') })
 }) {
   const barRef = useRef(null);
   useScrollPaddingAbove(barRef);
@@ -51,8 +52,8 @@ export default function BulkActionBar({
     if (ok) setPanel(null);
   };
   const togglePanel = (name) => setPanel((p) => (p === name ? null : name));
-  const remove = () => {
-    if (confirmDelete(bulkDeleteConfirmText(count))) apply({ delete: true }, t('gelöscht'));
+  const remove = async () => {
+    if (await confirmDelete(bulkDeleteConfirmText(count))) apply({ delete: true }, t('gelöscht'));
   };
 
   const button = 'btn-secondary text-xs py-2 px-3 min-h-[40px] flex shrink-0 items-center gap-1.5 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed';
