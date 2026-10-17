@@ -272,3 +272,25 @@ test('shelves: only an owner of the source shelf can move a series out of it', a
     await ben('DELETE', `/shelves/${benShelf.id}/members/${annaId}`);
     await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
 });
+
+test('shelves: leaving or being removed takes ownership and reading marks of that shelf along', async () => {
+    const own = await myShelf(anna);
+    const id = (await anna('POST', '/mangas', { title: 'Marken-Test' })).body.id;
+    const alone = (await anna('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    const shared = (await anna('POST', '/volumes', { manga_id: id, volume_number: '2', status: 'Fehlt' })).body.id;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    for (const vol of [alone, shared]) {
+        assert.equal((await ben('POST', `/volumes/${vol}/owners`, { owned: true })).status, 200);
+        assert.equal((await ben('POST', `/volumes/${vol}/read`, { read: true })).status, 200);
+    }
+    assert.equal((await anna('POST', `/volumes/${shared}/owners`, { owned: true })).status, 200);
+    assert.equal((await anna('DELETE', `/shelves/${own.id}/members/${benId}`)).status, 200);
+    const volumes = (await anna('GET', `/mangas/${id}`)).body.volumes;
+    const one = volumes.find(v => v.id === alone);
+    const two = volumes.find(v => v.id === shared);
+    assert.equal(one.owners.length, 0, 'no owner left on the volume only ben owned');
+    assert.equal(one.status, 'Fehlt');
+    assert.deepEqual(two.owners.map(o => o.user_id), [annaId], 'the other owner stays');
+    assert.equal(two.status, 'Vorhanden');
+    assert.equal(volumes.some(v => (v.read_users || []).some(r => r.user_id === benId)), false, 'ben reading marks are gone');
+});

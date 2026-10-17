@@ -3,6 +3,7 @@
 const { HttpError, msg, badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const access = require('../lib/access');
+const { syncStatusWithOwners, purchaseDateFromRemainingOwners } = require('../lib/owners');
 
 const ROLES = ['owner', 'editor', 'viewer'];
 const MAX_NAME = 80;
@@ -158,6 +159,22 @@ function setMemberRole(ctx, { params, body }) {
     return { body: { members: membersOf(ctx, id) } };
 }
 
+/**
+ * Whoever leaves a shelf no longer has access to it, so their ownership and reading marks on its volumes go too;
+ * otherwise a volume would keep counting as owned (and read) by someone who cannot see it. A volume that loses its
+ * last owner becomes "Fehlt".
+ */
+function forgetMarks(ctx, shelfId, userId) {
+    const inShelf = 'SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE m.shelf_id = ?';
+    const owned = ctx.db.prepare(`SELECT volume_id FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).all(userId, shelfId).map(r => r.volume_id);
+    ctx.db.prepare(`DELETE FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
+    ctx.db.prepare(`DELETE FROM volume_reads WHERE user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
+    for (const volumeId of owned) {
+        purchaseDateFromRemainingOwners(ctx.db, volumeId);
+        syncStatusWithOwners(ctx.db, volumeId);
+    }
+}
+
 // An owner removes anyone; everybody can leave a shelf themselves.
 function removeMember(ctx, { params }) {
     const { id, userId, member } = memberTarget(ctx, params);
@@ -167,7 +184,10 @@ function removeMember(ctx, { params }) {
     if (member.role === 'owner' && ownerCount(ctx, id) <= 1) {
         throw conflict('Das Regal braucht mindestens einen Eigentümer', 'SHELF_LAST_OWNER');
     }
-    ctx.db.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').run(id, userId);
+    ctx.db.transaction(() => {
+        ctx.db.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').run(id, userId);
+        forgetMarks(ctx, id, userId);
+    });
     return { body: { success: true, members: own ? undefined : membersOf(ctx, id) } };
 }
 
