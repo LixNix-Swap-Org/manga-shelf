@@ -311,7 +311,7 @@ export default function DashboardHeader({
             if (e.target instanceof Element && e.target.closest('button, input[type="file"]')) return;
             searchInputRef.current?.focus();
           }}
-          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[200px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
+          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[150px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
         >
           <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
           <input 
@@ -394,9 +394,10 @@ export default function DashboardHeader({
               aria-haspopup="true"
               className="btn-secondary flex items-center gap-1.5 text-xs text-sky-200 hover:text-white border-sky-500/30 hover:bg-sky-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
               title={t('Werkzeuge: Regale, Aufräumen, Papierkorb')}
+              aria-label={t('Werkzeuge')}
             >
               <Wrench className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
-              <span>{t('Werkzeuge')}</span>
+              <span className="hidden 2xl:inline">{t('Werkzeuge')}</span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${toolsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
