@@ -399,6 +399,28 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
         // anime progress and API keys go with the user (ON DELETE CASCADE)
         db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        // Shelves the user was the last owner of: the deleting admin takes them over (like the volumes above),
+        // otherwise their series would stay behind in a shelf nobody can open. Empty shelves nobody else uses go.
+        const orphaned = db.prepare(`
+            SELECT s.id, s.is_default,
+                   (SELECT count(*) FROM mangas m WHERE m.shelf_id = s.id) AS series,
+                   (SELECT count(*) FROM trash t WHERE t.shelf_id = s.id) AS trashed,
+                   (SELECT count(*) FROM shelf_members o WHERE o.shelf_id = s.id AND o.user_id != ?) AS others
+            FROM shelves s
+            JOIN shelf_members me ON me.shelf_id = s.id AND me.user_id = ? AND me.role = 'owner'
+            WHERE NOT EXISTS (SELECT 1 FROM shelf_members x WHERE x.shelf_id = s.id AND x.role = 'owner' AND x.user_id != ?)
+        `).all(userId, userId, userId);
+        for (const shelf of orphaned) {
+            if (!shelf.is_default && shelf.series === 0 && shelf.trashed === 0 && shelf.others === 0) {
+                db.prepare('DELETE FROM shelves WHERE id = ?').run(shelf.id);
+            } else {
+                db.prepare(`
+                    INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, 'owner')
+                    ON CONFLICT (shelf_id, user_id) DO UPDATE SET role = 'owner'
+                `).run(shelf.id, req.user.id);
+            }
+        }
+        db.prepare('UPDATE shelves SET owner_user_id = ? WHERE owner_user_id = ?').run(req.user.id, userId);
         revokeFeedTokens(db, userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });

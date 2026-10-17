@@ -240,3 +240,22 @@ test('shelves: readers and owners of a series are the shelf members, not every a
     await anna('POST', `/shelves/${shelf.id}/members`, { username: 'carl', role: 'viewer' });
     assert.deepEqual(await names(anna), [...before, 'carl'].sort());
 });
+
+test('shelves: deleting an account hands its shelves to the deleting admin, empty ones go', async () => {
+    const adminId = (await admin('GET', '/auth/me')).body.user.id;
+    const cleo = ctx.client();
+    const cleoId = (await admin('POST', '/users', { username: 'cleo', password: 'password123', role: 'editor', separate_shelf: true })).body.user.id;
+    await cleo('POST', '/auth/login', { username: 'cleo', password: 'password123' });
+    const full = await myShelf(cleo);
+    const seriesId = (await cleo('POST', '/mangas', { title: 'Cleo Only' })).body.id;
+    const empty = (await cleo('POST', '/shelves', { name: 'Leer' })).body.id;
+    assert.equal((await admin('GET', `/mangas/${seriesId}`)).status, 404);
+    assert.equal((await admin('DELETE', `/users/${cleoId}`)).status, 200);
+    const shelves = (await admin('GET', '/shelves')).body.shelves;
+    const kept = shelves.find(s => s.id === full.id);
+    assert.ok(kept, 'the shelf with series survives');
+    assert.equal(kept.role, 'owner');
+    assert.equal(shelves.some(s => s.id === empty), false, 'the empty shelf is removed');
+    assert.equal((await admin('GET', `/mangas/${seriesId}`)).status, 200);
+    assert.ok(adminId);
+});
