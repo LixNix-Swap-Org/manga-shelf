@@ -18,6 +18,7 @@
 - **Shelf role label:** the owner of a shelf is called "Owner" (not "Owners") in the shelves dialog in English, and likewise in the other languages.
 - **Moving a series:** only an owner of the shelf a series is in can move it to another shelf (the target still needs editor rights), so an editor of a shared shelf can no longer take its series away from the owners.
 - **Leaving a shelf:** when a member is removed from a shelf, or leaves it, their ownership and reading marks on that shelf's volumes are removed too, so a volume no longer counts as owned or read by someone who cannot see it; a volume that loses its last owner becomes "Fehlt".
+- **Anime ratings of others:** the anime detail no longer tells other accounts whether somebody rated anonymously or privately; the visibility is only part of your own progress.
 - **"Komplett" and progress:** a series is only complete, and shows 100 %, when you own every regular volume up to the highest one that exists in it. With "Gesamtbände: 3" and a missing volume 4 the card now reads "3 / 4" (75 %) instead of "3 / 3", the series counts for "Mit Lücken" and not for "Komplett". Scripts: `max_regular_number` in `GET /api/mangas` is now the highest regular number of any status (before: owned only), and `completed_series` in `GET /api/stats` follows the same target.
 
 ### Scan
