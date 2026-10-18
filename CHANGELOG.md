@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.1
+
+### App
+- **Cover cache:** the service worker keeps at most 1000 cover images in its uploads cache and drops the oldest first, so the cache no longer grows without limit on phones with large collections.
+
 ## 3.4.0
 
 ### Before updating
