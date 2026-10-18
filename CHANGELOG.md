@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 3.4.0
 
 ### Before updating
 - **Database migrations 29 to 33** run at the first start: `anime_progress.watched_episodes` (single watched episodes), `anime_progress.episode_scores` (ratings of single episodes) and `animes.custom_seasons` (seasons set by hand), shelves (`shelves`, `shelf_members`, `mangas.shelf_id`, `trash.shelf_id`) and the visibility of anime ratings (`anime_progress.rating_visibility`, `public_comment`, `users.default_anime_visibility`). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.3.0 cannot open the migrated database.
