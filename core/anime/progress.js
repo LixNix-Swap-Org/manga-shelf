@@ -14,6 +14,8 @@ function today(ctx) {
 
 const readProgress = (ctx, animeId, userId) => ctx.db.prepare('SELECT * FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(animeId, userId);
 
+const isRated = (score, episodeScores) => (score !== null && score !== undefined) || Object.keys(episodeScores).length > 0;
+
 /**
  * The watched episodes after a change as { now, next }: `now` the stored ones ({ episodes_watched, watched_episodes }, the
  * plain counter when the change sends `watched_episodes: null`), `next` the new ones or null when the change leaves them
@@ -55,6 +57,8 @@ function watchedAfter(current, change, total, monotonic) {
 // lowest unwatched episodes or drops the highest marks. A rated episode is a watched one: the episodes `episode_scores` rates
 // are marked (a lowered counter in the same change still wins), and ratings of episodes not watched afterwards are dropped.
 // `episode_scores` (object episode -> 1..10) replaces the ratings, `null` removes them; above a known episode count dropped.
+// `rating_visibility` is the change's; without one the user's default (users.default_anime_visibility) applies to a new row
+// and to a row that gets its first score or episode score with this change, any other row keeps its visibility.
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
     const anime = ctx.db.prepare('SELECT id, episodes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;
@@ -99,7 +103,9 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
     const scoresColumn = episodeMarks.storedScores(scores);
     const audio = change.audio_language === undefined ? current.audio_language ?? null : change.audio_language;
     const subtitle = change.subtitle_language === undefined ? current.subtitle_language ?? null : change.subtitle_language;
-    let visibility = change.rating_visibility === undefined ? current.rating_visibility : change.rating_visibility;
+    const score = change.score === undefined ? current.score : change.score;
+    const firstRating = !isRated(current.score, episodeMarks.parseScores(current.episode_scores)) && isRated(score, scores);
+    let visibility = change.rating_visibility === undefined && !firstRating ? current.rating_visibility : change.rating_visibility;
     if (!visibility) {
         const u = ctx.db.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = ?').get(userId);
         visibility = (u && u.v) || 'public';
@@ -115,7 +121,7 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
             audio_language = excluded.audio_language, subtitle_language = excluded.subtitle_language,
             watched_episodes = excluded.watched_episodes, episode_scores = excluded.episode_scores,
             rating_visibility = excluded.rating_visibility, public_comment = excluded.public_comment
-    `).run(animeId, userId, status, episodes, change.score === undefined ? current.score : change.score,
+    `).run(animeId, userId, status, episodes, score,
         change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn, visibility, comment);
     return readProgress(ctx, animeId, userId);
 }

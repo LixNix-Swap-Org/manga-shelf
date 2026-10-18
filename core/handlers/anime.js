@@ -1,7 +1,7 @@
 // Anime tab: shared list, progress per user, search and refresh over the gateway
 // (core/anime/gateway.js), adaptations of a series, the CSV export, shared streaming links and the AniList list sync.
 const { qstr } = require('../lib/query');
-const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../errors');
+const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const access = require('../lib/access');
 const { resolveTargetUser } = access;
 const { escapeCell } = require('../csvExchange');
@@ -28,6 +28,7 @@ const SEARCH_KINDS = ['anime', 'tv', 'movie', 'all'];
 const KINDS = ['anime', 'tv', 'movie'];
 const TMDB_KINDS = ['movie', 'tv'];
 const TMDB_LABEL = 'TMDB';
+const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -41,11 +42,13 @@ const ID_ERRORS = {
 };
 const TEXT_TYPE_ERRORS = {
     title_de: 'Ungültiger Wert für Deutscher Titel',
-    notes: 'Ungültiger Wert für Notiz'
+    notes: 'Ungültiger Wert für Notiz',
+    public_comment: 'Ungültiger Wert für Kommentar'
 };
 const TEXT_LENGTH_ERRORS = {
     title_de: 'Deutscher Titel ist zu lang (höchstens {max} Zeichen)',
-    notes: 'Notiz ist zu lang (höchstens {max} Zeichen)'
+    notes: 'Notiz ist zu lang (höchstens {max} Zeichen)',
+    public_comment: 'Kommentar ist zu lang (höchstens {max} Zeichen)'
 };
 
 function parseId(raw, field = 'id') {
@@ -93,6 +96,13 @@ function visibleManga(ctx, mangaId) {
     return manga && access.accessibleShelfIds(ctx).includes(manga.shelf_id) ? { id: manga.id, title: manga.title } : null;
 }
 
+/** Ids of the linked series in shelves the caller can see, for the list (like visibleManga). */
+function visibleMangaIds(ctx) {
+    const scope = access.inShelves('shelf_id', access.accessibleShelfIds(ctx));
+    return new Set(ctx.db.prepare(`SELECT id FROM mangas WHERE id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL) AND ${scope.sql}`)
+        .all(...scope.params).map((r) => r.id));
+}
+
 function mangaRef(ctx, mangaId) {
     if (mangaId === null) return null;
     const manga = ctx.db.prepare('SELECT id, title, shelf_id FROM mangas WHERE id = ?').get(mangaId);
@@ -131,8 +141,10 @@ function detailOf(ctx, id) {
     const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
     const progress = progressRows(ctx, id);
     const mine = progress.find((p) => p.user_id === (ctx.user && ctx.user.id));
+    const manga = row.manga_id ? visibleManga(ctx, row.manga_id) : null;
     return {
         ...entry,
+        manga_id: manga ? manga.id : null,
         ...store.linksOf(row),
         watch: store.watchOf(row, mine, rememberedLinks(ctx, id).get(id)),
         description: row.description,
@@ -140,7 +152,7 @@ function detailOf(ctx, id) {
             ...r,
             in_collection_id: (r.anilist_id && byAni.get(r.anilist_id)?.id) || (r.mal_id && byMal.get(r.mal_id)?.id) || null
         })),
-        manga: row.manga_id ? visibleManga(ctx, row.manga_id) : null,
+        manga,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
         // an anonymous rating still counts in `community` but carries no name here
@@ -232,6 +244,7 @@ function list(ctx) {
     const userId = ctx.user ? ctx.user.id : null;
     const communities = community.communityByAnime(progress);
     const remembered = rememberedLinks(ctx);
+    const visibleLinks = visibleMangaIds(ctx);
     let queued = 0;
     const body = rows.map((row) => {
         const entry = store.entryOf(row, now);
@@ -240,6 +253,7 @@ function list(ctx) {
         const mine = all.find((p) => p.user_id === userId);
         return {
             ...entry,
+            manga_id: visibleLinks.has(entry.manga_id) ? entry.manga_id : null,
             watch: store.watchOf(row, mine, remembered.get(row.id)),
             my_progress: store.progressOf(mine),
             community: communities.get(row.id) || { average: null, count: 0, watchers: 0 },
@@ -473,11 +487,16 @@ function parseScore(value) {
 
 /**
  * Own progress (admins may pass user_id), by the rule of core/anime/progress.js; may lower the counter. The caller's own
- * change goes to their AniList list when the sync is on.
+ * change goes to their AniList list when the sync is on. A rating, its visibility and the comment are only ever the
+ * user's own (403 with another user_id), and the answer for another user shows the row as othersView does.
  */
 function updateProgress(ctx, { params, body }) {
     const id = parseId(params.id);
     const userId = resolveTargetUser(ctx, body.user_id);
+    const forOther = Number(userId) !== Number(ctx.user.id);
+    if (forOther && OWN_RATING_FIELDS.some((field) => body[field] !== undefined)) {
+        throw forbidden('Bewertung, Sichtbarkeit und Kommentar kann nur der Benutzer selbst ändern');
+    }
     if (body.status !== undefined && !PROGRESS_STATUSES.includes(body.status)) {
         throw badRequest(msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(PROGRESS_STATUSES) }));
     }
@@ -516,7 +535,8 @@ function updateProgress(ctx, { params, body }) {
         });
     });
     listSync.schedulePush(ctx, userId, id);
-    return { body: store.progressOf(saved) };
+    const progress = store.progressOf(saved);
+    return { body: forOther ? community.othersView(progress, saved) : progress };
 }
 
 /** `watched_episodes` of PUT progress: undefined (unchanged), null (back to the plain counter) or the watched episode numbers. */
