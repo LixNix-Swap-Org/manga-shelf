@@ -49,6 +49,14 @@ async function remote(session, url) {
     const res = await fetch(`${session.base}/api${url}`, { headers: bearer(session) });
     return { status: res.status, body: await res.json().catch(() => null) };
 }
+async function remotePost(session, url, body) {
+    const res = await fetch(`${session.base}/api${url}`, {
+        method: 'POST', headers: { ...bearer(session), 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => null);
+    assert.ok(res.ok, `POST ${url}: ${JSON.stringify(data)}`);
+    return data;
+}
 
 test.before(async () => {
     if (!READY) return;
@@ -151,6 +159,36 @@ test('a non-admin pulls the offline snapshot: series, volumes and only the own o
     assert.deepEqual(copy.volumes.map((v) => v.owners.map((o) => o.username)), [[], ['lea'], []]);
     assert.equal(copy.cover_image, detail.cover_image);
     assert.ok(await rt.files.read(copy.cover_image.slice('/uploads/'.length)), 'cover loaded');
+    await rt.close();
+});
+
+test('a user with a separate shelf pulls the snapshot: the series land in the device shelf and stay listable', opts, async () => {
+    const { remoteLogin, pullFromServer } = mods.takeover;
+    const admin = await remoteLogin({ url: server.root, username: 'admin', password: PASSWORD });
+    await remotePost(admin, '/users', { username: 'mia', password: PASSWORD, role: 'editor', shelf_mode: 'personal' });
+    const mia = await remoteLogin({ url: server.root, username: 'mia', password: PASSWORD });
+    const { id } = await remotePost(mia, '/mangas', { title: 'Mias Reihe' });
+    await remotePost(mia, '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Vorhanden' });
+    const onServer = (await remote(mia, `/mangas/${id}`)).body;
+    await remotePost(mia, `/volumes/${onServer.volumes[0].id}/read`, {});
+    const listed = (await remote(mia, '/mangas')).body;
+    assert.deepEqual(listed.map((m) => m.title), ['Mias Reihe'], 'only the own shelf on the server');
+    assert.notEqual(listed[0].shelf_id, 1, 'the series sits in a shelf the device does not have');
+
+    const rt = await newRuntime('Mia');
+    const result = await pullFromServer(mia, rt);
+    assert.equal(result.kind, 'snapshot');
+    assert.equal(result.counts.mangas, 1);
+    assert.deepEqual(rt.getContext().db.prepare('SELECT DISTINCT shelf_id FROM mangas').all().map((r) => r.shelf_id), [1]);
+    const { shelves } = await local(rt, 'GET', '/api/shelves');
+    assert.deepEqual(shelves.map((s) => [s.id, s.role, s.series_count]), [[1, 'owner', 1]], 'the profile owns the device shelf');
+    const [manga] = await local(rt, 'GET', '/api/mangas');
+    assert.equal(manga.title, 'Mias Reihe');
+    const copy = await local(rt, 'GET', `/api/mangas/${manga.id}`);
+    assert.deepEqual(copy.volumes.map((v) => v.owners.map((o) => o.username)), [['mia'], ['mia']]);
+    assert.deepEqual(copy.volumes.map((v) => v.read_by), [[mia.user.id], []]);
+    const csv = await local(rt, 'GET', '/api/export/csv');
+    assert.match(csv, /Mias Reihe/, 'the device export carries the series');
     await rt.close();
 });
 
