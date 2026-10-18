@@ -18,6 +18,7 @@ import { rich } from '../../i18n/react.jsx';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import { t as tr, tn } from '../../i18n/index.js';
 import ConfirmDialog from '../modals/ConfirmDialog';
+import { afterDialogEntriesDropped } from '../../hooks/useDialogA11y';
 import { loadShelfMovePreview, seriesDeleteConfirmText, shelfMoveConfirmText } from '../../hooks/useMangaData';
 
 // i18n
@@ -825,7 +826,8 @@ export default function MangaHeroCard({
         cancelLabel={tr('Abbrechen')}
         onConfirm={() => {
           setConfirmDeleteOpen(false);
-          handleDeleteManga(true);
+          // the delete navigates to the collection: only after the confirmation's history entry is gone
+          afterDialogEntriesDropped(() => handleDeleteManga(true));
         }}
         onCancel={() => setConfirmDeleteOpen(false)}
       />
