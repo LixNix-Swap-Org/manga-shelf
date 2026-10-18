@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.1
+
+### Sources
+- **Pause after a 429:** an anime source (AniList, Jikan, MyAnimeList, TMDb) is paused for at most 5 minutes after a 429, whatever `Retry-After` or the reset header says; before, a huge value could block it for hours.
+
 ## 3.4.0
 
 ### Before updating
