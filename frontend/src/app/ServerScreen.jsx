@@ -21,6 +21,7 @@ const LocalOffer = lazy(() => import('./LocalOffer'));
 const LiveScanner = lazy(() => import('../components/common/LiveScanner'));
 import { parseConnectLink, takePendingDeepLink } from './deepLink';
 import LanguageSelect from '../components/common/LanguageSelect';
+import { askConfirm } from '../components/modals/askConfirm';
 import { t } from '../i18n/index.js';
 
 const EMPTY_FORM = { id: null, name: '', urls: '', instanceId: null };
@@ -341,7 +342,8 @@ export default function ServerScreen({ user, onSelect, onUseLocal, onTakeover })
     const lost = !queued ? '' : ` ${server.instanceId
       ? t('{changes} verloren, außer du fügst denselben Server wieder hinzu.', { changes })
       : t('{changes} verloren.', { changes })}`;
-    if (!confirm(t('Server „{name}“ entfernen? Die Anmeldung auf diesem Gerät wird dabei vergessen.{lost}', { name: server.name, lost }))) return;
+    const text = t('Server „{name}“ entfernen? Die Anmeldung auf diesem Gerät wird dabei vergessen.{lost}', { name: server.name, lost });
+    if (!(await askConfirm(text, { title: t('Server entfernen'), confirmLabel: t('Entfernen') }))) return;
     setBusyId(server.id);
     try {
       // an outstanding logout is sent now if the server answers, else given up with the entry

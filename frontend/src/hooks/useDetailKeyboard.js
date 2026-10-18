@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { askConfirm } from '../components/modals/askConfirm';
 import { t } from '../i18n/index.js';
 
 // Space on these is the control's own key; a focused spine (role=button) is the shortcut's target instead
@@ -6,6 +7,9 @@ const CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]:no
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color', 'image']);
 
 const asElement = (target) => (target && typeof target.closest === 'function' ? target : null);
+
+// a confirmation (ConfirmDialog, also the askConfirm one) owns the keyboard while it is open
+const confirmOpen = () => typeof document !== 'undefined' && Boolean(document.querySelector('[role="dialog"][data-confirm]'));
 
 function isTextEntry(target) {
   const el = asElement(target);
@@ -50,8 +54,9 @@ export function resolveVolumeShortcut(e, { shelfActive, modalOpen }) {
 }
 
 /**
- * Escape closes the topmost dialog (one that handles Escape itself calls preventDefault). J / K / Space / E drive
- * the shelf view; Space follows `canToggle` (default canEdit), E follows `canEdit`.
+ * Escape closes the topmost dialog (one that handles Escape itself calls preventDefault); a dirty series form asks
+ * through askConfirm first. J / K / Space / E drive the shelf view; Space follows `canToggle` (default canEdit), E
+ * follows `canEdit`. While a confirmation is open, none of them acts.
  */
 export default function useDetailKeyboard({
   lightboxData, setLightboxData, activeVolume, setActiveVolume, showBatchModal, setShowBatchModal,
@@ -61,7 +66,7 @@ export default function useDetailKeyboard({
   handleOpenEditVolume
 }) {
   const latest = useRef({});
-  latest.current = { isEditDirty, cancelEditing, setEditing };
+  latest.current = { isEditDirty, cancelEditing, setEditing, editing };
 
   // each dialog's state when focus first entered it (the dialog focuses itself on open, before any input)
   const dialogStart = useRef(new WeakMap());
@@ -76,7 +81,7 @@ export default function useDetailKeyboard({
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || confirmOpen()) return;
       if (lightboxData) {
         setLightboxData(null);
         return;
@@ -104,13 +109,22 @@ export default function useDetailKeyboard({
         return;
       }
       if (editing) {
-        const { isEditDirty: dirty, cancelEditing: cancel, setEditing: set } = latest.current;
+        const { isEditDirty: dirty, cancelEditing: cancel } = latest.current;
         if (isTextEntry(e.target) && dirty !== false) return;
+        const discard = () => {
+          const { cancelEditing: cancelNow, setEditing: setNow } = latest.current;
+          if (cancelNow) cancelNow();
+          else setNow(false);
+        };
         // cancelEditing resets the form: without a dirty flag from the caller, ask rather than lose input
         const mayLoseInput = cancel ? dirty !== false : Boolean(dirty);
-        if (mayLoseInput && !confirm(t('Ungespeicherte Änderungen verwerfen?'))) return;
-        if (cancel) cancel();
-        else set(false);
+        if (!mayLoseInput) {
+          discard();
+          return;
+        }
+        askConfirm(t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
+          title: t('Ungespeicherte Änderungen verwerfen?'), confirmLabel: t('Verwerfen')
+        }).then((ok) => { if (ok && latest.current.editing) discard(); });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -144,7 +158,8 @@ export default function useDetailKeyboard({
 
   useEffect(() => {
     const handleVolumeKeyboardNav = (e) => {
-      const modalOpen = Boolean(lightboxData || activeVolume || showBatchModal || showBatchReadModal || fillingGapNumber !== null || showMpEditionModal || editing);
+      const modalOpen = Boolean(lightboxData || activeVolume || showBatchModal || showBatchReadModal || fillingGapNumber !== null || showMpEditionModal || editing)
+        || confirmOpen();
       // without a view mode from the caller, fall back to whether shelf spines are on the page
       const shelfActive = volumeViewMode === undefined ? Boolean(document.querySelector('.manga-spine')) : volumeViewMode === 'spine';
       const action = resolveVolumeShortcut(e, { shelfActive, modalOpen });

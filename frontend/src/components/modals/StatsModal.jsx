@@ -1,5 +1,4 @@
-import { shelfQuery } from '../../utils/shelfScope';
-import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useId, useRef } from 'react';
 import { TrendingUp, Coins, BuildingComplex, BookCheck, X, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library } from 'lucide-react';
 import SpendingCard from './SpendingCard';
 import OwnerStatsCard from './OwnerStatsCard';
@@ -12,7 +11,9 @@ import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { readApiError } from '../../hooks/useVolumeActions';
 import useLatestRequest from '../../hooks/useLatestRequest';
-import { apiFetch, readJson } from '../../utils/api';
+import { apiFetch, isLocalMode, readJson } from '../../utils/api';
+import { shelfQuery } from '../../utils/shelfScope';
+import ShelfScopeBadge from '../common/ShelfScopeBadge';
 import { localISODate } from '../../utils/radarHelpers';
 import { t } from '../../i18n/index.js';
 
@@ -39,8 +40,10 @@ const READER_SERIES_STEP = 30;
 /**
  * Statistics dialog; its footer also opens the collection tools (Papierkorb, Sammlung aufräumen, Verlage for admins)
  * above it. `onDataChanged` runs after a tool changed data (restore, merge, fix), so the caller can reload its lists.
+ * `shelfId`/`shelfName`: the shelf chosen in the collection toolbar narrows the figures (badge with `onClearShelf`);
+ * `onShelfMissing` runs when that shelf answers 404.
  */
-export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
+export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelfId = null, shelfName = null, onClearShelf, onShelfMissing }) {
   const [statsData, setStatsData] = useState(null);
   const [statsError, setStatsError] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
@@ -59,14 +62,23 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
   const [visibleReaderSeries, setVisibleReaderSeries] = useState(READER_SERIES_STEP);
   const titleId = useId();
   const startDateId = useId();
+  const shelfRef = useRef(shelfId);
+  shelfRef.current = shelfId;
+  const shelfMissingRef = useRef(onShelfMissing);
+  shelfMissingRef.current = onShelfMissing;
 
   const fetchStats = useCallback(async () => {
     const { signal, isCurrent } = beginStatsRequest();
     setLoadingStats(true);
     setStatsError(null);
+    const scope = shelfQuery(shelfRef.current);
     try {
-      const res = await apiFetch(`/api/stats${shelfQuery()}`, { signal });
+      const res = await apiFetch(`/api/stats${scope}`, { signal });
       if (!isCurrent()) return;
+      if (res.status === 404 && scope && shelfMissingRef.current) {
+        shelfMissingRef.current();
+        return;
+      }
       if (!res.ok) {
         const message = await readApiError(res, t('Statistiken konnten nicht geladen werden'));
         if (!isCurrent()) return;
@@ -106,6 +118,14 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
     setStatsData(null);
     fetchStats();
   }, [isOpen, fetchStats, beginStatsRequest, beginReaderRequest]);
+
+  // another shelf (or every shelf again) reloads the figures without leaving the tab
+  const shownShelfRef = useRef(shelfId);
+  useEffect(() => {
+    if (shownShelfRef.current === shelfId) return;
+    shownShelfRef.current = shelfId;
+    if (isOpen) fetchStats();
+  }, [shelfId, isOpen, fetchStats]);
 
   const fetchReaderDetailedStats = async (userId) => {
     const { signal, isCurrent } = beginReaderRequest();
@@ -206,6 +226,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
               <p className="text-xs text-slate-400 mt-0.5 short:hidden max-sm:hidden">
                 {t('Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking')}
               </p>
+              <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mt-2" />
             </div>
           </div>
           <button 
@@ -330,7 +351,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
 
                   {statsTab === 'timeline' && (
                     <Suspense fallback={<p className="text-sm text-slate-400 py-8 text-center">{t('Leseverlauf wird geladen…')}</p>}>
-                      <ReadingOverTime readers={readersList} user={user} onNavigate={onClose} />
+                      <ReadingOverTime readers={readersList} user={user} onNavigate={onClose} shelfId={shelfId} />
                     </Suspense>
                   )}
 
@@ -361,9 +382,11 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
             <button id="btn-open-cleanup" type="button" onClick={() => setTool('cleanup')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
               <BrushCleaning className="w-3.5 h-3.5" aria-hidden="true" /> {t('Sammlung aufräumen')}
             </button>
-            <button id="btn-open-shelves" type="button" onClick={() => setTool('shelves')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
-              <Library className="w-3.5 h-3.5" aria-hidden="true" /> {t('Regale')}
-            </button>
+            {!isLocalMode() && (
+              <button id="btn-open-shelves" type="button" onClick={() => setTool('shelves')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
+                <Library className="w-3.5 h-3.5" aria-hidden="true" /> {t('Regale')}
+              </button>
+            )}
             {user?.role === 'admin' && (
               <button id="btn-open-publishers" type="button" onClick={() => setTool('publishers')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
                 <GitMerge className="w-3.5 h-3.5" aria-hidden="true" /> {t('Verlage zusammenführen')}
@@ -383,7 +406,17 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged }) {
       </div>
     </div>
     <Suspense fallback={null}>
-    {tool === 'trash' && <TrashModal onClose={closeTool} user={user} onChanged={toolChangedData} />}
+    {tool === 'trash' && (
+      <TrashModal
+        onClose={closeTool}
+        user={user}
+        onChanged={toolChangedData}
+        shelfId={shelfId}
+        shelfName={shelfName}
+        onClearShelf={onClearShelf}
+        onShelfMissing={onShelfMissing}
+      />
+    )}
     {tool === 'cleanup' && (
       <CleanupModal
         onClose={closeTool}

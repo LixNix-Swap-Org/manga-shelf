@@ -189,9 +189,13 @@ export default function DashboardHeader({
   const [systemOpen, setSystemOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsRef = useRef(null);
+  const toolsButtonRef = useRef(null);
   // without a server: no users, snapshots or system page; the backup entry exports/imports a ZIP on the device
   const local = isLocalMode();
   const showSystemEntry = isAdmin && !local && !user?.offline;
+  // the tools need the server; shelves are shared between accounts, so they mean nothing on the device alone
+  const toolsAvailable = !isOfflineMode && !user?.offline;
+  const showShelvesEntry = toolsAvailable && !local;
   const [backupOpen, setBackupOpen] = useState(false);
   const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
   const logoutLabel = local ? t('Sammlung schließen') : t('Abmelden');
@@ -202,23 +206,35 @@ export default function DashboardHeader({
   let searchPlaceholder = activeMainView === 'shelf' ? t(SEARCH_PLACEHOLDER) : t('In der Sammlung suchen...');
   if (searchOnline) searchPlaceholder = t('Sammlung und online suchen…');
 
+  // a plain disclosure: a click or focus outside closes it; Escape closes it, hands focus back to the trigger and is
+  // consumed (preventDefault), so the dashboard does not also clear the search
   useEffect(() => {
-    if (!toolsOpen) return;
+    if (!toolsOpen) return undefined;
+    const outside = (e) => toolsRef.current && !toolsRef.current.contains(e.target);
     const onDocClick = (e) => {
-      if (toolsRef.current && !toolsRef.current.contains(e.target)) {
-        setToolsOpen(false);
-      }
+      if (outside(e)) setToolsOpen(false);
+    };
+    const onFocusIn = (e) => {
+      if (outside(e)) setToolsOpen(false);
     };
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') setToolsOpen(false);
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      setToolsOpen(false);
+      toolsButtonRef.current?.focus();
     };
     document.addEventListener('pointerdown', onDocClick);
+    document.addEventListener('focusin', onFocusIn);
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('pointerdown', onDocClick);
+      document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [toolsOpen]);
+  useEffect(() => {
+    if (!toolsAvailable) setToolsOpen(false);
+  }, [toolsAvailable]);
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -388,12 +404,14 @@ export default function DashboardHeader({
           <div ref={toolsRef} className="relative">
             <button 
               id="btn-open-tools"
+              ref={toolsButtonRef}
               type="button"
               onClick={() => setToolsOpen(prev => !prev)}
+              disabled={!toolsAvailable}
               aria-expanded={toolsOpen}
-              aria-haspopup="true"
-              className="btn-secondary flex items-center gap-1.5 text-xs text-sky-200 hover:text-white border-sky-500/30 hover:bg-sky-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-              title={t('Werkzeuge: Regale, Aufräumen, Papierkorb')}
+              aria-controls={toolsOpen ? 'tools-dropdown-menu' : undefined}
+              className="btn-secondary flex items-center gap-1.5 text-xs text-sky-200 hover:text-white border-sky-500/30 hover:bg-sky-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+              title={!toolsAvailable ? t('Offline nicht verfügbar') : local ? t('Werkzeuge: Aufräumen, Papierkorb') : t('Werkzeuge: Regale, Aufräumen, Papierkorb')}
               aria-label={t('Werkzeuge')}
             >
               <Wrench className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
@@ -404,31 +422,28 @@ export default function DashboardHeader({
             {toolsOpen && (
               <div
                 id="tools-dropdown-menu"
-                role="menu"
-                aria-orientation="vertical"
-                aria-labelledby="btn-open-tools"
                 className="absolute right-0 top-full mt-2 w-72 rounded-2xl glass-panel border border-slate-700/80 bg-slate-950/95 backdrop-blur-xl p-2 shadow-2xl z-50 animate-fade-in divide-y divide-slate-800/80"
               >
                 <div className="py-1 space-y-1">
-                  <button
-                    id="btn-menu-shelves"
-                    role="menuitem"
-                    type="button"
-                    onClick={() => { setToolsOpen(false); handleOpenTool?.('shelves'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
-                      <Library className="w-4 h-4" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white group-hover:text-teal-300 transition-colors">{t('Regale')}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{t('Regale verwalten & freigeben')}</p>
-                    </div>
-                  </button>
+                  {showShelvesEntry && (
+                    <button
+                      id="btn-menu-shelves"
+                      type="button"
+                      onClick={() => { setToolsOpen(false); handleOpenTool?.('shelves'); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
+                        <Library className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white group-hover:text-teal-300 transition-colors">{t('Regale')}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{t('Regale verwalten & freigeben')}</p>
+                      </div>
+                    </button>
+                  )}
 
                   <button
                     id="btn-menu-cleanup"
-                    role="menuitem"
                     type="button"
                     onClick={() => { setToolsOpen(false); handleOpenTool?.('cleanup'); }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
@@ -444,7 +459,6 @@ export default function DashboardHeader({
 
                   <button
                     id="btn-menu-trash"
-                    role="menuitem"
                     type="button"
                     onClick={() => { setToolsOpen(false); handleOpenTool?.('trash'); }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
@@ -463,7 +477,6 @@ export default function DashboardHeader({
                   <div className="pt-2 pb-1">
                     <button
                       id="btn-menu-publishers"
-                      role="menuitem"
                       type="button"
                       onClick={() => { setToolsOpen(false); handleOpenTool?.('publishers'); }}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
@@ -733,48 +746,52 @@ export default function DashboardHeader({
             </button>
           )}
 
-          <div className="pt-2 border-t border-slate-800/80">
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2 px-1">{t('Werkzeuge & Regale')}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="btn-mobile-menu-shelves"
-                type="button"
-                onClick={() => runFromMenu(() => handleOpenTool?.('shelves'))}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-teal-300 border-teal-500/30"
-              >
-                <Library className="w-4 h-4 text-teal-400" aria-hidden="true" /> {t('Regale')}
-              </button>
+          {toolsAvailable && (
+            <div className="pt-2 border-t border-slate-800/80">
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2 px-1">{showShelvesEntry ? t('Werkzeuge & Regale') : t('Werkzeuge')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {showShelvesEntry && (
+                  <button
+                    id="btn-mobile-menu-shelves"
+                    type="button"
+                    onClick={() => runFromMenu(() => handleOpenTool?.('shelves'))}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-teal-300 border-teal-500/30"
+                  >
+                    <Library className="w-4 h-4 text-teal-400" aria-hidden="true" /> {t('Regale')}
+                  </button>
+                )}
 
-              <button
-                id="btn-mobile-menu-cleanup"
-                type="button"
-                onClick={() => runFromMenu(() => handleOpenTool?.('cleanup'))}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-300 border-amber-500/30"
-              >
-                <BrushCleaning className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Aufräumen')}
-              </button>
-
-              <button
-                id="btn-mobile-menu-trash"
-                type="button"
-                onClick={() => runFromMenu(() => handleOpenTool?.('trash'))}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-rose-300 border-rose-500/30"
-              >
-                <Trash2 className="w-4 h-4 text-rose-400" aria-hidden="true" /> {t('Papierkorb')}
-              </button>
-
-              {isAdmin && (
                 <button
-                  id="btn-mobile-menu-publishers"
+                  id="btn-mobile-menu-cleanup"
                   type="button"
-                  onClick={() => runFromMenu(() => handleOpenTool?.('publishers'))}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-purple-300 border-purple-500/30"
+                  onClick={() => runFromMenu(() => handleOpenTool?.('cleanup'))}
+                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-300 border-amber-500/30"
                 >
-                  <GitMerge className="w-4 h-4 text-purple-400" aria-hidden="true" /> {t('Verlage')}
+                  <BrushCleaning className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Aufräumen')}
                 </button>
-              )}
+
+                <button
+                  id="btn-mobile-menu-trash"
+                  type="button"
+                  onClick={() => runFromMenu(() => handleOpenTool?.('trash'))}
+                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-rose-300 border-rose-500/30"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-400" aria-hidden="true" /> {t('Papierkorb')}
+                </button>
+
+                {isAdmin && (
+                  <button
+                    id="btn-mobile-menu-publishers"
+                    type="button"
+                    onClick={() => runFromMenu(() => handleOpenTool?.('publishers'))}
+                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-purple-300 border-purple-500/30"
+                  >
+                    <GitMerge className="w-4 h-4 text-purple-400" aria-hidden="true" /> {t('Verlage')}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {!user?.offline && (
             <button

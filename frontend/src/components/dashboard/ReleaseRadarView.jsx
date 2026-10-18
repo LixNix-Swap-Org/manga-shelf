@@ -10,6 +10,7 @@ import PersonalFilters from './radar/PersonalFilters';
 import PersonalTimeline from './radar/PersonalTimeline';
 import useRadarDateChanges from './radar/useRadarDateChanges';
 import { filterMpItems, groupMpItemsByDate, mpMatchesSelection, importNotice } from '../../utils/radarHelpers';
+import ShelfScopeBadge from '../common/ShelfScopeBadge';
 import { t } from '../../i18n/index.js';
 
 const NOTICE_MS = 8000;
@@ -53,7 +54,9 @@ export default function ReleaseRadarView({
   importingMpIds,
   handleMarkDelivered,
   markingDeliveredIds,
-  GERMAN_MONTHS
+  GERMAN_MONTHS,
+  shelfName = null,
+  onClearShelf
 }) {
   const [notice, setNotice] = useState(null);
   const dateChanges = useRadarDateChanges({
@@ -110,6 +113,8 @@ export default function ReleaseRadarView({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* only the personal radar follows the shelf; the Manga Passion calendar is the same for everybody */}
+      {shelfName && radarSubView === 'personal' && <ShelfScopeBadge name={shelfName} onClear={onClearShelf} />}
       <RadarTabs
         radarSubView={radarSubView}
         setRadarSubView={setRadarSubView}

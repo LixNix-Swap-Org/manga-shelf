@@ -140,10 +140,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
     canFillTags, fillingTags, handleFillTags
   } = useMangaData({ id, user, canEdit: baseCanEdit, onUnauthorized });
 
-  // A viewer of the series' shelf reads only (the server answers 403 anyway)
-  const { viewer: viewerHere, movableShelves } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline);
+  // A viewer of the series' shelf reads only but keeps their own reading marks (the server answers 403 for the rest)
+  const { viewer: viewerHere, movableShelves } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline, user?.id);
   const canEdit = baseCanEdit && !viewerHere;
-  const canToggle = Boolean(canEdit || (isOffline && ['admin', 'editor'].includes(user?.realRole)));
+  const offlineEditor = isOffline && ['admin', 'editor'].includes(user?.realRole);
+  const canToggle = Boolean(baseCanEdit || offlineEditor);
+  const canToggleOwned = Boolean(canEdit || offlineEditor);
 
   const volumes = useMemo(() => manga?.volumes || [], [manga?.volumes]);
 
@@ -189,7 +191,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
-  } = useVolumeActions({ id, user, canEdit, canToggle, selectedReaderId, fetchManga, patchManga, volumes, onUnauthorized });
+  } = useVolumeActions({ id, user, canEdit, canToggle, canToggleOwned, selectedReaderId, fetchManga, patchManga, volumes, onUnauthorized });
 
   const { lightboxData, setLightboxData, openVolumeGallery } = useVolumeGallery({ manga });
   // the editor follows a refreshed copy of its volume (useVolumeEditForm rebases the untouched fields)
@@ -499,7 +501,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             </div>
 
             {/* Quick Actions */}
-            {canEdit && (
+            {baseCanEdit && (
               <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={() => setShowBatchReadModal(true)} 
@@ -508,12 +510,14 @@ export default function MangaDetail({ user, onUnauthorized }) {
                 >
                   <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
                 </button>
-                <button 
-                  onClick={() => setShowBatchModal(true)} 
-                  className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
-                >
-                  <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
-                </button>
+                {canEdit && (
+                  <button 
+                    onClick={() => setShowBatchModal(true)} 
+                    className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -664,6 +668,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   user={user}
                   canEdit={canEdit}
                   canToggle={canToggle}
+                  canToggleOwned={canToggleOwned}
                   canToggleOthers={canToggleOthers}
                   gapsOfficial={gapsOfficial}
                   selectedReaderId={selectedReaderId}
@@ -682,6 +687,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                 <VolumeGridView
                   canEdit={canEdit}
                   canToggle={canToggle}
+                  canToggleOwned={canToggleOwned}
                   canToggleOthers={canToggleOthers}
                   gapsOfficial={gapsOfficial}
                   displayVolumeItems={displayVolumeItems}

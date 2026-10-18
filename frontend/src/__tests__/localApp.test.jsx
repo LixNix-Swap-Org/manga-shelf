@@ -129,6 +129,9 @@ describe('App without a server (standalone mode)', () => {
     window.history.pushState(null, '', '/server');
     fireEvent.click(screen.getByRole('button', { name: 'Abmelden' }));
     fireEvent.click(await screen.findByRole('button', { name: /Mit Server verbinden/ }));
+    const question = await screen.findByRole('dialog', { name: 'Modus wechseln' });
+    expect(window.confirm).not.toHaveBeenCalled();
+    fireEvent.click(within(question).getByRole('button', { name: 'Verbinden' }));
     expect(await screen.findByRole('heading', { name: 'Server hinzufügen' })).toBeTruthy();
     expect(localStorage.getItem(MODE_KEY)).toBeNull();
     // the local collection stays and is offered again

@@ -13,6 +13,7 @@ import { notify } from '../utils/notify';
 import { haptic } from '../utils/haptics';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
+import { shelfQuery } from '../utils/shelfScope';
 
 async function errorText(res) {
   return serverText(await readJson(res));
@@ -51,10 +52,14 @@ const pendingPurchaseIds = (id) => new Set(getOutbox().list(outboxScope(id)).fil
 /**
  * Shopping list (missing volumes) with offline cache and quick buy. Purchases go through the outbox: made while the
  * server is unreachable they are kept per user and sent later. `user` has `offline: true` in App's offline mode.
+ * `shelfFilter` narrows the list to one shelf; such a list is never stored as the offline copy (the shop mode needs
+ * every shelf), and `onShelfMissing` runs when that shelf answers 404.
  */
-export default function useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter = 'ALL' }) {
+export default function useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter = 'ALL', onShelfMissing }) {
   const shelfRef = useRef(shelfFilter);
   shelfRef.current = shelfFilter;
+  const shelfMissingRef = useRef(onShelfMissing);
+  shelfMissingRef.current = onShelfMissing;
   const userId = user?.id ?? null;
   const [shoppingData, setShoppingData] = useState(() => withoutVolumes(readShoppingCache(), pendingPurchaseIds(userId)));
   const [loadingShopping, setLoadingShopping] = useState(false);
@@ -144,7 +149,12 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
     setLoadingShopping(true);
     try {
       const id = await resolveUserId();
-      const res = await apiFetch(`/api/shopping-list?include_others=1${shelfRef.current !== 'ALL' ? `&shelf_id=${encodeURIComponent(shelfRef.current)}` : ''}`);
+      const scope = shelfQuery(shelfRef.current, '&');
+      const res = await apiFetch(`/api/shopping-list?include_others=1${scope}`);
+      if (res.status === 404 && scope && shelfMissingRef.current) {
+        shelfMissingRef.current();
+        return;
+      }
       if (!res.ok) {
         if (generation === getClearGeneration()) {
           setShoppingError(shoppingErrorKind(res.status));
@@ -161,9 +171,11 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
       setShoppingError(null);
       setShoppingData(visible);
       setNetworkOffline(false);
-      const savedAt = writeShoppingCache(visible, generation);
-      setCacheWriteFailed(!savedAt);
-      if (savedAt) setOfflineLastUpdated(savedAt);
+      if (!scope) {
+        const savedAt = writeShoppingCache(visible, generation);
+        setCacheWriteFailed(!savedAt);
+        if (savedAt) setOfflineLastUpdated(savedAt);
+      }
       if (syncDueRef.current && getOutbox().count(outboxScope(id))) syncPendingPurchases();
     } catch (e) {
       console.warn('Network issue fetching shopping list, using offline cache:', e);

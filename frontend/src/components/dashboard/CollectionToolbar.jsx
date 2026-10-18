@@ -247,6 +247,7 @@ export default function CollectionToolbar({
               setAuthorFilter?.('');
               setTagFilter?.([]);
               setLanguageFilter?.('ALL');
+              setShelfFilter?.('ALL');
               setSearch('');
             }}
             className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"

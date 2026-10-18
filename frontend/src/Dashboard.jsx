@@ -37,6 +37,7 @@ import useSearchScope, { ONLINE_MIN_CHARS } from './hooks/useSearchScope';
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
 import { apiFetch, readJson, TIMEOUTS } from './utils/api';
+import { invalidateShelves } from './utils/shelfScope';
 import { notify } from './utils/notify';
 import { takeReopenAccount } from './i18n/preference.js';
 import { t } from './i18n/index.js';
@@ -146,9 +147,23 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
     groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves,
-    otherCurrencyTotals
-  } = useCollectionFilters(mangas, { loading: loading || refreshing, userId: user?.id, url: filterUrl });
+    shelves, otherCurrencyTotals
+  } = useCollectionFilters(mangas, {
+    loading: loading || refreshing, userId: user?.id, url: filterUrl, shelvesEnabled: !isOfflineMode, loadShelfRoles: canEdit && !isOfflineMode
+  });
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
+  // shelves where the user is a viewer: their series cards offer no delete
+  const readOnlyShelves = useMemo(() => new Set((shelves || []).filter((s) => s.role === 'viewer').map((s) => s.id)), [shelves]);
+  // the chosen shelf narrows statistics, trash, shopping list and radar too; those screens name it and can clear it
+  const scopedShelfId = shelfFilter !== 'ALL' ? shelfFilter : null;
+  const scopedShelfName = scopedShelfId
+    ? (availableShelves.find((s) => String(s.id) === scopedShelfId)?.name || (shelves || []).find((s) => String(s.id) === scopedShelfId)?.name || `#${scopedShelfId}`)
+    : null;
+  const clearShelfScope = useCallback(() => setShelfFilter('ALL'), [setShelfFilter]);
+  const onShelfMissing = useCallback(() => {
+    invalidateShelves();
+    setShelfFilter('ALL');
+  }, [setShelfFilter]);
 
   const lookupAvailable = Boolean(user) && !user.offline && !isOfflineMode;
   const searchScope = useSearchScope({ enabled: lookupAvailable });
@@ -162,7 +177,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
     fetchShoppingList, handleQuickBuy, syncPendingPurchases
-  } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter });
+  } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter, onShelfMissing });
 
   const {
     radarData, loadingRadar, radarError, radarPublisherFilter, setRadarPublisherFilter, radarStatusFilter, setRadarStatusFilter,
@@ -171,14 +186,15 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     mpPublisherFilter, setMpPublisherFilter, mpPrintOnly, setMpPrintOnly, mpMySeriesOnly, setMpMySeriesOnly, importingMpIds,
     fetchReleaseRadar, handleMarkDelivered, fetchMangaPassionReleases,
     handlePrevMonth, handleNextMonth, handleCurrentMonth, handleImportMangaPassion
-  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline), shelfFilter });
+  } = useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline: Boolean(user?.offline), shelfFilter, onShelfMissing });
 
+  // the tab badges count the chosen shelf too, so both lists follow a changed shelf
   const shelfSeen = useRef(shelfFilter);
   useEffect(() => {
     if (shelfSeen.current === shelfFilter) return;
     shelfSeen.current = shelfFilter;
-    if (activeMainView === 'shopping') fetchShoppingList();
-    if (activeMainView === 'radar' && !user?.offline) fetchReleaseRadar();
+    fetchShoppingList();
+    if (!user?.offline) fetchReleaseRadar();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to a changed shelf
   }, [shelfFilter]);
 
@@ -686,6 +702,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           setTagFilter={setTagFilter}
           languageFilter={languageFilter}
           setLanguageFilter={setLanguageFilter}
+          shelfFilter={shelfFilter}
+          setShelfFilter={setShelfFilter}
+          readOnlyShelves={readOnlyShelves}
           onAuthorClick={handleAuthorClick}
           searchExtras={searchExtras}
         />
@@ -716,6 +735,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         pendingPurchases={pendingPurchases}
         failedPurchases={failedPurchases}
         cacheWriteFailed={cacheWriteFailed}
+        shelfName={scopedShelfName}
+        onClearShelf={clearShelfScope}
       />
     )}
 
@@ -802,6 +823,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         handleMarkDelivered={handleMarkDelivered}
         markingDeliveredIds={markingDeliveredIds}
         GERMAN_MONTHS={monthNames('long')}
+        shelfName={scopedShelfName}
+        onClearShelf={clearShelfScope}
       />
     )}
     </main>
@@ -925,6 +948,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               fetchReleaseRadar();
             }}
+            shelfId={scopedShelfId}
+            shelfName={scopedShelfName}
+            onClearShelf={clearShelfScope}
+            onShelfMissing={onShelfMissing}
           />
         )}
 
@@ -983,6 +1010,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               fetchReleaseRadar();
             }}
+            shelfId={scopedShelfId}
+            shelfName={scopedShelfName}
+            onClearShelf={clearShelfScope}
+            onShelfMissing={onShelfMissing}
           />
         )}
 
@@ -996,10 +1027,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               fetchReleaseRadar();
             }}
-            onNavigate={(to) => {
-              setActiveToolModal(null);
-              navigate(to);
-            }}
+            onNavigate={() => setActiveToolModal(null)}
             onOpenPublishers={user?.role === 'admin' ? () => setActiveToolModal('publishers') : undefined}
           />
         )}

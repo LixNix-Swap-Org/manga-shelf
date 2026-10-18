@@ -7,6 +7,7 @@ import api from '../utils/api';
 import SourcesPanel from './SourcesPanel';
 import LanguageSelect from '../components/common/LanguageSelect';
 import { TAKEOVER } from './takeoverTexts';
+import { askConfirm } from '../components/modals/askConfirm';
 import { t } from '../i18n/index.js';
 
 const TakeoverDialog = lazy(() => import('./TakeoverDialog'));
@@ -46,7 +47,8 @@ export default function LocalScreen({ user, notice, onOpen, onReplaced, onTakeov
   };
 
   const leave = async () => {
-    if (!confirm(t('Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.'))) return;
+    const text = t('Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.');
+    if (!(await askConfirm(text, { title: t('Modus wechseln'), confirmLabel: t('Verbinden'), danger: false }))) return;
     toCollection(await onLeave());
   };
 

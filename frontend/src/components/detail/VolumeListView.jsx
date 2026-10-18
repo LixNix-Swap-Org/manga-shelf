@@ -35,6 +35,7 @@ export default function VolumeListView({
   canToggleOthers,
   gapsOfficial,
   canToggle = canEdit,
+  canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
   onSelectVolume
@@ -240,10 +241,10 @@ export default function VolumeListView({
                 <td className="py-2 px-3">
                   <button
                     type="button"
-                    disabled={!canToggle}
-                    onClick={() => canToggle && handleToggleVolume(vol)}
+                    disabled={!canToggleOwned}
+                    onClick={() => canToggleOwned && handleToggleVolume(vol)}
                     className={`hit-44 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                      canToggle ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+                      canToggleOwned ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                     } ${
                       isOwned
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -255,7 +256,7 @@ export default function VolumeListView({
                               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
                               : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                     }`}
-                    title={canToggle ? t('Klicken zum Status umschalten') : ''}
+                    title={canToggleOwned ? t('Klicken zum Status umschalten') : ''}
                     aria-label={t('Status: {status} – {volume}', { status: isOwned ? t('Im Besitz') : statusKind === 'preordered' ? t('Vorbestellt') : statusKind === 'ordered' ? t('Bestellt') : statusKind === 'upcoming' ? t('Erscheint bald') : t('Fehlt'), volume: getVolumeDisplayTitle(vol) })}
                   >
                     {isOwned ? (

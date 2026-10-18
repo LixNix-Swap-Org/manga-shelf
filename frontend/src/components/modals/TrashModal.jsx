@@ -1,5 +1,4 @@
-import { shelfQuery } from '../../utils/shelfScope';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, RotateCcw, Trash2 } from 'lucide-react';
 import ToolDialog from './ToolDialog';
 import CoverImage from '../common/CoverImage';
@@ -7,6 +6,8 @@ import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount, formatDate, formatDateTime } from '../../utils/format';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { shelfQuery } from '../../utils/shelfScope';
+import ShelfScopeBadge from '../common/ShelfScopeBadge';
 import { t, tn } from '../../i18n/index.js';
 
 const sqlTime = (value) => new Date(String(value || '').replace(' ', 'T') + 'Z');
@@ -19,9 +20,10 @@ export function trashEntryLabel(item) {
 
 /**
  * Papierkorb: deleted series and volumes of the last 30 days. Editors restore or delete an entry for good, admins empty
- * the whole trash. `onChanged` runs after every change (the dashboard reloads its lists).
+ * the whole trash. `onChanged` runs after every change (the dashboard reloads its lists). `shelfId`/`shelfName`: the
+ * shelf chosen in the collection toolbar narrows the list (badge with `onClearShelf`); `onShelfMissing` on its 404.
  */
-export default function TrashModal({ onClose, user, onChanged }) {
+export default function TrashModal({ onClose, user, onChanged, shelfId = null, shelfName = null, onClearShelf, onShelfMissing }) {
   const canEdit = Boolean(user) && (user.role === 'admin' || user.role === 'editor');
   const isAdmin = user?.role === 'admin';
   const [data, setData] = useState(null);
@@ -29,14 +31,22 @@ export default function TrashModal({ onClose, user, onChanged }) {
   const [busyId, setBusyId] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
 
+  const shelfMissingRef = useRef(onShelfMissing);
+  shelfMissingRef.current = onShelfMissing;
+
   const load = useCallback(async () => {
     setError(null);
+    const scope = shelfQuery(shelfId);
     try {
-      setData(await api.get(`/api/trash${shelfQuery()}`));
+      setData(await api.get(`/api/trash${scope}`));
     } catch (e) {
+      if (e?.status === 404 && scope && shelfMissingRef.current) {
+        shelfMissingRef.current();
+        return;
+      }
       setError(e?.message || t('Papierkorb konnte nicht geladen werden.'));
     }
-  }, []);
+  }, [shelfId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -89,6 +99,7 @@ export default function TrashModal({ onClose, user, onChanged }) {
         )
       )}
     >
+      <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mb-3" />
       {error ? (
         <div role="alert" className="py-10 text-center space-y-3">
           <p className="text-sm text-rose-300">{error}</p>

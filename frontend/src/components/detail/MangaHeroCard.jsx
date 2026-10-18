@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
 import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
@@ -18,7 +18,7 @@ import { rich } from '../../i18n/react.jsx';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import { t as tr, tn } from '../../i18n/index.js';
 import ConfirmDialog from '../modals/ConfirmDialog';
-import { seriesDeleteConfirmText } from '../../hooks/useMangaData';
+import { loadShelfMovePreview, seriesDeleteConfirmText, shelfMoveConfirmText } from '../../hooks/useMangaData';
 
 // i18n
 const COVER_UPLOAD_TEXT = 'Cover wird hochgeladen…';
@@ -194,6 +194,17 @@ export default function MangaHeroCard({
   const inRouter = useInRouterContext();
   const ids = useId();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // a move deletes the marks of everyone who does not see the target shelf: asked before the choice counts
+  const [shelfMove, setShelfMove] = useState(null);
+  const [checkingMove, setCheckingMove] = useState(false);
+  const moveRequestRef = useRef(0);
+  // leaving the form drops a question that is still loading or open
+  useEffect(() => {
+    if (editing) return;
+    moveRequestRef.current += 1;
+    setShelfMove(null);
+    setCheckingMove(false);
+  }, [editing]);
   const coverUrl = heroCoverUrl({ manga, formData, editing });
   const authors = splitAuthors(manga.author);
   const seriesTags = splitTags(manga.tags);
@@ -205,6 +216,25 @@ export default function MangaHeroCard({
   const handleCoverInput = (e) => {
     handleCoverUpload(e);
     e.target.value = '';
+  };
+  const chooseShelf = async (value) => {
+    const request = ++moveRequestRef.current;
+    if (value === String(manga.shelf_id || '')) {
+      setShelfMove(null);
+      setCheckingMove(false);
+      setFormData((prev) => ({ ...prev, shelf_id: value }));
+      return;
+    }
+    setCheckingMove(true);
+    const affected = await loadShelfMovePreview(manga.id, value);
+    if (request !== moveRequestRef.current) return;
+    setCheckingMove(false);
+    if (Array.isArray(affected) && affected.length === 0) {
+      setFormData((prev) => ({ ...prev, shelf_id: value }));
+      return;
+    }
+    const shelf = movableShelves.find((s) => String(s.id) === value)?.name || `#${value}`;
+    setShelfMove({ shelfId: value, text: shelfMoveConfirmText({ title: manga.title || '', shelf, affected }) });
   };
   const statusOptions = formData.status && !MANGA_STATUSES.includes(formData.status)
     ? [...MANGA_STATUSES, formData.status]
@@ -493,7 +523,8 @@ export default function MangaHeroCard({
                   id={`${ids}-shelf`}
                   className="input-field bg-slate-950"
                   value={formData.shelf_id || String(manga.shelf_id || '')}
-                  onChange={e => setFormData({ ...formData, shelf_id: e.target.value })}
+                  onChange={e => chooseShelf(e.target.value)}
+                  aria-busy={checkingMove || undefined}
                 >
                   {movableShelves.map(s => (
                     <option key={s.id} value={String(s.id)}>{s.name}</option>
@@ -642,7 +673,7 @@ export default function MangaHeroCard({
                     </>
                   ) : (
                     <span className="text-xs bg-slate-800/80 text-slate-400 px-3 py-1.5 rounded-xl border border-slate-700/60 font-medium">
-                      {isOffline ? tr('Nur Leseansicht (Offline)') : viewerShelf ? tr('Nur Leseansicht (Betrachter)') : tr('Nur Leseansicht (Gast)')}
+                      {isOffline ? tr('Nur Leseansicht (Offline)') : viewerShelf ? tr('Nur Leseansicht (Leser)') : tr('Nur Leseansicht (Gast)')}
                     </span>
                   )}
                 </div>
@@ -798,6 +829,21 @@ export default function MangaHeroCard({
         }}
         onCancel={() => setConfirmDeleteOpen(false)}
       />
+      {shelfMove && (
+        <ConfirmDialog
+          isOpen
+          title={tr('Reihe verschieben')}
+          message={shelfMove.text}
+          confirmLabel={tr('Verschieben')}
+          cancelLabel={tr('Abbrechen')}
+          onConfirm={() => {
+            const { shelfId } = shelfMove;
+            setShelfMove(null);
+            setFormData((prev) => ({ ...prev, shelf_id: shelfId }));
+          }}
+          onCancel={() => setShelfMove(null)}
+        />
+      )}
     </div>
   );
 }

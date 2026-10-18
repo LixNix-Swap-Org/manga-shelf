@@ -13,6 +13,8 @@ import { prepareImageForUpload } from '../utils/imageResize';
 import { DEFAULT_WISH_PRIORITY, normalizeWishPriority } from '../utils/priority';
 import { t } from '../i18n/index.js';
 import { editionCurrency, editionLanguage, editionRegion, isMpEdition } from '../utils/editions';
+import { formatCount } from '../utils/format';
+import { invalidateShelves } from '../utils/shelfScope';
 
 // i18n
 export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
@@ -96,6 +98,32 @@ export function changedFormFields(base, current) {
 
 export const seriesDeleteConfirmText = (title) =>
   t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title });
+
+/**
+ * Users whose ownership and reading marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
+ * [{ user_id, username, owned, read }], or null when the server cannot say (older server, no connection).
+ */
+export async function loadShelfMovePreview(mangaId, shelfId) {
+  try {
+    const res = await apiFetch(`/api/mangas/${encodeURIComponent(mangaId)}/shelf-move?shelf_id=${encodeURIComponent(shelfId)}`);
+    if (!res.ok) return null;
+    const data = await readJson(res);
+    return Array.isArray(data?.affected) ? data.affected : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The question before a move; `affected` as from loadShelfMovePreview (null: generic text). */
+export function shelfMoveConfirmText({ title, shelf, affected }) {
+  if (!Array.isArray(affected)) {
+    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf });
+  }
+  const people = affected
+    .map((a) => t('{name} ({owned} im Besitz, {read} gelesen)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') }))
+    .join(', ');
+  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
+}
 
 /** "Genres nachladen": only for a German series linked to Manga Passion that has no tags yet (MP knows only German editions). */
 export const canFillTags = (manga) => isMpEdition(manga) && Boolean(manga?.manga_passion_id) && !String(manga?.tags ?? '').trim();
@@ -310,6 +338,8 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
           }
         } else if (res && res.status === 404) {
           dropCache(ownerRef.current, key);
+          // the series may have moved to a shelf this user does not see
+          invalidateShelves();
           setNotFound(true);
           return;
         } else if (res && res.status === 401) {
@@ -365,6 +395,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
           return;
         }
         dropCache(ownerRef.current, LIST_KEY);
+        invalidateShelves();
       }
       if (hasBodyChanges) {
         const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });

@@ -6,6 +6,7 @@ import api from '../../../utils/api';
 import useLatestRequest from '../../../hooks/useLatestRequest';
 import { countLabel, fmtNumber, monthLabel, monthShort } from '../statsFormat';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
+import { shelfQuery } from '../../../utils/shelfScope';
 import { t, tn } from '../../../i18n/index.js';
 
 const readSummary = (m, sep = ' · ') => `${monthLabel(m.month)}: ${countLabel(m.volumes, 'Band', 'Bände')}${sep}${countLabel(m.pages, 'Seite', 'Seiten')}`;
@@ -46,9 +47,10 @@ function MonthBars({ months, value, label, color, activeColor, describe }) {
 
 /**
  * Reading over time (GET /api/stats/reading): reads per month, backlog (owned minus read), this vs last year, streaks
- * and the "Weiterlesen" list. `readers` are the users of /api/stats (user_reading_stats) for the reader select.
+ * and the "Weiterlesen" list. `readers` are the users of /api/stats (user_reading_stats) for the reader select; `shelfId`
+ * narrows it to one shelf like the overview.
  */
-export default function ReadingOverTime({ readers = [], user, onNavigate }) {
+export default function ReadingOverTime({ readers = [], user, onNavigate, shelfId = null }) {
   const [userId, setUserId] = useState(user?.id ?? null);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -58,11 +60,11 @@ export default function ReadingOverTime({ readers = [], user, onNavigate }) {
   useEffect(() => {
     const { signal, isCurrent } = begin();
     setError(null);
-    const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+    const query = userId ? `?user_id=${encodeURIComponent(userId)}${shelfQuery(shelfId, '&')}` : shelfQuery(shelfId);
     api.get(`/api/stats/reading${query}`, { signal })
       .then((body) => { if (isCurrent()) setData(body); })
       .catch((e) => { if (isCurrent() && e?.name !== 'AbortError') setError(e?.message || t('Leseverlauf konnte nicht geladen werden.')); });
-  }, [userId, begin]);
+  }, [userId, begin, shelfId]);
 
   if (error) return <p role="alert" className="text-sm text-rose-300 py-8 text-center">{error}</p>;
   if (!data) return <p role="status" className="text-sm text-slate-400 py-8 text-center">{t('Leseverlauf wird geladen…')}</p>;

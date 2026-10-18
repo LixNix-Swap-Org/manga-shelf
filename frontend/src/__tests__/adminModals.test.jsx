@@ -482,7 +482,7 @@ describe('UserManagementModal', () => {
     expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
     await screen.findByText(/Benutzer "redakteur" erfolgreich angelegt/);
-    expect(posts[0]).toEqual({ username: 'redakteur', password: 'langes-passwort', role: 'editor', shelf_mode: 'personal' });
+    expect(posts[0]).toEqual({ username: 'redakteur', password: 'langes-passwort', role: 'editor', shelf_mode: 'household' });
 
     fill('chefin');
     fireEvent.change(screen.getByRole('combobox', { name: 'Rolle' }), { target: { value: 'admin' } });
@@ -502,7 +502,7 @@ describe('UserManagementModal', () => {
     fireEvent.change(field, { target: { value: 'richtig-123' } });
     fireEvent.click(screen.getByRole('button', { name: /Benutzer erstellen/ }));
     await screen.findByText(/Benutzer "chefin" erfolgreich angelegt/);
-    expect(posts[2]).toEqual({ username: 'chefin', password: 'langes-passwort', role: 'admin', current_password: 'richtig-123', shelf_mode: 'personal' });
+    expect(posts[2]).toEqual({ username: 'chefin', password: 'langes-passwort', role: 'admin', current_password: 'richtig-123', shelf_mode: 'household' });
     expect(screen.queryByLabelText('Passwort zur Bestätigung')).toBeNull();
   });
 
@@ -618,7 +618,7 @@ describe('UserManagementModal', () => {
 
     const deleteButton = await screen.findByTitle('Benutzer "erika" löschen');
     fireEvent.click(deleteButton);
-    expect((await screen.findByRole('dialog', { name: 'Benutzer erika löschen' })).textContent).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an dich über/);
+    expect((await screen.findByRole('dialog', { name: 'Benutzer erika löschen' })).textContent).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Besitzer oder ein anderes Mitglied ihres Regals über\. Ist dort niemand mehr, gelten sie als „Fehlt“/);
     fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Fehler beim Löschen des Benutzers');
     expect(screen.getByRole('status').textContent).toBe('');

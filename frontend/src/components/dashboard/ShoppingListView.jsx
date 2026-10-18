@@ -17,6 +17,7 @@ import { notify } from '../../utils/notify';
 import { formatCount, formatEuro, formatMoney, formatNumber } from '../../utils/format';
 import LanguagePill from '../common/LanguagePill';
 import OtherCurrencies from '../common/OtherCurrencies';
+import ShelfScopeBadge from '../common/ShelfScopeBadge';
 import { editionCurrency } from '../../utils/editions';
 import { createSearch, naturalCollator } from '../../utils/search';
 import { buildShareText, canShareText, groupByPublisher, itemText, publisherLabel, shareText, summaryText } from '../../utils/shareList';
@@ -212,7 +213,9 @@ export default function ShoppingListView({
   handleQuickBuy,
   buyingId,
   buyingIds = null,
-  user = null
+  user = null,
+  shelfName = null,
+  onClearShelf
 }) {
   const userId = user?.id ?? null;
   const items = useMemo(() => shoppingData?.items || [], [shoppingData]);
@@ -782,6 +785,7 @@ export default function ShoppingListView({
             <p className="text-xs text-slate-400 mt-0.5">
               {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
             </p>
+            <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mt-2" />
           </div>
         </div>
 

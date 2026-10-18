@@ -1,8 +1,11 @@
 // Covers the anime tab: card, view, detail modal and add modal.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { useEffect, useState } from 'react';
 import { render, screen, fireEvent, waitFor, act, renderHook, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, useLocation } from 'react-router-dom';
+import { HISTORY_STATE_KEY } from '../hooks/useDialogA11y';
 import { fakeResponse } from './fakeResponse';
+import { clearDataCache } from '../utils/dataCache';
 import AnimeCard from '../components/dashboard/AnimeCard';
 import AnimeView, { watchLastText } from '../components/dashboard/AnimeView';
 import AnimeDetailModal from '../components/modals/AnimeDetailModal';
@@ -931,12 +934,18 @@ describe('AnimeDetailModal', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('"Von meiner Liste entfernen" offers to undo with the removed progress, single marks and ratings included', async () => {
+    it('"Von meiner Liste entfernen" offers to undo with the removed progress, single marks, ratings, visibility and comment included', async () => {
       const shown = [];
       const stop = subscribeToasts((e) => { if (e.type === 'show') shown.push(e.toast); });
       const updateProgress = vi.fn(async () => ({ status: 'Schaue' }));
       const removeFromMyList = vi.fn(async () => true);
-      const marked = () => ({ ...onePiece(), my_progress: { ...onePiece().my_progress, episodes_watched: 3, watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 } } });
+      const marked = () => ({
+        ...onePiece(),
+        my_progress: {
+          ...onePiece().my_progress, episodes_watched: 3, watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 },
+          rating_visibility: 'anonymous', public_comment: 'Bester Arc'
+        }
+      });
       const fetchDetail = vi.fn(async () => marked());
       try {
         openEditable(marked(), { updateProgress, removeFromMyList, fetchDetail });
@@ -948,7 +957,7 @@ describe('AnimeDetailModal', () => {
         await act(async () => { await shown[0].action.onClick(); });
         expect(updateProgress).toHaveBeenCalledWith(1, {
           status: 'Schaue', episodes_watched: 3, score: 9, notes: 'Arc 3', audio_language: 'ja', subtitle_language: 'de',
-          watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 }, restore: true
+          watched_episodes: [1, 2, 5], episode_scores: { 2: 7, 5: 9 }, rating_visibility: 'anonymous', public_comment: 'Bester Arc', restore: true
         });
         expect(fetchDetail.mock.calls.length).toBe(loads + 1);
       } finally {
@@ -1276,6 +1285,271 @@ describe('AnimeDetailModal', () => {
   });
 });
 
+describe('AnimeDetailModal: ratings with other accounts', () => {
+  const ME = 1;
+  const mine = (over = {}) => ({
+    user_id: ME, status: 'Schaue', episodes_watched: 7, score: null, notes: null, episode_scores: {}, rating_visibility: 'public', public_comment: null, ...over
+  });
+  const shared = ({ my_progress: own, ...over } = {}) => entry({
+    my_progress: mine(own),
+    progress: [
+      { user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: own?.score ?? null },
+      { user_id: 2, username: 'anna', status: 'Gesehen', episodes_watched: 12, score: 8, episode_scores: {} }
+    ],
+    community: { average: 8, count: 1, watchers: 2, episodes: {} },
+    ...over
+  });
+  const RATINGS = { ratings: [{ user_id: 2, username: 'anna', score: 8, comment: 'Schön', visibility: 'public', own: false }] };
+
+  let fetchMock;
+  beforeEach(() => {
+    fetchMock = vi.fn(async (url) => {
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      if (url === '/api/auth/me') return fakeResponse(200, { user: { id: ME, username: 'felix', default_anime_visibility: 'anonymous' } });
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => { clearDataCache(); });
+
+  function Where() {
+    const location = useLocation();
+    return <p data-testid="where">{location.pathname}</p>;
+  }
+  const openShared = (anime, props = {}) => render(
+    <MemoryRouter initialEntries={['/']}>
+      <Where />
+      <AnimeDetailModal isOpen animeId={anime.id} fallback={anime} onClose={vi.fn()} canEdit
+        fetchDetail={vi.fn(async () => anime)} updateProgress={vi.fn(async () => ({}))} removeFromMyList={vi.fn(async () => true)} update={vi.fn()}
+        refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} {...props} />
+    </MemoryRouter>
+  );
+  const save = async () => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fortschritt speichern' })); }); };
+
+  it('before the first rating the visibility shows the account default; untouched it is no unsaved change', async () => {
+    const onClose = vi.fn();
+    openShared(shared(), { defaultVisibility: 'private', onClose });
+    await act(async () => {});
+    expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('private');
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a picked and reverted visibility is no unsaved change either', async () => {
+    const onClose = vi.fn();
+    openShared(shared(), { defaultVisibility: 'private', onClose });
+    await act(async () => {});
+    const select = screen.getByLabelText('Meine Bewertung sehen');
+    fireEvent.change(select, { target: { value: 'public' } });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    fireEvent.change(select, { target: { value: 'private' } });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('the first rating goes out with the shown visibility, also when it equals the stored one', async () => {
+    const updateProgress = vi.fn(async () => ({}));
+    const { unmount } = openShared(shared(), { defaultVisibility: 'private', updateProgress });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '9' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 9, rating_visibility: 'private' });
+    unmount();
+
+    openShared(shared(), { defaultVisibility: 'public', updateProgress });
+    await act(async () => {});
+    expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('public');
+    fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '6' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 6, rating_visibility: 'public' });
+  });
+
+  it('without the prop the default comes from GET /api/auth/me (user.default_anime_visibility), asked once', async () => {
+    const updateProgress = vi.fn(async () => ({}));
+    const { unmount } = openShared(shared(), { updateProgress });
+    await waitFor(() => expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('anonymous'));
+    fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '7' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 7, rating_visibility: 'anonymous' });
+    unmount();
+    openShared(shared());
+    await act(async () => {});
+    expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('anonymous');
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(1);
+  });
+
+  it('a first episode rating in the grid goes out with the shown visibility', async () => {
+    const updateProgress = vi.fn(async (id, change) => mine({ episode_scores: change.episode_scores }));
+    openShared(shared(), { defaultVisibility: 'anonymous', updateProgress });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Folgen bewerten' }));
+    const grid = screen.getByRole('list', { name: 'Folgen 1–12' });
+    fireEvent.click(within(grid).getByRole('button', { name: 'Folge 3' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Folge 3 bewerten' })).getByRole('button', { name: '8' }));
+    await waitFor(() => expect(updateProgress).toHaveBeenCalledWith(1, expect.objectContaining({ episode_scores: { 3: 8 }, rating_visibility: 'anonymous' })), { timeout: 3000 });
+  });
+
+  it('a rated entry shows its stored visibility; the comment (at most 500 characters) is saved with the progress', async () => {
+    const updateProgress = vi.fn(async () => ({}));
+    openShared(shared({ my_progress: { score: 7, rating_visibility: 'anonymous', public_comment: 'Gut' } }), { defaultVisibility: 'private', updateProgress });
+    await act(async () => {});
+    expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('anonymous');
+    const comment = screen.getByLabelText('Kommentar zur Bewertung');
+    expect(comment.value).toBe('Gut');
+    expect(comment.getAttribute('maxLength')).toBe('500');
+    fireEvent.change(comment, { target: { value: '  Sehr gut ' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { public_comment: 'Sehr gut' });
+    fireEvent.change(comment, { target: { value: '' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { public_comment: null });
+  });
+
+  it('"Fortschritt aller" lists status and progress only; the scores are in the community line and the ratings', async () => {
+    openShared(shared());
+    await act(async () => {});
+    const section = screen.getByRole('heading', { name: 'Fortschritt aller' }).closest('section');
+    expect(within(section).getByText('Community: Ø 8 / 10 aus 1 Bewertung')).toBeTruthy();
+    const ratings = await within(section).findByRole('list', { name: 'Bewertungen' });
+    expect(ratings.textContent).toContain('anna 8/10');
+    const rows = within(section).getAllByRole('listitem').filter((li) => !ratings.contains(li));
+    expect(rows.map((li) => li.textContent)).toEqual(['felixSchaue7 / 12', 'annaGesehen12 / 12']);
+  });
+
+  it('a single account: no visibility, no comment, no community block, and a first rating sends no visibility', async () => {
+    const updateProgress = vi.fn(async () => ({}));
+    const alone = entry({
+      my_progress: mine({ score: null }),
+      progress: [{ user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: null }],
+      community: { average: 9, count: 1, watchers: 1, episodes: {} }
+    });
+    const rated = openShared({ ...alone, my_progress: { ...alone.my_progress, score: 9 } }, { defaultVisibility: 'private' });
+    await act(async () => {});
+    expect(screen.queryByLabelText('Meine Bewertung sehen')).toBeNull();
+    expect(screen.queryByLabelText('Kommentar zur Bewertung')).toBeNull();
+    expect(screen.queryByText(/^Community:/)).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Bewertungen' })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/ratings') || url === '/api/auth/me')).toBe(false);
+    rated.unmount();
+
+    openShared({ ...alone, community: { average: null, count: 0, watchers: 1, episodes: {} } }, { updateProgress });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '9' } });
+    await save();
+    expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 9 });
+  });
+
+  it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
+    const onOpenAnime = vi.fn();
+    const linked = () => shared({
+      manga: { id: 3, title: 'Frieren Manga' },
+      relations: [{ kind: 'ANIME', relation: 'SEQUEL', title: 'Frieren 2', anilist_id: 2, in_collection_id: 9 }]
+    });
+    const dirty = openShared(linked(), { defaultVisibility: 'public', onOpenAnime });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Meine Notiz'), { target: { value: 'Ungespeichert' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Öffnen' }));
+    expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    expect(onOpenAnime).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Öffnen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    expect(onOpenAnime).toHaveBeenCalledWith(9);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Frieren Manga' }));
+    expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe('/');
+    fireEvent.click(screen.getByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/manga/3'));
+    dirty.unmount();
+
+    openShared(linked(), { defaultVisibility: 'public' });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('link', { name: 'Frieren Manga' }));
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+    expect(screen.getByTestId('where').textContent).toBe('/manga/3');
+  });
+
+  it('closing while the save of that input runs does not ask', async () => {
+    let finish;
+    const updateProgress = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const onClose = vi.fn();
+    openShared(shared(), { defaultVisibility: 'public', updateProgress, onClose });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Meine Notiz'), { target: { value: 'Wird gespeichert' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Fortschritt speichern' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({}); });
+  });
+
+  it('the series link after the discard question: one Back from the series page leaves no entry of the closed dialog', async () => {
+    window.history.replaceState(null, '', '/');
+    const anime = shared({ manga: { id: 3, title: 'Frieren Manga' } });
+    // like the dashboard: leaving the page closes the dialog for good
+    function Page() {
+      const { pathname } = useLocation();
+      const [left, setLeft] = useState(false);
+      useEffect(() => { if (pathname !== '/') setLeft(true); }, [pathname]);
+      return (
+        <>
+          <p data-testid="where">{pathname}</p>
+          <AnimeDetailModal isOpen={!left && pathname === '/'} animeId={1} fallback={anime} onClose={vi.fn()} canEdit defaultVisibility="public"
+            fetchDetail={vi.fn(async () => anime)} updateProgress={vi.fn(async () => ({}))} removeFromMyList={vi.fn()} update={vi.fn()}
+            refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} />
+        </>
+      );
+    }
+    render(<BrowserRouter><Page /></BrowserRouter>);
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Meine Notiz'), { target: { value: 'Meine Notiz geändert' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Frieren Manga' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/manga/3'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+
+    const landed = new Promise((resolve) => window.addEventListener('popstate', (e) => resolve(e.state), { once: true }));
+    act(() => { window.history.back(); });
+    const state = await landed;
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/'));
+    expect(state?.[HISTORY_STATE_KEY]).toBeUndefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a save that ends after "Öffnen" switched the entry leaves the opened entry on screen', async () => {
+    let finish;
+    const updateProgress = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const first = shared({ title: 'Erste Staffel', relations: [{ kind: 'ANIME', relation: 'SEQUEL', title: 'Zweite Staffel', anilist_id: 2, in_collection_id: 9 }] });
+    const second = shared({ id: 9, title: 'Zweite Staffel' });
+    const fetchDetail = vi.fn(async (id) => (id === 9 ? second : first));
+    function Host() {
+      const [id, setId] = useState(1);
+      return (
+        <AnimeDetailModal isOpen animeId={id} fallback={id === 9 ? second : first} onClose={vi.fn()} canEdit defaultVisibility="public"
+          fetchDetail={fetchDetail} updateProgress={updateProgress} removeFromMyList={vi.fn()} update={vi.fn()}
+          refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={setId} />
+      );
+    }
+    render(<MemoryRouter><Host /></MemoryRouter>);
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Meine Notiz'), { target: { value: 'Neu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Fortschritt speichern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Öffnen' }));
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+    await act(async () => {});
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Zweite Staffel');
+
+    await act(async () => { finish({}); });
+    expect(updateProgress).toHaveBeenCalledWith(1, { notes: 'Neu' });
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Zweite Staffel');
+    expect(fetchDetail.mock.calls.map(([id]) => id)).toEqual([1, 9]);
+  });
+});
 
 describe('films and TV shows', () => {
   const SOURCES = {

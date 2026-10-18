@@ -58,6 +58,7 @@ import Dashboard from '../Dashboard';
 import Toaster from '../components/common/Toaster';
 import { fakeResponse, htmlResponse } from './fakeResponse';
 import { buildShareLink, receiveDeepLink } from '../app/deepLink';
+import { clearShelves } from '../utils/shelfScope';
 
 const json = (status, body) => fakeResponse(status, body);
 
@@ -298,12 +299,22 @@ describe('Dashboard', () => {
     expect(await screen.findByText('Anlegen-Dialog leer')).toBeTruthy();
   });
 
-  it('a delete refreshes the shopping and radar badges', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
+  it('a delete asks first; the confirmed one refreshes the shopping and radar badges', async () => {
     renderDashboard('/');
+    state.shopping.fetchShoppingList.mockClear();
+    state.radar.fetchReleaseRadar.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Naruto löschen' }));
+    let question = await screen.findByRole('dialog', { name: 'Manga löschen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Abbrechen' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Manga löschen' })).toBeNull());
+    expect(state.mangaList.handleDeleteManga).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Naruto löschen' }));
+    question = await screen.findByRole('dialog', { name: 'Manga löschen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Löschen' }));
     await waitFor(() => expect(state.shopping.fetchShoppingList).toHaveBeenCalled());
     expect(state.radar.fetchReleaseRadar).toHaveBeenCalled();
+    expect(state.mangaList.handleDeleteManga).toHaveBeenCalledWith(null, 1, 'Naruto', true);
   });
 
   it('editors open the CSV dialog from the header; a closed dialog is not mounted', async () => {
@@ -537,5 +548,80 @@ describe('Dashboard: shelf filters in the URL', () => {
     fireEvent.change(screen.getByLabelText('Gruppieren'), { target: { value: 'none' } });
     await waitFor(() => expect(currentUrl()).toBe('/'));
     expect(sections()).toHaveLength(0);
+  });
+});
+
+describe('Dashboard: shelves and the tools menu', () => {
+  const rows = [
+    { id: 1, title: 'Naruto', status: 'Laufend', owned_volumes: 1, regular_owned: 1, shelf_id: 1 },
+    { id: 2, title: 'Dandadan', status: 'Laufend', owned_volumes: 1, regular_owned: 1, shelf_id: 3 }
+  ];
+  const shelvesAnswer = { shelves: [{ id: 1, name: 'Familie', role: 'owner', is_default: true }, { id: 3, name: 'Zweites', role: 'viewer', is_default: false }] };
+  const quality = {
+    generated_at: '2026-10-04T00:00:00Z', today: '2026-10-04', limit: 50,
+    checks: [{ id: 'series_without_cover', count: 1, items: [{ id: 2, title: 'Dandadan', publisher: null }] }]
+  };
+  const shown = () => ['Naruto', 'Dandadan'].filter((title) => screen.queryAllByText(title).length > 0);
+
+  beforeEach(() => {
+    clearShelves();
+    state.mangaList = { ...state.mangaList, mangas: rows };
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const path = String(url);
+      if (path === '/api/shelves') return json(200, shelvesAnswer);
+      if (path.endsWith('/api/maintenance/quality')) return json(200, quality);
+      return json(404, { error: 'unbekannt' });
+    }));
+  });
+
+  it('a series link in "Sammlung aufräumen" opened from the tools closes the dialog and opens the series', async () => {
+    renderDashboard('/');
+    fireEvent.click(document.getElementById('btn-open-tools'));
+    fireEvent.click(document.getElementById('btn-menu-cleanup'));
+    const dialog = await screen.findByRole('dialog', { name: /Sammlung aufräumen/ });
+    fireEvent.click(within(dialog).getByRole('link', { name: 'Dandadan' }));
+    await waitFor(() => expect(currentUrl()).toBe('/manga/2'));
+    expect(screen.getByText('Detailseite')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: /Sammlung aufräumen/ })).toBeNull();
+  });
+
+  it('the shelf chip narrows the shelf and the lists; "Zurücksetzen" and a missing shelf go back to every shelf', async () => {
+    renderDashboard('/');
+    const chip = await screen.findByLabelText('Regal filtern');
+    await waitFor(() => expect([...chip.options].map((o) => o.textContent)).toEqual(['Alle Regale', 'Familie (1)', 'Zweites (1)']));
+    fireEvent.change(chip, { target: { value: '3' } });
+    expect(shown()).toEqual(['Dandadan']);
+    expect(state.shoppingCalls.at(-1).shelfFilter).toBe('3');
+    expect(state.radarCalls.at(-1).shelfFilter).toBe('3');
+    expect(state.shopping.fetchShoppingList).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filter und Suche zurücksetzen' }));
+    expect(screen.getByLabelText('Regal filtern').value).toBe('ALL');
+    expect(shown()).toEqual(['Naruto', 'Dandadan']);
+
+    fireEvent.change(screen.getByLabelText('Regal filtern'), { target: { value: '3' } });
+    act(() => state.shoppingCalls.at(-1).onShelfMissing());
+    expect(screen.getByLabelText('Regal filtern').value).toBe('ALL');
+  });
+
+  it('series of a shelf where the user is a viewer offer no delete', async () => {
+    renderDashboard('/');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Dandadan löschen' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Naruto löschen' })).toBeTruthy();
+  });
+
+  it('Escape closes the tools menu, hands focus back and leaves the search alone', () => {
+    renderDashboard('/');
+    const search = document.getElementById('main-search-input');
+    fireEvent.change(search, { target: { value: 'Nar' } });
+    const tools = document.getElementById('btn-open-tools');
+    fireEvent.click(tools);
+    const item = document.getElementById('btn-menu-cleanup');
+    item.focus();
+    expect(document.getElementById('tools-dropdown-menu').getAttribute('role')).toBeNull();
+    fireEvent.keyDown(item, { key: 'Escape' });
+    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
+    expect(document.activeElement).toBe(tools);
+    expect(search.value).toBe('Nar');
   });
 });

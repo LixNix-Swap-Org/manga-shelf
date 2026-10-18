@@ -8,6 +8,7 @@ import { notify, notifyResponseError } from '../utils/notify';
 import useLatestRequest from './useLatestRequest';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
+import { shelfQuery } from '../utils/shelfScope';
 
 // i18n
 const RADAR_LOAD_ERROR = 'Release-Radar konnte nicht geladen werden';
@@ -21,9 +22,11 @@ const errorText = async (res, fallback) => {
 };
 
 /** Release radar: personal pre-orders / upcoming volumes and the Manga-Passion monthly calendar. */
-export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline = false, shelfFilter = 'ALL' }) {
+export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, fetchShoppingList, offline = false, shelfFilter = 'ALL', onShelfMissing }) {
   const shelfRef = useRef(shelfFilter);
   shelfRef.current = shelfFilter;
+  const shelfMissingRef = useRef(onShelfMissing);
+  shelfMissingRef.current = onShelfMissing;
   const [radarData, setRadarData] = useState(null);
   const [loadingRadar, setLoadingRadar] = useState(false);
   const [radarError, setRadarError] = useState(null);
@@ -58,8 +61,13 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
     const { signal, isCurrent } = beginRadarRequest();
     setLoadingRadar(true);
     try {
-      const res = await apiFetch(`/api/release-radar${shelfRef.current !== 'ALL' ? `?shelf_id=${encodeURIComponent(shelfRef.current)}` : ''}`, { signal });
+      const scope = shelfQuery(shelfRef.current);
+      const res = await apiFetch(`/api/release-radar${scope}`, { signal });
       if (!isCurrent()) return;
+      if (res.status === 404 && scope && shelfMissingRef.current) {
+        shelfMissingRef.current();
+        return;
+      }
       if (!res.ok) {
         const message = await errorText(res, t(RADAR_LOAD_ERROR));
         if (isCurrent()) setRadarError(message);

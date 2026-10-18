@@ -254,6 +254,28 @@ describe('DashboardHeader', () => {
     expect(handleOpenTool).toHaveBeenCalledWith('publishers');
   });
 
+  it('the tools are plain buttons; "Regale" is gone on the device alone, and offline there are no tools', () => {
+    const user = { id: 1, username: 'anna', role: 'editor' };
+    const { rerender } = renderHeader({ mobileMenuOpen: true, user });
+    fireEvent.click(document.getElementById('btn-open-tools'));
+    expect(document.querySelectorAll('[role="menu"], [role="menuitem"]')).toHaveLength(0);
+    expect(document.getElementById('btn-open-tools').getAttribute('aria-controls')).toBe('tools-dropdown-menu');
+
+    mode.local = true;
+    rerender(<DashboardHeader {...headerProps({ mobileMenuOpen: true, user: { ...user, local: true } })} />);
+    expect(document.getElementById('btn-menu-shelves')).toBeNull();
+    expect(document.getElementById('btn-menu-cleanup')).toBeTruthy();
+    expect(document.getElementById('btn-mobile-menu-shelves')).toBeNull();
+    expect(document.getElementById('btn-mobile-menu-trash')).toBeTruthy();
+
+    mode.local = false;
+    rerender(<DashboardHeader {...headerProps({ mobileMenuOpen: true, isOfflineMode: true, user: { ...user, offline: true } })} />);
+    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
+    expect(document.getElementById('btn-open-tools').disabled).toBe(true);
+    expect(document.getElementById('btn-mobile-menu-cleanup')).toBeNull();
+    expect(document.getElementById('btn-mobile-menu-shelves')).toBeNull();
+  });
+
   it('without a server (local mode) users and system are hidden, "Backups" opens the device backup and logout closes the collection', async () => {
     mode.local = true;
     const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true, mobileMenuOpen: true });
