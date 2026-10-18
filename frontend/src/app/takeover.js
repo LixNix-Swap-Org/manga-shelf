@@ -142,15 +142,17 @@ function insertRow(conn, table, columns, row) {
     .run(...keys.map((k) => (row[k] === undefined ? null : row[k])));
 }
 
-// computed by buildMangaDetail or the triggers, never copied: owned_volumes is counted again by the volume inserts
-const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value']);
+// computed by buildMangaDetail or the triggers, never copied: owned_volumes is counted again by the volume inserts,
+// and the device has only its own shelf 1, which the trigger gives every series without shelf_id
+const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id']);
 const SKIP_VOLUME = new Set(['number_sort', 'owners', 'owned_by_me', 'read_users', 'read_by', 'is_read']);
 const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));
 const hasText = (v) => typeof v === 'string' && v.trim() !== '';
 
 /**
  * Fills a database from a non-admin's offline snapshot: series, volumes, and the snapshot user's ownership, reads and
- * profile. Other users' ownership is absent, so a volume only they own counts as missing.
+ * profile. Other users' ownership is absent, so a volume only they own counts as missing. Every series lands in the
+ * device's shelf 1, whichever server shelves it came from.
  */
 export function fillFromSnapshot(conn, snapshot) {
   const me = snapshot.user;

@@ -352,7 +352,7 @@ test('GET /system: installs that cannot replace themselves get structured instru
     assert.ok(['deb', 'rpm', 'package'].includes((await admin('GET', '/system')).body.update.install.instructions.kind));
 
     assert.deepEqual(system.startOptions(['start', '--port', '8080', '--host=0.0.0.0', '--data-dir', 'rel/data', '--no-console', '--log-file', '--port']), ['--port', '8080', '--host', '0.0.0.0', '--data-dir', path.resolve('rel/data'), '--no-console', '--log-file']);
-    assert.deepEqual(system.startOptions(['--no-console', '--data-dir=/srv/d', '--log-file'], { forService: true }), ['--data-dir', '/srv/d']);
+    assert.deepEqual(system.startOptions(['--no-console', '--data-dir=/srv/d', '--log-file'], { forService: true }), ['--data-dir', path.resolve('/srv/d')]);
     assert.deepEqual(system.startOptions(['--port', '--host', 'h']), ['--host', 'h']);
 });
 

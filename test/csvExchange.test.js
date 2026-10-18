@@ -498,10 +498,17 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
 
         await t.test('Besitzer mit Komma im Namen und unbekannte Besitzer', async () => {
             wipe();
-            const insertUser = db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, 'x', 'editor')");
-            const anna = Number(insertUser.run('Anna').lastInsertRowid);
-            insertUser.run('Ben');
-            const annaBen = Number(insertUser.run('Anna, Ben').lastInsertRowid);
+            // owners resolve against the members of the target shelf (the household shelf here)
+            const insert = db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, 'x', 'editor')");
+            const join = db.prepare("INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (1, ?, 'editor')");
+            const insertUser = (name) => {
+                const id = Number(insert.run(name).lastInsertRowid);
+                join.run(id);
+                return id;
+            };
+            const anna = insertUser('Anna');
+            insertUser('Ben');
+            const annaBen = insertUser('Anna, Ben');
             const res = (await admin('POST', '/import/csv', {
                 csv: 'Reihe;Bandnummer;Besitzer\nKomma;1;"Anna, Ben"\nKomma;2;"Anna, Ben| anna |Niemand"\n'
             })).body;
@@ -515,6 +522,38 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             wipe();
             await admin('POST', '/import/csv', { csv });
             assert.deepEqual(owners('1'), [annaBen]);
+        });
+
+        await t.test('Mitglieder des Zielregals gewinnen jeden Namen, andere Konten zählen nur ohne passendes Mitglied', async () => {
+            wipe();
+            const insert = db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, 'x', 'editor')");
+            const join = db.prepare("INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (1, ?, 'editor')");
+            const member = (name) => {
+                const id = Number(insert.run(name).lastInsertRowid);
+                join.run(id);
+                return id;
+            };
+            const outsider = (name) => Number(insert.run(name).lastInsertRowid);
+            // the UNIQUE index folds ASCII only, so both exist; matchKey folds them alike
+            const oemer = member('ömer');
+            outsider('Ömer');
+            const jo = member('Jo');
+            const ann = member('Ann');
+            outsider('Jo, Ann');
+            outsider('Udo');
+            const res = (await admin('POST', '/import/csv', {
+                csv: 'Reihe;Bandnummer;Status;Besitzer;Gelesen von\nVorrang;1;Vorhanden;Ömer;Ömer\nVorrang;2;Vorhanden;"Jo, Ann";\nVorrang;3;Vorhanden;Udo;Udo\n'
+            })).body;
+            assert.deepEqual(res.warnings, [
+                { line: 4, message: 'Besitzer „Udo“ gehört nicht zu diesem Regal (ignoriert)' },
+                { line: 4, message: 'Leser „Udo“ gehört nicht zu diesem Regal (ignoriert)' }
+            ]);
+            const marks = (table, num) => db.prepare(`SELECT t.user_id FROM ${table} t JOIN volumes v ON v.id = t.volume_id
+                JOIN mangas m ON m.id = v.manga_id WHERE m.title = 'Vorrang' AND v.volume_number = ? ORDER BY t.user_id`).all(num).map(r => r.user_id);
+            assert.deepEqual([marks('volume_owners', '1'), marks('volume_reads', '1')], [[oemer], [oemer]], 'the member spelled in another case wins the exact non-member');
+            assert.deepEqual(marks('volume_owners', '2'), [jo, ann].sort((a, b) => a - b), 'two members win the longer name of a non-member');
+            const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
+            assert.deepEqual([marks('volume_owners', '3'), marks('volume_reads', '3')], [[adminId], []]);
         });
 
         await t.test('Fehlerhafte Zeilen vorhandener Bände zählen als übersprungen', async () => {

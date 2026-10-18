@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, ExternalLink, ListOrdered, Minus, Play, Plus, RefreshCw, Sparkles, Star, Trash, Tv, X } from 'lucide-react';
-import useDialogA11y from '../../hooks/useDialogA11y';
+import useDialogA11y, { afterDialogEntriesDropped, dialogEntryOnTop } from '../../hooks/useDialogA11y';
 import useLatestRequest from '../../hooks/useLatestRequest';
+import useAccountDefaults from '../../hooks/useAccountDefaults';
 import CoverImage from '../common/CoverImage';
 import { langFor } from '../common/lang';
 import { openLinkOutside } from '../../app/openExternal';
-import { isAbortError } from '../../utils/api';
+import api, { isAbortError } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { compareNatural } from '../../utils/search';
 import {
@@ -18,6 +19,7 @@ import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editions';
 import episodeMarks from '../../../../core/anime/episodes.js';
+import ConfirmDialog from './ConfirmDialog';
 import { t, tn } from '../../i18n/index.js';
 
 const REFRESH_LOCK_MS = 60 * 1000;
@@ -45,37 +47,86 @@ function WatchLanguageSelect({ id, label, value, onChange }) {
   );
 }
 
-/** The form values of a stored progress. */
-const formValues = (progress) => ({
+const MAX_PUBLIC_COMMENT = 500;
+
+/** Whether a stored progress carries a rating (a score or an episode score), as core/anime/progress.js counts it. */
+const isRated = (progress) => Boolean(progress)
+  && ((progress.score !== null && progress.score !== undefined) || Object.keys(episodeMarks.parseScores(progress.episode_scores)).length > 0);
+
+/**
+ * The form values of a stored progress. The visibility shown is the stored one once the progress is rated; before the
+ * first rating it is the account default, which the server gives a first rating sent without a visibility.
+ */
+const formValues = (progress, defaultVisibility) => ({
   episodes: progress?.episodes_watched ?? 0,
   status: progress?.status || 'Geplant', // i18n-ignore: stored value
   score: progress?.score ? String(progress.score) : '',
   notes: progress?.notes || '',
   audio: progress?.audio_language || '',
+  visibility: (isRated(progress) ? progress.rating_visibility : defaultVisibility || progress?.rating_visibility) || 'public',
+  comment: progress?.public_comment || '',
   subtitle: progress?.subtitle_language || ''
 });
 
 /**
- * Own progress: counter, status, score, watched languages and note, saved together. A new stored progress (a grid tap,
- * a reload) only replaces the fields whose stored value changed, so an unsaved note or score survives it.
+ * Whether anybody else is in this entry: another account's progress, or community ratings beyond the own one. Without
+ * them (a single account) the visibility, the comment and the community block stay hidden.
  */
-function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
+function sharedWithOthers(anime) {
+  const rows = anime.progress || anime.progress_users || [];
+  const mine = anime.my_progress;
+  const others = mine?.user_id !== undefined && mine?.user_id !== null
+    ? rows.filter((p) => p.user_id !== mine.user_id).length
+    : rows.length - (mine ? 1 : 0);
+  const ownCounted = mine?.score && mine.rating_visibility !== 'private' ? 1 : 0;
+  return others > 0 || (anime.community?.count || 0) > ownCounted;
+}
+
+/**
+ * Own progress: counter, status, score, watched languages and note, saved together; with other accounts (`sharing`)
+ * also who sees the rating and a comment on it. A new stored progress (a grid tap, a reload) only replaces the fields
+ * whose stored value changed, so an unsaved note or score survives it; a visibility picked meanwhile survives too.
+ * A first rating goes out with the shown visibility; `visibilityRef` gets `{ id, value }` of it for the episode grid
+ * (null while the shown value is only a guess: account default unknown, nothing picked, nothing rated).
+ */
+function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, defaultVisibility = null, sharing = false, visibilityRef }) {
   const ids = useId();
   const seeded = useRef(null);
-  if (seeded.current === null) seeded.current = formValues(progress);
+  if (seeded.current === null) seeded.current = formValues(progress, defaultVisibility);
   const [episodes, setEpisodes] = useState(seeded.current.episodes);
   const [status, setStatus] = useState(seeded.current.status);
   const [score, setScore] = useState(seeded.current.score);
   const [notes, setNotes] = useState(seeded.current.notes);
   const [audio, setAudio] = useState(seeded.current.audio);
   const [subtitle, setSubtitle] = useState(seeded.current.subtitle);
+  const [visibility, setVisibility] = useState(seeded.current.visibility);
+  const [comment, setComment] = useState(seeded.current.comment);
   useEffect(() => {
-    const next = formValues(progress);
+    const next = formValues(progress, defaultVisibility);
     const last = seeded.current;
-    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle };
+    const setters = { episodes: setEpisodes, status: setStatus, score: setScore, notes: setNotes, audio: setAudio, subtitle: setSubtitle, comment: setComment };
     for (const [field, set] of Object.entries(setters)) if (next[field] !== last[field]) set(next[field]);
+    if (next.visibility !== last.visibility) setVisibility((shown) => (shown === last.visibility ? next.visibility : shown));
     seeded.current = next;
-  }, [progress]);
+  }, [progress, defaultVisibility]);
+
+  const currentInitial = formValues(progress, defaultVisibility);
+  const isDirty = Boolean(
+    (episodes !== '' && Number(episodes) !== currentInitial.episodes) ||
+    status !== currentInitial.status ||
+    (score ? String(score) : '') !== currentInitial.score ||
+    (notes.trim() || '') !== currentInitial.notes.trim() ||
+    (audio || '') !== currentInitial.audio ||
+    (subtitle || '') !== currentInitial.subtitle ||
+    visibility !== currentInitial.visibility ||
+    comment.trim() !== currentInitial.comment.trim()
+  );
+  const visibilityKnown = sharing && (Boolean(defaultVisibility) || isRated(progress) || visibility !== currentInitial.visibility);
+  if (visibilityRef) visibilityRef.current = visibilityKnown ? { id: anime.id, value: visibility } : null;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
   const movie = kindOf(anime) === 'movie';
   const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
@@ -91,6 +142,12 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
     if ((notes.trim() || null) !== (progress?.notes ?? null)) change.notes = notes.trim() || null;
     if ((audio || null) !== (progress?.audio_language ?? null)) change.audio_language = audio || null;
     if ((subtitle || null) !== (progress?.subtitle_language ?? null)) change.subtitle_language = subtitle || null;
+    if (sharing) {
+      // a first rating carries the shown value, so the server never puts another default on it than the one shown
+      const firstRating = !isRated(progress) && change.score !== undefined && change.score !== null;
+      if (visibilityKnown && (firstRating || visibility !== (progress?.rating_visibility ?? null))) change.rating_visibility = visibility;
+      if ((comment.trim() || null) !== (progress?.public_comment ?? null)) change.public_comment = comment.trim() || null;
+    }
     if (!progress && !Object.keys(change).length) change.status = status;
     onSave(change);
   };
@@ -126,6 +183,22 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy }) {
         <WatchLanguageSelect id={`${ids}-audio`} label={t('Gesehen auf')} value={audio} onChange={setAudio} />
         <WatchLanguageSelect id={`${ids}-subtitle`} label={t('Untertitel')} value={subtitle} onChange={setSubtitle} />
       </div>
+      {sharing && (
+        <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] items-start">
+          <div>
+            <label htmlFor={`${ids}-visibility`} className="block text-[11px] text-slate-400 mb-1">{t('Meine Bewertung sehen')}</label>
+            <select id={`${ids}-visibility`} className="input-field text-base sm:text-sm" value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+              <option value="public">{t('Alle mit Namen')}</option>
+              <option value="anonymous">{t('Alle anonym')}</option>
+              <option value="private">{t('Nur ich')}</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor={`${ids}-comment`} className="block text-[11px] text-slate-400 mb-1">{t('Kommentar zur Bewertung')}</label>
+            <textarea id={`${ids}-comment`} rows={2} maxLength={MAX_PUBLIC_COMMENT} className="input-field text-base sm:text-sm" value={comment} onChange={(e) => setComment(e.target.value)} />
+          </div>
+        </div>
+      )}
       <div>
         <label htmlFor={`${ids}-notes`} className="block text-[11px] text-slate-400 mb-1">{t('Meine Notiz')}</label>
         <textarea id={`${ids}-notes`} rows={2} maxLength={4000} className="input-field text-base sm:text-sm" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -546,13 +619,43 @@ function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
   );
 }
 
+/** Named community ratings of one entry as the caller may see them (anonymous ones without a name). */
+function CommunityRatings({ animeId, version }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    if (!animeId) return undefined;
+    const controller = new AbortController();
+    api.get(`/api/anime/${animeId}/ratings`, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setRows(Array.isArray(data?.ratings) ? data.ratings : []); })
+      .catch(() => { if (!controller.signal.aborted) setRows([]); });
+    return () => controller.abort();
+  }, [animeId, version]);
+  const shown = rows.filter((r) => r.score || r.comment);
+  if (!shown.length) return null;
+  return (
+    <ul className="space-y-1 mb-3" aria-label={t('Bewertungen')}>
+      {shown.map((r, i) => (
+        <li key={r.user_id || `anon-${i}`} className="text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">{r.username || t('Anonym')}</span>
+          {r.own && <span className="text-slate-400"> ({t('du')})</span>}
+          {r.score ? <span> {r.score}/10</span> : null}
+          {r.visibility === 'private' && <span className="text-slate-400"> · {t('privat')}</span>}
+          {r.comment && <span className="block text-slate-400 break-words">„{r.comment}“</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Detail of one anime: banner, metadata, description, relations (add or open), everybody's progress, my progress,
  * link to a series, refresh (60 s lock) and delete. `fallback` is the list entry (offline it is all there is).
+ * `defaultVisibility` (the account's default for new ratings) is read from GET /api/auth/me when not passed.
+ * Closing, "Öffnen" on a related anime and the series link ask before unsaved input is dropped.
  */
 export default function AnimeDetailModal({
   isOpen, animeId, fallback, onClose, canEdit, mangas = [], fetchDetail, updateProgress, removeFromMyList, update, seasonSuggestion, refresh, remove, onAdd,
-  onOpenAnime
+  onOpenAnime, defaultVisibility
 }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
@@ -561,15 +664,41 @@ export default function AnimeDetailModal({
   const [expanded, setExpanded] = useState(false);
   const [titleDe, setTitleDe] = useState('');
   const [refreshLeft, setRefreshLeft] = useState(0);
+  const [progressDirty, setProgressDirty] = useState(false);
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [discardThen, setDiscardThen] = useState(null);
   const begin = useLatestRequest();
+  const navigate = useNavigate();
   const hasFallback = useRef(Boolean(fallback));
   hasFallback.current = Boolean(fallback);
   const titleId = useId();
-  const dialogRef = useDialogA11y(isOpen, { onClose });
-  const latest = useRef(null);
 
+  const anime = detail || fallback;
+  const sharing = Boolean(anime) && sharedWithOthers(anime);
+  const account = useAccountDefaults({ enabled: Boolean(isOpen && canEdit && sharing && defaultVisibility === undefined) });
+  const accountVisibility = defaultVisibility === undefined ? account.animeVisibility : defaultVisibility;
+  const isTitleDirty = Boolean(anime && titleDe.trim() !== (anime.title_de || '').trim());
+  // input that a running save already sends is not lost by closing
+  const isDirty = (progressDirty && !progressSaving) || isTitleDirty;
+
+  // `afterQuestion` takes the place of `proceed` when the discard question was asked and answered with yes
+  const unlessDiscarding = useCallback((proceed, afterQuestion = proceed) => {
+    if (isDirty) {
+      setDiscardThen(() => afterQuestion);
+      return;
+    }
+    proceed();
+  }, [isDirty]);
+  const requestClose = useCallback(() => unlessDiscarding(onClose), [unlessDiscarding, onClose]);
+
+  const dialogRef = useDialogA11y(isOpen, { onClose: requestClose });
+  const latest = useRef(null);
+  const shownVisibility = useRef(null);
+
+  // a reload that a save, removal or add asks for after "Öffnen" switched the entry leaves the new entry alone
   const load = useCallback(async () => {
-    if (!animeId) return;
+    if (!animeId || latest.current?.animeId !== animeId) return;
     const { signal, isCurrent } = begin();
     setError('');
     try {
@@ -580,7 +709,7 @@ export default function AnimeDetailModal({
       setError(hasFallback.current ? '' : (err.message || t('Anime konnte nicht geladen werden')));
     }
   }, [animeId, begin, fetchDetail]);
-  latest.current = { animeId, load };
+  latest.current = { animeId, load, progress: anime?.my_progress ?? null };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -589,7 +718,6 @@ export default function AnimeDetailModal({
     load();
   }, [isOpen, load]);
 
-  const anime = detail || fallback;
   useEffect(() => { setTitleDe(anime?.title_de || ''); }, [anime?.title_de]);
 
   useEffect(() => {
@@ -613,13 +741,25 @@ export default function AnimeDetailModal({
     }
   };
 
-  const saveProgress = (change) => run(async () => {
-    const saved = await updateProgress(animeId, change);
-    if (saved) {
-      notify.success(t('Fortschritt gespeichert'));
-      await load();
-    }
-  });
+  const saveProgress = (change) => {
+    setProgressSaving(true);
+    return run(async () => {
+      const saved = await updateProgress(animeId, change);
+      if (saved) {
+        notify.success(t('Fortschritt gespeichert'));
+        await load();
+      }
+    }).finally(() => setProgressSaving(false));
+  };
+
+  // the series page takes the place of the dialog's history entry, so Back does not land on the closed dialog; after
+  // the discard question it waits until the question's own entry is gone
+  const followLink = (e, to) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    const go = () => navigate(to, { replace: dialogEntryOnTop() });
+    unlessDiscarding(go, () => afterDialogEntriesDropped(go));
+  };
 
   const doRefresh = () => run(async () => {
     lastRefresh.set(animeId, Date.now());
@@ -630,7 +770,11 @@ export default function AnimeDetailModal({
   });
 
   const doDelete = () => {
-    if (!confirm(t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) }))) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    setDeleteConfirmOpen(false);
     run(async () => {
       await remove(animeId);
       notify.success(t('Anime gelöscht'));
@@ -652,7 +796,10 @@ export default function AnimeDetailModal({
             status: prev.status, episodes_watched: prev.episodes_watched, score: prev.score, notes: prev.notes,
             audio_language: prev.audio_language ?? null, subtitle_language: prev.subtitle_language ?? null,
             ...(prev.watched_episodes !== undefined ? { watched_episodes: prev.watched_episodes } : {}),
-            ...(prev.episode_scores !== undefined ? { episode_scores: prev.episode_scores } : {}), restore: true
+            ...(prev.episode_scores !== undefined ? { episode_scores: prev.episode_scores } : {}),
+            // the restored rating keeps who saw it and its comment (a new row would get the account default)
+            ...(prev.rating_visibility ? { rating_visibility: prev.rating_visibility } : {}),
+            ...(prev.public_comment !== undefined ? { public_comment: prev.public_comment } : {}), restore: true
           });
           if (saved && latest.current?.animeId === id) latest.current.load();
         }
@@ -661,9 +808,12 @@ export default function AnimeDetailModal({
   });
 
   // a save of the episode grid, bound to the grid's entry: no toast; the dialog takes the answer (counter and status
-  // follow at once) only while it still shows that entry
+  // follow at once) only while it still shows that entry. A first rating takes the visibility the form shows.
   const saveEpisodes = async (id, change) => {
-    const saved = await updateProgress(id, change);
+    const shown = shownVisibility.current;
+    const firstRating = shown?.id === id && latest.current?.animeId === id && !isRated(latest.current.progress)
+      && Object.keys(change.episode_scores || {}).length > 0;
+    const saved = await updateProgress(id, firstRating ? { ...change, rating_visibility: shown.value } : change);
     if (saved && latest.current?.animeId === id) setDetail((d) => (d && d.id === id ? { ...d, my_progress: saved } : d));
     return saved;
   };
@@ -707,14 +857,14 @@ export default function AnimeDetailModal({
       aria-modal="true"
       aria-labelledby={titleId}
       tabIndex={-1}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') requestClose(); }}
       className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-sm animate-fade-in"
     >
       <div className="dialog-box glass-panel max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden">
         <div className="relative h-28 sm:h-40 bg-slate-900">
           {anime?.banner_image && <CoverImage src={anime.banner_image} className="w-full h-full object-cover opacity-70" />}
-          <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
+          <button type="button" onClick={requestClose} aria-label={t('Schließen')} className="hit-44 absolute top-3 right-3 bg-slate-950/70 text-slate-200 hover:text-white p-1.5 rounded-lg">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -748,7 +898,7 @@ export default function AnimeDetailModal({
                     <MetaRow label={t('Genres')}>{(anime.genres || []).join(', ') || null}</MetaRow>
                     <MetaRow label={t('Wertung')}>{anime.score ? `${anime.score} / 100` : null}</MetaRow>
                     <MetaRow label={t('Reihe')}>
-                      {anime.manga ? <Link to={`/manga/${anime.manga.id}`} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{anime.manga.title}</Link> : null}
+                      {anime.manga ? <Link to={`/manga/${anime.manga.id}`} onClick={(e) => followLink(e, `/manga/${anime.manga.id}`)} className="text-brand-300 hover:text-brand-200 inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{anime.manga.title}</Link> : null}
                     </MetaRow>
                   </dl>
                   {kind === 'tv' && seasons.length > 0 && <p className="text-xs text-slate-200">{t('Staffeln: {n} · Folgen: {m}', { n: seasons.length, m: anime.episodes || 0 })}</p>}
@@ -794,7 +944,7 @@ export default function AnimeDetailModal({
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
                   <h3 className="text-sm font-bold text-white mb-2">{t('Mein Fortschritt')}</h3>
                   <OwnProgress key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveProgress} busy={busy || gridBusy}
-                    onRemove={onRemove} />
+                    onRemove={onRemove} onDirtyChange={setProgressDirty} defaultVisibility={accountVisibility} sharing={sharing} visibilityRef={shownVisibility} />
                 </section>
               )}
 
@@ -814,13 +964,19 @@ export default function AnimeDetailModal({
               {(anime.progress || anime.progress_users || []).length > 0 && (
                 <section className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{t('Fortschritt aller')}</h3>
+                  {sharing && anime.community?.count > 0 && (
+                    <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { count: anime.community.count, average: formatNumber(anime.community.average, 1) })}</p>
+                  )}
+                  {sharing && (
+                    <CommunityRatings animeId={anime.id}
+                      version={`${anime.community?.count || 0}:${anime.my_progress?.score || 0}:${anime.my_progress?.rating_visibility || ''}:${anime.my_progress?.public_comment || ''}`} />
+                  )}
                   <ul className="space-y-1">
                     {(anime.progress || anime.progress_users).map((p) => (
                       <li key={p.user_id} className="text-xs text-slate-300 flex gap-2">
                         <span className="font-semibold text-slate-100 w-28 truncate">{p.username}</span>
                         <span>{animeProgressLabel(p.status)}</span>
                         {kind !== 'movie' && <span className="font-mono">{seasonEpisodeText(anime, p.episodes_watched) || progressText(p.episodes_watched, anime.episodes, aired)}</span>}
-                        {p.score ? <span>{p.score}/10</span> : null}
                       </li>
                     ))}
                   </ul>
@@ -836,7 +992,7 @@ export default function AnimeDetailModal({
                         <span className="text-slate-400 w-32 shrink-0">{relationLabel(r.relation)}</span>
                         <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}</span>
                         {r.in_collection_id ? (
-                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => onOpenAnime(r.in_collection_id)}>{t('Öffnen')}</button>
+                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => unlessDiscarding(() => onOpenAnime(r.in_collection_id))}>{t('Öffnen')}</button>
                         ) : canEdit && (r.anilist_id || r.mal_id) ? (
                           <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={busy}
                             onClick={() => run(async () => { await onAdd({ anilist_id: r.anilist_id || undefined, mal_id: r.mal_id || undefined }); notify.success(t('„{title}“ hinzugefügt', { title: r.title })); await load(); })}>
@@ -884,6 +1040,30 @@ export default function AnimeDetailModal({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={t('Für alle löschen')}
+        message={t('„{title}“ für alle löschen? Der Fortschritt aller Benutzer geht verloren.', { title: displayTitle(anime) })}
+        confirmLabel={t('Löschen')}
+        cancelLabel={t('Abbrechen')}
+        busy={busy}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={discardThen !== null}
+        title={t('Ungespeicherte Änderungen verwerfen?')}
+        message={t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.')}
+        confirmLabel={t('Verwerfen')}
+        cancelLabel={t('Abbrechen')}
+        isDanger
+        onConfirm={() => {
+          const proceed = discardThen;
+          setDiscardThen(null);
+          proceed?.();
+        }}
+        onCancel={() => setDiscardThen(null)}
+      />
     </div>
   );
 }

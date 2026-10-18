@@ -68,6 +68,8 @@ function Items({ check, onNavigate }) {
 /**
  * Sammlung aufräumen (GET /api/maintenance/quality): what is incomplete or inconsistent, with links to the series and
  * one-click fixes where they are safe. `onOpenPublishers` opens the merge screen (admins); `onChanged` runs after a fix.
+ * `onNavigate(event)` runs on a click on a series link (the click event, not a path): the host closes its dialogs there,
+ * the link navigates by itself.
  */
 export default function CleanupModal({ onClose, user, onChanged, onOpenPublishers, onNavigate }) {
   const canEdit = Boolean(user) && (user.role === 'admin' || user.role === 'editor');

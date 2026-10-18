@@ -378,7 +378,7 @@ export function createOutbox({ storage, send, now = () => Date.now(), onFlushed,
             continue;
           }
         }
-        let res = null;
+        let res;
         try { res = await send(entry); } catch (_) { res = null; }
         const outcome = classifyOutboxResponse(res, entry);
         const item = { entry, outcome, res };

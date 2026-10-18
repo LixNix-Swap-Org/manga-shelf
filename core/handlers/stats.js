@@ -3,6 +3,8 @@ const { wishedSummary } = require('./wishlist');
 const { regularNumberedSql } = require('../lib/volumeNumber');
 const { animeStats } = require('../anime/stats');
 const { badRequest, notFound } = require('../errors');
+const access = require('../lib/access');
+const { qstr } = require('../lib/query');
 
 /** Last `count` months (YYYY-MM) up to and including `now`, oldest first. */
 function lastMonthKeys(now, count) {
@@ -196,10 +198,29 @@ function currencyStats(ctx) {
         .sort((a, b) => (a.currency === 'EUR' ? -1 : b.currency === 'EUR' ? 1 : a.currency.localeCompare(b.currency)));
 }
 
+/**
+ * The accounts the statistics of these shelves name: their members and anyone holding an ownership or reading mark
+ * there (as usersOfSeries does for a series). Other accounts of the server never show up.
+ */
+function statsUsers(ctx, shelfIds) {
+    const members = access.inShelves('sm.shelf_id', shelfIds);
+    const series = access.inShelves('m.shelf_id', shelfIds);
+    const marked = (table, alias) => `EXISTS (SELECT 1 FROM ${table} ${alias} JOIN volumes v ON v.id = ${alias}.volume_id JOIN mangas m ON m.id = v.manga_id
+                                             WHERE ${alias}.user_id = u.id AND ${series.sql})`;
+    return ctx.db.prepare(`
+        SELECT u.id, u.username, u.role FROM users u
+        WHERE EXISTS (SELECT 1 FROM shelf_members sm WHERE sm.user_id = u.id AND ${members.sql})
+           OR ${marked('volume_owners', 'vo')} OR ${marked('volume_reads', 'vr')}
+        ORDER BY u.id
+    `).all(...members.params, ...series.params, ...series.params);
+}
+
 const round1 = (n) => Math.round(n * 10) / 10;
 const avgOrNull = (n) => (n === null || n === undefined ? null : round2(n));
 
-function stats(ctx) {
+function stats(realCtx, { query } = {}) {
+    const shelfIds = access.requestedShelfIds(realCtx, qstr(query && query.shelf_id));
+    const ctx = access.scopedCtx(realCtx, shelfIds);
     const totalSeriesRow = ctx.db.prepare('SELECT count(*) as count FROM mangas').get();
     const totalSeries = totalSeriesRow ? totalSeriesRow.count : 0;
 
@@ -252,7 +273,8 @@ function stats(ctx) {
     }));
 
     // User Reading Stats (Multi-User)
-    const allUsers = ctx.db.prepare('SELECT id, username, role FROM users').all();
+    const allUsers = statsUsers(realCtx, shelfIds);
+    const named = new Set(allUsers.map(u => u.id));
     const userReadingStats = allUsers.map(u => {
         const readRow = ctx.db.prepare(`
             SELECT count(vr.volume_id) as count
@@ -273,10 +295,10 @@ function stats(ctx) {
         };
     });
 
-    const ownerStats = ctx.db.prepare(OWNER_STATS_SQL).all().map(o => ({ ...o, total_value: round2(o.total_value) }));
+    const ownerStats = ctx.db.prepare(OWNER_STATS_SQL).all().filter(o => named.has(o.user_id)).map(o => ({ ...o, total_value: round2(o.total_value) }));
     // only shown with two or more users (OwnerStatsCard)
     const ownerPublishers = allUsers.length >= 2
-        ? ctx.db.prepare(OWNER_PUBLISHERS_SQL).all().map(r => ({
+        ? ctx.db.prepare(OWNER_PUBLISHERS_SQL).all().filter(r => named.has(r.user_id)).map(r => ({
             user_id: r.user_id,
             username: r.username,
             publisher: r.pub_name,
@@ -298,7 +320,7 @@ function stats(ctx) {
         unpriced: s.unpriced
     }));
 
-    const wishedRow = wishedSummary(ctx);
+    const wishedRow = wishedSummary(realCtx, shelfIds);
 
     const summary = {
         total_series: totalSeries,
@@ -403,12 +425,13 @@ function continueReading(ctx, userId) {
  * GET /stats/reading?user_id=: monthly reads, backlog curve, this vs last year, streaks, "Weiterlesen" list.
  * Reads without a date count as read but stay out of every timeline (unknown_date).
  */
-function reading(ctx, { query }) {
-    const raw = query.user_id;
+function reading(realCtx, { query }) {
+    const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(query.shelf_id)));
+    const raw = qstr(query.user_id);
     const userId = raw === undefined || raw === '' ? ctx.user.id : Number(raw);
     if (!Number.isSafeInteger(userId) || userId <= 0) throw badRequest('Ungültige user_id');
     const user = ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
-    if (!user) throw notFound('Benutzer');
+    if (!user || !access.canSeeUser(realCtx, user.id)) throw notFound('Benutzer');
 
     const now = ctx.now();
     const keys = lastMonthKeys(now, READING_MONTHS);
@@ -422,7 +445,7 @@ function reading(ctx, { query }) {
         GROUP BY month
     `).all(userId);
     const byMonthMap = new Map(monthRows.map(r => [r.month, r]));
-    const unknownDate = ctx.db.prepare('SELECT count(*) AS n FROM volume_reads WHERE user_id = ? AND read_at IS NULL').get(userId).n;
+    const unknownDate = ctx.db.prepare('SELECT count(*) AS n FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id WHERE vr.user_id = ? AND vr.read_at IS NULL').get(userId).n;
 
     // backlog: owned volumes (household) by purchase month, minus this reader's reads of owned volumes by read month
     const owned = ctx.db.prepare(`

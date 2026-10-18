@@ -38,7 +38,8 @@ export default function useDashboardKeyboard(options) {
         [opts.showStatsModal, opts.closeStatsModal || (() => opts.setShowStatsModal?.(false))],
         [opts.showUsersModal, opts.closeUsersModal || (() => opts.setShowUsersModal?.(false))],
         [opts.showRestoreModal, opts.closeRestoreModal || (() => opts.setShowRestoreModal?.(false))],
-        [opts.showPasswordModal, opts.closePasswordModal || (() => opts.setShowPasswordModal?.(false))]
+        [opts.showPasswordModal, opts.closePasswordModal || (() => opts.setShowPasswordModal?.(false))],
+        [Boolean(opts.activeToolModal), opts.closeToolModal || (() => opts.setActiveToolModal?.(null))]
       ];
       const openModal = modals.find(([shown]) => shown);
 

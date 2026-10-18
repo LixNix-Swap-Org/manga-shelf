@@ -7,6 +7,8 @@ const { addOwner, syncOwnersWithStatus, markRead, OWNED_STATUS } = require('../l
 const { HttpError, badRequest, msg } = require('../errors');
 const { DEFAULT_CURRENCY, DEFAULT_LANGUAGE, isManualWorkKey, manualWorkKey } = require('../lib/language');
 const { readProfile } = require('../lib/locales');
+const access = require('../lib/access');
+const { qstr } = require('../lib/query');
 
 const DRY_RUN_ROLLBACK = Symbol('dry-run');
 const MAX_IMPORT_ROWS = 20000;
@@ -50,9 +52,10 @@ const EXPORT_ORDER = 'ORDER BY m.title COLLATE NOCASE, m.id, COALESCE(v.number_s
  * All series and volumes as CSV, built in blocks of series so a large collection does not hold the event loop.
  * A database reopened meanwhile (restore) fails the export instead of mixing two databases.
  */
-async function exportCsv(ctx) {
+async function exportCsv(ctx, { query } = {}) {
     const generation = ctx.db.generation();
-    const order = ctx.db.prepare('SELECT id FROM mangas ORDER BY title COLLATE NOCASE, id').all().map(r => r.id);
+    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id)));
+    const order = ctx.db.prepare(`SELECT id FROM mangas WHERE ${scope.sql} ORDER BY title COLLATE NOCASE, id`).all(...scope.params).map(r => r.id);
     const statements = new Map();
     const prepared = (n) => {
         if (!statements.has(n)) {
@@ -105,13 +108,14 @@ function importCsv(ctx, { body }) {
     }
     const { records, errors, warnings, columns } = mapCsvRows(rows);
     const dryRun = isDryRun(body.dry_run);
+    const shelfId = access.targetShelfId(ctx, body.shelf_id);
     const bySeriesPublisher = columns.includes('series_publisher');
     // with a "Sprache" column, same-title editions in different languages stay apart
     const byLanguage = columns.includes('series_language');
 
     // Load titles, volumes and users once and compare in JS: SQLite LOWER() folds only ASCII (Ä would stay Ä)
     const seriesByTitle = new Map();
-    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas ORDER BY id').all()) {
+    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas WHERE shelf_id = ? ORDER BY id').all(shelfId)) {
         const key = matchKey(m.title);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE });
@@ -121,22 +125,31 @@ function importCsv(ctx, { body }) {
     const knownVolumes = new Set();
     // stored volumes once more by their own spelling: "3" as plain number, "Band 3" by its label
     const knownLabels = new Set();
-    for (const v of ctx.db.prepare("SELECT manga_id, COALESCE(type, 'volume') AS type, volume_number FROM volumes").all()) {
+    for (const v of ctx.db.prepare("SELECT manga_id, COALESCE(type, 'volume') AS type, volume_number FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id = ?)").all(shelfId)) {
         knownVolumes.add(volumeKey(v.manga_id, v.type, v.volume_number));
         knownLabels.add(labelKey(v.manga_id, v.type, v.volume_number));
     }
     const volumesBeforeImport = new Set(knownVolumes);
-    const usersExact = new Map();
-    const usersFolded = new Map();
+    const usernames = new Map();
+    // owners and readers come from the target shelf's members only; other accounts are named in a warning. A member
+    // wins every name a member matches (exactly or case-folded), other accounts count only where no member does.
+    const shelfMembers = new Set(ctx.db.prepare('SELECT user_id FROM shelf_members WHERE shelf_id = ?').all(shelfId).map(r => r.user_id));
+    const directory = () => ({ exact: new Map(), folded: new Map() });
+    const members = directory();
+    const others = directory();
     // longest user name in sections of the owner cell ("Müller, Hans" = 2)
     let maxNameParts = 1;
     for (const u of ctx.db.prepare('SELECT id, username FROM users ORDER BY id').all()) {
-        usersExact.set(u.username.trim(), u.id);
+        const into = shelfMembers.has(u.id) ? members : others;
+        if (!into.exact.has(u.username.trim())) into.exact.set(u.username.trim(), u.id);
         const key = matchKey(u.username);
-        if (!usersFolded.has(key)) usersFolded.set(key, u.id);
+        if (!into.folded.has(key)) into.folded.set(key, u.id);
+        usernames.set(u.id, u.username);
         maxNameParts = Math.max(maxNameParts, u.username.split(/[,|]/).length);
     }
-    const findUser = (name) => usersExact.get(name) ?? usersFolded.get(matchKey(name));
+    const lookup = ({ exact, folded }) => (name) => exact.get(name) ?? folded.get(matchKey(name));
+    const findMember = lookup(members);
+    const findOther = lookup(others);
     const isAdmin = ctx.user.role === 'admin';
 
     // The export names the language only on the first row of a series: later rows of the same title inherit it
@@ -175,37 +188,40 @@ function importCsv(ctx, { body }) {
         || (r.type_inferred && inferVolumeType({ volume_number: r.volume_number }) !== 'volume'
             && volumesBeforeImport.has(volumeKey(series.id, 'volume', r.volume_number)));
 
-    // Name cell: the longest section that is a user name first ("Müller, Hans" before "Müller")
+    // Name cell: at each position the longest section a member is called ("Müller, Hans" before "Müller"), then the
+    // longest section another account is called
     const resolveNames = (raw) => {
         const parts = String(raw || '').split(/([,|])/);
         const count = Math.ceil(parts.length / 2);
         const ids = [];
         const unknown = [];
-        for (let i = 0; i < count;) {
-            let matched = false;
+        const sectionAt = (i, find) => {
             for (let j = Math.min(count, i + maxNameParts) - 1; j >= i; j--) {
                 const name = parts.slice(2 * i, 2 * j + 1).join('').trim();
-                const id = name ? findUser(name) : undefined;
-                if (id !== undefined) {
-                    if (!ids.includes(id)) ids.push(id);
-                    i = j + 1;
-                    matched = true;
-                    break;
-                }
+                const id = name ? find(name) : undefined;
+                if (id !== undefined) return { id, next: j + 1 };
             }
-            if (!matched) {
-                const name = parts[2 * i].trim();
-                if (name) unknown.push(name);
-                i++;
+            return null;
+        };
+        for (let i = 0; i < count;) {
+            const hit = sectionAt(i, findMember) || sectionAt(i, findOther);
+            if (hit) {
+                if (!ids.includes(hit.id)) ids.push(hit.id);
+                i = hit.next;
+                continue;
             }
+            const name = parts[2 * i].trim();
+            if (name) unknown.push(name);
+            i++;
         }
         return { ids, unknown };
     };
-    // Only admins may enter other users as owner or reader (like /volumes/:id/owners and /read)
-    const resolveUsers = (raw, r, unknownMsg) => {
-        const { ids, unknown } = resolveNames(raw);
+    // Only admins may enter other users as owner or reader (like /volumes/:id/owners and /read), and only members
+    const resolveUsers = (raw, r, unknownMsg, outsideMsg) => {
+        const { ids: named, unknown } = resolveNames(raw);
+        const ids = named.filter(id => shelfMembers.has(id));
         const allowed = isAdmin ? ids : ids.filter(id => id === ctx.user.id);
-        const messages = unknown.map(unknownMsg);
+        const messages = [...unknown.map(unknownMsg), ...named.filter(id => !shelfMembers.has(id)).map(id => outsideMsg(usernames.get(id)))];
         if (allowed.length < ids.length) messages.push(msg('Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)'));
         const shown = messages.length > MAX_NAME_WARNINGS + 1 ? messages.slice(0, MAX_NAME_WARNINGS) : messages;
         for (const message of shown) result.warnings.push(rowNote(r.line, message));
@@ -229,8 +245,8 @@ function importCsv(ctx, { body }) {
 
     const insertManga = ctx.db.prepare(`
         INSERT INTO mangas (title, author, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
-                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
@@ -274,7 +290,7 @@ function importCsv(ctx, { body }) {
                 r.series, r.author, publisher, language, meta.status || 'Laufend', meta.alt_title ?? null,
                 meta.tags ?? null, meta.total_volumes ?? null, meta.description ?? null, meta.cover_image ?? null,
                 meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id,
-                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key)
+                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId
             ).lastInsertRowid);
         const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
         const key = matchKey(r.series);
@@ -327,8 +343,12 @@ function importCsv(ctx, { body }) {
             }
             result.created_volumes++;
 
-            const ownerIds = r.status === OWNED_STATUS ? resolveUsers(r.owners_raw, r, (name) => msg('Unbekannter Besitzer „{name}“ (ignoriert)', { name })) : [];
-            const readerIds = resolveUsers(r.readers_raw, r, (name) => msg('Unbekannter Leser „{name}“ (ignoriert)', { name }));
+            const ownerIds = r.status === OWNED_STATUS
+                ? resolveUsers(r.owners_raw, r, (name) => msg('Unbekannter Besitzer „{name}“ (ignoriert)', { name }),
+                    (name) => msg('Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)', { name }))
+                : [];
+            const readerIds = resolveUsers(r.readers_raw, r, (name) => msg('Unbekannter Leser „{name}“ (ignoriert)', { name }),
+                (name) => msg('Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)', { name }));
             if (r.mark_read) readerIds.push(...(ownerIds.length ? ownerIds : [ctx.user.id]));
             if (dryRun || series.id < 0) continue;
 

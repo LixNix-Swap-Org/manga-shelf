@@ -229,13 +229,16 @@ function MangaCollectionGrid({
   setTagFilter,
   languageFilter = 'ALL',
   setLanguageFilter,
+  shelfFilter = 'ALL',
+  setShelfFilter,
+  readOnlyShelves = null,
   onAuthorClick,
   searchExtras = null
 }) {
   const isList = viewMode === 'list';
   const { visible, total, shown, hasMore, showMore, sentinelRef } = useProgressiveList(filtered, {
     step: isList ? PAGE_SIZE.list : PAGE_SIZE.grid,
-    resetKey: JSON.stringify([viewMode, statusFilter, publisherFilter, sortBy, search, collectFilter, authorFilter, groupBy]),
+    resetKey: JSON.stringify([viewMode, statusFilter, publisherFilter, sortBy, search, collectFilter, authorFilter, groupBy, shelfFilter]),
     storageKey: SHELF_COUNT_KEY
   });
   const sections = visibleSections(groups, visible.length);
@@ -251,7 +254,7 @@ function MangaCollectionGrid({
   }
 
   const filtersActive = Boolean(search) || statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
-    || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL';
+    || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL' || shelfFilter !== 'ALL';
   const showErrorPanel = Boolean(error) && filtered.length === 0 && !filtersActive;
   const banner = error && !showErrorPanel ? (
     <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
@@ -287,6 +290,7 @@ function MangaCollectionGrid({
             setAuthorFilter?.('');
             setTagFilter?.([]);
             setLanguageFilter?.('ALL');
+            setShelfFilter?.('ALL');
           }}
         />
       </>
@@ -297,12 +301,15 @@ function MangaCollectionGrid({
   const progress = hasMore ? <ListProgress shown={shown} total={total} onMore={showMore} sentinelRef={sentinelRef} /> : null;
   const online = searchExtras ? <OnlineRow extras={searchExtras} /> : null;
 
+  // a viewer of the series' shelf reads only: no delete (the server would refuse it)
+  const canDelete = (manga) => Boolean(canEdit) && !readOnlyShelves?.has(manga.shelf_id);
+
   const renderRow = (manga) => (
     <MangaRow
       key={manga.id}
       className={ROW_CLASS}
       manga={manga}
-      canEdit={canEdit}
+      canEdit={canDelete(manga)}
       getStatusBadge={getStatusBadge}
       onDelete={handleDeleteManga}
       onAuthorClick={onAuthorClick}
@@ -313,7 +320,7 @@ function MangaCollectionGrid({
     <div key={manga.id} className={CARD_WRAPPER_CLASS}>
       <MangaCard manga={manga} getStatusBadge={getStatusBadge} onAuthorClick={onAuthorClick} />
       {isWishedSeries(manga) && <WishBadge manga={manga} />}
-      {canEdit && (
+      {canDelete(manga) && (
         <button
           type="button"
           onClick={(e) => handleDeleteManga(e, manga.id, manga.title)}

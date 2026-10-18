@@ -13,7 +13,7 @@ let admin;
 let scheduler;
 let backupsDir;
 let tempDir;
-const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+const isRoot = (typeof process.getuid === 'function' && process.getuid() === 0) || process.platform === 'win32';
 
 test.before(async () => {
     ctx = await startTestServer();

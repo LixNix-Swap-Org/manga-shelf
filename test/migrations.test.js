@@ -90,7 +90,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
     rerunMigration16();
     assert.equal(dbm.getConnectionGeneration(), generation + 1, 'reopening bumps the connection generation');
     const report = dbm.getLastMigrationReport();
-    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
+    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]);
     assert.equal(report[0].changes, db().prepare('SELECT count(*) AS n FROM mangas').get().n, 'the backfill touched every series');
     for (const row of db().prepare("SELECT m.owned_volumes AS stored, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS counted FROM mangas m").all()) {
         assert.equal(row.stored, row.counted);
@@ -98,7 +98,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
 
     const snapshots = safetySnapshots();
     assert.equal(snapshots.length, 1);
-    assert.match(snapshots[0], /^vor-update-v15-auf-v31-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
+    assert.match(snapshots[0], /^vor-update-v15-auf-v33-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
     const zip = new AdmZip(path.join(backupsDir, snapshots[0]));
     assert.deepEqual(zip.getEntries().map(e => e.entryName), ['manga.db']);
     const extracted = path.join(dataDir, 'temp', 'check.db');
@@ -151,7 +151,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'migrate-dry-run.js'), original], {
         encoding: 'utf8', env: { ...process.env, DATA_DIR: '', LOG_LEVEL: 'silent' }
     });
-    assert.match(out, /Schema:\s+v14 -> v31/);
+    assert.match(out, /Schema:\s+v14 -> v33/);
     assert.match(out, /v15 add_volumes_number_sort: [\d.]+ Zeilen geändert, \d+ ms/);
     assert.match(out, /v16 maintain_mangas_owned_volumes_by_triggers: /);
     assert.match(out, /v17 add_mangas_wish_priority: /);
@@ -213,7 +213,7 @@ test('no safety snapshot, no migration: the start stops unless MIGRATE_WITHOUT_S
         delete process.env.MIGRATE_WITHOUT_SNAPSHOT;
         failing.mock.restore();
     }
-    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
+    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]);
     assert.deepEqual(safetySnapshots(), before, 'migrated without a snapshot');
     assert.equal(require('../utils/config').readConfig({ MIGRATE_WITHOUT_SNAPSHOT: 'vielleicht' }).warnings.length, 1);
 });
@@ -393,7 +393,7 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         const warnings = [];
         const log = { debug() {}, info() {}, error() {}, warn: (...args) => warnings.push(args.join(' ')) };
         const report = schema.runSequentialMigrations(conn, { log });
-        assert.deepEqual(report.map(r => r.version), [27, 28, 29, 30, 31]);
+        assert.deepEqual(report.map(r => r.version), [27, 28, 29, 30, 31, 32, 33]);
         const rows = conn.prepare('SELECT title, language, region, work_key, currency FROM mangas ORDER BY title').all().map(r => ({ ...r }));
         assert.deepEqual(rows.map(r => [r.title, r.language, r.region]), [
             ['A', 'de', null], ['B', 'en', null], ['C', 'en', null], ['D', 'ja', null], ['E', 'en', 'US'], ['F', 'de', null], ['G', 'de', null],
@@ -458,7 +458,7 @@ test('migration 28 adds kinds, TMDb columns and watched languages and rebuilds u
         const credentials = () => conn.prepare('SELECT * FROM user_api_credentials ORDER BY id').all().map(r => ({ ...r }));
         const before = credentials();
         const report = schema.runSequentialMigrations(conn);
-        assert.deepEqual(report.map(r => r.version), [28, 29, 30, 31]);
+        assert.deepEqual(report.map(r => r.version), [28, 29, 30, 31, 32, 33]);
         assert.deepEqual(credentials(), before, 'every column of every row, ids included');
         conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-c')").run();
         assert.throws(() => conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-d')").run(), /UNIQUE/);
@@ -475,7 +475,7 @@ test('migration 28 adds kinds, TMDb columns and watched languages and rebuilds u
         assert.throws(() => conn.exec("INSERT INTO animes (title, kind, tmdb_id, tmdb_kind) VALUES ('Doppelt', 'tv', 7, 'tv')"), /UNIQUE/);
 
         conn.exec('DELETE FROM schema_migrations WHERE version >= 28');
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [28, 29, 30, 31], 'a second run is harmless');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [28, 29, 30, 31, 32, 33], 'a second run is harmless');
         assert.equal(conn.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name LIKE 'user_api_credentials%'").get().n, 1);
     } finally {
         conn.close();
@@ -585,5 +585,101 @@ test('the safety snapshot before migrations never prunes the backup an unconfirm
     } finally {
         delete process.env.BACKUP_KEEP_PRE_UPDATE;
         fs.rmSync(stateFile, { force: true });
+    }
+});
+
+test('migration 32 puts every series and trash entry into shelf 1 and every account into it with a role from its global role', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'shelves.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    const all = (sql) => conn.prepare(sql).all().map(r => ({ ...r }));
+    try {
+        schema.applySchema(conn);
+        conn.exec(`
+            DROP TRIGGER trg_mangas_shelf_default;
+            DROP TRIGGER trg_trash_shelf_default;
+            DROP INDEX idx_mangas_shelf;
+            DROP TABLE shelf_members;
+            DROP TABLE shelves;
+            ALTER TABLE mangas DROP COLUMN shelf_id;
+            ALTER TABLE trash DROP COLUMN shelf_id;
+            DELETE FROM schema_migrations WHERE version >= 32;
+            INSERT INTO users (id, username, password_hash, role) VALUES (11, 'ada', 'x', 'admin'), (12, 'bo', 'x', 'editor'), (13, 'cy', 'x', 'guest');
+            INSERT INTO mangas (id, title) VALUES (1, 'A'), (2, 'B');
+            INSERT INTO trash (id, kind, ref_id, manga_id, title, payload) VALUES (1, 'manga', 7, 7, 'Weg', '{}'), (2, 'volume', 9, 2, 'B', '{}');
+        `);
+        const report = schema.runSequentialMigrations(conn);
+        assert.deepEqual(report.map(r => r.version), [32, 33]);
+        assert.deepEqual(conn.prepare('SELECT DISTINCT shelf_id FROM mangas').all().map(r => r.shelf_id), [1]);
+        assert.deepEqual(all('SELECT id, shelf_id FROM trash ORDER BY id'), [{ id: 1, shelf_id: 1 }, { id: 2, shelf_id: 1 }]);
+        assert.equal(conn.prepare('SELECT owner_user_id FROM shelves WHERE id = 1').get().owner_user_id, 11);
+        const members = all('SELECT user_id, role FROM shelf_members WHERE shelf_id = 1 ORDER BY user_id');
+        assert.deepEqual(members, [{ user_id: 11, role: 'owner' }, { user_id: 12, role: 'editor' }, { user_id: 13, role: 'viewer' }]);
+        conn.exec("INSERT INTO mangas (id, title) VALUES (3, 'C')");
+        assert.equal(conn.prepare('SELECT shelf_id FROM mangas WHERE id = 3').get().shelf_id, 1, 'a series without a shelf lands in shelf 1');
+
+        // a populated database: bo moved series B into an own shelf and left the household shelf
+        conn.exec(`
+            INSERT INTO shelves (id, name, owner_user_id) VALUES (2, 'Bo', 12);
+            UPDATE shelf_members SET shelf_id = 2, role = 'owner' WHERE user_id = 12;
+            UPDATE mangas SET shelf_id = 2 WHERE id = 2;
+            UPDATE trash SET shelf_id = 2 WHERE id = 2;
+            INSERT INTO users (id, username, password_hash, role) VALUES (14, 'di', 'x', 'editor');
+        `);
+        conn.exec("INSERT INTO trash (id, kind, ref_id, manga_id, title, payload) VALUES (3, 'volume', 10, 2, 'B', '{}'), (4, 'manga', 8, 8, 'Alt', '{}')");
+        assert.deepEqual(all('SELECT id, shelf_id FROM trash WHERE id >= 3 ORDER BY id'), [{ id: 3, shelf_id: 2 }, { id: 4, shelf_id: 1 }],
+            'a trash entry written without a shelf takes the one of its series, else shelf 1');
+        const state = () => ({
+            shelves: all('SELECT id, name, owner_user_id, is_default FROM shelves ORDER BY id'),
+            members: all('SELECT shelf_id, user_id, role FROM shelf_members ORDER BY shelf_id, user_id'),
+            mangas: all('SELECT id, shelf_id FROM mangas ORDER BY id'),
+            trash: all('SELECT id, shelf_id FROM trash ORDER BY id')
+        });
+        const before = state();
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 32');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [32, 33]);
+        const after = state();
+        assert.deepEqual({ ...after, members: after.members.filter(m => m.user_id !== 14) }, before, 'a second run changes nothing that exists');
+        assert.deepEqual(after.members.filter(m => m.user_id === 14), [{ shelf_id: 1, user_id: 14, role: 'editor' }], 'an account without a shelf joins shelf 1');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
+});
+
+test('migration 33 adds rating_visibility (public), public_comment and users.default_anime_visibility (public) to existing rows', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'visibility.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        schema.applySchema(conn);
+        conn.exec(`
+            ALTER TABLE anime_progress DROP COLUMN rating_visibility;
+            ALTER TABLE anime_progress DROP COLUMN public_comment;
+            ALTER TABLE users DROP COLUMN default_anime_visibility;
+            DELETE FROM schema_migrations WHERE version >= 33;
+            INSERT INTO users (id, username, password_hash, role) VALUES (21, 'eli', 'x', 'editor');
+            INSERT INTO animes (id, title) VALUES (31, 'Alt');
+            INSERT INTO anime_progress (anime_id, user_id, status, score) VALUES (31, 21, 'Gesehen', 8);
+        `);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [33]);
+        const progress = () => ({ ...conn.prepare('SELECT rating_visibility, public_comment, score FROM anime_progress WHERE anime_id = 31 AND user_id = 21').get() });
+        assert.deepEqual(progress(), { rating_visibility: 'public', public_comment: null, score: 8 });
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 21').get().v, 'public');
+        conn.exec("INSERT INTO users (id, username, password_hash) VALUES (22, 'fe', 'x'); INSERT INTO anime_progress (anime_id, user_id) VALUES (31, 22)");
+        assert.equal(conn.prepare('SELECT rating_visibility AS v FROM anime_progress WHERE user_id = 22').get().v, 'public');
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 22').get().v, 'public');
+
+        conn.exec("UPDATE anime_progress SET rating_visibility = 'private', public_comment = 'gut' WHERE user_id = 21; UPDATE users SET default_anime_visibility = 'anonymous' WHERE id = 21");
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 33');
+        schema.runSequentialMigrations(conn);
+        assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+        assert.deepEqual(progress(), { rating_visibility: 'private', public_comment: 'gut', score: 8 });
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 21').get().v, 'anonymous');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
     }
 });

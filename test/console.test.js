@@ -169,6 +169,22 @@ test('admin <name> only promotes while no administrator exists', async () => {
     }
 });
 
+test('admin <name> lets the shelf roles follow like a role change in the user dialog', async () => {
+    const home = db.prepare('SELECT id FROM shelves WHERE is_default = 1').get().id;
+    const gast = db.prepare("SELECT id FROM users WHERE username = 'gast'").get().id;
+    db.prepare("INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, 'viewer')").run(home, gast);
+    db.prepare("UPDATE users SET role = 'editor' WHERE username = 'Chefin'").run();
+    try {
+        assert.equal((await run('admin gast')).ok, true);
+        assert.equal(db.prepare('SELECT role FROM users WHERE id = ?').get(gast).role, 'admin');
+        assert.equal(db.prepare('SELECT role FROM shelf_members WHERE shelf_id = ? AND user_id = ?').get(home, gast).role, 'editor', 'the former guest edits the household shelf');
+    } finally {
+        db.prepare("UPDATE users SET role = 'admin' WHERE username = 'Chefin'").run();
+        db.prepare("UPDATE users SET role = 'guest' WHERE id = ?").run(gast);
+        db.prepare('DELETE FROM shelf_members WHERE user_id = ?').run(gast);
+    }
+});
+
 test('backup creates a verified manual snapshot', async () => {
     const lifecycle = require('../services/lifecycle');
     const pending = run('backup');

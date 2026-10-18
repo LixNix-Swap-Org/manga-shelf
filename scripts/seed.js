@@ -80,6 +80,10 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
   runTransaction(() => {
     const insUser = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
     const users = DEMO_USERS.map(([name, role]) => Number(insUser.run(name, passwordHashes[name], role).lastInsertRowid));
+    // every demo account belongs to the household shelf (shelf 1), the admin as its owner, as /setup and POST /users do
+    const insMember = db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (1, ?, ?)');
+    users.forEach((id, i) => insMember.run(id, DEMO_USERS[i][1] === 'admin' ? 'owner' : 'editor'));
+    db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = 1').run(users[DEMO_USERS.findIndex(([, role]) => role === 'admin')]);
     const insManga = db.prepare(`INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, manga_passion_id, manga_passion_edition_data, updated_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const setWorkKey = db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?');

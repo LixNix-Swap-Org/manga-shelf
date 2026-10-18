@@ -47,7 +47,8 @@ function parsePort(value) {
 }
 
 /** argv without node/binary -> { command, args, options }; `console` swallows every later argument. */
-function parseArgs(argv) {
+function parseArgs(argv, platform = process.platform) {
+    const p = platform === 'win32' ? path.win32 : path.posix;
     const options = { port: null, host: null, dataDir: null, user: false, noConsole: false, logFile: false, account: null, allowNewerSchema: false };
     let command = null;
     const args = [];
@@ -66,7 +67,7 @@ function parseArgs(argv) {
         if (flag === '--data-dir') {
             const value = takeValue();
             if (!value.trim()) throw new UsageError('--data-dir braucht einen Pfad');
-            options.dataDir = path.resolve(value);
+            options.dataDir = p.resolve(value);
             continue;
         }
         if (command === 'console') {

@@ -2,7 +2,7 @@
 const {
     OWNED_STATUS, isLegacyReadStatus, addOwner, listOwners, syncStatusWithOwners, convertLegacyRead, purchaseDateFromRemainingOwners
 } = require('../lib/owners');
-const { resolveTargetUser } = require('../lib/access');
+const { resolveTargetUser, volumeAccess } = require('../lib/access');
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parsePrice, parseFlag, isValidDate, parseDate } = require('../lib/validate');
 const { FIELD_ERRORS, DATE_ERROR } = require('./volumes');
@@ -11,8 +11,8 @@ function toggleOwner(ctx, { params, body }) {
     const volumeId = parseInt(params.id, 10);
     const vol = ctx.db.prepare('SELECT id, manga_id, status, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     if (!vol) throw notFound('Band');
-    // Everyone changes only their own ownership; admins may enter it for others
-    const targetUserId = resolveTargetUser(ctx, body.user_id);
+    // Everyone changes only their own ownership; admins may enter it for others who belong to the volume's shelf
+    const targetUserId = resolveTargetUser(ctx, body.user_id, volumeAccess(ctx, volumeId, 'editor'));
     const ownerPrice = parsePrice(body.price);
     if (ownerPrice.error) throw badRequest(FIELD_ERRORS.price);
     if (!isValidDate(body.purchase_date)) throw badRequest(DATE_ERROR);

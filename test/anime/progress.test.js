@@ -166,6 +166,22 @@ test('episode ratings: a lowered counter drops the ratings above it, Geplant dro
     assert.deepEqual([row.episodes_watched, row.watched_episodes, row.episode_scores], [0, null, null]);
 });
 
+test('visibility: the default goes to a new row and to the first score or episode score, a rated row keeps its own', () => {
+    const { core, save } = setup(12);
+    const setDefault = (value) => core.conn.prepare('UPDATE users SET default_anime_visibility = ? WHERE id = 2').run(value);
+    assert.equal(save({ status: 'Geplant' }).rating_visibility, 'public', 'a new row');
+    setDefault('private');
+    assert.equal(save({ episodes_watched: 2 }).rating_visibility, 'public', 'no rating yet, nothing changes');
+    assert.equal(save({ episodes_watched: 1, episode_scores: { 5: 8 } }).rating_visibility, 'public', 'a rating the lowered counter drops is none');
+    assert.equal(save({ episode_scores: { 1: 8 } }).rating_visibility, 'private', 'the first episode score');
+    setDefault('anonymous');
+    assert.equal(save({ score: 7 }).rating_visibility, 'private', 'a rated row keeps its visibility');
+    save({ score: null, episode_scores: null });
+    assert.equal(save({ score: 6 }).rating_visibility, 'anonymous', 'rated again after its ratings went: the default of now');
+    save({ score: null });
+    assert.equal(save({ score: 5, rating_visibility: 'public' }).rating_visibility, 'public', 'a visibility sent along wins');
+});
+
 test('add_episodes: the union with the marks, never lower; nothing new keeps the counter but takes the resume link', () => {
     const { save } = setup(12);
     save({ watched_episodes: [1, 2, 10] });

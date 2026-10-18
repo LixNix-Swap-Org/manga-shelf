@@ -52,9 +52,12 @@ function linkedOfficialVolume(officialVolumes, uv, type) {
 
 /**
  * Looks up detailed metadata for a single volume or schuber (release_date, release_year, pages, isbn, price, cover, title)
- * via Manga Passion (and optionally DNB).
+ * via Manga Passion (and optionally DNB). options.persist = false (a viewer of the series' shelf) stores no edition
+ * link and downloads no cover: the answer carries the remote cover address.
  */
 async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
+  const persist = options.persist !== false;
+  const coverOf = (url) => (persist ? downloadRemoteImageToUploads(ctx, url) : url);
   let manga = null;
   if (mangaId) {
     manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
@@ -72,7 +75,7 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
       const fullRes = await fetchWithTimeout(ctx, `${API_BASE}/volumes/${directVolumeId}`, { headers: mpHeaders(ctx) }, 8000);
       if (fullRes.ok) {
         const fullVol = await fullRes.json();
-        const localCover = await downloadRemoteImageToUploads(ctx, fullVol.cover);
+        const localCover = await coverOf(fullVol.cover);
         const relDate = cleanOfficialDate(fullVol);
         const relYear = officialYear(relDate, fullVol.year);
         const publisher = normalizePublisher(fullVol.edition?.publishers?.[0]?.name) || knownPublisher(manga?.publisher);
@@ -107,7 +110,7 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
     try {
       // a single volume lookup may use an unconfirmed edition: the user sees and checks the filled values
       const searchRes = await searchMangaPassionEditions(ctx, manga.title, manga.publisher, manga.total_volumes);
-      editionId = linkRecommendedEdition(ctx, manga, searchRes).editionId;
+      editionId = linkRecommendedEdition(ctx, manga, searchRes, { persist }).editionId;
     } catch (e) {
       log(ctx).warn('Error finding edition for volume lookup:', e.message);
     }
@@ -151,7 +154,7 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
     const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
     const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
-    const localCover = await downloadRemoteImageToUploads(ctx, rawCover);
+    const localCover = await coverOf(rawCover);
     const title = fullVol?.title || matchedVolume.title || null;
     const publisher = knownPublisher(editionInfo?.publisher) || knownPublisher(manga?.publisher);
 

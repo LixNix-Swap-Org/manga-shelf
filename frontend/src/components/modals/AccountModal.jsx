@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
 import { KeyRound, Languages, Lock, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
+import useAccountDefaults, { rememberAccountDefaults } from '../../hooks/useAccountDefaults';
 import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
@@ -332,6 +333,49 @@ function DefaultLanguageField({ offline }) {
   );
 }
 
+/**
+ * Who sees the ratings you give to shared anime (users.default_anime_visibility, read fresh from GET /api/auth/me as
+ * `user.default_anime_visibility`); single ratings can differ.
+ */
+function DefaultVisibilityField({ offline }) {
+  const id = useId();
+  const stored = useAccountDefaults({ fresh: true, enabled: !offline });
+  const [picked, setPicked] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const value = picked ?? stored.animeVisibility ?? 'public';
+
+  const save = async (next) => {
+    setPicked(next);
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { default_anime_visibility: next } });
+      const data = await readJson(res);
+      if (!res.ok) {
+        notify.error(serverText(data) || t('Speichern fehlgeschlagen'));
+        return;
+      }
+      rememberAccountDefaults({ ...data?.user, default_anime_visibility: data?.user?.default_anime_visibility || next });
+    } catch (_) {
+      notify.error(t('Netzwerkfehler – bitte erneut versuchen.'));
+    } finally {
+      setPicked(null);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-4 border-t border-slate-800">
+      <label htmlFor={`${id}-visibility`} className="block text-xs font-semibold text-slate-300">{t('Sichtbarkeit deiner Anime-Bewertungen')}</label>
+      <select id={`${id}-visibility`} className="input-field bg-slate-950" value={value} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.value)}>
+        <option value="public">{t('Alle mit Namen')}</option>
+        <option value="anonymous">{t('Alle anonym')}</option>
+        <option value="private">{t('Nur ich')}</option>
+      </select>
+      <p className="text-xs text-slate-400">{t('Gilt für neue Bewertungen. Bei jedem Anime lässt sich das einzeln ändern. Notizen sieht nie jemand außer dir.')}</p>
+    </div>
+  );
+}
+
 /** UI language of this account; the switch remounts the page, the dialog reopens on this tab. */
 function LanguageTab({ offline = false }) {
   return (
@@ -341,6 +385,7 @@ function LanguageTab({ offline = false }) {
       </p>
       <LanguageSelect beforeChange={() => markReopenAccount('language')} />
       <DefaultLanguageField offline={offline} />
+      <DefaultVisibilityField offline={offline} />
     </div>
   );
 }

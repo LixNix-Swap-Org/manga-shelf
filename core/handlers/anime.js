@@ -1,8 +1,9 @@
 // Anime tab: shared list, progress per user, search and refresh over the gateway
 // (core/anime/gateway.js), adaptations of a series, the CSV export, shared streaming links and the AniList list sync.
 const { qstr } = require('../lib/query');
-const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../errors');
-const { resolveTargetUser } = require('../lib/access');
+const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
+const access = require('../lib/access');
+const { resolveTargetUser } = access;
 const { escapeCell } = require('../csvExchange');
 const gateway = require('../anime/gateway');
 const store = require('../anime/store');
@@ -10,6 +11,7 @@ const listSync = require('../anime/listSync');
 const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
 const episodeMarks = require('../anime/episodes');
+const community = require('../anime/community');
 const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
@@ -26,6 +28,7 @@ const SEARCH_KINDS = ['anime', 'tv', 'movie', 'all'];
 const KINDS = ['anime', 'tv', 'movie'];
 const TMDB_KINDS = ['movie', 'tv'];
 const TMDB_LABEL = 'TMDB';
+const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -39,11 +42,13 @@ const ID_ERRORS = {
 };
 const TEXT_TYPE_ERRORS = {
     title_de: 'Ungültiger Wert für Deutscher Titel',
-    notes: 'Ungültiger Wert für Notiz'
+    notes: 'Ungültiger Wert für Notiz',
+    public_comment: 'Ungültiger Wert für Kommentar'
 };
 const TEXT_LENGTH_ERRORS = {
     title_de: 'Deutscher Titel ist zu lang (höchstens {max} Zeichen)',
-    notes: 'Notiz ist zu lang (höchstens {max} Zeichen)'
+    notes: 'Notiz ist zu lang (höchstens {max} Zeichen)',
+    public_comment: 'Kommentar ist zu lang (höchstens {max} Zeichen)'
 };
 
 function parseId(raw, field = 'id') {
@@ -85,11 +90,24 @@ function cleanEpisodes(value) {
     return n;
 }
 
+/** { id, title } of a series in a shelf the caller can see, else null (a link into a foreign shelf stays invisible). */
+function visibleManga(ctx, mangaId) {
+    const manga = ctx.db.prepare('SELECT id, title, shelf_id FROM mangas WHERE id = ?').get(mangaId);
+    return manga && access.accessibleShelfIds(ctx).includes(manga.shelf_id) ? { id: manga.id, title: manga.title } : null;
+}
+
+/** Ids of the linked series in shelves the caller can see, for the list (like visibleManga). */
+function visibleMangaIds(ctx) {
+    const scope = access.inShelves('shelf_id', access.accessibleShelfIds(ctx));
+    return new Set(ctx.db.prepare(`SELECT id FROM mangas WHERE id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL) AND ${scope.sql}`)
+        .all(...scope.params).map((r) => r.id));
+}
+
 function mangaRef(ctx, mangaId) {
     if (mangaId === null) return null;
-    const manga = ctx.db.prepare('SELECT id, title FROM mangas WHERE id = ?').get(mangaId);
-    if (!manga) throw notFound('Reihe');
-    return manga;
+    const manga = ctx.db.prepare('SELECT id, title, shelf_id FROM mangas WHERE id = ?').get(mangaId);
+    if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) throw notFound('Reihe');
+    return { id: manga.id, title: manga.title };
 }
 
 const loadRow = (ctx, id) => {
@@ -123,8 +141,10 @@ function detailOf(ctx, id) {
     const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
     const progress = progressRows(ctx, id);
     const mine = progress.find((p) => p.user_id === (ctx.user && ctx.user.id));
+    const manga = row.manga_id ? visibleManga(ctx, row.manga_id) : null;
     return {
         ...entry,
+        manga_id: manga ? manga.id : null,
         ...store.linksOf(row),
         watch: store.watchOf(row, mine, rememberedLinks(ctx, id).get(id)),
         description: row.description,
@@ -132,12 +152,14 @@ function detailOf(ctx, id) {
             ...r,
             in_collection_id: (r.anilist_id && byAni.get(r.anilist_id)?.id) || (r.mal_id && byMal.get(r.mal_id)?.id) || null
         })),
-        manga: row.manga_id ? ctx.db.prepare('SELECT id, title FROM mangas WHERE id = ?').get(row.manga_id) || null : null,
+        manga,
         my_progress: store.progressOf(mine),
-        // a resume link is where one user stopped watching; the others only see the counter
+        // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
+        // an anonymous rating still counts in `community` but carries no name here
         progress: progress.map((p) => (p === mine
             ? { ...store.progressOf(p), username: p.username }
-            : { ...store.progressOf(p), resume_url: null, resume_episode: null, username: p.username }))
+            : { ...community.othersView(store.progressOf(p), p), username: p.username })),
+        community: { ...community.summarize(progress), episodes: community.episodeCommunity(progress) }
     };
 }
 
@@ -209,7 +231,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, p.rating_visibility, p.public_comment, u.username
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -220,7 +242,9 @@ function list(ctx) {
     }
     const now = nowMs(ctx);
     const userId = ctx.user ? ctx.user.id : null;
+    const communities = community.communityByAnime(progress);
     const remembered = rememberedLinks(ctx);
+    const visibleLinks = visibleMangaIds(ctx);
     let queued = 0;
     const body = rows.map((row) => {
         const entry = store.entryOf(row, now);
@@ -229,8 +253,10 @@ function list(ctx) {
         const mine = all.find((p) => p.user_id === userId);
         return {
             ...entry,
+            manga_id: visibleLinks.has(entry.manga_id) ? entry.manga_id : null,
             watch: store.watchOf(row, mine, remembered.get(row.id)),
             my_progress: store.progressOf(mine),
+            community: communities.get(row.id) || { average: null, count: 0, watchers: 0 },
             progress_users: all.map((p) => ({ user_id: p.user_id, username: p.username, status: p.status, episodes_watched: p.episodes_watched }))
         };
     });
@@ -243,6 +269,15 @@ function detail(ctx, { params }) {
     if (store.isStale(row, nowMs(ctx))) gateway.scheduleRefresh(ctx, id);
     gateway.scheduleOwnTmdbRefresh(ctx, row);
     return { body: detailOf(ctx, id) };
+}
+
+/** GET /anime/:id/ratings – the community ratings of an entry as the caller may see them. */
+function ratings(ctx, { params }) {
+    const id = parseId(params.id);
+    loadRow(ctx, id);
+    const rows = progressRows(ctx, id);
+    const viewer = ctx.user ? ctx.user.id : null;
+    return { body: { anime_id: id, ...community.ratingsOf(rows, viewer), episodes: community.episodeCommunity(rows) } };
 }
 
 function duplicateOf(ctx, anilistId, malId, tmdbRef = null) {
@@ -452,11 +487,16 @@ function parseScore(value) {
 
 /**
  * Own progress (admins may pass user_id), by the rule of core/anime/progress.js; may lower the counter. The caller's own
- * change goes to their AniList list when the sync is on.
+ * change goes to their AniList list when the sync is on. A rating, its visibility and the comment are only ever the
+ * user's own (403 with another user_id), and the answer for another user shows the row as othersView does.
  */
 function updateProgress(ctx, { params, body }) {
     const id = parseId(params.id);
     const userId = resolveTargetUser(ctx, body.user_id);
+    const forOther = Number(userId) !== Number(ctx.user.id);
+    if (forOther && OWN_RATING_FIELDS.some((field) => body[field] !== undefined)) {
+        throw forbidden('Bewertung, Sichtbarkeit und Kommentar kann nur der Benutzer selbst ändern');
+    }
     if (body.status !== undefined && !PROGRESS_STATUSES.includes(body.status)) {
         throw badRequest(msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(PROGRESS_STATUSES) }));
     }
@@ -472,6 +512,9 @@ function updateProgress(ctx, { params, body }) {
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     const audio = cleanLanguage(body.audio_language);
     const subtitle = cleanLanguage(body.subtitle_language);
+    const visibility = community.parseVisibility(body.rating_visibility);
+    if (visibility === null) throw badRequest('Ungültige Sichtbarkeit (public, anonymous oder private)');
+    const publicComment = body.public_comment === undefined ? undefined : cleanOptionalText(body.public_comment, 'public_comment', community.MAX_COMMENT);
     const saved = ctx.db.transaction(() => {
         const anime = loadRow(ctx, id);
         if (body.status === 'Gesehen' && body.restore !== true && stillAiring(anime)) {
@@ -487,11 +530,13 @@ function updateProgress(ctx, { params, body }) {
             if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
         }
         return writeProgress(ctx, id, userId, {
-            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle
+            status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle,
+            rating_visibility: visibility, public_comment: publicComment
         });
     });
     listSync.schedulePush(ctx, userId, id);
-    return { body: store.progressOf(saved) };
+    const progress = store.progressOf(saved);
+    return { body: forOther ? community.othersView(progress, saved) : progress };
 }
 
 /** `watched_episodes` of PUT progress: undefined (unchanged), null (back to the plain counter) or the watched episode numbers. */
@@ -898,8 +943,8 @@ function remove(ctx, { params }) {
 
 async function adaptations(ctx, { params }) {
     const id = parseId(params.id);
-    const manga = ctx.db.prepare('SELECT id, title, alt_title FROM mangas WHERE id = ?').get(id);
-    if (!manga) throw notFound('Reihe');
+    const manga = ctx.db.prepare('SELECT id, title, alt_title, shelf_id FROM mangas WHERE id = ?').get(id);
+    if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) throw notFound('Reihe');
     return { body: await gateway.adaptationsOf(ctx, manga) };
 }
 
@@ -934,6 +979,7 @@ function exportCsv(ctx) {
 }
 
 module.exports = {
+    ratings,
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
     removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
     duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS

@@ -189,7 +189,8 @@ describe('AddMangaModal: series created, scanned volume failed', () => {
     expect(submitButton().textContent).toContain('Fertig');
     fireEvent.click(submitButton());
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    // + GET /api/shelves
+    expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
   it('a non-JSON success answer does not report a created series', async () => {

@@ -13,6 +13,8 @@ import { prepareImageForUpload } from '../utils/imageResize';
 import { DEFAULT_WISH_PRIORITY, normalizeWishPriority } from '../utils/priority';
 import { t } from '../i18n/index.js';
 import { editionCurrency, editionLanguage, editionRegion, isMpEdition } from '../utils/editions';
+import { formatCount } from '../utils/format';
+import { invalidateShelves } from '../utils/shelfScope';
 
 // i18n
 export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
@@ -39,6 +41,7 @@ export function buildFormData(data) {
     description: data.description || '',
     cover_image: data.cover_image || '',
     manga_passion_id: data.manga_passion_id || null,
+    shelf_id: data.shelf_id ? String(data.shelf_id) : '',
     wish: normalizeWishPriority(data.wish_priority) !== null,
     wish_priority: String(normalizeWishPriority(data.wish_priority) ?? DEFAULT_WISH_PRIORITY)
   };
@@ -50,7 +53,7 @@ export const lookupMangaUrl = (title, language) =>
 
 /** PUT body of the edit form: the wishlist toggle and its priority become wish_priority (null = not wished). */
 export function updateBody(changed, form) {
-  const { wish, wish_priority: _priority, ...body } = changed;
+  const { wish, wish_priority: _priority, shelf_id: _shelfId, ...body } = changed;
   if (wish !== undefined || _priority !== undefined) {
     body.wish_priority = form.wish ? Number(form.wish_priority) : null;
   }
@@ -95,6 +98,32 @@ export function changedFormFields(base, current) {
 
 export const seriesDeleteConfirmText = (title) =>
   t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title });
+
+/**
+ * Users whose ownership and reading marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
+ * [{ user_id, username, owned, read }], or null when the server cannot say (older server, no connection).
+ */
+export async function loadShelfMovePreview(mangaId, shelfId) {
+  try {
+    const res = await apiFetch(`/api/mangas/${encodeURIComponent(mangaId)}/shelf-move?shelf_id=${encodeURIComponent(shelfId)}`);
+    if (!res.ok) return null;
+    const data = await readJson(res);
+    return Array.isArray(data?.affected) ? data.affected : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The question before a move; `affected` as from loadShelfMovePreview (null: generic text). */
+export function shelfMoveConfirmText({ title, shelf, affected }) {
+  if (!Array.isArray(affected)) {
+    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf });
+  }
+  const people = affected
+    .map((a) => t('{name} ({owned} im Besitz, {read} gelesen)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') }))
+    .join(', ');
+  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
+}
 
 /** "Genres nachladen": only for a German series linked to Manga Passion that has no tags yet (MP knows only German editions). */
 export const canFillTags = (manga) => isMpEdition(manga) && Boolean(manga?.manga_passion_id) && !String(manga?.tags ?? '').trim();
@@ -309,6 +338,8 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
           }
         } else if (res && res.status === 404) {
           dropCache(ownerRef.current, key);
+          // the series may have moved to a shelf this user does not see
+          invalidateShelves();
           setNotFound(true);
           return;
         } else if (res && res.status === 401) {
@@ -339,29 +370,43 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!canEdit) return;
-    const body = updateBody(changedFormFields(formBaseRef.current, formData), formData);
+    const changed = changedFormFields(formBaseRef.current, formData);
+    const nextShelfId = changed.shelf_id !== undefined && Number(changed.shelf_id) > 0 ? Number(changed.shelf_id) : null;
+    const body = updateBody(changed, formData);
+    const hasBodyChanges = Object.keys(body).length > 0;
     const closeForm = () => {
       editSessionRef.current++;
       editingRef.current = false;
       setEditingState(false);
       resetLookup();
     };
-    if (Object.keys(body).length === 0) {
+    if (!hasBodyChanges && !nextShelfId) {
       closeForm();
       seedForm(mangaRef.current);
       return;
     }
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
-      if (res.ok) {
-        closeForm();
-        await fetchManga();
-      } else if (res.status === 401) {
-        handleUnauthorized();
-      } else {
-        await notifyResponseError(res, t('Fehler beim Speichern'));
+      if (nextShelfId) {
+        const shelfRes = await apiFetch(`/api/mangas/${id}/shelf`, { method: 'PUT', body: { shelf_id: nextShelfId } });
+        if (!shelfRes.ok) {
+          if (shelfRes.status === 401) handleUnauthorized();
+          else await notifyResponseError(shelfRes, t('Fehler beim Speichern'));
+          return;
+        }
+        dropCache(ownerRef.current, LIST_KEY);
+        invalidateShelves();
       }
+      if (hasBodyChanges) {
+        const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
+        if (!res.ok) {
+          if (res.status === 401) handleUnauthorized();
+          else await notifyResponseError(res, t('Fehler beim Speichern'));
+          return;
+        }
+      }
+      closeForm();
+      await fetchManga();
     } catch (err) {
       notify.error(err);
     } finally {
@@ -376,9 +421,9 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     if (list) writeCache(ownerRef.current, LIST_KEY, list.data.filter((m) => String(m.id) !== String(id)));
   };
 
-  const handleDeleteManga = async () => {
+  const handleDeleteManga = async (confirmed = false) => {
     if (!canEdit || !manga) return;
-    if (!confirm(seriesDeleteConfirmText(manga.title))) return;
+    if (!confirmed && !confirm(seriesDeleteConfirmText(manga.title))) return;
     const { title } = manga;
     const seriesId = id;
     try {
@@ -389,7 +434,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         forgetSeries();
         // the offline copy would otherwise list the deleted series until the next throttled sync
         syncOfflineCopy({ force: true });
-        navigate('/');
+        navigate('/', { replace: true });
         // the page is gone by then: a restored series opens again
         notifyTrashed(`„${title}“`, trashId, (ok) => {
           if (!ok) return;

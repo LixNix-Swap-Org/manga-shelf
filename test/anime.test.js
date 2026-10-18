@@ -158,6 +158,8 @@ test('progress for another user: admins only; list and detail show everybody, mi
     const res = await admin('PUT', `/anime/${id}/progress`, { user_id: kimId(), notes: 'vom Admin' });
     assert.equal(res.status, 200);
     assert.equal(res.body.user_id, kimId());
+    assert.equal(res.body.notes, null, 'the answer for another user is the row as others see it');
+    assert.equal((await admin('PUT', `/anime/${id}/progress`, { user_id: kimId(), score: 3 })).status, 403, 'the rating stays the user\'s own');
     await admin('PUT', `/anime/${id}/progress`, { status: 'Geplant' });
 
     const list = await visitor('GET', '/anime');
@@ -596,4 +598,26 @@ test('films and TV shows: search parameters, TMDb hits in the collection, create
 
     for (const id of [s.id, film.id, ani.body.id]) assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
     assert.equal((await admin('DELETE', '/auth/api-keys/tmdb')).status, 200);
+});
+
+test('a link into a foreign shelf: list and detail carry neither manga_id nor manga, the series stays unreachable', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'nora', password: 'password123', role: 'editor', shelf_mode: 'personal' })).status, 200);
+    const nora = ctx.client();
+    assert.equal((await nora('POST', '/auth/login', { username: 'nora', password: 'password123' })).status, 200);
+    const series = await nora('POST', '/mangas', { title: 'Noras Reihe' });
+    assert.equal(series.status, 200, JSON.stringify(series.body));
+    const created = await nora('POST', '/anime', { title: 'Noras Anime', episodes: 12, manga_id: series.body.id });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const id = created.body.id;
+    assert.deepEqual([created.body.manga_id, created.body.manga], [series.body.id, { id: series.body.id, title: 'Noras Reihe' }]);
+    assert.equal((await nora('GET', '/anime')).body.find((a) => a.id === id).manga_id, series.body.id, 'the shelf member sees the link');
+
+    for (const client of [admin, visitor]) {
+        assert.equal((await client('GET', '/anime')).body.find((a) => a.id === id).manga_id, null);
+        const detail = (await client('GET', `/anime/${id}`)).body;
+        assert.deepEqual([detail.manga_id, detail.manga], [null, null]);
+        assert.equal((await client('GET', `/mangas/${series.body.id}/adaptations`)).status, 404);
+    }
+    assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: series.body.id })).status, 404);
+    assert.equal((await nora('DELETE', `/anime/${id}`)).status, 200);
 });

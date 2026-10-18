@@ -1,4 +1,4 @@
-import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
+import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, Library, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
 import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, collectFilterLabel, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
 import { t as tr } from '../../i18n/index.js';
@@ -41,14 +41,18 @@ export default function CollectionToolbar({
   setTagFilter,
   availableLanguages = [],
   languageFilter = 'ALL',
-  setLanguageFilter
+  setLanguageFilter,
+  availableShelves = [],
+  shelfFilter = 'ALL',
+  setShelfFilter
 }) {
   const tabs = statusTabs || getStatusTabs(filterCounts || {}, statusFilter);
   const chosenTags = Array.isArray(tagFilter) ? tagFilter : [];
   const chosenKeys = new Set(chosenTags.map(t => t.toLowerCase()));
   const tagOptions = availableTags.filter(t => !chosenKeys.has(t.tag.toLowerCase()));
   const filtersActive = statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter) || Boolean(search)
-    || chosenTags.length > 0 || languageFilter !== 'ALL';
+    || chosenTags.length > 0 || languageFilter !== 'ALL' || shelfFilter !== 'ALL';
+  const showShelves = Boolean(setShelfFilter) && (availableShelves.length > 1 || shelfFilter !== 'ALL');
   const showLanguages = Boolean(setLanguageFilter) && (availableLanguages.length > 1 || languageFilter !== 'ALL');
   return (
     <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
@@ -128,6 +132,23 @@ export default function CollectionToolbar({
             >
               <option value="">{chosenTags.length ? tr('Weiteres Genre…') : tr('Alle Genres')}</option>
               {tagOptions.map(t => <option key={t.tag} value={t.tag}>{genreLabel(t.tag)} ({t.count})</option>)}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
+          </label>
+        )}
+
+        {showShelves && (
+          <label className={CHIP_LABEL}>
+            <Library className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" />
+            <select
+              id="filter-shelf-select"
+              aria-label={tr('Regal filtern')}
+              value={shelfFilter}
+              onChange={e => setShelfFilter(e.target.value)}
+              className={`filter-chip-select ${CHIP_SELECT}`}
+            >
+              <option value="ALL">{tr('Alle Regale')}</option>
+              {availableShelves.map(s => <option key={s.id} value={String(s.id)}>{s.name} ({s.count})</option>)}
             </select>
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
           </label>
@@ -226,6 +247,7 @@ export default function CollectionToolbar({
               setAuthorFilter?.('');
               setTagFilter?.([]);
               setLanguageFilter?.('ALL');
+              setShelfFilter?.('ALL');
               setSearch('');
             }}
             className="btn-secondary py-1.5 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border-sky-500/30 shrink-0"

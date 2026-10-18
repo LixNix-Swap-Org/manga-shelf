@@ -178,7 +178,7 @@ describe('install-service / uninstall-service', () => {
 
     test('Linux system service with a data folder below /home: ProtectHome=tmpfs and only that folder bound in', () => {
         const dataDir = '/home/u/manga daten:1';
-        const steps = services.installPlan({ platform: 'linux', options: parseArgs(['install-service', '--data-dir', dataDir]).options, execPath: PACKAGED, uid: 0 });
+        const steps = services.installPlan({ platform: 'linux', options: parseArgs(['install-service', '--data-dir', dataDir], 'linux').options, execPath: PACKAGED, uid: 0 });
         const unit = steps.find(s => s.kind === 'write').content;
         assert.match(unit, /^ProtectHome=tmpfs$/m);
         assert.doesNotMatch(unit, /^ProtectHome=true$/m);

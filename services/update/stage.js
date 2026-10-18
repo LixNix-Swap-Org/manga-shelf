@@ -36,10 +36,14 @@ function removeDir(dir) {
     } catch (e) {}
 }
 
+/** Closes the verified handle; a discarded staging's folder is removed again once the handle is closed (Windows keeps open files). */
 function closeHandle(rec) {
     if (!rec.handle) return;
-    rec.handle.close().catch(() => {});
+    const h = rec.handle;
     rec.handle = null;
+    h.close().catch(() => {}).finally(() => {
+        if (rec.discarded) removeDir(rec.dir);
+    });
 }
 
 function folderProblem(dir, uid) {
@@ -86,6 +90,7 @@ function discard(id) {
     if (!current || (id !== undefined && current.id !== id)) return false;
     const rec = current;
     current = null;
+    rec.discarded = true;
     try { rec.abort.abort(); } catch (e) {}
     closeHandle(rec);
     removeDir(rec.dir);
@@ -113,6 +118,7 @@ function create({ dataDir, version, assetName, userId, now = Date.now(), uid }) 
         signer: null,
         logIndex: null,
         handle: null,
+        discarded: false,
         abort: new AbortController()
     };
     writeInfo(current);
@@ -171,7 +177,7 @@ function sweep(dataDir) {
     return removed;
 }
 
-/** For tests: forget the staging without touching its files. */
+/** For tests: forget the staging without touching its files (only its handle is closed). */
 function reset() {
     if (current) closeHandle(current);
     current = null;

@@ -471,10 +471,9 @@ test('owners: Löschen eines Mitbesitzers setzt das Kaufdatum auf das früheste 
     assert.equal(v.purchase_date, '2024-06-06');
 });
 
-test('owners: Altstatus Gelesen mit Lese-Einträgen behält genau diese (Datenqualität, Besitzwechsel, Migration 13 gleich)', async () => {
+test('owners: Altstatus Gelesen mit Lese-Einträgen behält genau diese (Datenqualität, Besitzwechsel)', async () => {
     const { db } = require('../db');
     const users = (await admin('GET', '/users')).body;
-    const adminId = users.find(u => u.username === 'admin').id;
     const edId = users.find(u => u.username === 'ed').id;
     const visId = users.find(u => u.username === 'vis').id;
     const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Leser' })).body.id;
@@ -486,7 +485,8 @@ test('owners: Altstatus Gelesen mit Lese-Einträgen behält genau diese (Datenqu
     db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaFix, edId);
     const fix = await editor('POST', '/maintenance/fix', { check: 'legacy_read' });
     assert.equal(fix.status, 200, JSON.stringify(fix.body));
-    assert.deepEqual([status(viaFix), owners(viaFix), readers(viaFix)], ['Vorhanden', [adminId], [edId]]);
+    // the fix runs in the caller's shelves: a volume without owner goes to the caller, a member there (not the oldest admin)
+    assert.deepEqual([status(viaFix), owners(viaFix), readers(viaFix)], ['Vorhanden', [edId], [edId]]);
 
     const viaOwner = seedVolume(id, '2', 'Gelesen');
     db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaOwner, edId);

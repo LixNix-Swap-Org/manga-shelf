@@ -30,6 +30,7 @@ export default function VolumeGridView({
   canToggleOthers,
   gapsOfficial,
   canToggle = canEdit,
+  canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
   onSelectVolume
@@ -206,25 +207,25 @@ export default function VolumeGridView({
                 )}
                 <button
                   type="button"
-                  disabled={!canToggle}
+                  disabled={!canToggleOwned}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (canToggle) handleToggleVolume(vol);
+                    if (canToggleOwned) handleToggleVolume(vol);
                   }}
                   className={`relative before:absolute before:-inset-2.5 before:content-[''] w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
-                    !canToggle ? 'cursor-default' : 'cursor-pointer'
+                    !canToggleOwned ? 'cursor-default' : 'cursor-pointer'
                   } ${
                     isOwned 
-                      ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canToggle ? ' hover:bg-emerald-500/30' : '') 
+                      ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-400' + (canToggleOwned ? ' hover:bg-emerald-500/30' : '') 
                       : statusKind === 'preordered'
-                        ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canToggle ? ' hover:bg-sky-500/30' : '')
+                        ? 'bg-sky-500/20 border border-sky-500/60 text-sky-400' + (canToggleOwned ? ' hover:bg-sky-500/30' : '')
                         : statusKind === 'ordered'
-                          ? 'bg-orange-500/20 border border-orange-500/60 text-orange-400' + (canToggle ? ' hover:bg-orange-500/30' : '')
+                          ? 'bg-orange-500/20 border border-orange-500/60 text-orange-400' + (canToggleOwned ? ' hover:bg-orange-500/30' : '')
                         : statusKind === 'upcoming'
-                          ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canToggle ? ' hover:bg-purple-500/30' : '')
-                          : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canToggle ? ' hover:border-slate-500 hover:text-slate-300' : '')
+                          ? 'bg-purple-500/20 border border-purple-500/60 text-purple-400' + (canToggleOwned ? ' hover:bg-purple-500/30' : '')
+                          : 'bg-slate-800/80 border border-slate-700 text-slate-400' + (canToggleOwned ? ' hover:border-slate-500 hover:text-slate-300' : '')
                   }`}
-                  title={!canToggle ? t('Status: {status}', { status: statusLabel(vol.status || 'Fehlt') }) : t('Status: {status} (Klicken zum Umschalten)', { status: statusLabel(vol.status || 'Fehlt') })}
+                  title={!canToggleOwned ? t('Status: {status}', { status: statusLabel(vol.status || 'Fehlt') }) : t('Status: {status} (Klicken zum Umschalten)', { status: statusLabel(vol.status || 'Fehlt') })}
                   aria-label={t('Status: {status} – {volume}', { status: statusLabel(vol.status || 'Fehlt'), volume: getVolumeDisplayTitle(vol) })}
                 >
                   {isOwned ? (

@@ -262,6 +262,7 @@ test('what is installed is what was verified, even when the staged file is repla
         { name: 'db.js', data: 'module.exports = 1;\n' }
     ]);
     fs.writeFileSync(`${staged}.planted`, planted);
+    if (process.platform === 'win32') fs.renameSync(staged, `${staged}.old`);
     fs.renameSync(`${staged}.planted`, staged);
     update.applyUpdate({ stagingId: started.staging_id, userId: 1 });
     await until(() => w.exits.length === 1);

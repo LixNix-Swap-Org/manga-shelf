@@ -235,18 +235,20 @@ describe('useDetailKeyboard: Escape', () => {
     expect(setActiveVolume).toHaveBeenCalledWith(null);
   });
 
-  it('asks before discarding a dirty series edit form and cancels through cancelEditing', () => {
+  // askConfirm without a mounted ConfirmHost asks through window.confirm and answers asynchronously
+  it('asks before discarding a dirty series edit form and cancels through cancelEditing', async () => {
     const cancelEditing = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     renderKeyboard({ editing: true, isEditDirty: true, cancelEditing });
     key(document.body, 'Escape');
+    await act(async () => {});
     expect(cancelEditing).not.toHaveBeenCalled();
     key(document.body, 'Escape');
-    expect(cancelEditing).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(cancelEditing).toHaveBeenCalledTimes(1));
     expect(confirmSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('Escape typed in a field of the series form keeps the form and its input', () => {
+  it('Escape typed in a field of the series form keeps the form and its input', async () => {
     const cancelEditing = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm');
     renderKeyboard({ editing: true, isEditDirty: true, cancelEditing });
@@ -263,16 +265,20 @@ describe('useDetailKeyboard: Escape', () => {
     document.body.appendChild(checkbox);
     confirmSpy.mockReturnValueOnce(true);
     key(checkbox, 'Escape');
-    expect(cancelEditing).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(cancelEditing).toHaveBeenCalledTimes(1));
   });
 
-  it('without a dirty flag, cancelEditing is only called after asking', () => {
+  it('without a dirty flag, cancelEditing is only called after asking', async () => {
     const cancelEditing = vi.fn();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     renderKeyboard({ editing: true, cancelEditing });
     key(document.body, 'Escape');
     expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await act(async () => {});
     expect(cancelEditing).not.toHaveBeenCalled();
+    key(document.body, 'Escape');
+    await waitFor(() => expect(cancelEditing).toHaveBeenCalledTimes(1));
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
   });
 
   it('a clean edit form closes without asking (setEditing fallback)', () => {
@@ -1047,6 +1053,20 @@ describe('useMangaData: edit form', () => {
     fetchMock.mockClear();
     await act(() => result.current.handleUpdate({ preventDefault() {} }));
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.editing).toBe(false);
+  });
+
+  it('save with a changed shelf_id moves the series via PUT /api/mangas/:id/shelf', async () => {
+    const { result, fetchMock } = await loaded(async () => res(200, { ...SERVER, shelf_id: 1 }));
+    act(() => result.current.startEditing());
+    act(() => result.current.setFormData(prev => ({ ...prev, shelf_id: 2 })));
+    fetchMock.mockClear();
+    fetchMock.mockImplementation(async (url, opts) => (opts?.method === 'PUT' ? res(200, { id: 7, shelf_id: 2 }) : res(200, { ...SERVER, shelf_id: 2 })));
+    await act(() => result.current.handleUpdate({ preventDefault() {} }));
+    const puts = fetchMock.mock.calls.filter(c => c[1]?.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    expect(puts[0][0]).toBe('/api/mangas/7/shelf');
+    expect(bodyOf(puts[0])).toEqual({ shelf_id: 2 });
     expect(result.current.editing).toBe(false);
   });
 

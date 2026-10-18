@@ -122,7 +122,7 @@ export default function DetailBottomBar({
     }
     toast('info', t('ISBN {isbn} wird gesucht...', { isbn: code }), { duration: 0 });
     let res;
-    let data = null;
+    let data;
     try {
       res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(code)}`, { timeout: TIMEOUTS.lookup });
       data = await readJson(res);

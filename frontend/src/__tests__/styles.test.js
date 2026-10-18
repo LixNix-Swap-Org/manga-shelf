@@ -227,7 +227,8 @@ describe('dialog overlays', () => {
     'components/detail/GapFillModal.jsx', 'components/detail/BatchAddModal.jsx', 'components/detail/BatchReadModal.jsx',
     'components/detail/MpEditionModal.jsx', 'components/modals/AnimeDetailModal.jsx',
     'components/dashboard/ScanCandidatesDialog.jsx', 'components/dashboard/CsvExchangeModal.jsx',
-    'components/common/ConnectQr.jsx', 'components/modals/ShareLinkDialog.jsx', 'app/watch/WatchMatchDialog.jsx'
+    'components/common/ConnectQr.jsx', 'components/modals/ShareLinkDialog.jsx', 'app/watch/WatchMatchDialog.jsx',
+    'components/modals/ConfirmDialog.jsx'
   ];
   const rule = (selector) => css.match(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] || '';
 
@@ -260,6 +261,8 @@ describe('dialog overlays', () => {
       expect(text, rel).toMatch(/className="outline-none dialog-overlay /);
       expect(text, rel).toMatch(/className="dialog-box /);
       expect(text, rel).not.toMatch(/fixed inset-0[^"]*(items-center|p-2 sm:p-4|overflow-hidden)/);
+      // the utilities would override the overlay's flex-start alignment and its safe-area padding
+      expect(text, rel).not.toMatch(/dialog-overlay [^"]*(\bitems-center\b|\bjustify-center\b|(^|\s)(\w+:)?p[xy]?-\d)/);
       expect(text, rel).not.toMatch(/dialog-box[^"]*\bmy-(3|8|auto)\b/);
     }
   });

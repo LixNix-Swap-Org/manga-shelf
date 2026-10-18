@@ -36,6 +36,11 @@ let nextToken = 1;
 let ownBacks = 0;
 let ownBackTimer = null;
 let listening = false;
+const closedTokens = new Set();
+let dropTimer = null;
+// callbacks of afterDialogEntriesDropped: until the drop runs, then until its Back has landed
+let waitingForDrop = [];
+let waitingForBack = [];
 
 const dialogTokens = (state) => (Array.isArray(state?.[HISTORY_STATE_KEY]) ? state[HISTORY_STATE_KEY] : []);
 
@@ -45,14 +50,44 @@ const dialogTokens = (state) => (Array.isArray(state?.[HISTORY_STATE_KEY]) ? sta
  */
 export const dialogEntryOnTop = () => typeof window !== 'undefined' && dialogTokens(window.history?.state).length > 0;
 
+const currentState = () => (window.history.state && typeof window.history.state === 'object' ? window.history.state : {});
+
 function pushDialogEntry(token) {
-  const state = window.history.state && typeof window.history.state === 'object' ? window.history.state : {};
+  const state = currentState();
   window.history.pushState({ ...state, [HISTORY_STATE_KEY]: [...dialogTokens(state), token] }, '');
+}
+
+/**
+ * A dialog that stayed open after Back gets its entry back. When it opened another dialog meanwhile (a confirmation
+ * asking about unsaved input), its entry goes below that one's, so the next Back closes the newer dialog first.
+ */
+function restoreDialogEntry(dialog) {
+  const state = currentState();
+  const tokens = dialogTokens(state);
+  const later = openDialogs.slice(openDialogs.indexOf(dialog) + 1).map((d) => d.token).filter((token) => tokens.includes(token));
+  if (!later.length) {
+    pushDialogEntry(dialog.token);
+    return;
+  }
+  let stack = [...tokens.filter((token) => !later.includes(token)), dialog.token];
+  window.history.replaceState({ ...state, [HISTORY_STATE_KEY]: stack }, '');
+  for (const token of later) {
+    stack = [...stack, token];
+    window.history.pushState({ ...state, [HISTORY_STATE_KEY]: stack }, '');
+  }
+}
+
+// in a task of their own, after the router has taken the popstate
+function releaseWaitingForBack() {
+  const waiting = waitingForBack;
+  waitingForBack = [];
+  if (waiting.length) setTimeout(() => waiting.forEach((fn) => fn()), 0);
 }
 
 function onPopState(event) {
   if (ownBacks > 0) {
     ownBacks--;
+    if (!ownBacks) releaseWaitingForBack();
     return;
   }
   const remaining = new Set(dialogTokens(event.state));
@@ -61,14 +96,49 @@ function onPopState(event) {
   }
 }
 
-/** Removes the entry of a dialog the app closed itself, unless a navigation already put another entry on top. */
-function dropDialogEntry(token) {
+/**
+ * Removes the entries of the dialogs the app closed in one go (a confirmation and the dialog it closes), unless a
+ * navigation already put another entry on top.
+ */
+function dropClosedEntries() {
+  dropTimer = null;
   const tokens = dialogTokens(window.history.state);
-  if (tokens[tokens.length - 1] !== token) return;
+  let depth = 0;
+  while (depth < tokens.length && closedTokens.has(tokens[tokens.length - 1 - depth])) depth++;
+  closedTokens.clear();
+  const waiting = waitingForDrop;
+  waitingForDrop = [];
+  if (!depth) {
+    waiting.forEach((fn) => fn());
+    return;
+  }
+  waitingForBack.push(...waiting);
   ownBacks++;
   clearTimeout(ownBackTimer);
-  ownBackTimer = setTimeout(() => { ownBacks = 0; }, OWN_BACK_TIMEOUT_MS);
-  window.history.back();
+  ownBackTimer = setTimeout(() => {
+    ownBacks = 0;
+    releaseWaitingForBack();
+  }, OWN_BACK_TIMEOUT_MS);
+  if (depth === 1) window.history.back();
+  else window.history.go(-depth);
+}
+
+function dropDialogEntry(token) {
+  closedTokens.add(token);
+  if (dropTimer === null) dropTimer = setTimeout(dropClosedEntries, 0);
+}
+
+/**
+ * Runs `fn` once the entries of the dialogs closing in this commit are gone (in the next task when there are none).
+ * A navigation chosen in a confirmation then replaces the entry of the dialog below it, not the confirmation's own.
+ */
+export function afterDialogEntriesDropped(fn) {
+  if (typeof window === 'undefined' || !window.history?.pushState) {
+    fn();
+    return;
+  }
+  waitingForDrop.push(fn);
+  if (dropTimer === null) dropTimer = setTimeout(dropClosedEntries, 0);
 }
 
 /** The dialog's own close path: its Escape handling (which may refuse while busy or ask about unsaved input). */
@@ -158,7 +228,7 @@ export default function useDialogA11y(open, { returnFocusRef, onClose, history =
       setTimeout(() => {
         if (!openDialogs.includes(dialog)) return;
         dialog.popped = false;
-        pushDialogEntry(dialog.token);
+        restoreDialogEntry(dialog);
       }, KEPT_OPEN_CHECK_MS);
     };
     openDialogs.push(dialog);
@@ -167,7 +237,7 @@ export default function useDialogA11y(open, { returnFocusRef, onClose, history =
       openDialogs.splice(openDialogs.indexOf(dialog), 1);
       if (dialog.popped) return;
       // after the commit: a navigation in the same handler (open the chosen series) pushes its entry first
-      setTimeout(() => dropDialogEntry(dialog.token), 0);
+      dropDialogEntry(dialog.token);
     };
   }, [open, history]);
 

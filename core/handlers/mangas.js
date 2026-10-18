@@ -8,6 +8,7 @@ const {
 const { readProfile } = require('../lib/locales');
 const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority } = require('../lib/validate');
 const snapshot = require('../snapshot');
+const access = require('../lib/access');
 const { moveMangaToTrash } = require('../lib/trash');
 const { normalizeTags, splitTags } = require('../lib/tags');
 
@@ -177,9 +178,10 @@ function readMangaFields(body, stored = null) {
 }
 
 /** GET /tags: every tag of the collection with the number of series, most used first (suggestions, filter chips). */
-function tags(ctx) {
+function tags(ctx, { query }) {
     const counts = new Map();
-    for (const row of ctx.db.prepare("SELECT tags FROM mangas WHERE tags IS NOT NULL AND TRIM(tags) <> ''").all()) {
+    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, query.shelf_id));
+    for (const row of ctx.db.prepare(`SELECT tags FROM mangas WHERE tags IS NOT NULL AND TRIM(tags) <> '' AND ${scope.sql}`).all(...scope.params)) {
         for (const tag of splitTags(row.tags)) {
             const key = tag.toLowerCase();
             const entry = counts.get(key);
@@ -191,8 +193,8 @@ function tags(ctx) {
     return { body: { tags: list } };
 }
 
-function list(ctx) {
-    return { body: snapshot.listMangas(ctx, ctx.user.id) };
+function list(ctx, { query }) {
+    return { body: snapshot.listMangas(ctx, ctx.user.id, { shelfIds: access.requestedShelfIds(ctx, query.shelf_id) }) };
 }
 
 function create(ctx, { body }) {
@@ -215,10 +217,11 @@ function create(ctx, { body }) {
         workKey = body.work_key;
     }
     const language = fields.language || defaultLanguageOf(ctx);
+    const shelfId = access.targetShelfId(ctx, body.shelf_id);
 
     const result = ctx.db.prepare(`
-        INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, updated_by, shelf_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         cleanTitle,
         fields.alt_title ?? null,
@@ -238,7 +241,8 @@ function create(ctx, { body }) {
         isMpLanguage(language) ? fields.manga_passion_id ?? null : null,
         fields.wish_priority ?? null,
         fields.collecting ?? 'aktiv',
-        ctx.user.id
+        ctx.user.id,
+        shelfId
     );
     return { body: { success: true, id: Number(result.lastInsertRowid) } };
 }
@@ -333,10 +337,10 @@ function createEdition(ctx, { params, body }) {
         if (!source.work_key) ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?').run(workKey, source.id);
         return Number(ctx.db.prepare(`
             INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes,
-                                description, cover_image, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, ?, ?, ?, ?)
+                                description, cover_image, updated_by, shelf_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, ?, ?, ?, ?, ?)
         `).run(title, source.alt_title, source.author, publisher, fields.language, fields.region ?? null, fields.currency || DEFAULT_CURRENCY,
-            workKey, source.tags, source.total_volumes, source.description, source.cover_image, ctx.user.id).lastInsertRowid);
+            workKey, source.tags, source.total_volumes, source.description, source.cover_image, ctx.user.id, source.shelf_id).lastInsertRowid);
     });
     return { status: 201, body: { success: true, id, work_key: workKey } };
 }
@@ -348,6 +352,8 @@ function createEdition(ctx, { params, body }) {
 function linkWork(ctx, { params, body }) {
     const manga = ctx.db.prepare('SELECT id, work_key FROM mangas WHERE id = ?').get(params.id);
     if (!manga) throw notFound('Manga');
+    // the group is only changed inside the shelves the caller may edit; other shelves keep their own groups
+    const editable = access.inShelves('shelf_id', access.accessibleShelfIds(ctx, 'editor'));
     if (body.link_to === undefined) throw badRequest('link_to ist erforderlich (Reihen-ID oder null)');
     let workKey = null;
     if (body.link_to === null || body.link_to === '') {
@@ -355,7 +361,7 @@ function linkWork(ctx, { params, body }) {
             ctx.db.prepare('UPDATE mangas SET work_key = NULL WHERE id = ?').run(manga.id);
             // a manual group of one is no group: its key would otherwise wait for the next link
             if (isManualWorkKey(manga.work_key)) {
-                const left = ctx.db.prepare('SELECT id FROM mangas WHERE work_key = ? LIMIT 2').all(manga.work_key);
+                const left = ctx.db.prepare(`SELECT id FROM mangas WHERE work_key = ? AND ${editable.sql} LIMIT 2`).all(manga.work_key, ...editable.params);
                 if (left.length === 1) ctx.db.prepare('UPDATE mangas SET work_key = NULL WHERE id = ?').run(left[0].id);
             }
         });
@@ -365,10 +371,11 @@ function linkWork(ctx, { params, body }) {
         if (targetId === manga.id) throw badRequest('Eine Reihe kann nicht mit sich selbst verknüpft werden');
         const target = ctx.db.prepare('SELECT id, work_key FROM mangas WHERE id = ?').get(targetId);
         if (!target) throw notFound('Manga');
+        access.mangaAccess(ctx, target.id, 'editor');
         workKey = preferredWorkKey(manga.work_key, target.work_key) || newManualWorkKey(ctx);
         ctx.db.transaction(() => {
-            const regroup = ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE work_key = ?');
-            for (const key of new Set([manga.work_key, target.work_key])) if (key && key !== workKey) regroup.run(workKey, key);
+            const regroup = ctx.db.prepare(`UPDATE mangas SET work_key = ? WHERE work_key = ? AND ${editable.sql}`);
+            for (const key of new Set([manga.work_key, target.work_key])) if (key && key !== workKey) regroup.run(workKey, key, ...editable.params);
             ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id IN (?, ?)').run(workKey, manga.id, target.id);
         });
     }

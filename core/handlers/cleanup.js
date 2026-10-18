@@ -1,8 +1,9 @@
 // "Sammlung aufräumen": GET /maintenance/quality (data-quality checks), POST /maintenance/fix (the safe fixes).
+const access = require('../lib/access');
 const { badRequest } = require('../errors');
 const { isValidIsbn } = require('../lib/isbn');
 const { normalizePublisher, isKnownPublisher } = require('../lib/publishers');
-const { migrateLegacyReadStatus } = require('../lib/owners');
+const { LEGACY_READ_STATUS, convertLegacyRead } = require('../lib/owners');
 const { zonedToday } = require('../radar');
 
 const ITEM_LIMIT = 50;
@@ -89,7 +90,8 @@ function todayString(ctx) {
 }
 
 /** Counts plus up to 50 entries per check; `fix` names the POST /maintenance/fix action a check offers. */
-function quality(ctx) {
+function quality(realCtx) {
+    const ctx = access.scopedCtx(realCtx, access.accessibleShelfIds(realCtx));
     const today = todayString(ctx);
     const checks = [
         duplicateTitles(ctx),
@@ -120,17 +122,28 @@ function normalizeStoredPublishers(ctx) {
     return changed;
 }
 
+// 'Gelesen' volumes of these shelves become owned and read; one without owner goes to the caller, a member there.
+function convertLegacyReads(ctx, shelfIds) {
+    const scope = access.inShelves('m.shelf_id', shelfIds);
+    const rows = ctx.db.prepare(`
+        SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE LOWER(TRIM(v.status)) = LOWER(?) AND ${scope.sql}
+    `).all(LEGACY_READ_STATUS, ...scope.params);
+    for (const row of rows) convertLegacyRead(ctx.db, row.id, ctx.user.id);
+    return rows.length;
+}
+
 const FIXES = {
-    legacy_read: (ctx) => migrateLegacyReadStatus(ctx.db),
-    normalize_publishers: normalizeStoredPublishers
+    legacy_read: convertLegacyReads,
+    normalize_publishers: (ctx, shelfIds) => normalizeStoredPublishers(access.scopedCtx(ctx, shelfIds))
 };
 
-/** { check: 'legacy_read' | 'normalize_publishers' } -> { success, changed }. */
+/** { check: 'legacy_read' | 'normalize_publishers' } -> { success, changed }; only in the caller's editable shelves. */
 function fix(ctx, { body }) {
     const run = Object.prototype.hasOwnProperty.call(FIXES, body.check) ? FIXES[body.check] : null;
     if (!run) throw badRequest('Unbekannte Korrektur', 'FIX_UNKNOWN');
+    const shelfIds = access.accessibleShelfIds(ctx, 'editor');
     let changed = 0;
-    ctx.db.transaction(() => { changed = run(ctx); });
+    ctx.db.transaction(() => { changed = run(ctx, shelfIds); });
     return { body: { success: true, check: body.check, changed } };
 }
 

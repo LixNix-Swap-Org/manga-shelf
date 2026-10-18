@@ -243,7 +243,7 @@ export async function createLocalRuntime({
   let seq = 0;
   let conn = null;
   let user = null;
-  let fresh = false;
+  let fresh;
 
   /** A follower never writes: a profile the stored database lacks stays pending until this window holds the lock. */
   function resolveProfile(selection, options = {}) {

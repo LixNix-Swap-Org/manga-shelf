@@ -7,6 +7,7 @@ import { prepareImageForUpload } from '../utils/imageResize';
 import { submitChange, applyChangeToCaches } from '../utils/outbox';
 import { applyVolumeChange } from '../utils/volumePatch';
 import { t, tn } from '../i18n/index.js';
+import { askConfirm } from '../components/modals/askConfirm';
 import { serverText } from '../i18n/serverText.js';
 
 /** Error text of a failed response: the JSON `error`, else the fallback (proxies answer 502/504/413 with HTML). */
@@ -109,10 +110,11 @@ export function ownedToggleChange(vol, user, today = localDateString()) {
 
 /**
  * Per-volume actions: add, toggle owned/read, open the editor, delete. Toggles go through the outbox: applied at once
- * (patchManga and cached copies), sent now or replayed later. `canToggle` (default canEdit) gates only the toggles.
+ * (patchManga and cached copies), sent now or replayed later. `canToggle` (default canEdit) gates the toggles,
+ * `canToggleOwned` (default canToggle) the ownership toggle alone (a shelf viewer marks reads, not ownership).
  */
 export default function useVolumeActions({
-  id, user, canEdit, canToggle = canEdit, selectedReaderId, fetchManga, volumes, onUnauthorized, patchManga
+  id, user, canEdit, canToggle = canEdit, canToggleOwned = canToggle, selectedReaderId, fetchManga, volumes, onUnauthorized, patchManga
 }) {
   const [newVolumeType, setNewVolumeType] = useState('volume'); // 'volume' | 'special_edition' | 'schuber' | 'special'
   const [newVolumeNum, setNewVolumeNum] = useState('');
@@ -313,7 +315,7 @@ export default function useVolumeActions({
   });
 
   const handleToggleVolume = (vol) => {
-    if (!canToggle) return undefined;
+    if (!canToggleOwned) return undefined;
     return withVolumeLock(vol.id, async () => {
       const change = { ...ownedToggleChange(vol, user), volumeId: vol.id, mangaId: id };
       const data = await submitToggle(change, t(STATUS_FAILED));
@@ -436,7 +438,7 @@ export default function useVolumeActions({
       : (volumes || []).find(v => String(v.id) === String(volOrId))
         || (activeVolume && String(activeVolume.id) === String(volOrId) ? activeVolume : null);
     const volId = typeof volOrId === 'object' ? volOrId.id : volOrId;
-    if (!confirm(volumeDeleteConfirmText(vol))) return;
+    if (!(await askConfirm(volumeDeleteConfirmText(vol), { title: t('Band löschen') }))) return;
     let res;
     try {
       res = await apiFetch(`/api/volumes/${volId}`, { method: 'DELETE' });

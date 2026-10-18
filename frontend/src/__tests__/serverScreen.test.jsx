@@ -14,6 +14,7 @@ import DashboardFooter from '../components/dashboard/DashboardFooter';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import { HAPTIC_PATTERNS } from '../utils/haptics';
 import { recordToasts } from './toastLog';
+import ConfirmHost from '../components/modals/askConfirm';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const healthy = (id = 'inst-1') => json(200, { name: 'Manga Shelf', status: 'ok', instance_id: id, version: '2.20.0' });
@@ -171,6 +172,25 @@ describe('ServerScreen', () => {
     await waitFor(() => expect(getServers()).toEqual([]));
     expect(confirmSpy).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(getOutbox().countServer(a.id)).toBe(0));
+    confirmSpy.mockRestore();
+  });
+
+  it('with the confirmation host mounted, the removal asks in the app dialog, not with window.confirm', async () => {
+    saveServer({ name: 'Laden', urls: ['https://laden.example'] });
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    render(<ConfirmHost />);
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Laden entfernen' }));
+    let question = await screen.findByRole('dialog', { name: 'Server entfernen' });
+    expect(question.textContent).toContain('Server „Laden“ entfernen? Die Anmeldung auf diesem Gerät wird dabei vergessen.');
+    fireEvent.click(within(question).getByRole('button', { name: 'Abbrechen' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Server entfernen' })).toBeNull());
+    expect(getServers()).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Laden entfernen' }));
+    question = await screen.findByRole('dialog', { name: 'Server entfernen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Entfernen' }));
+    await waitFor(() => expect(getServers()).toEqual([]));
+    expect(confirmSpy).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
 

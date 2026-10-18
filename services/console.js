@@ -5,7 +5,8 @@ const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
 const bcrypt = require('bcryptjs');
-const { db, dataDir, dbPath } = require('../db');
+const { db, dataDir, dbPath, runTransaction } = require('../db');
+const { reconcileShelfRoles } = require('../core/lib/access');
 const disk = require('../utils/disk');
 const pkg = require('../package.json');
 const log = require('../utils/logger').child('console');
@@ -145,7 +146,11 @@ async function cmdPromote(name, out) {
         out(`Benutzer „${name}“ nicht gefunden ("benutzer" listet alle).`);
         return false;
     }
-    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(user.id);
+    // the shelf roles follow the account role as on PUT /users/:id (a former visitor edits the household shelf)
+    runTransaction(() => {
+        db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(user.id);
+        reconcileShelfRoles(db, user.id, user.role, 'admin');
+    });
     log.info(`User "${user.username}" promoted to admin from the console`);
     out(`„${user.username}“ ist jetzt Administrator.`);
     return true;

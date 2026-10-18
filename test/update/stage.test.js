@@ -113,12 +113,57 @@ test('openVerified: one handle of the downloaded file, kept only when its bytes 
     const handle = await stage.openVerified(rec, h.sha256hex(Buffer.from('verified bytes')));
     assert.equal(rec.handle, handle);
     fs.writeFileSync(`${stage.assetPath(rec)}.swap`, 'planted bytes');
+    if (process.platform === 'win32') fs.renameSync(stage.assetPath(rec), `${stage.assetPath(rec)}.old`);
     fs.renameSync(`${stage.assetPath(rec)}.swap`, stage.assetPath(rec));
     assert.equal(await sha256Of(handle), h.sha256hex(Buffer.from('verified bytes')));
     stage.discard(rec.id);
     assert.equal(rec.handle, null);
     await new Promise((r) => setImmediate(r));
     assert.equal(handle.fd, -1, 'discard closes the handle');
+    assert.equal(await eventually(() => !fs.existsSync(rec.dir)), true, 'discard removes the folder');
+});
+
+async function eventually(check, ms = 2000) {
+    const end = Date.now() + ms;
+    while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 5));
+    return check();
+}
+
+/** Removing a folder fails while `handle` is open, as on Windows; `closed()` turns true once its close settled. */
+function lockedWhileOpen(t, handle) {
+    const close = handle.close;
+    let open = true;
+    handle.close = () => close.call(handle).finally(() => { open = false; });
+    const rmSync = fs.rmSync;
+    t.mock.method(fs, 'rmSync', (target, options) => {
+        if (open) throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${target}'`), { code: 'EBUSY' });
+        return rmSync(target, options);
+    });
+    return { closed: () => !open };
+}
+
+test('discard with an open handle: the folder goes once the handle is closed', async (t) => {
+    const rec = stage.create({ dataDir, version: '3.2.0', assetName: 'asset.zip', userId: 1 });
+    fs.writeFileSync(stage.assetPath(rec), 'verified bytes');
+    const handle = await stage.openVerified(rec, h.sha256hex(Buffer.from('verified bytes')));
+    lockedWhileOpen(t, handle);
+    assert.equal(stage.discard(rec.id), true);
+    assert.equal(fs.existsSync(rec.dir), true, 'the open handle blocks the first removal');
+    assert.equal(await eventually(() => !fs.existsSync(rec.dir)), true, 'removed after the close');
+    assert.equal(stage.get(), null);
+});
+
+test('reset forgets the staging without touching its files, also with an open handle', async (t) => {
+    const rec = stage.create({ dataDir, version: '3.2.0', assetName: 'asset.zip', userId: 1 });
+    fs.writeFileSync(stage.assetPath(rec), 'verified bytes');
+    const handle = await stage.openVerified(rec, h.sha256hex(Buffer.from('verified bytes')));
+    const lock = lockedWhileOpen(t, handle);
+    stage.reset();
+    assert.equal(stage.get(), null);
+    assert.equal(rec.handle, null);
+    assert.equal(await eventually(lock.closed), true);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(fs.readFileSync(stage.assetPath(rec), 'utf8'), 'verified bytes');
 });
 
 test('openVerified refuses a symlink in place of the download', { skip: process.platform === 'win32' ? 'symlinks' : false }, async () => {
