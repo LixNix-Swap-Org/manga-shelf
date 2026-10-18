@@ -641,15 +641,22 @@ function migrationList(log = silentLog) {
                 const trashCols = new Set(d.prepare('PRAGMA table_info(trash)').all().map(c => c.name));
                 if (!trashCols.has('shelf_id')) d.exec('ALTER TABLE trash ADD COLUMN shelf_id INTEGER;');
                 d.exec("UPDATE trash SET shelf_id = 1 WHERE shelf_id IS NULL;");
+                // only accounts without any shelf, so a second run leaves memberships changed since then alone
                 d.exec(`
                     INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role)
-                    SELECT 1, id, CASE role WHEN 'admin' THEN 'owner' WHEN 'editor' THEN 'editor' ELSE 'viewer' END FROM users;
+                    SELECT 1, id, CASE role WHEN 'admin' THEN 'owner' WHEN 'editor' THEN 'editor' ELSE 'viewer' END FROM users
+                    WHERE id NOT IN (SELECT user_id FROM shelf_members);
                     CREATE INDEX IF NOT EXISTS idx_mangas_shelf ON mangas (shelf_id);
                 `);
-                // a series is always in a shelf; new rows without one land in shelf 1 until the handler names it
+                // a series is always in a shelf; new rows without one land in shelf 1 until the handler names it. A trash
+                // entry written without a shelf (older code on this database) takes the shelf of its series, else 1.
                 d.exec(`
                     CREATE TRIGGER IF NOT EXISTS trg_mangas_shelf_default AFTER INSERT ON mangas
                     WHEN NEW.shelf_id IS NULL BEGIN UPDATE mangas SET shelf_id = 1 WHERE id = NEW.id; END;
+                    CREATE TRIGGER IF NOT EXISTS trg_trash_shelf_default AFTER INSERT ON trash
+                    WHEN NEW.shelf_id IS NULL BEGIN
+                        UPDATE trash SET shelf_id = COALESCE((SELECT shelf_id FROM mangas WHERE id = NEW.manga_id), 1) WHERE id = NEW.id;
+                    END;
                 `);
             }
         },

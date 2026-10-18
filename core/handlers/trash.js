@@ -103,27 +103,29 @@ function insertRow(ctx, table, columns, row, overrides = {}) {
         .run(...names.map(n => (values[n] === undefined ? null : values[n])));
 }
 
-// Re-inserts volumes with their owners and reads, keeping only columns the current schema still has.
-function restoreVolumeRows(ctx, volumes, owners, reads) {
+// Re-inserts volumes with their owners and reads, keeping only columns the current schema still has. Marks come back
+// for members of `shelfId` only: a user deleted meanwhile or no longer in the shelf takes their ownership and reads along.
+function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const volumeCols = columnsOf(ctx, 'volumes');
     volumeCols.delete('number_sort');
     const ownerCols = columnsOf(ctx, 'volume_owners');
     const readCols = columnsOf(ctx, 'volume_reads');
-    const userExists = ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?');
+    const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
+    const isMember = (userId) => Boolean(member.get(shelfId, userId));
     const restoredIds = new Set();
     for (const v of volumes) {
         insertRow(ctx, 'volumes', volumeCols, v);
         restoredIds.add(v.id);
     }
-    // a user deleted meanwhile takes their ownership and reads along
     const vanished = new Map();
     for (const o of owners) {
         if (!restoredIds.has(o.volume_id)) continue;
-        if (userExists.get(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
+        if (isMember(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
         else if (!vanished.has(o.volume_id)) vanished.set(o.volume_id, o);
     }
-    for (const r of reads) if (restoredIds.has(r.volume_id) && userExists.get(r.user_id)) insertRow(ctx, 'volume_reads', readCols, r);
-    // an owned volume left without owners goes to the restoring admin (as on a user delete), otherwise it is missing
+    for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) insertRow(ctx, 'volume_reads', readCols, r);
+    // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there),
+    // otherwise it is missing
     const hasOwner = ctx.db.prepare('SELECT 1 AS ok FROM volume_owners WHERE volume_id = ? LIMIT 1');
     for (const v of volumes) {
         if (v.status !== OWNED_STATUS || hasOwner.get(v.id)) continue;
@@ -133,6 +135,20 @@ function restoreVolumeRows(ctx, volumes, owners, reads) {
 }
 
 const sequenceOf = (ctx, table) => Number(ctx.db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table)?.seq ?? 0);
+
+/**
+ * The shelf a restored series goes back to: the one it was in when it was deleted, else the shelf of its trash entry
+ * (an entry written before migration 32 has no shelf in its payload), each only while it exists and the caller may
+ * edit there. Never the caller's own shelf by default: 409 SHELF_UNAVAILABLE instead.
+ */
+function restoreShelf(ctx, entry, manga) {
+    const editable = new Set(access.accessibleShelfIds(ctx, 'editor'));
+    for (const candidate of [manga.shelf_id, entry.shelf_id]) {
+        const id = access.parseId(candidate);
+        if (id && editable.has(id)) return id;
+    }
+    throw conflict('Das Regal dieser Reihe gibt es nicht mehr oder du darfst dort nichts ändern; die Reihe lässt sich nicht wiederherstellen.', 'SHELF_UNAVAILABLE');
+}
 
 function restoreManga(ctx, entry, payload) {
     const manga = payload.manga;
@@ -153,10 +169,11 @@ function restoreManga(ctx, entry, payload) {
     const edition = { language: (language && language.language) || DEFAULT_LANGUAGE, region: manga.region || (language && language.region) || null };
     // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries
     edition.work_key = manga.work_key && ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key) ? manga.work_key : null;
-    const shelfLive = manga.shelf_id && ctx.db.prepare('SELECT 1 AS ok FROM shelves WHERE id = ?').get(manga.shelf_id);
-    edition.shelf_id = shelfLive ? manga.shelf_id : access.targetShelfId(ctx);
+    edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
-    restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || []);
+    restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id);
+    // volumes of this series deleted on their own follow it, as on a move
+    ctx.db.prepare("UPDATE trash SET shelf_id = ? WHERE kind = 'volume' AND manga_id = ?").run(edition.shelf_id, manga.id);
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
     const relink = ctx.db.prepare('UPDATE animes SET manga_id = ? WHERE id = ? AND manga_id IS NULL');
     for (const animeId of animeIds) relink.run(manga.id, animeId);
@@ -172,15 +189,23 @@ function restoreVolume(ctx, entry, payload) {
             : msg('Die Reihe „{title}“ gibt es nicht mehr; der Band lässt sich nicht wiederherstellen.', { title: entry.title }),
         'TRASH_SERIES_MISSING', { series_in_trash: Boolean(seriesTrashed) });
     }
+    // the series may have moved since: the volume goes back where the series is now, so that shelf decides
+    let shelfId;
+    try {
+        shelfId = access.mangaAccess(ctx, volume.manga_id, 'editor');
+    } catch (err) {
+        if (err.status !== 403 && err.status !== 404) throw err;
+        throw conflict(msg('Die Reihe „{title}“ liegt in einem Regal, in dem du nichts ändern darfst; der Band lässt sich nicht wiederherstellen.', { title: entry.title }), 'SHELF_UNAVAILABLE');
+    }
     if (ctx.db.prepare('SELECT 1 AS ok FROM volumes WHERE id = ?').get(volume.id)) throw conflict('Der Band existiert bereits', 'TRASH_ID_TAKEN');
     if (volume.id > sequenceOf(ctx, 'volumes')) throw conflict('Der Eintrag passt nicht zu dieser Datenbank und lässt sich nicht wiederherstellen', 'TRASH_INVALID');
     const type = volume.type || 'volume';
     const duplicate = findDuplicate(ctx, volume.manga_id, volume.volume_number, type);
     if (duplicate) throw duplicateError(type, volume.volume_number, duplicate);
-    restoreVolumeRows(ctx, [volume], payload.owners || [], payload.reads || []);
+    restoreVolumeRows(ctx, [volume], payload.owners || [], payload.reads || [], shelfId);
 }
 
-/** Puts a series or volume back with its original ids, owners and reads (users deleted meanwhile are left out). */
+/** Puts a series or volume back with its original ids, owners and reads (only of users who are members of its shelf). */
 function restore(ctx, { params }) {
     const entry = loadEntry(ctx, params, 'editor');
     const id = entry.id;
@@ -199,8 +224,13 @@ function remove(ctx, { params }) {
     return { body: { success: true } };
 }
 
+/**
+ * Empties the trash of the shelves the caller owns; an app admin also that of every shelf they are an editor of (a
+ * second admin or local profile joins the household shelf as editor). A viewer, also a pending local profile, never.
+ */
 function empty(ctx, { query } = {}) {
-    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id), 'owner'));
+    const minRole = ctx.user && ctx.user.role === 'admin' ? 'editor' : 'owner';
+    const scope = access.inShelves('shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id), minRole));
     const removed = ctx.db.prepare(`DELETE FROM trash WHERE ${scope.sql}`).run(...scope.params).changes;
     return { body: { success: true, removed } };
 }

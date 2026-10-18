@@ -224,7 +224,7 @@ function startOptions(argv, { forService = false } = {}) {
                 i++;
             }
             if (!value.trim()) continue;
-            out.push(flag, flag === '--data-dir' ? (value.startsWith('/') ? path.posix.resolve(value) : path.resolve(value)) : value.trim());
+            out.push(flag, flag === '--data-dir' ? path.resolve(value) : value.trim());
         } else if (!forService && eq === -1 && START_FLAGS.includes(flag)) {
             out.push(flag);
         }

@@ -20,10 +20,11 @@ function volumeParts(ctx, volumeIds) {
     return { owners, reads };
 }
 
+// without shelfId, trg_trash_shelf_default (migration 32) gives the entry the shelf of its series
 function insertTrash(ctx, { kind, refId, mangaId, title, payload, shelfId }) {
     const result = ctx.db.prepare(`
         INSERT INTO trash (kind, ref_id, manga_id, title, payload, deleted_by, deleted_at, shelf_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(kind, refId, mangaId, title, JSON.stringify(payload), ctx.user?.id ?? null, sqlTimestamp(ctx.now()), shelfId ?? 1);
+    `).run(kind, refId, mangaId, title, JSON.stringify(payload), ctx.user?.id ?? null, sqlTimestamp(ctx.now()), shelfId ?? null);
     return Number(result.lastInsertRowid);
 }
 

@@ -23,12 +23,13 @@ const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
 const { HttpError, AUTH_TEXTS, notFound } = require('./errors');
 const access = require('./lib/access');
+const { qstr } = require('./lib/query');
 
 const routes = [
     { method: 'GET', path: '/mangas', role: 'auth', conditional: true, handler: mangas.list },
     { method: 'POST', path: '/mangas', role: 'editor', handler: mangas.create },
     // before /mangas/:id; the list leaves the search text out, the dashboard loads it on demand
-    { method: 'GET', path: '/mangas/volume-search', role: 'auth', conditional: true, handler: (ctx) => ({ body: listVolumeSearch(ctx) }) },
+    { method: 'GET', path: '/mangas/volume-search', role: 'auth', conditional: true, handler: (ctx, { query }) => ({ body: listVolumeSearch(ctx, access.requestedShelfIds(ctx, qstr(query.shelf_id))) }) },
     { method: 'GET', path: '/mangas/:id', role: 'auth', conditional: true, handler: mangas.detail },
     // the 30 MB copy never lands in the HTTP cache; the client sends If-None-Match by hand
     { method: 'GET', path: '/offline-snapshot', role: 'auth', conditional: { cacheControl: 'private, no-store' }, handler: snapshot.offlineSnapshot },
@@ -36,6 +37,7 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    { method: 'GET', path: '/mangas/:id/shelf-move', role: 'editor', handler: shelves.movePreview },
     { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
     { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
     { method: 'GET', path: '/shelves', role: 'auth', handler: shelves.list },
@@ -140,8 +142,9 @@ for (const row of routes) {
                 if (!/^\d+$/.test(String(input.params.id))) throw notFound(row.path.startsWith('/volumes') ? 'Band' : 'Manga');
                 guard.check(ctx, input, row, input.params.id);
             }
-        } else if (input.body && input.body.manga_id !== undefined) {
-            access.mangaAccess(ctx, input.body.manga_id, 'editor');
+        } else if (input.body && input.body.manga_id !== undefined && access.parseId(input.body.manga_id)) {
+            // the handlers parse manga_id with the same parseId and check the series again themselves
+            access.mangaAccess(ctx, access.parseId(input.body.manga_id), 'editor');
         }
         return handler(ctx, input);
     };

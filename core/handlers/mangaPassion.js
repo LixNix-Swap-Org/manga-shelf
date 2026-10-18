@@ -157,7 +157,9 @@ async function volumeLookup(ctx, { query }) {
     if (!volumeNumber && !isbn && !url && !mpVolumeId) {
         throw badRequest('Band-Nummer, ISBN oder URL erforderlich');
     }
-    if (mangaId) access.mangaAccess(ctx, mangaId, 'viewer');
+    const shelfId = mangaId ? access.mangaAccess(ctx, mangaId, 'viewer') : null;
+    // a viewer of the series' shelf may look a volume up but must not change the series or fill the uploads
+    const persist = !shelfId || access.shelfRole(ctx, shelfId) !== 'viewer';
     const series = mangaId ? ctx.db.prepare('SELECT language FROM mangas WHERE id = ?').get(mangaId) : null;
     if (series) {
         // a stored volume with its own language (an English volume in a German series) is no German edition either
@@ -172,7 +174,8 @@ async function volumeLookup(ctx, { query }) {
         price,
         url,
         mp_volume_id: mpVolumeId,
-        force_refresh: forceRefresh
+        force_refresh: forceRefresh,
+        persist
     });
 
     return { body: result };

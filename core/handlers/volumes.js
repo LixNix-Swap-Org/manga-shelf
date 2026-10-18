@@ -148,8 +148,8 @@ function create(ctx, { body }) {
         priority = 0
     } = body;
 
-    const mId = parseInt(manga_id, 10);
-    if (!mId || isNaN(mId)) {
+    const mId = access.parseId(manga_id);
+    if (!mId) {
         throw badRequest('Gültige manga_id und Bandnummer erforderlich');
     }
     const st = parseStatus(status, { allowEmpty: true });
@@ -185,9 +185,7 @@ function create(ctx, { body }) {
         imagesVal = JSON.stringify([String(cover_image).trim()]);
     }
 
-    if (!ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(mId)) {
-        throw notFound('Manga');
-    }
+    access.mangaAccess(ctx, mId, 'editor');
 
     // The same type + number twice is almost always a double click or a repeated entry; edit the existing one instead
     const duplicate = findDuplicate(ctx, mId, volNumStr, volType);
@@ -242,7 +240,7 @@ function createBatch(ctx, { body }) {
         condition = null,
         release_date = null
     } = body;
-    const mId = parseInt(manga_id, 10);
+    const mId = access.parseId(manga_id);
     const start = parseWholeNumber(from);
     const end = parseWholeNumber(to);
 
@@ -255,9 +253,7 @@ function createBatch(ctx, { body }) {
     const numeric = parseNumericFields(body, { default_price: parsePrice, release_year: parseYear });
     if (numeric.error) throw badRequest(numeric.error);
 
-    if (!ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(mId)) {
-        throw notFound('Manga');
-    }
+    access.mangaAccess(ctx, mId, 'editor');
 
     // Special editions, Schuber and Specials carry their own numbers and never block a regular volume
     const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'").all(mId);
@@ -453,10 +449,14 @@ const ownerRows = (ctx, volumeId) => ctx.db.prepare(
 
 const BULK_SNAPSHOT_COLUMNS = ['manga_id', ...BULK_SET_FIELDS];
 
-/** What the undo of a field edit needs: the fields a bulk edit may change, the owner rows and the reader's read row. */
-function bulkSnapshot(ctx, vol, { readUser }) {
-    const volume = Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null]));
-    const entry = { id: vol.id, deleted: false, volume, owners: ownerRows(ctx, vol.id) };
+/**
+ * What the undo of a field edit needs: the fields a bulk edit may change, the owner rows and the reader's read row;
+ * a change of reads only (readOnly) keeps just the read row.
+ */
+function bulkSnapshot(ctx, vol, { readUser, readOnly = false }) {
+    const entry = readOnly
+        ? { id: vol.id, deleted: false, read_only: true }
+        : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id) };
     if (readUser) {
         entry.read_user = readUser;
         entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
@@ -521,7 +521,7 @@ const UNDO_TOTAL = 200;
 const UNDO_BYTES_PER_USER = 8 * 1024 * 1024;
 const UNDO_BYTES_TOTAL = 32 * 1024 * 1024;
 
-function rememberUndo(ctx, previous) {
+function rememberUndo(ctx, previous, minRole = 'editor') {
     const store = ctx.undo;
     const now = ctx.now().getTime();
     const bytes = JSON.stringify(previous).length;
@@ -545,7 +545,7 @@ function rememberUndo(ctx, previous) {
     }
     const token = ctx.randomId();
     const expires = now + UNDO_TTL_MS;
-    store.set(token, { userId: ctx.user.id, expires, generation: ctx.db.generation(), previous, bytes });
+    store.set(token, { userId: ctx.user.id, expires, generation: ctx.db.generation(), previous, bytes, minRole });
     return { undo_token: token, undo_expires_at: new Date(expires).toISOString() };
 }
 
@@ -567,13 +567,22 @@ function bulk(ctx, { body }) {
     if (!remove && !changes) throw badRequest('Keine Änderung angegeben');
     if ('status' in set.value && owners) throw badRequest('Status und Besitzer bitte getrennt ändern');
 
+    // own reading marks need viewer rights only, like POST /volumes/:id/read; everything else needs editor
+    const readOnly = Boolean(read) && !owners && Object.keys(set.value).length === 0;
+    const minRole = readOnly ? 'viewer' : 'editor';
     const select = ctx.db.prepare('SELECT v.*, m.shelf_id AS _shelf_id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.id = ?');
-    const editable = new Set(access.accessibleShelfIds(ctx, 'editor'));
-    // a volume of a shelf the caller may not edit counts as unknown (404 rule)
-    const rows = ids.value.map((id) => select.get(id)).filter((v) => v && editable.has(v._shelf_id)).map(({ _shelf_id, ...v }) => v);
-    const found = new Set(rows.map((v) => v.id));
+    const allowed = new Set(access.accessibleShelfIds(ctx, minRole));
+    // a volume of a shelf the caller may not change this way counts as unknown (404 rule)
+    const selected = ids.value.map((id) => select.get(id)).filter((v) => v && allowed.has(v._shelf_id));
+    const found = new Set(selected.map((v) => v.id));
     const missing = ids.value.filter((id) => !found.has(id));
-    if (rows.length === 0) throw notFound('Band');
+    if (selected.length === 0) throw notFound('Band');
+    // somebody else's marks only within shelves that person belongs to
+    const others = new Set([...(owners ? [...owners.add, ...owners.remove] : []), ...(read ? [read.userId] : [])].filter((id) => id !== Number(ctx.user.id)));
+    for (const shelf of new Set(selected.map((v) => v._shelf_id))) {
+        for (const userId of others) if (!access.isMember(ctx.db, shelf, userId)) throw notFound('Benutzer');
+    }
+    const rows = selected.map(({ _shelf_id, ...v }) => v);
 
     const previous = [];
     const readSkipped = [];
@@ -584,7 +593,7 @@ function bulk(ctx, { body }) {
                 previous.push({ id: vol.id, deleted: true, trash_id: moveVolumeToTrash(ctx, vol.id) });
                 continue;
             }
-            previous.push(bulkSnapshot(ctx, vol, { readUser: read?.userId }));
+            previous.push(bulkSnapshot(ctx, vol, { readUser: read?.userId, readOnly }));
             if (owners?.add.length) {
                 const purchase = Object.fromEntries(OWNER_COLUMNS.filter((c) => c in set.value).map((c) => [c, set.value[c]]));
                 const rest = Object.fromEntries(Object.entries(set.value).filter(([c]) => !(c in purchase)));
@@ -598,7 +607,7 @@ function bulk(ctx, { body }) {
         }
     });
 
-    const answer = { success: true, updated: rows.length, ids: rows.map((v) => v.id), not_found: missing, ...rememberUndo(ctx, previous) };
+    const answer = { success: true, updated: rows.length, ids: rows.map((v) => v.id), not_found: missing, ...rememberUndo(ctx, previous, minRole) };
     if (remove) answer.deleted = true;
     if (readSkipped.length) answer.read_skipped = readSkipped;
     return { body: answer };
@@ -633,14 +642,28 @@ function restoreReads(ctx, volumeId, reads) {
 }
 
 // { revert: undo_token } restores exactly what that bulk edit changed: fields, owner rows, reads, and deleted volumes
-// (from their trash entry). Volumes gone meanwhile or without trash entry are in not_found; a deleted volume whose
-// type and number were taken again is a per-entry conflict, and the answer is 409 when nothing could be restored.
+// (from their trash entry). Volumes gone meanwhile, without trash entry or now in a shelf the caller may no longer
+// change are in not_found; a deleted volume whose type and number were taken again is a per-entry conflict, and the
+// answer is 409 when nothing could be restored.
 function revertBulk(ctx, token) {
-    const { previous } = takeUndo(ctx, token);
+    const { previous, minRole = 'editor' } = takeUndo(ctx, token);
     const current = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?');
-    const mangaExists = ctx.db.prepare('SELECT 1 FROM mangas WHERE id = ?');
-    const userExists = ctx.db.prepare('SELECT 1 FROM users WHERE id = ?');
-    const knownUsers = (rows) => (Array.isArray(rows) ? rows : []).filter((row) => userExists.get(row.user_id));
+    const shelfOf = ctx.db.prepare('SELECT shelf_id FROM mangas WHERE id = ?');
+    const allowed = new Set(access.accessibleShelfIds(ctx, minRole));
+    // the series' shelf as it is now, null when the caller lost that right meanwhile (removed, demoted, series moved)
+    const allowedShelf = (mangaId) => {
+        const row = shelfOf.get(mangaId);
+        return row && allowed.has(row.shelf_id) ? row.shelf_id : null;
+    };
+    const member = ctx.db.prepare('SELECT 1 FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
+    // marks come back for members of that shelf only (an account deleted meanwhile is a member of none)
+    const members = (rows, shelfId) => (Array.isArray(rows) ? rows : []).filter((row) => member.get(shelfId, row.user_id));
+    const putOwners = (volumeId, owners, shelfId) => {
+        const all = Array.isArray(owners) ? owners : [];
+        const kept = members(all, shelfId);
+        restoreOwners(ctx, volumeId, kept);
+        if (kept.length < all.length) syncStatusWithOwners(ctx.db, volumeId);
+    };
     const trashEntry = ctx.db.prepare("SELECT payload FROM trash WHERE id = ? AND kind = 'volume' AND ref_id = ?");
     // a deleted volume comes back from its trash entry; emptied or restored meanwhile means nothing to restore
     const trashedVolume = (snap) => {
@@ -665,16 +688,23 @@ function revertBulk(ctx, token) {
         for (const snap of previous) {
             const stored = current.get(snap.id);
             if (stored) {
+                const shelfId = allowedShelf(stored.manga_id);
+                if (!shelfId) {
+                    missing.push(snap.id);
+                    continue;
+                }
                 // a deleted volume that is back already (trash restore) stays as it is
                 if (!snap.deleted) {
-                    const keys = BULK_SET_FIELDS.filter((k) => (snap.volume[k] ?? null) !== (stored[k] ?? null));
-                    if (keys.length) {
-                        ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
+                    if (!snap.read_only) {
+                        const keys = BULK_SET_FIELDS.filter((k) => (snap.volume[k] ?? null) !== (stored[k] ?? null));
+                        if (keys.length) {
+                            ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
+                        }
+                        putOwners(snap.id, snap.owners, shelfId);
                     }
-                    restoreOwners(ctx, snap.id, knownUsers(snap.owners));
                     if (snap.read_user) {
                         ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(snap.id, snap.read_user);
-                        restoreReads(ctx, snap.id, knownUsers(snap.reads).filter((r) => r.user_id === snap.read_user));
+                        restoreReads(ctx, snap.id, members(snap.reads, shelfId).filter((r) => r.user_id === snap.read_user));
                     }
                 }
                 restored.push(snap.id);
@@ -682,7 +712,8 @@ function revertBulk(ctx, token) {
             }
             const trashed = snap.deleted ? trashedVolume(snap) : null;
             const row = trashed?.volume;
-            if (!row || snap.id > sequence || !mangaExists.get(row.manga_id)) {
+            const shelfId = row && snap.id <= sequence ? allowedShelf(row.manga_id) : null;
+            if (!shelfId) {
                 missing.push(snap.id);
                 continue;
             }
@@ -695,8 +726,8 @@ function revertBulk(ctx, token) {
             }
             const columns = Object.keys(row).filter((k) => volumeColumns.has(k));
             ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map((k) => row[k]));
-            restoreOwners(ctx, snap.id, knownUsers(trashed.owners));
-            restoreReads(ctx, snap.id, knownUsers(trashed.reads));
+            putOwners(snap.id, trashed.owners, shelfId);
+            restoreReads(ctx, snap.id, members(trashed.reads, shelfId));
             forgetTrashedVolume(ctx, snap.id);
             restored.push(snap.id);
         }

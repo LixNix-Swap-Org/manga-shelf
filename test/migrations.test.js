@@ -588,32 +588,98 @@ test('the safety snapshot before migrations never prunes the backup an unconfirm
     }
 });
 
-test('migration 32 puts every series into shelf 1 and every account into it with a role from its global role', () => {
+test('migration 32 puts every series and trash entry into shelf 1 and every account into it with a role from its global role', () => {
     const schema = require('../core/schema');
     const file = path.join(dataDir, 'temp', 'shelves.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    const all = (sql) => conn.prepare(sql).all().map(r => ({ ...r }));
+    try {
+        schema.applySchema(conn);
+        conn.exec(`
+            DROP TRIGGER trg_mangas_shelf_default;
+            DROP TRIGGER trg_trash_shelf_default;
+            DROP INDEX idx_mangas_shelf;
+            DROP TABLE shelf_members;
+            DROP TABLE shelves;
+            ALTER TABLE mangas DROP COLUMN shelf_id;
+            ALTER TABLE trash DROP COLUMN shelf_id;
+            DELETE FROM schema_migrations WHERE version >= 32;
+            INSERT INTO users (id, username, password_hash, role) VALUES (11, 'ada', 'x', 'admin'), (12, 'bo', 'x', 'editor'), (13, 'cy', 'x', 'guest');
+            INSERT INTO mangas (id, title) VALUES (1, 'A'), (2, 'B');
+            INSERT INTO trash (id, kind, ref_id, manga_id, title, payload) VALUES (1, 'manga', 7, 7, 'Weg', '{}'), (2, 'volume', 9, 2, 'B', '{}');
+        `);
+        const report = schema.runSequentialMigrations(conn);
+        assert.deepEqual(report.map(r => r.version), [32, 33]);
+        assert.deepEqual(conn.prepare('SELECT DISTINCT shelf_id FROM mangas').all().map(r => r.shelf_id), [1]);
+        assert.deepEqual(all('SELECT id, shelf_id FROM trash ORDER BY id'), [{ id: 1, shelf_id: 1 }, { id: 2, shelf_id: 1 }]);
+        assert.equal(conn.prepare('SELECT owner_user_id FROM shelves WHERE id = 1').get().owner_user_id, 11);
+        const members = all('SELECT user_id, role FROM shelf_members WHERE shelf_id = 1 ORDER BY user_id');
+        assert.deepEqual(members, [{ user_id: 11, role: 'owner' }, { user_id: 12, role: 'editor' }, { user_id: 13, role: 'viewer' }]);
+        conn.exec("INSERT INTO mangas (id, title) VALUES (3, 'C')");
+        assert.equal(conn.prepare('SELECT shelf_id FROM mangas WHERE id = 3').get().shelf_id, 1, 'a series without a shelf lands in shelf 1');
+
+        // a populated database: bo moved series B into an own shelf and left the household shelf
+        conn.exec(`
+            INSERT INTO shelves (id, name, owner_user_id) VALUES (2, 'Bo', 12);
+            UPDATE shelf_members SET shelf_id = 2, role = 'owner' WHERE user_id = 12;
+            UPDATE mangas SET shelf_id = 2 WHERE id = 2;
+            UPDATE trash SET shelf_id = 2 WHERE id = 2;
+            INSERT INTO users (id, username, password_hash, role) VALUES (14, 'di', 'x', 'editor');
+        `);
+        conn.exec("INSERT INTO trash (id, kind, ref_id, manga_id, title, payload) VALUES (3, 'volume', 10, 2, 'B', '{}'), (4, 'manga', 8, 8, 'Alt', '{}')");
+        assert.deepEqual(all('SELECT id, shelf_id FROM trash WHERE id >= 3 ORDER BY id'), [{ id: 3, shelf_id: 2 }, { id: 4, shelf_id: 1 }],
+            'a trash entry written without a shelf takes the one of its series, else shelf 1');
+        const state = () => ({
+            shelves: all('SELECT id, name, owner_user_id, is_default FROM shelves ORDER BY id'),
+            members: all('SELECT shelf_id, user_id, role FROM shelf_members ORDER BY shelf_id, user_id'),
+            mangas: all('SELECT id, shelf_id FROM mangas ORDER BY id'),
+            trash: all('SELECT id, shelf_id FROM trash ORDER BY id')
+        });
+        const before = state();
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 32');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [32, 33]);
+        const after = state();
+        assert.deepEqual({ ...after, members: after.members.filter(m => m.user_id !== 14) }, before, 'a second run changes nothing that exists');
+        assert.deepEqual(after.members.filter(m => m.user_id === 14), [{ shelf_id: 1, user_id: 14, role: 'editor' }], 'an account without a shelf joins shelf 1');
+    } finally {
+        conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
+    }
+});
+
+test('migration 33 adds rating_visibility (public), public_comment and users.default_anime_visibility (public) to existing rows', () => {
+    const schema = require('../core/schema');
+    const file = path.join(dataDir, 'temp', 'visibility.db');
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
         schema.applySchema(conn);
         conn.exec(`
-            DROP TRIGGER trg_mangas_shelf_default;
-            DROP INDEX idx_mangas_shelf;
-            DROP TABLE shelf_members;
-            DROP TABLE shelves;
-            ALTER TABLE mangas DROP COLUMN shelf_id;
-            DELETE FROM schema_migrations WHERE version >= 32;
-            INSERT INTO users (id, username, password_hash, role) VALUES (11, 'ada', 'x', 'admin'), (12, 'bo', 'x', 'editor'), (13, 'cy', 'x', 'guest');
-            INSERT INTO mangas (id, title) VALUES (1, 'A'), (2, 'B');
+            ALTER TABLE anime_progress DROP COLUMN rating_visibility;
+            ALTER TABLE anime_progress DROP COLUMN public_comment;
+            ALTER TABLE users DROP COLUMN default_anime_visibility;
+            DELETE FROM schema_migrations WHERE version >= 33;
+            INSERT INTO users (id, username, password_hash, role) VALUES (21, 'eli', 'x', 'editor');
+            INSERT INTO animes (id, title) VALUES (31, 'Alt');
+            INSERT INTO anime_progress (anime_id, user_id, status, score) VALUES (31, 21, 'Gesehen', 8);
         `);
-        const report = schema.runSequentialMigrations(conn);
-        assert.deepEqual(report.map(r => r.version), [32, 33]);
-        assert.deepEqual(conn.prepare('SELECT DISTINCT shelf_id FROM mangas').all().map(r => r.shelf_id), [1]);
-        assert.equal(conn.prepare('SELECT owner_user_id FROM shelves WHERE id = 1').get().owner_user_id, 11);
-        const members = conn.prepare('SELECT user_id, role FROM shelf_members WHERE shelf_id = 1 ORDER BY user_id').all().map(r => ({ ...r }));
-        assert.deepEqual(members, [{ user_id: 11, role: 'owner' }, { user_id: 12, role: 'editor' }, { user_id: 13, role: 'viewer' }]);
-        conn.exec("INSERT INTO mangas (id, title) VALUES (3, 'C')");
-        assert.equal(conn.prepare('SELECT shelf_id FROM mangas WHERE id = 3').get().shelf_id, 1, 'a series without a shelf lands in shelf 1');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [33]);
+        const progress = () => ({ ...conn.prepare('SELECT rating_visibility, public_comment, score FROM anime_progress WHERE anime_id = 31 AND user_id = 21').get() });
+        assert.deepEqual(progress(), { rating_visibility: 'public', public_comment: null, score: 8 });
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 21').get().v, 'public');
+        conn.exec("INSERT INTO users (id, username, password_hash) VALUES (22, 'fe', 'x'); INSERT INTO anime_progress (anime_id, user_id) VALUES (31, 22)");
+        assert.equal(conn.prepare('SELECT rating_visibility AS v FROM anime_progress WHERE user_id = 22').get().v, 'public');
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 22').get().v, 'public');
+
+        conn.exec("UPDATE anime_progress SET rating_visibility = 'private', public_comment = 'gut' WHERE user_id = 21; UPDATE users SET default_anime_visibility = 'anonymous' WHERE id = 21");
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 33');
+        schema.runSequentialMigrations(conn);
+        assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+        assert.deepEqual(progress(), { rating_visibility: 'private', public_comment: 'gut', score: 8 });
+        assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 21').get().v, 'anonymous');
     } finally {
         conn.close();
+        for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
     }
 });

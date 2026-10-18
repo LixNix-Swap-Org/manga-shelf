@@ -234,9 +234,8 @@ function assertSameConnection(ctx, generation) {
  * The collection for the client's read-only offline copy: { generated_at, user, mangas, details[id] }.
  * Built in blocks, so blocks may see slightly different states; a database reopened meanwhile (restore) fails the build.
  */
-async function buildOfflineSnapshot(ctx, user) {
+async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelfIds(ctx)) {
     const generation = ctx.db.generation();
-    const shelfIds = access.accessibleShelfIds(ctx);
     const mangas = listMangas(ctx, user.id, { volumeSearch: true, shelfIds });
     await ctx.yield();
     assertSameConnection(ctx, generation);

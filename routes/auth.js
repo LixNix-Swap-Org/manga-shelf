@@ -23,7 +23,7 @@ const { loginLimiter, logoutLimiter, setupLimiter, passwordChangeLimiter, loginG
 const log = require('../utils/logger').child('auth');
 const { config, normalizeSetupToken } = require('../utils/config');
 const { HttpError, msg, badRequest, notFound, sendError } = require('../utils/httpError');
-const { purchaseDateFromRemainingOwners } = require('../utils/owners');
+const { addOwner, purchaseDateFromRemainingOwners, syncStatusWithOwners } = require('../utils/owners');
 const { revokeFeedTokens } = require('../core/handlers/radar');
 const listSync = require('../core/anime/listSync');
 const { parseProfileBody, saveProfile, readProfile } = require('../core/lib/locales');
@@ -258,6 +258,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     const nameErr = usernameError(cleanUsername);
     if (nameErr) throw badRequest(nameErr);
     const cleanRole = role;
+    const shelfPlan = access.parseShelfSetup(req.body || {}, cleanRole);
 
     const usernameTaken = () => sendError(res, 400, 'Dieser Benutzername existiert bereits', 'USERNAME_TAKEN');
     if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return usernameTaken();
@@ -265,26 +266,22 @@ router.post('/users', requireAdmin, async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     // Check again after the await, synchronously with the insert: a parallel create of "Max"/"max" may have won.
-    // (COLLATE NOCASE folds ASCII only, like the login lookup.)
+    // (COLLATE NOCASE folds ASCII only, like the login lookup.) The shelves are set up in the same transaction: a
+    // refused shelf choice (400) leaves no account behind.
     let result;
     try {
         result = runTransaction(() => {
             if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return null;
-            return db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, cleanRole);
+            const inserted = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, cleanRole);
+            const created = { id: Number(inserted.lastInsertRowid), username: cleanUsername, role: cleanRole };
+            access.setupUserShelf(createCtx({ user: req.user }), created, shelfPlan);
+            return inserted;
         });
     } catch (err) {
         if (isUniqueViolation(err)) return usernameTaken();
         throw err;
     }
     if (!result) return usernameTaken();
-    {
-        const created = { id: Number(result.lastInsertRowid), username: cleanUsername, role: cleanRole };
-        if (req.body && (req.body.shelf_mode || req.body.separate_shelf !== undefined)) {
-            access.setupUserShelf(db, created, req.body);
-        } else {
-            access.ensureMembership(createCtx({ user: created }));
-        }
-    }
     log.info('Benutzer angelegt', { ...auditFields(req), user: cleanUsername, role: cleanRole });
 
     res.json({
@@ -336,6 +333,11 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         if (hash && version === null) return { status: 409 };
         if (hash) revokeFeedTokens(db, userId);
         db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
+        // the shelf roles follow the account role; a shelf that would lose its last owner refuses (rolls back) it all
+        const blocked = access.reconcileShelfRoles(db, userId, current.role, newRole);
+        if (blocked) {
+            throw new HttpError(409, msg('Das Regal „{name}“ hätte danach keinen Besitzer mehr. Bitte dort zuerst einen anderen Besitzer bestimmen.', { name: blocked.shelf }), 'SHELF_LAST_OWNER');
+        }
         listSync.onRoleChanged(createCtx(), userId, newRole);
         return { status: 200, previousRole: current.role, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
     });
@@ -383,24 +385,9 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
 
     // volume_reads go with the user; mangas/animes.updated_by are plain foreign keys and would block the delete otherwise
     runTransaction(() => {
-        const shared = db.prepare(`
-            SELECT volume_id FROM volume_owners
-            WHERE user_id = ? AND volume_id IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
-        `).all(userId, userId).map(r => r.volume_id);
-        db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
-        // Volumes only this user owned go to the deleting admin so the collection does not shrink
-        db.prepare(`
-            INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition)
-            SELECT volume_id, ?, price, purchase_date, condition FROM volume_owners
-            WHERE user_id = ? AND volume_id NOT IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
-        `).run(req.user.id, userId, userId);
-        db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
-        for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
-        db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
-        // anime progress and API keys go with the user (ON DELETE CASCADE)
-        db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
-        // Shelves the user was the last owner of: the deleting admin takes them over (like the volumes above),
-        // otherwise their series would stay behind in a shelf nobody can open. Empty shelves nobody else uses go.
+        // Shelves the user was the last owner of (owners that can act: admin or editor accounts) go to another member
+        // who can, else to the deleting admin, otherwise their series would stay behind in a shelf nobody can open.
+        // Empty shelves nobody else uses go.
         const orphaned = db.prepare(`
             SELECT s.id, s.is_default,
                    (SELECT count(*) FROM mangas m WHERE m.shelf_id = s.id) AS series,
@@ -408,19 +395,63 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
                    (SELECT count(*) FROM shelf_members o WHERE o.shelf_id = s.id AND o.user_id != ?) AS others
             FROM shelves s
             JOIN shelf_members me ON me.shelf_id = s.id AND me.user_id = ? AND me.role = 'owner'
-            WHERE NOT EXISTS (SELECT 1 FROM shelf_members x WHERE x.shelf_id = s.id AND x.role = 'owner' AND x.user_id != ?)
+            WHERE NOT EXISTS (SELECT 1 FROM shelf_members x JOIN users xu ON xu.id = x.user_id
+                              WHERE x.shelf_id = s.id AND x.role = 'owner' AND x.user_id != ? AND xu.role IN ('admin', 'editor'))
         `).all(userId, userId, userId);
+        const successor = db.prepare(`
+            SELECT m.user_id FROM shelf_members m JOIN users u ON u.id = m.user_id
+            WHERE m.shelf_id = ? AND m.user_id != ? AND u.role IN ('admin', 'editor')
+            ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'editor' THEN 1 ELSE 2 END, m.added_at, m.user_id LIMIT 1
+        `);
         for (const shelf of orphaned) {
             if (!shelf.is_default && shelf.series === 0 && shelf.trashed === 0 && shelf.others === 0) {
                 db.prepare('DELETE FROM shelves WHERE id = ?').run(shelf.id);
-            } else {
-                db.prepare(`
-                    INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, 'owner')
-                    ON CONFLICT (shelf_id, user_id) DO UPDATE SET role = 'owner'
-                `).run(shelf.id, req.user.id);
+                continue;
             }
+            const heir = successor.get(shelf.id, userId)?.user_id ?? req.user.id;
+            db.prepare(`
+                INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, 'owner')
+                ON CONFLICT (shelf_id, user_id) DO UPDATE SET role = 'owner'
+            `).run(shelf.id, heir);
         }
-        db.prepare('UPDATE shelves SET owner_user_id = ? WHERE owner_user_id = ?').run(req.user.id, userId);
+        db.prepare(`
+            UPDATE shelves SET owner_user_id = (SELECT o.user_id FROM shelf_members o JOIN users ou ON ou.id = o.user_id
+                                                WHERE o.shelf_id = shelves.id AND o.role = 'owner' AND o.user_id != ?
+                                                ORDER BY ou.role IN ('admin', 'editor') DESC, o.added_at, o.user_id LIMIT 1)
+            WHERE owner_user_id = ?
+        `).run(userId, userId);
+
+        const shared = db.prepare(`
+            SELECT volume_id FROM volume_owners
+            WHERE user_id = ? AND volume_id IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
+        `).all(userId, userId).map(r => r.volume_id);
+        db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
+        // A volume only this user owned goes to a member of its shelf (an owner first, the deleting admin only as a
+        // member), so the collection does not shrink; without anyone left there it becomes "Fehlt"
+        const sole = db.prepare(`
+            SELECT vo.volume_id, vo.price, vo.purchase_date, vo.condition, m.shelf_id FROM volume_owners vo
+            JOIN volumes v ON v.id = vo.volume_id JOIN mangas m ON m.id = v.manga_id
+            WHERE vo.user_id = ? AND NOT EXISTS (SELECT 1 FROM volume_owners o WHERE o.volume_id = vo.volume_id AND o.user_id != ?)
+        `).all(userId, userId);
+        const heirOf = db.prepare(`
+            SELECT m.user_id FROM shelf_members m JOIN users u ON u.id = m.user_id
+            WHERE m.shelf_id = ? AND m.user_id != ?
+            ORDER BY CASE WHEN u.role IN ('visitor', 'guest') THEN 3 WHEN m.role = 'owner' THEN 0 WHEN m.role = 'editor' THEN 1 ELSE 2 END,
+                     (m.user_id = ?) DESC, m.user_id
+            LIMIT 1
+        `);
+        const ownerless = [];
+        for (const row of sole) {
+            const heir = heirOf.get(row.shelf_id, userId, req.user.id);
+            if (heir) addOwner(db, row.volume_id, heir.user_id, row);
+            else ownerless.push(row.volume_id);
+        }
+        db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
+        for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
+        for (const volumeId of ownerless) syncStatusWithOwners(db, volumeId);
+        db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        // anime progress and API keys go with the user (ON DELETE CASCADE)
+        db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
         revokeFeedTokens(db, userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });

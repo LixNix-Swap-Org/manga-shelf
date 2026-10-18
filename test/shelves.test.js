@@ -20,7 +20,7 @@ test.before(async () => {
     assert.equal((await admin('POST', '/setup', { username: 'admin', password: 'password123' })).status, 200);
     annaId = (await admin('POST', '/users', { username: 'anna', password: 'password123', role: 'editor', separate_shelf: true })).body.user.id;
     benId = (await admin('POST', '/users', { username: 'ben', password: 'password123', role: 'editor', separate_shelf: true })).body.user.id;
-    assert.equal((await admin('POST', '/users', { username: 'gast', password: 'password123', role: 'visitor', separate_shelf: true })).status, 200);
+    assert.equal((await admin('POST', '/users', { username: 'gast', password: 'password123', role: 'visitor' })).status, 200);
     assert.equal((await anna('POST', '/auth/login', { username: 'anna', password: 'password123' })).status, 200);
     assert.equal((await ben('POST', '/auth/login', { username: 'ben', password: 'password123' })).status, 200);
     assert.equal((await guest('POST', '/auth/login', { username: 'gast', password: 'password123' })).status, 200);
@@ -76,9 +76,13 @@ test('shelves: sharing as viewer reads, editor writes, removing the member close
     assert.equal((await ben('GET', `/mangas/${series.id}`)).status, 404);
 });
 
-test('shelves: a read-only account is capped at viewer even with an editor membership', async () => {
+test('shelves: a read-only account is never more than a viewer of a shelf', async () => {
     const shelf = await myShelf(anna);
-    assert.equal((await anna('POST', `/shelves/${shelf.id}/members`, { username: 'gast', role: 'editor' })).status, 201);
+    const higher = await anna('POST', `/shelves/${shelf.id}/members`, { username: 'gast', role: 'editor' });
+    assert.deepEqual([higher.status, higher.body.code], [400, 'SHELF_ROLE_CAPPED']);
+    assert.equal((await anna('POST', `/shelves/${shelf.id}/members`, { username: 'gast', role: 'viewer' })).status, 201);
+    const gastId = (await guest('GET', '/auth/me')).body.user.id;
+    assert.equal((await anna('PUT', `/shelves/${shelf.id}/members/${gastId}`, { role: 'owner' })).status, 400);
     const [series] = (await anna('GET', '/mangas')).body;
     assert.equal((await guest('GET', `/mangas/${series.id}`)).status, 200);
     assert.equal((await guest('PUT', `/mangas/${series.id}`, { title: 'x' })).status, 403);
@@ -151,57 +155,89 @@ test('shelves: the user directory lists names only and is closed to guests', asy
     assert.equal((await guest('GET', '/users/directory')).status, 403);
 });
 
-test('shelves: user creation modes - personal, share_same, and share_mutual', async () => {
-    // 1. Personal shelf (default when shelf_mode is personal or separate_shelf: true)
-    const userA = ctx.client();
-    const resA = await admin('POST', '/users', { username: 'user_a', password: 'password123', role: 'editor', shelf_mode: 'personal' });
+test('shelves: user creation modes - household by default, personal, share_same and share_mutual only from own shelves', async () => {
+    const adminId = (await admin('GET', '/auth/me')).body.user.id;
+    const home = (await admin('GET', '/shelves')).body.shelves.find(s => s.is_default);
+    const login = async (username) => {
+        const client = ctx.client();
+        assert.equal((await client('POST', '/auth/login', { username, password: 'password123' })).status, 200, username);
+        return client;
+    };
+    const create = (username, extra = {}) => admin('POST', '/users', { username, password: 'password123', role: 'editor', ...extra });
+    const userNames = async () => (await admin('GET', '/users')).body.map(u => u.username);
+
+    // 1. no shelf fields: the household shelf, as editor
+    assert.equal((await create('user_h')).status, 200);
+    const shelvesH = (await (await login('user_h'))('GET', '/shelves')).body.shelves;
+    assert.deepEqual(shelvesH.map(s => [s.id, s.role]), [[home.id, 'editor']]);
+
+    // 2. personal: an own empty shelf
+    const resA = await create('user_a', { shelf_mode: 'personal' });
     assert.equal(resA.status, 200);
-    await userA('POST', '/auth/login', { username: 'user_a', password: 'password123' });
+    const userA = await login('user_a');
     const shelvesA = (await userA('GET', '/shelves')).body.shelves;
-    assert.equal(shelvesA.length, 1);
-    assert.equal(shelvesA[0].role, 'owner');
+    assert.deepEqual(shelvesA.map(s => [s.role, s.is_default]), [['owner', false]]);
 
-    // 2. share_same as viewer: joins user_a's shelf as viewer
-    const userB = ctx.client();
-    const resB = await admin('POST', '/users', {
-        username: 'user_b',
-        password: 'password123',
-        role: 'editor',
-        shelf_mode: 'share_same',
-        share_with_user_id: resA.body.user.id,
-        share_role: 'viewer'
-    });
-    assert.equal(resB.status, 200);
-    await userB('POST', '/auth/login', { username: 'user_b', password: 'password123' });
+    // 3. share_same / share_mutual with a shelf the admin does not own: 400 and no account is left behind
+    for (const mode of ['share_same', 'share_mutual']) {
+        const refused = await create(`user_x_${mode}`, { shelf_mode: mode, share_with_user_id: resA.body.user.id });
+        assert.equal(refused.status, 400, mode);
+        assert.equal((await userNames()).includes(`user_x_${mode}`), false, `${mode}: rolled back`);
+    }
+    assert.equal((await userA('GET', '/shelves')).body.shelves.length, 1, 'user_a got nobody added without consent');
+    // user_h's shelf is the household shelf the admin owns: share_same works, share_mutual stays the admin's own choice
+    const userH = (await admin('GET', '/users')).body.find(u => u.username === 'user_h').id;
+    const mutual = await create('user_x_mutual_h', { shelf_mode: 'share_mutual', share_with_user_id: userH });
+    assert.deepEqual([mutual.status, mutual.body.code], [400, 'SHELF_SHARE_USER']);
+    assert.equal((await create('user_g', { shelf_mode: 'share_same', share_with_user_id: userH })).status, 200);
+    assert.deepEqual((await (await login('user_g'))('GET', '/shelves')).body.shelves.map(s => [s.id, s.role]), [[home.id, 'editor']]);
+    assert.equal((await (await login('user_h'))('GET', '/shelves')).body.shelves.length, 1, 'user_h got no shelf of user_g');
+
+    // 4. share_same with the admin itself: the admin's own (household) shelf, as viewer when asked
+    assert.equal((await create('user_b', { shelf_mode: 'share_same', share_with_user_id: String(adminId), share_role: 'viewer' })).status, 200);
+    const userB = await login('user_b');
     const shelvesB = (await userB('GET', '/shelves')).body.shelves;
-    assert.equal(shelvesB.length, 1);
-    assert.equal(shelvesB[0].id, shelvesA[0].id);
-    assert.equal(shelvesB[0].role, 'viewer');
-    assert.equal((await userB('POST', '/mangas', { title: 'Forbidden', shelf_id: shelvesB[0].id })).status, 403);
+    assert.deepEqual(shelvesB.map(s => [s.id, s.role]), [[home.id, 'viewer']]);
+    assert.equal((await userB('POST', '/mangas', { title: 'Forbidden', shelf_id: home.id })).status, 403);
 
-    // 3. share_mutual: user_c gets personal shelf AND both user_a and user_c share each other's shelves
-    const userC = ctx.client();
-    const resC = await admin('POST', '/users', {
-        username: 'user_c',
-        password: 'password123',
-        role: 'editor',
-        shelf_mode: 'share_mutual',
-        share_with_user_id: resA.body.user.id,
-        share_role: 'editor'
-    });
-    assert.equal(resC.status, 200);
-    await userC('POST', '/auth/login', { username: 'user_c', password: 'password123' });
-    const shelvesC = (await userC('GET', '/shelves')).body.shelves;
+    // 5. the granted role is capped at the role of the account it is shared from (user_b is a viewer there)
+    assert.equal((await create('user_d', { shelf_mode: 'share_same', share_with_user_id: (await userB('GET', '/auth/me')).body.user.id, share_role: 'editor' })).status, 200);
+    assert.deepEqual((await (await login('user_d'))('GET', '/shelves')).body.shelves.map(s => [s.id, s.role]), [[home.id, 'viewer']]);
+
+    // 6. share_mutual with the admin: an own shelf, editor in the admin's shelf, and the admin edits the new one
+    assert.equal((await create('user_c', { shelf_mode: 'share_mutual', share_with_user_id: adminId, share_role: 'editor' })).status, 200);
+    const shelvesC = (await (await login('user_c'))('GET', '/shelves')).body.shelves;
     assert.equal(shelvesC.length, 2);
-    assert.ok(shelvesC.some(s => s.role === 'owner'));
-    assert.ok(shelvesC.some(s => s.id === shelvesA[0].id && s.role === 'editor'));
+    const ownC = shelvesC.find(s => s.role === 'owner');
+    assert.ok(ownC && !ownC.is_default);
+    assert.ok(shelvesC.some(s => s.id === home.id && s.role === 'editor'));
+    assert.ok((await admin('GET', '/shelves')).body.shelves.some(s => s.id === ownC.id && s.role === 'editor'));
 
-    // User A now also sees User C's shelf
-    const shelvesANew = (await userA('GET', '/shelves')).body.shelves;
-    assert.equal(shelvesANew.length, 2);
-    assert.ok(shelvesANew.some(s => s.role === 'editor'));
+    // 7. bad values answer 400
+    assert.equal((await create('user_bad1', { shelf_mode: 'everything' })).status, 400);
+    assert.equal((await create('user_bad2', { shelf_mode: 'share_same', share_with_user_id: '1e0' })).status, 400);
+    assert.equal((await create('user_bad3', { shelf_mode: 'share_same', share_with_user_id: 987654 })).status, 400);
+    assert.equal((await create('user_bad4', { separate_shelf: 'false' })).status, 400);
+    assert.equal((await create('user_bad5', { shelf_mode: 'household', share_role: 'owner' })).status, 400);
+    assert.equal((await userNames()).some(n => n.startsWith('user_bad')), false);
+
+    // 8. a visitor or guest gets no shelf of its own (it could not fill it): personal and share_mutual answer 400
+    for (const [role, extra] of [['visitor', { shelf_mode: 'personal' }], ['guest', { shelf_mode: 'share_mutual', share_with_user_id: adminId }], ['visitor', { separate_shelf: true }]]) {
+        const refused = await create(`user_ro_${role}_${Object.keys(extra)[0]}`, { role, ...extra });
+        assert.deepEqual([refused.status, refused.body.code], [400, 'SHELF_MODE'], `${role} ${JSON.stringify(extra)}`);
+    }
+    assert.equal((await userNames()).some(n => n.startsWith('user_ro_')), false);
+    assert.equal((await create('user_ro_same', { role: 'guest', shelf_mode: 'share_same', share_with_user_id: adminId })).status, 200);
+    assert.deepEqual((await (await login('user_ro_same'))('GET', '/shelves')).body.shelves.map(s => [s.id, s.role]), [[home.id, 'viewer']]);
+
+    // 9. a new admin joins the household shelf as editor, never as owner, and cannot add accounts there
+    assert.equal((await admin('POST', '/users', { username: 'admin_two', password: 'password123', role: 'admin', current_password: 'password123' })).status, 200);
+    const adminTwo = await login('admin_two');
+    assert.deepEqual((await adminTwo('GET', '/shelves')).body.shelves.map(s => [s.id, s.role]), [[home.id, 'editor']]);
+    const notOwner = await adminTwo('POST', '/users', { username: 'user_e', password: 'password123', role: 'editor' });
+    assert.deepEqual([notOwner.status, notOwner.body.code], [400, 'SHELF_NOT_OWNER']);
+    assert.equal((await adminTwo('POST', '/users', { username: 'user_e', password: 'password123', role: 'editor', shelf_mode: 'personal' })).status, 200);
 });
-
 
 let outsiderClient;
 const outsider = async (...args) => {
