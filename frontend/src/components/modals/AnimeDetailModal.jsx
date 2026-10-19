@@ -953,7 +953,7 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
-              {canEdit && kind !== 'movie' && (
+              {canEdit && kind !== 'movie' && !(anime.format === 'MOVIE' && !(anime.episodes > 1)) && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-episodes`}>
                   <h3 id={`${titleId}-episodes`} className="text-sm font-bold text-white mb-2">{t('Einzelne Folgen')}</h3>
                   {seasonSuggestion && (
@@ -995,7 +995,7 @@ export default function AnimeDetailModal({
                     {list.map((r) => (
                       <li key={`${r.relation}-${r.anilist_id || r.mal_id}`} className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400 w-32 shrink-0">{relationLabel(r.relation)}</span>
-                        <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}</span>
+                        <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}{r.my_status ? <span className="ml-2 text-slate-400">{animeProgressLabel(r.my_status)}</span> : null}</span>
                         {r.in_collection_id ? (
                           <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => unlessDiscarding(() => onOpenAnime(r.in_collection_id))}>{t('Öffnen')}</button>
                         ) : canEdit && (r.anilist_id || r.mal_id) ? (

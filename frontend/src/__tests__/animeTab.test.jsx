@@ -1456,6 +1456,20 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('Frieren 2');
   });
 
+  it('shows my status per related film and hides the episode grid of a one-episode film', async () => {
+    const view = openShared(shared({
+      relations: [{ kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3, in_collection_id: 9, my_status: 'Gesehen' }]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section').textContent).toContain('Gesehen');
+    expect(screen.getByRole('heading', { name: 'Einzelne Folgen' })).toBeTruthy();
+    view.unmount();
+
+    openShared(shared({ format: 'MOVIE', episodes: 1 }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
+  });
+
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
     const onOpenAnime = vi.fn();
     const linked = () => shared({

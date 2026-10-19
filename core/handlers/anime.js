@@ -141,6 +141,7 @@ function detailOf(ctx, id) {
     const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
     const progress = progressRows(ctx, id);
     const mine = progress.find((p) => p.user_id === (ctx.user && ctx.user.id));
+    const myStatus = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
     const manga = row.manga_id ? visibleManga(ctx, row.manga_id) : null;
     return {
         ...entry,
@@ -151,6 +152,9 @@ function detailOf(ctx, id) {
         relations: relations.map((r) => ({
             ...r,
             in_collection_id: (r.anilist_id && byAni.get(r.anilist_id)?.id) || (r.mal_id && byMal.get(r.mal_id)?.id) || null
+        })).map((r) => ({
+            ...r,
+            my_status: (r.in_collection_id && ctx.user && (myStatus.get(r.in_collection_id, ctx.user.id) || {}).status) || null
         })),
         manga,
         my_progress: store.progressOf(mine),
