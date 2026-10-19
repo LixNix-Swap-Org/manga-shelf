@@ -1700,6 +1700,16 @@ describe('films and TV shows', () => {
       await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ tmdb_id: 95396, tmdb_kind: 'movie', title: 'Dune: Teil 1', manga_id: null }));
     });
 
+    it('the kind chip starts on "Anime", so a plain search only asks for anime', async () => {
+      const search = vi.fn(async () => answer({ results: [], sources_used: ['anilist'], partial: false }));
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={vi.fn()} sources={SOURCES} />);
+      const kinds = screen.getByRole('group', { name: 'Art' });
+      expect(within(kinds).getByRole('button', { name: 'Anime' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.change(screen.getByLabelText('Titel suchen'), { target: { value: 'Frieren' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
+      await waitFor(() => expect(search).toHaveBeenCalledWith('Frieren', expect.objectContaining({ kind: 'anime' })));
+    });
+
     it('without a TMDB key: the TMDB chip, "Serien" and "Filme" are disabled, a remembered "Serien" counts as "Alle", the hint opens the keys', async () => {
       localStorage.setItem(SEARCH_KIND_KEY, 'tv');
       localStorage.setItem(SOURCES_KEY, JSON.stringify(['anilist', 'mal', 'tmdb']));
