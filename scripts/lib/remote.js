@@ -52,7 +52,7 @@ function parseUrl(raw) {
     try {
         url = new URL(raw);
     } catch (e) {
-        throw new Error(`Ungültige URL "${redactUrl(raw)}"`);
+        throw new Error(`Ungültige URL "${redactUrl(raw)}"`, { cause: e });
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Nur http:// oder https:// erlaubt: "${redactUrl(raw)}"`);
     if (!url.pathname.endsWith('/')) url.pathname += '/';
@@ -123,7 +123,7 @@ class RemoteClient {
         }
         const res = await fetch(this.url(p), { method, headers, body: payload ?? undefined, redirect: 'manual' });
         const text = await res.text();
-        let data = null;
+        let data;
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
         return { status: res.status, ok: res.status >= 200 && res.status < 300, data, text, headers: res.headers };
     }

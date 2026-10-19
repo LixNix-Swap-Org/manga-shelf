@@ -57,6 +57,15 @@ test('budget: 429 pauses until Retry-After (or the reset time), then resumes', (
     assert.equal(b.state('shared:jikan', T0).paused_until, T0 + 60000, 'no headers (Jikan): 60 s');
 });
 
+test('budget: a huge Retry-After or reset time pauses for 5 minutes at most', () => {
+    const b = createBudget();
+    b.take('shared:anilist', ANI, 'interactive', T0);
+    b.rateLimited('shared:anilist', { retryAfterSec: 86400 }, T0);
+    assert.equal(b.state('shared:anilist', T0).paused_until, T0 + 300000);
+    b.rateLimited('shared:anilist', { resetAt: Math.floor((T0 + 7200000) / 1000) }, T0);
+    assert.equal(b.state('shared:anilist', T0).paused_until, T0 + 300000);
+});
+
 test('budget: circuit opens after 3 outages, half-open lets one low-priority probe through, success closes it', () => {
     const events = [];
     const b = createBudget({ onChange: (key, event) => events.push(event) });

@@ -109,7 +109,7 @@ async function waitForToast(page, text, { kind = null, timeout = 10000 } = {}) {
     try {
         await page.waitForFunction(tagToast, { timeout }, selector, text, id);
     } catch (e) {
-        throw new Error(`No ${kind ? `${kind} ` : ''}toast with text "${text}"`);
+        throw new Error(`No ${kind ? `${kind} ` : ''}toast with text "${text}"`, { cause: e });
     }
     return `[data-e2e-toast="${id}"]`;
 }
@@ -137,7 +137,7 @@ async function clickText(page, text, { selector = 'button', within = null, timeo
                 .find(el => el.offsetParent !== null && !el.disabled && (el.innerText || '').includes(txt)) || null;
         }, { timeout }, selector, text, within);
     } catch (e) {
-        throw new Error(`No visible ${selector} with text "${text}"${within ? ` inside ${within}` : ''}`);
+        throw new Error(`No visible ${selector} with text "${text}"${within ? ` inside ${within}` : ''}`, { cause: e });
     }
     await handle.asElement().evaluate(el => el.click());
 }
@@ -182,7 +182,7 @@ async function api(page, method, path, body) {
             body: b === undefined ? undefined : JSON.stringify(b)
         });
         const text = await res.text();
-        let data = null;
+        let data;
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
         return { status: res.status, data };
     }, method, path, body);

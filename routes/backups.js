@@ -21,7 +21,7 @@ const update = require('../services/update');
 const disk = require('../utils/disk');
 const { trackJob } = require('../services/lifecycle');
 const { sendError } = require('../utils/httpError');
-const { msg, msgData, payloadMsg, badRequest, HttpError } = require('../core/errors');
+const { msg, msgData, payloadMsg } = require('../core/errors');
 const { clientIp } = require('../middleware/rateLimit');
 const log = require('../utils/logger').child('backup');
 

@@ -18,6 +18,8 @@ class FakeCache {
   constructor() { this.entries = new Map(); }
   async match(req) { return this.entries.get(abs(req))?.clone(); }
   async put(req, res) { this.entries.set(abs(req), res); }
+  async keys() { return [...this.entries.keys()].map((url) => ({ url })); }
+  async delete(req) { return this.entries.delete(abs(req)); }
   async add(req) {
     const res = await this.fetch(abs(req));
     if (!res.ok) throw new TypeError(`add failed: ${abs(req)}`);
@@ -173,6 +175,16 @@ describe('service worker', () => {
     for (const url of Object.keys(answers)) await sw.request(url);
     const uploads = await caches.open(UPLOADS_CACHE);
     expect([...uploads.entries.keys()]).toEqual([abs('/uploads/cover-1.jpg')]);
+  });
+
+  it('/uploads: keeps at most 1000 images, the oldest go first', async () => {
+    const caches = fakeCaches(vi.fn());
+    const sw = loadWorker({ version: '1', fetchImpl: async () => response('jpg', { type: 'image/jpeg' }), caches });
+    for (let i = 0; i < 1002; i++) await sw.request(`/uploads/c-${i}.jpg`);
+    const keys = [...(await caches.open(UPLOADS_CACHE)).entries.keys()];
+    expect(keys).toHaveLength(1000);
+    expect(keys[0]).toBe(abs('/uploads/c-2.jpg'));
+    expect(keys[999]).toBe(abs('/uploads/c-1001.jpg'));
   });
 
   it('network first: stores no HTML under a script URL, but stores navigations', async () => {

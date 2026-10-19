@@ -47,7 +47,7 @@ ipcRenderer.on('desktop:open-api-keys', () => {
 });
 
 // system UI language (app.getLocale()) for the page's language detection; read once per page load
-let locale = null;
+let locale;
 try { locale = ipcRenderer.sendSync('desktop:locale') || null; } catch (_) { locale = null; }
 
 let watchAllowed;

@@ -33,7 +33,7 @@ function readSecretFile() {
     } catch (e) {
         if (e.code === 'ENOENT') return null;
         // No silent per-process fallback: an unreadable key must stop the start, not log everyone out on each restart
-        throw new Error(`Signatur-Schlüssel ${SECRET_FILE} nicht lesbar: ${e.message}`);
+        throw new Error(`Signatur-Schlüssel ${SECRET_FILE} nicht lesbar: ${e.message}`, { cause: e });
     }
     if (content.length >= MIN_SECRET_LENGTH) {
         if (process.platform !== 'win32') {
@@ -57,7 +57,7 @@ function writeSecretFile() {
         fs.renameSync(tmp, SECRET_FILE);
     } catch (e) {
         try { fs.unlinkSync(tmp); } catch (e2) { /* not there */ }
-        throw new Error(`Signatur-Schlüssel ${SECRET_FILE} konnte nicht geschrieben werden: ${e.message}`);
+        throw new Error(`Signatur-Schlüssel ${SECRET_FILE} konnte nicht geschrieben werden: ${e.message}`, { cause: e });
     }
     return secret;
 }

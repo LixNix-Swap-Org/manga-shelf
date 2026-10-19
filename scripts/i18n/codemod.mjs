@@ -437,7 +437,7 @@ export function transform(file, rawCode) {
         let cleaned = cleanJsxText(c.value);
         if (pos === 0) cleaned = cleaned.replace(/^\s+/, '');
         if (pos === indices.length - 1) cleaned = cleaned.replace(/\s+$/, '');
-        void rawStart; void rawEnd;
+        void raw; void rawStart; void rawEnd;
         pieces.push({ text: cleaned });
         return;
       }

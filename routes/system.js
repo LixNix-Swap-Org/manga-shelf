@@ -496,7 +496,7 @@ const absolute = (req, p) => `${req.protocol}://${req.get('host')}${p}`;
 function feedState(req) {
     const row = feedRows(req.user.id)[0];
     if (!row) return { active: false, path: null, url: null, created_at: null, last_used_at: null, unreadable: false };
-    let token = null;
+    let token;
     try { token = openForServer(row.entry.sealed); } catch (e) { token = null; }
     return {
         active: true,
