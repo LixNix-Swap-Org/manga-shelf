@@ -79,7 +79,11 @@ function sharedWithOthers(anime) {
     ? rows.filter((p) => p.user_id !== mine.user_id).length
     : rows.length - (mine ? 1 : 0);
   const ownCounted = mine?.score && mine.rating_visibility !== 'private' ? 1 : 0;
-  return others > 0 || (anime.community?.count || 0) > ownCounted;
+  const hasOwnSharingState = Boolean(
+    (mine?.rating_visibility && mine.rating_visibility !== 'public')
+    || mine?.public_comment
+  );
+  return others > 0 || (anime.community?.count || 0) > ownCounted || hasOwnSharingState;
 }
 
 /**
@@ -213,7 +217,31 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
 
 const SAVE_DELAY_MS = 600;
 
+const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA', 'MUSIC'];
+
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
+
+/**
+ * The grid's seasons for an entry nobody set seasons for: a long run (more than 100 episodes, where the plain blocks of
+ * 100 say little) asks the TMDb suggestion (the server keeps the answer) and uses its seasons for display only, nothing is stored. Without a TMDb
+ * key, a match or an answer the grid keeps its blocks. Returns [{ start, name }] or null.
+ */
+function useAutoSeasons(anime, loadSuggestion) {
+  const id = anime?.id;
+  const needs = Boolean(loadSuggestion && id && anime.episodes > 100 && !(anime.custom_seasons?.length) && !(kindOf(anime) === 'tv' && anime.seasons?.length));
+  const [found, setFound] = useState(null);
+  useEffect(() => {
+    if (!needs) return undefined;
+    let alive = true;
+    Promise.resolve(loadSuggestion(id)).then((res) => {
+      const seasons = Array.isArray(res?.seasons) && res.seasons.length > 1 ? res.seasons.map((s) => ({ start: s.start, name: s.name || null })) : null;
+      if (alive) setFound({ id, seasons });
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one request per entry, the callback changes on every render
+  }, [id, needs]);
+  return needs && found?.id === id ? found.seasons : null;
+}
 
 /**
  * Single episodes as toggles (aria-pressed). Taps are collected for a moment and saved as one set of watched episodes and
@@ -363,9 +391,11 @@ function EpisodeGrid({ anime, progress, onSave, onSettled, onPendingChange, disa
     change(sorted(set), nextScores);
   };
   const sectionLabel = (s) => {
-    if (s.name) return t('{name} · Folgen {from}–{to}', { name: s.name, from: s.from, to: s.to });
-    if (s.season !== null) return t('Staffel {season} · Folgen {from}–{to}', { season: s.season, from: s.from, to: s.to });
-    return t('Folgen {from}–{to}', { from: s.from, to: s.to });
+    const range = { from: s.from, to: s.to };
+    if (s.name && s.season !== null) return t('Staffel {season} · {name} · Folgen {from}–{to}', { season: s.season, name: s.name, ...range });
+    if (s.name) return t('{name} · Folgen {from}–{to}', { name: s.name, ...range });
+    if (s.season !== null) return t('Staffel {season} · Folgen {from}–{to}', { season: s.season, ...range });
+    return t('Folgen {from}–{to}', range);
   };
   const episodeLabel = (n) => (section.relative
     ? t('Staffel {season}, Folge {episode}', { season: section.season, episode: n - section.start + 1 })
@@ -676,6 +706,8 @@ export default function AnimeDetailModal({
 
   const anime = detail || fallback;
   const sharing = Boolean(anime) && sharedWithOthers(anime);
+  const autoSeasons = useAutoSeasons(anime, isOpen && canEdit && anime && kindOf(anime) !== 'movie' ? seasonSuggestion : null);
+  const gridAnime = useMemo(() => (anime && autoSeasons ? { ...anime, custom_seasons: autoSeasons } : anime), [anime, autoSeasons]);
   const account = useAccountDefaults({ enabled: Boolean(isOpen && canEdit && sharing && defaultVisibility === undefined) });
   const accountVisibility = defaultVisibility === undefined ? account.animeVisibility : defaultVisibility;
   const isTitleDirty = Boolean(anime && titleDe.trim() !== (anime.title_de || '').trim());
@@ -719,6 +751,20 @@ export default function AnimeDetailModal({
   }, [isOpen, load]);
 
   useEffect(() => { setTitleDe(anime?.title_de || ''); }, [anime?.title_de]);
+
+  // the live main line (AniList, beyond the entries in the collection); the detail's own season_chain is the fallback
+  const [liveChain, setLiveChain] = useState(null);
+  const [chainRevision, setChainRevision] = useState(0);
+  const chainId = isOpen && anime?.anilist_id && (anime.kind || 'anime') === 'anime' ? animeId : null;
+  useEffect(() => { setLiveChain(null); }, [chainId]);
+  useEffect(() => {
+    if (!chainId) return undefined;
+    const controller = new AbortController();
+    api.get(`/api/anime/${chainId}/season-chain`, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted && Array.isArray(data?.seasons)) setLiveChain(data.seasons); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [chainId, chainRevision]);
 
   useEffect(() => {
     if (!isOpen || !animeId) return undefined;
@@ -846,7 +892,11 @@ export default function AnimeDetailModal({
   const countdown = anime ? countdownText(anime.next_airing, undefined, kind) : null;
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
-  const relations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
+  const animeRelations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
+  // films, specials and OVAs sit apart from the main line; they never touch the episode count
+  const chainSeasons = liveChain && liveChain.length > (anime.season_chain || []).length ? liveChain : (anime.season_chain || []);
+  const extras = animeRelations.filter((r) => EXTRA_FORMATS.includes(r.format));
+  const relations = animeRelations.filter((r) => !EXTRA_FORMATS.includes(r.format));
   const next = continueTarget(anime);
   const aired = anime ? airedEpisodes(anime) : null;
 
@@ -948,7 +998,7 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
-              {canEdit && kind !== 'movie' && (
+              {canEdit && kind !== 'movie' && !(anime.format === 'MOVIE' && !(anime.episodes > 1)) && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-episodes`}>
                   <h3 id={`${titleId}-episodes`} className="text-sm font-bold text-white mb-2">{t('Einzelne Folgen')}</h3>
                   {seasonSuggestion && (
@@ -956,7 +1006,15 @@ export default function AnimeDetailModal({
                       <SeasonEditor key={anime.id} anime={anime} onSave={saveSeasons} loadSuggestion={loadSeasonSuggestion} disabled={busy} />
                     </div>
                   )}
-                  <EpisodeGrid key={anime.id} anime={anime} progress={anime.my_progress} onSave={saveEpisodes} onSettled={episodesSettled}
+                  {autoSeasons && (
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-slate-300">{t('Staffeln von TMDB, nur zur Anzeige.')}</p>
+                      <button type="button" className="btn-secondary text-xs" disabled={busy} onClick={() => saveSeasons(autoSeasons).catch((err) => notify.error(err))}>
+                        {t('Für alle übernehmen')}
+                      </button>
+                    </div>
+                  )}
+                  <EpisodeGrid key={anime.id} anime={gridAnime} progress={anime.my_progress} onSave={saveEpisodes} onSettled={episodesSettled}
                     onPendingChange={setGridBusy} disabled={busy} />
                 </section>
               )}
@@ -983,14 +1041,39 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
-              {relations.length > 0 && (
-                <section className="mt-5 border-t border-slate-800 pt-4">
-                  <h3 className="text-sm font-bold text-white mb-2">{t('Verwandte Anime')}</h3>
+              {chainSeasons.length > 1 && (
+                <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-chain`}>
+                  <h3 id={`${titleId}-chain`} className="text-sm font-bold text-white mb-2">{t('Staffeln')}</h3>
+                  <ol className="space-y-1.5">
+                    {chainSeasons.map((c, i) => (
+                      <li key={`${c.anilist_id || c.mal_id || c.in_collection_id}`} className="flex items-center gap-2 text-xs" aria-current={c.current ? 'true' : undefined}>
+                        <span className="text-slate-400 w-32 shrink-0">{t('Staffel {n}', { n: i + 1 })}</span>
+                        <span className={`min-w-0 flex-1 truncate ${c.current ? 'text-white font-semibold' : 'text-slate-200'}`}>
+                          {c.title}{c.season_year ? ` (${c.season_year})` : ''}
+                          {c.my_status ? <span className="ml-2 text-slate-400">{animeProgressLabel(c.my_status)}</span> : null}
+                        </span>
+                        {c.current ? null : c.in_collection_id ? (
+                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => unlessDiscarding(() => onOpenAnime(c.in_collection_id))}>{t('Öffnen')}</button>
+                        ) : canEdit && (c.anilist_id || c.mal_id) ? (
+                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={busy}
+                            onClick={() => run(async () => { await onAdd({ anilist_id: c.anilist_id || undefined, mal_id: c.mal_id || undefined }); notify.success(t('„{title}“ hinzugefügt', { title: c.title })); await load(); setChainRevision((r) => r + 1); })}>
+                            {t('Hinzufügen')}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
+              {[[extras, t('Filme & Specials')], [relations, t('Verwandte Anime')]].map(([list, heading]) => list.length > 0 && (
+                <section key={heading} className="mt-5 border-t border-slate-800 pt-4">
+                  <h3 className="text-sm font-bold text-white mb-2">{heading}</h3>
                   <ul className="space-y-1.5">
-                    {relations.map((r) => (
+                    {list.map((r) => (
                       <li key={`${r.relation}-${r.anilist_id || r.mal_id}`} className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400 w-32 shrink-0">{relationLabel(r.relation)}</span>
-                        <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}</span>
+                        <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}{r.my_status ? <span className="ml-2 text-slate-400">{animeProgressLabel(r.my_status)}</span> : null}</span>
                         {r.in_collection_id ? (
                           <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => unlessDiscarding(() => onOpenAnime(r.in_collection_id))}>{t('Öffnen')}</button>
                         ) : canEdit && (r.anilist_id || r.mal_id) ? (
@@ -1003,7 +1086,7 @@ export default function AnimeDetailModal({
                     ))}
                   </ul>
                 </section>
-              )}
+              ))}
 
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4 grid gap-3 sm:grid-cols-2">
@@ -1016,7 +1099,7 @@ export default function AnimeDetailModal({
                   </form>
                   <div>
                     <label htmlFor={`${titleId}-manga`} className="block text-[11px] text-slate-400 mb-1">{t('Verknüpfte Reihe')}</label>
-                    <select id={`${titleId}-manga`} className="input-field text-base sm:text-sm" value={anime.manga_id || ''} disabled={busy} onChange={(e) => saveLink(e.target.value)}>
+                    <select id={`${titleId}-manga`} className="input-field text-base sm:text-sm" value={anime.manga_id || ''} disabled={busy || Boolean(anime.manga_linked_elsewhere)} onChange={(e) => saveLink(e.target.value)}>
                       <option value="">{t('Keine Verknüpfung')}</option>
                       {sortedMangas.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
                     </select>

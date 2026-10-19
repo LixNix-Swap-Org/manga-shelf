@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 const { ENTRIES, MIN_SETUP_TOKEN_LENGTH } = require('../utils/config');
 const { DEFAULT_TRUST_PROXY } = require('../utils/trustProxy');
 

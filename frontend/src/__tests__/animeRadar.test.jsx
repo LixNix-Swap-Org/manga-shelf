@@ -70,7 +70,8 @@ describe('mangaLinks', () => {
       entry(3, { title: 'Frieren: Beyond Journey’s End' }),
       entry(4, { title: 'Something else' }),
       entry(5, { manga_id: 99 }),
-      entry(6, { title: 'Another one' })
+      entry(6, { title: 'Another one' }),
+      entry(7, { title: 'Frieren', manga_linked_elsewhere: true })
     ];
     const r = mangaLinks(list, mangas);
     expect(r.linked.map((l) => [l.anime.id, l.manga?.id ?? null])).toEqual([[1, 8], [5, null]]);

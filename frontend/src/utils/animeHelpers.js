@@ -417,7 +417,7 @@ function seasonsOf(anime, count) {
   custom.forEach((s, i) => {
     const from = s.start;
     const to = Math.min(i + 1 < custom.length ? custom[i + 1].start - 1 : count, count);
-    if (from <= count && from <= to) out.push({ from, to, season: i + 1, name: s.name || null, relative: tv });
+    if (from <= count && from <= to) out.push({ from, to, season: i + 1, name: s.name || null, relative: true });
   });
   if (out.length) return out;
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
@@ -436,8 +436,8 @@ function seasonsOf(anime, count) {
 
 /**
  * Sections of the episode grid: the seasons set by hand (custom_seasons, `name` may be null), else the regular TMDb seasons
- * of a TV show, else blocks of `size` episodes. The seasons of a TV show are numbered within the season (`relative`, like
- * seasonEpisode), an anime's seasons by hand keep the absolute episode numbers.
+ * of a TV show, else blocks of `size` episodes. Every season counts its episodes from 1 (`relative`, like seasonEpisode),
+ * plain blocks keep the absolute numbers.
  * A season longer than `size` is cut into blocks of `size` that keep its name and number. Each section is
  * { from, to, season, name, relative, start } with the absolute range and the season's first episode `start`;
  * `season` is null for a plain block.
@@ -648,6 +648,7 @@ export function mangaLinks(list, mangas) {
       linked.push({ anime, manga: byId.get(anime.manga_id) || null });
       return;
     }
+    if (anime.manga_linked_elsewhere) return;
     const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native].map(titleKey).filter(Boolean);
     const hit = rows.find((row) => row.keys.some((a) => keys.includes(a)))
       || rows.find((row) => row.keys.some((a) => keys.some((b) => titlePrefix(a, b))))

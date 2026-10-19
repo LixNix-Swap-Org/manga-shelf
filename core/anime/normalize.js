@@ -11,13 +11,16 @@ const STATUSES = ['FINISHED', 'RELEASING', 'NOT_YET_RELEASED', 'CANCELLED', 'HIA
 const FORMATS = ['TV', 'TV_SHORT', 'MOVIE', 'OVA', 'ONA', 'SPECIAL', 'MUSIC'];
 const URL_KEYS = ['anilist', 'mal', 'tmdb', 'imdb'];
 
-/** ä→a, ö→o, ü→u, ß→ss (AniList's search does not match umlauts). */
+/** ä→a, ö→o, ü→u, ß→ss and every other accent or macron on a Latin letter (ū→u; AniList's search does not match them, TMDb spells "Shippūden"). Kana and kanji keep their marks. */
 function foldUmlauts(text) {
     return String(text ?? '')
         .replace(/[äÄ]/g, (c) => (c === 'ä' ? 'a' : 'A'))
         .replace(/[öÖ]/g, (c) => (c === 'ö' ? 'o' : 'O'))
         .replace(/[üÜ]/g, (c) => (c === 'ü' ? 'u' : 'U'))
-        .replace(/ß/g, 'ss');
+        .replace(/ß/g, 'ss')
+        .normalize('NFD')
+        .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+        .normalize('NFC');
 }
 
 const searchKey = (text) => titleKey(foldUmlauts(text));
