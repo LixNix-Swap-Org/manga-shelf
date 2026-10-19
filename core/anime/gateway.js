@@ -1191,6 +1191,49 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
     }
 }
 
+const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const CHAIN_STEPS = 12;
+
+/**
+ * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), one
+ * AniList request per step, at most CHAIN_STEPS each way. `relations` are the stored relations of the start entry.
+ * Returns { before: [node], after: [node] } with nodes { anilist_id, mal_id, title, season_year, episodes }; cached for a day.
+ */
+async function seasonChainOf(ctx, anilistId, relations) {
+    remember(ctx);
+    const key = `anime:chain:${anilistId}`;
+    const hit = cache.read(ctx, key);
+    if (hit) return hit.value;
+    const leave = enterInteractive(ctx);
+    const userId = ctx.user ? ctx.user.id : null;
+    try {
+        const value = await S().coalescer.run(key, async () => {
+            const walk = async (type) => {
+                const out = [];
+                const seen = new Set([anilistId]);
+                let rels = relations;
+                for (let i = 0; i < CHAIN_STEPS; i += 1) {
+                    const r = (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && CHAIN_FORMATS.includes(x.format) && x.anilist_id);
+                    if (!r || seen.has(r.anilist_id)) break;
+                    seen.add(r.anilist_id);
+                    out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
+                    // a failed step is no partial answer: nothing is cached and the caller answers 503
+                    const { metas } = await call(ctx, 'anilist', { priority: 'interactive', userId }, (credential) => anilist.byIdsDetail(ctx, [r.anilist_id], { credential }));
+                    rels = metas[0] ? metas[0].relations : [];
+                }
+                return out;
+            };
+            const after = await walk('SEQUEL');
+            const before = (await walk('PREQUEL')).reverse();
+            return { before, after };
+        });
+        cache.write(ctx, key, value, cache.TTL.adaptations);
+        return value;
+    } finally {
+        leave();
+    }
+}
+
 /**
  * Anime adaptations of a series (AniList relations ADAPTATION of type ANIME first, Jikan's as fallback), searched by
  * alt_title (romaji from Manga Passion), then title. Each with in_collection_id. Cached for a day.
@@ -1338,6 +1381,6 @@ function forgetAccess(userId, provider) {
 
 module.exports = {
     searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, scheduleOwnTmdbRefresh, refreshDue,
-    adaptationsOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
+    adaptationsOf, seasonChainOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
     spareDetail, tmdbLanguage, tmdbSeasons, state: () => S(), MANUAL_REFRESH_MS, SEARCH_GRACE_MS, SEARCH_SOURCES
 };

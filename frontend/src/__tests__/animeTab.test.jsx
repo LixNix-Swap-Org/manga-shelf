@@ -1487,6 +1487,25 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(chain.textContent).toContain('Hinzufügen');
   });
 
+  it('shows the live season chain when it reaches further than the collection', async () => {
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        return fakeResponse(200, { seasons: [
+          { in_collection_id: null, anilist_id: 7, title: 'Live Eins', season_year: 2015, my_status: null, current: false },
+          { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+          { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+        ] });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    expect(chain.textContent).toContain('Live Eins');
+    expect(chain.textContent).toContain('Live Drei');
+    expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Live Zwei');
+  });
+
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
     const onOpenAnime = vi.fn();
     const linked = () => shared({

@@ -998,6 +998,38 @@ async function adaptations(ctx, { params }) {
     return { body: await gateway.adaptationsOf(ctx, manga) };
 }
 
+/** GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live (beyond the entries in the collection). */
+async function seasonChainLive(ctx, { params }) {
+    const id = parseId(params.id);
+    const row = loadRow(ctx, id);
+    if ((row.kind || 'anime') !== 'anime' || !row.anilist_id) return { body: { seasons: [] } };
+    let chain;
+    try {
+        chain = await gateway.seasonChainOf(ctx, row.anilist_id, store.parseJson(row.relations, []));
+    } catch (err) {
+        if (!(err instanceof SourceError)) throw err;
+        throw new HttpError(503, 'AniList ist gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
+    }
+    if (!chain.before.length && !chain.after.length) return { body: { seasons: [] } };
+    const byAni = ctx.db.prepare('SELECT * FROM animes WHERE anilist_id = ?');
+    const status = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
+    const nodeOf = (n, current) => {
+        const entry = current ? row : byAni.get(n.anilist_id);
+        return {
+            in_collection_id: entry ? entry.id : null,
+            anilist_id: n.anilist_id || null,
+            mal_id: n.mal_id || null,
+            title: (entry && (entry.title_de || entry.title)) || n.title,
+            season_year: (entry && entry.season_year) || n.season_year || null,
+            episodes: (entry && entry.episodes) || n.episodes || null,
+            my_status: (entry && ctx.user && (status.get(entry.id, ctx.user.id) || {}).status) || null,
+            current: !!current
+        };
+    };
+    const self = { anilist_id: row.anilist_id, mal_id: row.mal_id, title: row.title, season_year: row.season_year, episodes: row.episodes };
+    return { body: { seasons: [...chain.before.map((n) => nodeOf(n)), nodeOf(self, true), ...chain.after.map((n) => nodeOf(n))] } };
+}
+
 const CSV_COLUMNS = [
     ['title', 'Titel'], ['title_de', 'Deutscher Titel'], ['anilist_id', 'AniList-ID'], ['mal_id', 'MAL-ID'], ['format', 'Format'],
     ['episodes', 'Folgen'], ['status', 'Status'], ['season_year', 'Jahr'], ['studios', 'Studios'], ['genres', 'Genres'],
@@ -1031,6 +1063,6 @@ function exportCsv(ctx) {
 module.exports = {
     ratings,
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
-    removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
+    removeProgress, refresh, remove, adaptations, seasonSuggestion, seasonChainLive, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
     duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

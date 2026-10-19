@@ -644,3 +644,44 @@ test('season chain: the TV prequel/sequel line through the entries in the collec
     const fromOne = (await admin('GET', `/anime/${one}`)).body.season_chain;
     assert.deepEqual(fromOne.map((c) => c.title), ['Kette Eins', 'Kette Zwei', 'Kette Drei'], 'the walk goes on through the entry that is in the collection');
 });
+
+test('season chain endpoint: follows prequel and sequel live through AniList beyond the collection, cached', async () => {
+    const edge = (relationType, id, format, title) => ({ relationType, node: { id, type: 'ANIME', format, status: 'FINISHED', episodes: 13, seasonYear: 2000 + id - 9500, title: { romaji: title } } });
+    const media = {
+        9501: ['Live Eins', [edge('SEQUEL', 9502, 'TV', 'Live Zwei')]],
+        9502: ['Live Zwei', [edge('PREQUEL', 9501, 'TV', 'Live Eins'), edge('SEQUEL', 9503, 'TV', 'Live Drei'), edge('SIDE_STORY', 9600, 'MOVIE', 'Live Film')]],
+        9503: ['Live Drei', [edge('PREQUEL', 9502, 'TV', 'Live Zwei')]]
+    };
+    let asked = 0;
+    const before = global.fetch;
+    global.fetch = (url, init) => {
+        if (new URL(String(url)).hostname !== 'graphql.anilist.co') return before(url, init);
+        asked += 1;
+        const { variables } = JSON.parse(init.body);
+        const list = (variables.ids || []).filter((id) => media[id]).map((id) => ({
+            id, title: { romaji: media[id][0] }, format: 'TV', status: 'FINISHED', episodes: 13, seasonYear: 2000 + id - 9500,
+            relations: { edges: media[id][1] }
+        }));
+        return Promise.resolve(new Response(JSON.stringify({ data: { Page: { media: list } } }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    };
+    try {
+        const made = await admin('POST', '/anime', { title: 'Live Zwei', episodes: 13 });
+        assert.equal(made.status, 201, JSON.stringify(made.body));
+        const id = made.body.id;
+        db.prepare('UPDATE animes SET anilist_id = 9502, season_year = 2002, relations = ? WHERE id = ?').run(JSON.stringify(media[9502][1].map((e) => ({
+            relation: e.relationType, kind: 'ANIME', anilist_id: e.node.id, mal_id: null, title: e.node.title.romaji, format: e.node.format, status: 'FINISHED', episodes: 13, season_year: e.node.seasonYear
+        }))), id);
+        const res = await admin('GET', `/anime/${id}/season-chain`);
+        assert.equal(res.status, 200, JSON.stringify(res.body));
+        assert.deepEqual(res.body.seasons.map((s) => s.title), ['Live Eins', 'Live Zwei', 'Live Drei']);
+        assert.deepEqual(res.body.seasons.map((s) => s.current), [false, true, false]);
+        assert.deepEqual(res.body.seasons.map((s) => s.in_collection_id), [null, id, null]);
+        const requests = asked;
+        assert.equal((await admin('GET', `/anime/${id}/season-chain`)).status, 200);
+        assert.equal(asked, requests, 'the second answer comes from the cache');
+        const manual = await admin('POST', '/anime', { title: 'Ohne Quelle', episodes: 3 });
+        assert.deepEqual((await admin('GET', `/anime/${manual.body.id}/season-chain`)).body.seasons, []);
+    } finally {
+        global.fetch = before;
+    }
+});

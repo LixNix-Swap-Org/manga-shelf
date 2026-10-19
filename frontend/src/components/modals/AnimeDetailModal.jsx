@@ -722,6 +722,19 @@ export default function AnimeDetailModal({
 
   useEffect(() => { setTitleDe(anime?.title_de || ''); }, [anime?.title_de]);
 
+  // the live main line (AniList, beyond the entries in the collection); the detail's own season_chain is the fallback
+  const [liveChain, setLiveChain] = useState(null);
+  const chainId = isOpen && anime?.anilist_id && (anime.kind || 'anime') === 'anime' ? animeId : null;
+  useEffect(() => { setLiveChain(null); }, [chainId]);
+  useEffect(() => {
+    if (!chainId) return undefined;
+    const controller = new AbortController();
+    api.get(`/api/anime/${chainId}/season-chain`, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted && Array.isArray(data?.seasons)) setLiveChain(data.seasons); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [chainId, detail]);
+
   useEffect(() => {
     if (!isOpen || !animeId) return undefined;
     const tick = () => setRefreshLeft(Math.max(0, Math.ceil(((lastRefresh.get(animeId) || 0) + REFRESH_LOCK_MS - Date.now()) / 1000)));
@@ -850,6 +863,7 @@ export default function AnimeDetailModal({
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
   const animeRelations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
   // films, specials and OVAs sit apart from the main line; they never touch the episode count
+  const chainSeasons = liveChain && liveChain.length > (anime.season_chain || []).length ? liveChain : (anime.season_chain || []);
   const extras = animeRelations.filter((r) => EXTRA_FORMATS.includes(r.format));
   const relations = animeRelations.filter((r) => !EXTRA_FORMATS.includes(r.format));
   const next = continueTarget(anime);
@@ -988,11 +1002,11 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
-              {(anime.season_chain || []).length > 1 && (
+              {chainSeasons.length > 1 && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-chain`}>
                   <h3 id={`${titleId}-chain`} className="text-sm font-bold text-white mb-2">{t('Staffeln')}</h3>
                   <ol className="space-y-1.5">
-                    {anime.season_chain.map((c, i) => (
+                    {chainSeasons.map((c, i) => (
                       <li key={`${c.anilist_id || c.mal_id || c.in_collection_id}`} className="flex items-center gap-2 text-xs" aria-current={c.current ? 'true' : undefined}>
                         <span className="text-slate-400 w-32 shrink-0">{t('Staffel {n}', { n: i + 1 })}</span>
                         <span className={`min-w-0 flex-1 truncate ${c.current ? 'text-white font-semibold' : 'text-slate-200'}`}>
