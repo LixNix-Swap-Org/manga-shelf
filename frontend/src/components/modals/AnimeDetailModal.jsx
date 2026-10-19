@@ -213,6 +213,8 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
 
 const SAVE_DELAY_MS = 600;
 
+const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA', 'MUSIC'];
+
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
 
 /**
@@ -846,7 +848,10 @@ export default function AnimeDetailModal({
   const countdown = anime ? countdownText(anime.next_airing, undefined, kind) : null;
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
-  const relations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
+  const animeRelations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
+  // films, specials and OVAs sit apart from the main line; they never touch the episode count
+  const extras = animeRelations.filter((r) => EXTRA_FORMATS.includes(r.format));
+  const relations = animeRelations.filter((r) => !EXTRA_FORMATS.includes(r.format));
   const next = continueTarget(anime);
   const aired = anime ? airedEpisodes(anime) : null;
 
@@ -983,11 +988,11 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
-              {relations.length > 0 && (
-                <section className="mt-5 border-t border-slate-800 pt-4">
-                  <h3 className="text-sm font-bold text-white mb-2">{t('Verwandte Anime')}</h3>
+              {[[extras, t('Filme & Specials')], [relations, t('Verwandte Anime')]].map(([list, heading]) => list.length > 0 && (
+                <section key={heading} className="mt-5 border-t border-slate-800 pt-4">
+                  <h3 className="text-sm font-bold text-white mb-2">{heading}</h3>
                   <ul className="space-y-1.5">
-                    {relations.map((r) => (
+                    {list.map((r) => (
                       <li key={`${r.relation}-${r.anilist_id || r.mal_id}`} className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400 w-32 shrink-0">{relationLabel(r.relation)}</span>
                         <span className="text-slate-200 min-w-0 flex-1 truncate">{r.title}{r.season_year ? ` (${r.season_year})` : ''}</span>
@@ -1003,7 +1008,7 @@ export default function AnimeDetailModal({
                     ))}
                   </ul>
                 </section>
-              )}
+              ))}
 
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4 grid gap-3 sm:grid-cols-2">

@@ -1442,6 +1442,20 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 9 });
   });
 
+  it('films and specials get their own block apart from the related anime', async () => {
+    openShared(shared({
+      relations: [
+        { kind: 'ANIME', relation: 'SEQUEL', title: 'Frieren 2', format: 'TV', anilist_id: 2 },
+        { kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3 }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const extras = screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section');
+    expect(extras.textContent).toContain('Frieren Film');
+    expect(extras.textContent).not.toContain('Frieren 2');
+    expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('Frieren 2');
+  });
+
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
     const onOpenAnime = vi.fn();
     const linked = () => shared({
