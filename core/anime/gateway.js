@@ -843,6 +843,16 @@ async function getTmdb(ctx, ref, { priority = 'interactive', userId = ctx.user ?
 async function tmdbSeasons(ctx, row, { language = 'de', userId = ctx.user ? ctx.user.id : null } = {}) {
     const none = (reason) => ({ seasons: [], reason, tmdb_id: null });
     if (!searchSourcesFor(ctx, userId).includes('tmdb')) return none('no_key');
+    // the grid asks for every opened entry: a found list is kept for 14 days, a miss for a day
+    const key = `anime:seasons:${row.id}:${tmdbLanguage(language)}:${row.episodes || 0}`;
+    const hit = row.id ? cache.read(ctx, key) : null;
+    if (hit) return hit.value;
+    const answer = await tmdbSeasonsLookup(ctx, row, { language, userId, none });
+    if (row.id) cache.write(ctx, key, answer, answer.seasons.length ? 14 * 24 * 60 * 60 * 1000 : cache.TTL.isbnNotFound);
+    return answer;
+}
+
+async function tmdbSeasonsLookup(ctx, row, { language, userId, none }) {
     const lang = tmdbLanguage(language);
     let tmdbId = row.tmdb_kind === 'tv' && row.tmdb_id ? row.tmdb_id : null;
     if (!tmdbId) {
