@@ -132,6 +132,51 @@ function rememberedLinks(ctx, animeId = null) {
     return new Map(rows.map((r) => [r.anime_id, r.url]));
 }
 
+/**
+ * The main line of an entry as seasons: the TV prequel/sequel chain, followed through the entries that are in the
+ * collection (their stored relations), so nothing is asked from a source. A neighbour that is not in the collection
+ * is listed but ends the walk. Returns [] when the entry has no TV neighbour; otherwise the seasons in order with
+ * { in_collection_id, anilist_id, mal_id, title, season_year, episodes, my_status, current }.
+ */
+function seasonChain(ctx, row, relations) {
+    const byAni = ctx.db.prepare('SELECT * FROM animes WHERE anilist_id = ?');
+    const byMal = ctx.db.prepare('SELECT * FROM animes WHERE mal_id = ?');
+    const status = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
+    const mineOf = (id) => (id && ctx.user && (status.get(id, ctx.user.id) || {}).status) || null;
+    const found = (r) => (r.anilist_id && byAni.get(r.anilist_id)) || (r.mal_id && byMal.get(r.mal_id)) || null;
+    const nodeOf = (r, entry) => ({
+        in_collection_id: entry ? entry.id : null,
+        anilist_id: r.anilist_id || null,
+        mal_id: r.mal_id || null,
+        title: (entry && (entry.title_de || entry.title)) || r.title,
+        season_year: (entry && entry.season_year) || r.season_year || null,
+        episodes: (entry && entry.episodes) || r.episodes || null,
+        my_status: mineOf(entry && entry.id),
+        current: false
+    });
+    const walk = (start, type) => {
+        const out = [];
+        const seen = new Set([start.id]);
+        let rels = relations;
+        for (let i = 0; i < 20; i += 1) {
+            const r = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && x.format === 'TV');
+            if (!r) break;
+            const entry = found(r);
+            out.push(nodeOf(r, entry));
+            if (!entry || seen.has(entry.id)) break;
+            seen.add(entry.id);
+            rels = store.parseJson(entry.relations, []);
+        }
+        return out;
+    };
+    const after = walk(row, 'SEQUEL');
+    const before = walk(row, 'PREQUEL').reverse();
+    if (!after.length && !before.length) return [];
+    const self = { in_collection_id: row.id, anilist_id: row.anilist_id || null, mal_id: row.mal_id || null, title: row.title_de || row.title,
+        season_year: row.season_year || null, episodes: row.episodes || null, my_status: mineOf(row.id), current: true };
+    return [...before, self, ...after];
+}
+
 /** The detail answer of GET /anime/:id (also returned by POST, PUT and refresh). */
 function detailOf(ctx, id) {
     const row = loadRow(ctx, id);
@@ -156,6 +201,7 @@ function detailOf(ctx, id) {
             ...r,
             my_status: (r.in_collection_id && ctx.user && (myStatus.get(r.in_collection_id, ctx.user.id) || {}).status) || null
         })),
+        season_chain: seasonChain(ctx, row, relations),
         manga,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;

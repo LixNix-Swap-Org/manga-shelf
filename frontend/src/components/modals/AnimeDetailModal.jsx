@@ -988,6 +988,31 @@ export default function AnimeDetailModal({
                 </section>
               )}
 
+              {(anime.season_chain || []).length > 1 && (
+                <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-chain`}>
+                  <h3 id={`${titleId}-chain`} className="text-sm font-bold text-white mb-2">{t('Staffeln')}</h3>
+                  <ol className="space-y-1.5">
+                    {anime.season_chain.map((c, i) => (
+                      <li key={`${c.anilist_id || c.mal_id || c.in_collection_id}`} className="flex items-center gap-2 text-xs" aria-current={c.current ? 'true' : undefined}>
+                        <span className="text-slate-400 w-32 shrink-0">{t('Staffel {n}', { n: i + 1 })}</span>
+                        <span className={`min-w-0 flex-1 truncate ${c.current ? 'text-white font-semibold' : 'text-slate-200'}`}>
+                          {c.title}{c.season_year ? ` (${c.season_year})` : ''}
+                          {c.my_status ? <span className="ml-2 text-slate-400">{animeProgressLabel(c.my_status)}</span> : null}
+                        </span>
+                        {c.current ? null : c.in_collection_id ? (
+                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => unlessDiscarding(() => onOpenAnime(c.in_collection_id))}>{t('Öffnen')}</button>
+                        ) : canEdit && (c.anilist_id || c.mal_id) ? (
+                          <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={busy}
+                            onClick={() => run(async () => { await onAdd({ anilist_id: c.anilist_id || undefined, mal_id: c.mal_id || undefined }); notify.success(t('„{title}“ hinzugefügt', { title: c.title })); await load(); })}>
+                            {t('Hinzufügen')}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
               {[[extras, t('Filme & Specials')], [relations, t('Verwandte Anime')]].map(([list, heading]) => list.length > 0 && (
                 <section key={heading} className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{heading}</h3>

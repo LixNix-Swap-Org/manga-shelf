@@ -1470,6 +1470,23 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
   });
 
+  it('lists the season chain with the current season marked', async () => {
+    openShared(shared({
+      season_chain: [
+        { in_collection_id: 1, anilist_id: 1, title: 'Erste Staffel', season_year: 2015, my_status: 'Gesehen', current: true },
+        { in_collection_id: 9, anilist_id: 2, title: 'Zweite Staffel', season_year: 2018, my_status: null, current: false },
+        { in_collection_id: null, anilist_id: 3, title: 'Dritte Staffel', season_year: 2022, my_status: null, current: false }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const chain = screen.getByRole('heading', { name: 'Staffeln' }).closest('section');
+    expect(chain.textContent).toContain('Staffel 1');
+    expect(chain.textContent).toContain('Dritte Staffel');
+    expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Erste Staffel');
+    expect(chain.textContent).toContain('Öffnen');
+    expect(chain.textContent).toContain('Hinzufügen');
+  });
+
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
     const onOpenAnime = vi.fn();
     const linked = () => shared({

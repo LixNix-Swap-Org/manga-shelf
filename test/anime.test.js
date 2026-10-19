@@ -621,3 +621,26 @@ test('a link into a foreign shelf: list and detail carry neither manga_id nor ma
     assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: series.body.id })).status, 404);
     assert.equal((await nora('DELETE', `/anime/${id}`)).status, 200);
 });
+
+test('season chain: the TV prequel/sequel line through the entries in the collection, other formats left out', async () => {
+    const make = async (title, anilist) => {
+        const made = await admin('POST', '/anime', { title, episodes: 12 });
+        assert.equal(made.status, 201, JSON.stringify(made.body));
+        const id = made.body.id;
+        db.prepare('UPDATE animes SET anilist_id = ?, season_year = ? WHERE id = ?').run(anilist, 2000 + anilist - 9000, id);
+        return id;
+    };
+    const one = await make('Kette Eins', 9001);
+    const two = await make('Kette Zwei', 9002);
+    const rel = (relation, anilist_id, format, title) => ({ relation, kind: 'ANIME', anilist_id, format, title, episodes: 12 });
+    const set = (id, list) => db.prepare('UPDATE animes SET relations = ? WHERE id = ?').run(JSON.stringify(list), id);
+    set(one, [rel('SEQUEL', 9002, 'TV', 'Kette Zwei'), rel('SIDE_STORY', 9100, 'MOVIE', 'Film')]);
+    set(two, [rel('PREQUEL', 9001, 'TV', 'Kette Eins'), rel('SEQUEL', 9003, 'TV', 'Kette Drei')]);
+
+    const fromTwo = (await admin('GET', `/anime/${two}`)).body.season_chain;
+    assert.deepEqual(fromTwo.map((c) => c.title), ['Kette Eins', 'Kette Zwei', 'Kette Drei']);
+    assert.deepEqual(fromTwo.map((c) => c.current), [false, true, false]);
+    assert.deepEqual(fromTwo.map((c) => c.in_collection_id), [one, two, null]);
+    const fromOne = (await admin('GET', `/anime/${one}`)).body.season_chain;
+    assert.deepEqual(fromOne.map((c) => c.title), ['Kette Eins', 'Kette Zwei', 'Kette Drei'], 'the walk goes on through the entry that is in the collection');
+});
