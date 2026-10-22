@@ -264,7 +264,8 @@ describe('README.md device backups', () => {
 describe('deploy examples', () => {
     test('the egg variables and the compose environment are variables of utils/config.js', () => {
         const egg = JSON.parse(read('egg-manga-shelf.json'));
-        for (const v of egg.variables) assert.ok(CONFIG_NAMES.has(v.env_variable), v.env_variable);
+        // BEHIND_PROXY exists only in the egg: its startup command turns it into TRUST_PROXY
+        for (const v of egg.variables.filter((x) => x.env_variable !== 'BEHIND_PROXY')) assert.ok(CONFIG_NAMES.has(v.env_variable), v.env_variable);
         const compose = read('docker-compose.yml');
         const env = [...compose.matchAll(/^\s*#?\s*- ([A-Z][A-Z0-9_]+)=/gm)].map((m) => m[1]).filter((n) => n !== 'NODE_ENV');
         assert.ok(env.length >= 3);
