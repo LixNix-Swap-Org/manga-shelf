@@ -7,35 +7,37 @@
   "exported_at": "2026-10-03T12:00:00+00:00",
   "name": "Manga Shelf App",
   "author": "antigravity@mangashelf",
-  "description": "Manga Shelf (https://github.com/LixNix-Swap-Org/manga-shelf): self-hosted manga collection. Needs Node.js 22.13 or newer (built-in node:sqlite). Upload and unpack pterodactyl-manga-shelf.zip from the releases; the setup code appears in the console at the first start.",
+  "description": "Manga Shelf (https://github.com/LixNix-Swap-Org/manga-shelf): self-hosted manga collection. Needs Node.js 22.13 or newer (built-in node:sqlite). The installation downloads the latest pterodactyl-manga-shelf.zip from the releases; the setup code appears in the console at the first start.",
   "features": null,
   "docker_images": {
-    "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
+    "Node.js 22 LTS - default": "ghcr.io/parkervcp/yolks:nodejs_22",
+    "Node.js 24 LTS - tested": "ghcr.io/parkervcp/yolks:nodejs_24",
+    "Node.js 26 Current - not LTS": "ghcr.io/parkervcp/yolks:nodejs_26"
   },
   "file_denylist": [],
-  "startup": "if [ -f package.json ]; then npm install --omit=dev --ignore-scripts --no-audit --no-fund; fi; node index.js",
+  "startup": "if [ -f package.json ]; then npm install --omit=dev --ignore-scripts --no-audit --no-fund; fi; if [ \"${BEHIND_PROXY}\" = \"true\" ] && { [ -z \"${TRUST_PROXY}\" ] || [ \"${TRUST_PROXY}\" = \"loopback\" ]; }; then GATEWAY=$(node -e \"const m=/^\\S+\\s+00000000\\s+([0-9A-Fa-f]{8})/m.exec(require('fs').readFileSync('/proc/net/route','utf8'));if(m){const g=m[1];console.log([6,4,2,0].map(i=>parseInt(g.substr(i,2),16)).join('.'))}\"); if [ -n \"${GATEWAY}\" ]; then export TRUST_PROXY=\"loopback, ${GATEWAY}\"; echo \"Manga Shelf: behind a reverse proxy, TRUST_PROXY=${TRUST_PROXY}\"; else echo \"Manga Shelf: gateway not found, TRUST_PROXY stays unchanged\"; fi; fi; node index.js",
   "config": {
     "files": "{}",
     "startup": "{\n    \"done\": [\n        \"Manga Shelf running on http://0.0.0.0:\",\n        \"Server listening on port\"\n    ]\n}",
     "logs": "{}",
-    "stop": "^^C"
+    "stop": "^C"
   },
   "scripts": {
     "installation": {
-      "script": "#!/bin/ash\n# The server files come from the release ZIP (pterodactyl-manga-shelf.zip); nothing to download here.\nmkdir -p /mnt/server\necho \"Manga Shelf: upload and extract pterodactyl-manga-shelf.zip in the server files, then start the server.\"\n",
+      "script": "#!/bin/ash\n# Downloads the latest release ZIP (pterodactyl-manga-shelf.zip) into the server folder and unpacks it.\n# On a reinstall only the files the ZIP ships are replaced; data/, .env, ssl/ and uploads/ stay.\nset -e\nmkdir -p /mnt/server\ncd /mnt/server\n\ncommand -v curl >/dev/null 2>&1 || apk add --no-cache curl\ncommand -v unzip >/dev/null 2>&1 || apk add --no-cache unzip\n\nURL=\"https://github.com/LixNix-Swap-Org/manga-shelf/releases/latest/download/pterodactyl-manga-shelf.zip\"\necho \"Manga Shelf: downloading $URL\"\nif ! curl -fsSL --retry 3 -o /tmp/pterodactyl-manga-shelf.zip \"$URL\"; then\n    echo \"Manga Shelf: download failed. Upload pterodactyl-manga-shelf.zip from the releases to the server files, unpack it and start the server.\"\n    exit 1\nfi\nunzip -o -q /tmp/pterodactyl-manga-shelf.zip -d /mnt/server\nrm -f /tmp/pterodactyl-manga-shelf.zip\ntest -f /mnt/server/index.js\necho \"Manga Shelf: installed. Start the server; the setup code appears in the console.\"\n",
       "container": "ghcr.io/parkervcp/installers:alpine",
       "entrypoint": "ash"
     }
   },
   "variables": [
     {
-      "name": "Server Port",
-      "description": "The port the web server will listen on.",
-      "env_variable": "SERVER_PORT",
-      "default_value": "3000",
+      "name": "Behind a reverse proxy",
+      "description": "Tick this when Nginx, Caddy or another reverse proxy on the host sits in front of this server. The server then believes the proxy's X-Forwarded-For (it adds the gateway of the Docker network, usually 172.18.0.1, to TRUST_PROXY), so login limits and locks count the real client address. Bind the allocation to 127.0.0.1 so the port is reachable only through the proxy. Leave it off without a proxy. It has no effect when TRUST_PROXY below is set to something other than loopback.",
+      "env_variable": "BEHIND_PROXY",
+      "default_value": "false",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|numeric",
+      "rules": "required|string|in:true,false",
       "field_type": "text"
     },
     {
@@ -56,6 +58,66 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "nullable|string|max:500",
+      "field_type": "text"
+    },
+    {
+      "name": "Time Zone",
+      "description": "What \"today\" is for the radar, calendar and anime dates, as an IANA name such as Europe/Berlin or America/New_York. An unknown name is ignored with a warning and Europe/Berlin applies.",
+      "env_variable": "APP_TIMEZONE",
+      "default_value": "Europe/Berlin",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:64",
+      "field_type": "text"
+    },
+    {
+      "name": "Backup Hour",
+      "description": "Hour of the day (0 to 23, in the time zone BACKUP_TIMEZONE, default Europe/Berlin) at which the daily automatic backup runs.",
+      "env_variable": "BACKUP_HOUR",
+      "default_value": "3",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|between:0,23",
+      "field_type": "text"
+    },
+    {
+      "name": "Daily Backups Kept",
+      "description": "How many daily automatic backups are kept (1 to 1000). Backups use the disk space of the server.",
+      "env_variable": "BACKUP_KEEP_DAILY",
+      "default_value": "7",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|between:1,1000",
+      "field_type": "text"
+    },
+    {
+      "name": "Log Level",
+      "description": "How much the console shows: debug (everything, for troubleshooting), info, warn, error or silent.",
+      "env_variable": "LOG_LEVEL",
+      "default_value": "info",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:debug,info,warn,error,silent",
+      "field_type": "text"
+    },
+    {
+      "name": "Install Updates From The App",
+      "description": "On: admins can install updates under System, Updates. Off: the list of releases and the manual steps stay, but the app refuses to download and install; update by uploading the ZIP instead.",
+      "env_variable": "UPDATE_INSTALL",
+      "default_value": "true",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:true,false",
+      "field_type": "text"
+    },
+    {
+      "name": "Setup Code",
+      "description": "Optional fixed setup code for the first admin account (at least 12 characters, spaces and hyphens do not count; shorter values are ignored). Empty = a random code is printed in the console at every start until an admin exists.",
+      "env_variable": "SETUP_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:100",
       "field_type": "text"
     }
   ]
