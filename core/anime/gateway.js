@@ -400,6 +400,33 @@ async function spareDetail(ctx, ids, { userId = null, timeoutMs, signal, beforeR
     }
 }
 
+const DISCOVER_TTL = 6 * 60 * 60 * 1000;
+
+/** A season of AniList by popularity (cached for 6 hours): { metas, has_next }. */
+async function discoverSeason(ctx, { season, year, page = 1 }, { userId = null, signal } = {}) {
+    remember(ctx);
+    const key = `anime:season:${season}:${year}:${page}`;
+    const hit = cache.read(ctx, key);
+    if (hit) return hit.value;
+    const answer = await call(ctx, 'anilist', { userId, signal }, (credential) => anilist.seasonal(ctx, { season, year, page }, { credential, signal }));
+    const value = { metas: answer.metas, has_next: answer.has_next };
+    cache.write(ctx, key, value, DISCOVER_TTL);
+    return value;
+}
+
+/** Recommendations for up to 50 AniList ids (cached for 6 hours per id set): [{ meta, rating, from }]. */
+async function discoverRecommendations(ctx, ids, { userId = null, signal } = {}) {
+    remember(ctx);
+    const sorted = [...new Set(ids)].sort((a, b) => a - b).slice(0, anilist.BATCH_SIZE);
+    if (!sorted.length) return [];
+    const key = `anime:recs:${sorted.join(',')}`;
+    const hit = cache.read(ctx, key);
+    if (hit) return hit.value;
+    const answer = await call(ctx, 'anilist', { userId, signal }, (credential) => anilist.recommendationsFor(ctx, sorted, { credential, signal }));
+    cache.write(ctx, key, answer.recommendations, DISCOVER_TTL);
+    return answer.recommendations;
+}
+
 /** The MyAnimeList side: official API when a client id exists, Jikan otherwise and when the official API fails. */
 async function callMalSide(ctx, { priority = 'interactive', userId = null, probe = false, signal } = {}, viaMal, viaJikan) {
     const side = malSide(ctx, userId, priority);
@@ -1391,6 +1418,6 @@ function forgetAccess(userId, provider) {
 
 module.exports = {
     searchAnime, searchManga, getAnime, refreshEntry, manualRefresh, scheduleRefresh, scheduleIdResolution, scheduleMalRefresh, scheduleOwnTmdbRefresh, refreshDue,
-    adaptationsOf, seasonChainOf, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
+    adaptationsOf, seasonChainOf, discoverSeason, discoverRecommendations, sourcesState, validateCredential, forgetAccess, resetGatewayState, call, poolDown, runInBackground, generationOf, spareSearch,
     spareDetail, tmdbLanguage, tmdbSeasons, state: () => S(), MANUAL_REFRESH_MS, SEARCH_GRACE_MS, SEARCH_SOURCES
 };

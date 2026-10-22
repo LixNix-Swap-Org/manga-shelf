@@ -25,7 +25,7 @@ export function feedAddress(state) {
  * "Kalender abonnieren": the personal iCal address of the radar (GET/POST/DELETE /api/radar/feed-token). The token
  * is its own secret, never the session; a new one replaces the old.
  */
-export function CalendarFeedPanel() {
+export function CalendarFeedPanel({ anime = false }) {
   const ids = useId();
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
@@ -59,7 +59,9 @@ export function CalendarFeedPanel() {
     return { active: false };
   }, t('Kalender-Abo beendet'));
 
-  const address = feedAddress(state);
+  // the anime feed shares the token of the radar feed and only differs in its path
+  const radarAddress = feedAddress(state);
+  const address = anime && radarAddress ? radarAddress.replace('/radar/feed.ics', '/anime/feed.ics') : radarAddress;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(address);
@@ -70,9 +72,11 @@ export function CalendarFeedPanel() {
   };
 
   return (
-    <div id="radar-calendar-feed" className="w-full rounded-2xl border border-sky-500/25 bg-slate-950/60 p-4 space-y-3 text-xs">
+    <div id={anime ? 'anime-calendar-feed' : 'radar-calendar-feed'} className="w-full rounded-2xl border border-sky-500/25 bg-slate-950/60 p-4 space-y-3 text-xs">
       <p className="text-slate-300">
-        {t('Vorbestellte und angekündigte Bände mit genauem Erscheinungstag als Kalender-Abo (iCal) – für iPhone, Android oder Thunderbird. Die Adresse ist persönlich und funktioniert ohne Anmeldung: nicht weitergeben.')}
+        {anime
+          ? t('Die nächsten Folgen deiner Anime (Schaue und Geplant) mit Uhrzeit als Kalender-Abo (iCal). Dieselbe persönliche Adresse wie im Release-Radar, nur mit anderem Pfad: eine neue Adresse ersetzt beide. In der Kalender-App kannst du für dieses Abo eine Erinnerung einstellen, so bekommst du auch ohne geöffnete App eine Benachrichtigung.')
+          : t('Vorbestellte und angekündigte Bände mit genauem Erscheinungstag als Kalender-Abo (iCal) – für iPhone, Android oder Thunderbird. Die Adresse ist persönlich und funktioniert ohne Anmeldung: nicht weitergeben.')}
       </p>
       {error && <p role="alert" className="text-rose-300">{error}</p>}
       {!state && !error && <p role="status" className="text-slate-400">{t('Wird geladen…')}</p>}

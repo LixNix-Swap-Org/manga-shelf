@@ -511,6 +511,7 @@ function feedState(req) {
 const removeFeeds = (userId) => revokeFeedTokens(db, userId);
 
 router.get('/radar/feed.ics', feedLimiter, (req, res, next) => next());
+router.get('/anime/feed.ics', feedLimiter, (req, res, next) => next());
 
 router.get('/radar/feed-token', requireAuth, (req, res) => {
     res.json(feedState(req));

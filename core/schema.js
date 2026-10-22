@@ -671,6 +671,31 @@ function migrationList(log = silentLog) {
                 const userCols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!userCols.has('default_anime_visibility')) d.exec("ALTER TABLE users ADD COLUMN default_anime_visibility TEXT NOT NULL DEFAULT 'public';");
             }
+        },
+        {
+            version: 34,
+            name: 'add_anime_tags',
+            up: (d) => {
+                // Tags / collections of the shared anime list (JSON list of short names)
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('tags')) d.exec('ALTER TABLE animes ADD COLUMN tags TEXT;');
+            }
+        },
+        {
+            version: 35,
+            name: 'add_anime_airings',
+            up: (d) => {
+                // Episodes that have aired (airing time in seconds), kept when the next one replaces them: the history of the anime calendar
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS anime_airings (
+                        anime_id INTEGER NOT NULL REFERENCES animes(id) ON DELETE CASCADE,
+                        episode INTEGER NOT NULL,
+                        at INTEGER NOT NULL,
+                        PRIMARY KEY (anime_id, episode)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_anime_airings_at ON anime_airings (at);
+                `);
+            }
         }
     ];
 }

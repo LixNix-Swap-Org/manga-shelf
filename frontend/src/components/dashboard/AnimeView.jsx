@@ -9,6 +9,7 @@ import {
   readSetting, writeSetting
 } from '../../utils/animeHelpers';
 import { languageName } from '../../utils/editions';
+import { tagCounts } from '../../utils/animeHub';
 import { t } from '../../i18n/index.js';
 import { animeProgressLabel } from '../../utils/enumLabels.js';
 
@@ -116,6 +117,7 @@ export default function AnimeView({
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState(ANIME_FILTERS[0]);
   const [sort, setSort] = useState('title');
+  const [tagChoice, setTagChoice] = useState(ALL_FILTER);
   const [kindChoice, setKindChoice] = useState(() => readSetting(KIND_FILTER_KEY, ALL_FILTER, (v) => KIND_FILTERS.includes(v)));
   const [languageChoice, setLanguageChoice] = useState(() => readSetting(LANGUAGE_FILTER_KEY, ALL_FILTER));
   const showKinds = useMemo(() => hasOtherKinds(list), [list]);
@@ -132,7 +134,9 @@ export default function AnimeView({
   };
   const kinds = useMemo(() => kindCounts(list), [list]);
   const counts = useMemo(() => filterCounts(filterKindLanguage(list, { kind, language })), [list, kind, language]);
-  const shown = useMemo(() => filterAnime(list, { search, filter, sort, kind, language }), [list, search, filter, sort, kind, language]);
+  const tags = useMemo(() => tagCounts(list), [list]);
+  const tag = tags.some((x) => x.name === tagChoice) ? tagChoice : ALL_FILTER;
+  const shown = useMemo(() => filterAnime(list, { search, filter, sort, kind, language, tag }), [list, search, filter, sort, kind, language, tag]);
   const offline = Boolean(user?.offline);
   // apps only: series of the Crunchyroll history the server could not map (always empty elsewhere)
   const unmatched = useUnmatched();
@@ -247,6 +251,21 @@ export default function AnimeView({
           </button>
         ))}
       </div>
+
+      {tags.length > 0 && (
+        <div role="group" aria-label={t('Nach Tag filtern')} className="flex gap-1.5 overflow-x-auto pb-1 mb-4" id="anime-tag-filter">
+          <button type="button" aria-pressed={tag === ALL_FILTER} onClick={() => setTagChoice(ALL_FILTER)}
+            className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${tag === ALL_FILTER ? 'bg-fuchsia-600/30 border-fuchsia-500/60 text-white' : 'border-slate-700 text-slate-300 hover:text-white'}`}>
+            {t('Alle Tags')}
+          </button>
+          {tags.map((x) => (
+            <button key={x.name} type="button" aria-pressed={tag === x.name} onClick={() => setTagChoice(x.name)}
+              className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${tag === x.name ? 'bg-fuchsia-600/30 border-fuchsia-500/60 text-white' : 'border-slate-700 text-slate-300 hover:text-white'}`}>
+              {x.name} <span className="font-mono text-slate-400">{x.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <span className="sr-only" aria-live="polite" data-testid="anime-refresh-status">{refreshing ? t('Gleiche ab…') : ''}</span>
       {!offline && <SourceHints sources={sources} listSync={listSync} onOpenAccount={onOpenAccount} />}

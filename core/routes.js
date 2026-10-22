@@ -14,6 +14,7 @@ const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
 const csv = require('./handlers/csv');
 const anime = require('./handlers/anime');
+const animeExtras = require('./handlers/animeExtras');
 const watch = require('./handlers/watch');
 const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
@@ -96,6 +97,11 @@ const routes = [
     { method: 'GET', path: '/export/csv', role: 'auth', handler: csv.exportCsv },
     { method: 'POST', path: '/import/csv', role: 'editor', handler: csv.importCsv },
 
+    // calendar apps send no session: the feed token of the radar is the credential
+    { method: 'GET', path: '/anime/feed.ics', role: 'public', handler: animeExtras.calendarFeed },
+    { method: 'GET', path: '/anime/history', role: 'auth', handler: animeExtras.history },
+    { method: 'GET', path: '/anime/discover/season', role: 'auth', limit: 'lookup', handler: animeExtras.discoverSeason },
+    { method: 'GET', path: '/anime/discover/recommendations', role: 'auth', limit: 'lookup', handler: animeExtras.discoverRecommendations },
     { method: 'GET', path: '/anime/search', role: 'auth', limit: 'lookup', handler: anime.search },
     { method: 'GET', path: '/anime/sources', role: 'auth', handler: anime.sources },
     { method: 'GET', path: '/anime', role: 'auth', handler: anime.list },
