@@ -724,6 +724,7 @@ function acceptNewerSchema(database) {
 function runSequentialMigrations(database, options = {}) {
     const log = options.log || silentLog;
     const pending = pendingMigrations(database, log);
+    const fresh = isFreshDatabase(database);
     ensureMigrationsTable(database);
     if (!pending.length) return [];
 
@@ -747,9 +748,18 @@ function runSequentialMigrations(database, options = {}) {
         // minus the schema_migrations row itself
         const entry = { version: mig.version, name: mig.name, changes: totalChanges() - changesBefore - 1, ms: Date.now() - started };
         report.push(entry);
+        if (fresh) continue;
         log.info(`[Database Migration] v${entry.version} ${entry.name}: ${entry.changes.toLocaleString('de-DE')} Zeilen geändert, ${entry.ms} ms`);
     }
+    if (fresh) log.info(`[Database Migration] Neue Datenbank angelegt (Schema v${report[report.length - 1].version}, ${report.length} Migrationen, ${report.reduce((sum, r) => sum + r.ms, 0)} ms)`);
     return report;
+}
+
+/** True for a database nobody has used: no migration recorded yet and no account or series, so its migrations change nothing worth listing. */
+function isFreshDatabase(database) {
+    const has = name => database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+    if (has('schema_migrations')) return false;
+    return ['users', 'mangas'].every(name => !has(name) || !database.prepare(`SELECT 1 FROM ${name} LIMIT 1`).get());
 }
 
 /**

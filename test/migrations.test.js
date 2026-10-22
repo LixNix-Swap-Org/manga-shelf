@@ -683,3 +683,31 @@ test('migration 33 adds rating_visibility (public), public_comment and users.def
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
     }
 });
+
+test('a new database logs one line for all migrations, an existing one lists each of them', () => {
+    const schema = require('../core/schema');
+    const infos = [];
+    const log = { debug() {}, info: (...args) => infos.push(args.join(' ')), error() {}, warn() {} };
+    const file = path.join(dataDir, 'temp', 'quiet.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const conn = dbm.openRawDb(file);
+    try {
+        schema.applySchema(conn, { log });
+        assert.equal(infos.length, 1, infos.join('\n'));
+        assert.match(infos[0], new RegExp(`Neue Datenbank angelegt \\(Schema v${dbm.LATEST_SCHEMA_VERSION}, ${dbm.LATEST_SCHEMA_VERSION} Migrationen, \\d+ ms\\)`));
+
+        conn.exec("INSERT INTO mangas (title) VALUES ('A'); DELETE FROM schema_migrations WHERE version >= 32;");
+        infos.length = 0;
+        schema.applySchema(conn, { log });
+        assert.equal(infos.filter(line => /\] v3[23] /.test(line)).length, 2, infos.join('\n'));
+        assert.ok(!infos.some(line => /Neue Datenbank/.test(line)));
+
+        conn.exec("DELETE FROM schema_migrations; DELETE FROM mangas;");
+        conn.exec("INSERT INTO users (username, password_hash) VALUES ('a', 'x'); DELETE FROM schema_migrations;");
+        infos.length = 0;
+        schema.applySchema(conn, { log });
+        assert.ok(infos.length > 1, 'an old database with accounts keeps the full list');
+    } finally {
+        conn.close();
+    }
+});
