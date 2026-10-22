@@ -5,6 +5,7 @@ import OwnerStatsCard from './OwnerStatsCard';
 import KpiCards from './stats/KpiCards';
 import TopSeriesCard from './stats/TopSeriesCard';
 import AnimeStatsCard from './stats/AnimeStatsCard';
+import AnimeInsightsCard from './stats/AnimeInsightsCard';
 import EditionsCard from './stats/EditionsCard';
 import PublisherTab, { TopPublishersCard } from './stats/PublisherTab';
 import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
@@ -340,6 +341,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
                         <OwnerStatsCard ownerStats={statsData.owner_stats} ownerPublishers={statsData.owner_publishers} />
                         <TopPublishersCard publishers={publishersList} onShowAll={() => setStatsTab('publishers')} />
                         <AnimeStatsCard anime={statsData.anime} />
+                        <AnimeInsightsCard insights={statsData.anime?.insights} />
                         <EditionsCard languages={statsData.languages} currencies={statsData.currencies} />
                       </div>
 

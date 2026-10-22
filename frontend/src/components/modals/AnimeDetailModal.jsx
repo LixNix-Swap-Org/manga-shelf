@@ -21,6 +21,8 @@ import { EDITION_LANGUAGES, languageName, withCurrent } from '../../utils/editio
 import episodeMarks from '../../../../core/anime/episodes.js';
 import ConfirmDialog from './ConfirmDialog';
 import { t, tn } from '../../i18n/index.js';
+import TagEditor from '../dashboard/animehub/TagEditor';
+import { readSpoilerGuard, spoilerState, writeSpoilerGuard } from '../../utils/animeHub';
 
 const REFRESH_LOCK_MS = 60 * 1000;
 const lastRefresh = new Map();
@@ -655,13 +657,15 @@ function CommunityRatings({ animeId, version }) {
  */
 export default function AnimeDetailModal({
   isOpen, animeId, fallback, onClose, canEdit, mangas = [], fetchDetail, updateProgress, removeFromMyList, update, seasonSuggestion, refresh, remove, onAdd,
-  onOpenAnime, defaultVisibility
+  onOpenAnime, defaultVisibility, knownTags = []
 }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [gridBusy, setGridBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [spoilerGuard, setSpoilerGuard] = useState(readSpoilerGuard);
+  const [revealed, setRevealed] = useState(null);
   const [titleDe, setTitleDe] = useState('');
   const [refreshLeft, setRefreshLeft] = useState(0);
   const [progressDirty, setProgressDirty] = useState(false);
@@ -676,6 +680,7 @@ export default function AnimeDetailModal({
 
   const anime = detail || fallback;
   const sharing = Boolean(anime) && sharedWithOthers(anime);
+  const spoilers = spoilerState(anime, spoilerGuard);
   const account = useAccountDefaults({ enabled: Boolean(isOpen && canEdit && sharing && defaultVisibility === undefined) });
   const accountVisibility = defaultVisibility === undefined ? account.animeVisibility : defaultVisibility;
   const isTitleDirty = Boolean(anime && titleDe.trim() !== (anime.title_de || '').trim());
@@ -933,12 +938,22 @@ export default function AnimeDetailModal({
                 </div>
               </div>
 
-              {description.text && (
-                <div className="mt-4">
+              <label className="mt-4 flex items-center gap-2 text-[11px] text-slate-400 w-fit">
+                <input type="checkbox" id="anime-spoiler-guard" checked={spoilerGuard}
+                  onChange={(e) => { setSpoilerGuard(e.target.checked); writeSpoilerGuard(e.target.checked); }} />
+                {t('Spoilerschutz (Beschreibung und fremde Bewertungen erst nach dem Anschauen)')}
+              </label>
+              {description.text && (spoilers.hideDescription && revealed !== anime.id ? (
+                <div className="mt-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-400" data-testid="anime-description-hidden">
+                  {t('Beschreibung ausgeblendet, bis du die erste Folge gesehen hast.')}{' '}
+                  <button type="button" className="text-brand-300 underline" onClick={() => setRevealed(anime.id)}>{t('Trotzdem anzeigen')}</button>
+                </div>
+              ) : (
+                <div className="mt-2">
                   <p className="text-sm text-slate-300 whitespace-pre-line break-words">{expanded ? anime.description : description.text}</p>
                   {description.cut && <button type="button" className="text-xs text-brand-300 mt-1" onClick={() => setExpanded((v) => !v)}>{expanded ? t('Weniger anzeigen') : t('Mehr anzeigen')}</button>}
                 </div>
-              )}
+              ))}
 
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-label={t('Mein Fortschritt')}>
@@ -964,10 +979,16 @@ export default function AnimeDetailModal({
               {(anime.progress || anime.progress_users || []).length > 0 && (
                 <section className="mt-5 border-t border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-white mb-2">{t('Fortschritt aller')}</h3>
-                  {sharing && anime.community?.count > 0 && (
+                  {sharing && spoilers.hideOthers && revealed !== `${anime.id}:others` && (
+                    <p className="text-xs text-slate-400 mb-2" data-testid="anime-ratings-hidden">
+                      {t('Bewertungen anderer sind ausgeblendet, bis du den Anime abgeschlossen oder selbst bewertet hast.')}{' '}
+                      <button type="button" className="text-brand-300 underline" onClick={() => setRevealed(`${anime.id}:others`)}>{t('Trotzdem anzeigen')}</button>
+                    </p>
+                  )}
+                  {sharing && !(spoilers.hideOthers && revealed !== `${anime.id}:others`) && anime.community?.count > 0 && (
                     <p className="text-xs text-slate-300 mb-2">{tn('Community: Ø {average} / 10 aus {count} Bewertung', 'Community: Ø {average} / 10 aus {count} Bewertungen', anime.community.count, { count: anime.community.count, average: formatNumber(anime.community.average, 1) })}</p>
                   )}
-                  {sharing && (
+                  {sharing && !(spoilers.hideOthers && revealed !== `${anime.id}:others`) && (
                     <CommunityRatings animeId={anime.id}
                       version={`${anime.community?.count || 0}:${anime.my_progress?.score || 0}:${anime.my_progress?.rating_visibility || ''}:${anime.my_progress?.public_comment || ''}`} />
                   )}
@@ -1004,6 +1025,11 @@ export default function AnimeDetailModal({
                   </ul>
                 </section>
               )}
+
+              <section className="mt-5 border-t border-slate-800 pt-4">
+                <TagEditor tags={anime.tags || []} known={knownTags} canEdit={canEdit} busy={busy}
+                  onSave={(tags) => run(async () => setDetail(await update(animeId, { tags })))} />
+              </section>
 
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4 grid gap-3 sm:grid-cols-2">

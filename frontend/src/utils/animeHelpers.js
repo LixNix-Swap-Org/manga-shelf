@@ -209,13 +209,14 @@ export function kindCounts(list) {
 }
 
 /** Filter (kind, watched language, status of my progress), search and sort of the list; never mutates. */
-export function filterAnime(list, { search = '', filter: rawFilter = ALL_FILTER, sort = 'title', kind = ALL_FILTER, language = ALL_FILTER } = {}) {
+export function filterAnime(list, { search = '', filter: rawFilter = ALL_FILTER, sort = 'title', kind = ALL_FILTER, language = ALL_FILTER, tag = ALL_FILTER } = {}) {
   const query = search.trim();
   const filter = normalizeAnimeFilter(rawFilter);
   let rows = filterKindLanguage(list, { kind, language }).filter((anime) => {
     const mine = anime.my_progress?.status || null;
     if (filter === NO_STATUS && mine) return false;
     if (filter !== ALL_FILTER && filter !== NO_STATUS && mine !== filter) return false;
+    if (tag !== ALL_FILTER && !(anime.tags || []).includes(tag)) return false;
     return true;
   });
   if (query) rows = rows.filter((anime) => searchIndex.matches(anime, query));

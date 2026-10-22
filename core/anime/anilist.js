@@ -173,6 +173,41 @@ async function byIdsDetail(ctx, ids, { credential, timeoutMs, signal } = {}) {
 }
 
 /** Anime adaptations of a manga found by title: [{ relation, kind, anilist_id, mal_id, title, … }] and the manga hit. */
+/** One page of a season (WINTER, SPRING, SUMMER, FALL) sorted by popularity: { metas, has_next, rate }. */
+async function seasonal(ctx, { season, year, page = 1, perPage = 30 }, { credential, timeoutMs, signal } = {}) {
+    const query = `query ($season: MediaSeason, $year: Int, $page: Int) { Page(page: $page, perPage: ${perPage}) {
+        pageInfo { hasNextPage } media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false) { ${MEDIA_FIELDS} } } }`;
+    const { data, rate } = await post(ctx, query, { season, year, page }, { credential, timeoutMs, signal });
+    const nowMs = ctx.now().getTime();
+    const list = data.Page && Array.isArray(data.Page.media) ? data.Page.media.filter((m) => m && m.title) : [];
+    return { metas: list.map((m) => normalize(m, nowMs)), has_next: Boolean(data.Page && data.Page.pageInfo && data.Page.pageInfo.hasNextPage), rate };
+}
+
+/**
+ * What AniList users recommend after the given entries: { recommendations: [{ meta, rating, from: [anilist ids] }], rate }.
+ * `rating` is the sum of the recommendation votes over the source entries.
+ */
+async function recommendationsFor(ctx, ids, { credential, timeoutMs, signal } = {}) {
+    const query = `query ($ids: [Int]) { Page(page: 1, perPage: ${BATCH_SIZE}) { media(id_in: $ids, type: ANIME) { id
+        recommendations(sort: RATING_DESC, perPage: 6) { nodes { rating mediaRecommendation { ${MEDIA_FIELDS} } } } } } }`;
+    const { data, rate } = await post(ctx, query, { ids }, { credential, timeoutMs, signal });
+    const nowMs = ctx.now().getTime();
+    const found = new Map();
+    const media = data.Page && Array.isArray(data.Page.media) ? data.Page.media : [];
+    for (const source of media) {
+        const nodes = source.recommendations && Array.isArray(source.recommendations.nodes) ? source.recommendations.nodes : [];
+        for (const node of nodes) {
+            const rec = node && node.mediaRecommendation;
+            if (!rec || !rec.id || !rec.title || (node.rating ?? 0) < 1) continue;
+            const hit = found.get(rec.id) || { meta: normalize(rec, nowMs), rating: 0, from: [] };
+            hit.rating += node.rating;
+            hit.from.push(source.id);
+            found.set(rec.id, hit);
+        }
+    }
+    return { recommendations: [...found.values()], rate };
+}
+
 async function adaptations(ctx, title, { credential, timeoutMs, signal } = {}) {
     const query = `query ($s: String) { Page(page: 1, perPage: 3) { media(search: $s, type: MANGA, sort: SEARCH_MATCH) {
         id idMal title { romaji english native } synonyms
@@ -235,4 +270,4 @@ async function saveListEntry(ctx, { mediaId, progress, status }, { credential, t
     return { entry: saved ? listEntryOf({ mediaId: Number(mediaId), ...saved }) : null, rate };
 }
 
-module.exports = { search, byId, byIds, byIdsDetail, adaptations, viewer, listCollection, listEntry, saveListEntry, normalize, BATCH_SIZE, API_URL, LABEL };
+module.exports = { seasonal, recommendationsFor, search, byId, byIds, byIdsDetail, adaptations, viewer, listCollection, listEntry, saveListEntry, normalize, BATCH_SIZE, API_URL, LABEL };

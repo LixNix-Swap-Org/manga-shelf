@@ -163,13 +163,18 @@ const feedPrice = (value, currency = 'EUR') => (typeof value === 'number' && val
     ? `${value.toFixed(2).replace('.', ',')} ${currency === 'EUR' ? '€' : currency}` : null);
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function calendarFeed(ctx, { query }) {
-    const found = feedEntryFor(ctx, qstr(query.token));
-    if (!found) throw feedNotFound();
+/** Remembers that the token was used ("last fetched" in the settings), at most once per FEED_USED_WRITE_GAP_MS. */
+function touchFeed(ctx, found) {
     const nowMs = ctx.now().getTime();
     if (!(found.entry.last_used_at > nowMs - FEED_USED_WRITE_GAP_MS)) {
         ctx.db.prepare('UPDATE app_settings SET value = ? WHERE key = ?').run(JSON.stringify({ ...found.entry, last_used_at: nowMs }), found.key);
     }
+}
+
+function calendarFeed(ctx, { query }) {
+    const found = feedEntryFor(ctx, qstr(query.token));
+    if (!found) throw feedNotFound();
+    touchFeed(ctx, found);
     const feedUser = ctx.db.prepare('SELECT id, role FROM users WHERE id = ?').get(found.entry.user_id);
     const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds({ ...ctx, user: feedUser }));
     const today = zonedToday(ctx.now(), ctx.config.appTimeZone);
@@ -211,4 +216,4 @@ function calendarFeed(ctx, { query }) {
     };
 }
 
-module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedVolumeLabel, revokeFeedTokens, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };
+module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, touchFeed, feedVolumeLabel, revokeFeedTokens, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };

@@ -424,11 +424,32 @@ function update(ctx, { params, body }) {
         const seasons = parseCustomSeasons(body.custom_seasons, columns.episodes !== undefined ? columns.episodes : row.episodes);
         columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
     }
+    if (body.tags !== undefined) {
+        const tags = parseTags(body.tags);
+        columns.tags = tags.length ? JSON.stringify(tags) : null;
+    }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
     columns.updated_by = ctx.user.id;
     store.updateRow(ctx, id, columns);
     return { body: detailOf(ctx, id) };
+}
+
+const MAX_TAGS = 20;
+const MAX_TAG = 30;
+
+/** tags of PUT /anime/:id: null or [] clears them, else a list of at most 20 short names (duplicates in any case are dropped). */
+function parseTags(value) {
+    if (value === null) return [];
+    if (!Array.isArray(value) || value.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
+    const seen = new Set();
+    const tags = [];
+    for (const raw of value) {
+        const name = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+        if (!name || name.length > MAX_TAG) throw badRequest(msg('Ein Tag hat 1 bis {max} Zeichen', { max: MAX_TAG }));
+        if (!seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); tags.push(name); }
+    }
+    return tags;
 }
 
 const seasonsError = () => badRequest(msg('Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})',
@@ -982,5 +1003,5 @@ module.exports = {
     ratings,
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
     removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
-    duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
+    duplicateOf, collectionMatcher, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

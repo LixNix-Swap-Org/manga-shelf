@@ -29,6 +29,8 @@ import useCollectionFilters, { loadPublisherNames } from './hooks/useCollectionF
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
 import useAnimeList from './hooks/useAnimeList';
+import useEpisodeAlerts from './hooks/useEpisodeAlerts';
+import { tagCounts } from './utils/animeHub';
 import useShareIntake from './hooks/useShareIntake';
 import { findStreamingLink } from './utils/shareIntake';
 import { SHARE_LINK_EVENT, takePendingShare } from './app/deepLink';
@@ -199,6 +201,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, [shelfFilter]);
 
   const anime = useAnimeList({ user });
+  const episodeAlerts = useEpisodeAlerts(anime.list);
+  const animeTagNames = useMemo(() => tagCounts(anime.list).map((x) => x.name), [anime.list]);
   const activeViewRef = useRef(activeMainView);
   activeViewRef.current = activeMainView;
   const setViewRef = useRef(null);
@@ -773,7 +777,12 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           loaded={anime.loaded}
           error={anime.error}
           canEdit={canEdit && !user?.offline}
+          userId={user?.id}
+          username={user?.username}
           onOpen={handleOpenAnime}
+          onOpenId={setAnimeDetailId}
+          onAddEntry={anime.add}
+          alerts={episodeAlerts}
           onLink={handleAnimeLink}
           onRefreshCover={anime.refresh}
           onRetry={anime.fetchAnime}
@@ -919,6 +928,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             remove={anime.remove}
             onAdd={anime.add}
             onOpenAnime={(id) => setAnimeDetailId(id)}
+            knownTags={animeTagNames}
           />
         )}
 

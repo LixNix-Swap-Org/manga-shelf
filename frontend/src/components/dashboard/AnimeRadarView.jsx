@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, CalendarClock, Link2, Tv, Unlink } from 'lucide-react';
+import { BookOpen, Bell, CalendarClock, Link2, Tv, Unlink } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import useTabList from '../../hooks/useTabList';
 import { countdownText, displayTitle, kindOf, mangaLinks, newEpisodes } from '../../utils/animeHelpers';
+import AnimeCalendarTab from './animehub/AnimeCalendarTab';
+import AnimeTogetherTab from './animehub/AnimeTogetherTab';
+import AnimeDiscoverTab from './animehub/AnimeDiscoverTab';
 import { formatCount } from '../../utils/format';
 import { compareNatural } from '../../utils/search';
 import { t, tn } from '../../i18n/index.js';
 
-const TABS = ['episodes', 'manga'];
+const TABS = ['episodes', 'calendar', 'together', 'discover', 'manga'];
 
 // entries whose cover was already asked for: remembered per device for a week, so a source without a cover is not asked at every visit
 const COVER_TRIED_KEY = 'mangashelf_cover_tried';
@@ -61,13 +64,30 @@ function Section({ title, count, children }) {
   );
 }
 
-function EpisodesTab({ list, now, onOpen }) {
+function AlertsToggle({ alerts }) {
+  if (!alerts) return null;
+  const blocked = alerts.permission === 'denied';
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300" id="anime-alerts">
+      <label className="inline-flex items-center gap-2">
+        <input type="checkbox" checked={alerts.enabled} onChange={(e) => (e.target.checked ? alerts.enable() : alerts.disable())} />
+        <Bell className="w-3.5 h-3.5 text-fuchsia-400" aria-hidden="true" /> {t('Hinweis, wenn eine neue Folge erscheint')}
+      </label>
+      <span className="text-slate-400">
+        {blocked ? t('Benachrichtigungen sind im Browser blockiert, es erscheint nur ein Hinweis in der App.') : t('Solange Manga Shelf geöffnet ist. Ohne App: Kalender abonnieren.')}
+      </span>
+    </div>
+  );
+}
+
+function EpisodesTab({ list, now, onOpen, alerts }) {
   const { upcoming, behind } = useMemo(() => newEpisodes(list, now), [list, now]);
   if (!upcoming.length && !behind.length) {
-    return <Empty>{t('Keine neuen Folgen in Sicht. Anime, die du schaust oder planst, erscheinen hier, sobald ein Termin bekannt ist.')}</Empty>;
+    return <><AlertsToggle alerts={alerts} /><Empty>{t('Keine neuen Folgen in Sicht. Anime, die du schaust oder planst, erscheinen hier, sobald ein Termin bekannt ist.')}</Empty></>;
   }
   return (
     <>
+      <AlertsToggle alerts={alerts} />
       {upcoming.length > 0 && (
         <Section title={t('Demnächst')} count={upcoming.length}>
           {upcoming.map((anime) => (
@@ -202,7 +222,7 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
 }
 
 /** Tab "Anime-Radar": new episodes of my anime and the links between anime and series of the shelf. */
-export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, onOpen, onLink, onRetry, onRefreshCover, now = new Date() }) {
+export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, userId, username, onOpen, onOpenId, onLink, onRetry, onRefreshCover, onAddEntry, alerts, now = new Date() }) {
   const [tab, setTab] = useState('episodes');
   // new entries from a source can arrive without a cover (background download pending or failed): ask the source once each
   useEffect(() => {
@@ -221,13 +241,13 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, o
     return () => { cancelled = true; };
   }, [list, canEdit, onRefreshCover]);
   const { tabListProps, tabProps, panelProps } = useTabList({ tabs: TABS, selected: tab, onSelect: setTab, prefix: 'anime-radar' });
-  const labels = { episodes: t('Neue Folgen'), manga: t('Manga-Verknüpfung') };
+  const labels = { episodes: t('Neue Folgen'), calendar: t('Kalender'), together: t('Gemeinsam'), discover: t('Entdecken'), manga: t('Manga-Verknüpfung') };
   return (
     <div id="anime-radar-view">
       <h2 className="sr-only">{t('Anime-Radar')}</h2>
-      <div {...tabListProps} aria-label={t('Bereiche')} className="flex w-full sm:inline-flex sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
+      <div {...tabListProps} aria-label={t('Bereiche')} className="flex w-full max-w-full overflow-x-auto sm:inline-flex sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
         {TABS.map((key) => (
-          <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
+          <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
             {labels[key]}
           </button>
         ))}
@@ -237,7 +257,10 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, o
       )}
       <div {...panelProps}>
         {!loaded && !list.length ? <Empty>{t('Lädt…')}</Empty>
-          : tab === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} />
+          : tab === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} alerts={alerts} />
+            : tab === 'calendar' ? <AnimeCalendarTab list={list} now={now} onOpen={onOpen} />
+              : tab === 'together' ? <AnimeTogetherTab list={list} userId={userId} username={username} onOpen={onOpen} />
+                : tab === 'discover' ? <AnimeDiscoverTab canEdit={canEdit} now={now} onAdd={onAddEntry} onOpenId={onOpenId} />
             : <MangaTab list={list} mangas={mangas} canEdit={canEdit} onLink={onLink} />}
       </div>
     </div>
