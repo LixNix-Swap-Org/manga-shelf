@@ -899,7 +899,9 @@ export default function AnimeDetailModal({
   const sortedMangas = [...mangas].sort((a, b) => compareNatural(a.title, b.title));
   const animeRelations = (anime?.relations || []).filter((r) => r.kind === 'ANIME');
   // films, specials and OVAs sit apart from the main line; they never touch the episode count
-  const chainSeasons = liveChain && liveChain.length > (anime.season_chain || []).length ? liveChain : (anime.season_chain || []);
+  // no fallback (an entry the list does not know yet): `anime` stays null until the detail has loaded
+  const storedChain = anime?.season_chain || [];
+  const chainSeasons = liveChain && liveChain.length > storedChain.length ? liveChain : storedChain;
   const extras = animeRelations.filter((r) => EXTRA_FORMATS.includes(r.format));
   const relations = animeRelations.filter((r) => !EXTRA_FORMATS.includes(r.format));
   const next = continueTarget(anime);

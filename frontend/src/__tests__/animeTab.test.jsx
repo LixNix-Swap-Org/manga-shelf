@@ -1522,6 +1522,22 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(chain.textContent).toContain('Hinzufügen');
   });
 
+  it('opens an entry the list does not know yet (no fallback): loading first, then the detail with its seasons', async () => {
+    let finish;
+    const anime = shared({
+      season_chain: [
+        { in_collection_id: 1, anilist_id: 1, title: 'Erste Staffel', season_year: 2015, my_status: 'Gesehen', current: true },
+        { in_collection_id: 9, anilist_id: 2, title: 'Zweite Staffel', season_year: 2018, my_status: null, current: false }
+      ]
+    });
+    const fetchDetail = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    openShared(anime, { fallback: undefined, fetchDetail, defaultVisibility: 'public' });
+    expect(screen.getByText('Wird geladen…')).toBeTruthy();
+    await act(async () => { finish(anime); });
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Frieren');
+    expect(screen.getByRole('heading', { name: 'Staffeln' }).closest('section').textContent).toContain('Zweite Staffel');
+  });
+
   it('shows the live season chain when it reaches further than the collection', async () => {
     fetchMock.mockImplementation(async (url) => {
       if (url === '/api/anime/1/season-chain') {
