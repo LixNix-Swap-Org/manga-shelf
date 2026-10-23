@@ -233,7 +233,8 @@ describe('the scheduler', () => {
     expect(JSON.parse(fake.prefs.get(REMINDER_KEY))).toEqual({ enabled: true });
     await waitFor(() => expect(fake.own().map((n) => n.extra?.day)).toEqual(['2026-10-25', '2026-10-27']));
     expect(fake.scheduled()).toContainEqual(foreign);
-    expect(fake.LocalNotifications.createChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'release-day', name: 'Erinnerungen am Erscheinungstag' }));
+    // Android: its own channel, default importance, private on a lock screen that hides sensitive content
+    expect(fake.LocalNotifications.createChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'release-day', name: 'Erinnerungen am Erscheinungstag', importance: 3, visibility: 0 }));
     stop();
   });
 
@@ -285,6 +286,16 @@ describe('the scheduler', () => {
     const guest = fakeNotificationsBridge();
     startReleaseReminders({ user: { id: 4, role: 'visitor' }, native: guest.native })();
     expect(guest.native.plugins.App.addListener).not.toHaveBeenCalled();
+  });
+
+  it('iOS has no channels: it schedules without createChannel', async () => {
+    const fake = fakeNotificationsBridge({ platform: 'ios' });
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    stubLists();
+    const stop = startReleaseReminders({ user: EDITOR, native: fake.native, now: () => NOW });
+    await waitFor(() => expect(fake.own()).toHaveLength(1));
+    expect(fake.LocalNotifications.createChannel).not.toHaveBeenCalled();
+    stop();
   });
 
   it('stop (logout) cancels the reminders, and a run that answers after it schedules nothing', async () => {

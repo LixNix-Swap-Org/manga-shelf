@@ -573,6 +573,13 @@ describe('native project settings', () => {
     assert.match(manifest, /<uses-permission android:name="android\.permission\.POST_NOTIFICATIONS" \/>/);
     // a morning reminder needs no exact alarm (the plugin falls back to an inexact one); Play restricts this permission
     assert.doesNotMatch(manifest, /SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM/);
+    // the status bar icon: a white vector drawable named in the plugin config (the plugin looks it up by name)
+    const icon = /LocalNotifications: \{ smallIcon: '([a-z_]+)', iconColor: '#[0-9a-f]{6}' \}/.exec(read('capacitor.config.ts'));
+    assert.ok(icon, 'smallIcon in capacitor.config.ts');
+    const drawable = read(`android/app/src/main/res/drawable/${icon[1]}.xml`);
+    assert.match(drawable, /^<vector /m);
+    assert.deepEqual([...new Set([...drawable.matchAll(/android:(?:stroke|fill)Color="([^"]+)"/g)].map((m) => m[1]))], ['#FFFFFFFF']);
+    assert.doesNotMatch(read('android/app/build.gradle'), /shrinkResources\s+true/, 'resource shrinking would drop an icon looked up by name');
     const bridge = read('src/native-bridge.mjs');
     assert.match(bridge, /import \{ LocalNotifications \} from '@capacitor\/local-notifications';/);
     assert.match(bridge, /NATIVE\.has\(platform\) \? \{ WebLogin, LocalNotifications \}/);

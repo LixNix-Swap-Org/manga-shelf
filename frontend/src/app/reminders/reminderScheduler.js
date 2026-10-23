@@ -21,7 +21,12 @@ export async function permissionState(native = reminderBridge()) {
   }
 }
 
-// Android only: its own channel, so the reminders can be silenced in the system settings apart from anything else
+// Android 8+: its own channel, so the reminders can be silenced in the system settings apart from anything else. The name
+// follows the UI language on every run (Android keeps the importance the user chose). Visibility private: a lock screen
+// set to hide sensitive content shows no titles (the plugin's default would be public). Below Android 8 the call rejects
+// and the notifications need no channel.
+export const CHANNEL_IMPORTANCE_DEFAULT = 3;
+export const CHANNEL_VISIBILITY_PRIVATE = 0;
 async function ensureChannel(native) {
   if (native.platform !== 'android') return;
   try {
@@ -29,9 +34,10 @@ async function ensureChannel(native) {
       id: REMINDER_CHANNEL,
       name: t('Erinnerungen am Erscheinungstag'),
       description: t('Neue Bände aus dem Release-Radar und neue Folgen deiner Anime'),
-      importance: 3
+      importance: CHANNEL_IMPORTANCE_DEFAULT,
+      visibility: CHANNEL_VISIBILITY_PRIVATE
     });
-  } catch (_) { /* older plugin or system: the default channel takes them */ }
+  } catch (_) { /* Android 7 or an older plugin: no channels */ }
 }
 
 async function run(mine, now) {
