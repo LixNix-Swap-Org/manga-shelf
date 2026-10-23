@@ -35,7 +35,7 @@ function deleteVolumeRows(ctx, volumeId) {
 }
 
 /**
- * Moves a series with its volumes, owners and reads into the trash; call it inside a transaction.
+ * Moves a series with its volumes, owners, reads and chapter progress into the trash; call it inside a transaction.
  * Returns the trash id, or null when the series does not exist.
  */
 function moveMangaToTrash(ctx, mangaId) {
@@ -44,11 +44,13 @@ function moveMangaToTrash(ctx, mangaId) {
     const volumes = ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ? ORDER BY id').all(manga.id);
     const { owners, reads } = volumeParts(ctx, volumes.map(v => v.id));
     const animeIds = ctx.db.prepare('SELECT id FROM animes WHERE manga_id = ? ORDER BY id').all(manga.id).map(r => r.id);
+    const chapters = ctx.db.prepare('SELECT * FROM chapter_progress WHERE manga_id = ? ORDER BY user_id').all(manga.id);
     const trashId = insertTrash(ctx, {
         kind: 'manga', refId: manga.id, mangaId: manga.id, title: manga.title,
-        payload: { manga, volumes, owners, reads, anime_ids: animeIds }, shelfId: manga.shelf_id
+        payload: { manga, volumes, owners, reads, anime_ids: animeIds, chapters }, shelfId: manga.shelf_id
     });
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
+    ctx.db.prepare('DELETE FROM chapter_progress WHERE manga_id = ?').run(manga.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);
     return trashId;
 }

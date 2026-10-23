@@ -37,6 +37,7 @@
   "+ {n} weiterer Titel|+ {n} weitere Titel": {
     "other": "+ {n}개 더"
   },
+  "+1 – ein Kapitel mehr gelesen": "+1 – 한 화 더 읽음",
   "-- Keine Angabe --": "-- 선택 안 함 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "복원 후 계정 1개의 비밀번호를 재설정해야 해요 (백업에 비밀번호가 없어요): {names}.",
   "32 Zeichen aus 0–9 und a–f": "0–9와 a–f로 이루어진 32자",
@@ -111,6 +112,7 @@
   "Alle Filter zurücksetzen": "모든 필터 초기화",
   "Alle Genres": "모든 장르",
   "Alle Geräte aller Benutzer abmelden?": "모든 사용자의 모든 기기에서 로그아웃할까요?",
+  "Alle Kapitel gelesen": "모든 화를 읽었어요",
   "Alle Regale": "모든 책장",
   "Alle Regale anzeigen": "모든 책장 표시",
   "Alle Reihen": "모든 시리즈",
@@ -242,6 +244,9 @@
   "Art der Vorschläge": "추천 종류",
   "Art des Eintrags": "항목 종류",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "“{name}” 계정에도 비밀번호가 없어요. 이후에 새 비밀번호는 다른 관리자가 사용자 관리에서 설정하거나, 서버에서 콘솔 명령 “{command}”로만 설정할 수 있어요.",
+  "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
+    "other": "웹툰 {n}개의 화수 진행 상황도 삭제돼요."
+  },
   "Auch für automatische Aktualisierungen verwenden": "자동 업데이트에도 사용",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "other": "특별판/박스 세트도 {n}개"
@@ -477,6 +482,7 @@
   "Bitte eine Adresse mit http:// oder https:// eingeben.": "http:// 또는 https://로 시작하는 주소를 입력해 주세요.",
   "Bitte eine Bandnummer eingeben.": "권 번호를 입력해 주세요.",
   "Bitte eine Bild-URL mit http:// oder https:// eingeben.": "http:// 또는 https://로 시작하는 이미지 URL을 입력해 주세요.",
+  "Bitte eine ganze Zahl zwischen 0 und {max} eingeben.": "0부터 {max}까지의 정수를 입력하세요.",
   "Bitte eine gültige Band-Nummer eingeben.": "올바른 권 번호를 입력해 주세요.",
   "Bitte einen Eintrag wählen.": "항목을 선택해 주세요.",
   "Bitte einen Namen für dein Profil eingeben.": "프로필 이름을 입력해 주세요.",
@@ -844,6 +850,7 @@
   "Ein Bearbeiter kann Anime hinzufügen.": "편집자는 애니메이션을 추가할 수 있어요.",
   "Ein Benutzer kann nicht gleichzeitig Besitzer werden und abgeben": "한 사용자가 동시에 보유자가 되면서 양도할 수는 없어요",
   "Ein Google-API-Schlüssel beginnt mit „AIza“ und hat 39 Zeichen.": "Google API 키는 “AIza”로 시작하며 39자예요.",
+  "Ein Kapitel mehr gelesen": "한 화 더 읽음",
   "Ein Tag hat 1 bis {max} Zeichen": "태그는 1~{max}자입니다",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "병합해야 할 오타나 표기 차이인가요?",
   "Eine Folge mehr": "1화 추가",
@@ -889,6 +896,7 @@
   "Entdecken": "둘러보기",
   "Entfernen": "삭제",
   "Enthält": "포함",
+  "Entweder chapters_read oder add angeben": "chapters_read 또는 add 중 하나만 보내세요",
   "Er ist dabei kurz nicht erreichbar, die Apps zeigen so lange „offline“; alle bleiben angemeldet.": "그동안 서버에 잠깐 연결할 수 없어서 앱에는 “오프라인”으로 표시돼요. 모두 로그인 상태가 유지돼요.",
   "Erfasse eine neue Reihe in deiner Sammlung": "컬렉션에 새 시리즈 등록",
   "Erfassen": "등록",
@@ -1089,6 +1097,7 @@
   "Gast": "게스트",
   "Gast (Nur Lesezugriff)": "게스트 (읽기 전용)",
   "Gast (alte Rolle)": "게스트 (이전 역할)",
+  "Gedruckt (Bände)": "종이책(권)",
   "Gegenseitig mit dir teilen": "나와 서로 공유",
   "Gegenseitig teilen lässt sich nur mit deinem eigenen Konto": "서로 공유는 내 계정과만 할 수 있어요",
   "Gekauft": "구매함",
@@ -1097,12 +1106,14 @@
   "Gelesen ({count})": "읽음 ({count})",
   "Gelesen am": "읽은 날짜",
   "Gelesen am: {date}": "읽은 날짜: {date}",
+  "Gelesen bis Kapitel": "읽은 화",
   "Gelesen ✓": "읽음 ✓",
   "Gelesen: {count}": "읽음: {count}",
   "Gelesen: {name} – {volume}": "읽음: {name} – {volume}",
   "Gelesen: {read} von {owned}": "읽음: {owned}권 중 {read}권",
   "Gelesene Bände je Monat": "월별 읽은 권",
   "Gelesene Bände je Monat, {range}": "월별 읽은 권, {range}",
+  "Gelesene Kapitel muss eine ganze Zahl zwischen 0 und {max} sein": "읽은 화수는 0부터 {max}까지의 정수여야 해요",
   "Gelesene Mangas von {username}": "{username}님이 읽은 만화",
   "Geliefert": "수령함",
   "Gelöscht {date}": "{date} 삭제",
@@ -1144,6 +1155,7 @@
   "Gesamt": "전체",
   "Gesamt geplant": "전체 예정",
   "Gesamt: {total}": "전체: {total}",
+  "Gesamtkapitel muss eine ganze Zahl zwischen 1 und {max} sein": "전체 화수는 1부터 {max}까지의 정수여야 해요",
   "Gescannt ({count})": "스캔됨 ({count})",
   "Gescannt: {bookTitle}": "스캔됨: {bookTitle}",
   "Gescannt: {scanned}": "스캔됨: {scanned}",
@@ -1314,6 +1326,12 @@
   "Kalender-Modus: Vorbestellungen & Neuerscheinungen im Blick": "캘린더 모드: 예약 구매와 신간을 한눈에",
   "Kamera wird gestartet…": "카메라를 시작하는 중…",
   "Kampfkunst": "무술",
+  "Kap.": "화",
+  "Kapitel": "화수",
+  "Kapitel gesamt": "전체 화수",
+  "Kapitel {chapter} gibt es bei dieser Reihe nicht (sie hat {total} Kapitel).": "이 시리즈에는 {chapter}화가 없어요 (전체 {total}화).",
+  "Kapitelstand konnte nicht gespeichert werden": "화수 진행 상황을 저장하지 못했어요",
+  "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "“{name}”의 진행 상황이 전체 화수보다 커요 (무시됨)",
   "Karten": "카드",
   "Kaufdatum": "구매일",
   "Kaufdatum…": "구매일…",
@@ -1534,6 +1552,7 @@
   "Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.": "지금 Manga Passion에 연결할 수 없어요 – 이번 달에 마지막으로 저장된 데이터를 표시해요.",
   "Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.": "지금 Manga Passion에 연결할 수 없어요. 나중에 다시 시도해 주세요.",
   "Manga Passion kennt nur deutsche Ausgaben": "Manga Passion은 독일어판만 알고 있어요",
+  "Manga Passion kennt nur gedruckte Ausgaben, keine Webtoons": "Manga Passion은 종이책만 알고 웹툰은 몰라요",
   "Manga Passion nennt für diese Ausgabe keine Genres.": "Manga Passion에 이 판의 장르 정보가 없어요.",
   "Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.": "지금 Manga Passion과 AniList에 연결할 수 없어요. 시리즈를 직접 만들거나 나중에 다시 검색해 주세요.",
   "Manga Passion:": "Manga Passion:",
@@ -1652,6 +1671,7 @@
   "Name (optional)": "이름(선택)",
   "Name des Regals": "책장 이름",
   "Name fehlt": "이름이 없습니다",
+  "Name: Kapitel, z. B. anna: 150": "이름: 화수, 예: anna: 150",
   "Nebengeschichte": "외전",
   "Netzwerkfehler": "네트워크 오류",
   "Netzwerkfehler bei der Metadatensuche": "메타데이터 검색 중 네트워크 오류가 발생했어요",
@@ -1811,6 +1831,7 @@
   "Offizieller Preis: {price}": "공식 가격: {price}",
   "Offizielles Schuber-Cover herunterladen, Erscheinungsdatum, Titel & Preis automatisch abrufen.": "공식 박스 세트 표지를 다운로드하고 발매일, 제목, 가격을 자동으로 가져와요.",
   "Offline": "오프라인",
+  "Offline lässt sich der Kapitelstand nicht ändern.": "오프라인에서는 화수 진행 상황을 바꿀 수 없어요.",
   "Offline nicht verfügbar": "오프라인에서는 사용할 수 없어요",
   "Offline nicht verfügbar: Der Manga-Passion-Abgleich braucht eine Verbindung.": "오프라인에서는 사용할 수 없어요: Manga Passion 대조에는 연결이 필요해요.",
   "Offline – Stand der Sammlung: {age}": "오프라인 – 컬렉션 기준: {age}",
@@ -2420,6 +2441,7 @@
   "Ungültiges Datum (erwartet: YYYY-MM-DD ab 1900)": "올바르지 않은 날짜예요 (형식: YYYY-MM-DD, 1900년 이후)",
   "Ungültiges Erscheinungsjahr": "올바르지 않은 출간 연도예요",
   "Ungültiges Erscheinungsjahr „{value}“": "올바르지 않은 발매 연도 “{value}”",
+  "Ungültiges Format (erlaubt: print, webtoon)": "잘못된 형식이에요 (허용: print, webtoon)",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "올바르지 않은 ISBN 형식이에요 (10자 또는 13자여야 해요)",
   "Ungültiges Jahr oder Monat": "올바르지 않은 연도 또는 월이에요",
   "Ungültiges Regal": "잘못된 책장입니다",
@@ -2553,6 +2575,9 @@
   "Vorschläge konnten nicht geladen werden": "추천을 불러오지 못했습니다",
   "Waisen aufräumen": "사용되지 않는 항목 정리",
   "Wartet seit {elapsed} Min.": "대기 시간 {elapsed} (분:초)",
+  "Webtoon": "웹툰",
+  "Webtoon (Kapitel)": "웹툰(화)",
+  "Webtoons": "웹툰",
   "Weg zurück (README)": "되돌리는 방법 (README)",
   "Weil du {titles} mochtest": "{titles}을(를) 좋아하셔서",
   "Weiter auf Crunchyroll": "Crunchyroll에서 이어보기",
@@ -2562,6 +2587,7 @@
   "Weiter sind: {names} – bei Spoilern aufpassen.": "앞서 있는 사람: {names} – 스포일러에 주의하세요.",
   "Weiter zur Sammlung": "컬렉션으로 계속",
   "Weitere Fotos hinzufügen": "사진 더 추가",
+  "Weitere Leser": "다른 독자",
   "Weitere Reihen anzeigen ({number} übrig)": "시리즈 더 보기 ({number}개 남음)",
   "Weitere Währungen": "다른 통화",
   "Weitere Währungen (nicht umgerechnet): {amounts}": "다른 통화 (환산 안 됨): {amounts}",
@@ -2754,6 +2780,9 @@
   "im Besitz": "보유 중",
   "in dieser Installationsart nur mit Anleitung": "이 설치 방식에서는 안내만 가능",
   "in {currency}": "{currency} 기준",
+  "in {n} Reihe|in {n} Reihen": {
+    "other": "{n}개 시리즈에서"
+  },
   "in {n} Tag|in {n} Tagen": {
     "other": "{n}일 후"
   },
@@ -2770,6 +2799,7 @@
   "keiner": "없음",
   "langer Text aus drei Teilen, beginnt mit „ey“": "세 부분으로 된 긴 텍스트, “ey”로 시작",
   "leer = jetzt": "비우면 지금",
+  "leer = noch offen": "비워 두면 = 미정",
   "letzter geprüfter Snapshot älter als 48 Std.": "마지막으로 검사한 스냅샷이 48시간보다 오래되었어요",
   "link_to ist erforderlich (Reihen-ID oder null)": "link_to가 필요해요 (시리즈 ID 또는 null)",
   "manuell": "직접 입력",
@@ -2951,6 +2981,7 @@
   "{name} (persönlich)": "{name} (개인용)",
   "{name} ({count} gelesen)": "{name} ({count}권 읽음)",
   "{name} ({owned} im Besitz, {read} gelesen)": "{name} (보유 {owned}, 읽음 {read})",
+  "{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})": "{name} (보유 {owned}, 읽음 {read}, {chapter}화까지)",
   "{name} als Besitzer eingetragen": "{name}을(를) 보유자로 등록했어요",
   "{name} auswählen": "{name} 선택",
   "{name} bearbeiten": "{name} 편집",
@@ -2962,6 +2993,7 @@
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name}을(를) 기존 시리즈에 추가했어요.",
   "{name} · Folgen {from}–{to}": "{name} · {from}–{to}화",
   "{name}. Server wechseln": "{name}. 서버 전환",
+  "{name}: Kapitel {n}": "{name}: {n}화",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: 시리즈가 아직 컬렉션에 없어요",
   "{name}: {state}": "{name}: {state}",
   "{name}: {state} (Klicken zum Umschalten)": "{name}: {state} (클릭하여 전환)",
@@ -3007,6 +3039,12 @@
   },
   "{n} Jahr|{n} Jahre": {
     "other": "{n}년"
+  },
+  "{n} Kapitel gelesen|{n} Kapitel gelesen": {
+    "other": "{n}화 읽음"
+  },
+  "{n} Kapitel|{n} Kapitel": {
+    "other": "{n}화"
   },
   "{n} Kauf vorgemerkt, wird automatisch übertragen.|{n} Käufe vorgemerkt, werden automatisch übertragen.": {
     "other": "구매 {n}건이 대기 중이며 자동으로 전송돼요."
@@ -3054,6 +3092,9 @@
   "{n} vorgemerkter Kauf wurde vom Server abgelehnt.|{n} vorgemerkte Käufe wurden vom Server abgelehnt.": {
     "other": "대기 중이던 구매 {n}건이 서버에서 거부되었어요."
   },
+  "{n} zu Ende gelesen|{n} zu Ende gelesen": {
+    "other": "{n}개 완독"
+  },
   "{official} statt {stored}": "{stored} 대신 {official}",
   "{owned} im Besitz": "{owned}권 보유",
   "{owned} von {count}": "{count}권 중 {owned}권",
@@ -3068,6 +3109,9 @@
   "{provider} lehnt den Token ab ({status})": "{provider}이(가) 토큰을 거부했어요 ({status})",
   "{provider} lehnt die Client-ID ab ({status})": "{provider}이(가) 클라이언트 ID를 거부했어요 ({status})",
   "{queued} vorgemerkt": "{queued} 대기 중",
+  "{read} von {n} Kapitel gelesen|{read} von {n} Kapiteln gelesen": {
+    "other": "{n}화 중 {read}화 읽음"
+  },
   "{read} von {owned} gelesen": "{owned}권 중 {read}권 읽음",
   "{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?": "{reason}\n\n판 “{edition}”을(를) 지금 확인한 뒤 채울까요?",
   "{reason} – die Suche geht trotzdem.": "{reason} – 그래도 검색은 가능해요.",
@@ -3091,7 +3135,9 @@
   "{title} – Folge {episode}": "{title} – {episode}화",
   "{title}, Folge {episode} gesehen?": "{title}, {episode}화를 봤나요?",
   "{title}: Folge {episode} gesehen": "{title}: {episode}화 시청함",
+  "{title}: Kapitelstand zurückgesetzt": "{title}: 화수 진행 상황을 초기화했어요",
   "{title}: Link für „Weiter“ gemerkt": "{title}: “이어보기” 링크를 저장했어요",
+  "{title}: bis Kapitel {n} gelesen": "{title}: {n}화까지 읽음",
   "{title}: eine Folge mehr gesehen": "{title}: 1화 더 시청함",
   "{title}: komplett gesehen": "{title}: 전편 시청함",
   "{title}: welche Folge?": "{title}: 몇 화인가요?",

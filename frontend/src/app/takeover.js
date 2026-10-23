@@ -150,8 +150,8 @@ const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k
 const hasText = (v) => typeof v === 'string' && v.trim() !== '';
 
 /**
- * Fills a database from a non-admin's offline snapshot: series, volumes, and the snapshot user's ownership, reads and
- * profile. Other users' ownership is absent, so a volume only they own counts as missing. Every series lands in the
+ * Fills a database from a non-admin's offline snapshot: series, volumes, and the snapshot user's ownership, reads,
+ * chapter progress of webtoons and profile. Other users' ownership is absent, so a volume only they own counts as missing. Every series lands in the
  * device's shelf 1, whichever server shelves it came from.
  */
 export function fillFromSnapshot(conn, snapshot) {
@@ -162,8 +162,10 @@ export function fillFromSnapshot(conn, snapshot) {
   const volumeCols = columnsOf(conn, 'volumes');
   const insertOwner = conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
   const insertRead = conn.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
+  const insertChapters = conn.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
+    if (manga.chapters_read > 0) insertChapters.run(manga.id, me.id, manga.chapters_read);
     for (const v of manga.volumes || []) {
       const vol = scalars(v, SKIP_VOLUME);
       // buildMangaDetail fills images from the cover (and the cover from the images): only real lists are stored

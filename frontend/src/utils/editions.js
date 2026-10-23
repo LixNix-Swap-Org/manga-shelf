@@ -28,8 +28,8 @@ export const editionCurrency = (row) => normalizeCurrency(row?.currency ?? '') |
 
 export const editionRegion = (row) => normalizeRegion(row?.region ?? '');
 
-/** Manga Passion only knows German editions: gaps, autofill and edition matching run for these only. */
-export const isMpEdition = (row) => editionLanguage(row) === MP_LANGUAGE;
+/** Manga Passion only knows German print editions: gaps, autofill and edition matching run for these only (no webtoons). */
+export const isMpEdition = (row) => editionLanguage(row) === MP_LANGUAGE && row?.format !== 'webtoon';
 
 /** A volume of its own other language (even in a German series) gets no Manga Passion lookup either (409 MP_LANGUAGE). */
 export const isMpVolume = (volume, manga) => isMpEdition(manga) && volumeLanguage(volume, manga) === MP_LANGUAGE;

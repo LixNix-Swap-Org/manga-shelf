@@ -350,7 +350,7 @@ function scopeSql(sql, shelfIds) {
     });
 }
 
-const MARK_TABLES = /\b(volume_reads|volume_owners|trash)\b/i;
+const MARK_TABLES = /\b(volume_reads|volume_owners|chapter_progress|trash)\b/i;
 const SCOPED_TABLE = /\b(FROM|JOIN)\s+(mangas|volumes)\b/i;
 
 /** Throws for a statement scopeSql cannot confine to the shelves; such a statement would read or write every shelf. */

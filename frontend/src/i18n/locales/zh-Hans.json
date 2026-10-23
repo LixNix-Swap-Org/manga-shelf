@@ -37,6 +37,7 @@
   "+ {n} weiterer Titel|+ {n} weitere Titel": {
     "other": "+ 另外 {n} 项"
   },
+  "+1 – ein Kapitel mehr gelesen": "+1 – 又读了一话",
   "-- Keine Angabe --": "-- 未填写 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "恢复后有 1 个账户需要重置密码（备份中没有密码）：{names}。",
   "32 Zeichen aus 0–9 und a–f": "由 0–9 和 a–f 组成的 32 个字符",
@@ -111,6 +112,7 @@
   "Alle Filter zurücksetzen": "重置所有筛选",
   "Alle Genres": "所有类型",
   "Alle Geräte aller Benutzer abmelden?": "要让所有用户的所有设备退出登录吗？",
+  "Alle Kapitel gelesen": "已读完全部章节",
   "Alle Regale": "所有书架",
   "Alle Regale anzeigen": "显示所有书架",
   "Alle Reihen": "所有系列",
@@ -242,6 +244,9 @@
   "Art der Vorschläge": "推荐类型",
   "Art des Eintrags": "条目类型",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "你的账户“{name}”在其中同样没有密码：之后只能由其他管理员在用户管理中设置，或在服务器上执行控制台命令“{command}”来设置新密码。",
+  "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
+    "other": "{n} 部条漫的章节进度也会被删除。"
+  },
   "Auch für automatische Aktualisierungen verwenden": "同时用于自动更新",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "other": "另加 {n} 个Special Edition/套盒"
@@ -477,6 +482,7 @@
   "Bitte eine Adresse mit http:// oder https:// eingeben.": "请输入以 http:// 或 https:// 开头的地址。",
   "Bitte eine Bandnummer eingeben.": "请输入卷号。",
   "Bitte eine Bild-URL mit http:// oder https:// eingeben.": "请输入以 http:// 或 https:// 开头的图片 URL。",
+  "Bitte eine ganze Zahl zwischen 0 und {max} eingeben.": "请输入 0 到 {max} 之间的整数。",
   "Bitte eine gültige Band-Nummer eingeben.": "请输入有效的卷号。",
   "Bitte einen Eintrag wählen.": "请选择一个条目。",
   "Bitte einen Namen für dein Profil eingeben.": "请为你的个人资料输入一个名称。",
@@ -844,6 +850,7 @@
   "Ein Bearbeiter kann Anime hinzufügen.": "编辑者可以添加动画。",
   "Ein Benutzer kann nicht gleichzeitig Besitzer werden und abgeben": "同一用户不能同时成为拥有者又放弃拥有",
   "Ein Google-API-Schlüssel beginnt mit „AIza“ und hat 39 Zeichen.": "Google API 密钥以“AIza”开头，共 39 个字符。",
+  "Ein Kapitel mehr gelesen": "又读了一话",
   "Ein Tag hat 1 bis {max} Zeichen": "标签长度为 1 到 {max} 个字符",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "是需要合并的笔误或不同写法吗？",
   "Eine Folge mehr": "多一集",
@@ -889,6 +896,7 @@
   "Entdecken": "发现",
   "Entfernen": "移除",
   "Enthält": "包含",
+  "Entweder chapters_read oder add angeben": "请只发送 chapters_read 或 add 之一",
   "Er ist dabei kurz nicht erreichbar, die Apps zeigen so lange „offline“; alle bleiben angemeldet.": "期间服务器会短暂无法访问，应用会显示“离线”；所有人都保持登录状态。",
   "Erfasse eine neue Reihe in deiner Sammlung": "在你的收藏中登记一个新系列",
   "Erfassen": "登记",
@@ -1089,6 +1097,7 @@
   "Gast": "访客",
   "Gast (Nur Lesezugriff)": "访客（只读权限）",
   "Gast (alte Rolle)": "访客（旧角色）",
+  "Gedruckt (Bände)": "纸质版（卷）",
   "Gegenseitig mit dir teilen": "与你互相共享",
   "Gegenseitig teilen lässt sich nur mit deinem eigenen Konto": "互相共享只能与你自己的账户进行",
   "Gekauft": "已购",
@@ -1097,12 +1106,14 @@
   "Gelesen ({count})": "已读（{count}）",
   "Gelesen am": "阅读日期",
   "Gelesen am: {date}": "阅读日期：{date}",
+  "Gelesen bis Kapitel": "已读到第几话",
   "Gelesen ✓": "已读 ✓",
   "Gelesen: {count}": "已读：{count}",
   "Gelesen: {name} – {volume}": "已读：{name} – {volume}",
   "Gelesen: {read} von {owned}": "已读：{read}/{owned}",
   "Gelesene Bände je Monat": "每月阅读卷数",
   "Gelesene Bände je Monat, {range}": "每月阅读卷数，{range}",
+  "Gelesene Kapitel muss eine ganze Zahl zwischen 0 und {max} sein": "已读话数必须是 0 到 {max} 之间的整数",
   "Gelesene Mangas von {username}": "{username} 读过的漫画",
   "Geliefert": "已送达",
   "Gelöscht {date}": "删除于 {date}",
@@ -1144,6 +1155,7 @@
   "Gesamt": "合计",
   "Gesamt geplant": "计划合计",
   "Gesamt: {total}": "合计：{total}",
+  "Gesamtkapitel muss eine ganze Zahl zwischen 1 und {max} sein": "总话数必须是 1 到 {max} 之间的整数",
   "Gescannt ({count})": "已扫描（{count}）",
   "Gescannt: {bookTitle}": "已扫描：{bookTitle}",
   "Gescannt: {scanned}": "已扫描：{scanned}",
@@ -1314,6 +1326,12 @@
   "Kalender-Modus: Vorbestellungen & Neuerscheinungen im Blick": "日历模式：预订和新刊一目了然",
   "Kamera wird gestartet…": "正在启动相机…",
   "Kampfkunst": "武术",
+  "Kap.": "话",
+  "Kapitel": "章节",
+  "Kapitel gesamt": "总话数",
+  "Kapitel {chapter} gibt es bei dieser Reihe nicht (sie hat {total} Kapitel).": "此系列没有第 {chapter} 话（共 {total} 话）。",
+  "Kapitelstand konnte nicht gespeichert werden": "无法保存章节进度",
+  "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "“{name}”的进度超过了总话数（已忽略）",
   "Karten": "卡片",
   "Kaufdatum": "购买日期",
   "Kaufdatum…": "购买日期…",
@@ -1534,6 +1552,7 @@
   "Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.": "Manga Passion 当前无法访问——显示的是本月最近一次保存的数据。",
   "Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Manga Passion 当前无法访问。请稍后再试。",
   "Manga Passion kennt nur deutsche Ausgaben": "Manga Passion 只收录德文版",
+  "Manga Passion kennt nur gedruckte Ausgaben, keine Webtoons": "Manga Passion 只收录纸质版，不收录条漫",
   "Manga Passion nennt für diese Ausgabe keine Genres.": "Manga Passion 没有列出该版本的类型。",
   "Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.": "Manga Passion 和 AniList 当前都无法访问。请手动创建系列，或稍后再搜索。",
   "Manga Passion:": "Manga Passion：",
@@ -1652,6 +1671,7 @@
   "Name (optional)": "名称（可选）",
   "Name des Regals": "书架名称",
   "Name fehlt": "缺少名称",
+  "Name: Kapitel, z. B. anna: 150": "名称: 话数，例如 anna: 150",
   "Nebengeschichte": "外传",
   "Netzwerkfehler": "网络错误",
   "Netzwerkfehler bei der Metadatensuche": "元数据搜索时出现网络错误",
@@ -1811,6 +1831,7 @@
   "Offizieller Preis: {price}": "官方定价：{price}",
   "Offizielles Schuber-Cover herunterladen, Erscheinungsdatum, Titel & Preis automatisch abrufen.": "下载官方套盒封面，并自动获取发售日期、标题和价格。",
   "Offline": "离线",
+  "Offline lässt sich der Kapitelstand nicht ändern.": "离线时无法更改章节进度。",
   "Offline nicht verfügbar": "离线时不可用",
   "Offline nicht verfügbar: Der Manga-Passion-Abgleich braucht eine Verbindung.": "离线时不可用：Manga Passion 比对需要连接网络。",
   "Offline – Stand der Sammlung: {age}": "离线——收藏截至：{age}",
@@ -2420,6 +2441,7 @@
   "Ungültiges Datum (erwartet: YYYY-MM-DD ab 1900)": "日期无效（应为 1900 年以后的 YYYY-MM-DD）",
   "Ungültiges Erscheinungsjahr": "出版年份无效",
   "Ungültiges Erscheinungsjahr „{value}“": "无效的发售年份“{value}”",
+  "Ungültiges Format (erlaubt: print, webtoon)": "格式无效（允许：print, webtoon）",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "ISBN 格式无效（必须为 10 或 13 个字符）",
   "Ungültiges Jahr oder Monat": "年份或月份无效",
   "Ungültiges Regal": "书架无效",
@@ -2553,6 +2575,9 @@
   "Vorschläge konnten nicht geladen werden": "无法加载推荐",
   "Waisen aufräumen": "清理孤立项",
   "Wartet seit {elapsed} Min.": "已等待 {elapsed}（分:秒）",
+  "Webtoon": "条漫",
+  "Webtoon (Kapitel)": "条漫（话）",
+  "Webtoons": "条漫",
   "Weg zurück (README)": "如何回退（README）",
   "Weil du {titles} mochtest": "因为你喜欢 {titles}",
   "Weiter auf Crunchyroll": "在 Crunchyroll 上继续",
@@ -2562,6 +2587,7 @@
   "Weiter sind: {names} – bei Spoilern aufpassen.": "进度更靠前：{names}，注意剧透。",
   "Weiter zur Sammlung": "继续前往收藏",
   "Weitere Fotos hinzufügen": "添加更多照片",
+  "Weitere Leser": "其他阅读者",
   "Weitere Reihen anzeigen ({number} übrig)": "显示更多系列（还剩 {number} 个）",
   "Weitere Währungen": "其他货币",
   "Weitere Währungen (nicht umgerechnet): {amounts}": "其他货币（未换算）：{amounts}",
@@ -2754,6 +2780,9 @@
   "im Besitz": "已拥有",
   "in dieser Installationsart nur mit Anleitung": "此安装方式只提供操作说明",
   "in {currency}": "以{currency}计",
+  "in {n} Reihe|in {n} Reihen": {
+    "other": "共 {n} 个系列"
+  },
   "in {n} Tag|in {n} Tagen": {
     "other": "{n} 天后"
   },
@@ -2770,6 +2799,7 @@
   "keiner": "无",
   "langer Text aus drei Teilen, beginnt mit „ey“": "由三部分组成的长文本，以“ey”开头",
   "leer = jetzt": "留空 = 现在",
+  "leer = noch offen": "留空 = 尚未确定",
   "letzter geprüfter Snapshot älter als 48 Std.": "最近一次验证的快照已超过 48 小时",
   "link_to ist erforderlich (Reihen-ID oder null)": "必须提供 link_to（系列 ID 或 null）",
   "manuell": "手动",
@@ -2951,6 +2981,7 @@
   "{name} (persönlich)": "{name}（个人）",
   "{name} ({count} gelesen)": "{name}（已读 {count}）",
   "{name} ({owned} im Besitz, {read} gelesen)": "{name}（已拥有 {owned}，已读 {read}）",
+  "{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})": "{name}（已拥有 {owned}，已读 {read}，读到第 {chapter} 话）",
   "{name} als Besitzer eingetragen": "已将 {name} 登记为拥有者",
   "{name} auswählen": "选择 {name}",
   "{name} bearbeiten": "编辑 {name}",
@@ -2962,6 +2993,7 @@
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name} 已添加到现有系列。",
   "{name} · Folgen {from}–{to}": "{name} · 第 {from}–{to} 集",
   "{name}. Server wechseln": "{name}。切换服务器",
+  "{name}: Kapitel {n}": "{name}：第 {n} 话",
   "{name}: Reihe noch nicht in der Sammlung": "{name}：该系列尚未加入收藏",
   "{name}: {state}": "{name}：{state}",
   "{name}: {state} (Klicken zum Umschalten)": "{name}：{state}（点击切换）",
@@ -3007,6 +3039,12 @@
   },
   "{n} Jahr|{n} Jahre": {
     "other": "{n} 年"
+  },
+  "{n} Kapitel gelesen|{n} Kapitel gelesen": {
+    "other": "已读 {n} 话"
+  },
+  "{n} Kapitel|{n} Kapitel": {
+    "other": "{n} 话"
   },
   "{n} Kauf vorgemerkt, wird automatisch übertragen.|{n} Käufe vorgemerkt, werden automatisch übertragen.": {
     "other": "已暂存 {n} 笔购买，将自动传输。"
@@ -3054,6 +3092,9 @@
   "{n} vorgemerkter Kauf wurde vom Server abgelehnt.|{n} vorgemerkte Käufe wurden vom Server abgelehnt.": {
     "other": "{n} 笔已暂存的购买被服务器拒绝。"
   },
+  "{n} zu Ende gelesen|{n} zu Ende gelesen": {
+    "other": "已读完 {n} 部"
+  },
   "{official} statt {stored}": "{official}，而非 {stored}",
   "{owned} im Besitz": "已拥有 {owned}",
   "{owned} von {count}": "已拥有 {owned}/{count}",
@@ -3068,6 +3109,9 @@
   "{provider} lehnt den Token ab ({status})": "{provider} 拒绝了该令牌（{status}）",
   "{provider} lehnt die Client-ID ab ({status})": "{provider} 拒绝了该 Client ID（{status}）",
   "{queued} vorgemerkt": "已暂存 {queued}",
+  "{read} von {n} Kapitel gelesen|{read} von {n} Kapiteln gelesen": {
+    "other": "共 {n} 话，已读 {read} 话"
+  },
   "{read} von {owned} gelesen": "已读 {read}/{owned}",
   "{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?": "{reason}\n\n现在确认版本“{edition}”，然后再填写吗？",
   "{reason} – die Suche geht trotzdem.": "{reason}——搜索仍可使用。",
@@ -3091,7 +3135,9 @@
   "{title} – Folge {episode}": "{title} – 第 {episode} 集",
   "{title}, Folge {episode} gesehen?": "{title}，看过第 {episode} 集了吗？",
   "{title}: Folge {episode} gesehen": "{title}：已看第 {episode} 集",
+  "{title}: Kapitelstand zurückgesetzt": "{title}：章节进度已重置",
   "{title}: Link für „Weiter“ gemerkt": "{title}：已记下“继续观看”的链接",
+  "{title}: bis Kapitel {n} gelesen": "{title}：已读到第 {n} 话",
   "{title}: eine Folge mehr gesehen": "{title}：多看了一集",
   "{title}: komplett gesehen": "{title}：已全部看完",
   "{title}: welche Folge?": "{title}：看到哪一集？",

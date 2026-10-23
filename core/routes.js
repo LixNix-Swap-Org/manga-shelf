@@ -6,6 +6,7 @@ const snapshot = require('./handlers/snapshot');
 const volumes = require('./handlers/volumes');
 const owners = require('./handlers/owners');
 const reads = require('./handlers/reads');
+const chapters = require('./handlers/chapters');
 const stats = require('./handlers/stats');
 const settings = require('./handlers/settings');
 const shopping = require('./handlers/shopping');
@@ -38,6 +39,8 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    // the caller's own chapter of a webtoon; viewer rights in the shelf are enough, like reading marks
+    { method: 'PUT', path: '/mangas/:id/chapters', role: 'editor', handler: chapters.setChapters },
     { method: 'GET', path: '/mangas/:id/shelf-move', role: 'editor', handler: shelves.movePreview },
     { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
     { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
@@ -132,6 +135,7 @@ const routes = [
 // Shelf access in front of the handlers: a series or volume of a shelf the caller does not belong to answers 404, a
 // viewer who writes gets 403. Lists filter by shelf inside their handlers; bodies with several ids check them there.
 const GUARDS = [
+    { re: /^\/mangas\/(\d+)\/chapters$/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, 'viewer') },
     { re: /^\/mangas\/(?!volume-search$)(\d+)(\/|$)/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, row.method === 'GET' ? 'viewer' : 'editor') },
     { re: /^\/volumes\/(\d+)\/read$/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'viewer') },
     { re: /^\/volumes\/(\d+)(\/|$)/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'editor') }

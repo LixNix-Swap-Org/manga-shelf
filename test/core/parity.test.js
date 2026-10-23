@@ -108,8 +108,14 @@ test('a seeded collection reads the same through Express and the in-memory core'
     await both('ed', 'PUT', `/anime/${film}`, { kind: 'tv' });
     await both('ed', 'PUT', `/anime/${film}/progress`, { status: 'Gesehen', audio_language: 'en' });
 
+    // a webtoon with chapter progress of two users and a chapter progress from a CSV import
+    const webtoon = (await both('ed', 'POST', '/mangas', { title: 'Parität Webtoon', format: 'webtoon', total_chapters: 200 })).id;
+    await both('ed', 'PUT', `/mangas/${webtoon}/chapters`, { chapters_read: 150 });
+    await both('admin', 'PUT', `/mangas/${webtoon}/chapters`, { add: 1 });
+    await both('ed', 'POST', '/import/csv', { csv: 'Reihe;Bandnummer;Format;Gesamtkapitel;Kapitel gelesen von\nCSV-Webtoon;;webtoon;80;ed: 12\n' });
+
     const reads = [
-        '/anime', `/anime/${anime}`, `/anime/${film}`, '/anime/sync', '/export/anime.csv', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
+        '/anime', `/anime/${anime}`, `/anime/${film}`, '/anime/sync', '/export/anime.csv', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${webtoon}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
         '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
         '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
         '/maintenance/quality'
@@ -118,7 +124,9 @@ test('a seeded collection reads the same through Express and the in-memory core'
         for (const url of reads) await both(user, 'GET', url);
     }
     const snapshot = await both('ed', 'GET', '/offline-snapshot');
-    assert.deepEqual(snapshot.mangas.map(m => m.title), ['CSV-Edition', 'CSV-Reihe', 'Kalenderreihe', 'Naruto', 'Naruto', 'One Piece', 'Wunschreihe']);
+    assert.deepEqual(snapshot.mangas.map(m => m.title), ['CSV-Edition', 'CSV-Reihe', 'CSV-Webtoon', 'Kalenderreihe', 'Naruto', 'Naruto', 'One Piece', 'Parität Webtoon', 'Wunschreihe']);
+    assert.deepEqual(snapshot.details[webtoon].chapter_progress.map(p => [p.username, p.chapters_read]), [['admin', 1], ['ed', 150]]);
+    assert.deepEqual(snapshot.mangas.filter(m => m.format === 'webtoon').map(m => [m.title, m.total_chapters, m.chapters_read]), [['CSV-Webtoon', 80, 12], ['Parität Webtoon', 200, 150]]);
     assert.equal(Object.values(snapshot.details).reduce((n, m) => n + m.volumes.length, 0), 17);
     assert.deepEqual(snapshot.details[naruto].editions.map(e => [e.id, e.language, e.currency]), [[narutoEn, 'en', 'USD']]);
     const [csvEdition] = snapshot.mangas.filter(m => m.title === 'CSV-Edition');

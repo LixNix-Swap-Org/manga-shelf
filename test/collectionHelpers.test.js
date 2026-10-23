@@ -291,7 +291,7 @@ test('collect filter: gaps need a missing volume or an unreached total; dropped 
     assert.equal(matchesCollectFilter({}, 'ALL'), true);
     assert.equal(collectingOf({ collecting: 'unbekannt' }), 'aktiv');
     assert.deepEqual(getCollectCounts([{ missing_count: 1 }, { collecting: 'abgebrochen', missing_count: 3 }, { preorder_count: 2 }]),
-        { ALL: 3, gaps: 1, preorder: 1, complete: 0, pausiert: 0, abgebrochen: 1 });
+        { ALL: 3, gaps: 1, preorder: 1, complete: 0, pausiert: 0, abgebrochen: 1, webtoon: 0 });
 });
 
 test('authors: a shared author field is split into names; the filter matches one name, case and spacing independent', async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Flame } from 'lucide-react';
+import { BookOpen, Flame, ScrollText } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import api from '../../../utils/api';
 import useLatestRequest from '../../../hooks/useLatestRequest';
@@ -108,6 +108,17 @@ export default function ReadingOverTime({ readers = [], user, onNavigate, shelfI
           <p className="text-[11px] text-slate-400">{t('vorhanden minus gelesen')}</p>
         </div>
       </div>
+
+      {data.chapters?.series > 0 && (
+        <div id="stats-webtoon-chapters" className="p-3 rounded-2xl bg-slate-950/70 border border-teal-500/30 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="text-[10px] uppercase font-bold text-teal-300 flex items-center gap-1"><ScrollText className="w-3 h-3" aria-hidden="true" /> {t('Webtoons')}</p>
+          <p className="text-lg font-extrabold text-white">{tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', data.chapters.read)}</p>
+          <p className="text-[11px] text-slate-400">
+            {tn('in {n} Reihe', 'in {n} Reihen', data.chapters.series)}
+            {data.chapters.finished > 0 && ` · ${tn('{n} zu Ende gelesen', '{n} zu Ende gelesen', data.chapters.finished)}`}
+          </p>
+        </div>
+      )}
 
       <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
         <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-1">{t('Gelesene Bände je Monat')}</h3>

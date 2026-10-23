@@ -696,6 +696,26 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_anime_airings_at ON anime_airings (at);
                 `);
             }
+        },
+        {
+            version: 36,
+            name: 'add_webtoon_chapters',
+            up: (d) => {
+                // Webtoons and manhwa are read by chapter: the series format, its known chapter count and each user's chapter
+                const cols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!cols.has('format')) d.exec("ALTER TABLE mangas ADD COLUMN format TEXT NOT NULL DEFAULT 'print';");
+                if (!cols.has('total_chapters')) d.exec('ALTER TABLE mangas ADD COLUMN total_chapters INTEGER;');
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS chapter_progress (
+                        manga_id INTEGER NOT NULL REFERENCES mangas(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        chapters_read INTEGER NOT NULL,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (manga_id, user_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
+                `);
+            }
         }
     ];
 }
@@ -823,6 +843,8 @@ function applySchema(conn, options = {}) {
             region TEXT,
             work_key TEXT,
             currency TEXT NOT NULL DEFAULT 'EUR',
+            format TEXT NOT NULL DEFAULT 'print',
+            total_chapters INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_by INTEGER,

@@ -37,6 +37,7 @@
   "+ {n} weiterer Titel|+ {n} weitere Titel": {
     "other": "ほか {n} 件"
   },
+  "+1 – ein Kapitel mehr gelesen": "+1 – もう1話読んだ",
   "-- Keine Angabe --": "-- 指定なし --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1件のアカウントは復元後にパスワードのリセットが必要です(バックアップにパスワードがありません): {names}。",
   "32 Zeichen aus 0–9 und a–f": "0～9とa～fの32文字",
@@ -111,6 +112,7 @@
   "Alle Filter zurücksetzen": "フィルターをすべてリセット",
   "Alle Genres": "すべてのジャンル",
   "Alle Geräte aller Benutzer abmelden?": "全ユーザーの全端末をサインアウトしますか？",
+  "Alle Kapitel gelesen": "全話読了",
   "Alle Regale": "すべての本棚",
   "Alle Regale anzeigen": "すべての本棚を表示",
   "Alle Reihen": "すべてのシリーズ",
@@ -242,6 +244,9 @@
   "Art der Vorschläge": "おすすめの種類",
   "Art des Eintrags": "項目の種類",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "あなたのアカウント「{name}」にもパスワードがありません。その後、新しいパスワードを設定できるのは、ユーザー管理での別の管理者か、サーバー上のコンソールコマンド「{command}」だけです。",
+  "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
+    "other": "{n}作品のWebtoonの話数の進捗も削除されます。"
+  },
   "Auch für automatische Aktualisierungen verwenden": "自動更新にも使う",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "other": "特別版/ボックスセットも{n}点"
@@ -477,6 +482,7 @@
   "Bitte eine Adresse mit http:// oder https:// eingeben.": "http://またはhttps://で始まるアドレスを入力してください。",
   "Bitte eine Bandnummer eingeben.": "巻数を入力してください。",
   "Bitte eine Bild-URL mit http:// oder https:// eingeben.": "http://またはhttps://で始まる画像URLを入力してください。",
+  "Bitte eine ganze Zahl zwischen 0 und {max} eingeben.": "0から{max}までの整数を入力してください。",
   "Bitte eine gültige Band-Nummer eingeben.": "有効な巻数を入力してください。",
   "Bitte einen Eintrag wählen.": "項目を選んでください。",
   "Bitte einen Namen für dein Profil eingeben.": "プロフィール名を入力してください。",
@@ -844,6 +850,7 @@
   "Ein Bearbeiter kann Anime hinzufügen.": "編集者はアニメを追加できます。",
   "Ein Benutzer kann nicht gleichzeitig Besitzer werden und abgeben": "ユーザーは、所有者になると同時に手放すことはできません",
   "Ein Google-API-Schlüssel beginnt mit „AIza“ und hat 39 Zeichen.": "GoogleのAPIキーは「AIza」で始まり、39文字です。",
+  "Ein Kapitel mehr gelesen": "もう1話読んだ",
   "Ein Tag hat 1 bis {max} Zeichen": "タグは1〜{max}文字です",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "誤字や、統合すべき表記ゆれでしょうか？",
   "Eine Folge mehr": "1話進める",
@@ -889,6 +896,7 @@
   "Entdecken": "見つける",
   "Entfernen": "削除",
   "Enthält": "含む",
+  "Entweder chapters_read oder add angeben": "chapters_readかaddのどちらかを送ってください",
   "Er ist dabei kurz nicht erreichbar, die Apps zeigen so lange „offline“; alle bleiben angemeldet.": "その間、サーバーに一時的に接続できず、アプリには「オフライン」と表示されます。全員のサインイン状態は維持されます。",
   "Erfasse eine neue Reihe in deiner Sammlung": "コレクションに新しいシリーズを登録します",
   "Erfassen": "登録",
@@ -1089,6 +1097,7 @@
   "Gast": "ゲスト",
   "Gast (Nur Lesezugriff)": "ゲスト(閲覧のみ)",
   "Gast (alte Rolle)": "ゲスト(旧ロール)",
+  "Gedruckt (Bände)": "紙(巻)",
   "Gegenseitig mit dir teilen": "あなたと相互に共有",
   "Gegenseitig teilen lässt sich nur mit deinem eigenen Konto": "相互共有は自分のアカウントとのみ可能です",
   "Gekauft": "購入済み",
@@ -1097,12 +1106,14 @@
   "Gelesen ({count})": "既読({count})",
   "Gelesen am": "既読日",
   "Gelesen am: {date}": "既読日: {date}",
+  "Gelesen bis Kapitel": "読了した話",
   "Gelesen ✓": "既読 ✓",
   "Gelesen: {count}": "既読: {count}",
   "Gelesen: {name} – {volume}": "既読: {name} – {volume}",
   "Gelesen: {read} von {owned}": "既読: {owned}巻中{read}巻",
   "Gelesene Bände je Monat": "月別の既読巻数",
   "Gelesene Bände je Monat, {range}": "月別の既読巻数、{range}",
+  "Gelesene Kapitel muss eine ganze Zahl zwischen 0 und {max} sein": "読了した話数は0から{max}までの整数にしてください",
   "Gelesene Mangas von {username}": "{username}が読んだマンガ",
   "Geliefert": "配達済み",
   "Gelöscht {date}": "{date}に削除",
@@ -1144,6 +1155,7 @@
   "Gesamt": "合計",
   "Gesamt geplant": "予定合計",
   "Gesamt: {total}": "全{total}巻",
+  "Gesamtkapitel muss eine ganze Zahl zwischen 1 und {max} sein": "全話数は1から{max}までの整数にしてください",
   "Gescannt ({count})": "スキャン済み({count})",
   "Gescannt: {bookTitle}": "スキャン済み: {bookTitle}",
   "Gescannt: {scanned}": "スキャン済み: {scanned}",
@@ -1314,6 +1326,12 @@
   "Kalender-Modus: Vorbestellungen & Neuerscheinungen im Blick": "カレンダーモード: 予約と新刊をひと目で確認",
   "Kamera wird gestartet…": "カメラを起動中…",
   "Kampfkunst": "格闘技",
+  "Kap.": "話",
+  "Kapitel": "話",
+  "Kapitel gesamt": "全話数",
+  "Kapitel {chapter} gibt es bei dieser Reihe nicht (sie hat {total} Kapitel).": "このシリーズに第{chapter}話はありません(全{total}話です)。",
+  "Kapitelstand konnte nicht gespeichert werden": "話数の進捗を保存できませんでした",
+  "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "「{name}」の進捗が全話数を超えています(無視されました)",
   "Karten": "カード",
   "Kaufdatum": "購入日",
   "Kaufdatum…": "購入日…",
@@ -1534,6 +1552,7 @@
   "Manga Passion ist gerade nicht erreichbar – angezeigt werden die zuletzt gespeicherten Daten dieses Monats.": "Manga Passionに現在接続できません – この月の最後に保存されたデータを表示しています。",
   "Manga Passion ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Manga Passionに現在接続できません。後でもう一度お試しください。",
   "Manga Passion kennt nur deutsche Ausgaben": "Manga Passionはドイツ語版のみ対応しています",
+  "Manga Passion kennt nur gedruckte Ausgaben, keine Webtoons": "Manga Passionは紙の版のみ対応しており、Webtoonには対応していません",
   "Manga Passion nennt für diese Ausgabe keine Genres.": "Manga Passionには、この版のジャンルが記載されていません。",
   "Manga Passion und AniList sind gerade nicht erreichbar. Reihe von Hand anlegen oder später erneut suchen.": "Manga PassionとAniListに現在接続できません。シリーズを手動で作成するか、後でもう一度検索してください。",
   "Manga Passion:": "Manga Passion:",
@@ -1652,6 +1671,7 @@
   "Name (optional)": "名前（任意）",
   "Name des Regals": "棚の名前",
   "Name fehlt": "名前がありません",
+  "Name: Kapitel, z. B. anna: 150": "名前: 話数(例: anna: 150)",
   "Nebengeschichte": "外伝",
   "Netzwerkfehler": "ネットワークエラー",
   "Netzwerkfehler bei der Metadatensuche": "メタデータの検索中にネットワークエラーが発生しました",
@@ -1811,6 +1831,7 @@
   "Offizieller Preis: {price}": "公式価格: {price}",
   "Offizielles Schuber-Cover herunterladen, Erscheinungsdatum, Titel & Preis automatisch abrufen.": "公式のボックスセットのカバーをダウンロードし、発売日、タイトル、価格を自動取得します。",
   "Offline": "オフライン",
+  "Offline lässt sich der Kapitelstand nicht ändern.": "オフラインでは話数の進捗を変更できません。",
   "Offline nicht verfügbar": "オフラインでは利用できません",
   "Offline nicht verfügbar: Der Manga-Passion-Abgleich braucht eine Verbindung.": "オフラインでは利用できません: Manga Passionとの照合には接続が必要です。",
   "Offline – Stand der Sammlung: {age}": "オフライン – コレクションの状態: {age}",
@@ -2420,6 +2441,7 @@
   "Ungültiges Datum (erwartet: YYYY-MM-DD ab 1900)": "日付が正しくありません(形式: 1900年以降のYYYY-MM-DD)",
   "Ungültiges Erscheinungsjahr": "発売年が正しくありません",
   "Ungültiges Erscheinungsjahr „{value}“": "発売年「{value}」が無効です",
+  "Ungültiges Format (erlaubt: print, webtoon)": "無効な形式です(使用可能: print, webtoon)",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "ISBNの形式が正しくありません(10桁または13桁である必要があります)",
   "Ungültiges Jahr oder Monat": "年または月が正しくありません",
   "Ungültiges Regal": "無効な本棚です",
@@ -2553,6 +2575,9 @@
   "Vorschläge konnten nicht geladen werden": "おすすめを読み込めませんでした",
   "Waisen aufräumen": "孤立データを整理",
   "Wartet seit {elapsed} Min.": "待機時間 {elapsed}(分:秒)",
+  "Webtoon": "Webtoon",
+  "Webtoon (Kapitel)": "Webtoon(話)",
+  "Webtoons": "Webtoon",
   "Weg zurück (README)": "元に戻す方法(README)",
   "Weil du {titles} mochtest": "{titles}が気に入ったので",
   "Weiter auf Crunchyroll": "Crunchyrollで続きを見る",
@@ -2562,6 +2587,7 @@
   "Weiter sind: {names} – bei Spoilern aufpassen.": "先に進んでいる人：{names} – ネタバレに注意。",
   "Weiter zur Sammlung": "コレクションへ進む",
   "Weitere Fotos hinzufügen": "写真を追加",
+  "Weitere Leser": "ほかの読者",
   "Weitere Reihen anzeigen ({number} übrig)": "シリーズをさらに表示(残り{number}件)",
   "Weitere Währungen": "その他の通貨",
   "Weitere Währungen (nicht umgerechnet): {amounts}": "その他の通貨(換算なし): {amounts}",
@@ -2754,6 +2780,9 @@
   "im Besitz": "所持",
   "in dieser Installationsart nur mit Anleitung": "このインストール方法では手順の案内のみ",
   "in {currency}": "{currency}建て",
+  "in {n} Reihe|in {n} Reihen": {
+    "other": "{n}シリーズ中"
+  },
   "in {n} Tag|in {n} Tagen": {
     "other": "{n}日後"
   },
@@ -2770,6 +2799,7 @@
   "keiner": "なし",
   "langer Text aus drei Teilen, beginnt mit „ey“": "3つの部分からなる長いテキストで、「ey」で始まります",
   "leer = jetzt": "空欄 = 現在",
+  "leer = noch offen": "空欄 = 未定",
   "letzter geprüfter Snapshot älter als 48 Std.": "最後に確認したスナップショットが48時間より古い",
   "link_to ist erforderlich (Reihen-ID oder null)": "link_to は必須です(シリーズIDまたは null)",
   "manuell": "手動",
@@ -2951,6 +2981,7 @@
   "{name} (persönlich)": "{name}(個人用)",
   "{name} ({count} gelesen)": "{name}(既読{count}巻)",
   "{name} ({owned} im Besitz, {read} gelesen)": "{name}(所持: {owned}、既読: {read})",
+  "{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})": "{name}(所持: {owned}、既読: {read}、第{chapter}話まで)",
   "{name} als Besitzer eingetragen": "{name}を所有者として登録しました",
   "{name} auswählen": "{name}を選択",
   "{name} bearbeiten": "{name}を編集",
@@ -2962,6 +2993,7 @@
   "{name} wurde zur vorhandenen Reihe hinzugefügt.": "{name}を既存のシリーズに追加しました。",
   "{name} · Folgen {from}–{to}": "{name} · {from}–{to}話",
   "{name}. Server wechseln": "{name}。サーバーを切り替え",
+  "{name}: Kapitel {n}": "{name}: 第{n}話",
   "{name}: Reihe noch nicht in der Sammlung": "{name}: このシリーズはまだコレクションにありません",
   "{name}: {state}": "{name}: {state}",
   "{name}: {state} (Klicken zum Umschalten)": "{name}: {state}(クリックで切り替え)",
@@ -3007,6 +3039,12 @@
   },
   "{n} Jahr|{n} Jahre": {
     "other": "{n}年"
+  },
+  "{n} Kapitel gelesen|{n} Kapitel gelesen": {
+    "other": "{n}話を読了"
+  },
+  "{n} Kapitel|{n} Kapitel": {
+    "other": "{n}話"
   },
   "{n} Kauf vorgemerkt, wird automatisch übertragen.|{n} Käufe vorgemerkt, werden automatisch übertragen.": {
     "other": "購入{n}件を保留中です。自動的に送信されます。"
@@ -3054,6 +3092,9 @@
   "{n} vorgemerkter Kauf wurde vom Server abgelehnt.|{n} vorgemerkte Käufe wurden vom Server abgelehnt.": {
     "other": "保留中の購入{n}件がサーバーに拒否されました。"
   },
+  "{n} zu Ende gelesen|{n} zu Ende gelesen": {
+    "other": "{n}作品を最後まで読了"
+  },
   "{official} statt {stored}": "{stored}ではなく{official}",
   "{owned} im Besitz": "{owned}巻所有",
   "{owned} von {count}": "{count}中{owned}巻",
@@ -3068,6 +3109,9 @@
   "{provider} lehnt den Token ab ({status})": "{provider}がトークンを拒否しました({status})",
   "{provider} lehnt die Client-ID ab ({status})": "{provider}がクライアントIDを拒否しました({status})",
   "{queued} vorgemerkt": "{queued}件を保留中",
+  "{read} von {n} Kapitel gelesen|{read} von {n} Kapiteln gelesen": {
+    "other": "全{n}話中{read}話を読了"
+  },
   "{read} von {owned} gelesen": "{owned}巻中{read}巻既読",
   "{reason}\n\nEdition „{edition}“ jetzt bestätigen und danach ausfüllen?": "{reason}\n\nEdition「{edition}」を今すぐ確定して、その後に入力しますか？",
   "{reason} – die Suche geht trotzdem.": "{reason} – 検索は引き続き利用できます。",
@@ -3091,7 +3135,9 @@
   "{title} – Folge {episode}": "{title} – 第{episode}話",
   "{title}, Folge {episode} gesehen?": "{title}の{episode}話を視聴しましたか？",
   "{title}: Folge {episode} gesehen": "{title}: {episode}話を視聴済み",
+  "{title}: Kapitelstand zurückgesetzt": "{title}: 話数の進捗をリセットしました",
   "{title}: Link für „Weiter“ gemerkt": "{title}: 「続きから」用のリンクを保存しました",
+  "{title}: bis Kapitel {n} gelesen": "{title}: 第{n}話まで読了",
   "{title}: eine Folge mehr gesehen": "{title}: 1話視聴済みにしました",
   "{title}: komplett gesehen": "{title}: 全話視聴済み",
   "{title}: welche Folge?": "{title}: 何話ですか？",

@@ -38,6 +38,9 @@ export function buildFormData(data) {
     status: data.status || 'Laufend', // i18n-ignore
     tags: data.tags || '',
     total_volumes: data.total_volumes || '',
+    // print or webtoon (read by chapter, with its known chapter count)
+    format: data.format === 'webtoon' ? 'webtoon' : 'print',
+    total_chapters: data.total_chapters || '',
     description: data.description || '',
     cover_image: data.cover_image || '',
     manga_passion_id: data.manga_passion_id || null,
@@ -70,7 +73,11 @@ export function mergeEditLookup(prev, item, coverUrl) {
     author: item.author || prev.author,
     publisher: (item.publisher && item.publisher !== 'Unbekannt') ? item.publisher : prev.publisher,
     status: normalizeLookupStatus(item.status, prev.status),
-    total_volumes: prefillTotalVolumes(item, prev.total_volumes),
+    // a manhwa or manhua hit suggests the webtoon format (no hit switches a chosen format back); its print volume count
+    // says nothing about the webtoon
+    total_volumes: item.series_format === 'webtoon' ? prev.total_volumes : prefillTotalVolumes(item, prev.total_volumes),
+    format: item.series_format === 'webtoon' ? 'webtoon' : prev.format,
+    total_chapters: item.total_chapters ? String(item.total_chapters) : prev.total_chapters,
     tags: String(prev.tags ?? '').trim() ? prev.tags : (item.tags || prev.tags),
     description: item.description || prev.description,
     cover_image: coverUrl || prev.cover_image,
@@ -101,7 +108,7 @@ export const seriesDeleteConfirmText = (title) =>
 
 /**
  * Users whose ownership and reading marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
- * [{ user_id, username, owned, read }], or null when the server cannot say (older server, no connection).
+ * [{ user_id, username, owned, read, chapters }], or null when the server cannot say (older server, no connection).
  */
 export async function loadShelfMovePreview(mangaId, shelfId) {
   try {
@@ -120,7 +127,13 @@ export function shelfMoveConfirmText({ title, shelf, affected }) {
     return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf });
   }
   const people = affected
-    .map((a) => t('{name} ({owned} im Besitz, {read} gelesen)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') }))
+    .map((a) => {
+      const counts = { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') };
+      // a webtoon: the chapter that goes too
+      return a.chapters > 0
+        ? t('{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})', { ...counts, chapter: a.chapters })
+        : t('{name} ({owned} im Besitz, {read} gelesen)', counts);
+    })
     .join(', ');
   return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
 }
