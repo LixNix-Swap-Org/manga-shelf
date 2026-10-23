@@ -61,5 +61,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Android 13+: release-day reminders (LocalNotifications); asked only when the switch is turned on. No
+         SCHEDULE_EXACT_ALARM: the plugin falls back to an inexact alarm, which is enough for a morning reminder -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

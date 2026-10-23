@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Apps
+- **Release-day reminders (Android and iPhone):** the switch "Erinnerungen am Erscheinungstag" (account dialog, tab "Sprache"; without a server also on the "Server" screen) is off by default, per device and for editors and admins. Switching it on asks for the notification permission; switching it off cancels every reminder. The app plans local notifications on the device from the release radar (volumes with an exact release day) and the anime list (the next episode of your "Schaue" and "Geplant" entries, when its airing is confirmed): one notification per day for the next 14 days at 9:00 local time, several volumes and episodes of a day together. It plans again at every start and return to the foreground (at most every 15 minutes) and keeps the planned reminders while offline; signing out, another account or another server cancels them. No server change and no push service; it works without a server too. Native: `@capacitor/local-notifications` 7, bridge version 4 (`plugins.LocalNotifications`), `POST_NOTIFICATIONS` for Android 13+, no exact-alarm permission. `Podfile.lock` gets the new pod at the next `pod install` on macOS.
+
 ## 3.4.0
 
 ### Before updating

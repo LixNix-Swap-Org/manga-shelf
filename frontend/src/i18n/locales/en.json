@@ -35,6 +35,10 @@
     "one": "+ {n} announced",
     "other": "+ {n} announced"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} more title",
+    "other": "+ {n} more titles"
+  },
   "-- Keine Angabe --": "-- Not specified --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 account needs a password reset after the restore (no password in the backup): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 characters from 0–9 and a–f",
@@ -890,6 +894,8 @@
   "Erfassen": "Add",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Filled in from {source}: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Connection check result",
+  "Erinnerungen am Erscheinungstag": "Release-day reminders",
+  "Erinnerungen konnten nicht umgestellt werden": "Reminders could not be changed",
   "Erkannt: {isbn}": "Detected: {isbn}",
   "Erneut laden": "Reload",
   "Erneut prüfen": "Check again",
@@ -1576,6 +1582,7 @@
   "Melde an…": "Signing in…",
   "Melde dich bei deiner Sammlung an": "Sign in to your collection",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Signs every user out on all devices (e.g. after a lost phone). You stay signed in on this device.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Notifies you on this device in the morning of the release day when a volume from the Release Radar comes out or a new episode of an anime on your list airs. Applies to this device only.",
   "Meldung schließen": "Dismiss message",
   "Menü": "Menu",
   "Menü schließen": "Close menu",
@@ -1604,6 +1611,7 @@
   "Mitglied hinzugefügt": "Member added",
   "Mitglied nicht gefunden": "Member not found",
   "Mitglieder": "Members",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Notifications are turned off for Manga Shelf – allow them in the device settings.",
   "Mittel": "Medium",
   "Modus wechseln": "Switch mode",
   "Monat": "Month",
@@ -1666,6 +1674,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "New address created – the old one no longer works",
   "Neue Adresse – bitte erneut anmelden": "New address – please sign in again",
   "Neue Ausgabe anlegen": "Create a new edition",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "New volumes from the Release Radar and new episodes of your anime",
   "Neue Datei laden und den Dienst neu einrichten:": "Download the new file and set up the service again:",
   "Neue Folgen": "New episodes",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "New episodes of your anime and their manga series",
@@ -2940,6 +2949,10 @@
     "one": "{n} volume created",
     "other": "{n} volumes created"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "{n} volume out today",
+    "other": "{n} volumes out today"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} volume",
     "other": "{n} volumes"
@@ -2984,6 +2997,10 @@
     "one": "{n} account needs a password reset after the restore (no password in the backup): {names}.",
     "other": "{n} accounts need a password reset after the restore (no password in the backup): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} new release today",
+    "other": "{n} new releases today"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} series",
     "other": "{n} series"
@@ -3019,6 +3036,10 @@
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "one": "Add {n} missing volume to the shopping list?",
     "other": "Add {n} missing volumes to the shopping list?"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} new episode today",
+    "other": "{n} new episodes today"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} found online",
@@ -3062,6 +3083,7 @@
   "{title} von der Wunschliste nehmen": "Remove {title} from the wishlist",
   "{title} öffnen": "Open {title}",
   "{title} – Band {number}": "{title} – volume {number}",
+  "{title} – Folge {episode}": "{title} – Episode {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, watched episode {episode}?",
   "{title}: Folge {episode} gesehen": "{title}: watched episode {episode}",
   "{title}: Link für „Weiter“ gemerkt": "{title}: link saved for “Continue”",

@@ -33,6 +33,9 @@
   "+ {n} angekündigt|+ {n} angekündigt": {
     "other": "+ {n} 个已公布"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "other": "+ 另外 {n} 项"
+  },
   "-- Keine Angabe --": "-- 未填写 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "恢复后有 1 个账户需要重置密码（备份中没有密码）：{names}。",
   "32 Zeichen aus 0–9 und a–f": "由 0–9 和 a–f 组成的 32 个字符",
@@ -875,6 +878,8 @@
   "Erfassen": "登记",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "已成功从 {source} 填写：{fields}！",
   "Ergebnis der Verbindungsprüfung": "连接检查结果",
+  "Erinnerungen am Erscheinungstag": "发售日提醒",
+  "Erinnerungen konnten nicht umgestellt werden": "无法更改提醒",
   "Erkannt: {isbn}": "已识别：{isbn}",
   "Erneut laden": "重新加载",
   "Erneut prüfen": "再次检查",
@@ -1550,6 +1555,7 @@
   "Melde an…": "正在登录…",
   "Melde dich bei deiner Sammlung an": "登录你的收藏",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "让所有用户在所有设备上退出登录（例如手机丢失之后）。你在此设备上仍保持登录。",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "在发售当天早上通过此设备提醒你：Release Radar 中有卷册发售，或你列表中的动画有新一集播出。仅适用于此设备。",
   "Meldung schließen": "关闭消息",
   "Menü": "菜单",
   "Menü schließen": "关闭菜单",
@@ -1578,6 +1584,7 @@
   "Mitglied hinzugefügt": "已添加成员",
   "Mitglied nicht gefunden": "找不到该成员",
   "Mitglieder": "成员",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Manga Shelf 的通知已关闭——请在设备设置中允许。",
   "Mittel": "中",
   "Modus wechseln": "切换模式",
   "Monat": "月份",
@@ -1639,6 +1646,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "已生成新地址——旧地址不再有效",
   "Neue Adresse – bitte erneut anmelden": "新地址——请重新登录",
   "Neue Ausgabe anlegen": "创建新版本",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Release Radar 中的新卷和你的动画的新剧集",
   "Neue Datei laden und den Dienst neu einrichten:": "下载新文件并重新设置服务：",
   "Neue Folgen": "新剧集",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "你的动画的新剧集及其漫画系列",
@@ -2888,6 +2896,9 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "已创建 {n} 卷"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "other": "今天有 {n} 卷发售"
+  },
   "{n} Bände|{n} Bände": {
     "other": "{n} 卷"
   },
@@ -2921,6 +2932,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "恢复后，{n} 个账户需要重置密码（备份中没有密码）：{names}。"
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "other": "今天有 {n} 项新内容"
+  },
   "{n} Reihen|{n} Reihen": {
     "other": "{n} 个系列"
   },
@@ -2947,6 +2961,9 @@
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "要将 {n} 个缺失的卷加入购物清单吗？"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "other": "今天有 {n} 集新剧集"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "在线找到 {n} 个结果"
@@ -2988,6 +3005,7 @@
   "{title} von der Wunschliste nehmen": "将 {title} 从愿望清单中移除",
   "{title} öffnen": "打开 {title}",
   "{title} – Band {number}": "{title} – 第 {number} 卷",
+  "{title} – Folge {episode}": "{title} – 第 {episode} 集",
   "{title}, Folge {episode} gesehen?": "{title}，看过第 {episode} 集了吗？",
   "{title}: Folge {episode} gesehen": "{title}：已看第 {episode} 集",
   "{title}: Link für „Weiter“ gemerkt": "{title}：已记下“继续观看”的链接",

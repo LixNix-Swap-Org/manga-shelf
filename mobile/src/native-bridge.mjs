@@ -7,6 +7,7 @@ import { AppLauncher } from '@capacitor/app-launcher';
 import { Browser } from '@capacitor/browser';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
@@ -14,7 +15,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { KeychainAccess, SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { BarcodeFormat, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 
-export const BRIDGE_VERSION = 3;
+export const BRIDGE_VERSION = 4;
 
 // app-module plugin of the Android project (ShareIntentPlugin.java); iOS has no native side for it
 const ShareIntent = registerPlugin('ShareIntent');
@@ -33,7 +34,8 @@ export function createBridge() {
     convertFileSrc: (uri) => Capacitor.convertFileSrc(uri),
     plugins: Object.freeze({
       App, AppLauncher, Browser, Filesystem, Haptics, Network, Preferences, Share, StatusBar, SecureStorage, BarcodeScanner, CapacitorHttp,
-      ...(NATIVE.has(platform) ? { WebLogin } : {}),
+      // release-day reminders (frontend/src/app/reminders); the web implementation of the plugin is never exposed
+      ...(NATIVE.has(platform) ? { WebLogin, LocalNotifications } : {}),
       ...(platform === 'android' ? { ShareIntent } : {}),
       ...(platform === 'ios' ? { SharedInbox } : {})
     }),

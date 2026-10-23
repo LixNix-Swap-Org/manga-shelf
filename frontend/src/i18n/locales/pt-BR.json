@@ -37,6 +37,11 @@
     "many": "+ {n} anunciados",
     "other": "+ {n} anunciados"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} outro título",
+    "many": "+ {n} outros títulos",
+    "other": "+ {n} outros títulos"
+  },
   "-- Keine Angabe --": "-- Não informado --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 conta precisa de redefinição de senha após a restauração (sem senha no backup): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caracteres de 0–9 e a–f",
@@ -905,6 +910,8 @@
   "Erfassen": "Registrar",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Preenchido com sucesso por {source}: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Resultado do teste de conexão",
+  "Erinnerungen am Erscheinungstag": "Lembretes no dia do lançamento",
+  "Erinnerungen konnten nicht umgestellt werden": "Não foi possível alterar os lembretes",
   "Erkannt: {isbn}": "Reconhecido: {isbn}",
   "Erneut laden": "Carregar de novo",
   "Erneut prüfen": "Verificar de novo",
@@ -1602,6 +1609,7 @@
   "Melde an…": "Entrando…",
   "Melde dich bei deiner Sammlung an": "Entre na sua coleção",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Desconecta todos os usuários em todos os dispositivos (p. ex. após perder o celular). Você continua conectado neste dispositivo.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Avisa você neste dispositivo na manhã do dia do lançamento quando sai um volume do Release Radar ou vai ao ar um novo episódio de um anime da sua lista. Vale só para este dispositivo.",
   "Meldung schließen": "Fechar mensagem",
   "Menü": "Menu",
   "Menü schließen": "Fechar menu",
@@ -1630,6 +1638,7 @@
   "Mitglied hinzugefügt": "Membro adicionado",
   "Mitglied nicht gefunden": "Membro não encontrado",
   "Mitglieder": "Membros",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "As notificações do Manga Shelf estão desativadas – permita-as nos ajustes do dispositivo.",
   "Mittel": "Média",
   "Modus wechseln": "Trocar de modo",
   "Monat": "Mês",
@@ -1693,6 +1702,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Novo endereço gerado – o antigo deixou de funcionar",
   "Neue Adresse – bitte erneut anmelden": "Novo endereço – entre novamente",
   "Neue Ausgabe anlegen": "Criar uma nova edição",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Novos volumes do Release Radar e novos episódios dos seus animes",
   "Neue Datei laden und den Dienst neu einrichten:": "Baixe o novo arquivo e configure o serviço novamente:",
   "Neue Folgen": "Novos episódios",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "Novos episódios dos seus animes e as respectivas séries de mangá",
@@ -2992,6 +3002,11 @@
     "many": "{n} volumes criados",
     "other": "{n} volumes criados"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "{n} volume sai hoje",
+    "many": "{n} volumes saem hoje",
+    "other": "{n} volumes saem hoje"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} volume",
     "many": "{n} volumes",
@@ -3047,6 +3062,11 @@
     "many": "{n} contas precisam de redefinição de senha após a restauração (sem senha no backup): {names}.",
     "other": "{n} contas precisam de redefinição de senha após a restauração (sem senha no backup): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} lançamento hoje",
+    "many": "{n} lançamentos hoje",
+    "other": "{n} lançamentos hoje"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} série",
     "many": "{n} séries",
@@ -3092,6 +3112,11 @@
     "many": "Colocar {n} volumes faltando na lista de compras?",
     "other": "Colocar {n} volumes faltando na lista de compras?"
   },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} episódio novo hoje",
+    "many": "{n} episódios novos hoje",
+    "other": "{n} episódios novos hoje"
+  },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} resultado encontrado online",
     "many": "{n} resultados encontrados online",
@@ -3136,6 +3161,7 @@
   "{title} von der Wunschliste nehmen": "Tirar {title} da lista de desejos",
   "{title} öffnen": "Abrir {title}",
   "{title} – Band {number}": "{title} – volume {number}",
+  "{title} – Folge {episode}": "{title} – Episódio {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, episódio {episode} assistido?",
   "{title}: Folge {episode} gesehen": "{title}: episódio {episode} assistido",
   "{title}: Link für „Weiter“ gemerkt": "{title}: link de “Continuar” guardado",

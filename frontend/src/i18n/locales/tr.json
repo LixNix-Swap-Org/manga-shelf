@@ -35,6 +35,10 @@
     "one": "+ {n} duyuruldu",
     "other": "+ {n} duyuruldu"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} başlık daha",
+    "other": "+ {n} başlık daha"
+  },
   "-- Keine Angabe --": "-- Belirtilmemiş --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 hesabın geri yüklemeden sonra parolasının sıfırlanması gerekiyor (yedekte parola yok): {names}.",
   "32 Zeichen aus 0–9 und a–f": "0–9 ve a–f arasından 32 karakter",
@@ -890,6 +894,8 @@
   "Erfassen": "Ekle",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "{source} kaynağından başarıyla dolduruldu: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Bağlantı kontrolü sonucu",
+  "Erinnerungen am Erscheinungstag": "Çıkış günü hatırlatıcıları",
+  "Erinnerungen konnten nicht umgestellt werden": "Hatırlatıcılar değiştirilemedi",
   "Erkannt: {isbn}": "Algılandı: {isbn}",
   "Erneut laden": "Yeniden yükle",
   "Erneut prüfen": "Yeniden kontrol et",
@@ -1576,6 +1582,7 @@
   "Melde an…": "Giriş yapılıyor…",
   "Melde dich bei deiner Sammlung an": "Koleksiyonuna giriş yap",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Her kullanıcının tüm cihazlardaki oturumunu kapatır (örn. telefon kaybolunca). Bu cihazda oturumun açık kalır.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Release Radar’daki bir cilt çıktığında ya da listendeki bir animenin yeni bölümü yayınlandığında çıkış günü sabahı bu cihazda haber verir. Yalnızca bu cihaz için geçerlidir.",
   "Meldung schließen": "Mesajı kapat",
   "Menü": "Menü",
   "Menü schließen": "Menüyü kapat",
@@ -1604,6 +1611,7 @@
   "Mitglied hinzugefügt": "Üye eklendi",
   "Mitglied nicht gefunden": "Üye bulunamadı",
   "Mitglieder": "Üyeler",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Manga Shelf için bildirimler kapalı – cihaz ayarlarından izin ver.",
   "Mittel": "Orta",
   "Modus wechseln": "Modu değiştir",
   "Monat": "Ay",
@@ -1666,6 +1674,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Yeni adres oluşturuldu – eskisi artık çalışmıyor",
   "Neue Adresse – bitte erneut anmelden": "Yeni adres – lütfen yeniden giriş yap",
   "Neue Ausgabe anlegen": "Yeni baskı oluştur",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Release Radar’dan yeni ciltler ve animelerinin yeni bölümleri",
   "Neue Datei laden und den Dienst neu einrichten:": "Yeni dosyayı indir ve hizmeti yeniden kur:",
   "Neue Folgen": "Yeni bölümler",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "Animelerinin yeni bölümleri ve manga serileri",
@@ -2940,6 +2949,10 @@
     "one": "{n} cilt oluşturuldu",
     "other": "{n} cilt oluşturuldu"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "Bugün {n} cilt çıkıyor",
+    "other": "Bugün {n} cilt çıkıyor"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} cilt",
     "other": "{n} cilt"
@@ -2984,6 +2997,10 @@
     "one": "{n} hesabın, geri yüklemeden sonra parolasının sıfırlanması gerekiyor (yedekte parola yok): {names}.",
     "other": "{n} hesabın, geri yüklemeden sonra parolasının sıfırlanması gerekiyor (yedekte parola yok): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "Bugün {n} yeni çıkan",
+    "other": "Bugün {n} yeni çıkan"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} seri",
     "other": "{n} seri"
@@ -3019,6 +3036,10 @@
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "one": "Eksik {n} cilt alışveriş listesine eklensin mi?",
     "other": "Eksik {n} cilt alışveriş listesine eklensin mi?"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "Bugün {n} yeni bölüm",
+    "other": "Bugün {n} yeni bölüm"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "Çevrimiçi {n} sonuç bulundu",
@@ -3062,6 +3083,7 @@
   "{title} von der Wunschliste nehmen": "{title} serisini istek listesinden çıkar",
   "{title} öffnen": "{title} aç",
   "{title} – Band {number}": "{title} – cilt {number}",
+  "{title} – Folge {episode}": "{title} – {episode}. bölüm",
   "{title}, Folge {episode} gesehen?": "{title}, {episode}. bölüm izlendi mi?",
   "{title}: Folge {episode} gesehen": "{title}: {episode}. bölüm izlendi",
   "{title}: Link für „Weiter“ gemerkt": "{title}: “Devam” bağlantısı hatırlandı",

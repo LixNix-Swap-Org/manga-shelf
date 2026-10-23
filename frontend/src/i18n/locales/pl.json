@@ -39,6 +39,12 @@
     "many": "+ {n} zapowiedzianych",
     "other": "+ {n} zapowiedzianego"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} inny tytuł",
+    "few": "+ {n} inne tytuły",
+    "many": "+ {n} innych tytułów",
+    "other": "+ {n} innego tytułu"
+  },
   "-- Keine Angabe --": "-- Brak danych --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 konto wymaga resetu hasła po przywróceniu (brak hasła w kopii zapasowej): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 znaki: cyfry 0–9 i litery a–f",
@@ -920,6 +926,8 @@
   "Erfassen": "Dodaj",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Pomyślnie uzupełniono z {source}: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Wynik testu połączenia",
+  "Erinnerungen am Erscheinungstag": "Przypomnienia w dniu premiery",
+  "Erinnerungen konnten nicht umgestellt werden": "Nie udało się zmienić przypomnień",
   "Erkannt: {isbn}": "Rozpoznano: {isbn}",
   "Erneut laden": "Wczytaj ponownie",
   "Erneut prüfen": "Sprawdź ponownie",
@@ -1628,6 +1636,7 @@
   "Melde an…": "Logowanie…",
   "Melde dich bei deiner Sammlung an": "Zaloguj się do swojej kolekcji",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Wylogowuje każdego użytkownika na wszystkich urządzeniach (np. po zgubieniu telefonu). Sesja na tym urządzeniu pozostaje aktywna.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Powiadamia cię na tym urządzeniu rano w dniu premiery, gdy wychodzi tom z Release Radar albo emitowany jest nowy odcinek anime z twojej listy. Dotyczy tylko tego urządzenia.",
   "Meldung schließen": "Zamknij komunikat",
   "Menü": "Menu",
   "Menü schließen": "Zamknij menu",
@@ -1656,6 +1665,7 @@
   "Mitglied hinzugefügt": "Dodano członka",
   "Mitglied nicht gefunden": "Nie znaleziono członka",
   "Mitglieder": "Członkowie",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Powiadomienia dla Manga Shelf są wyłączone – zezwól na nie w ustawieniach urządzenia.",
   "Mittel": "Średni",
   "Modus wechseln": "Zmień tryb",
   "Monat": "Miesiąc",
@@ -1720,6 +1730,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Utworzono nowy adres – stary już nie działa",
   "Neue Adresse – bitte erneut anmelden": "Nowy adres – zaloguj się ponownie",
   "Neue Ausgabe anlegen": "Utwórz nowe wydanie",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Nowe tomy z Release Radar i nowe odcinki twoich anime",
   "Neue Datei laden und den Dienst neu einrichten:": "Pobierz nowy plik i skonfiguruj usługę od nowa:",
   "Neue Folgen": "Nowe odcinki",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "Nowe odcinki Twoich anime i ich serie mangi",
@@ -3044,6 +3055,12 @@
     "many": "Utworzono {n} tomów",
     "other": "Utworzono {n} tomu"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "Dziś wychodzi {n} tom",
+    "few": "Dziś wychodzą {n} tomy",
+    "many": "Dziś wychodzi {n} tomów",
+    "other": "Dziś wychodzi {n} tomu"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} tom",
     "few": "{n} tomy",
@@ -3110,6 +3127,12 @@
     "many": "{n} kont wymaga po przywróceniu resetu hasła (brak hasła w kopii zapasowej): {names}.",
     "other": "{n} konta wymaga po przywróceniu resetu hasła (brak hasła w kopii zapasowej): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} nowość dziś",
+    "few": "{n} nowości dziś",
+    "many": "{n} nowości dziś",
+    "other": "{n} nowości dziś"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} seria",
     "few": "{n} serie",
@@ -3164,6 +3187,12 @@
     "many": "Dodać {n} brakujących tomów do listy zakupów?",
     "other": "Dodać {n} brakującego tomu do listy zakupów?"
   },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} nowy odcinek dziś",
+    "few": "{n} nowe odcinki dziś",
+    "many": "{n} nowych odcinków dziś",
+    "other": "{n} nowego odcinka dziś"
+  },
   "{n} online gefunden|{n} online gefunden": {
     "one": "Znaleziono online: {n}",
     "few": "Znaleziono online: {n}",
@@ -3210,6 +3239,7 @@
   "{title} von der Wunschliste nehmen": "Zdejmij {title} z listy życzeń",
   "{title} öffnen": "Otwórz {title}",
   "{title} – Band {number}": "{title} – tom {number}",
+  "{title} – Folge {episode}": "{title} – odcinek {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, obejrzano odcinek {episode}?",
   "{title}: Folge {episode} gesehen": "{title}: obejrzano odcinek {episode}",
   "{title}: Link für „Weiter“ gemerkt": "{title}: zapamiętano link dla „Dalej”",

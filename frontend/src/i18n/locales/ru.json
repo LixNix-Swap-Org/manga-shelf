@@ -39,6 +39,12 @@
     "many": "+ {n} анонсировано",
     "other": "+ {n} анонсировано"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ ещё {n} название",
+    "few": "+ ещё {n} названия",
+    "many": "+ ещё {n} названий",
+    "other": "+ ещё {n} названия"
+  },
   "-- Keine Angabe --": "— Не указано —",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "После восстановления 1 аккаунту нужен сброс пароля (в резервной копии нет пароля): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 символа из 0–9 и a–f",
@@ -920,6 +926,8 @@
   "Erfassen": "Внести",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Успешно заполнено из {source}: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Результат проверки соединения",
+  "Erinnerungen am Erscheinungstag": "Напоминания в день выхода",
+  "Erinnerungen konnten nicht umgestellt werden": "Не удалось изменить напоминания",
   "Erkannt: {isbn}": "Распознано: {isbn}",
   "Erneut laden": "Загрузить снова",
   "Erneut prüfen": "Проверить снова",
@@ -1628,6 +1636,7 @@
   "Melde an…": "Вход…",
   "Melde dich bei deiner Sammlung an": "Войдите в свою коллекцию",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Выводит всех пользователей из системы на всех устройствах (например, после потери телефона). На этом устройстве вы остаётесь в системе.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Утром в день выхода сообщает на этом устройстве, когда выходит том из Release Radar или новый эпизод аниме из вашего списка. Действует только на этом устройстве.",
   "Meldung schließen": "Закрыть сообщение",
   "Menü": "Меню",
   "Menü schließen": "Закрыть меню",
@@ -1656,6 +1665,7 @@
   "Mitglied hinzugefügt": "Участник добавлен",
   "Mitglied nicht gefunden": "Участник не найден",
   "Mitglieder": "Участники",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Уведомления для Manga Shelf выключены – разрешите их в настройках устройства.",
   "Mittel": "Средний",
   "Modus wechseln": "Сменить режим",
   "Monat": "Месяц",
@@ -1720,6 +1730,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Новый адрес создан — старый больше не работает",
   "Neue Adresse – bitte erneut anmelden": "Новый адрес — войдите заново",
   "Neue Ausgabe anlegen": "Создать новое издание",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Новые тома из Release Radar и новые эпизоды ваших аниме",
   "Neue Datei laden und den Dienst neu einrichten:": "Скачайте новый файл и заново настройте службу:",
   "Neue Folgen": "Новые эпизоды",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "Новые эпизоды ваших аниме и их серии манги",
@@ -3044,6 +3055,12 @@
     "many": "создано {n} томов",
     "other": "создано {n} тома"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "Сегодня выходит {n} том",
+    "few": "Сегодня выходят {n} тома",
+    "many": "Сегодня выходят {n} томов",
+    "other": "Сегодня выходят {n} тома"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} том",
     "few": "{n} тома",
@@ -3110,6 +3127,12 @@
     "many": "{n} аккаунтов после восстановления требуют сброса пароля (в копии нет пароля): {names}.",
     "other": "{n} аккаунта после восстановления требуют сброса пароля (в копии нет пароля): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} новинка сегодня",
+    "few": "{n} новинки сегодня",
+    "many": "{n} новинок сегодня",
+    "other": "{n} новинки сегодня"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} серия",
     "few": "{n} серии",
@@ -3164,6 +3187,12 @@
     "many": "Добавить {n} недостающих томов в список покупок?",
     "other": "Добавить {n} недостающего тома в список покупок?"
   },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} новый эпизод сегодня",
+    "few": "{n} новых эпизода сегодня",
+    "many": "{n} новых эпизодов сегодня",
+    "other": "{n} нового эпизода сегодня"
+  },
   "{n} online gefunden|{n} online gefunden": {
     "one": "Найдено онлайн: {n}",
     "few": "Найдено онлайн: {n}",
@@ -3210,6 +3239,7 @@
   "{title} von der Wunschliste nehmen": "Убрать {title} из списка желаемого",
   "{title} öffnen": "Открыть {title}",
   "{title} – Band {number}": "{title} — том {number}",
+  "{title} – Folge {episode}": "{title} – эпизод {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, эпизод {episode} просмотрен?",
   "{title}: Folge {episode} gesehen": "{title}: эпизод {episode} просмотрен",
   "{title}: Link für „Weiter“ gemerkt": "{title}: ссылка для «Продолжить» запомнена",

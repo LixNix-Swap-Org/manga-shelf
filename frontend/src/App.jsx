@@ -27,6 +27,8 @@ import {
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import { useRevealFocusedField } from './hooks/useKeyboardOpen';
 import useWatchSync from './app/watch/useWatchSync';
+import useReleaseReminders from './app/reminders/useReleaseReminders';
+import { clearReleaseReminders } from './app/reminders/reminderState';
 import { useLanguage } from './i18n/react.jsx';
 import { clearPendingLanguage, setLanguageTarget, syncUserLanguage } from './i18n/preference.js';
 import { t } from './i18n/index.js';
@@ -260,7 +262,7 @@ async function clearSessionData() {
   clearSearchState();
   clearScanList();
   endViewSession();
-  await Promise.all([clearOfflineData(), clearUploadsCache()]);
+  await Promise.all([clearOfflineData(), clearUploadsCache(), clearReleaseReminders()]);
 }
 
 const reloadPage = () => window.location.reload();
@@ -436,6 +438,8 @@ function App() {
 
   // apps: the opt-in Crunchyroll history sync runs in the foreground for a signed-in user or the opened device collection
   useWatchSync(user, localMode ? 'local' : activeServer?.id ?? 'server');
+  // apps: the opt-in release-day reminders, planned on the device from the radar and the anime list
+  useReleaseReminders(user, localMode ? 'local' : activeServer?.id ?? 'server');
 
   // standalone in the browser build: a source without CORS headers is named once instead of failing silently
   useEffect(() => {

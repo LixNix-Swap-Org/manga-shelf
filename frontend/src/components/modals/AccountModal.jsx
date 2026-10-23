@@ -9,6 +9,7 @@ import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
 import ApiKeyCard from './ApiKeyCard';
 import TmdbAttribution from '../TmdbAttribution';
 import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
+import { REMINDER_BUILD, canRemind, remindersAvailable } from '../../app/reminders/reminderState';
 import LanguageSelect from '../common/LanguageSelect';
 import { t } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
@@ -18,6 +19,8 @@ import { EDITION_LANGUAGES, languageName, setDefaultLanguage, withCurrent } from
 
 // apps only (feature-detected): the Crunchyroll history card and its sync code load on demand; other builds drop them
 const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/CrunchyrollCard')) : null;
+// apps with the LocalNotifications plugin only: the switch of the release-day reminders
+const ReminderSwitch = REMINDER_BUILD ? lazy(() => import('../../app/reminders/ReminderSwitch')) : null;
 
 /** Own password change (PUT /api/auth/password): current password, new password twice. Other devices are logged out. */
 function PasswordTab({ onClose }) {
@@ -376,8 +379,8 @@ function DefaultVisibilityField({ offline }) {
   );
 }
 
-/** UI language of this account; the switch remounts the page, the dialog reopens on this tab. */
-function LanguageTab({ offline = false }) {
+/** UI language of this account; the switch remounts the page, the dialog reopens on this tab. Apps: the reminder switch. */
+function LanguageTab({ user = null, offline = false }) {
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-400">
@@ -386,6 +389,13 @@ function LanguageTab({ offline = false }) {
       <LanguageSelect beforeChange={() => markReopenAccount('language')} />
       <DefaultLanguageField offline={offline} />
       <DefaultVisibilityField offline={offline} />
+      {ReminderSwitch && canRemind(user) && remindersAvailable() && (
+        <div className="pt-4 border-t border-slate-800">
+          <Suspense fallback={null}>
+            <ReminderSwitch />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 }
@@ -451,7 +461,7 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
 
         <div {...panelProps}>
           {tab === 'password' ? <PasswordTab onClose={onClose} />
-            : tab === 'language' ? <LanguageTab offline={Boolean(user?.offline)} />
+            : tab === 'language' ? <LanguageTab user={user} offline={Boolean(user?.offline)} />
               : <KeysTab isAdmin={user?.role === 'admin'} canEdit={!user?.offline && (user?.role === 'admin' || user?.role === 'editor')} />}
         </div>
       </div>

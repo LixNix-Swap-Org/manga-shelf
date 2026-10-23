@@ -33,6 +33,9 @@
   "+ {n} angekündigt|+ {n} angekündigt": {
     "other": "+ 発表済み{n}件"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "other": "ほか {n} 件"
+  },
   "-- Keine Angabe --": "-- 指定なし --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1件のアカウントは復元後にパスワードのリセットが必要です(バックアップにパスワードがありません): {names}。",
   "32 Zeichen aus 0–9 und a–f": "0～9とa～fの32文字",
@@ -875,6 +878,8 @@
   "Erfassen": "登録",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "{source}から入力しました: {fields}！",
   "Ergebnis der Verbindungsprüfung": "接続テストの結果",
+  "Erinnerungen am Erscheinungstag": "発売日のリマインダー",
+  "Erinnerungen konnten nicht umgestellt werden": "リマインダーを変更できませんでした",
   "Erkannt: {isbn}": "認識しました: {isbn}",
   "Erneut laden": "再読み込み",
   "Erneut prüfen": "再確認",
@@ -1550,6 +1555,7 @@
   "Melde an…": "サインイン中…",
   "Melde dich bei deiner Sammlung an": "コレクションにサインイン",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "すべてのユーザーを全端末からサインアウトさせます(スマートフォンを紛失した場合など)。この端末ではサインインしたままです。",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Release Radar の巻が発売される日や、リストのアニメの新しいエピソードが放送される日の朝に、この端末で通知します。この端末にのみ適用されます。",
   "Meldung schließen": "メッセージを閉じる",
   "Menü": "メニュー",
   "Menü schließen": "メニューを閉じる",
@@ -1578,6 +1584,7 @@
   "Mitglied hinzugefügt": "メンバーを追加しました",
   "Mitglied nicht gefunden": "メンバーが見つかりません",
   "Mitglieder": "メンバー",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Manga Shelf の通知がオフになっています。端末の設定で許可してください。",
   "Mittel": "中",
   "Modus wechseln": "モードを切り替え",
   "Monat": "月",
@@ -1639,6 +1646,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "新しいアドレスを作成しました – 古いアドレスは使えなくなります",
   "Neue Adresse – bitte erneut anmelden": "新しいアドレス – もう一度サインインしてください",
   "Neue Ausgabe anlegen": "新しい版を作成",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Release Radar の新刊とアニメの新しいエピソード",
   "Neue Datei laden und den Dienst neu einrichten:": "新しいファイルをダウンロードし、サービスを設定し直してください:",
   "Neue Folgen": "新しいエピソード",
   "Neue Folgen deiner Anime und ihre Manga-Reihen": "視聴中のアニメの新しいエピソードと、そのマンガシリーズ",
@@ -2888,6 +2896,9 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "{n}巻を追加しました"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "other": "今日 {n} 巻発売"
+  },
   "{n} Bände|{n} Bände": {
     "other": "{n}巻"
   },
@@ -2921,6 +2932,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "復元後、{n}件のアカウントでパスワードのリセットが必要です(バックアップにパスワードがありません): {names}。"
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "other": "今日の新着 {n} 件"
+  },
   "{n} Reihen|{n} Reihen": {
     "other": "{n}シリーズ"
   },
@@ -2947,6 +2961,9 @@
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "未所持の{n}冊を買い物リストに入れますか？"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "other": "今日の新エピソード {n} 件"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "オンラインで{n}件見つかりました"
@@ -2988,6 +3005,7 @@
   "{title} von der Wunschliste nehmen": "{title}をウィッシュリストから外す",
   "{title} öffnen": "{title}を開く",
   "{title} – Band {number}": "{title} – {number}巻",
+  "{title} – Folge {episode}": "{title} – 第{episode}話",
   "{title}, Folge {episode} gesehen?": "{title}の{episode}話を視聴しましたか？",
   "{title}: Folge {episode} gesehen": "{title}: {episode}話を視聴済み",
   "{title}: Link für „Weiter“ gemerkt": "{title}: 「続きから」用のリンクを保存しました",
