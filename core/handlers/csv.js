@@ -32,7 +32,12 @@ const SERIES_DETAILS_SELECT = `
     SELECT id, status AS series_status, NULLIF(collecting, 'aktiv') AS series_collecting, total_volumes AS series_total,
            alt_title AS series_alt_title, language AS series_language, region AS series_region, currency AS series_currency,
            work_key AS series_work_key, tags AS series_tags, manga_passion_id AS series_mp_id,
-           cover_image AS series_cover, banner_image AS series_banner, description AS series_description
+           cover_image AS series_cover, banner_image AS series_banner, description AS series_description,
+           NULLIF(format, 'print') AS series_format, total_chapters AS series_chapters,
+           (SELECT GROUP_CONCAT(entry, ', ') FROM (
+               SELECT u.username || ': ' || cp.chapters_read AS entry FROM chapter_progress cp JOIN users u ON u.id = cp.user_id
+               WHERE cp.manga_id = mangas.id ORDER BY cp.user_id
+           )) AS series_chapter_readers
     FROM mangas`;
 
 // LEFT JOIN: series without volumes appear as a series row (type "Reihe", no volume number)
@@ -245,9 +250,11 @@ function importCsv(ctx, { body }) {
 
     const insertManga = ctx.db.prepare(`
         INSERT INTO mangas (title, author, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
-                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id,
+                            format, total_chapters)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const insertChapters = ctx.db.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
@@ -284,20 +291,39 @@ function importCsv(ctx, { body }) {
         const publisher = normalizePublisher(bySeriesPublisher ? r.series_publisher : r.publisher);
         const meta = seriesMeta.get(seriesMetaKey(r)) || {};
         const language = meta.language || languageOf(r) || defaultLanguage;
+        const format = meta.format || 'print';
         const id = dryRun
             ? --placeholderId
             : Number(insertManga.run(
                 r.series, r.author, publisher, language, meta.status || 'Laufend', meta.alt_title ?? null,
                 meta.tags ?? null, meta.total_volumes ?? null, meta.description ?? null, meta.cover_image ?? null,
-                meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id,
-                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId
+                // Manga Passion knows no webtoons
+                meta.banner_image ?? null, format === 'webtoon' ? null : meta.manga_passion_id ?? null, meta.wish_priority ?? null,
+                meta.collecting || 'aktiv', ctx.user.id,
+                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId,
+                format, meta.total_chapters ?? null
             ).lastInsertRowid);
+        importChapters(r, id, meta);
         const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
         const key = matchKey(r.series);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push(entry);
         result.created_series++;
         return entry;
+    };
+
+    // chapter progress of a new series ("Kapitel gelesen von"): the same name rules as the readers of a volume
+    const importChapters = (r, mangaId, meta) => {
+        for (const { name, chapters } of meta.chapter_readers || []) {
+            const [userId] = resolveUsers(name, r, (unknown) => msg('Unbekannter Leser „{name}“ (ignoriert)', { name: unknown }),
+                (outside) => msg('Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)', { name: outside }));
+            if (userId === undefined) continue;
+            if (meta.total_chapters && chapters > meta.total_chapters) {
+                result.warnings.push(rowNote(r.line, msg('Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)', { name })));
+                continue;
+            }
+            if (chapters > 0 && mangaId > 0) insertChapters.run(mangaId, userId, chapters);
+        }
     };
 
     const run = () => {

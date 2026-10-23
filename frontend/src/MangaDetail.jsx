@@ -7,6 +7,7 @@ import VolumeGridView from './components/detail/VolumeGridView';
 import AddVolumeBar from './components/detail/AddVolumeBar';
 import VolumeFilterBar from './components/detail/VolumeFilterBar';
 import MangaHeroCard from './components/detail/MangaHeroCard';
+import ChapterProgress, { withChapter } from './components/detail/ChapterProgress';
 import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
@@ -484,6 +485,16 @@ export default function MangaDetail({ user, onUnauthorized }) {
           handleFillTags={handleFillTags}
           onEditionsChanged={fetchManga}
         />
+
+        {manga.format === 'webtoon' && (
+          <ChapterProgress
+            manga={manga}
+            user={user}
+            canChange={Boolean(baseCanEdit) && !isOffline}
+            isOffline={isOffline}
+            onSaved={(data) => patchManga((m) => withChapter(m, data, user))}
+          />
+        )}
 
         {/* VOLUMES CHECKLIST SECTION */}
         <section aria-labelledby="volumes-heading" className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">

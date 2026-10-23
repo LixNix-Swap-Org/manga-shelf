@@ -32,7 +32,8 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
             SELECT m.id, m.title, m.alt_title, m.author, m.publisher, m.language, m.status, m.tags, m.total_volumes,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
-                   m.collecting, m.region, m.work_key, m.currency, m.shelf_id,
+                   m.collecting, m.region, m.work_key, m.currency, m.shelf_id, m.format, m.total_chapters,
+                   COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.manga_id = m.id AND cp.user_id = ?), 0) as chapters_read,
                    COUNT(DISTINCT CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
                    COUNT(DISTINCT CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
                    CASE WHEN m.wish_priority IS NOT NULL AND COUNT(CASE WHEN v.status = 'Vorhanden' THEN 1 END) = 0 THEN 1 ELSE 0 END as wished,
@@ -50,7 +51,7 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
             WHERE ${scope.sql}
             GROUP BY m.id
             ORDER BY m.title ASC
-        `).all(userId, ...scope.params);
+        `).all(userId, userId, ...scope.params);
 }
 
 /** GET /mangas/volume-search: [{ id, volume_search }] by series id, only series with something to search. */
@@ -80,6 +81,11 @@ const OWNERS_SELECT = `
         SELECT vo.volume_id, vo.user_id, u.username, vo.price, vo.purchase_date, vo.condition, vo.created_at
         FROM volume_owners vo
         JOIN users u ON vo.user_id = u.id`;
+
+const CHAPTERS_SELECT = `
+        SELECT cp.manga_id, cp.user_id, u.username, cp.chapters_read, cp.updated_at
+        FROM chapter_progress cp
+        JOIN users u ON cp.user_id = u.id`;
 
 const USERS_SQL = 'SELECT id, username, role FROM users ORDER BY id ASC';
 const MEMBERS_SQL = 'SELECT shelf_id, user_id FROM shelf_members';
@@ -142,12 +148,15 @@ function groupBy(rows, key) {
 
 /**
  * Turns a mangas row plus its volumes (already in display order) into the detail shape of GET /mangas/:id:
- * owners, read info, parsed images, values and reader_stats. Shared by the detail route and the offline snapshot.
+ * owners, read info, parsed images, values, reader_stats and the chapter progress (`chapters`: its chapter_progress
+ * rows). Shared by the detail route and the offline snapshot.
  */
-function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = []) {
+function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = []) {
     delete manga.manga_passion_edition_data;
     manga.editions = editions;
     manga.volumes = volumes;
+    manga.chapter_progress = chapters.map(r => ({ user_id: r.user_id, username: r.username, chapters_read: r.chapters_read, updated_at: r.updated_at }));
+    manga.chapters_read = chapters.find(r => r.user_id === userId)?.chapters_read || 0;
 
     let total_value = 0;
     let full_value = 0;
@@ -220,7 +229,8 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const readsByVolume = groupBy(reads, 'volume_id');
     const ownersByVolume = groupBy(owners, 'volume_id');
     const scoped = usersOfSeries(users, loadMembers(ctx), manga, userId, volumes, readsByVolume, ownersByVolume);
-    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga));
+    const chapters = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id = ? ORDER BY cp.user_id`).all(mangaId);
+    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters);
 }
 
 function assertSameConnection(ctx, generation) {
@@ -249,6 +259,7 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
     const volumesStmt = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id BETWEEN ? AND ? ORDER BY v.manga_id, ${volumeOrderSql('v')}, v.id ASC`);
     const readsStmt = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vr.volume_id, vr.read_at, vr.rowid`);
     const ownersStmt = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vo.volume_id, vo.created_at, vo.rowid`);
+    const chaptersStmt = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id BETWEEN ? AND ? ORDER BY cp.manga_id, cp.user_id`);
 
     const details = {};
     const size = Math.max(1, options.chunkSize);
@@ -263,11 +274,12 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
         const volumesByManga = groupBy(volumesStmt.all(from, to), 'manga_id');
         const readsByVolume = groupBy(readsStmt.all(from, to), 'volume_id');
         const ownersByVolume = groupBy(ownersStmt.all(from, to), 'volume_id');
+        const chaptersByManga = groupBy(chaptersStmt.all(from, to), 'manga_id');
         for (const m of block) {
             const volumes = volumesByManga.get(m.id) || [];
             details[m.id] = buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
                 usersOfSeries(users, members, m, user.id, volumes, readsByVolume, ownersByVolume), user.id,
-                editionsOf(m, editionsByWork.get(m.work_key) || []));
+                editionsOf(m, editionsByWork.get(m.work_key) || []), chaptersByManga.get(m.id) || []);
         }
     }
     assertSameConnection(ctx, generation);

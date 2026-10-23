@@ -11,7 +11,7 @@ const ITEM_LIMIT = 50;
 const SERIES_CHECKS = [
     { id: 'series_without_cover', where: "(m.cover_image IS NULL OR TRIM(m.cover_image) = '')" },
     // Manga Passion only knows German editions
-    { id: 'series_without_mp_link', where: "m.manga_passion_id IS NULL AND COALESCE(m.language, 'de') = 'de'" },
+    { id: 'series_without_mp_link', where: "m.manga_passion_id IS NULL AND COALESCE(m.language, 'de') = 'de' AND COALESCE(m.format, 'print') <> 'webtoon'" },
     { id: 'series_without_author', where: "(m.author IS NULL OR TRIM(m.author) = '')" },
     { id: 'series_without_total', where: 'm.total_volumes IS NULL' }
 ];

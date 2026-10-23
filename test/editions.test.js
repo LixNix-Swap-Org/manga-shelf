@@ -74,7 +74,7 @@ test('CSV: Sprache exports codes, Region/Währung/Werk follow it, Bandsprache si
     const csv = await exportCsv();
     const lines = csv.split('\r\n');
     assert.ok(lines[0].includes(';Sprache;Region;Währung;Werk;Tags;'), lines[0]);
-    assert.ok(lines[0].endsWith(';Bandsprache;Gelesen von;Besitzer'));
+    assert.ok(lines[0].endsWith(';Bandsprache;Format;Gesamtkapitel;Kapitel gelesen von;Gelesen von;Besitzer'));
     const { parseCsv } = require('../core/csvExchange');
     const header = parseCsv(lines[0])[0];
     const rows = parseCsv(csv).slice(1);

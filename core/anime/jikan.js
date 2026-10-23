@@ -106,7 +106,9 @@ async function searchManga(ctx, term, { limit = 5, timeoutMs, signal } = {}) {
     return (Array.isArray(json.data) ? json.data : []).filter((m) => m && m.title).map(mangaLookupResult);
 }
 
-const TYPE_LABELS = { 'Light Novel': 'Light Novel', Novel: 'Light Novel', 'One-shot': 'One-Shot' };
+const TYPE_LABELS = { 'Light Novel': 'Light Novel', Novel: 'Light Novel', 'One-shot': 'One-Shot', Manhwa: 'Manhwa', Manhua: 'Manhua' };
+// MyAnimeList types read as webtoons far more often than in print: the lookup suggests that format
+const WEBTOON_TYPES = ['Manhwa', 'Manhua'];
 
 function mangaLookupResult(m) {
     const status = m.status === 'Finished' ? 'Abgeschlossen' : m.status === 'On Hiatus' ? 'Pausiert' : m.status === 'Discontinued' ? 'Abgebrochen' : 'Laufend';
@@ -118,6 +120,7 @@ function mangaLookupResult(m) {
         source_label: 'MyAnimeList',
         format: m.type || null,
         format_label: TYPE_LABELS[m.type] || null,
+        ...(WEBTOON_TYPES.includes(m.type) ? { series_format: 'webtoon' } : {}),
         title: m.title_english || m.title,
         alt_title: m.title_japanese || m.title,
         alt_titles: [...new Set([m.title, m.title_english, m.title_japanese].filter(Boolean))],
@@ -128,6 +131,7 @@ function mangaLookupResult(m) {
         banner_image: null,
         tags: Array.isArray(m.genres) ? m.genres.map((g) => g.name).join(', ') : null,
         total_volumes: m.volumes || null,
+        total_chapters: m.chapters || null,
         status
     };
 }

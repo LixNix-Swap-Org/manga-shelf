@@ -6,6 +6,9 @@ const VOLUME_STATUSES = ['Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 
 const VOLUME_TYPES = ['volume', 'special_edition', 'schuber', 'special'];
 // The UI offers Laufend/Abgeschlossen/Pausiert/Geplant; the AniList lookup also sends Abgebrochen.
 const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
+// How a series is read: print = by volume (default), webtoon = by chapter (webtoons, manhwa, manhua)
+const SERIES_FORMATS = ['print', 'webtoon'];
+const MAX_CHAPTERS = 99999;
 
 const isBlank = (val) => val === null || val === undefined || (typeof val === 'string' && val.trim() === '');
 
@@ -83,6 +86,19 @@ const isValidReadAt = (val) => {
     return Number(m[4]) < 24 && Number(m[5]) < 60 && Number(m[6]) < 60;
 };
 const parseDate = (val) => (isValidDate(val) ? { value: isBlank(val) ? null : String(val).trim() } : { error: true });
+
+/** Series format: absent/empty = print; anything but print or webtoon is { error: true }. */
+const parseSeriesFormat = (val) => {
+    if (isBlank(val)) return { value: 'print' };
+    const text = typeof val === 'string' ? val.trim().toLowerCase() : null;
+    return SERIES_FORMATS.includes(text) ? { value: text } : { error: true };
+};
+
+/** Known chapter count of a series: null, '' and 0 clear it, else a whole number from 1 to MAX_CHAPTERS. */
+const parseTotalChapters = (val) => {
+    if (isBlank(val) || val === 0 || val === '0') return { value: null };
+    return parseIntInRange(1, MAX_CHAPTERS)(val);
+};
 
 /** Whole number (number or digit string) or null; no range check beyond safe integers. */
 const parseWholeNumber = (val) => {
@@ -162,8 +178,8 @@ const parseBulkSet = (set) => {
 };
 
 module.exports = {
-    VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, BULK_SET_FIELDS,
+    VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, BULK_SET_FIELDS,
     isBlank, parsePrice, parseIntInRange, parsePages, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
-    isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId,
+    isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId, parseSeriesFormat, parseTotalChapters,
     parseIdList, parseCondition, parseBulkSet
 };

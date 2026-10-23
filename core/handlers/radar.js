@@ -68,16 +68,16 @@ function dashboardSummary(ctx, { query = {} } = {}) {
     return { body: { total_missing: missing, total_releases: radar.total, preordered_count: radar.preordered || 0 } };
 }
 
-// The Manga Passion calendar lists German editions only: series and volumes in other languages never match it
+// The Manga Passion calendar lists German print editions only: other languages and webtoons never match it
 const loadUserMangas = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.manga_passion_id, m.wish_priority, m.collecting,
            (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS owned_count
-    FROM mangas m WHERE COALESCE(m.language, ?) = ? AND ${scope.sql} ORDER BY m.id
+    FROM mangas m WHERE COALESCE(m.language, ?) = ? AND COALESCE(m.format, 'print') <> 'webtoon' AND ${scope.sql} ORDER BY m.id
 `).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
 const loadUserVolumes = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.price, v.release_date, v.manga_passion_volume_id
     FROM volumes v JOIN mangas m ON m.id = v.manga_id
-    WHERE COALESCE(v.language, m.language, ?) = ? AND ${scope.sql} ORDER BY v.id
+    WHERE COALESCE(v.language, m.language, ?) = ? AND COALESCE(m.format, 'print') <> 'webtoon' AND ${scope.sql} ORDER BY v.id
 `).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
 
 // Preorders whose date in the Manga Passion calendar has changed since (postponements)

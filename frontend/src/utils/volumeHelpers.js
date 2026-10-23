@@ -169,6 +169,26 @@ export const getSeriesProgress = ({ regular_owned, max_regular_number, total_vol
   return { owned: regular, total, extras: Math.max(0, extras), pct };
 };
 
+/** A webtoon is read by chapter (mangas.format); its cards and sorting follow the chapter progress. */
+export const isWebtoon = (manga) => manga?.format === 'webtoon';
+
+/**
+ * The caller's chapter progress of a series: read (chapters_read), total (total_chapters, 0 = unknown) and pct like
+ * getSeriesProgress (null without a total, never 100 before the end, never 0 once started; a total lowered below the
+ * stored chapter shows 100).
+ */
+export const getChapterProgress = ({ chapters_read, total_chapters }) => {
+  const read = Math.max(0, Number(chapters_read) || 0);
+  const total = Math.max(0, Number(total_chapters) || 0);
+  let pct = null;
+  if (total > 0) {
+    pct = Math.min(100, Math.round((read / total) * 100));
+    if (read < total) pct = Math.min(pct, 99);
+    if (read > 0) pct = Math.max(pct, 1);
+  }
+  return { read, total, pct };
+};
+
 /** The getSeriesProgress input for the volumes of one series (same rules as GET /api/mangas). */
 export const getVolumeProgressCounts = (volumes) => {
   const owned = (volumes || []).filter(v => v.status === 'Vorhanden');

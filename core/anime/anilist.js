@@ -24,7 +24,7 @@ const BATCH_FIELDS = `${MEDIA_FIELDS}
     description(asHtml: false) ${LINK_FIELDS}`;
 const MANGA_FIELDS = `
     id idMal title { romaji english native } description(asHtml: false) coverImage { extraLarge large medium }
-    bannerImage format status volumes genres staff(perPage: 5) { edges { role node { name { full } } } }`;
+    bannerImage format status volumes chapters countryOfOrigin genres staff(perPage: 5) { edges { role node { name { full } } } }`;
 
 function headers(credential, version) {
     const h = { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': `MangaShelf/${version || 'dev'}` };

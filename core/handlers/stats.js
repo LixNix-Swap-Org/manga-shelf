@@ -422,8 +422,9 @@ function continueReading(ctx, userId) {
 }
 
 /**
- * GET /stats/reading?user_id=: monthly reads, backlog curve, this vs last year, streaks, "Weiterlesen" list.
- * Reads without a date count as read but stay out of every timeline (unknown_date).
+ * GET /stats/reading?user_id=: monthly reads, backlog curve, this vs last year, streaks, "Weiterlesen" list and the
+ * chapter progress of webtoons ({ series, read, finished }). Reads without a date count as read but stay out of every
+ * timeline (unknown_date).
  */
 function reading(realCtx, { query }) {
     const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(query.shelf_id)));
@@ -487,9 +488,21 @@ function reading(realCtx, { query }) {
             last_year: yearTotals(thisYear - 1),
             streak: readingStreaks(monthRows.map(r => r.month).filter(Boolean), currentKey),
             unknown_date: unknownDate,
-            continue_reading: continueReading(ctx, userId)
+            continue_reading: continueReading(ctx, userId),
+            chapters: chapterTotals(ctx, userId)
         }
     };
+}
+
+/** Webtoons with chapter progress of the user: how many, chapters read in total, how many read to their known end. */
+function chapterTotals(ctx, userId) {
+    const row = ctx.db.prepare(`
+        SELECT count(*) AS series, COALESCE(SUM(cp.chapters_read), 0) AS read,
+               COALESCE(SUM(CASE WHEN m.total_chapters > 0 AND cp.chapters_read >= m.total_chapters THEN 1 ELSE 0 END), 0) AS finished
+        FROM chapter_progress cp JOIN mangas m ON m.id = cp.manga_id
+        WHERE cp.user_id = ? AND m.format = 'webtoon'
+    `).get(userId);
+    return { series: row.series, read: row.read, finished: row.finished };
 }
 
 /** { anime } only when the anime list has entries (the parity tests compare /stats without it). */

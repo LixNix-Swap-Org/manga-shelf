@@ -110,7 +110,8 @@ export default function CollectionToolbar({
               onChange={e => setCollectFilter(e.target.value)}
               className={`filter-chip-select ${CHIP_SELECT}`}
             >
-              {COLLECT_FILTERS.map(f => (
+              {/* "Webtoons" only once the collection has one */}
+              {COLLECT_FILTERS.filter(f => f.id !== 'webtoon' || collectFilter === 'webtoon' || (collectCounts?.webtoon || 0) > 0).map(f => (
                 <option key={f.id} value={f.id}>
                   {collectFilterLabel(f)}{collectCounts && f.id !== 'ALL' ? ` (${collectCounts[f.id] || 0})` : ''}
                 </option>

@@ -24,13 +24,23 @@ const { GAP_IMPORT_STATUSES: IMPORT_STATUSES } = gapsLib;
 const MP_LANGUAGE_ERROR = 'Manga Passion kennt nur deutsche Ausgaben';
 // Manga Passion lists German editions only: a series in another language would be matched to the German edition
 const mpLanguageError = () => conflict(MP_LANGUAGE_ERROR, 'MP_LANGUAGE');
+// ... and print editions only: a webtoon is read by chapter, its volumes would turn into gaps and shopping list entries
+const mpWebtoonError = () => conflict('Manga Passion kennt nur gedruckte Ausgaben, keine Webtoons', 'MP_WEBTOON');
+// series Manga Passion may match: German and in print (the format column defaults to print)
+const MP_SERIES_SQL = "COALESCE(language, ?) = ? AND COALESCE(format, 'print') <> 'webtoon'";
 
-// 404 instead of a logged 500 when the series of a Manga Passion action does not exist; 409 for a non-German edition
+/** 409 for a series Manga Passion cannot know: another language or a webtoon. */
+function assertMpSeries(row) {
+    if (!isMpLanguage(row.language)) throw mpLanguageError();
+    if (row.format === 'webtoon') throw mpWebtoonError();
+}
+
+// 404 instead of a logged 500 when the series of a Manga Passion action does not exist; 409 for a non-German edition or a webtoon
 function mangaExists(ctx, params) {
     const mangaId = parseInt(params.id, 10);
-    const row = ctx.db.prepare('SELECT id, language FROM mangas WHERE id = ?').get(mangaId);
+    const row = ctx.db.prepare('SELECT id, language, format FROM mangas WHERE id = ?').get(mangaId);
     if (!row) throw notFound('Manga');
-    if (!isMpLanguage(row.language)) throw mpLanguageError();
+    assertMpSeries(row);
     return mangaId;
 }
 
@@ -160,8 +170,9 @@ async function volumeLookup(ctx, { query }) {
     const shelfId = mangaId ? access.mangaAccess(ctx, mangaId, 'viewer') : null;
     // a viewer of the series' shelf may look a volume up but must not change the series or fill the uploads
     const persist = !shelfId || access.shelfRole(ctx, shelfId) !== 'viewer';
-    const series = mangaId ? ctx.db.prepare('SELECT language FROM mangas WHERE id = ?').get(mangaId) : null;
+    const series = mangaId ? ctx.db.prepare('SELECT language, format FROM mangas WHERE id = ?').get(mangaId) : null;
     if (series) {
+        if (series.format === 'webtoon') throw mpWebtoonError();
         // a stored volume with its own language (an English volume in a German series) is no German edition either
         const stored = volumeNumber ? findDuplicate(ctx, mangaId, volumeNumber, type || inferVolumeType({ volume_number: volumeNumber, notes })) : null;
         if (!isMpLanguage((stored && stored.language) || series.language)) throw mpLanguageError();
@@ -334,9 +345,9 @@ async function importRelease(ctx, { body }) {
     const shelfId = seriesShelf || access.targetShelfId(ctx, body && body.shelf_id);
 
     if (mangaId) {
-        const series = ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id, language FROM mangas WHERE id = ?').get(mangaId);
+        const series = ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id, language, format FROM mangas WHERE id = ?').get(mangaId);
         if (!series) throw notFound('Manga');
-        if (!isMpLanguage(series.language)) throw mpLanguageError();
+        assertMpSeries(series);
         // Older clients send the main series' id for a spin-off ("X – Episode Nagi"): that is another work
         if (cleanTitle && cleanTitle.length <= 300) {
             const [probe] = releases.buildMatcher([series]).enrich([{ title: cleanTitle, edition_id: editionId, volume_number: volNumStr }]);
@@ -359,7 +370,7 @@ async function importRelease(ctx, { body }) {
         let seriesCreated = false;
         if (!mangaId) {
             const existing = releases.findSeriesForImport(
-                ctx.db.prepare('SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE shelf_id = ? AND COALESCE(language, ?) = ? ORDER BY id').all(shelfId, DEFAULT_LANGUAGE, MP_LANGUAGE), cleanTitle, editionId
+                ctx.db.prepare(`SELECT id, title, alt_title, manga_passion_id FROM mangas WHERE shelf_id = ? AND ${MP_SERIES_SQL} ORDER BY id`).all(shelfId, DEFAULT_LANGUAGE, MP_LANGUAGE), cleanTitle, editionId
             );
             if (existing) {
                 mangaId = existing.id;

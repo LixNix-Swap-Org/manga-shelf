@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Before updating
+- **Database migration 34** runs at the first start: `mangas.format` (`print`, the default for every existing series, or `webtoon`), `mangas.total_chapters` and the table `chapter_progress` (each user's chapter of a webtoon). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.4.0 cannot open the migrated database.
+
+### Webtoons
+- **Webtoons and manhwa with chapters:** a series can be "Webtoon (Kapitel)" instead of "Gedruckt (Bände)" (add dialog and edit form, with an optional "Kapitel gesamt"). On its page a panel "Kapitel" shows your chapter as "150 von 200 Kapiteln gelesen" with a bar, "+1" and "Gelesen bis Kapitel" (with "Rückgängig" in the notice), and how far the other people of the series are. Everyone has their own chapter; a viewer of the shelf may set theirs too, like reading marks. Offline the panel only shows. The card and the list row show "Webtoon", "150 / 200 Kap." and a chapter bar, sorting by completion uses the chapter progress, the collecting filter has "Webtoons" (once there is one), and a webtoon counts for "Mit Lücken" only with a print volume marked as missing.
+- **Out of the print flows:** Manga Passion leaves webtoons alone: no gap check, no ghost spines, no autofill or edition link, no calendar matches (409 `MP_WEBTOON` for scripts), and "Serie ohne Manga-Passion-Verknüpfung" in "Sammlung aufräumen" skips them. Print volumes you add to a webtoon behave as before (shopping list, radar, value).
+- **Lookup:** an AniList hit of a Korean or Chinese comic and a MyAnimeList hit of the type Manhwa or Manhua carry the badge "Manhwa" or "Manhua", suggest the webtoon format and fill in the chapter count when the source knows it. Such a hit is no longer folded into a Manga Passion hit of the same title, so "Solo Leveling" offers the German print edition and the webtoon side by side.
+- **Shelves and trash:** the chapter progress follows the rules of reading marks: the trash keeps it, leaving a shelf or a move into a shelf you are not a member of deletes it, and the questions before that name it.
+- **Statistics:** the reading history shows the chapters read in webtoons, in how many series and how many are read to their end.
+- **CSV and device:** the CSV has the columns "Format", "Gesamtkapitel" and "Kapitel gelesen von" ("anna: 150, ben: 30"; the import applies the reader rules: members of the target shelf, others only by an admin, new series only). "Vom Server holen" without admin rights takes your own chapter progress along.
+- **Scripts:** `POST`/`PUT /api/mangas` take `format` (`print`, `webtoon`) and `total_chapters`; `PUT /api/mangas/:id/chapters` sets the own chapter (`{ chapters_read }`, `{ add }`, optional `monotonic`; 400 `CHAPTER_ABOVE_TOTAL` above a known total); `GET /api/mangas` rows carry `format`, `total_chapters` and the caller's `chapters_read`, the detail also `chapter_progress`; `GET /api/stats/reading` carries `chapters`; the move preview and the shelf members carry `chapters`; lookup hits carry `series_format` and `total_chapters`.
+
 ## 3.4.0
 
 ### Before updating
@@ -185,7 +199,7 @@ State: base v2.19.1 (`f0c2a64`), the commits after it up to the tip of the branc
 - **`TRUST_PROXY` defaults to `loopback`.** Behind a proxy on another host enter its address (no hop count), in front of Pterodactyl/Docker only the gateway address of the Docker network (e.g. `loopback, 172.18.0.1`, never the whole subnet), and make the app port reachable only through the proxy.
 - **Every session ends once:** the signing key now lives in `data/secret.key` (no longer in the database and therefore in no backup).
 - **Import the Pterodactyl egg again** (install container with `ash`, installation without install scripts, variable `TRUST_PROXY`).
-- **Database migrations 12–33** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
+- **Database migrations 12–34** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility, migration 34 with webtoons); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
 - **Migration 22 unifies known publisher spellings** in series and volumes (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga", "EMA" → "Egmont Manga", "TOKYOPOP GmbH" → "TOKYOPOP", appended legal forms of built-in publishers). Deleting an alias later does not undo that.
 - **Migration 27 turns the stored series languages into codes** ("Deutsch" → `de`, "English" → `en`, `en-US` → `en` with the region `US`). A text it does not recognise becomes `de` and is named in the start log ("unknown series languages set to 'de'"); check those series afterwards. Every existing series gets the currency `EUR`.
 - **No automatic way back:** going back to the old version only works by starting the old version and immediately restoring the backup `vor-update-…zip` (README, "Upgrading from v2.19.1"). Do not run the old version permanently on the new database: new "Gelesen" (read) volumes it writes are not converted by a later update any more.

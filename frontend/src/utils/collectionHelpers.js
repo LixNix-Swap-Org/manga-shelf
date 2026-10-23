@@ -1,4 +1,4 @@
-import { normalizePubName, getSeriesProgress } from './volumeHelpers.js';
+import { normalizePubName, getSeriesProgress, getChapterProgress, isWebtoon } from './volumeHelpers.js';
 import { formatDate, monthNames } from './format.js';
 import { createSearch, prepareQuery, naturalCollator } from './search.js';
 import { isWishedSeries } from './priority.js';
@@ -129,10 +129,12 @@ export const isSortOption = (value) => SORT_OPTIONS.some(o => o.value === value)
 
 const byTitle = (a, b) => naturalCollator.compare(a.title || '', b.title || '');
 
-// series without a target (no total, no numbered volume) have no collection % and always go last
+// series without a target (no total, no numbered volume) have no collection % and always go last; a webtoon counts
+// with its chapter progress
+const progressPct = (m) => (isWebtoon(m) ? getChapterProgress(m).pct : getSeriesProgress(m).pct);
 const byCompletion = (a, b, dir) => {
-  const pa = getSeriesProgress(a).pct;
-  const pb = getSeriesProgress(b).pct;
+  const pa = progressPct(a);
+  const pb = progressPct(b);
   if (pa === null || pb === null) return (pa === null) - (pb === null) || byTitle(a, b);
   return dir * (pa - pb) || byTitle(a, b);
 };
@@ -195,7 +197,8 @@ export const COLLECT_FILTERS = [
   { id: 'preorder', label: 'Mit Vorbestellungen' },
   { id: 'complete', label: 'Komplett' },
   { id: 'pausiert', label: 'Pausiert' },
-  { id: 'abgebrochen', label: 'Nicht mehr gesammelt' }
+  { id: 'abgebrochen', label: 'Nicht mehr gesammelt' },
+  { id: 'webtoon', label: 'Webtoons' }
 ];
 export const isCollectFilter = (value) => COLLECT_FILTERS.some(f => f.id === value);
 /** Shown label of a collect filter; the collecting states use collectingLabel ('Pausiert' in its collecting sense). */
@@ -203,11 +206,13 @@ export const collectFilterLabel = (f) => (f.id === 'pausiert' || f.id === 'abgeb
 
 /**
  * Still something to buy: a missing volume, or a known total that is not reached yet. A dropped series has no gaps;
- * a complete one (spec A2) neither, even when a stale missing entry is left over.
+ * a complete one (spec A2) neither, even when a stale missing entry is left over. A webtoon is read by chapter: only a
+ * print volume marked as missing makes a gap there.
  */
 export const hasCollectionGaps = (m) => {
   if (collectingOf(m) === 'abgebrochen' || isSeriesComplete(m)) return false;
   if ((Number(m?.missing_count) || 0) > 0) return true;
+  if (isWebtoon(m)) return false;
   const total = Number(m?.total_volumes) || 0;
   return total > 0 && (Number(m?.regular_owned ?? m?.owned_volumes) || 0) < total;
 };
@@ -219,6 +224,7 @@ export const matchesCollectFilter = (m, filter) => {
     case 'complete': return isSeriesComplete(m);
     case 'pausiert':
     case 'abgebrochen': return collectingOf(m) === filter;
+    case 'webtoon': return isWebtoon(m);
     default: return true;
   }
 };
