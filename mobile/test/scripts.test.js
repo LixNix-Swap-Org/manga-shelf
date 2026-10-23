@@ -569,10 +569,11 @@ describe('native project settings', () => {
     assert.match(read('android/capacitor.settings.gradle'), /project\(':capacitor-local-notifications'\)\.projectDir = new File\('\.\.\/node_modules\/@capacitor\/local-notifications\/android'\)/);
     assert.match(read('android/app/capacitor.build.gradle'), /implementation project\(':capacitor-local-notifications'\)/);
     assert.match(read('ios/App/Podfile'), /pod 'CapacitorLocalNotifications', :path => '\.\.\/\.\.\/node_modules\/@capacitor\/local-notifications'/);
-    const manifest = read('android/app/src/main/AndroidManifest.xml').replace(/<!--[\s\S]*?-->/g, '');
-    assert.match(manifest, /<uses-permission android:name="android\.permission\.POST_NOTIFICATIONS" \/>/);
+    // whole element lines only, so the explaining comment next to them never counts
+    const manifest = read('android/app/src/main/AndroidManifest.xml');
+    assert.match(manifest, /^\s*<uses-permission android:name="android\.permission\.POST_NOTIFICATIONS" \/>$/m);
     // a morning reminder needs no exact alarm (the plugin falls back to an inexact one); Play restricts this permission
-    assert.doesNotMatch(manifest, /SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM/);
+    assert.doesNotMatch(manifest, /<uses-permission android:name="android\.permission\.(?:SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM)"/);
     // the status bar icon: a white vector drawable named in the plugin config (the plugin looks it up by name)
     const icon = /LocalNotifications: \{ smallIcon: '([a-z_]+)', iconColor: '#[0-9a-f]{6}' \}/.exec(read('capacitor.config.ts'));
     assert.ok(icon, 'smallIcon in capacitor.config.ts');
