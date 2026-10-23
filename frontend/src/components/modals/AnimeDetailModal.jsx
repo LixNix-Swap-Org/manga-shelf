@@ -219,7 +219,8 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
 
 const SAVE_DELAY_MS = 600;
 
-const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA', 'MUSIC'];
+// music videos (an opening as its own AniList entry) are no film or special: they stay with the related anime
+const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA'];
 
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
 
@@ -876,6 +877,12 @@ export default function AnimeDetailModal({
 
   const saveLink = (value) => run(async () => setDetail(await update(animeId, { manga_id: value ? Number(value) : null })));
   const saveKind = (value) => run(async () => setDetail(await update(animeId, { kind: value })));
+  // one tag change ({ tags_add } or { tags_remove }), applied on the server to the stored tags; false when nothing was stored
+  const saveTags = async (change) => {
+    let saved = false;
+    await run(async () => { setDetail(await update(animeId, change)); saved = true; });
+    return saved;
+  };
   // the season editor shows its own errors: no toast, the busy flag only
   const saveSeasons = async (customSeasons) => {
     setBusy(true);
@@ -1114,7 +1121,7 @@ export default function AnimeDetailModal({
 
               <section className="mt-5 border-t border-slate-800 pt-4">
                 <TagEditor tags={anime.tags || []} known={knownTags} canEdit={canEdit} busy={busy}
-                  onSave={(tags) => run(async () => setDetail(await update(animeId, { tags })))} />
+                  onSave={saveTags} />
               </section>
 
               {canEdit && (

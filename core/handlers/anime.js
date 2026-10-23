@@ -487,6 +487,9 @@ function update(ctx, { params, body }) {
     if (body.tags !== undefined) {
         const tags = parseTags(body.tags);
         columns.tags = tags.length ? JSON.stringify(tags) : null;
+    } else if (body.tags_add !== undefined || body.tags_remove !== undefined) {
+        const tags = changeTags(store.parseJson(row.tags, []), body.tags_add, body.tags_remove);
+        columns.tags = tags.length ? JSON.stringify(tags) : null;
     }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
@@ -509,6 +512,21 @@ function parseTags(value) {
         if (!name || name.length > MAX_TAG) throw badRequest(msg('Ein Tag hat 1 bis {max} Zeichen', { max: MAX_TAG }));
         if (!seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); tags.push(name); }
     }
+    return tags;
+}
+
+/**
+ * tags_add / tags_remove of PUT /anime/:id: applied to the stored tags instead of replacing them, so two people adding a tag
+ * to the same entry at once both keep theirs. Names as in `tags` (removal ignores case); more than 20 afterwards is 400.
+ */
+function changeTags(stored, add, remove) {
+    const added = add === undefined ? [] : parseTags(add);
+    const removed = new Set((remove === undefined ? [] : parseTags(remove)).map((name) => name.toLowerCase()));
+    const tags = stored.filter((name) => !removed.has(name.toLowerCase()));
+    for (const name of added) {
+        if (!tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+    }
+    if (tags.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
     return tags;
 }
 

@@ -1514,6 +1514,36 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('Frieren 2');
   });
 
+  it('a music video is no film or special: it stays with the related anime', async () => {
+    openShared(shared({
+      relations: [
+        { kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3 },
+        { kind: 'ANIME', relation: 'CHARACTER', title: 'The Brave', format: 'MUSIC', anilist_id: 4 }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section').textContent).not.toContain('The Brave');
+    expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('The Brave');
+  });
+
+  it('a tag goes out alone (tags_add / tags_remove); a failed save keeps the typed name', async () => {
+    const update = vi.fn(async (id, change) => shared({ tags: change.tags_add ? ['Fantasy', ...change.tags_add] : [] }));
+    openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public', update });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Neuer Tag'), { target: { value: '  Mit   Freunden ' } });
+    await act(async () => { fireEvent.click(within(screen.getByLabelText('Neuer Tag').closest('form')).getByRole('button', { name: 'Hinzufügen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_add: ['Mit Freunden'] });
+    expect(screen.getByLabelText('Neuer Tag').value).toBe('');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tag „Fantasy“ entfernen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_remove: ['Fantasy'] });
+
+    update.mockRejectedValueOnce(new Error('Tags müssen eine Liste mit höchstens 20 Namen sein'));
+    fireEvent.change(screen.getByLabelText('Neuer Tag'), { target: { value: 'Winter' } });
+    await act(async () => { fireEvent.click(within(screen.getByLabelText('Neuer Tag').closest('form')).getByRole('button', { name: 'Hinzufügen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_add: ['Winter'] });
+    expect(screen.getByLabelText('Neuer Tag').value).toBe('Winter');
+  });
+
   it('shows my status per related film and hides the episode grid of a one-episode film', async () => {
     const view = openShared(shared({
       relations: [{ kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3, in_collection_id: 9, my_status: 'Gesehen' }]

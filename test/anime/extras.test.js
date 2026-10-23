@@ -28,6 +28,23 @@ test('tags are trimmed, deduplicated and validated', async () => {
     assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags: null })).body.tags, []);
 });
 
+test('tags_add / tags_remove change the stored tags, so two people adding at once both keep theirs', async () => {
+    const id = (await admin('POST', '/anime', { title: 'Gemeinsame Tags', episodes: 12, kind: 'anime' })).body.id;
+    await admin('PUT', `/anime/${id}`, { tags: ['Winter'] });
+    // both started from ['Winter']: the second change no longer drops the first one's tag
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags_add: ['Mit Freunden'] })).body.tags, ['Winter', 'Mit Freunden']);
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags_add: [' Lieblinge '] })).body.tags, ['Winter', 'Mit Freunden', 'Lieblinge']);
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags_add: ['winter'] })).body.tags, ['Winter', 'Mit Freunden', 'Lieblinge']);
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags_remove: ['mit freunden'] })).body.tags, ['Winter', 'Lieblinge']);
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags_remove: ['Gibt es nicht'] })).body.tags, ['Winter', 'Lieblinge']);
+    assert.equal((await admin('PUT', `/anime/${id}`, { tags_add: 'Winter' })).status, 400);
+    assert.equal((await admin('PUT', `/anime/${id}`, { tags_add: ['x'.repeat(31)] })).status, 400);
+    assert.equal((await admin('PUT', `/anime/${id}`, { tags_add: Array.from({ length: 19 }, (_, i) => `t${i}`) })).status, 400);
+    assert.deepEqual((await admin('GET', `/anime/${id}`)).body.tags, ['Winter', 'Lieblinge']);
+    // `tags` still replaces the whole list and wins over tags_add
+    assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags: ['Neu'], tags_add: ['Ignoriert'] })).body.tags, ['Neu']);
+});
+
 test('anime feed: needs the radar token, lists next and estimated weekly episodes with times', async () => {
     const { db } = require('../../db');
     const created = await admin('POST', '/anime', { title: 'Weekly Show', episodes: 12, kind: 'anime' });
