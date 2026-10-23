@@ -684,7 +684,6 @@ test('migration 33 adds rating_visibility (public), public_comment and users.def
     }
 });
 
-<<<<<<< HEAD
 test('a new database logs one line for all migrations, an existing one lists each of them', () => {
     const schema = require('../core/schema');
     const infos = [];
