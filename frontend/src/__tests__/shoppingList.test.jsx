@@ -157,6 +157,40 @@ describe('ShoppingListView scan list', () => {
     expect(screen.getByText(/2 von 3 gebucht, 1 vorgemerkt. Fehler: Konflikt/)).toBeTruthy();
   });
 
+  it('basket: books volumes without a list entry by kind and shows the total', async () => {
+    seedScans([
+      { isbn: '1', kind: 'buy', label: 'Berserk Band 1', itemId: 1, price: 7, currency: 'EUR' },
+      { isbn: '2', kind: 'claim', label: 'X Band 2 (Status Vorbestellt)', volumeId: 40, mangaId: 4, price: 8.5, currency: 'EUR' },
+      { isbn: '3', kind: 'add', label: 'X Band 9: fehlt noch', mangaId: 4, price: 6, currency: 'USD', volume: { volume_number: '9', isbn: '3' } },
+      { isbn: '4', kind: 'new', label: 'Neu: Reihe noch nicht in der Sammlung' }
+    ]);
+    const handleAddBought = vi.fn(async () => ({ status: 'ok' }));
+    const p = props({ handleQuickBuy: vi.fn(async () => ({ status: 'ok' })), handleAddBought });
+    renderView(p);
+    expect(document.getElementById('shop-scan-total').textContent.replace(/\s/g, ' ')).toBe('Summe: 15,50 € + 6,00 $');
+    expect(scanEntries()[2].textContent).toContain('(wird beim Buchen angelegt)');
+    fireEvent.click(screen.getByRole('button', { name: '3 als gekauft abhaken' }));
+    await flush();
+    expect(p.handleQuickBuy.mock.calls).toEqual([[1, { batch: true }], [40, { batch: true, mangaId: 4 }]]);
+    expect(handleAddBought).toHaveBeenCalledWith({ mangaId: 4, volume: { volume_number: '9', isbn: '3' } }, { batch: true });
+    const rows = scanEntries();
+    expect(rows.slice(0, 3).every((li) => li.querySelector('.line-through'))).toBe(true);
+    expect(rows[3].querySelector('.line-through')).toBeNull();
+    expect(p.fetchShoppingList).toHaveBeenCalledTimes(1);
+  });
+
+  it('basket: a volume to create is not bookable without handleAddBought; a scan can be removed', async () => {
+    seedScans([
+      { isbn: '3', kind: 'add', label: 'X Band 9', mangaId: 4, volume: { volume_number: '9' } },
+      { isbn: '2', kind: 'claim', label: 'X Band 2', volumeId: 40, mangaId: 4 }
+    ]);
+    renderView();
+    expect(screen.getByRole('button', { name: '1 als gekauft abhaken' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Scan entfernen: X Band 2' }));
+    expect(scanEntries()).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /als gekauft abhaken/ })).toBeNull();
+  });
+
   it('keeps the scan list across unmount and drops open entries no longer on the list', async () => {
     const first = renderView();
     await scan('9783551000011');
@@ -249,7 +283,7 @@ describe('ShoppingListView scan list', () => {
     renderView();
     await scan('9783551762931');
     let [entry] = scanEntries();
-    expect(entry.dataset.kind).toBe('check');
+    expect(entry.dataset.kind).toBe('claim');
     expect(entry.textContent).toContain('Naruto Band 3 (Status Fehlt) (Stand Offline-Kopie vor 3 Min.)');
     expect(fetchMock).toHaveBeenCalledTimes(1);
 

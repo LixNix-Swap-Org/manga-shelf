@@ -91,6 +91,46 @@ describe('useShoppingList', () => {
     expect(queued()).toEqual([2]);
   });
 
+  it('handleAddBought creates a scanned volume as owned with the purchase date of today', async () => {
+    const fetchMock = stubFetch();
+    const created = vi.fn();
+    window.addEventListener(PURCHASE_RECORDED_EVENT, created);
+    fetchMock.mockImplementationOnce(async () => json(201, { success: true, id: 77 }));
+    const { result, props } = renderList();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.handleAddBought({ mangaId: 5, volume: { volume_number: '9', isbn: '9783551000011', price: 7 } }, { batch: true });
+    });
+    window.removeEventListener(PURCHASE_RECORDED_EVENT, created);
+    expect(outcome).toEqual({ status: 'ok', error: '', httpStatus: 201 });
+    const [url, opts] = fetchMock.mock.calls.find(([u]) => u === '/api/volumes');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({
+      volume_number: '9', isbn: '9783551000011', price: 7, manga_id: 5, status: 'Vorhanden', purchase_date: localToday()
+    });
+    expect(created.mock.calls[0][0].detail).toEqual({ volumeId: 77 });
+    expect(props.fetchMangas).not.toHaveBeenCalled();
+  });
+
+  it('handleAddBought books the existing volume after a duplicate conflict and refuses offline', async () => {
+    const fetchMock = stubFetch();
+    fetchMock.mockImplementationOnce(async () => json(409, { error: 'Band 9 existiert bereits', code: 'VOLUME_DUPLICATE', existing_id: 2 }));
+    const { result } = renderList();
+    let outcome;
+    await act(async () => { outcome = await result.current.handleAddBought({ mangaId: 5, volume: { volume_number: '9' } }, { batch: true }); });
+    expect(outcome.status).toBe('ok');
+    expect(puts(fetchMock).map(([url]) => url)).toEqual(['/api/volumes/2/owners']);
+
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      await act(async () => { outcome = await result.current.handleAddBought({ mangaId: 5, volume: { volume_number: '10' } }); });
+    } finally {
+      onLine.mockRestore();
+    }
+    expect(outcome).toBe('failed');
+    expect(toasts.messages('error')).toEqual(['Neue Bände lassen sich nur mit Verbindung anlegen.']);
+  });
+
   it('batch mode: a volume that no longer exists leaves the list as a 404 result', async () => {
     const fetchMock = stubFetch({ putResponse: () => json(404, { error: 'Band nicht gefunden' }) });
     const { result } = await loaded(fetchMock);

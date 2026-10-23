@@ -178,7 +178,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
-    fetchShoppingList, handleQuickBuy, syncPendingPurchases
+    fetchShoppingList, handleQuickBuy, handleAddBought, syncPendingPurchases
   } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter, onShelfMissing });
 
   const {
@@ -732,6 +732,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         setActiveMainView={setView}
         canEdit={canQuickBuy}
         handleQuickBuy={handleQuickBuy}
+        handleAddBought={handleAddBought}
         buyingIds={buyingIds}
         shoppingError={shoppingError}
         user={user}

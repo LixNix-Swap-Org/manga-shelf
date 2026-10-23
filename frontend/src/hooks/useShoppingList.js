@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  loadUser, getClearGeneration, readShoppingCache, readShoppingCacheTimestamp, writeShoppingCache, updateShoppingCache
+  loadUser, getClearGeneration, readShoppingCache, readShoppingCacheTimestamp, writeShoppingCache, updateShoppingCache,
+  invalidateIsbnIndex
 } from '../utils/offlineStore';
 import { discardLegacyQueue, withoutVolumes, localToday } from '../utils/shoppingQueue';
 import {
@@ -27,6 +28,8 @@ const SESSION_EXPIRED = 'Sitzung abgelaufen – der Kauf ist vorgemerkt und wird
 const BUY_FAILED = 'Fehler beim Aktualisieren des Bands';
 // i18n
 const QUEUE_FAILED = 'Der Kauf konnte nicht vorgemerkt werden (Speicher voll oder nicht verfügbar). Bitte erneut versuchen, sobald eine Verbindung besteht.';
+// i18n
+const ADD_OFFLINE = 'Neue Bände lassen sich nur mit Verbindung anlegen.';
 
 /** Why the list could not be loaded: 'offline' (no answer), 'auth' (401), 'server' (5xx/429) or 'error' (other 4xx). */
 export function shoppingErrorKind(status) {
@@ -203,8 +206,8 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
    * Writes a sent or queued purchase into the stored copies (memory, offline detail, ISBN index) and fires
    * PURCHASE_RECORDED_EVENT. Call before markBought: the series is looked up on the list.
    */
-  const recordPurchaseLocally = (volumeId, change, ownerId, queued) => {
-    const mangaId = mangaIdIn(shoppingDataRef.current, volumeId) ?? mangaIdIn(readShoppingCache(), volumeId);
+  const recordPurchaseLocally = (volumeId, change, ownerId, queued, knownMangaId = null) => {
+    const mangaId = mangaIdIn(shoppingDataRef.current, volumeId) ?? mangaIdIn(readShoppingCache(), volumeId) ?? knownMangaId;
     window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: queued ? { volumeId, queued: true } : { volumeId } }));
     if (mangaId === null) return Promise.resolve(false);
     const me = user?.id !== undefined && user?.id !== null ? user : { id: ownerId };
@@ -214,8 +217,9 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
   /**
    * Records the purchase as the user's ownership: 'ok', 'queued' (sent later) or 'failed' (user told why). With
    * { batch: true } nothing is alerted or refetched and the result is { status, error, httpStatus }; a 404 drops the volume.
+   * `mangaId` names the series of a volume that is not on the list (a scanned volume), so the stored copies follow too.
    */
-  const handleQuickBuy = async (volumeId, { batch = false } = {}) => {
+  const handleQuickBuy = async (volumeId, { batch = false, mangaId = null } = {}) => {
     const done = (status, error = '', httpStatus = null) => {
       if (!batch) {
         if (status === 'failed' && error) notify.error(error);
@@ -240,14 +244,14 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
       if (status === 'queued' || status === 'auth') {
         syncDueRef.current = true;
         if (!offline && status === 'queued') setNetworkOffline(true);
-        const recorded = recordPurchaseLocally(volumeId, change, id, true);
+        const recorded = recordPurchaseLocally(volumeId, change, id, true, mangaId);
         markBought(volumeId);
         if (status === 'auth' && !sessionEndAnnounced(res) && !batch) notify.info(t(SESSION_EXPIRED));
         await recorded;
         return done('queued');
       }
       if (status === 'sent' && res?.ok) {
-        const recorded = recordPurchaseLocally(volumeId, change, id, false);
+        const recorded = recordPurchaseLocally(volumeId, change, id, false, mangaId);
         markBought(volumeId);
         await recorded;
         if (!batch) {
@@ -264,9 +268,46 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
     }
   };
 
+  /**
+   * Creates a scanned volume of a known series as owned by the user (`POST /api/volumes` with status Vorhanden and
+   * today's purchase date). Needs the server: offline it fails instead of queuing. A 409 with `existing_id` (the volume
+   * was created meanwhile) books that volume. Results as handleQuickBuy.
+   */
+  const handleAddBought = async ({ mangaId, volume }, { batch = false } = {}) => {
+    const done = (status, error = '', httpStatus = null) => {
+      if (!batch) {
+        if (status === 'failed' && error) notify.error(error);
+        return status;
+      }
+      return { status, error, httpStatus };
+    };
+    if (user?.offline || browserOffline()) return done('failed', t(ADD_OFFLINE));
+    let res;
+    try {
+      res = await apiFetch('/api/volumes', {
+        method: 'POST',
+        // i18n-ignore: stored status value
+        body: { ...volume, manga_id: mangaId, status: 'Vorhanden', purchase_date: localToday() }
+      });
+    } catch (err) {
+      return done('failed', err?.message || t(BUY_FAILED));
+    }
+    const data = await readJson(res);
+    if (res.status === 409 && data?.existing_id) return handleQuickBuy(data.existing_id, { batch, mangaId });
+    if (!res.ok) return done('failed', serverText(data) || t(BUY_FAILED), res.status);
+    invalidateIsbnIndex();
+    window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: { volumeId: data?.id ?? null } }));
+    haptic('success');
+    if (!batch) {
+      fetchMangas();
+      fetchShoppingList();
+    }
+    return done('ok', '', res.status);
+  };
+
   return {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed,
-    pendingPurchases, failedPurchases, fetchShoppingList, handleQuickBuy, syncPendingPurchases
+    pendingPurchases, failedPurchases, fetchShoppingList, handleQuickBuy, handleAddBought, syncPendingPurchases
   };
 }
