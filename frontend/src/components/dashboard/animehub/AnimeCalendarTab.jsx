@@ -42,7 +42,7 @@ function Event({ event, onOpen }) {
 const VIEW_KEY = 'mangashelf_anime_calendar_view';
 
 /** The month as a grid: a count of episodes per day, a tap opens that day's list below. */
-function MonthGrid({ days, month, today, selected, onSelect }) {
+function MonthGrid({ days, month, today, now, selected, onSelect }) {
   const names = days.slice(0, 7).map((d) => weekdayName(d.date));
   return (
     <div role="grid" aria-label={t('Monatsansicht')} className="grid grid-cols-7 gap-1">
@@ -56,7 +56,7 @@ function MonthGrid({ days, month, today, selected, onSelect }) {
             type="button"
             role="gridcell"
             aria-pressed={selected === day.key}
-            aria-label={`${day.date.getDate()}.${day.date.getMonth() + 1}. · ${count ? tn('{n} Folge', '{n} Folgen', count) : t('keine Folge')}`}
+            aria-label={`${formatDayMonth(day.date, now)} · ${count ? tn('{n} Folge', '{n} Folgen', count) : t('keine Folge')}`}
             onClick={() => onSelect(day.key)}
             className={`min-h-14 sm:min-h-20 rounded-xl border p-1.5 text-left flex flex-col justify-between ${selected === day.key ? 'border-fuchsia-400 bg-fuchsia-500/10' : day.key === today ? 'border-fuchsia-500/60' : 'border-slate-800 bg-slate-950/60'} ${inMonth ? '' : 'opacity-40'}`}
           >
@@ -185,10 +185,10 @@ export default function AnimeCalendarTab({ list, now, onOpen }) {
           onOpenMonth={(m) => { setView('month'); writeSetting(VIEW_KEY, 'month'); setOffset((shownYear - now.getFullYear()) * 12 + m - now.getMonth()); setPicked(null); }} />
       ) : month ? (
         <>
-          <MonthGrid days={days} month={grid.first.getMonth()} today={today} selected={shownDay ? shownDay.key : null} onSelect={(key) => setPicked(key)} />
+          <MonthGrid days={days} month={grid.first.getMonth()} today={today} now={now} selected={shownDay ? shownDay.key : null} onSelect={(key) => setPicked(key)} />
           {shownDay && (
             <section className="mt-4" aria-live="polite" id="anime-calendar-day">
-              <h3 className="text-sm font-bold text-slate-200 mb-2">{weekdayName(shownDay.date)} {shownDay.date.getDate()}.{shownDay.date.getMonth() + 1}.</h3>
+              <h3 className="text-sm font-bold text-slate-200 mb-2">{weekdayName(shownDay.date)} {formatDayMonth(shownDay.date, now)}</h3>
               {shownDay.events.length === 0
                 ? <p className="text-xs text-slate-400">{t('Keine Folge an diesem Tag.')}</p>
                 : <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">{shownDay.events.map((event) => <Event key={`${event.anime.id}-${event.episode}-${event.at}`} event={event} onOpen={onOpen} />)}</ul>}
@@ -201,7 +201,7 @@ export default function AnimeCalendarTab({ list, now, onOpen }) {
             <li key={day.key} className={`rounded-2xl border p-2 lg:min-h-24 ${day.key === today ? 'border-fuchsia-500/60 bg-fuchsia-500/5' : 'border-slate-800 bg-slate-950/60'}`}>
               <p className="text-xs font-bold text-slate-300 mb-1.5 flex items-baseline gap-1.5">
                 <span className="uppercase tracking-wide">{weekdayName(day.date)}</span>
-                <span className="font-mono text-slate-400">{day.date.getDate()}.{day.date.getMonth() + 1}.</span>
+                <span className="font-mono text-slate-400">{formatDayMonth(day.date, now)}</span>
                 {day.key === today && <span className="text-[10px] text-fuchsia-300">{t('heute')}</span>}
               </p>
               {day.events.length === 0
