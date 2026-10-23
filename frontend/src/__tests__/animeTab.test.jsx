@@ -59,7 +59,10 @@ describe('AnimeCard', () => {
   });
 
   it('shows the countdown, the estimate badge, co-watchers and the link to the series', () => {
-    const at = Math.floor((Date.now() + 3 * 86400000) / 1000);
+    const target = new Date();
+    target.setDate(target.getDate() + 3);
+    target.setHours(12, 0, 0, 0);
+    const at = Math.floor(target.getTime() / 1000);
     inRouter(<AnimeCard anime={entry({ manga_id: 9, next_airing: { episode: 8, at, estimated: true }, progress_users: [{ user_id: 2, username: 'kim', status: 'Schaue', episodes_watched: 3 }] })}
       canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
     expect(screen.getByText(/Folge 8 · in 3 Tagen/)).toBeTruthy();
@@ -855,7 +858,10 @@ describe('AnimeDetailModal', () => {
     expect(screen.queryByText('Nächste Folge')).toBeNull();
     unmount();
 
-    const at = Math.floor((Date.now() + 3 * 86400000) / 1000);
+    const target = new Date();
+    target.setDate(target.getDate() + 3);
+    target.setHours(12, 0, 0, 0);
+    const at = Math.floor(target.getTime() / 1000);
     open(entry({ next_airing: { episode: 8, at, estimated: true } }));
     await act(async () => {});
     expect(screen.getByText('Nächste Folge').nextElementSibling.textContent).toMatch(/^Folge 8 · in 3 Tagen \(geschätzt\)$/);

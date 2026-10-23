@@ -63,7 +63,8 @@ export const APP_ONLY_MODULES = [
   'src/components/modals/BackupExportModal.jsx'
 ]
 
-const appOnlyFiles = new Set(APP_ONLY_MODULES.map((file) => path.resolve(import.meta.dirname, file)))
+const toPosix = (file) => (file ? path.resolve(file).split(path.sep).join('/') : '')
+const appOnlyFiles = new Set(APP_ONLY_MODULES.map((file) => toPosix(path.resolve(import.meta.dirname, file))))
 
 /**
  * The standalone core (src/local/boot.js: sql.js, its wasm file and ../core) only belongs to the app build. Rollup emits
@@ -77,7 +78,7 @@ export const webBuildWithoutLocalCore = () => ({
     if (source === './boot.js' && /[\\/]src[\\/]local[\\/]localTransport\.js$/.test(importer || '')) return LOCAL_BOOT_STUB
     if (!importer || source.startsWith('\0') || !/(LocalOffer|LocalScreen|LocalSetup|TakeoverDialog|BackupExportModal)(\.jsx)?$/.test(source)) return null
     const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
-    return resolved && appOnlyFiles.has(resolved.id) ? APP_ONLY_STUB : null
+    return resolved && appOnlyFiles.has(toPosix(resolved.id)) ? APP_ONLY_STUB : null
   },
   load(id) {
     if (id === LOCAL_BOOT_STUB) return "export function bootLocalRuntime() { throw new Error('Der Modus ohne Server gibt es nur in der App') }"

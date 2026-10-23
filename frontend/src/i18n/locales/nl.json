@@ -36,6 +36,10 @@
     "one": "+ {n} aangekondigd",
     "other": "+ {n} aangekondigd"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} andere titel",
+    "other": "+ {n} andere titels"
+  },
   "-- Keine Angabe --": "-- Geen opgave --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 account heeft na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 tekens uit 0–9 en a–f",
@@ -906,6 +910,8 @@
   "Erfassen": "Registreren",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Succesvol ingevuld vanuit {source}: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Resultaat van de verbindingscontrole",
+  "Erinnerungen am Erscheinungstag": "Herinneringen op de verschijningsdag",
+  "Erinnerungen konnten nicht umgestellt werden": "Herinneringen konden niet worden aangepast",
   "Erkannt: {isbn}": "Herkend: {isbn}",
   "Erneut laden": "Opnieuw laden",
   "Erneut prüfen": "Opnieuw controleren",
@@ -1612,6 +1618,7 @@
   "Melde an…": "Inloggen…",
   "Melde dich bei deiner Sammlung an": "Log in bij je collectie",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Logt elke gebruiker uit op alle apparaten (bijv. na een verloren telefoon). Je blijft ingelogd op dit apparaat.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Meldt zich op dit apparaat op de ochtend van de verschijningsdag als er een deel uit de Release Radar uitkomt of een nieuwe aflevering van een anime op je lijst wordt uitgezonden. Geldt alleen voor dit apparaat.",
   "Meldung schließen": "Melding sluiten",
   "Menü": "Menu",
   "Menü schließen": "Menu sluiten",
@@ -1640,6 +1647,7 @@
   "Mitglied hinzugefügt": "Lid toegevoegd",
   "Mitglied nicht gefunden": "Lid niet gevonden",
   "Mitglieder": "Leden",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Meldingen staan uit voor Manga Shelf – sta ze toe in de instellingen van het apparaat.",
   "Mittel": "Gemiddeld",
   "Modus wechseln": "Modus wisselen",
   "Monat": "Maand",
@@ -1705,6 +1713,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Nieuw adres aangemaakt – het oude werkt niet meer",
   "Neue Adresse – bitte erneut anmelden": "Nieuw adres – log opnieuw in",
   "Neue Ausgabe anlegen": "Nieuwe editie aanmaken",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Nieuwe delen uit de Release Radar en nieuwe afleveringen van je anime",
   "Neue Bände lassen sich nur mit Verbindung anlegen.": "Nieuwe delen kunnen alleen met een verbinding worden aangemaakt.",
   "Neue Datei laden und den Dienst neu einrichten:": "Download het nieuwe bestand en stel de service opnieuw in:",
   "Neue Folge": "Nieuwe aflevering",
@@ -3019,6 +3028,10 @@
     "one": "{n} deel aangemaakt",
     "other": "{n} delen aangemaakt"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "{n} deel verschijnt vandaag",
+    "other": "{n} delen verschijnen vandaag"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} deel",
     "other": "{n} delen"
@@ -3067,6 +3080,10 @@
     "one": "{n} account heeft na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}.",
     "other": "{n} accounts hebben na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} nieuwe uitgave vandaag",
+    "other": "{n} nieuwe uitgaven vandaag"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} reeks",
     "other": "{n} reeksen"
@@ -3103,6 +3120,10 @@
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "one": "{n} ontbrekend deel op de kooplijst zetten?",
     "other": "{n} ontbrekende delen op de kooplijst zetten?"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} nieuwe aflevering vandaag",
+    "other": "{n} nieuwe afleveringen vandaag"
   },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} online gevonden",
@@ -3146,6 +3167,7 @@
   "{title} von der Wunschliste nehmen": "{title} van de verlanglijst halen",
   "{title} öffnen": "{title} openen",
   "{title} – Band {number}": "{title} – deel {number}",
+  "{title} – Folge {episode}": "{title} – Aflevering {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, aflevering {episode} gezien?",
   "{title}: Folge {episode} gesehen": "{title}: aflevering {episode} gezien",
   "{title}: Link für „Weiter“ gemerkt": "{title}: link voor “Verder” onthouden",

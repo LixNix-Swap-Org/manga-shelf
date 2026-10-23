@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { pathToFileURL } = require('url');
 const { injectBridgeTag, shouldCopy, parseArgs, prepareWeb, BRIDGE_TAG } = require('../scripts/prepare-web');
 const { parseVersion, versionCode, patchGradle, patchPbxproj, patchPackageJson, syncVersion } = require('../scripts/sync-version');
 const { signingPatch, withoutShareExtension, exportOptionsPlist, profileFits, toolEnv, IOS_SECRETS, IOS_SHARE_SECRET } = require('../scripts/build-ios');
@@ -26,7 +27,7 @@ function bridgeOn(platform) {
     android: 'globalThis.androidBridge = { postMessage() {} };',
     ios: 'globalThis.webkit = { messageHandlers: { bridge: { postMessage() {} } } };'
   }[platform] || '';
-  const script = `${setup} const m = await import(${JSON.stringify(path.join(MOBILE, 'src/native-bridge.mjs'))});
+  const script = `${setup} const m = await import(${JSON.stringify(pathToFileURL(path.join(MOBILE, 'src/native-bridge.mjs')).href)});
     const b = m.createBridge(); console.log(JSON.stringify({ version: b.version, platform: b.platform, plugins: Object.keys(b.plugins),
       keychainAccess: b.constants.KeychainAccess }));`;
   const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf-8' });
@@ -279,18 +280,18 @@ describe('signing', () => {
 });
 
 describe('native bridge', () => {
-  it('version 3: AppLauncher everywhere, WebLogin in both apps, ShareIntent on Android, SharedInbox on iOS', () => {
+  it('version 4: AppLauncher everywhere, WebLogin and LocalNotifications in both apps, ShareIntent on Android, SharedInbox on iOS', () => {
     const android = bridgeOn('android');
-    assert.equal(android.version, 3);
+    assert.equal(android.version, 4);
     assert.equal(android.platform, 'android');
-    for (const name of ['ShareIntent', 'AppLauncher', 'WebLogin']) assert.ok(android.plugins.includes(name), name);
+    for (const name of ['ShareIntent', 'AppLauncher', 'WebLogin', 'LocalNotifications']) assert.ok(android.plugins.includes(name), name);
     assert.ok(!android.plugins.includes('SharedInbox'));
     const ios = bridgeOn('ios');
     assert.equal(ios.platform, 'ios');
-    for (const name of ['SharedInbox', 'AppLauncher', 'WebLogin']) assert.ok(ios.plugins.includes(name), name);
+    for (const name of ['SharedInbox', 'AppLauncher', 'WebLogin', 'LocalNotifications']) assert.ok(ios.plugins.includes(name), name);
     assert.ok(!ios.plugins.includes('ShareIntent'));
     const other = bridgeOn('web');
-    for (const name of ['ShareIntent', 'SharedInbox', 'WebLogin']) assert.ok(!other.plugins.includes(name), name);
+    for (const name of ['ShareIntent', 'SharedInbox', 'WebLogin', 'LocalNotifications']) assert.ok(!other.plugins.includes(name), name);
     assert.ok(other.plugins.includes('AppLauncher'));
   });
 
@@ -561,6 +562,28 @@ describe('native project settings', () => {
     const history = plugin.indexOf('Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY');
     assert.ok(history > 0, 'plugin ignores history relaunches');
     assert.ok(history < plugin.indexOf('notifyListeners('), 'before the share is delivered');
+  });
+
+  it('local notifications (release-day reminders): dependency, cap sync output and the Android 13 permission', () => {
+    assert.match(JSON.parse(read('package.json')).dependencies['@capacitor/local-notifications'], /^\^7\./);
+    assert.match(read('android/capacitor.settings.gradle'), /project\(':capacitor-local-notifications'\)\.projectDir = new File\('\.\.\/node_modules\/@capacitor\/local-notifications\/android'\)/);
+    assert.match(read('android/app/capacitor.build.gradle'), /implementation project\(':capacitor-local-notifications'\)/);
+    assert.match(read('ios/App/Podfile'), /pod 'CapacitorLocalNotifications', :path => '\.\.\/\.\.\/node_modules\/@capacitor\/local-notifications'/);
+    // whole element lines only, so the explaining comment next to them never counts
+    const manifest = read('android/app/src/main/AndroidManifest.xml');
+    assert.match(manifest, /^\s*<uses-permission android:name="android\.permission\.POST_NOTIFICATIONS" \/>$/m);
+    // a morning reminder needs no exact alarm (the plugin falls back to an inexact one); Play restricts this permission
+    assert.doesNotMatch(manifest, /<uses-permission android:name="android\.permission\.(?:SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM)"/);
+    // the status bar icon: a white vector drawable named in the plugin config (the plugin looks it up by name)
+    const icon = /LocalNotifications: \{ smallIcon: '([a-z_]+)', iconColor: '#[0-9a-f]{6}' \}/.exec(read('capacitor.config.ts'));
+    assert.ok(icon, 'smallIcon in capacitor.config.ts');
+    const drawable = read(`android/app/src/main/res/drawable/${icon[1]}.xml`);
+    assert.match(drawable, /^<vector /m);
+    assert.deepEqual([...new Set([...drawable.matchAll(/android:(?:stroke|fill)Color="([^"]+)"/g)].map((m) => m[1]))], ['#FFFFFFFF']);
+    assert.doesNotMatch(read('android/app/build.gradle'), /shrinkResources\s+true/, 'resource shrinking would drop an icon looked up by name');
+    const bridge = read('src/native-bridge.mjs');
+    assert.match(bridge, /import \{ LocalNotifications \} from '@capacitor\/local-notifications';/);
+    assert.match(bridge, /NATIVE\.has\(platform\) \? \{ WebLogin, LocalNotifications \}/);
   });
 
   it('app launcher: dependency and cap sync output for both platforms', () => {

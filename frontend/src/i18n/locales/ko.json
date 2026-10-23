@@ -34,6 +34,9 @@
   "+ {n} angekündigt|+ {n} angekündigt": {
     "other": "+ {n}개 발표됨"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "other": "+ {n}개 더"
+  },
   "-- Keine Angabe --": "-- 선택 안 함 --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "복원 후 계정 1개의 비밀번호를 재설정해야 해요 (백업에 비밀번호가 없어요): {names}.",
   "32 Zeichen aus 0–9 und a–f": "0–9와 a–f로 이루어진 32자",
@@ -891,6 +894,8 @@
   "Erfassen": "등록",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "{source}에서 채웠어요: {fields}!",
   "Ergebnis der Verbindungsprüfung": "연결 확인 결과",
+  "Erinnerungen am Erscheinungstag": "발매일 알림",
+  "Erinnerungen konnten nicht umgestellt werden": "알림 설정을 바꾸지 못했습니다",
   "Erkannt: {isbn}": "인식됨: {isbn}",
   "Erneut laden": "다시 불러오기",
   "Erneut prüfen": "다시 확인",
@@ -1586,6 +1591,7 @@
   "Melde an…": "로그인하는 중…",
   "Melde dich bei deiner Sammlung an": "컬렉션에 로그인해 주세요",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "모든 사용자를 모든 기기에서 로그아웃시켜요 (예: 휴대폰을 잃어버린 뒤). 이 기기에서는 로그인 상태가 유지돼요.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Release Radar의 권이 발매되거나 내 목록에 있는 애니메의 새 에피소드가 방영되는 날 아침에 이 기기로 알려 줍니다. 이 기기에만 적용됩니다.",
   "Meldung schließen": "메시지 닫기",
   "Menü": "메뉴",
   "Menü schließen": "메뉴 닫기",
@@ -1614,6 +1620,7 @@
   "Mitglied hinzugefügt": "멤버를 추가했습니다",
   "Mitglied nicht gefunden": "멤버를 찾을 수 없습니다",
   "Mitglieder": "멤버",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Manga Shelf 알림이 꺼져 있습니다. 기기 설정에서 허용해 주세요.",
   "Mittel": "보통",
   "Modus wechseln": "모드 전환",
   "Monat": "월",
@@ -1678,6 +1685,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "새 주소를 만들었어요 – 이전 주소는 더 이상 작동하지 않아요",
   "Neue Adresse – bitte erneut anmelden": "새 주소 – 다시 로그인해 주세요",
   "Neue Ausgabe anlegen": "새 판 만들기",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Release Radar의 새 권과 내 애니메의 새 에피소드",
   "Neue Bände lassen sich nur mit Verbindung anlegen.": "새 권은 연결된 상태에서만 만들 수 있습니다.",
   "Neue Datei laden und den Dienst neu einrichten:": "새 파일을 받아서 서비스를 다시 설정해 주세요:",
   "Neue Folge": "새 에피소드",
@@ -2967,6 +2975,9 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "{n}권 생성됨"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "other": "오늘 {n}권 발매"
+  },
   "{n} Bände|{n} Bände": {
     "other": "{n}권"
   },
@@ -3003,6 +3014,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "백업에 비밀번호가 없어서 복원 후 {n}개 계정은 비밀번호를 재설정해야 해요: {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "other": "오늘 신간 {n}개"
+  },
   "{n} Reihen|{n} Reihen": {
     "other": "시리즈 {n}개"
   },
@@ -3030,6 +3044,9 @@
   },
   "{n} fehlender Band auf die Einkaufsliste setzen?|{n} fehlende Bände auf die Einkaufsliste setzen?": {
     "other": "미보유 {n}권을 쇼핑 목록에 올릴까요?"
+  },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "other": "오늘 새 에피소드 {n}개"
   },
   "{n} online gefunden|{n} online gefunden": {
     "other": "온라인에서 {n}건 찾았어요"
@@ -3071,6 +3088,7 @@
   "{title} von der Wunschliste nehmen": "{title}을(를) 위시리스트에서 제거",
   "{title} öffnen": "{title} 열기",
   "{title} – Band {number}": "{title} – {number}권",
+  "{title} – Folge {episode}": "{title} – {episode}화",
   "{title}, Folge {episode} gesehen?": "{title}, {episode}화를 봤나요?",
   "{title}: Folge {episode} gesehen": "{title}: {episode}화 시청함",
   "{title}: Link für „Weiter“ gemerkt": "{title}: “이어보기” 링크를 저장했어요",

@@ -38,6 +38,11 @@
     "many": "+ {n} annoncés",
     "other": "+ {n} annoncés"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} autre titre",
+    "many": "+ {n} autres titres",
+    "other": "+ {n} autres titres"
+  },
   "-- Keine Angabe --": "-- Non précisé --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 compte a besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caractères parmi 0–9 et a–f",
@@ -921,6 +926,8 @@
   "Erfassen": "Enregistrer",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "Rempli avec succès depuis {source} : {fields} !",
   "Ergebnis der Verbindungsprüfung": "Résultat du test de connexion",
+  "Erinnerungen am Erscheinungstag": "Rappels le jour de sortie",
+  "Erinnerungen konnten nicht umgestellt werden": "Impossible de modifier les rappels",
   "Erkannt: {isbn}": "Détecté : {isbn}",
   "Erneut laden": "Recharger",
   "Erneut prüfen": "Revérifier",
@@ -1638,6 +1645,7 @@
   "Melde an…": "Connexion…",
   "Melde dich bei deiner Sammlung an": "Connecte-toi à ta collection",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Déconnecte chaque utilisateur sur tous les appareils (p. ex. après la perte d'un téléphone). Tu restes connecté sur cet appareil.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Vous prévient sur cet appareil le matin du jour de sortie lorsqu’un tome du Release Radar paraît ou qu’un nouvel épisode d’un anime de votre liste est diffusé. Ne s’applique qu’à cet appareil.",
   "Meldung schließen": "Fermer le message",
   "Menü": "Menu",
   "Menü schließen": "Fermer le menu",
@@ -1666,6 +1674,7 @@
   "Mitglied hinzugefügt": "Membre ajouté",
   "Mitglied nicht gefunden": "Membre introuvable",
   "Mitglieder": "Membres",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Les notifications sont désactivées pour Manga Shelf – autorisez-les dans les réglages de l’appareil.",
   "Mittel": "Moyenne",
   "Modus wechseln": "Changer de mode",
   "Monat": "Mois",
@@ -1732,6 +1741,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Nouvelle adresse créée – l'ancienne ne fonctionne plus",
   "Neue Adresse – bitte erneut anmelden": "Nouvelle adresse – reconnecte-toi",
   "Neue Ausgabe anlegen": "Créer une nouvelle édition",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Nouveaux tomes du Release Radar et nouveaux épisodes de vos anime",
   "Neue Bände lassen sich nur mit Verbindung anlegen.": "Les nouveaux tomes ne peuvent être créés qu’avec une connexion.",
   "Neue Datei laden und den Dienst neu einrichten:": "Télécharge le nouveau fichier et réinstalle le service :",
   "Neue Folge": "Nouvel épisode",
@@ -3071,6 +3081,11 @@
     "many": "{n} tomes créés",
     "other": "{n} tomes créés"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "{n} tome sort aujourd’hui",
+    "many": "{n} tomes sortent aujourd’hui",
+    "other": "{n} tomes sortent aujourd’hui"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} tome",
     "many": "{n} tomes",
@@ -3131,6 +3146,11 @@
     "many": "{n} comptes ont besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}.",
     "other": "{n} comptes ont besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} nouveauté aujourd’hui",
+    "many": "{n} nouveautés aujourd’hui",
+    "other": "{n} nouveautés aujourd’hui"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} série",
     "many": "{n} séries",
@@ -3177,6 +3197,11 @@
     "many": "Mettre {n} tomes manquants dans la liste d'achats ?",
     "other": "Mettre {n} tomes manquants dans la liste d'achats ?"
   },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} nouvel épisode aujourd’hui",
+    "many": "{n} nouveaux épisodes aujourd’hui",
+    "other": "{n} nouveaux épisodes aujourd’hui"
+  },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} résultat trouvé en ligne",
     "many": "{n} résultats trouvés en ligne",
@@ -3221,6 +3246,7 @@
   "{title} von der Wunschliste nehmen": "Retirer {title} de la liste de souhaits",
   "{title} öffnen": "Ouvrir {title}",
   "{title} – Band {number}": "{title} – tome {number}",
+  "{title} – Folge {episode}": "{title} – Épisode {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, épisode {episode} vu ?",
   "{title}: Folge {episode} gesehen": "{title} : épisode {episode} vu",
   "{title}: Link für „Weiter“ gemerkt": "{title} : lien retenu pour « Continuer »",

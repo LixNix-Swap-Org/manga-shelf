@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Unreleased
+
+### Apps
+- **Release-day reminders (Android; iPhone should work but is untested):** the switch "Erinnerungen am Erscheinungstag" (account dialog, tab "Sprache"; without a server also on the "Server" screen) is off by default, per device and for editors and admins. Switching it on asks for the notification permission; switching it off cancels every reminder. The app plans local notifications on the device from the release radar (volumes with an exact release day) and the anime list (the next episode of your "Schaue" and "Geplant" entries, when its airing is confirmed): one notification per day for the next 14 days at 9:00 local time, several volumes and episodes of a day together. It plans again at every start and return to the foreground (at most every 15 minutes) and keeps the planned reminders while offline; signing out, another account or another server cancels them. No server change and no push service; it works without a server too. Android: its own notification channel (lock-screen visibility private), a monochrome book icon in the status bar, `POST_NOTIFICATIONS` for Android 13+, no exact-alarm permission; after a phone restart the plugin restores the scheduled reminders. Native: `@capacitor/local-notifications` 7, bridge version 4 (`plugins.LocalNotifications`). `Podfile.lock` gets the new pod at the next `pod install` on macOS.
+
 ### Shopping list
 - **Shop scan as a basket:** the scan list now also books volumes that are not on the shopping list. A stored volume that is ordered, announced or missing in a paused series is booked as your purchase, and a volume of a series you already collect that is not stored yet is created as owned with today's purchase date ("wird beim Buchen angelegt"; this needs a connection). "N als gekauft abhaken" books all of them in one go, the list shows the price total per currency, and every scan can be removed. A series that is not in the collection yet is still only noted.
 

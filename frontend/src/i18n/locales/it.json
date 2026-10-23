@@ -38,6 +38,11 @@
     "many": "+ {n} annunciati",
     "other": "+ {n} annunciati"
   },
+  "+ {n} weiterer Titel|+ {n} weitere Titel": {
+    "one": "+ {n} altro titolo",
+    "many": "+ altri {n} titoli",
+    "other": "+ altri {n} titoli"
+  },
   "-- Keine Angabe --": "-- Nessuna indicazione --",
   "1 Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": "1 account richiede un reset della password dopo il ripristino (nessuna password nel backup): {names}.",
   "32 Zeichen aus 0–9 und a–f": "32 caratteri tra 0–9 e a–f",
@@ -921,6 +926,8 @@
   "Erfassen": "Registra",
   "Erfolgreich von {source} ausgefüllt: {fields}!": "{source} ha compilato con successo: {fields}!",
   "Ergebnis der Verbindungsprüfung": "Risultato della verifica della connessione",
+  "Erinnerungen am Erscheinungstag": "Promemoria il giorno di uscita",
+  "Erinnerungen konnten nicht umgestellt werden": "Impossibile modificare i promemoria",
   "Erkannt: {isbn}": "Riconosciuto: {isbn}",
   "Erneut laden": "Ricarica",
   "Erneut prüfen": "Controlla di nuovo",
@@ -1638,6 +1645,7 @@
   "Melde an…": "Accesso…",
   "Melde dich bei deiner Sammlung an": "Accedi alla tua collezione",
   "Meldet jeden Benutzer auf allen Geräten ab (z. B. nach einem verlorenen Handy). Du bleibst auf diesem Gerät angemeldet.": "Disconnette ogni utente su tutti i dispositivi (ad es. dopo aver perso un telefono). Resti connesso su questo dispositivo.",
+  "Meldet sich am Erscheinungstag morgens auf diesem Gerät, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft. Gilt nur für dieses Gerät.": "Ti avvisa su questo dispositivo la mattina del giorno di uscita quando esce un volume del Release Radar o va in onda un nuovo episodio di un anime della tua lista. Vale solo per questo dispositivo.",
   "Meldung schließen": "Chiudi messaggio",
   "Menü": "Menu",
   "Menü schließen": "Chiudi menu",
@@ -1666,6 +1674,7 @@
   "Mitglied hinzugefügt": "Membro aggiunto",
   "Mitglied nicht gefunden": "Membro non trovato",
   "Mitglieder": "Membri",
+  "Mitteilungen sind für Manga Shelf ausgeschaltet – erlaube sie in den Einstellungen des Geräts.": "Le notifiche di Manga Shelf sono disattivate: consentile nelle impostazioni del dispositivo.",
   "Mittel": "Media",
   "Modus wechseln": "Cambia modalità",
   "Monat": "Mese",
@@ -1732,6 +1741,7 @@
   "Neue Adresse erzeugt – die alte funktioniert nicht mehr": "Nuovo indirizzo creato – il vecchio non funziona più",
   "Neue Adresse – bitte erneut anmelden": "Nuovo indirizzo – accedi di nuovo",
   "Neue Ausgabe anlegen": "Crea una nuova edizione",
+  "Neue Bände aus dem Release-Radar und neue Folgen deiner Anime": "Nuovi volumi dal Release Radar e nuovi episodi dei tuoi anime",
   "Neue Bände lassen sich nur mit Verbindung anlegen.": "I nuovi volumi si possono creare solo con una connessione.",
   "Neue Datei laden und den Dienst neu einrichten:": "Scarica il nuovo file e configura di nuovo il servizio:",
   "Neue Folge": "Nuovo episodio",
@@ -3071,6 +3081,11 @@
     "many": "{n} volumi creati",
     "other": "{n} volumi creati"
   },
+  "{n} Band erscheint heute|{n} Bände erscheinen heute": {
+    "one": "{n} volume esce oggi",
+    "many": "{n} volumi escono oggi",
+    "other": "{n} volumi escono oggi"
+  },
   "{n} Bände|{n} Bände": {
     "one": "{n} volume",
     "many": "{n} volumi",
@@ -3131,6 +3146,11 @@
     "many": "{n} account richiedono un reset della password dopo il ripristino (nessuna password nel backup): {names}.",
     "other": "{n} account richiedono un reset della password dopo il ripristino (nessuna password nel backup): {names}."
   },
+  "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
+    "one": "{n} novità oggi",
+    "many": "{n} novità oggi",
+    "other": "{n} novità oggi"
+  },
   "{n} Reihen|{n} Reihen": {
     "one": "{n} serie",
     "many": "{n} serie",
@@ -3177,6 +3197,11 @@
     "many": "Mettere {n} volumi mancanti nella lista della spesa?",
     "other": "Mettere {n} volumi mancanti nella lista della spesa?"
   },
+  "{n} neue Folge heute|{n} neue Folgen heute": {
+    "one": "{n} nuovo episodio oggi",
+    "many": "{n} nuovi episodi oggi",
+    "other": "{n} nuovi episodi oggi"
+  },
   "{n} online gefunden|{n} online gefunden": {
     "one": "{n} risultato trovato online",
     "many": "{n} risultati trovati online",
@@ -3221,6 +3246,7 @@
   "{title} von der Wunschliste nehmen": "Togli {title} dalla lista dei desideri",
   "{title} öffnen": "Apri {title}",
   "{title} – Band {number}": "{title} – volume {number}",
+  "{title} – Folge {episode}": "{title} – Episodio {episode}",
   "{title}, Folge {episode} gesehen?": "{title}, episodio {episode} visto?",
   "{title}: Folge {episode} gesehen": "{title}: episodio {episode} visto",
   "{title}: Link für „Weiter“ gemerkt": "{title}: link per “Continua” memorizzato",
