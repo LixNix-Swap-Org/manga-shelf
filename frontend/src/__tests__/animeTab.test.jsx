@@ -1231,6 +1231,29 @@ describe('AnimeDetailModal', () => {
       expect(update).not.toHaveBeenCalled();
     });
 
+    it('seasons: a running show without an episode count counts its aired episodes for the TMDb seasons', async () => {
+      const running = (id, nextEpisode) => entry({
+        id, episodes: null, status: 'RELEASING', next_airing: { episode: nextEpisode, at: Math.floor(Date.now() / 1000) + 86400, estimated: false },
+        my_progress: { status: 'Schaue', episodes_watched: 50, score: null, notes: null }
+      });
+      const seasonSuggestion = vi.fn(async () => ({
+        seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Alabasta', episodes: 1094 }, { start: 1156, name: 'Elbaph', episodes: 40 }], reason: null
+      }));
+      const short = running(9104, 81);
+      const { unmount } = openEditable(short, { seasonSuggestion, fetchDetail: vi.fn(async () => short) });
+      await act(async () => {});
+      expect(seasonSuggestion).not.toHaveBeenCalled();
+      unmount();
+
+      const long = running(9105, 1181);
+      openEditable(long, { seasonSuggestion, fetchDetail: vi.fn(async () => long) });
+      await act(async () => {});
+      expect(seasonSuggestion).toHaveBeenCalledWith(9105);
+      const sections = [...screen.getByLabelText('Abschnitt').options].map((o) => o.textContent);
+      expect(sections[0]).toBe('Staffel 1 · East Blue · Folgen 1–61');
+      expect(sections[sections.length - 1]).toBe('Staffel 3 · Elbaph · Folgen 1156–1180');
+    });
+
     it('seasons: "Für alle übernehmen" stores the shown TMDb seasons', async () => {
       const current = entry({ id: 9102, episodes: 300, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
       const update = vi.fn(async (id, body) => ({ ...current, custom_seasons: body.custom_seasons }));

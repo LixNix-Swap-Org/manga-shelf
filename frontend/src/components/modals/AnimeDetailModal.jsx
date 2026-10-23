@@ -224,13 +224,14 @@ const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA', 'MUSIC'];
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
 
 /**
- * The grid's seasons for an entry nobody set seasons for: a long run (more than 100 episodes, where the plain blocks of
- * 100 say little) asks the TMDb suggestion (the server keeps the answer) and uses its seasons for display only, nothing is stored. Without a TMDb
+ * The grid's seasons for an entry nobody set seasons for: a long run (more than 100 episodes in the grid, the known count
+ * or, for a running show without one, the aired episodes; the plain blocks of 100 say little there) asks the TMDb
+ * suggestion (the server keeps the answer) and uses its seasons for display only, nothing is stored. Without a TMDb
  * key, a match or an answer the grid keeps its blocks. Returns [{ start, name }] or null.
  */
 function useAutoSeasons(anime, loadSuggestion) {
   const id = anime?.id;
-  const needs = Boolean(loadSuggestion && id && anime.episodes > 100 && !(anime.custom_seasons?.length) && !(kindOf(anime) === 'tv' && anime.seasons?.length));
+  const needs = Boolean(loadSuggestion && id && episodeGridCount(anime, []) > 100 && !(anime.custom_seasons?.length) && !(kindOf(anime) === 'tv' && anime.seasons?.length));
   const [found, setFound] = useState(null);
   useEffect(() => {
     if (!needs) return undefined;
