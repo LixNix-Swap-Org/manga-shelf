@@ -121,6 +121,14 @@ describe('AnimeRadarView', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Anime 1' })[0]);
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
+  it('the five tabs wrap on a phone instead of hiding behind a sideways scroll', () => {
+    render(<MemoryRouter><AnimeRadarView {...props} mangas={[]} list={[]} /></MemoryRouter>);
+    const tabs = screen.getByRole('tablist', { name: 'Bereiche' });
+    expect(tabs.className).toMatch(/\bflex-wrap\b/);
+    expect(tabs.className).toMatch(/\bsm:flex-nowrap\b/);
+    expect(tabs.className).not.toMatch(/overflow-x-auto/);
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+  });
   it('links a suggestion and unlinks a linked entry', async () => {
     const onLink = vi.fn().mockResolvedValue();
     const list = [entry(2, { title: 'Frieren' }), entry(3, { manga_id: 8 })];

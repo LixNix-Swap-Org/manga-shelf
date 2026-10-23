@@ -245,7 +245,8 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, u
   return (
     <div id="anime-radar-view">
       <h2 className="sr-only">{t('Anime-Radar')}</h2>
-      <div {...tabListProps} aria-label={t('Bereiche')} className="flex w-full max-w-full overflow-x-auto sm:inline-flex sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
+      {/* five tabs do not fit a phone in every language: they wrap into a second row instead of hiding behind a scroll */}
+      <div {...tabListProps} aria-label={t('Bereiche')} className="flex flex-wrap w-full max-w-full sm:inline-flex sm:flex-nowrap sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
         {TABS.map((key) => (
           <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
             {labels[key]}
