@@ -112,7 +112,7 @@ export const classifyShopScan = (isbn, data, shoppingItems = []) => {
   const key = toIsbn13(clean);
   const fromList = shoppingItems.find((it) => isbnDigits(it.isbn) && toIsbn13(it.isbn) === key);
   const entry = (kind, label, extra = {}) => ({ isbn: clean, kind, label, ...extra });
-  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), { itemId: it.id, price: it.price ?? null });
+  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), { itemId: it.id, price: it.price ?? null, currency: it.currency ?? null });
   if (fromList) return buyEntry(fromList);
 
   const book = data?.book;
@@ -133,11 +133,31 @@ export const classifyShopScan = (isbn, data, shoppingItems = []) => {
   if (data.matched_manga && book?.volume_number_known === false && !mv) {
     return entry('check', t('{series}: Bandnummer im Katalog unbekannt, bitte selbst prüfen', { series: data.matched_manga.title }));
   }
-  if (data.matched_manga) {
-    return entry('check', mv
-      ? t('{volume} (Status {status})', { volume: volumeLabel(data.matched_manga.title, mv), status: statusLabel(mv.status) })
-      : t('{volume}: fehlt noch und steht nicht auf der Einkaufsliste', { volume: volumeLabel(data.matched_manga.title, { volume_number: book?.volume_number ?? '' }) }));
+  const manga = data.matched_manga;
+  const currency = manga?.currency ?? null;
+  if (manga && mv) {
+    // stored but not on the list (ordered, announced, or missing in a paused series): booking adds the user as owner
+    return entry('claim', t('{volume} (Status {status})', { volume: volumeLabel(manga.title, mv), status: statusLabel(mv.status) }), {
+      volumeId: mv.id, mangaId: manga.id ?? mv.manga_id ?? null, price: mv.price ?? null, currency
+    });
   }
+  if (manga && book?.volume_number) {
+    // a known series without this volume: booking creates it as owned; a catalogue price is in euros
+    const euro = !currency || currency === 'EUR';
+    return entry('add', t('{volume}: fehlt noch und steht nicht auf der Einkaufsliste', { volume: volumeLabel(manga.title, { volume_number: book.volume_number }) }), {
+      mangaId: manga.id ?? null,
+      price: euro ? book.price ?? null : null,
+      currency,
+      volume: {
+        volume_number: String(book.volume_number),
+        isbn: key || null,
+        price: euro ? book.price ?? null : null,
+        pages: book.pages || null,
+        release_year: book.release_year || null
+      }
+    });
+  }
+  if (manga) return entry('check', t('{series}: Bandnummer im Katalog unbekannt, bitte selbst prüfen', { series: manga.title }));
   if (data.matched_candidates?.length > 0) {
     return entry('check', t('{name} passt zu mehreren Reihen ({candidates})', { name, candidates: data.matched_candidates.map((c) => c.title).join(', ') }));
   }
@@ -201,8 +221,27 @@ export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note, source =
   return { ...result, label: `${result.label} (${shownNote})`, offline: true, source };
 };
 
-/** A `buy` entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
-export const isBookable = (entry) => entry.kind === 'buy' && !entry.done && !entry.booking && !entry.offline;
+/**
+ * Kinds the basket books: `buy` (on the shopping list), `claim` (a stored volume that is not on the list) and `add`
+ * (a volume of a known series that is not stored yet; created as owned when booked).
+ */
+export const BOOKABLE_KINDS = ['buy', 'claim', 'add'];
+
+/** An entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
+export const isBookable = (entry) => BOOKABLE_KINDS.includes(entry.kind) && !entry.done && !entry.booking && !entry.offline;
+
+/** Price total of the bookable entries per currency, euro first: [{ currency, total }]; entries without a price are left out. */
+export const basketTotals = (entries) => {
+  const sums = new Map();
+  for (const e of entries || []) {
+    const price = Number(e?.price);
+    if (!isBookable(e) || e.price === null || e.price === undefined || e.price === '' || !Number.isFinite(price)) continue;
+    const currency = e.currency || 'EUR';
+    sums.set(currency, (sums.get(currency) || 0) + price);
+  }
+  return [...sums].map(([currency, total]) => ({ currency, total: Math.round(total * 100) / 100 }))
+    .sort((a, b) => (a.currency === 'EUR' ? -1 : b.currency === 'EUR' ? 1 : a.currency.localeCompare(b.currency)));
+};
 
 /** Label note of a scan answered from the offline copy before asking the server. */
 export const localSourceNote = (age) => (age ? t('Stand Offline-Kopie {age}', { age }) : t('Stand Offline-Kopie'));

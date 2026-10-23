@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Shopping list
+- **Shop scan as a basket:** the scan list now also books volumes that are not on the shopping list. A stored volume that is ordered, announced or missing in a paused series is booked as your purchase, and a volume of a series you already collect that is not stored yet is created as owned with today's purchase date ("wird beim Buchen angelegt"; this needs a connection). "N als gekauft abhaken" books all of them in one go, the list shows the price total per currency, and every scan can be removed. A series that is not in the collection yet is still only noted.
+
 ## 3.4.0
 
 ### Before updating

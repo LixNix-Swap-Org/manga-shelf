@@ -413,12 +413,12 @@ const VOLUME_COLUMNS = 'id, manga_id, volume_number, status, isbn, price, publis
 function matchCollection(db, book, isbn13) {
     const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS} FROM volumes WHERE isbn = ? ORDER BY id LIMIT 1`).get(isbn13) : null;
     if (byIsbn) {
-        const manga = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas WHERE id = ?').get(byIsbn.manga_id);
+        const manga = db.prepare('SELECT id, title, alt_title, publisher, cover_image, currency FROM mangas WHERE id = ?').get(byIsbn.manga_id);
         return { manga: manga || null, volume: byIsbn, reason: 'isbn', candidates: [], number_in_title: false };
     }
 
     const bookPublisher = normalizePublisher(book.publisher);
-    const scored = db.prepare('SELECT id, title, alt_title, publisher, cover_image FROM mangas ORDER BY id').all()
+    const scored = db.prepare('SELECT id, title, alt_title, publisher, cover_image, currency FROM mangas ORDER BY id').all()
         .map(m => ({
             manga: m,
             score: titleMatchScore([book.series, book.title], m),
