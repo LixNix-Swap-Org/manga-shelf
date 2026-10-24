@@ -47,6 +47,10 @@
 ### PWA
 - **Cover cache:** the service worker keeps at most 1000 cover images in its uploads cache and drops the oldest first, so the cache no longer grows without limit on phones with large collections.
 
+### Security
+- **Uploads:** `multer` 2.5.0 fixes a denial of service through a pending file filter after the request was torn down (GHSA-q7qp-rjg7-q26m).
+- **Request parsing:** `body-parser` 2.4.0 and `ip-address` 10.7.4 (GHSA-27r3-jxmh-p828).
+
 ### Tests and documentation
 - Server tests for webtoons (`test/webtoon.test.js`, the scenario "webtoons", the CSV round trip of a print edition and a webtoon of one title, the format switch that keeps the Manga Passion link), migrations 34 to 36, the anime calendar, history, discover and tags (`test/anime/extras.test.js`), the season chain against a fake AniList (`test/anime/seasonChain.test.js`), the separate radar and anime feed tokens, the chapter readers of the CSV and the egg (`test/deploy.test.js`); Vitest for webtoons, the release-day reminders (`releaseReminders.test.jsx`), the anime calendar and discover tabs, the shop basket and the calendar feed panel. README: webtoons, release-day reminders, the anime calendar and its own address, the Pterodactyl installation; `AGENTS.md`: Case T, migrations 34 to 36, the anime feed token, the season chain, the shop basket and the reminder rules.
 
