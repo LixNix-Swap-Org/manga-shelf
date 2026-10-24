@@ -37,11 +37,14 @@ function keytoolSha256(text) {
   return match ? hex(match[1]) : null;
 }
 
-/** Certificates of `apksigner verify --print-certs`: [{ dn, sha256 }]. */
+/**
+ * Certificates of `apksigner verify --print-certs`: [{ dn, sha256 }]. Older build-tools print "Signer #1 certificate DN: …",
+ * build-tools 37 prints "V3.0 Signer: certificate DN: …" (also "V3.1 Signer #2: …").
+ */
 function apksignerCerts(text) {
   const certs = new Map();
   for (const line of String(text).split(/\r?\n/)) {
-    const m = /^Signer #(\d+) certificate (DN|SHA-256 digest): (.+)$/.exec(line.trim());
+    const m = /^((?:V[\d.]+ )?Signer(?: #\d+)?):? certificate (DN|SHA-256 digest): (.+)$/.exec(line.trim());
     if (!m) continue;
     const cert = certs.get(m[1]) || {};
     if (m[2] === 'DN') cert.dn = m[3].trim();
