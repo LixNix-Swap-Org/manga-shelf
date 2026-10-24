@@ -402,8 +402,14 @@ async function spareDetail(ctx, ids, { userId = null, timeoutMs, signal, beforeR
 
 const DISCOVER_TTL = 6 * 60 * 60 * 1000;
 
+/** 503 of the discover views when ANIME_SOURCES leaves AniList out: nothing is asked, also no cached answer is used. */
+function requireAniList(ctx) {
+    if (!settings(ctx).anilist) throw new HttpError(503, 'AniList ist gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
+}
+
 /** A season of AniList by popularity (cached for 6 hours): { metas, has_next }. */
 async function discoverSeason(ctx, { season, year, page = 1 }, { userId = null, signal } = {}) {
+    requireAniList(ctx);
     remember(ctx);
     const key = `anime:season:${season}:${year}:${page}`;
     const hit = cache.read(ctx, key);
@@ -416,6 +422,7 @@ async function discoverSeason(ctx, { season, year, page = 1 }, { userId = null, 
 
 /** Recommendations for up to 50 AniList ids (cached for 6 hours per id set): [{ meta, rating, from }]. */
 async function discoverRecommendations(ctx, ids, { userId = null, signal } = {}) {
+    requireAniList(ctx);
     remember(ctx);
     const sorted = [...new Set(ids)].sort((a, b) => a - b).slice(0, anilist.BATCH_SIZE);
     if (!sorted.length) return [];
@@ -1232,42 +1239,72 @@ const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const CHAIN_STEPS = 12;
 
 /**
- * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), one
- * AniList request per step, at most CHAIN_STEPS each way. `relations` are the stored relations of the start entry.
- * Returns { before: [node], after: [node] } with nodes { anilist_id, mal_id, title, season_year, episodes }; cached for a day.
+ * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), at
+ * most CHAIN_STEPS each way. `relations` are the stored relations of the start entry. A neighbour in the collection
+ * lends its stored AniList relations; only beyond the last of them AniList is asked, one request per step, at most
+ * CHAIN_STEPS per call (the walk ends there). Each answer is cached for a day under anime:rel:<anilist_id>, so
+ * neighbouring seasons share it and a failed step keeps the steps before it. With AniList switched off only the stored
+ * relations count and nothing is asked. Returns { before: [node], after: [node] } with nodes
+ * { anilist_id, mal_id, title, season_year, episodes }; rejects with the SourceError of a failed step.
  */
 async function seasonChainOf(ctx, anilistId, relations) {
     remember(ctx);
-    const key = `anime:chain:${anilistId}`;
-    const hit = cache.read(ctx, key);
-    if (hit) return hit.value;
-    const leave = enterInteractive(ctx);
+    const canAsk = settings(ctx).anilist;
     const userId = ctx.user ? ctx.user.id : null;
-    try {
-        const value = await S().coalescer.run(key, async () => {
-            const walk = async (type) => {
-                const out = [];
-                const seen = new Set([anilistId]);
-                let rels = relations;
-                for (let i = 0; i < CHAIN_STEPS; i += 1) {
-                    const r = (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && CHAIN_FORMATS.includes(x.format) && x.anilist_id);
-                    if (!r || seen.has(r.anilist_id)) break;
-                    seen.add(r.anilist_id);
-                    out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
-                    // a failed step is no partial answer: nothing is cached and the caller answers 503
-                    const { metas } = await call(ctx, 'anilist', { priority: 'interactive', userId }, (credential) => anilist.byIdsDetail(ctx, [r.anilist_id], { credential }));
-                    rels = metas[0] ? metas[0].relations : [];
-                }
-                return out;
-            };
-            const after = await walk('SEQUEL');
-            const before = (await walk('PREQUEL')).reverse();
-            return { before, after };
+    const storedRow = ctx.db.prepare('SELECT relations FROM animes WHERE anilist_id = ?');
+    let asked = 0;
+    let leave = null;
+    const stepOf = (rels, type) => (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && CHAIN_FORMATS.includes(x.format) && x.anilist_id);
+    const liveRelations = async (id) => {
+        if (!canAsk) return null;
+        const key = `anime:rel:${id}`;
+        const hit = cache.read(ctx, key);
+        if (hit) return hit.value;
+        if (asked >= CHAIN_STEPS) return null;
+        asked += 1;
+        if (!leave) leave = enterInteractive(ctx);
+        return S().coalescer.run(key, async () => {
+            const { metas } = await call(ctx, 'anilist', { priority: 'interactive', userId }, (credential) => anilist.byIdsDetail(ctx, [id], { credential }));
+            const rels = metas[0] ? metas[0].relations || [] : [];
+            cache.write(ctx, key, rels, metas[0] ? cache.TTL.adaptations : cache.TTL.notFound);
+            return rels;
         });
-        cache.write(ctx, key, value, cache.TTL.adaptations);
-        return value;
+    };
+    // stored relations of an entry in the collection, else the live (cached) ones; `stored` tells which
+    const relationsOf = async (id) => {
+        const row = storedRow.get(id);
+        const stored = row ? store.parseJson(row.relations, []) : [];
+        if (Array.isArray(stored) && stored.some((x) => x && x.anilist_id)) return { rels: stored, stored: true };
+        return { rels: await liveRelations(id), stored: false };
+    };
+    const walk = async (type) => {
+        const out = [];
+        const seen = new Set([anilistId]);
+        let id = anilistId;
+        let rels = relations;
+        let stored = true;
+        for (let i = 0; i < CHAIN_STEPS; i += 1) {
+            let r = stepOf(rels, type);
+            // stored relations end the chain: a season announced after the entry was stored is only known to AniList
+            if (!r && stored && canAsk) {
+                rels = await liveRelations(id);
+                stored = false;
+                r = stepOf(rels, type);
+            }
+            if (!r || seen.has(r.anilist_id)) break;
+            seen.add(r.anilist_id);
+            out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
+            id = r.anilist_id;
+            if (i + 1 < CHAIN_STEPS) ({ rels, stored } = await relationsOf(id));
+        }
+        return out;
+    };
+    try {
+        const after = await walk('SEQUEL');
+        const before = (await walk('PREQUEL')).reverse();
+        return { before, after };
     } finally {
-        leave();
+        if (leave) leave();
     }
 }
 

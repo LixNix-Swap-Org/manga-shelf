@@ -120,10 +120,10 @@ function importCsv(ctx, { body }) {
 
     // Load titles, volumes and users once and compare in JS: SQLite LOWER() folds only ASCII (Ä would stay Ä)
     const seriesByTitle = new Map();
-    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas WHERE shelf_id = ? ORDER BY id').all(shelfId)) {
+    for (const m of ctx.db.prepare("SELECT id, title, publisher, wish_priority, language, COALESCE(format, 'print') AS format FROM mangas WHERE shelf_id = ? ORDER BY id").all(shelfId)) {
         const key = matchKey(m.title);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
-        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE });
+        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE, format: m.format });
     }
     const volumeKey = (mangaId, type, number) => `${mangaId}|${type}|${matchKey(canonicalVolumeNumber(number, type))}`;
     const labelKey = (mangaId, type, label) => `${mangaId}|${type}|=${matchKey(label)}`;
@@ -157,32 +157,57 @@ function importCsv(ctx, { body }) {
     const findOther = lookup(others);
     const isAdmin = ctx.user.role === 'admin';
 
-    // The export names the language only on the first row of a series: later rows of the same title inherit it
-    // (rows before the first named one take that first one)
-    const rowLanguage = new Map();
-    if (byLanguage) {
-        const sources = [...records.map(r => [r, r]), ...errors.filter(e => e.series_source).map(e => [e.series_source, e.record])]
-            .sort((a, b) => a[0].line - b[0].line);
-        const named = (source) => (source.series_meta && source.series_meta.language) || null;
+    // The export writes the series fields only on the first row of a series: later rows of the same title inherit the
+    // value of the row before them that named one (rows before the first such row take that first one)
+    const sources = [...records.map(r => [r, r]), ...errors.filter(e => e.series_source).map(e => [e.series_source, e.record])]
+        .sort((a, b) => a[0].line - b[0].line);
+    const inherit = (named) => {
+        const values = new Map();
         const first = new Map();
         for (const [source] of sources) if (named(source) && !first.has(matchKey(source.series))) first.set(matchKey(source.series), named(source));
         const current = new Map();
         for (const [source, record] of sources) {
             const title = matchKey(source.series);
             if (named(source)) current.set(title, named(source));
-            const language = current.get(title) || first.get(title) || null;
-            rowLanguage.set(source, language);
-            if (record && record !== source) rowLanguage.set(record, language);
+            const value = current.get(title) || first.get(title) || null;
+            values.set(source, value);
+            if (record && record !== source) values.set(record, value);
+        }
+        return values;
+    };
+    const rowLanguage = byLanguage ? inherit((source) => (source.series_meta && source.series_meta.language) || null) : new Map();
+    const languageOf = (r) => rowLanguage.get(r) || null;
+    // Print is an empty "Format" cell: a row with series fields of its own (the first row of a series in the export)
+    // names its format, print without one; without a "Format" column every row is print
+    // A hand-written file may repeat the series fields on every row and name the format only once: an empty cell then
+    // keeps the format of the row before it with the same title and the same other series fields
+    const ownsSeriesFields = (source) => Object.keys(source.series_meta || {}).some(field => field !== 'wish_priority');
+    const seriesSignature = (source) => JSON.stringify(Object.entries(source.series_meta || {})
+        .filter(([field]) => field !== 'format' && field !== 'wish_priority').sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+    const namedFormat = new Map();
+    if (columns.includes('series_format')) {
+        const lastByTitle = new Map();
+        for (const [source] of sources) {
+            if (!ownsSeriesFields(source) || namedFormat.has(source)) continue;
+            const title = matchKey(source.series);
+            const signature = seriesSignature(source);
+            const last = lastByTitle.get(title);
+            const format = source.series_meta.format || (last && last.signature === signature ? last.format : 'print');
+            lastByTitle.set(title, { format, signature });
+            namedFormat.set(source, format);
         }
     }
-    const languageOf = (r) => rowLanguage.get(r) || null;
+    const rowFormat = columns.includes('series_format') ? inherit((source) => namedFormat.get(source) || null) : new Map();
+    const formatOf = (r) => rowFormat.get(r) || 'print';
 
     // Without a "Reihenverlag" column only the title counts (lowest ID wins); with it title + publisher of the series.
-    // A row without a known language matches any edition, as before.
+    // A row without a known language matches any edition, as before. Only a series of the row's format matches, so a
+    // print edition and a webtoon of one title stay apart.
     const findSeries = (r) => {
         const titled = seriesByTitle.get(matchKey(r.series));
         const language = languageOf(r);
-        const list = titled && language ? titled.filter(c => c.language === language) : titled;
+        const format = formatOf(r);
+        const list = titled && titled.filter(c => c.format === format && (!language || c.language === language));
         if (!list || !list.length) return null;
         if (!bySeriesPublisher) return list[0];
         const want = publisherKey(r.series_publisher);
@@ -238,7 +263,7 @@ function importCsv(ctx, { body }) {
 
     // Series fields of a new series: per field the first filled value from all rows of this series, also discarded ones
     const seriesMetaKey = (r) => matchKey(r.series) + (bySeriesPublisher ? '|' + publisherKey(r.series_publisher) : '')
-        + (byLanguage ? '|' + (languageOf(r) || '') : '');
+        + (byLanguage ? '|' + (languageOf(r) || '') : '') + '|' + formatOf(r);
     const seriesMeta = new Map();
     const metaSources = [...records, ...errors.map(e => e.series_source).filter(Boolean)].sort((a, b) => a.line - b.line);
     for (const r of metaSources) {
@@ -291,7 +316,7 @@ function importCsv(ctx, { body }) {
         const publisher = normalizePublisher(bySeriesPublisher ? r.series_publisher : r.publisher);
         const meta = seriesMeta.get(seriesMetaKey(r)) || {};
         const language = meta.language || languageOf(r) || defaultLanguage;
-        const format = meta.format || 'print';
+        const format = formatOf(r);
         const id = dryRun
             ? --placeholderId
             : Number(insertManga.run(
@@ -304,7 +329,7 @@ function importCsv(ctx, { body }) {
                 format, meta.total_chapters ?? null
             ).lastInsertRowid);
         importChapters(r, id, meta);
-        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
+        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language, format };
         const key = matchKey(r.series);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push(entry);

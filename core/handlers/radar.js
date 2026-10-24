@@ -110,40 +110,44 @@ async function dateChanges(ctx) {
     return { body: { changes: detectDateChanges(pending, enriched), months_checked: months.length - failed, months_failed: failed } };
 }
 
-// Calendar feed (GET /radar/feed.ics?token=…): a per-user token, stored as app_settings 'calendar_feed:<sha256>' with
-// { user_id, created_at, last_used_at, sealed }; routes/system.js issues and revokes it (the sealed copy needs the
-// server secret). The feed lists the radar's volumes that have a full release date, from 30 days back.
+// Calendar feeds (GET /radar/feed.ics?token=…, GET /anime/feed.ics?token=…): a per-user token per feed, stored as
+// app_settings 'calendar_feed:<sha256>' with { user_id, scope, created_at, last_used_at, sealed }; routes/system.js
+// issues and revokes them (the sealed copy needs the server secret). `scope` is the one feed a token opens: 'radar'
+// (also every token from before scopes existed) or 'anime'. The radar feed lists the radar's volumes that have a full
+// release date, from 30 days back.
 const FEED_KEY_PREFIX = 'calendar_feed:';
 const FEED_TOKEN = /^[A-Za-z0-9_-]{32,128}$/;
 const FEED_PAST_DAYS = 30;
 const FEED_USED_WRITE_GAP_MS = 60 * 60 * 1000;
 
 const feedNotFound = () => new HttpError(404, 'Kalender-Abo nicht gefunden oder widerrufen', 'NOT_FOUND');
+const feedScopeOf = (entry) => (entry && entry.scope !== undefined ? entry.scope : 'radar');
 
-/** The stored feed entry for a token (user still present), else null. */
-function feedEntryFor(ctx, token) {
+/** The stored feed entry for a token of `scope` (user still present), else null. */
+function feedEntryFor(ctx, token, scope = 'radar') {
     if (typeof token !== 'string' || !FEED_TOKEN.test(token)) return null;
     const key = FEED_KEY_PREFIX + sha256Hex(token);
     const row = ctx.db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
     if (!row) return null;
     let entry;
     try { entry = JSON.parse(row.value); } catch (e) { return null; }
-    if (!entry || !Number.isInteger(entry.user_id)) return null;
+    if (!entry || !Number.isInteger(entry.user_id) || feedScopeOf(entry) !== scope) return null;
     if (!ctx.db.prepare('SELECT 1 FROM users WHERE id = ?').get(entry.user_id)) return null;
     return { key, entry };
 }
 
 /**
- * Deletes the calendar feed tokens of `userId`, or of every user when it is null (sessions ended for everyone).
- * `db` is ctx.db or the server connection; returns how many were removed.
+ * Deletes the calendar feed tokens of `userId`, or of every user when it is null (sessions ended for everyone); with
+ * `scope` only the tokens of that feed. `db` is ctx.db or the server connection; returns how many were removed.
  */
-function revokeFeedTokens(db, userId = null) {
+function revokeFeedTokens(db, userId = null, scope = null) {
     const rows = db.prepare('SELECT key, value FROM app_settings WHERE substr(key, 1, ?) = ?').all(FEED_KEY_PREFIX.length, FEED_KEY_PREFIX);
     let removed = 0;
     for (const row of rows) {
-        let owner;
-        try { owner = JSON.parse(row.value)?.user_id; } catch (e) { owner = undefined; }
-        if (userId === null || owner === userId) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
+        let entry;
+        try { entry = JSON.parse(row.value); } catch (e) { entry = undefined; }
+        if (scope !== null && feedScopeOf(entry) !== scope) continue;
+        if (userId === null || entry?.user_id === userId) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
     }
     return removed;
 }
@@ -172,7 +176,7 @@ function touchFeed(ctx, found) {
 }
 
 function calendarFeed(ctx, { query }) {
-    const found = feedEntryFor(ctx, qstr(query.token));
+    const found = feedEntryFor(ctx, qstr(query.token), 'radar');
     if (!found) throw feedNotFound();
     touchFeed(ctx, found);
     const feedUser = ctx.db.prepare('SELECT id, role FROM users WHERE id = ?').get(found.entry.user_id);
@@ -216,4 +220,7 @@ function calendarFeed(ctx, { query }) {
     };
 }
 
-module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, touchFeed, feedVolumeLabel, revokeFeedTokens, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };
+module.exports = {
+    releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedScopeOf, touchFeed, feedVolumeLabel, revokeFeedTokens, loadUserMangas,
+    loadUserVolumes, FEED_KEY_PREFIX
+};

@@ -600,7 +600,7 @@ test('films and TV shows: search parameters, TMDb hits in the collection, create
     assert.equal((await admin('DELETE', '/auth/api-keys/tmdb')).status, 200);
 });
 
-test('a link into a foreign shelf: list and detail carry neither manga_id nor manga, the series stays unreachable', async () => {
+test('a link into a foreign shelf: list and detail say only manga_linked_elsewhere, never the series id or title; the series stays unreachable', async () => {
     assert.equal((await admin('POST', '/users', { username: 'nora', password: 'password123', role: 'editor', shelf_mode: 'personal' })).status, 200);
     const nora = ctx.client();
     assert.equal((await nora('POST', '/auth/login', { username: 'nora', password: 'password123' })).status, 200);
@@ -618,11 +618,17 @@ test('a link into a foreign shelf: list and detail carry neither manga_id nor ma
         assert.equal(listed.manga_linked_elsewhere, true);
         const detail = (await client('GET', `/anime/${id}`)).body;
         assert.deepEqual([detail.manga_id, detail.manga, detail.manga_linked_elsewhere], [null, null, true]);
+        const mangaFields = (answer) => Object.entries(answer).filter(([key]) => key.includes('manga')).sort();
+        assert.deepEqual(mangaFields(listed), [['manga_id', null], ['manga_linked_elsewhere', true]], 'one bit, no id');
+        assert.deepEqual(mangaFields(detail), [['manga', null], ['manga_id', null], ['manga_linked_elsewhere', true]]);
+        assert.doesNotMatch(JSON.stringify([listed, detail]), /Noras Reihe/, 'no title of the foreign series');
         assert.equal((await client('GET', `/mangas/${series.body.id}/adaptations`)).status, 404);
     }
     const ownSeries = await admin('POST', '/mangas', { title: 'Admins Reihe' });
     assert.equal(ownSeries.status, 200);
-    assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: series.body.id })).status, 404);
+    const refused = await admin('PUT', `/anime/${id}`, { manga_id: series.body.id });
+    assert.equal(refused.status, 404);
+    assert.doesNotMatch(JSON.stringify(refused.body), /Noras Reihe/);
     assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404, 'cannot unlink a foreign shelf series');
     assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: ownSeries.body.id })).status, 404, 'cannot overwrite a foreign shelf series link');
     assert.equal((await nora('GET', `/anime/${id}`)).body.manga_id, series.body.id, 'the foreign shelf link remains intact');

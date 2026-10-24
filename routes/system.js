@@ -1,4 +1,4 @@
-// Admin system page (GET /api/system and its actions) and the calendar feed token of the release radar. Server-only:
+// Admin system page (GET /api/system and its actions) and the calendar feed tokens (radar, anime). Server-only:
 // file sizes, free disk, backups, sessions and the sealed token copy need Node and the server secret.
 const express = require('express');
 const fs = require('fs');
@@ -15,7 +15,7 @@ const scheduler = require('../services/scheduler');
 const lifecycle = require('../services/lifecycle');
 const { cleanOrphanUploads } = require('../services/uploadCleanup');
 const { appliedSchemaVersion, LATEST_SCHEMA_VERSION } = require('../core/schema');
-const { FEED_KEY_PREFIX, revokeFeedTokens } = require('../core/handlers/radar');
+const { FEED_KEY_PREFIX, feedScopeOf, revokeFeedTokens } = require('../core/handlers/radar');
 const backupsRoutes = require('./backups');
 const updater = require('../services/update');
 const { REPOSITORY_URL } = require('../services/update/constants');
@@ -477,61 +477,69 @@ router.delete('/system/update/staging/:stagingId', requireAdmin, updateAvailable
     res.json({ success: true, ...result });
 });
 
-// ----- calendar feed token (GET /api/radar/feed.ics is a core handler; it only compares the hash) -----
+// ----- calendar feed tokens (GET /api/radar/feed.ics and /api/anime/feed.ics are core handlers; they only compare
+// the hash). One token per user and feed: a radar token opens only the radar feed, an anime token only the anime feed.
 
-const FEED_PATH = '/api/radar/feed.ics';
+const FEED_PATHS = { radar: '/api/radar/feed.ics', anime: '/api/anime/feed.ics' };
 const feedLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 120, message: 'Zu viele Kalender-Abrufe. Bitte später erneut versuchen.' });
 
-function feedRows(userId) {
+function feedRows(userId, scope) {
     return db.prepare('SELECT key, value FROM app_settings WHERE key LIKE ?').all(`${FEED_KEY_PREFIX}%`)
         .map(row => {
             try { return { key: row.key, entry: JSON.parse(row.value) }; } catch (e) { return null; }
         })
-        .filter(r => r && r.entry && r.entry.user_id === userId);
+        .filter(r => r && r.entry && r.entry.user_id === userId && feedScopeOf(r.entry) === scope);
 }
 
-const feedPath = (token) => `${FEED_PATH}?token=${encodeURIComponent(token)}`;
+const feedPath = (scope, token) => `${FEED_PATHS[scope]}?token=${encodeURIComponent(token)}`;
 const absolute = (req, p) => `${req.protocol}://${req.get('host')}${p}`;
 
-function feedState(req) {
-    const row = feedRows(req.user.id)[0];
+function feedState(req, scope) {
+    const row = feedRows(req.user.id, scope)[0];
     if (!row) return { active: false, path: null, url: null, created_at: null, last_used_at: null, unreadable: false };
     let token;
     try { token = openForServer(row.entry.sealed); } catch (e) { token = null; }
     return {
         active: true,
-        path: token ? feedPath(token) : null,
-        url: token ? absolute(req, feedPath(token)) : null,
+        path: token ? feedPath(scope, token) : null,
+        url: token ? absolute(req, feedPath(scope, token)) : null,
         created_at: row.entry.created_at || null,
         last_used_at: row.entry.last_used_at ? new Date(row.entry.last_used_at).toISOString() : null,
         unreadable: !token
     };
 }
 
-const removeFeeds = (userId) => revokeFeedTokens(db, userId);
+const removeFeeds = (userId, scope) => revokeFeedTokens(db, userId, scope);
+
+const showFeed = (scope) => (req, res) => {
+    res.json(feedState(req, scope));
+};
+
+// a new token replaces the old one of the same feed: calendars subscribed with the old address stop updating
+const mintFeed = (scope) => (req, res) => {
+    const token = crypto.randomBytes(32).toString('base64url');
+    const hash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+    const entry = { user_id: req.user.id, scope, created_at: new Date().toISOString(), last_used_at: null, sealed: sealForServer(token) };
+    runTransaction(() => {
+        removeFeeds(req.user.id, scope);
+        db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(FEED_KEY_PREFIX + hash, JSON.stringify(entry));
+    });
+    res.json(feedState(req, scope));
+};
+
+const revokeFeed = (scope) => (req, res) => {
+    res.json({ success: true, removed: runTransaction(() => removeFeeds(req.user.id, scope)) });
+};
 
 router.get('/radar/feed.ics', feedLimiter, (req, res, next) => next());
 router.get('/anime/feed.ics', feedLimiter, (req, res, next) => next());
 
-router.get('/radar/feed-token', requireAuth, (req, res) => {
-    res.json(feedState(req));
-});
-
-// a new token replaces the old one: calendars subscribed with the old address stop updating
-router.post('/radar/feed-token', requireAuth, (req, res) => {
-    const token = crypto.randomBytes(32).toString('base64url');
-    const hash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
-    const entry = { user_id: req.user.id, created_at: new Date().toISOString(), last_used_at: null, sealed: sealForServer(token) };
-    runTransaction(() => {
-        removeFeeds(req.user.id);
-        db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(FEED_KEY_PREFIX + hash, JSON.stringify(entry));
-    });
-    res.json(feedState(req));
-});
-
-router.delete('/radar/feed-token', requireAuth, (req, res) => {
-    res.json({ success: true, removed: runTransaction(() => removeFeeds(req.user.id)) });
-});
+router.get('/radar/feed-token', requireAuth, showFeed('radar'));
+router.post('/radar/feed-token', requireAuth, mintFeed('radar'));
+router.delete('/radar/feed-token', requireAuth, revokeFeed('radar'));
+router.get('/anime/feed-token', requireAuth, showFeed('anime'));
+router.post('/anime/feed-token', requireAuth, mintFeed('anime'));
+router.delete('/anime/feed-token', requireAuth, revokeFeed('anime'));
 
 module.exports = router;
 module.exports.checkForUpdate = checkForUpdate;

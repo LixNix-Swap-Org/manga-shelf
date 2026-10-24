@@ -49,7 +49,11 @@ const TOTAL_VOLUMES_ERROR = 'Gesamtbände muss eine ganze Zahl zwischen 1 und 50
 const FORMAT_ERROR = msg('Ungültiges Format (erlaubt: print, webtoon)');
 const TOTAL_CHAPTERS_ERROR = msg('Gesamtkapitel muss eine ganze Zahl zwischen 1 und {max} sein', { max: MAX_CHAPTERS });
 
-/** Manga Passion only knows German print editions: a webtoon or another language never keeps a link. */
+/**
+ * Manga Passion only knows German print editions: a new webtoon or a series in another language gets no link. An edit
+ * that only switches the format keeps a stored link (the Manga Passion actions refuse a webtoon with 409 MP_WEBTOON,
+ * back on print they use it again); it goes when the client sends manga_passion_id null or the series leaves German.
+ */
 const keepsMpLink = (language, format) => isMpLanguage(language) && format !== 'webtoon';
 const EDITION_ERRORS = {
     language: 'Unbekannte Sprache',
@@ -316,7 +320,7 @@ function update(ctx, { params, body }) {
         pick('description') || null,
         pick('cover_image') || null,
         pick('banner_image') || null,
-        keepsMpLink(language, format) ? pick('manga_passion_id') ?? null : null,
+        isMpLanguage(language) ? pick('manga_passion_id') ?? null : null,
         pick('wish_priority') ?? null,
         pick('collecting') || 'aktiv',
         format,

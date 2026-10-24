@@ -577,6 +577,17 @@ const scenarios = [
             const wrong = await anonymous('GET', `/radar/feed.ics?token=${'B'.repeat(43)}`);
             assert.deepEqual([wrong.status, wrong.body.code], [404, 'NOT_FOUND']);
             assert.equal((await anonymous('GET', '/radar/feed.ics')).status, 404);
+
+            // a token opens only the feed of its scope; one without a scope (stored before 3.5.0) is a radar token
+            assert.equal((await anonymous('GET', `/anime/feed.ics?token=${token}`)).status, 404);
+            const animeToken = token.replace(/^kern/, 'anim');
+            const animeHash = require('crypto').createHash('sha256').update(animeToken, 'utf8').digest('hex');
+            run('INSERT INTO app_settings (key, value) VALUES (?, ?)', `calendar_feed:${animeHash}`,
+                JSON.stringify({ user_id: 2, scope: 'anime', created_at: new Date().toISOString(), last_used_at: null }));
+            const anime = await anonymous.raw('GET', `/anime/feed.ics?token=${animeToken}`);
+            assert.equal(anime.status, 200);
+            assert.ok(anime.text.startsWith('BEGIN:VCALENDAR'));
+            assert.equal((await anonymous('GET', `/radar/feed.ics?token=${animeToken}`)).status, 404);
         }
     },
     {

@@ -225,6 +225,20 @@ test('normalizeBuyOutcome and shouldStopBooking', () => {
   assert.strictEqual(helpers.shouldStopBooking(conflict), false);
   assert.strictEqual(helpers.shouldStopBooking(helpers.normalizeBuyOutcome({ status: 'failed', httpStatus: 401 })), true);
   assert.strictEqual(helpers.shouldStopBooking(helpers.normalizeBuyOutcome('queued')), false);
+  // a 403 of one shelf skips that entry; a read-only account (or a 403 without a code) stops the batch
+  const stops = (code) => helpers.shouldStopBooking(helpers.normalizeBuyOutcome({ status: 'failed', httpStatus: 403, ...(code ? { code } : {}) }));
+  assert.deepStrictEqual([stops('FORBIDDEN'), stops('READ_ONLY'), stops(null)], [false, true, true]);
+});
+
+test('a scan of a series in a shelf the caller only views is a hint, never claim or add', () => {
+  const answer = (manga, volume, book = {}) => ({ found: true, matched_manga: manga, matched_volume: volume, book });
+  const stored = answer({ id: 4, title: 'Naruto' }, { id: 40, volume_number: '2', status: 'Vorbestellt', owned_by_me: false });
+  const missing = answer({ id: 4, title: 'Naruto' }, null, { volume_number: '3', volume_number_known: true });
+  assert.deepStrictEqual([helpers.classifyShopScan('1', stored).kind, helpers.classifyShopScan('1', missing).kind], ['claim', 'add']);
+  const viewer = { readOnlySeries: new Set([4]) };
+  assert.deepStrictEqual([helpers.classifyShopScan('1', stored, [], viewer).kind, helpers.classifyShopScan('1', missing, [], viewer).kind], ['check', 'check']);
+  assert.match(helpers.classifyShopScan('1', missing, [], viewer).label, /^Naruto Band 3: In diesem Regal bist du Leser/);
+  assert.strictEqual(helpers.classifyShopScan('1', answer({ id: 5, title: 'Akira', can_edit: false }, { id: 50, status: 'Fehlt' })).kind, 'check');
 });
 
 const memoryStorage = () => {

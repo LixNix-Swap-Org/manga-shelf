@@ -100,7 +100,7 @@ const routes = [
     { method: 'GET', path: '/export/csv', role: 'auth', handler: csv.exportCsv },
     { method: 'POST', path: '/import/csv', role: 'editor', handler: csv.importCsv },
 
-    // calendar apps send no session: the feed token of the radar is the credential
+    // calendar apps send no session: the anime feed token (POST /anime/feed-token in routes/system.js) is the credential
     { method: 'GET', path: '/anime/feed.ics', role: 'public', handler: animeExtras.calendarFeed },
     { method: 'GET', path: '/anime/history', role: 'auth', handler: animeExtras.history },
     { method: 'GET', path: '/anime/discover/season', role: 'auth', limit: 'lookup', handler: animeExtras.discoverSeason },

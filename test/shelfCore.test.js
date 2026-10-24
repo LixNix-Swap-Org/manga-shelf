@@ -45,6 +45,7 @@ test('scopedCtx refuses statements it cannot confine to the shelves and scopes t
         INSERT INTO mangas (id, title, shelf_id) VALUES (1, 'Eins', 1), (2, 'Zwei', 2);
         INSERT INTO volumes (id, manga_id, volume_number) VALUES (1, 1, '1'), (2, 2, '1');
         INSERT INTO volume_reads (volume_id, user_id) VALUES (1, 1), (2, 1);
+        INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (1, 1, 10), (2, 1, 20);
     `);
     const scoped = access.scopedCtx(createCtx({ db: dbFromConnection(conn) }), [2]).db;
     for (const sql of [
@@ -54,11 +55,14 @@ test('scopedCtx refuses statements it cannot confine to the shelves and scopes t
         "INSERT INTO volumes (manga_id, volume_number) VALUES (1, '2')",
         'SELECT count(*) AS n FROM volume_reads WHERE user_id = ?',
         'SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1',
+        'SELECT count(*) AS n FROM chapter_progress WHERE user_id = ?',
         'SELECT count(*) AS n FROM trash'
     ]) {
         assert.throws(() => scoped.prepare(sql), /scopedCtx/, sql);
     }
     assert.equal(scoped.prepare('SELECT count(*) AS n FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id WHERE vr.user_id = ?').get(1).n, 1);
+    assert.equal(scoped.prepare('SELECT SUM(cp.chapters_read) AS n FROM chapter_progress cp JOIN mangas m ON m.id = cp.manga_id WHERE cp.user_id = ?').get(1).n, 20,
+        'chapter progress only through the series of the shelves');
     assert.deepEqual(scoped.prepare('SELECT id FROM mangas').all().map(r => r.id), [2]);
     assert.equal(scoped.prepare("UPDATE mangas SET title = 'X' WHERE title IS NOT NULL").run().changes, 1);
     assert.deepEqual(conn.prepare('SELECT title FROM mangas ORDER BY id').all().map(r => r.title), ['Eins', 'X']);

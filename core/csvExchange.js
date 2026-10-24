@@ -410,20 +410,30 @@ function readSeriesMeta(get, line, warnings) {
 }
 
 /**
- * "anna: 150, ben: 30" as [{ name, chapters }]; a name may hold commas ("Müller, Hans: 12"). null for a cell that is
- * not such a list or longer than a names cell may be.
+ * "anna: 150, ben: 30" as [{ name, chapters }]; a name may hold commas ("Müller, Hans: 12") and colons ("Dr: Who: 7"):
+ * an entry ends at a section whose text after its last colon is a number. null for a cell that is not such a list or
+ * longer than a names cell may be. Split by hand (no backtracking regex), so the cost stays linear in the cell length.
  */
 function parseChapterReaders(raw) {
     if (raw.length > MAX_NAMES_CELL_LENGTH) return null;
+    const parts = raw.split(/([,|])/);
     const pairs = [];
-    const re = /\s*([^:]+?)\s*:\s*(\d+)\s*(?:[,|]|$)/gy;
-    let match;
-    while (re.lastIndex < raw.length && (match = re.exec(raw))) {
-        const chapters = Number(match[2]);
-        if (!match[1] || chapters > MAX_CHAPTERS) return null;
-        pairs.push({ name: match[1], chapters });
+    let name = '';
+    for (let i = 0; i < parts.length; i += 2) {
+        const part = parts[i];
+        const colon = part.lastIndexOf(':');
+        const count = colon >= 0 ? part.slice(colon + 1).trim() : '';
+        if (/^\d+$/.test(count)) {
+            const who = (name + part.slice(0, colon)).trim();
+            const chapters = Number(count);
+            if (!who || chapters > MAX_CHAPTERS) return null;
+            pairs.push({ name: who, chapters });
+            name = '';
+        } else if (name || part.trim()) {
+            name += part + (parts[i + 1] ?? '');
+        }
     }
-    return re.lastIndex === raw.length && pairs.length && pairs.length <= MAX_NAMES_PER_CELL ? pairs : null;
+    return !name.trim() && pairs.length && pairs.length <= MAX_NAMES_PER_CELL ? pairs : null;
 }
 
 function resolveColumns(headers) {
@@ -576,5 +586,5 @@ function mapCsvRows(rows) {
 
 module.exports = {
     COLUMNS, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE, COLLECTING_STATUSES, CsvFormatError, rowNote, toCsv, csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, canonicalVolumeNumber, escapeCell, unescapeCell,
-    guardFormulas, normalizeDate, parseAmount, parseCount, MAX_NOTES_LENGTH, MAX_CELL_LENGTH
+    guardFormulas, normalizeDate, parseAmount, parseCount, parseChapterReaders, MAX_NOTES_LENGTH, MAX_CELL_LENGTH
 };

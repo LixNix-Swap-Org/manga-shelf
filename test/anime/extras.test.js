@@ -45,7 +45,7 @@ test('tags_add / tags_remove change the stored tags, so two people adding at onc
     assert.deepEqual((await admin('PUT', `/anime/${id}`, { tags: ['Neu'], tags_add: ['Ignoriert'] })).body.tags, ['Neu']);
 });
 
-test('anime feed: needs the radar token, lists next and estimated weekly episodes with times', async () => {
+test('anime feed: needs the anime token, lists next and estimated weekly episodes with times of the owner only', async () => {
     const { db } = require('../../db');
     const created = await admin('POST', '/anime', { title: 'Weekly Show', episodes: 12, kind: 'anime' });
     const id = created.body.id;
@@ -55,20 +55,31 @@ test('anime feed: needs the radar token, lists next and estimated weekly episode
     const other = await admin('POST', '/anime', { title: 'Nicht auf der Liste', episodes: 12, kind: 'anime' });
     db.prepare('UPDATE animes SET next_airing_episode = 1, next_airing_at = ? WHERE id = ?').run(at, other.body.id);
     assert.equal((await admin('DELETE', `/anime/${other.body.id}/progress`)).status, 200);
+    assert.equal((await admin('POST', '/users', { username: 'feed-bea', password: 'password123', role: 'editor' })).status, 200);
+    const bea = ctx.client();
+    assert.equal((await bea('POST', '/auth/login', { username: 'feed-bea', password: 'password123' })).status, 200);
+    assert.equal((await bea('PUT', `/anime/${other.body.id}/progress`, { status: 'Schaue' })).status, 200);
 
     assert.equal((await fetch(`${ctx.base}/anime/feed.ics`)).status, 404);
     assert.equal((await fetch(`${ctx.base}/anime/feed.ics?token=${'a'.repeat(43)}`)).status, 404);
-    const token = (await admin('POST', '/radar/feed-token')).body.path.split('token=')[1];
+    const radarToken = (await admin('POST', '/radar/feed-token')).body.path.split('token=')[1];
+    assert.equal((await fetch(`${ctx.base}/anime/feed.ics?token=${radarToken}`)).status, 404, 'the radar token does not open the anime feed');
+    const token = (await admin('POST', '/anime/feed-token')).body.path.split('token=')[1];
     const res = await fetch(`${ctx.base}/anime/feed.ics?token=${token}`);
     assert.equal(res.status, 200);
-    assert.ok((await admin('GET', '/radar/feed-token')).body.last_used_at, 'the anime feed marks the token as used');
+    assert.ok((await admin('GET', '/anime/feed-token')).body.last_used_at, 'the anime feed marks its token as used');
+    assert.equal((await admin('GET', '/radar/feed-token')).body.last_used_at, null);
     assert.match(res.headers.get('content-type'), /text\/calendar/);
     const text = await res.text();
     assert.equal((text.match(/BEGIN:VEVENT/g) || []).length, 4, 'next episode and three weekly estimates');
     assert.match(text, /SUMMARY:Weekly Show – Folge 3\r\n/);
     assert.match(text, /SUMMARY:Weekly Show – Folge 4 \(geschätzt\)/);
     assert.match(text, /DTSTART:\d{8}T\d{6}Z/);
-    assert.doesNotMatch(text, /Nicht auf der Liste/);
+    assert.doesNotMatch(text, /Nicht auf der Liste/, 'neither a dropped entry nor what another account watches');
+    const beaToken = (await bea('POST', '/anime/feed-token')).body.path.split('token=')[1];
+    const beas = await (await fetch(`${ctx.base}/anime/feed.ics?token=${beaToken}`)).text();
+    assert.match(beas, /SUMMARY:Nicht auf der Liste – Folge 1/);
+    assert.doesNotMatch(beas, /Weekly Show/);
 });
 
 test('discover endpoints check their input', async () => {

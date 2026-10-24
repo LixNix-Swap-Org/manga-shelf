@@ -84,6 +84,20 @@ test('CSV: format, chapter count and chapter progress go out and come back; the 
     const list = (await anna('GET', '/mangas')).body;
     assert.deepEqual(list.map(m => [m.title, m.format, m.chapters_read]).sort(),
         [['Anna Webtoon', 'webtoon', 40], ['Hoch Webtoon', 'webtoon', 0], ['Kaputt Webtoon', 'print', 0]]);
+
+    // a hand-written file repeating the series fields on every row names the format once; a same-title row with
+    // other series fields and an empty cell is a print edition of its own
+    wipe();
+    const repeated = 'Reihe;Typ;Bandnummer;Reihenverlag;Reihenstatus;Format;Gesamtkapitel;Gesamtbände\n'
+        + 'Wiederholt;Band;1;Webtoon Verlag;Laufend;webtoon;80;\n'
+        + 'Wiederholt;Band;2;Webtoon Verlag;Laufend;;80;\n'
+        + 'Wiederholt;Band;3;Webtoon Verlag;Laufend;;80;\n'
+        + 'Wiederholt;Band;1;Druck Verlag;Laufend;;;12\n';
+    const again = await anna('POST', '/import/csv', { csv: repeated });
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+    const series = (await anna('GET', '/mangas')).body.filter(m => m.title === 'Wiederholt');
+    assert.deepEqual(series.map(m => [m.format, m.publisher || m.series_publisher || null]).sort(),
+        [['print', 'Druck Verlag'], ['webtoon', 'Webtoon Verlag']]);
 });
 
 test('the Manga Passion calendar and the quality check leave webtoons out', async () => {
@@ -99,4 +113,58 @@ test('the Manga Passion calendar and the quality check leave webtoons out', asyn
     const mpCheck = quality.checks.find(c => c.id === 'series_without_mp_link');
     assert.deepEqual(mpCheck.items.map(i => i.id), [print]);
     assert.equal((await admin('POST', '/manga-passion/import', { manga_id: webtoon, title: 'Kalender Webtoon', volume_number: '1' })).body.code, 'MP_WEBTOON');
+});
+
+test('CSV: a print edition and a webtoon of the same title stay two series through export and import, in either order', async () => {
+    const makePrint = async () => {
+        const res = await admin('POST', '/mangas', { title: 'Solo Leveling', publisher: 'altraverse', manga_passion_id: 4711, total_volumes: 14 });
+        for (const n of ['1', '2']) assert.equal((await admin('POST', '/volumes', { manga_id: res.body.id, volume_number: n, status: 'Vorhanden' })).status, 200);
+    };
+    const makeWebtoon = async () => {
+        const res = await admin('POST', '/mangas', { title: 'Solo Leveling', format: 'webtoon', total_chapters: 201 });
+        assert.equal((await admin('PUT', `/mangas/${res.body.id}/chapters`, { chapters_read: 150 })).status, 200);
+        assert.equal((await admin('POST', '/volumes', { manga_id: res.body.id, volume_number: '1', status: 'Fehlt' })).status, 200);
+    };
+    for (const order of [[makePrint, makeWebtoon], [makeWebtoon, makePrint]]) {
+        wipe();
+        for (const make of order) await make();
+        const csv = await exportCsv();
+        wipe();
+        const imported = await admin('POST', '/import/csv', { csv });
+        assert.equal(imported.status, 200, JSON.stringify(imported.body));
+        assert.deepEqual([imported.body.created_series, imported.body.created_volumes, imported.body.skipped_existing, imported.body.warnings],
+            [2, 3, 0, []], order.map(f => f.name).join(' → '));
+
+        const series = (await admin('GET', '/mangas')).body.filter(m => m.title === 'Solo Leveling');
+        const detailOf = async (format) => (await admin('GET', `/mangas/${series.find(m => m.format === format).id}`)).body;
+        const print = await detailOf('print');
+        assert.deepEqual([print.publisher, print.manga_passion_id, print.total_volumes, print.volumes.map(v => [v.volume_number, v.status]), print.chapter_progress],
+            ['Altraverse', 4711, 14, [['1', 'Vorhanden'], ['2', 'Vorhanden']], []]);
+        const webtoon = await detailOf('webtoon');
+        assert.deepEqual([webtoon.publisher, webtoon.manga_passion_id, webtoon.total_chapters, webtoon.volumes.map(v => [v.volume_number, v.status])],
+            [null, null, 201, [['1', 'Fehlt']]]);
+        assert.deepEqual(webtoon.chapter_progress.map(p => [p.username, p.chapters_read]), [['admin', 150]]);
+
+        const again = await admin('POST', '/import/csv', { csv });
+        assert.deepEqual([again.body.created_series, again.body.created_volumes, again.body.skipped_existing], [0, 0, 3], 'every row finds the series of its format');
+    }
+});
+
+test('PUT /mangas/:id: switching the format keeps the Manga Passion link; manga_passion_id null clears it', async () => {
+    wipe();
+    const id = (await admin('POST', '/mangas', { title: 'Tower of God', publisher: 'altraverse', manga_passion_id: 99 })).body.id;
+    const stored = async () => {
+        const detail = (await admin('GET', `/mangas/${id}`)).body;
+        return [detail.format, detail.manga_passion_id];
+    };
+    assert.equal((await admin('PUT', `/mangas/${id}`, { format: 'webtoon', total_chapters: '201' })).status, 200);
+    assert.deepEqual(await stored(), ['webtoon', 99]);
+    const gaps = await admin('GET', `/mangas/${id}/gaps`);
+    assert.deepEqual([gaps.status, gaps.body.code], [409, 'MP_WEBTOON'], 'the link stays unused while the series is a webtoon');
+    assert.equal((await admin('PUT', `/mangas/${id}`, { format: 'print' })).status, 200);
+    assert.deepEqual(await stored(), ['print', 99], 'back on print the link is there again');
+    assert.equal((await admin('PUT', `/mangas/${id}`, { format: 'webtoon', manga_passion_id: null })).status, 200);
+    assert.deepEqual(await stored(), ['webtoon', null]);
+    const fresh = (await admin('POST', '/mangas', { title: 'Neues Webtoon', format: 'webtoon', manga_passion_id: 98 })).body.id;
+    assert.equal((await admin('GET', `/mangas/${fresh}`)).body.manga_passion_id, null, 'a new webtoon still gets no link');
 });

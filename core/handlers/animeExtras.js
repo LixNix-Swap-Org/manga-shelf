@@ -35,9 +35,12 @@ function airings(row, nowSeconds) {
 
 const titleOf = (row) => row.title_de || row.title || row.title_romaji || row.title_english || row.title_native;
 
-/** GET /anime/feed.ics?token= : the airing times of the entries the token's owner watches or plans. */
+/**
+ * GET /anime/feed.ics?token= : the airing times of the entries the token's owner watches or plans. Only a token of
+ * POST /anime/feed-token opens it; a radar token answers 404 here.
+ */
 function calendarFeed(ctx, { query }) {
-    const found = radar.feedEntryFor(ctx, qstr(query.token));
+    const found = radar.feedEntryFor(ctx, qstr(query.token), 'anime');
     if (!found) throw new HttpError(404, 'Kalender-Abo nicht gefunden oder widerrufen', 'NOT_FOUND');
     radar.touchFeed(ctx, found);
     const rows = ctx.db.prepare(`

@@ -1046,7 +1046,10 @@ async function adaptations(ctx, { params }) {
     return { body: await gateway.adaptationsOf(ctx, manga) };
 }
 
-/** GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live (beyond the entries in the collection). */
+/**
+ * GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live beyond the entries in the collection
+ * (gateway.seasonChainOf); with AniList switched off the chain of the stored relations, without a request.
+ */
 async function seasonChainLive(ctx, { params }) {
     const id = parseId(params.id);
     const row = loadRow(ctx, id);

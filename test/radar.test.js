@@ -979,6 +979,46 @@ test('feed token: wrong, missing or session tokens get 404; a new token revokes 
     assert.equal((await own('GET', '/radar/feed-token')).body.active, false);
 });
 
+const animeFeed = (token) => fetch(`${ctx.base}/anime/feed.ics?token=${token}`);
+const tokenOf = (res) => new URL(res.body.url).searchParams.get('token');
+
+test('feed token: the radar and the anime feed each have their own token, revoked one by one; an older token opens the radar only', async () => {
+    const own = ctx.client();
+    await own('POST', '/auth/login', { username: 'ed', password: 'password123' });
+    assert.equal((await own('GET', '/anime/feed-token')).body.active, false);
+    assert.equal((await ctx.client()('POST', '/anime/feed-token')).status, 401);
+
+    const radarToken = tokenOf(await own('POST', '/radar/feed-token'));
+    const made = await own('POST', '/anime/feed-token');
+    assert.equal(made.status, 200);
+    assert.match(made.body.path, /^\/api\/anime\/feed\.ics\?token=[A-Za-z0-9_-]{43}$/);
+    const animeToken = tokenOf(made);
+    assert.equal((await own('GET', '/anime/feed-token')).body.path, made.body.path, 'the anime address can be shown again');
+    assert.equal((await own('GET', '/radar/feed-token')).body.path, `/api/radar/feed.ics?token=${radarToken}`, 'the anime token leaves the radar token alone');
+
+    assert.equal((await animeFeed(animeToken)).status, 200);
+    assert.equal((await animeFeed(radarToken)).status, 404, 'a radar address never lists the anime');
+    assert.equal((await fetchFeed(`?token=${animeToken}`)).status, 404, 'an anime address never lists the radar');
+    assert.equal((await fetchFeed(`?token=${radarToken}`)).status, 200);
+
+    // stored before feeds had scopes: no scope in the entry
+    const { db } = require('../db');
+    const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
+    const older = 'L'.repeat(43);
+    const hash = require('crypto').createHash('sha256').update(older, 'utf8').digest('hex');
+    db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)')
+        .run(`calendar_feed:${hash}`, JSON.stringify({ user_id: edId, created_at: '2026-01-01T00:00:00.000Z', last_used_at: null, sealed: null }));
+    assert.equal((await fetchFeed(`?token=${older}`)).status, 200);
+    assert.equal((await animeFeed(older)).status, 404);
+
+    assert.deepEqual((await own('DELETE', '/anime/feed-token')).body, { success: true, removed: 1 });
+    assert.equal((await animeFeed(animeToken)).status, 404);
+    assert.equal((await own('GET', '/anime/feed-token')).body.active, false);
+    assert.equal((await fetchFeed(`?token=${radarToken}`)).status, 200, 'revoking the anime address keeps the radar address');
+    assert.deepEqual((await own('DELETE', '/radar/feed-token')).body, { success: true, removed: 2 }, 'the radar token and the older one');
+    assert.equal((await fetchFeed(`?token=${older}`)).status, 404);
+});
+
 test('feed token: a deleted user\'s feed stops working', async () => {
     assert.equal((await admin('POST', '/users', { username: 'kalender', password: 'password123', role: 'editor' })).status, 200);
     const gone = ctx.client();
@@ -1000,9 +1040,12 @@ test('feed token: a password change, an admin password reset and "Alle Sitzungen
         return { client, token };
     };
     const kim = await login('kim-feed');
+    const kimAnime = tokenOf(await kim.client('POST', '/anime/feed-token'));
+    assert.equal((await animeFeed(kimAnime)).status, 200);
     const other = await login('lea-feed');
     assert.equal((await kim.client('PUT', '/auth/password', { current_password: 'password123', new_password: 'password456' })).status, 200);
     assert.equal((await fetchFeed(`?token=${kim.token}`)).status, 404, 'own password change');
+    assert.equal((await animeFeed(kimAnime)).status, 404, 'own password change ends the anime address too');
     assert.equal((await fetchFeed(`?token=${other.token}`)).status, 200, 'other users keep theirs');
     assert.equal((await kim.client('GET', '/radar/feed-token')).body.active, false);
 
