@@ -2,15 +2,16 @@ import { memo } from 'react';
 import { BookOpen, BuildingComplex, Trash } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
-import { getSeriesProgress } from '../../utils/volumeHelpers';
+import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
 import { formatCount, formatMoney } from '../../utils/format';
 import { langFor } from '../common/lang';
 import { splitAuthors } from '../../utils/seriesMeta';
 import { AuthorButtons } from './MangaCard';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 import { mangaStatusLabel } from '../../utils/enumLabels.js';
 import LanguagePill from '../common/LanguagePill';
+import WebtoonPill from '../common/WebtoonPill';
 import { editionCurrency, editionLanguage, editionRegion } from '../../utils/editions';
 
 const COVER_FALLBACK = (
@@ -24,6 +25,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
   const { owned, total, extras, pct } = getSeriesProgress(manga);
   const readState = getReadState(manga);
   const authors = onAuthorClick ? splitAuthors(manga.author) : [];
+  const chapters = isWebtoon(manga) ? getChapterProgress(manga) : null;
 
   return (
     <tr className={className}>
@@ -42,6 +44,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
             {manga.title}
           </Link>
           <LanguagePill language={editionLanguage(manga)} region={editionRegion(manga)} />
+          <WebtoonPill format={manga.format} />
         </div>
         <div className="text-slate-400 text-xs mt-0.5 [@media(pointer:coarse)]:mt-1.5 [@media(pointer:fine)]:line-clamp-1">
           {authors.length ? <AuthorButtons names={authors} onAuthorClick={onAuthorClick} buttonClassName="hit-44" /> : (manga.author || t('Kein Autor'))}
@@ -67,30 +70,53 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
         </span>
       </td>
       <td className="py-2.5 px-4 min-w-[9rem]">
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="font-bold text-white font-mono whitespace-nowrap">
-            {owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}
-          </span>
-          {readState.read > 0 ? (
-            <span className={`text-[10px] font-mono whitespace-nowrap ${readState.complete ? 'text-emerald-400 font-bold' : 'text-sky-300'}`}>
-              {t('({read} gelesen • {pct}%)', { read: readState.read, pct: readState.pct })}
+        {chapters ? (
+          <>
+            <span className="font-bold text-white font-mono whitespace-nowrap">
+              {chapters.read}{chapters.total > 0 ? ` / ${chapters.total}` : ''} {t('Kap.')}
             </span>
-          ) : (
-            <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">{t('(Ungelesen)')}</span>
-          )}
-        </div>
-        {pct !== null && (
-          <div
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuetext={t('{owned} von {count}', { owned, count: formatCount(total, 'Band', 'Bänden') })}
-            aria-label={t('Fortschritt')}
-            className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1"
-          >
-            <div className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 rounded-full" style={{ width: `${pct}%` }} />
-          </div>
+            {chapters.pct !== null && (
+              <div
+                role="progressbar"
+                aria-valuenow={chapters.pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: chapters.read })}
+                aria-label={t('Fortschritt')}
+                className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1"
+              >
+                <div className="h-full bg-gradient-to-r from-teal-500 to-sky-400 rounded-full" style={{ width: `${chapters.pct}%` }} />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col items-start gap-0.5">
+              <span className="font-bold text-white font-mono whitespace-nowrap">
+                {owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}
+              </span>
+              {readState.read > 0 ? (
+                <span className={`text-[10px] font-mono whitespace-nowrap ${readState.complete ? 'text-emerald-400 font-bold' : 'text-sky-300'}`}>
+                  {t('({read} gelesen • {pct}%)', { read: readState.read, pct: readState.pct })}
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">{t('(Ungelesen)')}</span>
+              )}
+            </div>
+            {pct !== null && (
+              <div
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={t('{owned} von {count}', { owned, count: formatCount(total, 'Band', 'Bänden') })}
+                aria-label={t('Fortschritt')}
+                className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1"
+              >
+                <div className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 rounded-full" style={{ width: `${pct}%` }} />
+              </div>
+            )}
+          </>
         )}
       </td>
       <td className="py-2.5 px-4 text-right hidden md:table-cell font-mono font-bold text-emerald-400">

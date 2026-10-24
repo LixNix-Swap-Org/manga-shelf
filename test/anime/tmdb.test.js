@@ -297,3 +297,13 @@ test('season suggestion: the TMDb twin of an anime entry, names in the UI langua
     const keyless = await gateway.tmdbSeasons(ctxWith(http, keys().provider), row);
     assert.deepEqual(keyless, { seasons: [], reason: 'no_key', tmdb_id: null });
 });
+
+test('season suggestion: an answer for a stored entry is cached, so reopening it asks TMDb once', async () => {
+    const http = fakeFetch({ tmdb: tmdbFixtures });
+    const ctx = ctxWith(http, keys({ instance: HEX_KEY }).provider);
+    const row = { id: 7, kind: 'anime', title: 'Sousou no Frieren', title_romaji: 'Sousou no Frieren', title_native: '葬送のフリーレン', season_year: 2023, episodes: 38 };
+    const first = await gateway.tmdbSeasons(ctx, row, { language: 'de' });
+    const calls = http.calls.length;
+    assert.deepEqual(await gateway.tmdbSeasons(ctx, row, { language: 'de' }), first);
+    assert.equal(http.calls.length, calls, 'second call from api_cache');
+});

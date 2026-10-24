@@ -50,7 +50,7 @@ function coreRules() {
 }
 
 module.exports = [
-    { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/dist-app/', 'desktop/dist/', 'desktop/node_modules/', 'mobile/node_modules/', 'mobile/www/', 'mobile/build/', 'mobile/ios/App/App/public/', 'mobile/android/app/src/main/assets/public/', 'mobile/android/**/build/', 'mobile/ios/App/Pods/', 'dist_pack/', 'dist/', 'data/', 'data-dev/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'gemini_export/'] },
+    { ignores: ['.claude/', 'node_modules/', 'frontend/node_modules/', 'frontend/dist/', 'frontend/dist-app/', 'desktop/dist/', 'desktop/node_modules/', 'mobile/node_modules/', 'mobile/www/', 'mobile/build/', 'mobile/ios/App/App/public/', 'mobile/android/app/src/main/assets/public/', 'mobile/android/**/build/', 'mobile/ios/App/Pods/', 'dist_pack/', 'dist/', 'data/', 'data-dev/', 'pterodactyl-manga-shelf/', 'scratch/', 'screenshots/', '*_screenshots/', 'screenshots_*/', 'testlauf-*/', 'gemini_export/'] },
     js.configs.recommended,
     // new in the eslint 10 recommended set: warn until the existing sites are cleaned up
     { rules: { 'no-useless-assignment': 'warn', 'preserve-caught-error': 'warn' } },

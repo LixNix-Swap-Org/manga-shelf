@@ -51,6 +51,8 @@ function foldPairs(mpHits, gatewayHits) {
     const pairs = new Map();
     gatewayHits.forEach((hit, i) => {
         if (hit.source !== 'anilist' && hit.source !== 'mal') return;
+        // a manhwa or manhua stands for the webtoon, the Manga Passion hit for the German print edition: both stay pickable
+        if (hit.series_format === 'webtoon') return;
         const targets = mpHits.map((mp, j) => j).filter((j) => matches(mpHits[j], hit));
         if (targets.length !== 1) return;
         const rival = gatewayHits.some((other, k) => k !== i && other.source === hit.source && matches(mpHits[targets[0]], other));

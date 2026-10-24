@@ -7,6 +7,8 @@ const BUILD_ID = '__BUILD_ID__';
 const CACHE_NAME = BUILD_ID && !BUILD_ID.startsWith('__') ? `mangashelf-app-__APP_VERSION__-${BUILD_ID}` : 'mangashelf-app-__APP_VERSION__';
 // Same name as UPLOADS_CACHE in src/appShell.js (cleared on logout). v2 dropped v1 entries that held index.html.
 const UPLOADS_CACHE = 'mangashelf-uploads-v2';
+// Most images the uploads cache keeps; the oldest ones go first (they are fetched again when needed).
+const MAX_UPLOADS = 1000;
 // The web app manifest of the active language is cached by WARM_LANGUAGE (below), not here.
 const STATIC_ASSETS = [
   '/',
@@ -162,6 +164,12 @@ async function networkFirst(event) {
   }
 }
 
+/** Keeps the newest MAX_UPLOADS images (cache.keys() lists them in insertion order). */
+async function trimUploads(cache) {
+  const keys = await cache.keys();
+  await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_UPLOADS)).map((key) => cache.delete(key)));
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -181,7 +189,7 @@ self.addEventListener('fetch', (event) => {
         if (cachedResponse) return cachedResponse;
         const networkResponse = await fetch(request);
         if (isOwnOk(networkResponse) && contentType(networkResponse).startsWith('image/')) {
-          event.waitUntil(cache.put(request, networkResponse.clone()).catch(() => {}));
+          event.waitUntil(cache.put(request, networkResponse.clone()).then(() => trimUploads(cache)).catch(() => {}));
         }
         return networkResponse;
       })

@@ -5,6 +5,8 @@ const RESERVE_SHARE = 0.4;
 const FAILURES_TO_OPEN = 3;
 const OPEN_MS = 60 * 1000;
 const DEFAULT_PAUSE_MS = 60 * 1000;
+// A 429 never pauses a source longer than this, whatever Retry-After or the reset header claims.
+const MAX_PAUSE_MS = 5 * 60 * 1000;
 const SLOW_WINDOW_MS = 10 * MINUTE;
 
 /**
@@ -104,13 +106,14 @@ function createBudget({ onChange = () => {} } = {}) {
         if (rate.reset) b.resetAt = rate.reset * 1000;
     }
 
-    /** 429: no token until Retry-After (seconds) or X-RateLimit-Reset (unix seconds), 60 s without either. */
+    /** 429: no token until Retry-After (seconds) or X-RateLimit-Reset (unix seconds), 60 s without either, at most 5 minutes. */
     function rateLimited(key, { retryAfterSec, resetAt } = {}, nowMs) {
         const b = buckets.get(key);
         if (!b) return;
         let until = nowMs + DEFAULT_PAUSE_MS;
         if (retryAfterSec > 0) until = nowMs + retryAfterSec * 1000;
         else if (resetAt && resetAt * 1000 > nowMs) until = resetAt * 1000;
+        until = Math.min(until, nowMs + MAX_PAUSE_MS);
         b.pausedUntil = until;
         b.tokens = 0;
         b.waitedAt = nowMs;

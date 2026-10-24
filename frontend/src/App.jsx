@@ -27,6 +27,8 @@ import {
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import { useRevealFocusedField } from './hooks/useKeyboardOpen';
 import useWatchSync from './app/watch/useWatchSync';
+import useReleaseReminders from './app/reminders/useReleaseReminders';
+import { clearReleaseReminders, releaseRemindersChanged } from './app/reminders/reminderState';
 import { useLanguage } from './i18n/react.jsx';
 import { clearPendingLanguage, setLanguageTarget, syncUserLanguage } from './i18n/preference.js';
 import { t } from './i18n/index.js';
@@ -255,12 +257,13 @@ function clearScanList() {
   }
 }
 
-async function clearSessionData() {
+/** Drops what belongs to the session; the reminder switch goes off for the next account unless the collection stays (a restore). */
+async function clearSessionData({ sameCollection = false } = {}) {
   clearMangaListCache();
   clearSearchState();
   clearScanList();
   endViewSession();
-  await Promise.all([clearOfflineData(), clearUploadsCache()]);
+  await Promise.all([clearOfflineData(), clearUploadsCache(), clearReleaseReminders(undefined, { keepSetting: sameCollection })]);
 }
 
 const reloadPage = () => window.location.reload();
@@ -436,6 +439,8 @@ function App() {
 
   // apps: the opt-in Crunchyroll history sync runs in the foreground for a signed-in user or the opened device collection
   useWatchSync(user, localMode ? 'local' : activeServer?.id ?? 'server');
+  // apps: the opt-in release-day reminders, planned on the device from the radar and the anime list
+  useReleaseReminders(user, localMode ? 'local' : activeServer?.id ?? 'server');
 
   // standalone in the browser build: a source without CORS headers is named once instead of failing silently
   useEffect(() => {
@@ -615,12 +620,14 @@ function App() {
   const handleSwitchProfile = useCallback((profile) => openLocal(profile), [openLocal]);
 
   // a restore replaced the local collection: drop the list caches, read the profile again (one run per restore, whether
-  // the device screen or the runtime's event asks first)
+  // the device screen or the runtime's event asks first); the reminders are planned again from the restored data
   const handleLocalReplaced = useCallback(() => {
     if (!replacing.current) {
       replacing.current = (async () => {
-        await clearSessionData();
-        return checkStatus();
+        await clearSessionData({ sameCollection: true });
+        const outcome = await checkStatus();
+        releaseRemindersChanged();
+        return outcome;
       })().finally(() => { replacing.current = null; });
     }
     return replacing.current;

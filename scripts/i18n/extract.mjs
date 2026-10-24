@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // i18n key extractor: collects every UI source text (t/tc/rich/msg/tn/formatCount calls, `// i18n` marked declarations, API-key
 // guides, takeover texts, server error texts). --write adds missing keys to the catalogs, --prune drops unused ones, --merge takes
 // fragment files, --context writes { key: [{ file, line, component }] }, --check exits 1 on invalid calls (--strict: missing texts).

@@ -11,6 +11,7 @@ import { getVolumeDisplayTitle } from '../utils/volumeHelpers';
 import { t, tn } from '../i18n/index.js';
 import { askConfirm } from '../components/modals/askConfirm';
 import { payloadText, serverText } from '../i18n/serverText.js';
+import { releaseRemindersChanged } from '../app/reminders/reminderState';
 
 /**
  * State and actions of the volume editor: form, photos, Manga-Passion autofill, save and delete. Mount it once per
@@ -283,6 +284,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
         signal: signal()
       });
       if (res.ok) {
+        releaseRemindersChanged();
         onClose();
         if (onSuccess) await onSuccess();
         return;
@@ -309,6 +311,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
       setFormError(result.error);
       return;
     }
+    releaseRemindersChanged();
     onClose();
     if (onSuccess) await onSuccess();
     notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, result.trash_id, onSuccess);

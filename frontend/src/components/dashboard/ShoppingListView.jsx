@@ -5,7 +5,7 @@ import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import {
   classifyShopScan, classifyShopScanOffline, classifyLocalHit, localSourceNote, lookupFailureKind, canStartLookup,
   mergeScanEntry, normalizeBuyOutcome, shouldStopBooking, applyBookingResults, markScanBooking, bookingSummary, isBookable,
-  loadScanList, saveScanList, reconcileScanList, filterShoppingItems, recountPublishers, resolvePublisherFilter,
+  basketTotals, removeScanEntry, loadScanList, saveScanList, reconcileScanList, filterShoppingItems, recountPublishers, resolvePublisherFilter,
   formatShoppingStand, liveScanSupported
 } from '../../utils/scanHelpers';
 import { lookupLocalIsbn, formatAge } from '../../utils/offlineStore';
@@ -30,7 +30,7 @@ import CoverImage from '../common/CoverImage';
 import {
   ShoppingCart, RefreshCw, Search, X, CircleCheck, CircleAlert, SearchX,
   BookOpen, BuildingComplex, Check, WifiOff, ScanBarcode, Heart, Share2, Copy, Printer,
-  Users, Info, CircleQuestionMark, Clock, TriangleAlert
+  Users, Info, CircleQuestionMark, Clock, TriangleAlert, CirclePlus, PackageCheck
 } from 'lucide-react';
 import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
@@ -50,7 +50,8 @@ const FROM_SHOPPING = { from: '/?view=shopping' };
 export const keepNumberWithWord = (text) => String(text ?? '').replace(/ (?=\d)/, '\u00a0');
 
 const KIND_STYLE = {
-  buy: [ShoppingCart, 'text-emerald-300'], owned: [CircleCheck, 'text-slate-400'], partner: [Users, 'text-sky-300'],
+  buy: [ShoppingCart, 'text-emerald-300'], claim: [PackageCheck, 'text-emerald-300'], add: [CirclePlus, 'text-emerald-300'],
+  owned: [CircleCheck, 'text-slate-400'], partner: [Users, 'text-sky-300'],
   check: [Info, 'text-amber-300'], new: [BookOpen, 'text-sky-300'], unknown: [CircleQuestionMark, 'text-slate-400'],
   offline: [WifiOff, 'text-amber-300'], pending: [Clock, 'text-slate-400']
 };
@@ -211,11 +212,13 @@ export default function ShoppingListView({
   setActiveMainView,
   canEdit,
   handleQuickBuy,
+  handleAddBought = null,
   buyingId,
   buyingIds = null,
   user = null,
   shelfName = null,
-  onClearShelf
+  onClearShelf,
+  readOnlySeries = null
 }) {
   const userId = user?.id ?? null;
   const items = useMemo(() => shoppingData?.items || [], [shoppingData]);
@@ -233,6 +236,9 @@ export default function ShoppingListView({
   });
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  // series in shelves where the user is a viewer: their scans are not bookable
+  const scanOptionsRef = useRef(null);
+  scanOptionsRef.current = { readOnlySeries };
 
   // Scan list of this store visit (kept in localStorage for 12 h: survives opening a series, a reload and an app kill)
   const [scanned, setScanned] = useState(() => loadScanList(scanStore(), { userId }));
@@ -272,7 +278,7 @@ export default function ShoppingListView({
     updateScanned((prev) => mergeScanEntry(prev, { isbn: cleanIsbn, kind: 'pending', label: t('{isbn} – wird geprüft…', { isbn: cleanIsbn }) }));
 
     const finish = (entry) => updateScanned((prev) => mergeScanEntry(prev, entry));
-    const checkOffline = async () => finish(classifyShopScanOffline(cleanIsbn, await lookupLocalIsbn(cleanIsbn), itemsRef.current));
+    const checkOffline = async () => finish(classifyShopScanOffline(cleanIsbn, await lookupLocalIsbn(cleanIsbn), itemsRef.current, scanOptionsRef.current));
     const abandon = () => updateScanned((prev) => prev.flatMap((e) => (
       e.isbn === cleanIsbn && e.kind === 'pending' ? (previous ? [previous] : []) : [e]
     )));
@@ -284,7 +290,7 @@ export default function ShoppingListView({
         const hit = await lookupLocalIsbn(cleanIsbn);
         if (hit) {
           const note = localSourceNote(hit.syncedAt ? formatAge(hit.syncedAt) : '');
-          finish(classifyLocalHit(cleanIsbn, hit, itemsRef.current, { note, source: 'local' }));
+          finish(classifyLocalHit(cleanIsbn, hit, itemsRef.current, { ...scanOptionsRef.current, note, source: 'local' }));
         }
       }
       return await checkNetwork(cleanIsbn, { finish, checkOffline, abandon });
@@ -315,7 +321,7 @@ export default function ShoppingListView({
       return;
     }
     if (!data) return checkOffline();
-    finish(classifyShopScan(cleanIsbn, data, itemsRef.current));
+    finish(classifyShopScan(cleanIsbn, data, itemsRef.current, scanOptionsRef.current));
   };
 
   // Quick buy with a short undo window: the PUT is sent when the window ends, the page is hidden or the view closes
@@ -395,10 +401,21 @@ export default function ShoppingListView({
     };
   }, [commitBuy]);
 
-  const buyable = scanned.filter(isBookable);
+  // a volume to create needs handleAddBought (Dashboard passes it); without it only stored volumes are booked
+  const canBook = useCallback((e) => isBookable(e) && (e.kind !== 'add' || Boolean(handleAddBought)), [handleAddBought]);
+  const buyable = scanned.filter(canBook);
+  const basket = basketTotals(buyable);
+  /** One booking: list volumes through the quick buy (and its undo window), others as an own purchase or a new volume. */
+  const bookEntry = (entry) => {
+    if (entry.kind === 'add') return handleAddBought({ mangaId: entry.mangaId, volume: entry.volume }, { batch: true });
+    if (entry.kind === 'claim') return handleQuickBuy(entry.volumeId, { batch: true, mangaId: entry.mangaId });
+    // a 'Gekauft' tap still in its undo window is cancelled only now; entries after a stop keep theirs
+    const single = dropDeferred(entry.itemId) ? null : commitsRef.current.get(entry.itemId);
+    return single || handleQuickBuy(entry.itemId, { batch: true });
+  };
   const bookAll = async () => {
     if (booking) return;
-    const batch = scannedRef.current.filter(isBookable);
+    const batch = scannedRef.current.filter(canBook);
     if (!batch.length) return;
     setBooking(true);
     setBookingNote('');
@@ -406,11 +423,9 @@ export default function ShoppingListView({
     try {
       for (const entry of batch) {
         updateScanned((prev) => markScanBooking(prev, [entry.isbn]));
-        // a 'Gekauft' tap still in its undo window is cancelled only now; entries after a stop keep theirs
-        const single = dropDeferred(entry.itemId) ? null : commitsRef.current.get(entry.itemId);
         let outcome;
         try {
-          outcome = single ? await single : await handleQuickBuy(entry.itemId, { batch: true });
+          outcome = await bookEntry(entry);
         } catch (err) {
           outcome = { status: 'failed', error: err?.message || '' };
         }
@@ -734,6 +749,11 @@ export default function ShoppingListView({
               <button type="button" onClick={clearScanned} className="btn-secondary text-xs px-3 py-1.5" disabled={booking}>{t('Leeren')}</button>
             </div>
           </div>
+          {canEdit && basket.length > 0 && (
+            <p className="text-xs text-slate-300" id="shop-scan-total">
+              {t('Summe: {total}', { total: basket.map((b) => formatMoney(b.total, b.currency)).join(' + ') })}
+            </p>
+          )}
           {bookingNote && <p className="text-xs text-rose-300" role="status">{bookingNote}</p>}
           <ul className="space-y-1.5">
             {scanned.map((e) => {
@@ -749,6 +769,7 @@ export default function ShoppingListView({
                     {e.done && e.queued && <span className="ml-1 text-slate-400">{t('(vorgemerkt)')}</span>}
                     {e.done && e.gone && <span className="ml-1 text-slate-400">{t('(nicht mehr auf der Liste)')}</span>}
                     {e.booking && <span className="ml-1 text-slate-400">{t('(wird gebucht…)')}</span>}
+                    {e.kind === 'add' && !e.done && !e.booking && canEdit && <span className="ml-1 text-slate-400">{t('(wird beim Buchen angelegt)')}</span>}
                     {!e.done && e.failed && <span className="ml-1 text-rose-300">{t('– nicht gebucht: {error}', { error: e.error })}</span>}
                   </span>
                   {recheck && (
@@ -758,6 +779,18 @@ export default function ShoppingListView({
                       className="shrink-0 text-[11px] text-brand-300 hover:text-white underline"
                     >
                       {t('Erneut prüfen')}
+                    </button>
+                  )}
+                  {!e.booking && (
+                    <button
+                      type="button"
+                      onClick={() => updateScanned((prev) => removeScanEntry(prev, e.isbn))}
+                      disabled={booking}
+                      className="hit-44 shrink-0 text-slate-400 hover:text-white rounded disabled:opacity-50"
+                      aria-label={t('Scan entfernen: {label}', { label: e.label })}
+                      title={t('Scan entfernen: {label}', { label: e.label })}
+                    >
+                      <X className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                   )}
                 </li>

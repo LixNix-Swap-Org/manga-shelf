@@ -29,6 +29,7 @@ const KINDS = ['anime', 'tv', 'movie'];
 const TMDB_KINDS = ['movie', 'tv'];
 const TMDB_LABEL = 'TMDB';
 const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
+const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -132,6 +133,51 @@ function rememberedLinks(ctx, animeId = null) {
     return new Map(rows.map((r) => [r.anime_id, r.url]));
 }
 
+/**
+ * The main line of an entry as seasons: the TV prequel/sequel chain, followed through the entries that are in the
+ * collection (their stored relations), so nothing is asked from a source. A neighbour that is not in the collection
+ * is listed but ends the walk. Returns [] when the entry has no TV neighbour; otherwise the seasons in order with
+ * { in_collection_id, anilist_id, mal_id, title, season_year, episodes, my_status, current }.
+ */
+function seasonChain(ctx, row, relations) {
+    const byAni = ctx.db.prepare('SELECT * FROM animes WHERE anilist_id = ?');
+    const byMal = ctx.db.prepare('SELECT * FROM animes WHERE mal_id = ?');
+    const status = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
+    const mineOf = (id) => (id && ctx.user && (status.get(id, ctx.user.id) || {}).status) || null;
+    const found = (r) => (r.anilist_id && byAni.get(r.anilist_id)) || (r.mal_id && byMal.get(r.mal_id)) || null;
+    const nodeOf = (r, entry) => ({
+        in_collection_id: entry ? entry.id : null,
+        anilist_id: r.anilist_id || null,
+        mal_id: r.mal_id || null,
+        title: (entry && (entry.title_de || entry.title)) || r.title,
+        season_year: (entry && entry.season_year) || r.season_year || null,
+        episodes: (entry && entry.episodes) || r.episodes || null,
+        my_status: mineOf(entry && entry.id),
+        current: false
+    });
+    const walk = (start, type) => {
+        const out = [];
+        const seen = new Set([start.id]);
+        let rels = relations;
+        for (let i = 0; i < 20; i += 1) {
+            const r = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && SEASON_FORMATS.includes(x.format));
+            if (!r) break;
+            const entry = found(r);
+            out.push(nodeOf(r, entry));
+            if (!entry || seen.has(entry.id)) break;
+            seen.add(entry.id);
+            rels = store.parseJson(entry.relations, []);
+        }
+        return out;
+    };
+    const after = walk(row, 'SEQUEL');
+    const before = walk(row, 'PREQUEL').reverse();
+    if (!after.length && !before.length) return [];
+    const self = { in_collection_id: row.id, anilist_id: row.anilist_id || null, mal_id: row.mal_id || null, title: row.title_de || row.title,
+        season_year: row.season_year || null, episodes: row.episodes || null, my_status: mineOf(row.id), current: true };
+    return [...before, self, ...after];
+}
+
 /** The detail answer of GET /anime/:id (also returned by POST, PUT and refresh). */
 function detailOf(ctx, id) {
     const row = loadRow(ctx, id);
@@ -141,17 +187,24 @@ function detailOf(ctx, id) {
     const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
     const progress = progressRows(ctx, id);
     const mine = progress.find((p) => p.user_id === (ctx.user && ctx.user.id));
+    const myStatus = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
     const manga = row.manga_id ? visibleManga(ctx, row.manga_id) : null;
+    const linkedElsewhere = Boolean(row.manga_id && !manga && ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(row.manga_id));
     return {
         ...entry,
         manga_id: manga ? manga.id : null,
+        ...(linkedElsewhere ? { manga_linked_elsewhere: true } : {}),
         ...store.linksOf(row),
         watch: store.watchOf(row, mine, rememberedLinks(ctx, id).get(id)),
         description: row.description,
         relations: relations.map((r) => ({
             ...r,
             in_collection_id: (r.anilist_id && byAni.get(r.anilist_id)?.id) || (r.mal_id && byMal.get(r.mal_id)?.id) || null
+        })).map((r) => ({
+            ...r,
+            my_status: (r.in_collection_id && ctx.user && (myStatus.get(r.in_collection_id, ctx.user.id) || {}).status) || null
         })),
+        season_chain: seasonChain(ctx, row, relations),
         manga,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
@@ -245,15 +298,19 @@ function list(ctx) {
     const communities = community.communityByAnime(progress);
     const remembered = rememberedLinks(ctx);
     const visibleLinks = visibleMangaIds(ctx);
+    const allLinkedMangaIds = new Set(ctx.db.prepare('SELECT id FROM mangas WHERE id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL)').all().map((r) => r.id));
     let queued = 0;
     const body = rows.map((row) => {
         const entry = store.entryOf(row, now);
         if (entry.stale && queued < 50 && gateway.scheduleRefresh(ctx, row.id)) queued++;
         const all = byAnime.get(row.id) || [];
         const mine = all.find((p) => p.user_id === userId);
+        const visibleLink = visibleLinks.has(entry.manga_id);
+        const linkedElsewhere = Boolean(entry.manga_id && !visibleLink && allLinkedMangaIds.has(entry.manga_id));
         return {
             ...entry,
-            manga_id: visibleLinks.has(entry.manga_id) ? entry.manga_id : null,
+            manga_id: visibleLink ? entry.manga_id : null,
+            ...(linkedElsewhere ? { manga_linked_elsewhere: true } : {}),
             watch: store.watchOf(row, mine, remembered.get(row.id)),
             my_progress: store.progressOf(mine),
             community: communities.get(row.id) || { average: null, count: 0, watchers: 0 },
@@ -405,6 +462,9 @@ function update(ctx, { params, body }) {
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     if (notes !== undefined) columns.notes = notes;
     if (body.manga_id !== undefined) {
+        if (row.manga_id && !visibleManga(ctx, row.manga_id) && ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(row.manga_id)) {
+            throw notFound('Reihe');
+        }
         const mangaId = optionalId(body.manga_id, 'manga_id');
         mangaRef(ctx, mangaId);
         columns.manga_id = mangaId;
@@ -424,11 +484,50 @@ function update(ctx, { params, body }) {
         const seasons = parseCustomSeasons(body.custom_seasons, columns.episodes !== undefined ? columns.episodes : row.episodes);
         columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
     }
+    if (body.tags !== undefined) {
+        const tags = parseTags(body.tags);
+        columns.tags = tags.length ? JSON.stringify(tags) : null;
+    } else if (body.tags_add !== undefined || body.tags_remove !== undefined) {
+        const tags = changeTags(store.parseJson(row.tags, []), body.tags_add, body.tags_remove);
+        columns.tags = tags.length ? JSON.stringify(tags) : null;
+    }
     if (!Object.keys(columns).length) throw badRequest('Keine Änderungen angegeben');
     columns.updated_at = sqlNow(ctx);
     columns.updated_by = ctx.user.id;
     store.updateRow(ctx, id, columns);
     return { body: detailOf(ctx, id) };
+}
+
+const MAX_TAGS = 20;
+const MAX_TAG = 30;
+
+/** tags of PUT /anime/:id: null or [] clears them, else a list of at most 20 short names (duplicates in any case are dropped). */
+function parseTags(value) {
+    if (value === null) return [];
+    if (!Array.isArray(value) || value.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
+    const seen = new Set();
+    const tags = [];
+    for (const raw of value) {
+        const name = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+        if (!name || name.length > MAX_TAG) throw badRequest(msg('Ein Tag hat 1 bis {max} Zeichen', { max: MAX_TAG }));
+        if (!seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); tags.push(name); }
+    }
+    return tags;
+}
+
+/**
+ * tags_add / tags_remove of PUT /anime/:id: applied to the stored tags instead of replacing them, so two people adding a tag
+ * to the same entry at once both keep theirs. Names as in `tags` (removal ignores case); more than 20 afterwards is 400.
+ */
+function changeTags(stored, add, remove) {
+    const added = add === undefined ? [] : parseTags(add);
+    const removed = new Set((remove === undefined ? [] : parseTags(remove)).map((name) => name.toLowerCase()));
+    const tags = stored.filter((name) => !removed.has(name.toLowerCase()));
+    for (const name of added) {
+        if (!tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+    }
+    if (tags.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
+    return tags;
 }
 
 const seasonsError = () => badRequest(msg('Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})',
@@ -664,7 +763,6 @@ const PAGE_TIMEOUT_MS = 6000;
 const MAX_SHARE_TEXT = 4000;
 const MAX_CANDIDATES = 5;
 const LOOKUP_FORMATS = ['TV', 'TV_SHORT', 'ONA', 'OVA'];
-const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const STRONG_SCORE = 0.9;
 const MAX_HITS = 5;
 const SUGGEST_BUDGET_MS = 6000;
@@ -948,6 +1046,42 @@ async function adaptations(ctx, { params }) {
     return { body: await gateway.adaptationsOf(ctx, manga) };
 }
 
+/**
+ * GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live beyond the entries in the collection
+ * (gateway.seasonChainOf); with AniList switched off the chain of the stored relations, without a request.
+ */
+async function seasonChainLive(ctx, { params }) {
+    const id = parseId(params.id);
+    const row = loadRow(ctx, id);
+    if ((row.kind || 'anime') !== 'anime' || !row.anilist_id) return { body: { seasons: [] } };
+    let chain;
+    try {
+        chain = await gateway.seasonChainOf(ctx, row.anilist_id, store.parseJson(row.relations, []));
+    } catch (err) {
+        if (!(err instanceof SourceError)) throw err;
+        throw new HttpError(503, 'AniList ist gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
+    }
+    if (!chain.before.length && !chain.after.length) return { body: { seasons: [] } };
+    const byAni = ctx.db.prepare('SELECT * FROM animes WHERE anilist_id = ?');
+    const byMal = ctx.db.prepare('SELECT * FROM animes WHERE mal_id = ?');
+    const status = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
+    const nodeOf = (n, current) => {
+        const entry = current ? row : ((n.anilist_id && byAni.get(n.anilist_id)) || (n.mal_id && byMal.get(n.mal_id)) || null);
+        return {
+            in_collection_id: entry ? entry.id : null,
+            anilist_id: n.anilist_id || null,
+            mal_id: n.mal_id || null,
+            title: (entry && (entry.title_de || entry.title)) || n.title,
+            season_year: (entry && entry.season_year) || n.season_year || null,
+            episodes: (entry && entry.episodes) || n.episodes || null,
+            my_status: (entry && ctx.user && (status.get(entry.id, ctx.user.id) || {}).status) || null,
+            current: !!current
+        };
+    };
+    const self = { anilist_id: row.anilist_id, mal_id: row.mal_id, title: row.title, season_year: row.season_year, episodes: row.episodes };
+    return { body: { seasons: [...chain.before.map((n) => nodeOf(n)), nodeOf(self, true), ...chain.after.map((n) => nodeOf(n))] } };
+}
+
 const CSV_COLUMNS = [
     ['title', 'Titel'], ['title_de', 'Deutscher Titel'], ['anilist_id', 'AniList-ID'], ['mal_id', 'MAL-ID'], ['format', 'Format'],
     ['episodes', 'Folgen'], ['status', 'Status'], ['season_year', 'Jahr'], ['studios', 'Studios'], ['genres', 'Genres'],
@@ -981,6 +1115,6 @@ function exportCsv(ctx) {
 module.exports = {
     ratings,
     search, sources, list, detail, create, update, updateProgress, markWatched, resolveLink, syncState: syncStateOf, syncUpdate, syncRun,
-    removeProgress, refresh, remove, adaptations, seasonSuggestion, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
-    duplicateOf, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
+    removeProgress, refresh, remove, adaptations, seasonSuggestion, seasonChainLive, exportCsv, PROGRESS_STATUSES, matchRows, candidateOf, preferred, servicePath, parseId,
+    duplicateOf, collectionMatcher, insertPrepared, prepareExternal, applyWatched, strongHits, LOOKUP_FORMATS
 };

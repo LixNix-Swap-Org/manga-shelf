@@ -1,9 +1,9 @@
-// Covers the personal calendar feed address and token handling in the radar summary.
+// Covers the personal calendar feed address and token handling in the radar summary and the anime calendar.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
-import PersonalSummary, { feedAddress } from '../components/dashboard/radar/PersonalSummary';
+import PersonalSummary, { CalendarFeedPanel, feedAddress } from '../components/dashboard/radar/PersonalSummary';
 
 const TOKEN_A = 'a'.repeat(43);
 const TOKEN_B = 'b'.repeat(43);
@@ -116,5 +116,33 @@ describe('PersonalSummary: Kalender abonnieren', () => {
     expect(feedAddress(null)).toBeNull();
     expect(feedAddress({ active: true, path: null })).toBeNull();
     expect(feedAddress({ path: '/api/radar/feed.ics?token=x' })).toBe(`${window.location.origin}/api/radar/feed.ics?token=x`);
+  });
+});
+
+describe('CalendarFeedPanel of the anime calendar', () => {
+  it('uses its own token (POST /api/anime/feed-token) and shows the address the server answers', async () => {
+    let state = { active: false, path: null, url: null, created_at: null, last_used_at: null, unreadable: false };
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      if (url !== '/api/anime/feed-token') return fakeResponse(404, { error: 'Nicht gefunden' });
+      const method = init.method || 'GET';
+      if (method === 'POST') state = { ...active(TOKEN_B), path: `/api/anime/feed.ics?token=${TOKEN_B}`, url: null };
+      if (method === 'DELETE') {
+        state = { ...state, active: false, path: null };
+        return fakeResponse(200, { success: true, removed: 1 });
+      }
+      return fakeResponse(200, state);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<CalendarFeedPanel anime />);
+    const panel = document.getElementById('anime-calendar-feed');
+    expect(panel.textContent).toContain('gilt nur für die Anime');
+    fireEvent.click(await within(panel).findByRole('button', { name: /Abo-Adresse erzeugen/ }));
+    const field = await within(panel).findByLabelText('Kalender-Adresse');
+    expect(field.value).toBe(`${window.location.origin}/api/anime/feed.ics?token=${TOKEN_B}`);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Abo beenden' }));
+    await within(panel).findByRole('button', { name: /Abo-Adresse erzeugen/ });
+    expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method || 'GET'} ${url}`)).toEqual([
+      'GET /api/anime/feed-token', 'POST /api/anime/feed-token', 'DELETE /api/anime/feed-token'
+    ]);
   });
 });

@@ -113,7 +113,47 @@ describe('Pterodactyl egg', () => {
     const v = egg.variables.find(x => x.env_variable === 'TRUST_PROXY');
     assert.ok(v, 'TRUST_PROXY variable missing');
     assert.equal(v.default_value, require('../utils/trustProxy').DEFAULT_TRUST_PROXY);
-    assert.ok(egg.variables.some(x => x.env_variable === 'SERVER_PORT'));
+  });
+
+  test('BEHIND_PROXY is a true/false switch that only widens the default TRUST_PROXY with the gateway of the Docker network', () => {
+    const v = egg.variables.find(x => x.env_variable === 'BEHIND_PROXY');
+    assert.ok(v, 'BEHIND_PROXY variable missing');
+    assert.equal(v.default_value, 'false');
+    assert.ok(v.rules.split('|').includes('in:true,false') && v.rules.split('|').includes('string'), 'the panel shows a switch only for these rules');
+    assert.match(egg.startup, /"\$\{BEHIND_PROXY\}" = "true"/);
+    assert.match(egg.startup, /"\$\{TRUST_PROXY\}" = "loopback"/);
+    assert.match(egg.startup, /export TRUST_PROXY="loopback, \$\{GATEWAY\}"/);
+    assert.doesNotMatch(egg.startup, /\{\{|\}\}|\\[nt]/, 'the container entrypoint rewrites {{ }} and echo -e turns \\n and \\t into characters');
+    assert.ok(egg.startup.trimEnd().endsWith('node index.js'));
+  });
+
+  test('every docker image name and image passes the panel import rule (no brackets or commas in the name)', () => {
+    for (const [name, image] of Object.entries(egg.docker_images)) {
+      assert.match(`${name}|${image}`, /^[\w#./\- ]*\|?~?[\w./\-:@ ]*$/, name);
+    }
+  });
+
+  test('the egg defaults are the defaults of the app and every variable value passes utils/config.js without a warning', () => {
+    const { readConfig } = require('../utils/config');
+    const env = {};
+    for (const v of egg.variables.filter(x => x.env_variable !== 'BEHIND_PROXY')) env[v.env_variable] = v.default_value;
+    const empty = readConfig({});
+    const withEgg = readConfig(env);
+    assert.deepEqual(withEgg.warnings, []);
+    assert.deepEqual(withEgg.errors, []);
+    assert.deepEqual(withEgg.values, empty.values);
+    for (const name of ['APP_TIMEZONE', 'BACKUP_HOUR', 'BACKUP_KEEP_DAILY', 'LOG_LEVEL', 'UPDATE_INSTALL', 'SETUP_TOKEN']) {
+      assert.ok(egg.variables.some(x => x.env_variable === name), `${name} missing in the egg`);
+    }
+  });
+
+  test('no variable uses a name the panel reserves (SERVER_PORT comes from the allocation)', () => {
+    const reserved = ['SERVER_MEMORY', 'SERVER_IP', 'SERVER_PORT', 'ENV', 'HOME', 'USER', 'STARTUP', 'SERVER_UUID', 'UUID'];
+    assert.deepEqual(egg.variables.map(x => x.env_variable).filter(n => reserved.includes(n)), []);
+  });
+
+  test('stops with SIGINT (Wings kills on an unknown signal such as "^^C")', () => {
+    assert.equal(egg.config.stop, '^C');
   });
 });
 

@@ -4,6 +4,7 @@ import { ApiError, apiFetch, readJson } from '../../../utils/api';
 import { notify } from '../../../utils/notify';
 import { t } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
+import { releaseRemindersChanged } from '../../../app/reminders/reminderState';
 
 const hasKey = (obj, key) => Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
 
@@ -47,6 +48,7 @@ export default function OwnersField({ volumeId, owners: initialOwners, users, cu
       const data = (await readJson(res)) ?? {};
       if (!res.ok) throw new ApiError(serverText(data) || t('Fehler beim Speichern'), { status: res.status, ref: data.ref ?? null });
       setOwners(data.owners || []);
+      releaseRemindersChanged();
       return data;
     } finally {
       setBusyId(null);

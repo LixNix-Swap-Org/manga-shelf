@@ -3,6 +3,7 @@ import { withId, withoutId } from '../../../utils/radarHelpers';
 import { apiFetch, readJson, TIMEOUTS } from '../../../utils/api';
 import { notify, notifyResponseError } from '../../../utils/notify';
 import { t as tr } from '../../../i18n/index.js';
+import { releaseRemindersChanged } from '../../../app/reminders/reminderState';
 
 /**
  * Pre-orders whose Manga-Passion date changed; loaded once per radar visit (the server walks several months).
@@ -55,6 +56,7 @@ export default function useRadarDateChanges({ enabled, onApplied }) {
       const res = await apiFetch(`/api/volumes/${change.volume_id}`, { method: 'PUT', body: { release_date: change.new_date } });
       if (res.ok) {
         dropVolume(change.volume_id);
+        releaseRemindersChanged();
         onApplied?.();
       } else {
         await notifyResponseError(res, tr('Termin konnte nicht übernommen werden'));

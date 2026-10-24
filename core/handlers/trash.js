@@ -172,6 +172,12 @@ function restoreManga(ctx, entry, payload) {
     edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id);
+    // chapter progress comes back for members of the shelf only, like reads
+    const chapterCols = columnsOf(ctx, 'chapter_progress');
+    const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
+    for (const c of Array.isArray(payload.chapters) ? payload.chapters : []) {
+        if (member.get(edition.shelf_id, c.user_id)) insertRow(ctx, 'chapter_progress', chapterCols, c, { manga_id: manga.id });
+    }
     // volumes of this series deleted on their own follow it, as on a move
     ctx.db.prepare("UPDATE trash SET shelf_id = ? WHERE kind = 'volume' AND manga_id = ?").run(edition.shelf_id, manga.id);
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
@@ -205,7 +211,7 @@ function restoreVolume(ctx, entry, payload) {
     restoreVolumeRows(ctx, [volume], payload.owners || [], payload.reads || [], shelfId);
 }
 
-/** Puts a series or volume back with its original ids, owners and reads (only of users who are members of its shelf). */
+/** Puts a series or volume back with its original ids, owners, reads and chapter progress (only of users who are members of its shelf). */
 function restore(ctx, { params }) {
     const entry = loadEntry(ctx, params, 'editor');
     const id = entry.id;

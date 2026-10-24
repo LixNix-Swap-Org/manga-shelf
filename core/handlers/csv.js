@@ -32,7 +32,12 @@ const SERIES_DETAILS_SELECT = `
     SELECT id, status AS series_status, NULLIF(collecting, 'aktiv') AS series_collecting, total_volumes AS series_total,
            alt_title AS series_alt_title, language AS series_language, region AS series_region, currency AS series_currency,
            work_key AS series_work_key, tags AS series_tags, manga_passion_id AS series_mp_id,
-           cover_image AS series_cover, banner_image AS series_banner, description AS series_description
+           cover_image AS series_cover, banner_image AS series_banner, description AS series_description,
+           NULLIF(format, 'print') AS series_format, total_chapters AS series_chapters,
+           (SELECT GROUP_CONCAT(entry, ', ') FROM (
+               SELECT u.username || ': ' || cp.chapters_read AS entry FROM chapter_progress cp JOIN users u ON u.id = cp.user_id
+               WHERE cp.manga_id = mangas.id ORDER BY cp.user_id
+           )) AS series_chapter_readers
     FROM mangas`;
 
 // LEFT JOIN: series without volumes appear as a series row (type "Reihe", no volume number)
@@ -115,10 +120,10 @@ function importCsv(ctx, { body }) {
 
     // Load titles, volumes and users once and compare in JS: SQLite LOWER() folds only ASCII (Ä would stay Ä)
     const seriesByTitle = new Map();
-    for (const m of ctx.db.prepare('SELECT id, title, publisher, wish_priority, language FROM mangas WHERE shelf_id = ? ORDER BY id').all(shelfId)) {
+    for (const m of ctx.db.prepare("SELECT id, title, publisher, wish_priority, language, COALESCE(format, 'print') AS format FROM mangas WHERE shelf_id = ? ORDER BY id").all(shelfId)) {
         const key = matchKey(m.title);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
-        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE });
+        seriesByTitle.get(key).push({ id: m.id, pubKey: publisherKey(m.publisher), wish: m.wish_priority, language: m.language || DEFAULT_LANGUAGE, format: m.format });
     }
     const volumeKey = (mangaId, type, number) => `${mangaId}|${type}|${matchKey(canonicalVolumeNumber(number, type))}`;
     const labelKey = (mangaId, type, label) => `${mangaId}|${type}|=${matchKey(label)}`;
@@ -152,32 +157,57 @@ function importCsv(ctx, { body }) {
     const findOther = lookup(others);
     const isAdmin = ctx.user.role === 'admin';
 
-    // The export names the language only on the first row of a series: later rows of the same title inherit it
-    // (rows before the first named one take that first one)
-    const rowLanguage = new Map();
-    if (byLanguage) {
-        const sources = [...records.map(r => [r, r]), ...errors.filter(e => e.series_source).map(e => [e.series_source, e.record])]
-            .sort((a, b) => a[0].line - b[0].line);
-        const named = (source) => (source.series_meta && source.series_meta.language) || null;
+    // The export writes the series fields only on the first row of a series: later rows of the same title inherit the
+    // value of the row before them that named one (rows before the first such row take that first one)
+    const sources = [...records.map(r => [r, r]), ...errors.filter(e => e.series_source).map(e => [e.series_source, e.record])]
+        .sort((a, b) => a[0].line - b[0].line);
+    const inherit = (named) => {
+        const values = new Map();
         const first = new Map();
         for (const [source] of sources) if (named(source) && !first.has(matchKey(source.series))) first.set(matchKey(source.series), named(source));
         const current = new Map();
         for (const [source, record] of sources) {
             const title = matchKey(source.series);
             if (named(source)) current.set(title, named(source));
-            const language = current.get(title) || first.get(title) || null;
-            rowLanguage.set(source, language);
-            if (record && record !== source) rowLanguage.set(record, language);
+            const value = current.get(title) || first.get(title) || null;
+            values.set(source, value);
+            if (record && record !== source) values.set(record, value);
+        }
+        return values;
+    };
+    const rowLanguage = byLanguage ? inherit((source) => (source.series_meta && source.series_meta.language) || null) : new Map();
+    const languageOf = (r) => rowLanguage.get(r) || null;
+    // Print is an empty "Format" cell: a row with series fields of its own (the first row of a series in the export)
+    // names its format, print without one; without a "Format" column every row is print
+    // A hand-written file may repeat the series fields on every row and name the format only once: an empty cell then
+    // keeps the format of the row before it with the same title and the same other series fields
+    const ownsSeriesFields = (source) => Object.keys(source.series_meta || {}).some(field => field !== 'wish_priority');
+    const seriesSignature = (source) => JSON.stringify(Object.entries(source.series_meta || {})
+        .filter(([field]) => field !== 'format' && field !== 'wish_priority').sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+    const namedFormat = new Map();
+    if (columns.includes('series_format')) {
+        const lastByTitle = new Map();
+        for (const [source] of sources) {
+            if (!ownsSeriesFields(source) || namedFormat.has(source)) continue;
+            const title = matchKey(source.series);
+            const signature = seriesSignature(source);
+            const last = lastByTitle.get(title);
+            const format = source.series_meta.format || (last && last.signature === signature ? last.format : 'print');
+            lastByTitle.set(title, { format, signature });
+            namedFormat.set(source, format);
         }
     }
-    const languageOf = (r) => rowLanguage.get(r) || null;
+    const rowFormat = columns.includes('series_format') ? inherit((source) => namedFormat.get(source) || null) : new Map();
+    const formatOf = (r) => rowFormat.get(r) || 'print';
 
     // Without a "Reihenverlag" column only the title counts (lowest ID wins); with it title + publisher of the series.
-    // A row without a known language matches any edition, as before.
+    // A row without a known language matches any edition, as before. Only a series of the row's format matches, so a
+    // print edition and a webtoon of one title stay apart.
     const findSeries = (r) => {
         const titled = seriesByTitle.get(matchKey(r.series));
         const language = languageOf(r);
-        const list = titled && language ? titled.filter(c => c.language === language) : titled;
+        const format = formatOf(r);
+        const list = titled && titled.filter(c => c.format === format && (!language || c.language === language));
         if (!list || !list.length) return null;
         if (!bySeriesPublisher) return list[0];
         const want = publisherKey(r.series_publisher);
@@ -233,7 +263,7 @@ function importCsv(ctx, { body }) {
 
     // Series fields of a new series: per field the first filled value from all rows of this series, also discarded ones
     const seriesMetaKey = (r) => matchKey(r.series) + (bySeriesPublisher ? '|' + publisherKey(r.series_publisher) : '')
-        + (byLanguage ? '|' + (languageOf(r) || '') : '');
+        + (byLanguage ? '|' + (languageOf(r) || '') : '') + '|' + formatOf(r);
     const seriesMeta = new Map();
     const metaSources = [...records, ...errors.map(e => e.series_source).filter(Boolean)].sort((a, b) => a.line - b.line);
     for (const r of metaSources) {
@@ -245,9 +275,11 @@ function importCsv(ctx, { body }) {
 
     const insertManga = ctx.db.prepare(`
         INSERT INTO mangas (title, author, publisher, language, status, alt_title, tags, total_volumes, description, cover_image,
-                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            banner_image, manga_passion_id, wish_priority, collecting, updated_by, region, currency, work_key, shelf_id,
+                            format, total_chapters)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const insertChapters = ctx.db.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
@@ -284,20 +316,39 @@ function importCsv(ctx, { body }) {
         const publisher = normalizePublisher(bySeriesPublisher ? r.series_publisher : r.publisher);
         const meta = seriesMeta.get(seriesMetaKey(r)) || {};
         const language = meta.language || languageOf(r) || defaultLanguage;
+        const format = formatOf(r);
         const id = dryRun
             ? --placeholderId
             : Number(insertManga.run(
                 r.series, r.author, publisher, language, meta.status || 'Laufend', meta.alt_title ?? null,
                 meta.tags ?? null, meta.total_volumes ?? null, meta.description ?? null, meta.cover_image ?? null,
-                meta.banner_image ?? null, meta.manga_passion_id ?? null, meta.wish_priority ?? null, meta.collecting || 'aktiv', ctx.user.id,
-                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId
+                // Manga Passion knows no webtoons
+                meta.banner_image ?? null, format === 'webtoon' ? null : meta.manga_passion_id ?? null, meta.wish_priority ?? null,
+                meta.collecting || 'aktiv', ctx.user.id,
+                meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId,
+                format, meta.total_chapters ?? null
             ).lastInsertRowid);
-        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language };
+        importChapters(r, id, meta);
+        const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language, format };
         const key = matchKey(r.series);
         if (!seriesByTitle.has(key)) seriesByTitle.set(key, []);
         seriesByTitle.get(key).push(entry);
         result.created_series++;
         return entry;
+    };
+
+    // chapter progress of a new series ("Kapitel gelesen von"): the same name rules as the readers of a volume
+    const importChapters = (r, mangaId, meta) => {
+        for (const { name, chapters } of meta.chapter_readers || []) {
+            const [userId] = resolveUsers(name, r, (unknown) => msg('Unbekannter Leser „{name}“ (ignoriert)', { name: unknown }),
+                (outside) => msg('Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)', { name: outside }));
+            if (userId === undefined) continue;
+            if (meta.total_chapters && chapters > meta.total_chapters) {
+                result.warnings.push(rowNote(r.line, msg('Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)', { name })));
+                continue;
+            }
+            if (chapters > 0 && mangaId > 0) insertChapters.run(mangaId, userId, chapters);
+        }
     };
 
     const run = () => {

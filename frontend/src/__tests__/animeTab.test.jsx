@@ -59,7 +59,10 @@ describe('AnimeCard', () => {
   });
 
   it('shows the countdown, the estimate badge, co-watchers and the link to the series', () => {
-    const at = Math.floor((Date.now() + 3 * 86400000) / 1000);
+    const target = new Date();
+    target.setDate(target.getDate() + 3);
+    target.setHours(12, 0, 0, 0);
+    const at = Math.floor(target.getTime() / 1000);
     inRouter(<AnimeCard anime={entry({ manga_id: 9, next_airing: { episode: 8, at, estimated: true }, progress_users: [{ user_id: 2, username: 'kim', status: 'Schaue', episodes_watched: 3 }] })}
       canEdit onOpen={vi.fn()} onPlusOne={vi.fn()} onStatusChange={vi.fn()} userId={1} />);
     expect(screen.getByText(/Folge 8 · in 3 Tagen/)).toBeTruthy();
@@ -237,8 +240,8 @@ describe('animeHelpers', () => {
       .toEqual([{ from: 1, to: 8, season: 1, name: null, relative: true, start: 1 }, { from: 9, to: 18, season: 2, name: null, relative: true, start: 9 }]);
     const onePiece = { kind: 'anime', custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: null }, { start: 1200, name: 'Zu spät' }] };
     expect(episodeSections(onePiece, 135)).toEqual([
-      { from: 1, to: 61, season: 1, name: 'East Blue', relative: false, start: 1 },
-      { from: 62, to: 135, season: 2, name: null, relative: false, start: 62 }
+      { from: 1, to: 61, season: 1, name: 'East Blue', relative: true, start: 1 },
+      { from: 62, to: 135, season: 2, name: null, relative: true, start: 62 }
     ]);
     expect(episodeSections({ kind: 'tv', seasons: [{ season_number: 1, episode_count: 8 }], custom_seasons: [{ start: 1, name: 'A' }] }, 8))
       .toEqual([{ from: 1, to: 8, season: 1, name: 'A', relative: true, start: 1 }], 'seasons set by hand win over TMDb');
@@ -855,7 +858,10 @@ describe('AnimeDetailModal', () => {
     expect(screen.queryByText('Nächste Folge')).toBeNull();
     unmount();
 
-    const at = Math.floor((Date.now() + 3 * 86400000) / 1000);
+    const target = new Date();
+    target.setDate(target.getDate() + 3);
+    target.setHours(12, 0, 0, 0);
+    const at = Math.floor(target.getTime() / 1000);
     open(entry({ next_airing: { episode: 8, at, estimated: true } }));
     await act(async () => {});
     expect(screen.getByText('Nächste Folge').nextElementSibling.textContent).toMatch(/^Folge 8 · in 3 Tagen \(geschätzt\)$/);
@@ -1057,7 +1063,7 @@ describe('AnimeDetailModal', () => {
       const updateProgress = vi.fn((id, change) => new Promise((resolve) => { saves.push({ change, resolve }); }));
       return { saves, updateProgress };
     };
-    const gridCell = (name, n) => within(screen.getByRole('list', { name })).getByRole('button', { name: `Folge ${n}` });
+    const gridCell = (name, n, label = `Folge ${n}`) => within(screen.getByRole('list', { name })).getByRole('button', { name: label });
 
     it('single episodes: a tap while a save runs stays on screen and goes into the next save; the burst ends with one reload', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -1187,8 +1193,8 @@ describe('AnimeDetailModal', () => {
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
       expect(update).toHaveBeenCalledWith(1, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
       expect([...screen.getByLabelText('Abschnitt').options].map((o) => o.textContent))
-        .toEqual(['East Blue · Folgen 1–61', 'Alabasta · Folgen 62–161', 'Alabasta · Folgen 162–261', 'Alabasta · Folgen 262–300']);
-      expect(gridCell('Alabasta · Folgen 62–161', 75).getAttribute('aria-pressed')).toBe('true');
+        .toEqual(['Staffel 1 · East Blue · Folgen 1–61', 'Staffel 2 · Alabasta · Folgen 62–161', 'Staffel 2 · Alabasta · Folgen 162–261', 'Staffel 2 · Alabasta · Folgen 262–300']);
+      expect(gridCell('Staffel 2 · Alabasta · Folgen 62–161', 75, 'Staffel 2, Folge 14').getAttribute('aria-pressed')).toBe('true');
       expect(updateProgress).not.toHaveBeenCalled();
       await act(async () => { vi.advanceTimersByTime(600); });
       expect(updateProgress).toHaveBeenCalledTimes(1);
@@ -1220,6 +1226,51 @@ describe('AnimeDetailModal', () => {
       expect(names[1].getAttribute('maxLength')).toBe('80');
     });
 
+    it('seasons: a long run without seasons asks the TMDb suggestion once and shows its seasons without storing them', async () => {
+      const current = entry({ id: 9101, episodes: 300, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
+      const update = vi.fn();
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Alabasta', episodes: 239 }], reason: null }));
+      openEditable(current, { update, seasonSuggestion, fetchDetail: vi.fn(async () => current) });
+      await act(async () => {});
+      expect(seasonSuggestion).toHaveBeenCalledTimes(1);
+      expect(gridCell('Staffel 2 · Alabasta · Folgen 62–161', 75, 'Staffel 2, Folge 14')).toBeTruthy();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('seasons: a running show without an episode count counts its aired episodes for the TMDb seasons', async () => {
+      const running = (id, nextEpisode) => entry({
+        id, episodes: null, status: 'RELEASING', next_airing: { episode: nextEpisode, at: Math.floor(Date.now() / 1000) + 86400, estimated: false },
+        my_progress: { status: 'Schaue', episodes_watched: 50, score: null, notes: null }
+      });
+      const seasonSuggestion = vi.fn(async () => ({
+        seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Alabasta', episodes: 1094 }, { start: 1156, name: 'Elbaph', episodes: 40 }], reason: null
+      }));
+      const short = running(9104, 81);
+      const { unmount } = openEditable(short, { seasonSuggestion, fetchDetail: vi.fn(async () => short) });
+      await act(async () => {});
+      expect(seasonSuggestion).not.toHaveBeenCalled();
+      unmount();
+
+      const long = running(9105, 1181);
+      openEditable(long, { seasonSuggestion, fetchDetail: vi.fn(async () => long) });
+      await act(async () => {});
+      expect(seasonSuggestion).toHaveBeenCalledWith(9105);
+      const sections = [...screen.getByLabelText('Abschnitt').options].map((o) => o.textContent);
+      expect(sections[0]).toBe('Staffel 1 · East Blue · Folgen 1–61');
+      expect(sections[sections.length - 1]).toBe('Staffel 3 · Elbaph · Folgen 1156–1180');
+    });
+
+    it('seasons: "Für alle übernehmen" stores the shown TMDb seasons', async () => {
+      const current = entry({ id: 9102, episodes: 300, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
+      const update = vi.fn(async (id, body) => ({ ...current, custom_seasons: body.custom_seasons }));
+      const seasonSuggestion = vi.fn(async () => ({ seasons: [{ start: 1, name: 'East Blue', episodes: 61 }, { start: 62, name: 'Alabasta', episodes: 239 }], reason: null }));
+      openEditable(current, { update, seasonSuggestion, fetchDetail: vi.fn(async () => current) });
+      await act(async () => {});
+      expect(screen.getByText('Staffeln von TMDB, nur zur Anzeige.')).toBeTruthy();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Für alle übernehmen' })); });
+      expect(update).toHaveBeenCalledWith(9102, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
+    });
+
     it('seasons: "Vorschlag von TMDB laden" fills the editor, saving stores them for everybody and the grid follows the names', async () => {
       let current = entry({ episodes: 135, my_progress: { status: 'Schaue', episodes_watched: 70, score: null, notes: null } });
       const update = vi.fn(async (id, body) => { current = { ...current, custom_seasons: body.custom_seasons || [] }; return current; });
@@ -1240,13 +1291,13 @@ describe('AnimeDetailModal', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Staffel 3 entfernen' }));
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Staffeln speichern' })); });
       expect(update).toHaveBeenCalledWith(1, { custom_seasons: [{ start: 1, name: 'East Blue' }, { start: 62, name: 'Alabasta' }] });
-      const grid = await screen.findByRole('list', { name: 'Alabasta · Folgen 62–135' });
-      expect(within(grid).getByRole('button', { name: 'Folge 71' }).textContent).toBe('71');
+      const grid = await screen.findByRole('list', { name: 'Staffel 2 · Alabasta · Folgen 62–135' });
+      expect(within(grid).getByRole('button', { name: 'Staffel 2, Folge 10' }).textContent).toBe('10');
       expect(screen.getByText('2 eigene Staffeln')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Eigene Staffeln entfernen' })); });
       expect(update).toHaveBeenLastCalledWith(1, { custom_seasons: null });
-      expect(await screen.findByRole('list', { name: 'Folgen 1–100' })).toBeTruthy();
+      expect(await screen.findByRole('list', { name: 'Staffel 2 · Arabasta · Folgen 62–135' })).toBeTruthy();
     });
 
     it('seasons: without a TMDB key the suggestion says so; without the prop there is no editor', async () => {
@@ -1440,6 +1491,166 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     fireEvent.change(screen.getByLabelText('Bewertung'), { target: { value: '9' } });
     await save();
     expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 9 });
+  });
+
+  it('a single account with the default "Nur ich": the stored private visibility alone shows no sharing UI', async () => {
+    const alone = entry({
+      my_progress: mine({ rating_visibility: 'private' }),
+      progress: [{ user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: null }],
+      community: { average: null, count: 0, watchers: 1, episodes: {} }
+    });
+    for (const own of [{}, { score: 9 }]) {
+      const view = openShared({ ...alone, my_progress: { ...alone.my_progress, ...own } });
+      await act(async () => {});
+      expect(screen.queryByLabelText('Meine Bewertung sehen')).toBeNull();
+      expect(screen.queryByLabelText('Kommentar zur Bewertung')).toBeNull();
+      expect(screen.queryByText(/^Community:/)).toBeNull();
+      view.unmount();
+    }
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/ratings') || url === '/api/auth/me')).toBe(false);
+  });
+
+  it('keeps visibility and comment editable when the own row carries a comment even without other watchers', async () => {
+    const alonePrivate = entry({
+      my_progress: mine({ score: 8, rating_visibility: 'private', public_comment: 'Nur für mich' }),
+      progress: [{ user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: 8 }],
+      community: { average: null, count: 0, watchers: 1, episodes: {} }
+    });
+    const view = openShared(alonePrivate, { defaultVisibility: 'private' });
+    await act(async () => {});
+    expect(screen.getByLabelText('Meine Bewertung sehen').value).toBe('private');
+    expect(screen.getByLabelText('Kommentar zur Bewertung').value).toBe('Nur für mich');
+    view.unmount();
+  });
+
+  it('films and specials get their own block apart from the related anime', async () => {
+    openShared(shared({
+      relations: [
+        { kind: 'ANIME', relation: 'SEQUEL', title: 'Frieren 2', format: 'TV', anilist_id: 2 },
+        { kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3 }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const extras = screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section');
+    expect(extras.textContent).toContain('Frieren Film');
+    expect(extras.textContent).not.toContain('Frieren 2');
+    expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('Frieren 2');
+  });
+
+  it('a music video is no film or special: it stays with the related anime', async () => {
+    openShared(shared({
+      relations: [
+        { kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3 },
+        { kind: 'ANIME', relation: 'CHARACTER', title: 'The Brave', format: 'MUSIC', anilist_id: 4 }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section').textContent).not.toContain('The Brave');
+    expect(screen.getByRole('heading', { name: 'Verwandte Anime' }).closest('section').textContent).toContain('The Brave');
+  });
+
+  it('a tag goes out alone (tags_add / tags_remove); a failed save keeps the typed name', async () => {
+    const update = vi.fn(async (id, change) => shared({ tags: change.tags_add ? ['Fantasy', ...change.tags_add] : [] }));
+    openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public', update });
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Neuer Tag'), { target: { value: '  Mit   Freunden ' } });
+    await act(async () => { fireEvent.click(within(screen.getByLabelText('Neuer Tag').closest('form')).getByRole('button', { name: 'Hinzufügen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_add: ['Mit Freunden'] });
+    expect(screen.getByLabelText('Neuer Tag').value).toBe('');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tag „Fantasy“ entfernen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_remove: ['Fantasy'] });
+
+    update.mockRejectedValueOnce(new Error('Tags müssen eine Liste mit höchstens 20 Namen sein'));
+    fireEvent.change(screen.getByLabelText('Neuer Tag'), { target: { value: 'Winter' } });
+    await act(async () => { fireEvent.click(within(screen.getByLabelText('Neuer Tag').closest('form')).getByRole('button', { name: 'Hinzufügen' })); });
+    expect(update).toHaveBeenLastCalledWith(1, { tags_add: ['Winter'] });
+    expect(screen.getByLabelText('Neuer Tag').value).toBe('Winter');
+  });
+
+  it('tags: a labelled field, 44 px remove targets; without edit rights no empty tags block', async () => {
+    const view = openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const field = screen.getByLabelText('Neuer Tag');
+    expect(document.querySelector(`label[for="${field.id}"]`).textContent).toBe('Neuer Tag');
+    expect(screen.getByRole('button', { name: 'Tag „Fantasy“ entfernen' }).className).toMatch(/\bhit-44\b.*\bw-6 h-6\b/);
+    view.unmount();
+
+    const readOnly = openShared(shared({ tags: [] }), { defaultVisibility: 'public', canEdit: false });
+    await act(async () => {});
+    expect(document.getElementById('anime-tags')).toBeNull();
+    expect(screen.queryByText('Noch keine Tags')).toBeNull();
+    readOnly.unmount();
+
+    openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public', canEdit: false });
+    await act(async () => {});
+    expect(document.getElementById('anime-tags').textContent).toContain('Fantasy');
+    expect(screen.queryByRole('button', { name: 'Tag „Fantasy“ entfernen' })).toBeNull();
+  });
+
+  it('shows my status per related film and hides the episode grid of a one-episode film', async () => {
+    const view = openShared(shared({
+      relations: [{ kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3, in_collection_id: 9, my_status: 'Gesehen' }]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Filme & Specials' }).closest('section').textContent).toContain('Gesehen');
+    expect(screen.getByRole('heading', { name: 'Einzelne Folgen' })).toBeTruthy();
+    view.unmount();
+
+    openShared(shared({ format: 'MOVIE', episodes: 1 }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.queryByRole('heading', { name: 'Einzelne Folgen' })).toBeNull();
+  });
+
+  it('lists the season chain with the current season marked', async () => {
+    openShared(shared({
+      season_chain: [
+        { in_collection_id: 1, anilist_id: 1, title: 'Erste Staffel', season_year: 2015, my_status: 'Gesehen', current: true },
+        { in_collection_id: 9, anilist_id: 2, title: 'Zweite Staffel', season_year: 2018, my_status: null, current: false },
+        { in_collection_id: null, anilist_id: 3, title: 'Dritte Staffel', season_year: 2022, my_status: null, current: false }
+      ]
+    }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const chain = screen.getByRole('heading', { name: 'Staffeln' }).closest('section');
+    expect(chain.textContent).toContain('Staffel 1');
+    expect(chain.textContent).toContain('Dritte Staffel');
+    expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Erste Staffel');
+    expect(chain.textContent).toContain('Öffnen');
+    expect(chain.textContent).toContain('Hinzufügen');
+  });
+
+  it('opens an entry the list does not know yet (no fallback): loading first, then the detail with its seasons', async () => {
+    let finish;
+    const anime = shared({
+      season_chain: [
+        { in_collection_id: 1, anilist_id: 1, title: 'Erste Staffel', season_year: 2015, my_status: 'Gesehen', current: true },
+        { in_collection_id: 9, anilist_id: 2, title: 'Zweite Staffel', season_year: 2018, my_status: null, current: false }
+      ]
+    });
+    const fetchDetail = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    openShared(anime, { fallback: undefined, fetchDetail, defaultVisibility: 'public' });
+    expect(screen.getByText('Wird geladen…')).toBeTruthy();
+    await act(async () => { finish(anime); });
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Frieren');
+    expect(screen.getByRole('heading', { name: 'Staffeln' }).closest('section').textContent).toContain('Zweite Staffel');
+  });
+
+  it('shows the live season chain when it reaches further than the collection', async () => {
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        return fakeResponse(200, { seasons: [
+          { in_collection_id: null, anilist_id: 7, title: 'Live Eins', season_year: 2015, my_status: null, current: false },
+          { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+          { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+        ] });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    expect(chain.textContent).toContain('Live Eins');
+    expect(chain.textContent).toContain('Live Drei');
+    expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Live Zwei');
   });
 
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
@@ -1698,6 +1909,16 @@ describe('films and TV shows', () => {
       expect(screen.queryByText(/1 Folgen/)).toBeNull();
       fireEvent.click(screen.getAllByRole('button', { name: /Hinzufügen/ })[1]);
       await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ tmdb_id: 95396, tmdb_kind: 'movie', title: 'Dune: Teil 1', manga_id: null }));
+    });
+
+    it('the kind chip starts on "Anime", so a plain search only asks for anime', async () => {
+      const search = vi.fn(async () => answer({ results: [], sources_used: ['anilist'], partial: false }));
+      render(<AddAnimeModal isOpen onClose={vi.fn()} search={search} onAdd={vi.fn()} sources={SOURCES} />);
+      const kinds = screen.getByRole('group', { name: 'Art' });
+      expect(within(kinds).getByRole('button', { name: 'Anime' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.change(screen.getByLabelText('Titel suchen'), { target: { value: 'Frieren' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
+      await waitFor(() => expect(search).toHaveBeenCalledWith('Frieren', expect.objectContaining({ kind: 'anime' })));
     });
 
     it('without a TMDB key: the TMDB chip, "Serien" and "Filme" are disabled, a remembered "Serien" counts as "Alle", the hint opens the keys', async () => {

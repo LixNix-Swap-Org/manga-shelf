@@ -7,11 +7,14 @@ import api from '../utils/api';
 import SourcesPanel from './SourcesPanel';
 import LanguageSelect from '../components/common/LanguageSelect';
 import { TAKEOVER } from './takeoverTexts';
+import { REMINDER_BUILD, remindersAvailable } from './reminders/reminderState';
 import { askConfirm } from '../components/modals/askConfirm';
 import { t } from '../i18n/index.js';
 
 const TakeoverDialog = lazy(() => import('./TakeoverDialog'));
 const BackupExportModal = lazy(() => import('../components/modals/BackupExportModal'));
+// apps with the LocalNotifications plugin only
+const ReminderSwitch = REMINDER_BUILD ? lazy(() => import('./reminders/ReminderSwitch')) : null;
 
 const ICONS = { push: CloudUpload, merge: GitMerge, pull: CloudDownload };
 
@@ -113,6 +116,14 @@ export default function LocalScreen({ user, notice, onOpen, onReplaced, onTakeov
           </button>
           {sourcesOpen && (user ? <SourcesPanel headingLevel={2} /> : <p className="text-xs text-slate-400">{t('Erst die Sammlung öffnen.')}</p>)}
         </section>
+
+        {ReminderSwitch && user && remindersAvailable() && (
+          <div className="glass-panel rounded-2xl p-4 border border-slate-700/70">
+            <Suspense fallback={null}>
+              <ReminderSwitch />
+            </Suspense>
+          </div>
+        )}
 
         <section className="glass-panel rounded-2xl p-4 border border-slate-700/70 space-y-2" aria-label={t('Sicherung und Server')}>
           <button type="button" id="btn-local-backup" className="btn-secondary w-full text-sm inline-flex items-center gap-2" onClick={() => setDialog('backup')} disabled={!user}>

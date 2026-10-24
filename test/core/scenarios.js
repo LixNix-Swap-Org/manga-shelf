@@ -577,6 +577,17 @@ const scenarios = [
             const wrong = await anonymous('GET', `/radar/feed.ics?token=${'B'.repeat(43)}`);
             assert.deepEqual([wrong.status, wrong.body.code], [404, 'NOT_FOUND']);
             assert.equal((await anonymous('GET', '/radar/feed.ics')).status, 404);
+
+            // a token opens only the feed of its scope; one without a scope (stored before 3.5.0) is a radar token
+            assert.equal((await anonymous('GET', `/anime/feed.ics?token=${token}`)).status, 404);
+            const animeToken = token.replace(/^kern/, 'anim');
+            const animeHash = require('crypto').createHash('sha256').update(animeToken, 'utf8').digest('hex');
+            run('INSERT INTO app_settings (key, value) VALUES (?, ?)', `calendar_feed:${animeHash}`,
+                JSON.stringify({ user_id: 2, scope: 'anime', created_at: new Date().toISOString(), last_used_at: null }));
+            const anime = await anonymous.raw('GET', `/anime/feed.ics?token=${animeToken}`);
+            assert.equal(anime.status, 200);
+            assert.ok(anime.text.startsWith('BEGIN:VCALENDAR'));
+            assert.equal((await anonymous('GET', `/radar/feed.ics?token=${animeToken}`)).status, 404);
         }
     },
     {
@@ -673,6 +684,61 @@ const scenarios = [
             assert.ok(stats.languages.some(l => l.language === 'ja' && l.series >= 1));
             assert.ok(stats.currencies.some(c => c.currency === 'USD' && c.missing_value === 12));
             assert.equal(stats.currencies[0].currency, 'EUR');
+        }
+    },
+    {
+        name: 'webtoons: format, own chapter progress, Manga Passion off, trash',
+        async run({ admin, ed, vis }) {
+            assert.equal((await ed('POST', '/mangas', { title: 'Kern Webtoon X', format: 'scroll' })).body.error, 'Ungültiges Format (erlaubt: print, webtoon)');
+            const badTotal = await ed('POST', '/mangas', { title: 'Kern Webtoon X', total_chapters: 'viele' });
+            assert.deepEqual([badTotal.status, badTotal.body.error], [400, 'Gesamtkapitel muss eine ganze Zahl zwischen 1 und 99999 sein']);
+            const id = await newSeries(ed, 'Kern Webtoon', { format: 'Webtoon', total_chapters: '200', manga_passion_id: 77 });
+            const row = (await ed('GET', '/mangas')).body.find(m => m.id === id);
+            assert.deepEqual([row.format, row.total_chapters, row.chapters_read], ['webtoon', 200, 0]);
+            const fresh = (await ed('GET', `/mangas/${id}`)).body;
+            assert.deepEqual([fresh.manga_passion_id, fresh.chapters_read, fresh.chapter_progress], [null, 0, []], 'Manga Passion knows no webtoons');
+
+            const chapters = (body, api = ed) => api('PUT', `/mangas/${id}/chapters`, body);
+            assert.deepEqual((await chapters({ add: 1 })).body, { success: true, manga_id: id, chapters_read: 1, previous: 0, total_chapters: 200 });
+            assert.deepEqual([(await chapters({ chapters_read: 150 })).body.chapters_read, (await chapters({ chapters_read: 120, monotonic: true })).body.chapters_read], [150, 150]);
+            const above = await chapters({ chapters_read: 201 });
+            assert.deepEqual([above.status, above.body.code, above.body.total_chapters, above.body.error],
+                [400, 'CHAPTER_ABOVE_TOTAL', 200, 'Kapitel 201 gibt es bei dieser Reihe nicht (sie hat 200 Kapitel).']);
+            for (const body of [{}, { chapters_read: 1, add: 1 }, { add: 0 }, { chapters_read: -1 }, { chapters_read: 'drei' }]) {
+                assert.equal((await chapters(body)).status, 400, JSON.stringify(body));
+            }
+            assert.equal((await chapters({ add: 1 }, vis)).status, 403);
+            assert.equal((await ed('PUT', '/mangas/999999/chapters', { add: 1 })).status, 404);
+            assert.equal((await chapters({ chapters_read: 10 }, admin)).body.chapters_read, 10, 'everyone has their own chapter');
+            const detail = (await vis('GET', `/mangas/${id}`)).body;
+            assert.deepEqual(detail.chapter_progress.map(p => [p.username, p.chapters_read]).sort(), [['admin', 10], ['ed', 150]]);
+            assert.equal(detail.chapters_read, 0, 'the visitor has read nothing');
+            assert.equal((await ed('GET', '/mangas')).body.find(m => m.id === id).chapters_read, 150);
+            assert.equal((await ed('GET', '/offline-snapshot')).body.details[id].chapters_read, 150);
+
+            // a total lowered below a stored chapter: going down stays possible, going up does not
+            assert.equal((await ed('PUT', `/mangas/${id}`, { total_chapters: 100 })).status, 200);
+            assert.equal((await chapters({ chapters_read: 140 })).body.chapters_read, 140);
+            assert.equal((await chapters({ add: 1 })).body.code, 'CHAPTER_ABOVE_TOTAL');
+            assert.deepEqual((await ed('GET', '/stats/reading')).body.chapters, { series: 1, read: 140, finished: 1 });
+            assert.deepEqual((await chapters({ chapters_read: 0 })).body.previous, 140);
+            assert.deepEqual((await ed('GET', `/mangas/${id}`)).body.chapter_progress.map(p => p.username), ['admin'], '0 removes the row');
+
+            for (const [method, url, body] of [
+                ['GET', `/mangas/${id}/gaps`], ['POST', `/mangas/${id}/autofill-volumes`, {}], ['GET', `/volumes/lookup?manga_id=${id}&volume_number=1`]
+            ]) {
+                const res = await ed(method, url, body);
+                assert.deepEqual([res.status, res.body.code], [409, 'MP_WEBTOON'], url);
+            }
+
+            await chapters({ chapters_read: 50 });
+            const trashed = (await ed('DELETE', `/mangas/${id}`)).body.trash_id;
+            assert.equal((await ed('PUT', `/mangas/${id}/chapters`, { add: 1 })).status, 404);
+            assert.equal((await ed('POST', `/trash/${trashed}/restore`)).status, 200);
+            const back = (await ed('GET', `/mangas/${id}`)).body;
+            assert.deepEqual([back.format, back.total_chapters, back.chapters_read, back.chapter_progress.length], ['webtoon', 100, 50, 2]);
+            assert.equal((await ed('PUT', `/mangas/${id}`, { format: 'print' })).status, 200);
+            assert.equal((await ed('GET', `/mangas/${id}`)).body.format, 'print');
         }
     },
     {

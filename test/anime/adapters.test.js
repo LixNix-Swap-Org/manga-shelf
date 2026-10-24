@@ -5,7 +5,7 @@ const anilist = require('../../core/anime/anilist');
 const jikan = require('../../core/anime/jikan');
 const mal = require('../../core/anime/mal');
 const {
-    mergeResults, mergeMeta, emptyMeta, foldUmlauts, estimateNextAiring, rankByTitle, nextCheckAt, cleanDescription, DAY, HOUR, MINUTE
+    mergeResults, mergeMeta, emptyMeta, foldUmlauts, titleScore, estimateNextAiring, rankByTitle, nextCheckAt, cleanDescription, DAY, HOUR, MINUTE
 } = require('../../core/anime/normalize');
 const { cleanAniListDescription } = require('../../core/anilist');
 const { fixture } = require('./helpers');
@@ -101,6 +101,10 @@ test('merge by MAL id: AniList fields first, gaps from MyAnimeList, both ids and
 
 test('umlauts are folded; next checks follow the data', () => {
     assert.equal(foldUmlauts('Tagebücher der Apothekerin – Größe'), 'Tagebucher der Apothekerin – Grosse');
+    // macrons and other accents on Latin letters fold too, kana keep their dakuten
+    assert.equal(foldUmlauts('Naruto Shippūden – Tōkyō'), 'Naruto Shippuden – Tokyo');
+    assert.equal(foldUmlauts('ぼっち・が'), 'ぼっち・が');
+    assert.equal(titleScore('Naruto: Shippuden', ['Naruto Shippūden']), 1);
     const base = { status: 'FINISHED' };
     assert.equal(nextCheckAt(base, NOW), NOW + 14 * DAY);
     assert.equal(nextCheckAt({ status: 'CANCELLED' }, NOW), NOW + 14 * DAY);

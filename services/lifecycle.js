@@ -78,7 +78,7 @@ let backupCache = null;
 
 function lastVerifiedBackup(lastVerifiedSnapshot, now) {
     if (!backupCache || now - backupCache.at > HEALTH_CACHE_MS) {
-        let snapshot = null;
+        let snapshot;
         try { snapshot = lastVerifiedSnapshot(); } catch (e) { snapshot = null; }
         backupCache = { at: now, snapshot };
     }

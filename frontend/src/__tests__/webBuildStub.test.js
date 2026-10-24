@@ -34,15 +34,17 @@ describe('web build without the standalone modules', () => {
   });
 
   // run against a scratch build: WEB_BUILD_DIR=<outDir of `vite build`> npx vitest run src/__tests__/webBuildStub.test.js
-  it.skipIf(!process.env.WEB_BUILD_DIR)('a web build has no bcryptjs, fflate, sql.js, takeover or Crunchyroll chunk and does not precache them', () => {
+  it.skipIf(!process.env.WEB_BUILD_DIR)('a web build has no bcryptjs, fflate, sql.js, takeover, Crunchyroll or reminder chunk and does not precache them', () => {
     const dir = process.env.WEB_BUILD_DIR;
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, '.vite', 'manifest.json'), 'utf8'));
     const sources = Object.keys(manifest);
     expect(sources.filter((s) => /bcryptjs|fflate|sql\.js|takeover|backupZip|LocalOffer|LocalScreen|LocalSetup|TakeoverDialog|BackupExportModal|SourcesPanel/.test(s))).toEqual([]);
     expect(sources.filter((s) => /CrunchyrollCard|WatchMatchDialog|crunchyrollSync|crunchyrollFlow|crunchyrollSecret|useCrunchyroll/.test(s))).toEqual([]);
+    expect(sources.filter((s) => /ReminderSwitch|reminderScheduler|reminderPlan/.test(s))).toEqual([]);
     const sw = fs.readFileSync(path.join(dir, 'sw.js'), 'utf8');
     expect(sw).not.toMatch(/bcrypt|fflate|sql-wasm|TakeoverDialog|LocalScreen/);
     expect(sw).not.toMatch(/CrunchyrollCard|WatchMatchDialog|crunchyrollSync/);
+    expect(sw).not.toMatch(/ReminderSwitch|reminderScheduler|reminderPlan/);
   });
 
   it('only the desktop web build switches the Crunchyroll history on', () => {

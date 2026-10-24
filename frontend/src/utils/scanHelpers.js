@@ -103,16 +103,21 @@ const ownerNames = (owners) => (Array.isArray(owners) ? owners : [])
   .map((o) => (typeof o === 'string' ? o : o?.username))
   .filter(Boolean);
 
+// i18n
+const VIEWER_SHELF_TEXT = '{volume}: In diesem Regal bist du Leser und kannst hier nicht buchen';
+
 /**
  * Shopping mode: turns an ISBN lookup answer into a scan-list entry. kind: buy (on the list, `itemId` to tick off),
- * owned, partner (only other users own it), check (series known, volume unclear), new (series missing), unknown.
+ * owned, partner (only other users own it), claim/add (bookable), check (series known, volume unclear or not bookable),
+ * new (series missing), unknown. `readOnlySeries` (a Set of series ids in shelves where the caller is a viewer) or
+ * `matched_manga.can_edit === false` keeps claim and add out: the server refuses those writes.
  */
-export const classifyShopScan = (isbn, data, shoppingItems = []) => {
+export const classifyShopScan = (isbn, data, shoppingItems = [], { readOnlySeries = null } = {}) => {
   const clean = isbnDigits(isbn);
   const key = toIsbn13(clean);
   const fromList = shoppingItems.find((it) => isbnDigits(it.isbn) && toIsbn13(it.isbn) === key);
   const entry = (kind, label, extra = {}) => ({ isbn: clean, kind, label, ...extra });
-  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), { itemId: it.id, price: it.price ?? null });
+  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), { itemId: it.id, price: it.price ?? null, currency: it.currency ?? null });
   if (fromList) return buyEntry(fromList);
 
   const book = data?.book;
@@ -133,11 +138,35 @@ export const classifyShopScan = (isbn, data, shoppingItems = []) => {
   if (data.matched_manga && book?.volume_number_known === false && !mv) {
     return entry('check', t('{series}: Bandnummer im Katalog unbekannt, bitte selbst prüfen', { series: data.matched_manga.title }));
   }
-  if (data.matched_manga) {
-    return entry('check', mv
-      ? t('{volume} (Status {status})', { volume: volumeLabel(data.matched_manga.title, mv), status: statusLabel(mv.status) })
-      : t('{volume}: fehlt noch und steht nicht auf der Einkaufsliste', { volume: volumeLabel(data.matched_manga.title, { volume_number: book?.volume_number ?? '' }) }));
+  const manga = data.matched_manga;
+  const currency = manga?.currency ?? null;
+  const viewerOnly = Boolean(manga) && (manga.can_edit === false || Boolean(readOnlySeries?.has(manga.id)));
+  if (viewerOnly && (mv || book?.volume_number)) {
+    return entry('check', t(VIEWER_SHELF_TEXT, { volume: volumeLabel(manga.title, mv || { volume_number: book.volume_number }) }));
   }
+  if (manga && mv) {
+    // stored but not on the list (ordered, announced, or missing in a paused series): booking adds the user as owner
+    return entry('claim', t('{volume} (Status {status})', { volume: volumeLabel(manga.title, mv), status: statusLabel(mv.status) }), {
+      volumeId: mv.id, mangaId: manga.id ?? mv.manga_id ?? null, price: mv.price ?? null, currency
+    });
+  }
+  if (manga && book?.volume_number) {
+    // a known series without this volume: booking creates it as owned; a catalogue price is in euros
+    const euro = !currency || currency === 'EUR';
+    return entry('add', t('{volume}: fehlt noch und steht nicht auf der Einkaufsliste', { volume: volumeLabel(manga.title, { volume_number: book.volume_number }) }), {
+      mangaId: manga.id ?? null,
+      price: euro ? book.price ?? null : null,
+      currency,
+      volume: {
+        volume_number: String(book.volume_number),
+        isbn: key || null,
+        price: euro ? book.price ?? null : null,
+        pages: book.pages || null,
+        release_year: book.release_year || null
+      }
+    });
+  }
+  if (manga) return entry('check', t('{series}: Bandnummer im Katalog unbekannt, bitte selbst prüfen', { series: manga.title }));
   if (data.matched_candidates?.length > 0) {
     return entry('check', t('{name} passt zu mehreren Reihen ({candidates})', { name, candidates: data.matched_candidates.map((c) => c.title).join(', ') }));
   }
@@ -194,27 +223,46 @@ export const findVolumeByIsbn = (index, isbn) => {
  * Scan result for a volume of the offline copy ({ manga, volume }). Always provisional (`offline: true`, note in the
  * label) so the server's answer replaces it and it is not bookable before (isBookable).
  */
-export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note, source = 'offline' } = {}) => {
+export const classifyLocalHit = (isbn, hit, shoppingItems = [], { note, source = 'offline', readOnlySeries = null } = {}) => {
   const clean = isbnDigits(isbn);
-  const result = classifyShopScan(clean, { found: true, matched_manga: hit.manga, matched_volume: hit.volume, book: {} }, shoppingItems);
+  const result = classifyShopScan(clean, { found: true, matched_manga: hit.manga, matched_volume: hit.volume, book: {} }, shoppingItems, { readOnlySeries });
   const shownNote = note === undefined ? t('offline geprüft') : note;
   return { ...result, label: `${result.label} (${shownNote})`, offline: true, source };
 };
 
-/** A `buy` entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
-export const isBookable = (entry) => entry.kind === 'buy' && !entry.done && !entry.booking && !entry.offline;
+/**
+ * Kinds the basket books: `buy` (on the shopping list), `claim` (a stored volume that is not on the list) and `add`
+ * (a volume of a known series that is not stored yet; created as owned when booked).
+ */
+export const BOOKABLE_KINDS = ['buy', 'claim', 'add'];
+
+/** An entry that may be booked now: not done or booking, and not a provisional answer of the offline copy. */
+export const isBookable = (entry) => BOOKABLE_KINDS.includes(entry.kind) && !entry.done && !entry.booking && !entry.offline;
+
+/** Price total of the bookable entries per currency, euro first: [{ currency, total }]; entries without a price are left out. */
+export const basketTotals = (entries) => {
+  const sums = new Map();
+  for (const e of entries || []) {
+    const price = Number(e?.price);
+    if (!isBookable(e) || e.price === null || e.price === undefined || e.price === '' || !Number.isFinite(price)) continue;
+    const currency = e.currency || 'EUR';
+    sums.set(currency, (sums.get(currency) || 0) + price);
+  }
+  return [...sums].map(([currency, total]) => ({ currency, total: Math.round(total * 100) / 100 }))
+    .sort((a, b) => (a.currency === 'EUR' ? -1 : b.currency === 'EUR' ? 1 : a.currency.localeCompare(b.currency)));
+};
 
 /** Label note of a scan answered from the offline copy before asking the server. */
 export const localSourceNote = (age) => (age ? t('Stand Offline-Kopie {age}', { age }) : t('Stand Offline-Kopie'));
 
 /** Scan result without the server: shopping list first, then the offline copy; a miss is `offline` (not checked). */
-export const classifyShopScanOffline = (isbn, index, shoppingItems = []) => {
+export const classifyShopScanOffline = (isbn, index, shoppingItems = [], { readOnlySeries = null } = {}) => {
   const clean = isbnDigits(isbn);
   const listed = classifyShopScan(clean, { found: false }, shoppingItems);
   if (listed.kind === 'buy') return listed;
   const hit = index instanceof Map ? findVolumeByIsbn(index, clean) : index;
   if (!hit) return { isbn: clean, kind: 'offline', label: t('{clean} – offline, nicht geprüft', { clean }), offline: true };
-  return classifyLocalHit(clean, hit, shoppingItems);
+  return classifyLocalHit(clean, hit, shoppingItems, { readOnlySeries });
 };
 
 /** How a failed ISBN lookup is handled: `offline` (check locally, can be re-scanned), `auth` or `error` (show the message). */
@@ -251,18 +299,21 @@ export const mergeScanEntry = (list, entry) => {
 
 export const removeScanEntry = (list, isbn) => list.filter((e) => e.isbn !== isbn);
 
-/** Outcome of handleQuickBuy: a plain 'ok' | 'queued' | 'failed', or { status, error, httpStatus } in batch mode. */
+/** Outcome of handleQuickBuy: a plain 'ok' | 'queued' | 'failed', or { status, error, httpStatus, code? } in batch mode. */
 export const normalizeBuyOutcome = (outcome) => {
   if (outcome && typeof outcome === 'object') {
     const status = ['ok', 'queued'].includes(outcome.status) ? outcome.status : 'failed';
-    return { status, error: outcome.error || '', httpStatus: outcome.httpStatus ?? null, batch: true };
+    return { status, error: outcome.error || '', httpStatus: outcome.httpStatus ?? null, code: outcome.code || null, batch: true };
   }
   return { status: ['ok', 'queued'].includes(outcome) ? outcome : 'failed', error: '', httpStatus: null, batch: false };
 };
 
-/** Stop a batch after this result? Always after a session/permission error, and after any failure of a hook that alerts itself. */
+/**
+ * Stop a batch after this result? After a session error, a 403 for the account (READ_ONLY, or no code from an older
+ * server) and any failure of a hook that alerts itself; a 403 FORBIDDEN of one shelf only skips that entry.
+ */
 export const shouldStopBooking = (result) => result.status === 'failed'
-  && (!result.batch || result.httpStatus === 401 || result.httpStatus === 403);
+  && (!result.batch || result.httpStatus === 401 || (result.httpStatus === 403 && result.code !== 'FORBIDDEN'));
 
 /** Applies booking results ({ isbn, status, error, httpStatus }) to the scan list: only successes and queued buys become done. */
 export const applyBookingResults = (list, results) => {

@@ -6,7 +6,7 @@ const {
     DEFAULT_LANGUAGE, DEFAULT_CURRENCY
 } = require('../lib/language');
 const { readProfile } = require('../lib/locales');
-const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority } = require('../lib/validate');
+const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority, parseSeriesFormat, parseTotalChapters, MAX_CHAPTERS } = require('../lib/validate');
 const snapshot = require('../snapshot');
 const access = require('../lib/access');
 const { moveMangaToTrash } = require('../lib/trash');
@@ -46,6 +46,15 @@ const TEXT_LENGTH_ERRORS = {
 };
 
 const TOTAL_VOLUMES_ERROR = 'Gesamtbände muss eine ganze Zahl zwischen 1 und 5000 sein';
+const FORMAT_ERROR = msg('Ungültiges Format (erlaubt: print, webtoon)');
+const TOTAL_CHAPTERS_ERROR = msg('Gesamtkapitel muss eine ganze Zahl zwischen 1 und {max} sein', { max: MAX_CHAPTERS });
+
+/**
+ * Manga Passion only knows German print editions: a new webtoon or a series in another language gets no link. An edit
+ * that only switches the format keeps a stored link (the Manga Passion actions refuse a webtoon with 409 MP_WEBTOON,
+ * back on print they use it again); it goes when the client sends manga_passion_id null or the series leaves German.
+ */
+const keepsMpLink = (language, format) => isMpLanguage(language) && format !== 'webtoon';
 const EDITION_ERRORS = {
     language: 'Unbekannte Sprache',
     region: 'Ungültige Region (zwei Buchstaben, z. B. US)',
@@ -159,6 +168,16 @@ function readMangaFields(body, stored = null) {
         if (r.error) return { error: r.error };
         fields.total_volumes = r.value;
     }
+    if (body.format !== undefined) {
+        const r = parseSeriesFormat(body.format);
+        if (r.error) return { error: FORMAT_ERROR };
+        fields.format = r.value;
+    }
+    if (body.total_chapters !== undefined) {
+        const r = parseTotalChapters(body.total_chapters);
+        if (r.error) return { error: TOTAL_CHAPTERS_ERROR };
+        fields.total_chapters = r.value;
+    }
     if (body.manga_passion_id !== undefined) {
         const r = parseOptionalId(body.manga_passion_id);
         if (r.error) return { error: 'Ungültige Manga-Passion-ID' };
@@ -217,11 +236,12 @@ function create(ctx, { body }) {
         workKey = body.work_key;
     }
     const language = fields.language || defaultLanguageOf(ctx);
+    const format = fields.format || 'print';
     const shelfId = access.targetShelfId(ctx, body.shelf_id);
 
     const result = ctx.db.prepare(`
-        INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, updated_by, shelf_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, banner_image, manga_passion_id, wish_priority, collecting, format, total_chapters, updated_by, shelf_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         cleanTitle,
         fields.alt_title ?? null,
@@ -237,10 +257,11 @@ function create(ctx, { body }) {
         fields.description ?? null,
         fields.cover_image ?? null,
         fields.banner_image ?? null,
-        // Manga Passion only knows German editions
-        isMpLanguage(language) ? fields.manga_passion_id ?? null : null,
+        keepsMpLink(language, format) ? fields.manga_passion_id ?? null : null,
         fields.wish_priority ?? null,
         fields.collecting ?? 'aktiv',
+        format,
+        fields.total_chapters ?? null,
         ctx.user.id,
         shelfId
     );
@@ -277,12 +298,13 @@ function update(ctx, { params, body }) {
     }
     const pick = (field) => (fields[field] !== undefined ? fields[field] : manga[field]);
     const language = fields.language === null ? defaultLanguageOf(ctx) : (pick('language') || DEFAULT_LANGUAGE);
+    const format = pick('format') || 'print';
 
     ctx.db.prepare(`
         UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?,
         language = ?, region = ?, currency = ?, status = ?, tags = ?, total_volumes = ?,
         description = ?, cover_image = ?,
-        banner_image = ?, manga_passion_id = ?, wish_priority = ?, collecting = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        banner_image = ?, manga_passion_id = ?, wish_priority = ?, collecting = ?, format = ?, total_chapters = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     `).run(
         body.title !== undefined ? body.title.trim() : manga.title,
@@ -301,6 +323,8 @@ function update(ctx, { params, body }) {
         isMpLanguage(language) ? pick('manga_passion_id') ?? null : null,
         pick('wish_priority') ?? null,
         pick('collecting') || 'aktiv',
+        format,
+        pick('total_chapters') ?? null,
         ctx.user.id,
         params.id
     );
@@ -308,8 +332,8 @@ function update(ctx, { params, body }) {
 }
 
 /**
- * POST /mangas/:id/editions: the same work in another language as a new series. Copies the descriptive fields of the
- * source; both share the source's work key (a fresh manual one when it has none).
+ * POST /mangas/:id/editions: the same work in another language as a new series. Copies the descriptive fields (and the
+ * format) of the source; both share the source's work key (a fresh manual one when it has none).
  */
 function createEdition(ctx, { params, body }) {
     const source = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(params.id);
@@ -337,10 +361,11 @@ function createEdition(ctx, { params, body }) {
         if (!source.work_key) ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?').run(workKey, source.id);
         return Number(ctx.db.prepare(`
             INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes,
-                                description, cover_image, updated_by, shelf_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, ?, ?, ?, ?, ?)
+                                description, cover_image, format, total_chapters, updated_by, shelf_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Laufend', ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(title, source.alt_title, source.author, publisher, fields.language, fields.region ?? null, fields.currency || DEFAULT_CURRENCY,
-            workKey, source.tags, source.total_volumes, source.description, source.cover_image, ctx.user.id, source.shelf_id).lastInsertRowid);
+            workKey, source.tags, source.total_volumes, source.description, source.cover_image, source.format || 'print', source.total_chapters ?? null,
+            ctx.user.id, source.shelf_id).lastInsertRowid);
     });
     return { status: 201, body: { success: true, id, work_key: workKey } };
 }

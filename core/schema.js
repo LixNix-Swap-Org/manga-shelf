@@ -671,6 +671,51 @@ function migrationList(log = silentLog) {
                 const userCols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!userCols.has('default_anime_visibility')) d.exec("ALTER TABLE users ADD COLUMN default_anime_visibility TEXT NOT NULL DEFAULT 'public';");
             }
+        },
+        {
+            version: 34,
+            name: 'add_anime_tags',
+            up: (d) => {
+                // Tags / collections of the shared anime list (JSON list of short names)
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('tags')) d.exec('ALTER TABLE animes ADD COLUMN tags TEXT;');
+            }
+        },
+        {
+            version: 35,
+            name: 'add_anime_airings',
+            up: (d) => {
+                // Episodes that have aired (airing time in seconds), kept when the next one replaces them: the history of the anime calendar
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS anime_airings (
+                        anime_id INTEGER NOT NULL REFERENCES animes(id) ON DELETE CASCADE,
+                        episode INTEGER NOT NULL,
+                        at INTEGER NOT NULL,
+                        PRIMARY KEY (anime_id, episode)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_anime_airings_at ON anime_airings (at);
+                `);
+            }
+        },
+        {
+            version: 36,
+            name: 'add_webtoon_chapters',
+            up: (d) => {
+                // Webtoons and manhwa are read by chapter: the series format, its known chapter count and each user's chapter
+                const cols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!cols.has('format')) d.exec("ALTER TABLE mangas ADD COLUMN format TEXT NOT NULL DEFAULT 'print';");
+                if (!cols.has('total_chapters')) d.exec('ALTER TABLE mangas ADD COLUMN total_chapters INTEGER;');
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS chapter_progress (
+                        manga_id INTEGER NOT NULL REFERENCES mangas(id) ON DELETE CASCADE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        chapters_read INTEGER NOT NULL,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (manga_id, user_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
+                `);
+            }
         }
     ];
 }
@@ -724,6 +769,7 @@ function acceptNewerSchema(database) {
 function runSequentialMigrations(database, options = {}) {
     const log = options.log || silentLog;
     const pending = pendingMigrations(database, log);
+    const fresh = isFreshDatabase(database);
     ensureMigrationsTable(database);
     if (!pending.length) return [];
 
@@ -747,9 +793,18 @@ function runSequentialMigrations(database, options = {}) {
         // minus the schema_migrations row itself
         const entry = { version: mig.version, name: mig.name, changes: totalChanges() - changesBefore - 1, ms: Date.now() - started };
         report.push(entry);
+        if (fresh) continue;
         log.info(`[Database Migration] v${entry.version} ${entry.name}: ${entry.changes.toLocaleString('de-DE')} Zeilen geändert, ${entry.ms} ms`);
     }
+    if (fresh) log.info(`[Database Migration] Neue Datenbank angelegt (Schema v${report[report.length - 1].version}, ${report.length} Migrationen, ${report.reduce((sum, r) => sum + r.ms, 0)} ms)`);
     return report;
+}
+
+/** True for a database nobody has used: no migration recorded yet and no account or series, so its migrations change nothing worth listing. */
+function isFreshDatabase(database) {
+    const has = name => database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+    if (has('schema_migrations')) return false;
+    return ['users', 'mangas'].every(name => !has(name) || !database.prepare(`SELECT 1 FROM ${name} LIMIT 1`).get());
 }
 
 /**
@@ -788,6 +843,8 @@ function applySchema(conn, options = {}) {
             region TEXT,
             work_key TEXT,
             currency TEXT NOT NULL DEFAULT 'EUR',
+            format TEXT NOT NULL DEFAULT 'print',
+            total_chapters INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_by INTEGER,

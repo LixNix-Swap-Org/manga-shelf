@@ -4,7 +4,7 @@ const { inferVolumeType } = require('./lib/volumeType');
 const { isLegacyReadStatus, OWNED_STATUS } = require('./lib/owners');
 const { canonicalVolumeNumber } = require('./lib/volumeNumber');
 const { msg, msgData, isMsg } = require('./errors');
-const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES } = require('./lib/validate');
+const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS } = require('./lib/validate');
 const { parseLanguage, normalizeRegion, normalizeCurrency, isWorkKey } = require('./lib/language');
 
 const DELIMITER = ';';
@@ -17,7 +17,8 @@ const COLLECTING_STATUSES = ['aktiv', 'pausiert', 'abgebrochen'];
 // "Reihenverlag" is the series publisher, "Verlag" a volume's differing publisher (empty = the series').
 // The series wish is on every row of the series, the other series fields only on its first row.
 // "Gelesen von" and the owners stay the last columns. "Sprache" is a language code; region, currency and work key of the
-// edition follow it, "Bandsprache" (empty = the series') is a volume's own language.
+// edition follow it, "Bandsprache" (empty = the series') is a volume's own language. "Format" (empty = print),
+// "Gesamtkapitel" and "Kapitel gelesen von" ("anna: 150, ben: 30") belong to webtoons.
 const COLUMNS = [
     ['series', 'Reihe'], ['series_publisher', 'Reihenverlag'], ['publisher', 'Verlag'], ['author', 'Autor'], ['type', 'Typ'],
     ['volume_number', 'Bandnummer'], ['status', 'Status'], ['isbn', 'ISBN'], ['price', 'Preis'],
@@ -29,12 +30,14 @@ const COLUMNS = [
     ['series_work_key', 'Werk'], ['series_tags', 'Tags'],
     ['series_mp_id', 'Manga-Passion-ID'], ['series_cover', 'Reihen-Cover'], ['series_banner', 'Reihen-Banner'],
     ['series_description', 'Beschreibung'], ['cover_image', 'Band-Cover'], ['images', 'Bilder'], ['mp_volume_id', 'MP-Band-ID'],
-    ['volume_language', 'Bandsprache'], ['readers', 'Gelesen von'], ['owners', 'Besitzer']
+    ['volume_language', 'Bandsprache'], ['series_format', 'Format'], ['series_chapters', 'Gesamtkapitel'],
+    ['series_chapter_readers', 'Kapitel gelesen von'], ['readers', 'Gelesen von'], ['owners', 'Besitzer']
 ];
 // Series fields that the export writes only on the first row of a series
 const SERIES_DETAIL_KEYS = [
     'series_status', 'series_collecting', 'series_total', 'series_alt_title', 'series_language', 'series_region', 'series_currency',
-    'series_work_key', 'series_tags', 'series_mp_id', 'series_cover', 'series_banner', 'series_description'
+    'series_work_key', 'series_tags', 'series_mp_id', 'series_cover', 'series_banner', 'series_description',
+    'series_format', 'series_chapters', 'series_chapter_readers'
 ];
 
 // Limits for user-name cells (owners, read by)
@@ -215,11 +218,14 @@ const HEADER_ALIASES = {
     series_mp_id: ['mangapassionid', 'mangapassionedition', 'mpid'], series_cover: ['reihencover', 'seriescover'],
     series_banner: ['reihenbanner', 'banner'], series_description: ['beschreibung', 'description'],
     cover_image: ['bandcover', 'cover', 'volumecover'], images: ['bilder', 'images', 'fotos'],
-    mp_volume_id: ['mpbandid', 'mpvolumeid'], volume_language: ['bandsprache', 'volumelanguage']
+    mp_volume_id: ['mpbandid', 'mpvolumeid'], volume_language: ['bandsprache', 'volumelanguage'],
+    series_format: ['format', 'reihenformat', 'seriesformat'], series_chapters: ['gesamtkapitel', 'totalchapters', 'chapters'],
+    series_chapter_readers: ['kapitelgelesenvon', 'chaptersreadby', 'chapterprogress']
 };
 const SERIES_META_KEYS = [
     'series_wish', 'series_status', 'series_collecting', 'series_total', 'series_alt_title', 'series_language', 'series_region',
-    'series_currency', 'series_work_key', 'series_tags', 'series_mp_id', 'series_cover', 'series_banner', 'series_description'
+    'series_currency', 'series_work_key', 'series_tags', 'series_mp_id', 'series_cover', 'series_banner', 'series_description',
+    'series_format', 'series_chapters', 'series_chapter_readers'
 ];
 const SERIES_KEYS = new Set(['series', 'series_publisher', 'publisher', 'author', ...SERIES_META_KEYS]);
 const MAX_IMAGES = 50;
@@ -372,6 +378,24 @@ function readSeriesMeta(get, line, warnings) {
         if (isWorkKey(workKey)) meta.work_key = workKey;
         else warn('Werk', shorten(workKey));
     }
+    const format = get('series_format');
+    if (format) {
+        const found = SERIES_FORMATS.find(f => f === format.toLowerCase());
+        if (found) meta.format = found;
+        else warn('Format', shorten(format), SERIES_FORMATS.join(', '));
+    }
+    const chapters = get('series_chapters');
+    if (chapters) {
+        const r = parseCount(chapters, MAX_CHAPTERS);
+        if (r.error) warn('Gesamtkapitel', shorten(chapters), range(0, MAX_CHAPTERS));
+        else meta.total_chapters = r.value || null;
+    }
+    const chapterReaders = get('series_chapter_readers');
+    if (chapterReaders) {
+        const pairs = parseChapterReaders(chapterReaders);
+        if (!pairs) warn('Kapitel gelesen von', shorten(chapterReaders), msg('Name: Kapitel, z. B. anna: 150'));
+        else meta.chapter_readers = pairs;
+    }
     for (const [key, field, label, max] of [
         ['series_alt_title', 'alt_title', 'Alternativtitel', 300],
         ['series_tags', 'tags', 'Tags', 500], ['series_description', 'description', 'Beschreibung', MAX_NOTES_LENGTH],
@@ -383,6 +407,33 @@ function readSeriesMeta(get, line, warnings) {
         else meta[field] = value;
     }
     return meta;
+}
+
+/**
+ * "anna: 150, ben: 30" as [{ name, chapters }]; a name may hold commas ("Müller, Hans: 12") and colons ("Dr: Who: 7"):
+ * an entry ends at a section whose text after its last colon is a number. null for a cell that is not such a list or
+ * longer than a names cell may be. Split by hand (no backtracking regex), so the cost stays linear in the cell length.
+ */
+function parseChapterReaders(raw) {
+    if (raw.length > MAX_NAMES_CELL_LENGTH) return null;
+    const parts = raw.split(/([,|])/);
+    const pairs = [];
+    let name = '';
+    for (let i = 0; i < parts.length; i += 2) {
+        const part = parts[i];
+        const colon = part.lastIndexOf(':');
+        const count = colon >= 0 ? part.slice(colon + 1).trim() : '';
+        if (/^\d+$/.test(count)) {
+            const who = (name + part.slice(0, colon)).trim();
+            const chapters = Number(count);
+            if (!who || chapters > MAX_CHAPTERS) return null;
+            pairs.push({ name: who, chapters });
+            name = '';
+        } else if (name || part.trim()) {
+            name += part + (parts[i + 1] ?? '');
+        }
+    }
+    return !name.trim() && pairs.length && pairs.length <= MAX_NAMES_PER_CELL ? pairs : null;
 }
 
 function resolveColumns(headers) {
@@ -535,5 +586,5 @@ function mapCsvRows(rows) {
 
 module.exports = {
     COLUMNS, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE, COLLECTING_STATUSES, CsvFormatError, rowNote, toCsv, csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, canonicalVolumeNumber, escapeCell, unescapeCell,
-    guardFormulas, normalizeDate, parseAmount, parseCount, MAX_NOTES_LENGTH, MAX_CELL_LENGTH
+    guardFormulas, normalizeDate, parseAmount, parseCount, parseChapterReaders, MAX_NOTES_LENGTH, MAX_CELL_LENGTH
 };

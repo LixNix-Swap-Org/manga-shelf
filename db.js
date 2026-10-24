@@ -149,7 +149,7 @@ function openRawDb(file, options = {}) {
         } catch (fallbackErr) {
             if (fallbackErr && fallbackErr.code !== 'MODULE_NOT_FOUND') throw fallbackErr;
             // e.g. a Pterodactyl egg still on Node 20: say what to change instead of "Cannot find module"
-            throw new Error(`Node.js ${process.versions.node} hat kein eingebautes node:sqlite. Manga Shelf braucht Node.js 22.13 oder neuer (im Pterodactyl-Panel unter Startup das Docker-Image "Node.js 22" wählen).`);
+            throw new Error(`Node.js ${process.versions.node} hat kein eingebautes node:sqlite. Manga Shelf braucht Node.js 22.13 oder neuer (im Pterodactyl-Panel unter Startup das Docker-Image "Node.js 22" wählen).`, { cause: fallbackErr });
         }
         return new Database(file, options.readOnly ? { readonly: true } : {});
     }
@@ -184,7 +184,7 @@ function dbFileProblem(probe) {
  */
 function validateDbFile(file) {
     let probe;
-    let problem = null;
+    let problem;
     try {
         probe = openRawDb(file, { readOnly: true });
         problem = dbFileProblem(probe);

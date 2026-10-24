@@ -451,7 +451,7 @@ function runPlan(steps, { exec = defaultExec, readSecurity = readWindowsSecurity
                 try {
                     exec(step.cmd, step.args, step.env ? { env: step.env } : undefined);
                 } catch (err) {
-                    if (!step.allowFail) throw new Error(`${step.cmd} ${step.args.join(' ')} fehlgeschlagen: ${err.message}`);
+                    if (!step.allowFail) throw new Error(`${step.cmd} ${step.args.join(' ')} fehlgeschlagen: ${err.message}`, { cause: err });
                 }
                 break;
             default:

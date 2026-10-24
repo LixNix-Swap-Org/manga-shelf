@@ -50,10 +50,11 @@ test('classifyShopScan: Einkaufsliste, vorhanden, prüfen, neu, unbekannt', () =
   const owned = c({ found: true, matched_manga: { title: 'X' }, matched_volume: { id: 9, status: 'Vorhanden', volume_number: '1' }, book: {} });
   assert.deepStrictEqual([owned.kind, owned.label], ['owned', 'X Band 1']);
   const ordered = c({ found: true, matched_manga: { title: 'X' }, matched_volume: { id: 9, status: 'Vorbestellt', volume_number: '2' }, book: {} });
-  assert.deepStrictEqual([ordered.kind, ordered.label], ['check', 'X Band 2 (Status Vorbestellt)']);
+  assert.deepStrictEqual([ordered.kind, ordered.label], ['claim', 'X Band 2 (Status Vorbestellt)']);
   assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, book: { volume_number_known: false } }).kind, 'check');
-  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, book: { volume_number: '4' } }).label,
-    'X Band 4: fehlt noch und steht nicht auf der Einkaufsliste');
+  assert.strictEqual(c({ found: true, matched_manga: { title: 'X' }, book: {} }).kind, 'check');
+  const add = c({ found: true, matched_manga: { title: 'X' }, book: { volume_number: '4' } });
+  assert.deepStrictEqual([add.kind, add.label], ['add', 'X Band 4: fehlt noch und steht nicht auf der Einkaufsliste']);
   const candidates = c({ found: true, book: { title: 'Mein kleiner Bruder!', series: 'Kaguya-sama' }, matched_candidates: [{ title: 'A' }, { title: 'B' }] });
   assert.deepStrictEqual([candidates.kind, candidates.label], ['check', 'Kaguya-sama passt zu mehreren Reihen (A, B)']);
   assert.strictEqual(c({ found: true, book: { title: 'Neu' } }).kind, 'new');
@@ -224,6 +225,20 @@ test('normalizeBuyOutcome and shouldStopBooking', () => {
   assert.strictEqual(helpers.shouldStopBooking(conflict), false);
   assert.strictEqual(helpers.shouldStopBooking(helpers.normalizeBuyOutcome({ status: 'failed', httpStatus: 401 })), true);
   assert.strictEqual(helpers.shouldStopBooking(helpers.normalizeBuyOutcome('queued')), false);
+  // a 403 of one shelf skips that entry; a read-only account (or a 403 without a code) stops the batch
+  const stops = (code) => helpers.shouldStopBooking(helpers.normalizeBuyOutcome({ status: 'failed', httpStatus: 403, ...(code ? { code } : {}) }));
+  assert.deepStrictEqual([stops('FORBIDDEN'), stops('READ_ONLY'), stops(null)], [false, true, true]);
+});
+
+test('a scan of a series in a shelf the caller only views is a hint, never claim or add', () => {
+  const answer = (manga, volume, book = {}) => ({ found: true, matched_manga: manga, matched_volume: volume, book });
+  const stored = answer({ id: 4, title: 'Naruto' }, { id: 40, volume_number: '2', status: 'Vorbestellt', owned_by_me: false });
+  const missing = answer({ id: 4, title: 'Naruto' }, null, { volume_number: '3', volume_number_known: true });
+  assert.deepStrictEqual([helpers.classifyShopScan('1', stored).kind, helpers.classifyShopScan('1', missing).kind], ['claim', 'add']);
+  const viewer = { readOnlySeries: new Set([4]) };
+  assert.deepStrictEqual([helpers.classifyShopScan('1', stored, [], viewer).kind, helpers.classifyShopScan('1', missing, [], viewer).kind], ['check', 'check']);
+  assert.match(helpers.classifyShopScan('1', missing, [], viewer).label, /^Naruto Band 3: In diesem Regal bist du Leser/);
+  assert.strictEqual(helpers.classifyShopScan('1', answer({ id: 5, title: 'Akira', can_edit: false }, { id: 50, status: 'Fehlt' })).kind, 'check');
 });
 
 const memoryStorage = () => {
@@ -340,4 +355,53 @@ test('computeScaledSize keeps the aspect ratio and never upscales', () => {
   assert.deepStrictEqual(helpers.computeScaledSize(3024, 4032, 1600), { width: 1200, height: 1600 });
   assert.deepStrictEqual(helpers.computeScaledSize(800, 600, 1600), { width: 800, height: 600 });
   assert.deepStrictEqual(helpers.computeScaledSize(0, 0, 1600), { width: 1, height: 1 });
+});
+
+test('classifyShopScan: basket kinds for volumes without a list entry', () => {
+  const items = [shopRow()];
+  const claim = helpers.classifyShopScan('9780000000002', {
+    found: true, matched_manga: { id: 5, title: 'X', currency: 'USD' },
+    matched_volume: { id: 9, manga_id: 5, status: 'Erscheint bald', volume_number: '2', price: 12.5 }, book: {}
+  }, items);
+  assert.deepStrictEqual(
+    [claim.kind, claim.volumeId, claim.mangaId, claim.price, claim.currency, helpers.isBookable(claim)],
+    ['claim', 9, 5, 12.5, 'USD', true]
+  );
+  // a missing volume of a paused series is not on the list either
+  const paused = helpers.classifyShopScan('9780000000002', {
+    found: true, matched_manga: { id: 5, title: 'X' }, matched_volume: { id: 10, status: 'Fehlt', volume_number: '3' }, book: {}
+  }, items);
+  assert.strictEqual(paused.kind, 'claim');
+
+  const add = helpers.classifyShopScan('3-551-76293-X', {
+    found: true, matched_manga: { id: 5, title: 'X', currency: 'EUR' },
+    book: { volume_number: '7', volume_number_known: true, price: 7.5, pages: 192, release_year: 2024 }
+  }, items);
+  assert.deepStrictEqual([add.kind, add.mangaId, add.price, helpers.isBookable(add)], ['add', 5, 7.5, true]);
+  assert.deepStrictEqual(add.volume, { volume_number: '7', isbn: helpers.toIsbn13('355176293X'), price: 7.5, pages: 192, release_year: 2024 });
+
+  // the catalogue price is in euros: a series in another currency gets none
+  const yen = helpers.classifyShopScan('9780000000002', {
+    found: true, matched_manga: { id: 6, title: 'Y', currency: 'JPY' }, book: { volume_number: '1', price: 7 }
+  }, items);
+  assert.deepStrictEqual([yen.kind, yen.price, yen.volume.price], ['add', null, null]);
+
+  // provisional (offline copy) and finished entries are never booked
+  assert.strictEqual(helpers.isBookable({ ...claim, offline: true }), false);
+  assert.strictEqual(helpers.isBookable({ ...add, done: true }), false);
+  for (const kind of ['owned', 'partner', 'check', 'new', 'unknown']) assert.strictEqual(helpers.isBookable({ kind }), false);
+});
+
+test('basketTotals sums the bookable entries per currency, euro first', () => {
+  const totals = helpers.basketTotals([
+    { kind: 'buy', price: 7.5, currency: 'EUR' },
+    { kind: 'claim', price: 10, currency: 'USD' },
+    { kind: 'add', price: 6.95 },
+    { kind: 'add', price: null },
+    { kind: 'buy', price: 99, done: true },
+    { kind: 'owned', price: 50 },
+    { kind: 'claim', price: 5, offline: true }
+  ]);
+  assert.deepStrictEqual(totals, [{ currency: 'EUR', total: 14.45 }, { currency: 'USD', total: 10 }]);
+  assert.deepStrictEqual(helpers.basketTotals([]), []);
 });

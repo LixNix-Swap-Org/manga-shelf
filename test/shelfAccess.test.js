@@ -407,13 +407,13 @@ test('the move preview names whose marks a move deletes; the shelf detail counts
 
     const members = (await anna('GET', `/shelves/${shelfA}`)).body.members;
     assert.deepEqual(members.map(m => [m.username, m.role, m.app_role, m.marks]), [
-        ['a12_anna', 'owner', 'editor', { owned: 1, read: 0 }],
-        ['a12_ben', 'editor', 'editor', { owned: 1, read: 2 }]
+        ['a12_anna', 'owner', 'editor', { owned: 1, read: 0, chapters: 0 }],
+        ['a12_ben', 'editor', 'editor', { owned: 1, read: 2, chapters: 0 }]
     ]);
 
     const preview = await anna('GET', `/mangas/${id}/shelf-move?shelf_id=${shelfB}`);
     assert.equal(preview.status, 200);
-    assert.deepEqual(preview.body.affected, [{ user_id: ben.id, username: 'a12_ben', owned: 1, read: 2 }]);
+    assert.deepEqual(preview.body.affected, [{ user_id: ben.id, username: 'a12_ben', owned: 1, read: 2, chapters: 0 }]);
     assert.deepEqual((await anna('GET', `/mangas/${id}/shelf-move?shelf_id=${shelfA}`)).body.affected, []);
     assert.equal((await ben('GET', `/mangas/${id}/shelf-move?shelf_id=${shelfB}`)).status, 403, 'an editor of the source cannot move it');
     assert.equal((await anna('GET', `/mangas/${id}/shelf-move?shelf_id=${home}`)).status, 404, 'a target the owner is not in');
@@ -423,4 +423,36 @@ test('the move preview names whose marks a move deletes; the shelf detail counts
 
     assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: shelfB })).status, 200);
     assert.deepEqual([ownersOf(v2), readersOf(v1), readersOf(v2)], [[], [], []]);
+});
+
+const chaptersOf = (mangaId) => db.prepare('SELECT user_id, chapters_read FROM chapter_progress WHERE manga_id = ? ORDER BY user_id').all(mangaId).map(r => [r.user_id, r.chapters_read]);
+
+test('webtoon chapters: a shelf viewer sets their own, other shelves see 404; leaving and moving delete them like reads', async () => {
+    const anna = await account('a13_anna');
+    const carl = await account('a13_carl');
+    const dora = await account('a13_dora');
+    const shelf = (await ownShelf(anna)).id;
+    const target = (await anna('POST', '/shelves', { name: 'A13 Ziel' })).body.id;
+    await anna('POST', `/shelves/${shelf}/members`, { user_id: carl.id, role: 'viewer' });
+    await anna('POST', `/shelves/${shelf}/members`, { user_id: dora.id, role: 'editor' });
+    const id = await series(anna, 'A13 Webtoon', { shelf_id: shelf, format: 'webtoon', total_chapters: 200 });
+    const other = await series(anna, 'A13 Zweiter Webtoon', { shelf_id: shelf, format: 'webtoon' });
+
+    assert.equal((await carl('PUT', `/mangas/${id}/chapters`, { chapters_read: 30 })).status, 200, 'viewer rights are enough');
+    assert.equal((await carl('PUT', `/mangas/${id}`, { total_chapters: 300 })).status, 403, 'but nothing else');
+    assert.equal((await admin('PUT', `/mangas/${id}/chapters`, { add: 1 })).status, 404, 'a server admin outside the shelf');
+    await dora('PUT', `/mangas/${id}/chapters`, { chapters_read: 12 });
+    await dora('PUT', `/mangas/${other}/chapters`, { chapters_read: 5 });
+    await anna('PUT', `/mangas/${id}/chapters`, { chapters_read: 200 });
+    assert.deepEqual(chaptersOf(id), [[anna.id, 200], [carl.id, 30], [dora.id, 12]]);
+    const marks = Object.fromEntries((await anna('GET', `/shelves/${shelf}`)).body.members.map(m => [m.username, m.marks.chapters]));
+    assert.deepEqual(marks, { a13_anna: 1, a13_carl: 1, a13_dora: 2 });
+
+    assert.equal((await dora('DELETE', `/shelves/${shelf}/members/${dora.id}`)).status, 200);
+    assert.deepEqual([chaptersOf(id), chaptersOf(other)], [[[anna.id, 200], [carl.id, 30]], []], 'leaving deletes them');
+
+    const preview = (await anna('GET', `/mangas/${id}/shelf-move?shelf_id=${target}`)).body.affected;
+    assert.deepEqual(preview, [{ user_id: carl.id, username: 'a13_carl', owned: 0, read: 0, chapters: 30 }]);
+    assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: target })).status, 200);
+    assert.deepEqual(chaptersOf(id), [[anna.id, 200]], 'a move deletes the chapters of non-members');
 });

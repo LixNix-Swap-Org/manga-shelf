@@ -273,6 +273,27 @@ test('Sammelstatus: nach Reihenstatus, nur auf der ersten Zeile; Import ohne Rü
     assert.deepEqual(warnings, [{ line: 4, message: 'Ungültiger Wert „vielleicht“ in „Sammelstatus“ (aktiv, pausiert, abgebrochen) wird ignoriert' }]);
 });
 
+test('"Kapitel gelesen von": names with commas and colons, invalid cells null, long blank runs in linear time', () => {
+    const { parseChapterReaders } = require('../core/csvExchange');
+    assert.deepEqual(parseChapterReaders('anna: 150, ben: 30'), [{ name: 'anna', chapters: 150 }, { name: 'ben', chapters: 30 }]);
+    assert.deepEqual(parseChapterReaders('Müller, Hans: 12|anna :3 ,'), [{ name: 'Müller, Hans', chapters: 12 }, { name: 'anna', chapters: 3 }]);
+    assert.deepEqual(parseChapterReaders('admin: 120, anna: 50, Dr: Who: 7').map(p => p.name), ['admin', 'anna', 'Dr: Who'], 'a name may hold a colon');
+    for (const bad of ['anna', 'anna vierzig', ':5', 'anna: 15x', 'anna: 100000', 'anna: 1, ben']) assert.equal(parseChapterReaders(bad), null, bad);
+
+    const cells = ['a:1,' + ' '.repeat(995), 'a:1,' + ' '.repeat(990) + 'b', ' '.repeat(1000), '\t'.repeat(998) + ':1', 'a' + ' '.repeat(997) + ':1'];
+    const started = process.hrtime.bigint();
+    const parsed = cells.map(parseChapterReaders);
+    assert.ok(Number(process.hrtime.bigint() - started) / 1e6 < 20, 'five 1000-character cells in well under 50 ms');
+    assert.deepEqual(parsed.map(p => p && p.map(x => x.name)), [['a'], null, null, null, ['a']]);
+
+    const rows = ['Reihe;Typ;Bandnummer;Kapitel gelesen von'];
+    for (let i = 0; i < 60; i++) rows.push(`Serie ${i};Reihe;;a:1,${' '.repeat(990)}b`);
+    const t0 = process.hrtime.bigint();
+    const { records, warnings } = mapCsvRows(parseCsv(rows.join('\n')));
+    assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 250, 'an import of such rows does not hold the server');
+    assert.deepEqual([records.length, warnings.length], [60, 60]);
+});
+
 test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t) => {
     const ctx = await startTestServer();
     const { db } = require('../db');

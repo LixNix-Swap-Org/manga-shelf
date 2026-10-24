@@ -20,7 +20,7 @@ function parseTrustProxy(raw) {
     try {
         express().set('trust proxy', value);
     } catch (e) {
-        throw new Error(`TRUST_PROXY ungültig: "${value}" (${ALLOWED})`);
+        throw new Error(`TRUST_PROXY ungültig: "${value}" (${ALLOWED})`, { cause: e });
     }
     return value;
 }

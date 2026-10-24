@@ -79,7 +79,7 @@ export default function AddAnimeModal({
   const [manualEpisodes, setManualEpisodes] = useState('');
   const [manualKind, setManualKind] = useState('anime');
   const [picked, setPicked] = useState(() => (animeOnly ? SEARCH_SOURCES : readStoredSources()));
-  const [kind, setKind] = useState(() => (animeOnly ? 'anime' : readSetting(SEARCH_KIND_KEY, ALL_FILTER, (v) => SEARCH_KINDS.includes(v))));
+  const [kind, setKind] = useState(() => (animeOnly ? 'anime' : readSetting(SEARCH_KIND_KEY, 'anime', (v) => SEARCH_KINDS.includes(v))));
   const [asked, setAsked] = useState(null);
   const abortRef = useRef(null);
   const titleId = useId();

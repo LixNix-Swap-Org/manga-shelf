@@ -4,6 +4,7 @@ import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
+import { getChapterProgress } from '../../utils/volumeHelpers';
 import FilePickerButton from '../common/FilePickerButton';
 import { langFor } from '../common/lang';
 import { PRIORITY_OPTIONS, isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
@@ -11,6 +12,8 @@ import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
 import EditionSwitcher from './EditionSwitcher';
 import EditionFields from '../common/EditionFields';
+import FormatFields from '../common/FormatFields';
+import WebtoonPill from '../common/WebtoonPill';
 import LanguagePill from '../common/LanguagePill';
 import { editionCurrency, editionLanguage, editionRegion, editionsOf, isMpEdition } from '../../utils/editions';
 import { joinTags, splitTags, tagKey } from '../../utils/tags';
@@ -211,6 +214,9 @@ export default function MangaHeroCard({
   const seriesTags = splitTags(manga.tags);
   const longDescription = isLongDescription(manga.description);
   const currency = editionCurrency(manga);
+  // a webtoon is read by chapter (ChapterProgress below the card); its volumes are optional print volumes
+  const webtoon = manga?.format === 'webtoon';
+  const chapters = getChapterProgress(manga || {});
   const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
   const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
   // the hook reads the file synchronously; clearing the input lets the same file be picked again
@@ -299,19 +305,34 @@ export default function MangaHeroCard({
         {/* one live region that is always mounted: a region mounted together with its text is often not announced */}
         <p role="status" className="sr-only">{uploadingCover ? tr(COVER_UPLOAD_TEXT) : ''}</p>
 
-        {/* Quick stats under cover */}
+        {/* Quick stats under cover (a webtoon: its chapter first, volumes and value only once it has print volumes) */}
         <div className="w-full mt-4 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex justify-around text-center">
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">{tr('Bände')}</span>
-            <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title={tr('Schuber, Specials und Extras zusätzlich zu den Bänden')}>+{extrasCount}</span>}</span>
-          </div>
-          <div aria-hidden="true" className="w-[1px] bg-slate-800"></div>
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-emerald-400 block">{tr('Sammlungswert')}</span>
-            <span className="text-sm font-bold text-emerald-400 font-mono">
-              {formatMoney(totalOwnedValue, currency)}
-            </span>
-          </div>
+          {webtoon && (
+            <div>
+              <span className="text-[10px] uppercase font-semibold text-teal-300 block">{tr('Kapitel')}</span>
+              <span className="text-sm font-bold text-white">{chapters.read} / {chapters.total || '?'}</span>
+            </div>
+          )}
+          {(!webtoon || ownedCount > 0 || totalTarget > 0) && (
+            <>
+              {webtoon && <div aria-hidden="true" className="w-[1px] bg-slate-800"></div>}
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">{tr('Bände')}</span>
+                <span className="text-sm font-bold text-white">{ownedCount} / {totalTarget || '?'}{extrasCount > 0 && <span className="text-[10px] font-semibold text-fuchsia-300 ml-1" title={tr('Schuber, Specials und Extras zusätzlich zu den Bänden')}>+{extrasCount}</span>}</span>
+              </div>
+            </>
+          )}
+          {(!webtoon || totalOwnedValue > 0) && (
+            <>
+              <div aria-hidden="true" className="w-[1px] bg-slate-800"></div>
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-emerald-400 block">{tr('Sammlungswert')}</span>
+                <span className="text-sm font-bold text-emerald-400 font-mono">
+                  {formatMoney(totalOwnedValue, currency)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -517,6 +538,13 @@ export default function MangaHeroCard({
               onChange={(patch) => setFormData({ ...formData, ...patch })}
             />
 
+            <FormatFields
+              idPrefix={`${ids}-format`}
+              labelClassName="block text-xs font-semibold text-slate-400 mb-1"
+              value={formData}
+              onChange={(patch) => setFormData({ ...formData, ...patch })}
+            />
+
             {movableShelves.length > 1 && (
               <div>
                 <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Regal')}</label>
@@ -705,6 +733,7 @@ export default function MangaHeroCard({
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">
                   {mangaStatusLabel(manga.status || 'Laufend') /* i18n-ignore: stored default value */}
                 </span>
+                <WebtoonPill format={manga.format} size="md" />
                 <CollectingControl manga={manga} canEdit={canEdit} isOffline={isOffline} onSaved={onCollectingSaved} />
                 {isWishedSeries(manga) && (
                   <span id="detail-wish-pill" className={`px-3 py-1 rounded-xl border font-semibold flex items-center gap-1.5 ${priorityBadgeClass(manga.wish_priority)}`}>
@@ -713,12 +742,17 @@ export default function MangaHeroCard({
                   </span>
                 )}
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
-                  {tr('Gesamt: {total}', { total: totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : tr('Unbekannt') })}
+                  {webtoon
+                    ? tr('Gesamt: {total}', { total: manga.total_chapters > 0 ? tn('{n} Kapitel', '{n} Kapitel', manga.total_chapters) : tr('Unbekannt') })
+                    : tr('Gesamt: {total}', { total: totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : tr('Unbekannt') })}
                 </span>
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
-                  <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                  {rich('Sammlungswert: {price}', { price: <strong className="text-white font-mono">{formatMoney(totalOwnedValue, currency)}</strong> })}
-                </span>
+                {/* a webtoon without bought volumes has no collection value */}
+                {(!webtoon || totalOwnedValue > 0) && (
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
+                    <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                    {rich('Sammlungswert: {price}', { price: <strong className="text-white font-mono">{formatMoney(totalOwnedValue, currency)}</strong> })}
+                  </span>
+                )}
               </div>
 
               {seriesTags.length > 0 && (
@@ -786,33 +820,35 @@ export default function MangaHeroCard({
               </div>
             </div>
 
-            {/* Progress bar */}
-            <div className="pt-4 border-t border-slate-800/80">
-              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs mb-2">
-                <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                  <CircleCheck className="w-4 h-4 text-emerald-400" />
-                  {tr('Sammlungs-Fortschritt')}
-                </span>
-                <span className="text-slate-400 font-mono">
-                  <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extras', '+ {n} Extras', extrasCount)}` : ''} 
-                  {completionPct !== null && ` (${completionPct}%)`}
-                </span>
+            {/* Progress bar (a webtoon only shows it once it has print volumes) */}
+            {(!webtoon || ownedCount > 0 || totalTarget > 0) && (
+              <div className="pt-4 border-t border-slate-800/80">
+                <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs mb-2">
+                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <CircleCheck className="w-4 h-4 text-emerald-400" />
+                    {tr('Sammlungs-Fortschritt')}
+                  </span>
+                  <span className="text-slate-400 font-mono">
+                    <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extras', '+ {n} Extras', extrasCount)}` : ''} 
+                    {completionPct !== null && ` (${completionPct}%)`}
+                  </span>
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label={tr('Sammlungs-Fortschritt')}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={completionPct ?? 0}
+                  aria-valuetext={totalTarget > 0 ? tr('{owned} von {total}', { owned: ownedCount, total: formatCount(totalTarget, 'Band', 'Bänden') }) : tr('{volumes} im Besitz', { volumes: formatCount(ownedCount, 'Band', 'Bände') })}
+                  className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800"
+                >
+                  <div 
+                    className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500"
+                    style={{ width: `${completionPct !== null ? completionPct : 0}%` }}
+                  />
+                </div>
               </div>
-              <div
-                role="progressbar"
-                aria-label={tr('Sammlungs-Fortschritt')}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={completionPct ?? 0}
-                aria-valuetext={totalTarget > 0 ? tr('{owned} von {total}', { owned: ownedCount, total: formatCount(totalTarget, 'Band', 'Bänden') }) : tr('{volumes} im Besitz', { volumes: formatCount(ownedCount, 'Band', 'Bände') })}
-                className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800"
-              >
-                <div 
-                  className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500"
-                  style={{ width: `${completionPct !== null ? completionPct : 0}%` }}
-                />
-              </div>
-            </div>
+            )}
 
           </div>
         )}

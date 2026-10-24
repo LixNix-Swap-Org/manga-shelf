@@ -14,6 +14,7 @@ import { t } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
+import FormatFields from '../common/FormatFields';
 import { editionDefaults, isMpEdition } from '../../utils/editions';
 import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
@@ -27,6 +28,9 @@ const EMPTY_FORM = {
   publisher: '',
   status: 'Laufend',
   total_volumes: '',
+  // print (by volume) or webtoon (by chapter, with its known chapter count)
+  format: 'print',
+  total_chapters: '',
   tags: '',
   description: '',
   cover_image: '',
@@ -315,6 +319,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             publisher: form.publisher.trim() || null,
             status: form.status,
             total_volumes: form.total_volumes ? parseInt(form.total_volumes, 10) : null,
+            format: form.format,
+            total_chapters: form.format === 'webtoon' && form.total_chapters ? parseInt(form.total_chapters, 10) : null,
             tags: form.tags || null,
             description: form.description.trim() || null,
             cover_image: cover,
@@ -644,6 +650,13 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               />
             </div>
           </div>
+
+          <FormatFields
+            idPrefix={`${ids}-format`}
+            value={form}
+            // Manga Passion knows no webtoons: a picked Manga Passion id goes with the switch
+            onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.format === 'webtoon' ? { manga_passion_id: null } : {}) }))}
+          />
 
           {shelves.length > 1 && (
             <div>

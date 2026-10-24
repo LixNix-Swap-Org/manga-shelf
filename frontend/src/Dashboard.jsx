@@ -29,6 +29,8 @@ import useCollectionFilters, { loadPublisherNames } from './hooks/useCollectionF
 import useShoppingList from './hooks/useShoppingList';
 import useReleaseRadar from './hooks/useReleaseRadar';
 import useAnimeList from './hooks/useAnimeList';
+import useEpisodeAlerts from './hooks/useEpisodeAlerts';
+import { tagCounts } from './utils/animeHub';
 import useShareIntake from './hooks/useShareIntake';
 import { findStreamingLink } from './utils/shareIntake';
 import { SHARE_LINK_EVENT, takePendingShare } from './app/deepLink';
@@ -154,6 +156,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
   // shelves where the user is a viewer: their series cards offer no delete
   const readOnlyShelves = useMemo(() => new Set((shelves || []).filter((s) => s.role === 'viewer').map((s) => s.id)), [shelves]);
+  // their series: a scanned volume of one is not bookable in the shop basket
+  const readOnlySeries = useMemo(() => new Set(readOnlyShelves.size ? (mangas || []).filter((m) => readOnlyShelves.has(m.shelf_id)).map((m) => m.id) : []), [mangas, readOnlyShelves]);
   // the chosen shelf narrows statistics, trash, shopping list and radar too; those screens name it and can clear it
   const scopedShelfId = shelfFilter !== 'ALL' ? shelfFilter : null;
   const scopedShelfName = scopedShelfId
@@ -176,7 +180,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const {
     shoppingData, loadingShopping, shoppingPublisherFilter, setShoppingPublisherFilter,
     shoppingSearch, setShoppingSearch, buyingIds, shoppingError, offlineLastUpdated, cacheWriteFailed, pendingPurchases, failedPurchases,
-    fetchShoppingList, handleQuickBuy, syncPendingPurchases
+    fetchShoppingList, handleQuickBuy, handleAddBought, syncPendingPurchases
   } = useShoppingList({ user, setNetworkOffline, fetchMangas, shelfFilter, onShelfMissing });
 
   const {
@@ -199,6 +203,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, [shelfFilter]);
 
   const anime = useAnimeList({ user });
+  const episodeAlerts = useEpisodeAlerts(anime.list);
+  const animeTagNames = useMemo(() => tagCounts(anime.list).map((x) => x.name), [anime.list]);
   const activeViewRef = useRef(activeMainView);
   activeViewRef.current = activeMainView;
   const setViewRef = useRef(null);
@@ -728,6 +734,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         setActiveMainView={setView}
         canEdit={canQuickBuy}
         handleQuickBuy={handleQuickBuy}
+        handleAddBought={handleAddBought}
         buyingIds={buyingIds}
         shoppingError={shoppingError}
         user={user}
@@ -737,6 +744,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         cacheWriteFailed={cacheWriteFailed}
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
+        readOnlySeries={readOnlySeries}
       />
     )}
 
@@ -773,7 +781,12 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           loaded={anime.loaded}
           error={anime.error}
           canEdit={canEdit && !user?.offline}
+          userId={user?.id}
+          username={user?.username}
           onOpen={handleOpenAnime}
+          onOpenId={setAnimeDetailId}
+          onAddEntry={anime.add}
+          alerts={episodeAlerts}
           onLink={handleAnimeLink}
           onRefreshCover={anime.refresh}
           onRetry={anime.fetchAnime}
@@ -919,6 +932,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             remove={anime.remove}
             onAdd={anime.add}
             onOpenAnime={(id) => setAnimeDetailId(id)}
+            knownTags={animeTagNames}
           />
         )}
 

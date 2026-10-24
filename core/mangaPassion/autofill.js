@@ -276,7 +276,6 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
   // a volume with its own language never gets German edition data
   const userVolumes = germanVolumes(manga, ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ?').all(mangaId));
 
-  let updatedCount = 0;
   const overwrite = Boolean(options.overwrite);
   const editionPublisher = knownPublisher(details.edition?.publisher);
   const mangaPublisher = knownPublisher(manga.publisher);
@@ -330,7 +329,7 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
   }
 
   // Phase 2 (sync): apply all updates atomically
-  updatedCount = applyAutofillUpdates(ctx, pendingUpdates);
+  const updatedCount = applyAutofillUpdates(ctx, pendingUpdates);
 
   return {
     success: true,

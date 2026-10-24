@@ -1092,6 +1092,17 @@ describe('useMangaData: edit form', () => {
     expect(result.current.formData.status).toBe('Laufend');
   });
 
+  it('auto-fill with a single manhwa hit keeps a print series print and its Manga Passion link, with a hint', async () => {
+    const hit = { id: 'al_1', source: 'anilist', title: 'Solo Leveling', series_format: 'webtoon', total_chapters: 201, manga_passion_id: null };
+    const { result, fetchMock } = await loaded(async () => res(200, { ...SERVER, title: 'Solo Leveling', manga_passion_id: 4711 }));
+    act(() => result.current.startEditing());
+    fetchMock.mockImplementation(async (url) => (String(url).startsWith('/api/lookup/manga') ? res(200, [hit]) : res(200, SERVER)));
+    await act(() => result.current.handleEditLookup());
+    expect(result.current.formData).toMatchObject({ format: 'print', manga_passion_id: 4711, total_chapters: '' });
+    expect(result.current.editLookupError).toBe('Treffer ist ein Webtoon – Form bleibt Druck');
+    expect(result.current.isEditDirty).toBe(false);
+  });
+
   it('delete uses the shared text, refreshes the offline copy and leaves the page', async () => {
     const { result, fetchMock } = await loaded();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);

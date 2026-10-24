@@ -128,14 +128,17 @@ function buildCalendar({ name, description, events, now, refreshHours = 6 }) {
     ];
     if (description) lines.push(`X-WR-CALDESC:${escapeText(description)}`);
     for (const event of events) {
-        const day = allDay(event.date);
-        if (!day) continue;
+        // a timed event (`at` in ms, `minutes` long) or an all-day one (`date`)
+        const timed = Number.isFinite(event.at) ? new Date(event.at) : null;
+        const day = timed ? null : allDay(event.date);
+        if (!timed && !day) continue;
         lines.push(
             'BEGIN:VEVENT',
             `UID:${escapeText(event.uid)}`,
             `DTSTAMP:${stamp}`,
-            `DTSTART;VALUE=DATE:${day.start}`,
-            `DTEND;VALUE=DATE:${day.end}`,
+            ...(timed
+                ? [`DTSTART:${formatStamp(timed)}`, `DTEND:${formatStamp(new Date(timed.getTime() + (event.minutes || 24) * 60 * 1000))}`]
+                : [`DTSTART;VALUE=DATE:${day.start}`, `DTEND;VALUE=DATE:${day.end}`]),
             `SUMMARY:${escapeText(event.summary)}`
         );
         if (event.description) lines.push(`DESCRIPTION:${escapeText(event.description)}`);

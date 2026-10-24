@@ -19,6 +19,8 @@ function cleanAniListDescription(raw) {
 }
 
 const FORMAT_LABELS = { NOVEL: 'Light Novel', ONE_SHOT: 'One-Shot' };
+// comics from Korea and China: read as webtoons far more often than in print, so the lookup suggests that format
+const WEBTOON_COUNTRIES = { KR: 'Manhwa', CN: 'Manhua', TW: 'Manhua' };
 
 function mapAniListMedia(m) {
     let author = null;
@@ -31,6 +33,7 @@ function mapAniListMedia(m) {
         author = storyOrArt ? storyOrArt.node?.name?.full : m.staff.edges[0]?.node?.name?.full;
     }
 
+    const webtoon = m.format === 'MANGA' ? WEBTOON_COUNTRIES[m.countryOfOrigin] : null;
     let status = 'Laufend';
     if (m.status === 'FINISHED') status = 'Abgeschlossen';
     else if (m.status === 'HIATUS') status = 'Pausiert';
@@ -42,7 +45,8 @@ function mapAniListMedia(m) {
         source: 'anilist',
         source_label: 'AniList',
         format: m.format || null,
-        format_label: FORMAT_LABELS[m.format] || null,
+        format_label: FORMAT_LABELS[m.format] || webtoon || null,
+        ...(webtoon ? { series_format: 'webtoon' } : {}),
         title: m.title?.english || m.title?.romaji,
         alt_title: m.title?.native || m.title?.romaji,
         alt_titles: [...new Set([m.title?.romaji, m.title?.english, m.title?.native].filter(Boolean))],
@@ -53,6 +57,7 @@ function mapAniListMedia(m) {
         banner_image: m.bannerImage || null,
         tags: Array.isArray(m.genres) ? m.genres.join(', ') : null,
         total_volumes: m.volumes || null,
+        total_chapters: m.chapters || null,
         status: status
     };
 }

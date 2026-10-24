@@ -68,16 +68,16 @@ function dashboardSummary(ctx, { query = {} } = {}) {
     return { body: { total_missing: missing, total_releases: radar.total, preordered_count: radar.preordered || 0 } };
 }
 
-// The Manga Passion calendar lists German editions only: series and volumes in other languages never match it
+// The Manga Passion calendar lists German print editions only: other languages and webtoons never match it
 const loadUserMangas = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.manga_passion_id, m.wish_priority, m.collecting,
            (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS owned_count
-    FROM mangas m WHERE COALESCE(m.language, ?) = ? AND ${scope.sql} ORDER BY m.id
+    FROM mangas m WHERE COALESCE(m.language, ?) = ? AND COALESCE(m.format, 'print') <> 'webtoon' AND ${scope.sql} ORDER BY m.id
 `).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
 const loadUserVolumes = (ctx) => { const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx)); return ctx.db.prepare(`
     SELECT v.id, v.manga_id, v.volume_number, v.type, v.notes, v.status, v.price, v.release_date, v.manga_passion_volume_id
     FROM volumes v JOIN mangas m ON m.id = v.manga_id
-    WHERE COALESCE(v.language, m.language, ?) = ? AND ${scope.sql} ORDER BY v.id
+    WHERE COALESCE(v.language, m.language, ?) = ? AND COALESCE(m.format, 'print') <> 'webtoon' AND ${scope.sql} ORDER BY v.id
 `).all(DEFAULT_LANGUAGE, MP_LANGUAGE, ...scope.params); };
 
 // Preorders whose date in the Manga Passion calendar has changed since (postponements)
@@ -110,40 +110,44 @@ async function dateChanges(ctx) {
     return { body: { changes: detectDateChanges(pending, enriched), months_checked: months.length - failed, months_failed: failed } };
 }
 
-// Calendar feed (GET /radar/feed.ics?token=…): a per-user token, stored as app_settings 'calendar_feed:<sha256>' with
-// { user_id, created_at, last_used_at, sealed }; routes/system.js issues and revokes it (the sealed copy needs the
-// server secret). The feed lists the radar's volumes that have a full release date, from 30 days back.
+// Calendar feeds (GET /radar/feed.ics?token=…, GET /anime/feed.ics?token=…): a per-user token per feed, stored as
+// app_settings 'calendar_feed:<sha256>' with { user_id, scope, created_at, last_used_at, sealed }; routes/system.js
+// issues and revokes them (the sealed copy needs the server secret). `scope` is the one feed a token opens: 'radar'
+// (also every token from before scopes existed) or 'anime'. The radar feed lists the radar's volumes that have a full
+// release date, from 30 days back.
 const FEED_KEY_PREFIX = 'calendar_feed:';
 const FEED_TOKEN = /^[A-Za-z0-9_-]{32,128}$/;
 const FEED_PAST_DAYS = 30;
 const FEED_USED_WRITE_GAP_MS = 60 * 60 * 1000;
 
 const feedNotFound = () => new HttpError(404, 'Kalender-Abo nicht gefunden oder widerrufen', 'NOT_FOUND');
+const feedScopeOf = (entry) => (entry && entry.scope !== undefined ? entry.scope : 'radar');
 
-/** The stored feed entry for a token (user still present), else null. */
-function feedEntryFor(ctx, token) {
+/** The stored feed entry for a token of `scope` (user still present), else null. */
+function feedEntryFor(ctx, token, scope = 'radar') {
     if (typeof token !== 'string' || !FEED_TOKEN.test(token)) return null;
     const key = FEED_KEY_PREFIX + sha256Hex(token);
     const row = ctx.db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
     if (!row) return null;
     let entry;
     try { entry = JSON.parse(row.value); } catch (e) { return null; }
-    if (!entry || !Number.isInteger(entry.user_id)) return null;
+    if (!entry || !Number.isInteger(entry.user_id) || feedScopeOf(entry) !== scope) return null;
     if (!ctx.db.prepare('SELECT 1 FROM users WHERE id = ?').get(entry.user_id)) return null;
     return { key, entry };
 }
 
 /**
- * Deletes the calendar feed tokens of `userId`, or of every user when it is null (sessions ended for everyone).
- * `db` is ctx.db or the server connection; returns how many were removed.
+ * Deletes the calendar feed tokens of `userId`, or of every user when it is null (sessions ended for everyone); with
+ * `scope` only the tokens of that feed. `db` is ctx.db or the server connection; returns how many were removed.
  */
-function revokeFeedTokens(db, userId = null) {
+function revokeFeedTokens(db, userId = null, scope = null) {
     const rows = db.prepare('SELECT key, value FROM app_settings WHERE substr(key, 1, ?) = ?').all(FEED_KEY_PREFIX.length, FEED_KEY_PREFIX);
     let removed = 0;
     for (const row of rows) {
-        let owner;
-        try { owner = JSON.parse(row.value)?.user_id; } catch (e) { owner = undefined; }
-        if (userId === null || owner === userId) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
+        let entry;
+        try { entry = JSON.parse(row.value); } catch (e) { entry = undefined; }
+        if (scope !== null && feedScopeOf(entry) !== scope) continue;
+        if (userId === null || entry?.user_id === userId) removed += db.prepare('DELETE FROM app_settings WHERE key = ?').run(row.key).changes;
     }
     return removed;
 }
@@ -163,13 +167,18 @@ const feedPrice = (value, currency = 'EUR') => (typeof value === 'number' && val
     ? `${value.toFixed(2).replace('.', ',')} ${currency === 'EUR' ? '€' : currency}` : null);
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function calendarFeed(ctx, { query }) {
-    const found = feedEntryFor(ctx, qstr(query.token));
-    if (!found) throw feedNotFound();
+/** Remembers that the token was used ("last fetched" in the settings), at most once per FEED_USED_WRITE_GAP_MS. */
+function touchFeed(ctx, found) {
     const nowMs = ctx.now().getTime();
     if (!(found.entry.last_used_at > nowMs - FEED_USED_WRITE_GAP_MS)) {
         ctx.db.prepare('UPDATE app_settings SET value = ? WHERE key = ?').run(JSON.stringify({ ...found.entry, last_used_at: nowMs }), found.key);
     }
+}
+
+function calendarFeed(ctx, { query }) {
+    const found = feedEntryFor(ctx, qstr(query.token), 'radar');
+    if (!found) throw feedNotFound();
+    touchFeed(ctx, found);
     const feedUser = ctx.db.prepare('SELECT id, role FROM users WHERE id = ?').get(found.entry.user_id);
     const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds({ ...ctx, user: feedUser }));
     const today = zonedToday(ctx.now(), ctx.config.appTimeZone);
@@ -211,4 +220,7 @@ function calendarFeed(ctx, { query }) {
     };
 }
 
-module.exports = { releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedVolumeLabel, revokeFeedTokens, loadUserMangas, loadUserVolumes, FEED_KEY_PREFIX };
+module.exports = {
+    releaseRadar, dashboardSummary, dateChanges, calendarFeed, feedEntryFor, feedScopeOf, touchFeed, feedVolumeLabel, revokeFeedTokens, loadUserMangas,
+    loadUserVolumes, FEED_KEY_PREFIX
+};

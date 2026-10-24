@@ -38,6 +38,9 @@ export function buildFormData(data) {
     status: data.status || 'Laufend', // i18n-ignore
     tags: data.tags || '',
     total_volumes: data.total_volumes || '',
+    // print or webtoon (read by chapter, with its known chapter count)
+    format: data.format === 'webtoon' ? 'webtoon' : 'print',
+    total_chapters: data.total_chapters || '',
     description: data.description || '',
     cover_image: data.cover_image || '',
     manga_passion_id: data.manga_passion_id || null,
@@ -61,8 +64,13 @@ export function updateBody(changed, form) {
   return body;
 }
 
-/** Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released volumes). */
+/**
+ * Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released
+ * volumes). The format of the series never changes (a print series would lose its Manga Passion link on saving); only a
+ * webtoon takes the chapter count of a hit.
+ */
 export function mergeEditLookup(prev, item, coverUrl) {
+  const webtoon = prev.format === 'webtoon';
   return {
     ...prev,
     title: item.title || prev.title,
@@ -70,13 +78,20 @@ export function mergeEditLookup(prev, item, coverUrl) {
     author: item.author || prev.author,
     publisher: (item.publisher && item.publisher !== 'Unbekannt') ? item.publisher : prev.publisher,
     status: normalizeLookupStatus(item.status, prev.status),
-    total_volumes: prefillTotalVolumes(item, prev.total_volumes),
+    // the print volume count of a manhwa or manhua hit says nothing about this edition
+    total_volumes: item.series_format === 'webtoon' ? prev.total_volumes : prefillTotalVolumes(item, prev.total_volumes),
+    total_chapters: webtoon && item.total_chapters ? String(item.total_chapters) : prev.total_chapters,
     tags: String(prev.tags ?? '').trim() ? prev.tags : (item.tags || prev.tags),
     description: item.description || prev.description,
     cover_image: coverUrl || prev.cover_image,
-    manga_passion_id: item.manga_passion_id || prev.manga_passion_id
+    manga_passion_id: webtoon ? prev.manga_passion_id : (item.manga_passion_id || prev.manga_passion_id)
   };
 }
+
+/** The line under the edit lookup after applying a hit: a webtoon hit on a print series says that the format stays. */
+export const editLookupHint = (prev, item) => (
+  item?.series_format === 'webtoon' && prev?.format !== 'webtoon' ? t('Treffer ist ein Webtoon – Form bleibt Druck') : ''
+);
 
 export function isFormDirty(base, current) {
   if (!base || !current) return false;
@@ -101,7 +116,7 @@ export const seriesDeleteConfirmText = (title) =>
 
 /**
  * Users whose ownership and reading marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
- * [{ user_id, username, owned, read }], or null when the server cannot say (older server, no connection).
+ * [{ user_id, username, owned, read, chapters }], or null when the server cannot say (older server, no connection).
  */
 export async function loadShelfMovePreview(mangaId, shelfId) {
   try {
@@ -120,7 +135,13 @@ export function shelfMoveConfirmText({ title, shelf, affected }) {
     return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf });
   }
   const people = affected
-    .map((a) => t('{name} ({owned} im Besitz, {read} gelesen)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') }))
+    .map((a) => {
+      const counts = { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') };
+      // a webtoon: the chapter that goes too
+      return a.chapters > 0
+        ? t('{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})', { ...counts, chapter: a.chapters })
+        : t('{name} ({owned} im Besitz, {read} gelesen)', counts);
+    })
     .join(', ');
   return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
 }
@@ -272,7 +293,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
 
     setFormData(prev => mergeEditLookup(prev, item, localCoverUrl));
     setEditLookupResults(null);
-    setEditLookupError('');
+    setEditLookupError(editLookupHint(formData, item));
   };
 
   const applyMangaData = (data) => {

@@ -392,6 +392,10 @@ test('rankLookupHits: a fold needs a unique pair; a MyAnimeList hit next to an A
 
     const malOnly = rankLookupHits('Blue', [mp(1, 'Blue')], [mal(60, 'Blue')]);
     assert.deepEqual([malOnly.length, malOnly[0].work_key, malOnly[0].mal_id, malOnly[0].anilist_id], [1, 'mal:60', 60, undefined]);
+
+    // a manhwa stands for the webtoon, the Manga Passion hit for the German print edition: both stay pickable
+    const webtoon = rankLookupHits('Solo Leveling', [mp(1, 'Solo Leveling')], [al(10, 'Solo Leveling', { series_format: 'webtoon', total_chapters: 201 })]);
+    assert.deepEqual(webtoon.map((h) => [h.id, h.series_format, h.also_on]), [['mp_1', undefined, undefined], ['al_10', 'webtoon', undefined]]);
 });
 
 test('rankLookupHits: at most 10 hits, up to 3 Manga Passion hits with a score kept, ties put Manga Passion first', () => {

@@ -6,6 +6,7 @@ const snapshot = require('./handlers/snapshot');
 const volumes = require('./handlers/volumes');
 const owners = require('./handlers/owners');
 const reads = require('./handlers/reads');
+const chapters = require('./handlers/chapters');
 const stats = require('./handlers/stats');
 const settings = require('./handlers/settings');
 const shopping = require('./handlers/shopping');
@@ -14,6 +15,7 @@ const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
 const csv = require('./handlers/csv');
 const anime = require('./handlers/anime');
+const animeExtras = require('./handlers/animeExtras');
 const watch = require('./handlers/watch');
 const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
@@ -37,6 +39,8 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    // the caller's own chapter of a webtoon; viewer rights in the shelf are enough, like reading marks
+    { method: 'PUT', path: '/mangas/:id/chapters', role: 'editor', handler: chapters.setChapters },
     { method: 'GET', path: '/mangas/:id/shelf-move', role: 'editor', handler: shelves.movePreview },
     { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
     { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
@@ -96,6 +100,11 @@ const routes = [
     { method: 'GET', path: '/export/csv', role: 'auth', handler: csv.exportCsv },
     { method: 'POST', path: '/import/csv', role: 'editor', handler: csv.importCsv },
 
+    // calendar apps send no session: the anime feed token (POST /anime/feed-token in routes/system.js) is the credential
+    { method: 'GET', path: '/anime/feed.ics', role: 'public', handler: animeExtras.calendarFeed },
+    { method: 'GET', path: '/anime/history', role: 'auth', handler: animeExtras.history },
+    { method: 'GET', path: '/anime/discover/season', role: 'auth', limit: 'lookup', handler: animeExtras.discoverSeason },
+    { method: 'GET', path: '/anime/discover/recommendations', role: 'auth', limit: 'lookup', handler: animeExtras.discoverRecommendations },
     { method: 'GET', path: '/anime/search', role: 'auth', limit: 'lookup', handler: anime.search },
     { method: 'GET', path: '/anime/sources', role: 'auth', handler: anime.sources },
     { method: 'GET', path: '/anime', role: 'auth', handler: anime.list },
@@ -117,6 +126,7 @@ const routes = [
     { method: 'DELETE', path: '/anime/:id/progress', role: 'editor', handler: anime.removeProgress },
     { method: 'POST', path: '/anime/:id/refresh', role: 'editor', handler: anime.refresh },
     { method: 'GET', path: '/anime/:id/season-suggestion', role: 'editor', limit: 'lookup', handler: anime.seasonSuggestion },
+    { method: 'GET', path: '/anime/:id/season-chain', role: 'auth', limit: 'lookup', handler: anime.seasonChainLive },
     { method: 'GET', path: '/mangas/:id/adaptations', role: 'auth', limit: 'lookup', handler: anime.adaptations },
     { method: 'GET', path: '/export/anime.csv', role: 'auth', handler: anime.exportCsv },
     { method: 'GET', path: '/sources/guides', role: 'auth', handler: guidesHandler }
@@ -125,6 +135,7 @@ const routes = [
 // Shelf access in front of the handlers: a series or volume of a shelf the caller does not belong to answers 404, a
 // viewer who writes gets 403. Lists filter by shelf inside their handlers; bodies with several ids check them there.
 const GUARDS = [
+    { re: /^\/mangas\/(\d+)\/chapters$/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, 'viewer') },
     { re: /^\/mangas\/(?!volume-search$)(\d+)(\/|$)/, check: (ctx, input, row, id) => access.mangaAccess(ctx, id, row.method === 'GET' ? 'viewer' : 'editor') },
     { re: /^\/volumes\/(\d+)\/read$/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'viewer') },
     { re: /^\/volumes\/(\d+)(\/|$)/, check: (ctx, input, row, id) => access.volumeAccess(ctx, id, 'editor') }

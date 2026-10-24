@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // i18n codemod: wraps German UI text in t() / tn() / rich() by splicing the source at node positions (untouched bytes stay).
 // Each edit is self-checked (the rendered German must equal the original); failing or ambiguous cases go to the MANUAL list.
 // Usage: node scripts/i18n/codemod.mjs [--files <path|dir>[,…]] [--report out.json] [--write]  (default: frontend/src, dry run)
@@ -187,7 +186,9 @@ function makeSig(code, names) {
 
 // --- the transform ---
 
-export function transform(file, code) {
+export function transform(file, rawCode) {
+  const crlf = /\r\n/.test(rawCode);
+  const code = crlf ? rawCode.replace(/\r\n/g, '\n') : rawCode;
   const result = { file: rel(file), edits: [], manual: [], markers: 0 };
   let ast;
   try {
@@ -436,7 +437,7 @@ export function transform(file, code) {
         let cleaned = cleanJsxText(c.value);
         if (pos === 0) cleaned = cleaned.replace(/^\s+/, '');
         if (pos === indices.length - 1) cleaned = cleaned.replace(/\s+$/, '');
-        void rawStart; void rawEnd;
+        void raw; void rawStart; void rawEnd;
         pieces.push({ text: cleaned });
         return;
       }
@@ -759,7 +760,7 @@ export function transform(file, code) {
   result.edits = [...edits].sort((a, b) => a.start - b.start).map(({ rule, line, before, text }) => ({ rule, line, before, after: text }));
   result.imports = importEdits.map((e) => e.text.trim());
   result.manual.sort((a, b) => a.line - b.line);
-  result.output = output;
+  result.output = crlf ? output.replace(/\n/g, '\r\n') : output;
   return result;
 }
 

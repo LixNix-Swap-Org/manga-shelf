@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { BookCheck, BookOpen, BuildingComplex, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
-import { getSeriesProgress } from '../../utils/volumeHelpers';
+import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
 import { formatCount, formatMoney } from '../../utils/format';
 import { splitAuthors } from '../../utils/seriesMeta';
@@ -10,6 +10,7 @@ import { langFor } from '../common/lang';
 import { t, tn } from '../../i18n/index.js';
 import { mangaStatusLabel } from '../../utils/enumLabels.js';
 import LanguagePill, { useDefaultLanguage } from '../common/LanguagePill';
+import WebtoonPill from '../common/WebtoonPill';
 import { editionCurrency, editionLanguage, editionName, editionRegion } from '../../utils/editions';
 
 /** What the card shows as badges and progress bar, as one sentence for screen readers. */
@@ -17,6 +18,15 @@ export function seriesSummary(manga, { owned, total, extras }, readState, defaul
   const parts = [mangaStatusLabel(manga.status)];
   const language = editionLanguage(manga);
   if (defaultLanguage && language !== defaultLanguage) parts.push(t('Ausgabe: {language}', { language: editionName(language, editionRegion(manga)) }));
+  if (isWebtoon(manga)) {
+    const chapters = getChapterProgress(manga);
+    parts.push(t('Webtoon'));
+    parts.push(chapters.total > 0
+      ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: chapters.read })
+      : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', chapters.read));
+    if (owned > 0) parts.push(formatCount(owned, 'Band', 'Bände'));
+    return parts.filter(Boolean).join(', ');
+  }
   parts.push(total > 0 ? t('{owned} von {volumes}', { owned, volumes: formatCount(total, 'Band', 'Bänden') }) : formatCount(owned, 'Band', 'Bände'));
   if (extras > 0) parts.push(tn('{n} Extras', '{n} Extras', extras));
   if (readState.read > 0) parts.push(readState.complete ? t('alle gelesen') : t('{read} von {owned} gelesen', { read: readState.read, owned: readState.owned }));
@@ -70,6 +80,9 @@ export function AuthorButtons({ names, onAuthorClick, buttonClassName = '' }) {
 function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
   const progress = getSeriesProgress(manga);
   const { owned, total, extras, pct } = progress;
+  // a webtoon counts chapters: its badge, bar and footer follow the caller's chapter progress
+  const chapters = isWebtoon(manga) ? getChapterProgress(manga) : null;
+  const barPct = chapters ? chapters.pct : pct;
   const readState = getReadState(manga);
   const titleId = `manga-card-${manga.id}-title`;
   const summaryId = `manga-card-${manga.id}-summary`;
@@ -102,7 +115,9 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             </span>
 
             <span className="bg-slate-950/85 border border-slate-800 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
-              {owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}
+              {chapters
+                ? `${chapters.read}${chapters.total > 0 ? ` / ${chapters.total}` : ''} ${t('Kap.')}`
+                : <>{owned} {total > 0 ? `/ ${total}` : (owned === 1 ? t('Band') : t('Bde.'))}{extras > 0 ? ` +${extras}` : ''}</>}
             </span>
           </div>
 
@@ -119,9 +134,16 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             </div>
           )}
 
-          {pct !== null && (
+          {/* bottom left, the top row is full with status, language and count */}
+          {chapters && (
+            <span aria-hidden="true" className="absolute bottom-3 left-2 pointer-events-none">
+              <WebtoonPill format={manga.format} />
+            </span>
+          )}
+
+          {barPct !== null && (
             <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60">
-              <div className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all duration-500" style={{ width: `${pct}%` }} />
+              <div className={`h-full bg-gradient-to-r ${chapters ? 'from-teal-500 to-sky-400' : 'from-brand-500 to-emerald-400'} transition-all duration-500`} style={{ width: `${barPct}%` }} />
             </div>
           )}
         </div>
@@ -161,7 +183,9 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
             </span>
           ) : (
             <span className="text-slate-400">
-              {pct !== null ? t('{pct}% komplett', { pct }) : formatCount(owned, 'Band', 'Bände')}
+              {chapters
+                ? (chapters.pct !== null ? t('{pct}% gelesen', { pct: chapters.pct }) : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', chapters.read))
+                : (pct !== null ? t('{pct}% komplett', { pct }) : formatCount(owned, 'Band', 'Bände'))}
             </span>
           )}
           <span aria-hidden="true" className="text-brand-400 font-semibold group-hover:translate-x-0.5 transition-transform whitespace-nowrap">{t('Details →')}</span>

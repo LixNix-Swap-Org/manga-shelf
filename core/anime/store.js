@@ -117,8 +117,16 @@ function applySnapshot(ctx, id, meta, images = {}, { partial = false } = {}) {
         if (row[key] || !meta[key]) continue;
         if (!ctx.db.prepare(`SELECT 1 FROM animes WHERE ${key} = ? AND id != ?`).get(meta[key], id)) columns[key] = meta[key];
     }
+    rememberAired(ctx, row, columns, nowMs);
     updateRow(ctx, id, columns);
     return true;
+}
+
+/** The announced episode that has aired by now is kept in anime_airings when the snapshot replaces it with another one. */
+function rememberAired(ctx, row, columns, nowMs) {
+    if (!row.next_airing_at || row.next_airing_estimated || !(row.next_airing_episode > 0) || row.next_airing_at * 1000 > nowMs) return;
+    if (columns.next_airing_episode === row.next_airing_episode && columns.next_airing_at === row.next_airing_at) return;
+    ctx.db.prepare('INSERT OR IGNORE INTO anime_airings (anime_id, episode, at) VALUES (?, ?, ?)').run(row.id, row.next_airing_episode, row.next_airing_at);
 }
 
 function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {}) {
@@ -181,6 +189,7 @@ function entryOf(row, nowMs) {
         spoken_languages: parseJson(row.spoken_languages, []),
         seasons: parseJson(row.seasons, []),
         custom_seasons: episodeMarks.parseSeasons(row.custom_seasons),
+        tags: parseJson(row.tags, []),
         urls: { ...urls, tmdb: urls.tmdb ?? null, imdb: urls.imdb ?? null },
         notes: row.notes,
         manual: !row.anilist_id && !row.mal_id && !row.tmdb_id,
