@@ -1,14 +1,18 @@
 // Release-day reminders (opt-in, per device): reads the release radar and the anime list through utils/api.js (the device
 // core in local mode) and schedules local notifications on this device. No server change, no push service.
 import api from '../../utils/api';
+import { PURCHASE_RECORDED_EVENT } from '../../appShell';
 import { t } from '../../i18n/index.js';
 import { planReminders } from './reminderPlan';
 import {
-  REMINDER_CHANNEL, reminderBridge, canRemind, readEnabled, writeEnabled, serial, cancelOwn, beginSession, isCurrentSession, endSession
+  REMINDER_CHANNEL, REMINDERS_CHANGED_EVENT, reminderBridge, canRemind, readEnabled, writeEnabled, serial, cancelOwn, clearOwn,
+  beginSession, isCurrentSession, endSession
 } from './reminderState';
 
-// a return to the foreground plans again at most this often; a new session, the switch and a forced run always do
+// a return to the foreground or going to the background plans again at most this often, unless a write changed something
+// since the last plan; a new session, the switch, a write and a forced run always do
 export const REFRESH_FLOOR_MS = 15 * 60 * 1000;
+const CHANGE_EVENTS = [REMINDERS_CHANGED_EVENT, PURCHASE_RECORDED_EVENT];
 
 let active = null;
 
@@ -42,7 +46,12 @@ async function ensureChannel(native) {
 
 async function run(mine, now) {
   const { native } = mine;
-  if (!(await readEnabled(native))) return { ran: false, reason: 'off' };
+  // the writes this run covers: a later one keeps its replan pending
+  const seen = mine.changes;
+  if (!(await readEnabled(native))) {
+    mine.planned = seen;
+    return { ran: false, reason: 'off' };
+  }
   let radar;
   let anime;
   try {
@@ -57,24 +66,30 @@ async function run(mine, now) {
       await cancelOwn(native);
       return { ran: false, reason: 'off' };
     }
-    if ((await permissionState(native)) !== 'granted') return { ran: false, reason: 'denied' };
+    if ((await permissionState(native)) !== 'granted') {
+      mine.planned = seen;
+      return { ran: false, reason: 'denied' };
+    }
     const notifications = planReminders({ radar, anime: Array.isArray(anime) ? anime : [], now: now() });
     await ensureChannel(native);
     await cancelOwn(native);
     if (notifications.length) await native.plugins.LocalNotifications.schedule({ notifications });
     mine.lastOk = now().getTime();
+    mine.planned = seen;
     return { ran: true, scheduled: notifications.length };
   });
 }
 
 /**
  * Plans the reminders of the running session again: reads both lists, cancels the own pending reminders and schedules
- * the new ones. A call during a run makes it run once more afterwards. Never rejects.
+ * the new ones. A call during a run makes it run once more afterwards. Without `force` the floor applies unless a write
+ * since the last plan is still pending. Never rejects.
  */
 export function refreshReleaseReminders({ force = true, now = () => new Date() } = {}) {
   const mine = active;
   if (!mine) return Promise.resolve({ ran: false, reason: 'no_session' });
-  if (!force && mine.lastOk && now().getTime() - mine.lastOk < REFRESH_FLOOR_MS) return Promise.resolve({ ran: false, reason: 'floor' });
+  const changed = mine.changes !== mine.planned;
+  if (!force && !changed && mine.lastOk && now().getTime() - mine.lastOk < REFRESH_FLOOR_MS) return Promise.resolve({ ran: false, reason: 'floor' });
   if (mine.running) {
     mine.again = true;
     return mine.running;
@@ -92,26 +107,34 @@ export function refreshReleaseReminders({ force = true, now = () => new Date() }
 }
 
 /**
- * Starts the reminders for a signed-in editor or admin (or the opened device collection): plans once now and again on
- * every return to the foreground (App appStateChange isActive). Returns stop(), which also cancels the reminders, so a
+ * Starts the reminders for a signed-in editor or admin (or the opened device collection): plans once now, after every
+ * write that can change a reminder (releaseRemindersChanged, a purchase of the shopping list or the shop basket), and on
+ * every return to the foreground and every move to the background (App appStateChange, both directions: going away
+ * catches an edit whose own replan could not read the lists). Returns stop(), which also cancels the reminders, so a
  * logout leaves none behind; the next session plans its own after that cancel.
  */
-export function startReleaseReminders({ user, native = reminderBridge(), now = () => new Date() } = {}) {
+export function startReleaseReminders({ user, native = reminderBridge(), now = () => new Date(), win = globalThis.window } = {}) {
   if (!native || !canRemind(user)) return () => {};
-  const mine = { native, session: beginSession(), running: null, again: false, lastOk: 0 };
+  const mine = { native, session: beginSession(), running: null, again: false, lastOk: 0, changes: 0, planned: 0 };
   active = mine;
   let stopped = false;
   const trigger = (force) => {
     if (!stopped && active === mine) refreshReleaseReminders({ force, now }).catch(() => {});
   };
+  const onChange = () => {
+    mine.changes += 1;
+    trigger(true);
+  };
   trigger(true);
+  CHANGE_EVENTS.forEach((name) => win?.addEventListener?.(name, onChange));
   const handle = Promise.resolve()
-    .then(() => native.plugins.App?.addListener?.('appStateChange', ({ isActive } = {}) => { if (isActive) trigger(false); }))
+    .then(() => native.plugins.App?.addListener?.('appStateChange', () => trigger(false)))
     .catch(() => null);
   return () => {
     stopped = true;
     if (active === mine) active = null;
     endSession(mine.session);
+    CHANGE_EVENTS.forEach((name) => win?.removeEventListener?.(name, onChange));
     serial(() => cancelOwn(native)).catch(() => {});
     handle.then((h) => h?.remove?.()).catch(() => {});
   };
@@ -119,13 +142,14 @@ export function startReleaseReminders({ user, native = reminderBridge(), now = (
 
 /**
  * The switch "Erinnerungen am Erscheinungstag". On: asks for the notification permission, stores the setting and plans at
- * once; resolves { enabled: false, denied: true } when the system refuses. Off: stores it and cancels every own reminder.
+ * once; resolves { enabled: false, denied: true } when the system refuses. Off: stores it and removes every own
+ * reminder, pending and shown.
  */
 export async function setReleaseReminders(on, { native = reminderBridge(), now = () => new Date() } = {}) {
   if (!native) return { enabled: false };
   if (!on) {
     await writeEnabled(native, false);
-    await serial(() => cancelOwn(native)).catch(() => {});
+    await serial(() => clearOwn(native)).catch(() => {});
     return { enabled: false };
   }
   let display;

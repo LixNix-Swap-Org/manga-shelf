@@ -27,7 +27,8 @@ export default function ReminderSwitch() {
     if (!native) return undefined;
     let active = true;
     readEnabled(native).then(async (on) => {
-      const blocked = on && (await permissionState(native)) === 'denied';
+      // Android reports a permission revoked in the system settings as 'prompt', not 'denied'
+      const blocked = on && (await permissionState(native)) !== 'granted';
       if (!active) return;
       setEnabled(on);
       setDenied(blocked);

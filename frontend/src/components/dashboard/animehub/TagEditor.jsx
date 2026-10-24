@@ -29,7 +29,7 @@ export default function TagEditor({ tags = [], known = [], canEdit, busy, onSave
           <li key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100">
             {tag}
             {canEdit && (
-              <button type="button" disabled={busy} className="text-fuchsia-300 hover:text-white" aria-label={t('Tag „{tag}“ entfernen', { tag })} onClick={() => onSave({ tags_remove: [tag] })}>
+              <button type="button" disabled={busy} className="hit-44 inline-flex items-center justify-center w-6 h-6 -my-1 -mr-1.5 rounded-full text-fuchsia-300 hover:text-white" aria-label={t('Tag „{tag}“ entfernen', { tag })} onClick={() => onSave({ tags_remove: [tag] })}>
                 <X className="w-3 h-3" aria-hidden="true" />
               </button>
             )}
@@ -38,7 +38,8 @@ export default function TagEditor({ tags = [], known = [], canEdit, busy, onSave
       </ul>
       {canEdit && tags.length < MAX_TAGS && (
         <form onSubmit={add} className="flex gap-2">
-          <input id={`${ids}-tag`} list={`${ids}-known`} aria-label={t('Neuer Tag')} placeholder={t('z. B. Mit Freunden')} maxLength={MAX_TAG} className="input-field text-base sm:text-sm"
+          <label htmlFor={`${ids}-tag`} className="sr-only">{t('Neuer Tag')}</label>
+          <input id={`${ids}-tag`} list={`${ids}-known`} placeholder={t('z. B. Mit Freunden')} maxLength={MAX_TAG} className="input-field text-base sm:text-sm"
             value={value} onChange={(e) => setValue(e.target.value)} />
           <datalist id={`${ids}-known`}>{suggestions.map((k) => <option key={k} value={k} />)}</datalist>
           <button type="submit" className="btn-secondary text-xs" disabled={busy || !value.trim()}>{t('Hinzufügen')}</button>

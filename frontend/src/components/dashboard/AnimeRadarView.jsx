@@ -240,15 +240,19 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, u
     })();
     return () => { cancelled = true; };
   }, [list, canEdit, onRefreshCover]);
-  const { tabListProps, tabProps, panelProps } = useTabList({ tabs: TABS, selected: tab, onSelect: setTab, prefix: 'anime-radar' });
+  // "Gemeinsam" needs another account in some entry: on a server with one account it could never show anything
+  const withOthers = useMemo(() => list.some((a) => (a.progress_users || []).some((p) => p.user_id !== userId)), [list, userId]);
+  const tabs = withOthers ? TABS : TABS.filter((key) => key !== 'together');
+  const shown = tabs.includes(tab) ? tab : 'episodes';
+  const { tabListProps, tabProps, panelProps } = useTabList({ tabs, selected: shown, onSelect: setTab, prefix: 'anime-radar' });
   const labels = { episodes: t('Neue Folgen'), calendar: t('Kalender'), together: t('Gemeinsam'), discover: t('Entdecken'), manga: t('Manga-Verknüpfung') };
   return (
     <div id="anime-radar-view">
       <h2 className="sr-only">{t('Anime-Radar')}</h2>
       {/* five tabs do not fit a phone in every language: they wrap into a second row instead of hiding behind a scroll */}
       <div {...tabListProps} aria-label={t('Bereiche')} className="flex flex-wrap w-full max-w-full sm:inline-flex sm:flex-nowrap sm:w-auto gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl mb-4">
-        {TABS.map((key) => (
-          <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
+        {tabs.map((key) => (
+          <button key={key} {...tabProps(key)} className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1.5 [@media(pointer:coarse)]:py-3 rounded-lg text-sm font-semibold ${shown === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
             {labels[key]}
           </button>
         ))}
@@ -258,10 +262,10 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, u
       )}
       <div {...panelProps}>
         {!loaded && !list.length ? <Empty>{t('Lädt…')}</Empty>
-          : tab === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} alerts={alerts} />
-            : tab === 'calendar' ? <AnimeCalendarTab list={list} now={now} onOpen={onOpen} />
-              : tab === 'together' ? <AnimeTogetherTab list={list} userId={userId} username={username} onOpen={onOpen} />
-                : tab === 'discover' ? <AnimeDiscoverTab canEdit={canEdit} now={now} onAdd={onAddEntry} onOpenId={onOpenId} />
+          : shown === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} alerts={alerts} />
+            : shown === 'calendar' ? <AnimeCalendarTab list={list} now={now} onOpen={onOpen} />
+              : shown === 'together' ? <AnimeTogetherTab list={list} userId={userId} username={username} onOpen={onOpen} />
+                : shown === 'discover' ? <AnimeDiscoverTab canEdit={canEdit} now={now} onAdd={onAddEntry} onOpenId={onOpenId} />
             : <MangaTab list={list} mangas={mangas} canEdit={canEdit} onLink={onLink} />}
       </div>
     </div>

@@ -141,6 +141,17 @@ describe('useShoppingList', () => {
     expect(result.current.shoppingData.items.map(i => i.id)).toEqual([2]);
   });
 
+  it('batch mode: a refusal carries the server code, so the basket can tell one shelf from the account', async () => {
+    const fetchMock = stubFetch({ putResponse: () => json(403, { error: 'Keine ausreichende Berechtigung für dieses Regal', code: 'FORBIDDEN' }) });
+    const { result } = await loaded(fetchMock);
+    let outcome;
+    await act(async () => { outcome = await result.current.handleQuickBuy(1, { batch: true }); });
+    expect(outcome).toEqual({ status: 'failed', error: 'Keine ausreichende Berechtigung für dieses Regal', httpStatus: 403, code: 'FORBIDDEN' });
+    fetchMock.mockImplementationOnce(async () => json(403, { error: 'Nur Lesezugriff', code: 'READ_ONLY' }));
+    await act(async () => { outcome = await result.current.handleAddBought({ mangaId: 5, volume: { volume_number: '9' } }, { batch: true }); });
+    expect(outcome).toEqual({ status: 'failed', error: 'Nur Lesezugriff', httpStatus: 403, code: 'READ_ONLY' });
+  });
+
   it('batch mode: a gateway error queues the purchase', async () => {
     const fetchMock = stubFetch({ putResponse: () => json(503) });
     const { result } = await loaded(fetchMock);

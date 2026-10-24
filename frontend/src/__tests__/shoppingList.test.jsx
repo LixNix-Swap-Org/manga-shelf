@@ -191,6 +191,46 @@ describe('ShoppingListView scan list', () => {
     expect(screen.queryByRole('button', { name: /als gekauft abhaken/ })).toBeNull();
   });
 
+  it('basket: a scan of a series in a shelf the user only views stays a hint, never claim or add', async () => {
+    const answers = {
+      9783551758019: { found: true, matched_manga: { id: 4, title: 'Naruto' }, matched_volume: { id: 40, volume_number: '2', status: 'Vorbestellt', owned_by_me: false }, book: {} },
+      9783551758026: { found: true, matched_manga: { id: 4, title: 'Naruto' }, matched_volume: null, book: { volume_number: '3', volume_number_known: true } },
+      9783551758033: { found: true, matched_manga: { id: 5, title: 'Akira', can_edit: false }, matched_volume: { id: 50, volume_number: '1', status: 'Fehlt' }, book: {} }
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url) => response(200, answers[new URL(url, 'http://x').searchParams.get('isbn')])));
+    renderView(props({ readOnlySeries: new Set([4]), handleAddBought: vi.fn() }));
+    for (const isbn of Object.keys(answers)) await scan(isbn);
+    const entries = scanEntries();
+    expect(entries.map((li) => li.dataset.kind)).toEqual(['check', 'check', 'check']);
+    expect(entries.map((li) => li.textContent).join('|')).toMatch(/Akira Band 1: In diesem Regal bist du Leser.*Naruto Band 3: In diesem Regal bist du Leser.*Naruto Band 2: In diesem Regal bist du Leser/);
+    expect(screen.queryByRole('button', { name: /als gekauft abhaken/ })).toBeNull();
+  });
+
+  it('basket: a 403 FORBIDDEN of one shelf skips that entry, a READ_ONLY account stops the batch', async () => {
+    const forbidden = { status: 'failed', error: 'Keine ausreichende Berechtigung für dieses Regal', httpStatus: 403, code: 'FORBIDDEN' };
+    const entries = [
+      { isbn: '2', kind: 'claim', label: 'X Band 2', volumeId: 40, mangaId: 4 },
+      { isbn: '1', kind: 'buy', label: 'Berserk Band 1', itemId: 1 }
+    ];
+    seedScans(entries);
+    const p = props({ handleQuickBuy: vi.fn(async (id) => (id === 40 ? forbidden : { status: 'ok' })) });
+    const view = renderView(p);
+    fireEvent.click(screen.getByRole('button', { name: '2 als gekauft abhaken' }));
+    await flush();
+    expect(p.handleQuickBuy.mock.calls.map(([id]) => id)).toEqual([40, 1]);
+    expect(screen.getByText('1 von 2 gebucht. Fehler: Keine ausreichende Berechtigung für dieses Regal')).toBeTruthy();
+    view.unmount();
+
+    localStorage.clear();
+    seedScans(entries);
+    const readOnly = props({ handleQuickBuy: vi.fn(async () => ({ status: 'failed', error: 'Nur Lesezugriff', httpStatus: 403, code: 'READ_ONLY' })) });
+    renderView(readOnly);
+    fireEvent.click(screen.getByRole('button', { name: '2 als gekauft abhaken' }));
+    await flush();
+    expect(readOnly.handleQuickBuy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/0 von 2 gebucht, 1 nicht versucht/)).toBeTruthy();
+  });
+
   it('keeps the scan list across unmount and drops open entries no longer on the list', async () => {
     const first = renderView();
     await scan('9783551000011');

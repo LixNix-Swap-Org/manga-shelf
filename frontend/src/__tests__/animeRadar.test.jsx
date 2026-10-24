@@ -122,12 +122,18 @@ describe('AnimeRadarView', () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
   it('the five tabs wrap on a phone instead of hiding behind a sideways scroll', () => {
-    render(<MemoryRouter><AnimeRadarView {...props} mangas={[]} list={[]} /></MemoryRouter>);
+    const shared = entry(1, { progress_users: [{ user_id: 1, username: 'felix', status: 'Schaue' }, { user_id: 2, username: 'anna', status: 'Schaue' }] });
+    render(<MemoryRouter><AnimeRadarView {...props} userId={1} mangas={[]} list={[shared]} /></MemoryRouter>);
     const tabs = screen.getByRole('tablist', { name: 'Bereiche' });
     expect(tabs.className).toMatch(/\bflex-wrap\b/);
     expect(tabs.className).toMatch(/\bsm:flex-nowrap\b/);
     expect(tabs.className).not.toMatch(/overflow-x-auto/);
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Neue Folgen', 'Kalender', 'Gemeinsam', 'Entdecken', 'Manga-Verknüpfung']);
+  });
+  it('"Gemeinsam" stays away while no entry has another account in it (a server with one account)', () => {
+    const mine = entry(1, { progress_users: [{ user_id: 1, username: 'felix', status: 'Schaue' }] });
+    render(<MemoryRouter><AnimeRadarView {...props} userId={1} mangas={[]} list={[mine]} /></MemoryRouter>);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Neue Folgen', 'Kalender', 'Entdecken', 'Manga-Verknüpfung']);
   });
   it('links a suggestion and unlinks a linked entry', async () => {
     const onLink = vi.fn().mockResolvedValue();

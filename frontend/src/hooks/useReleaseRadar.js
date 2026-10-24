@@ -9,6 +9,7 @@ import useLatestRequest from './useLatestRequest';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 import { shelfQuery } from '../utils/shelfScope';
+import { releaseRemindersChanged } from '../app/reminders/reminderState';
 
 // i18n
 const RADAR_LOAD_ERROR = 'Release-Radar konnte nicht geladen werden';
@@ -101,6 +102,7 @@ export default function useReleaseRadar({ canEdit, activeMainView, fetchMangas, 
       if (!item.purchase_date) body.purchase_date = localISODate();
       const res = await apiFetch(`/api/volumes/${item.id}`, { method: 'PUT', body });
       if (res.ok) {
+        releaseRemindersChanged();
         // a future 'Fehlt' volume is on the shopping list as well
         await Promise.all([fetchReleaseRadar(), fetchMangas(), fetchShoppingList()]);
         return true;

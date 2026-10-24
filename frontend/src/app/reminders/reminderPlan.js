@@ -13,6 +13,13 @@ const FOLLOWED = ['Schaue', 'Geplant'];
 
 const pad = (n) => String(n).padStart(2, '0');
 const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The id of a release day's reminder, fixed per calendar day: planning again reschedules a day under its old id and never
+ * reuses the id of a reminder already shown today (Android dismisses a shown notification whose id gets scheduled).
+ */
+export const reminderIdFor = (at) => REMINDER_ID_BASE + (Math.floor(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()) / DAY_MS) % REMINDER_ID_COUNT);
 
 /** Local `hour`:00 of that calendar day, or null for a day that does not exist (2026-02-30). */
 function fireAt(year, month, day, hour) {
@@ -62,7 +69,7 @@ function titleOf(volumes, episodes) {
 /**
  * One notification per release day whose reminder (local `hour`:00) lies after `now` and at most `days` calendar days
  * ahead (the same clock time, so a DST switch in between moves nothing). Several volumes and episodes of the same day
- * share one; volumes come first. Ids count up from REMINDER_ID_BASE.
+ * share one; volumes come first. Ids from reminderIdFor.
  */
 export function planReminders({ radar, anime, now = new Date(), days = REMINDER_DAYS, hour = REMINDER_HOUR } = {}) {
   const from = now.getTime();
@@ -78,13 +85,13 @@ export function planReminders({ radar, anime, now = new Date(), days = REMINDER_
   return [...byDay.values()]
     .sort((a, b) => a.at - b.at)
     .slice(0, REMINDER_ID_COUNT)
-    .map((day, i) => {
+    .map((day) => {
       const lines = [...day.volume, ...day.episode];
       const shown = lines.length > MAX_LINES ? lines.slice(0, MAX_LINES - 1) : lines;
       const rest = lines.length - shown.length;
       const body = [...shown, ...(rest ? [tn('+ {n} weiterer Titel', '+ {n} weitere Titel', rest)] : [])].join('\n');
       return {
-        id: REMINDER_ID_BASE + i,
+        id: reminderIdFor(day.at),
         title: titleOf(day.volume.length, day.episode.length),
         body,
         largeBody: body,

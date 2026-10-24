@@ -156,6 +156,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const handleAuthorClick = useCallback((name) => setAuthorFilter(String(name || '').trim()), [setAuthorFilter]);
   // shelves where the user is a viewer: their series cards offer no delete
   const readOnlyShelves = useMemo(() => new Set((shelves || []).filter((s) => s.role === 'viewer').map((s) => s.id)), [shelves]);
+  // their series: a scanned volume of one is not bookable in the shop basket
+  const readOnlySeries = useMemo(() => new Set(readOnlyShelves.size ? (mangas || []).filter((m) => readOnlyShelves.has(m.shelf_id)).map((m) => m.id) : []), [mangas, readOnlyShelves]);
   // the chosen shelf narrows statistics, trash, shopping list and radar too; those screens name it and can clear it
   const scopedShelfId = shelfFilter !== 'ALL' ? shelfFilter : null;
   const scopedShelfName = scopedShelfId
@@ -742,6 +744,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         cacheWriteFailed={cacheWriteFailed}
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
+        readOnlySeries={readOnlySeries}
       />
     )}
 

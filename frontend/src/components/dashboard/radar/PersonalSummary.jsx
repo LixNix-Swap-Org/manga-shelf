@@ -9,7 +9,9 @@ import OtherCurrencies from '../../common/OtherCurrencies';
 
 const euro = (value) => formatEuro(value || 0);
 
-const FEED_API = '/api/radar/feed-token';
+// each calendar has its own token: the radar address never lists anime, the anime address never volumes
+const RADAR_FEED_API = '/api/radar/feed-token';
+const ANIME_FEED_API = '/api/anime/feed-token';
 
 /** Absolute feed address as this client reaches the server (relative in the browser build, the server base in the app). */
 export function feedAddress(state) {
@@ -22,11 +24,13 @@ export function feedAddress(state) {
 }
 
 /**
- * "Kalender abonnieren": the personal iCal address of the radar (GET/POST/DELETE /api/radar/feed-token). The token
- * is its own secret, never the session; a new one replaces the old.
+ * "Kalender abonnieren": the personal iCal address of the radar (GET/POST/DELETE /api/radar/feed-token) or, with
+ * `anime`, of the anime calendar (/api/anime/feed-token). Each token is its own secret, never the session; a new one
+ * replaces the old one of the same calendar only.
  */
 export function CalendarFeedPanel({ anime = false }) {
   const ids = useId();
+  const feedApi = anime ? ANIME_FEED_API : RADAR_FEED_API;
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,11 +38,11 @@ export function CalendarFeedPanel({ anime = false }) {
 
   useEffect(() => {
     let alive = true;
-    api.get(FEED_API, { fallback: t('Kalender-Abo konnte nicht geladen werden') })
+    api.get(feedApi, { fallback: t('Kalender-Abo konnte nicht geladen werden') })
       .then((data) => { if (alive) setState(data); })
       .catch((err) => { if (alive) setError(err?.message || t('Kalender-Abo konnte nicht geladen werden')); });
     return () => { alive = false; };
-  }, []);
+  }, [feedApi]);
 
   const act = async (fn, success) => {
     setBusy(true);
@@ -53,15 +57,13 @@ export function CalendarFeedPanel({ anime = false }) {
       setBusy(false);
     }
   };
-  const create = (renew) => act(() => api.post(FEED_API, {}), renew ? t('Neue Adresse erzeugt – die alte funktioniert nicht mehr') : t('Kalender-Adresse erzeugt'));
+  const create = (renew) => act(() => api.post(feedApi, {}), renew ? t('Neue Adresse erzeugt – die alte funktioniert nicht mehr') : t('Kalender-Adresse erzeugt'));
   const revoke = () => act(async () => {
-    await api.del(FEED_API);
+    await api.del(feedApi);
     return { active: false };
   }, t('Kalender-Abo beendet'));
 
-  // the anime feed shares the token of the radar feed and only differs in its path
-  const radarAddress = feedAddress(state);
-  const address = anime && radarAddress ? radarAddress.replace('/radar/feed.ics', '/anime/feed.ics') : radarAddress;
+  const address = feedAddress(state);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(address);
@@ -75,7 +77,7 @@ export function CalendarFeedPanel({ anime = false }) {
     <div id={anime ? 'anime-calendar-feed' : 'radar-calendar-feed'} className="w-full rounded-2xl border border-sky-500/25 bg-slate-950/60 p-4 space-y-3 text-xs">
       <p className="text-slate-300">
         {anime
-          ? t('Die nächsten Folgen deiner Anime (Schaue und Geplant) mit Uhrzeit als Kalender-Abo (iCal). Dieselbe persönliche Adresse wie im Release-Radar, nur mit anderem Pfad: eine neue Adresse ersetzt beide. In der Kalender-App kannst du für dieses Abo eine Erinnerung einstellen, so bekommst du auch ohne geöffnete App eine Benachrichtigung.')
+          ? t('Die nächsten Folgen deiner Anime (Schaue und Geplant) mit Uhrzeit als Kalender-Abo (iCal). Die Adresse ist persönlich, gilt nur für die Anime (nicht für den Release-Radar) und funktioniert ohne Anmeldung: nicht weitergeben. In der Kalender-App kannst du für dieses Abo eine Erinnerung einstellen, so bekommst du auch ohne geöffnete App eine Benachrichtigung.')
           : t('Vorbestellte und angekündigte Bände mit genauem Erscheinungstag als Kalender-Abo (iCal) – für iPhone, Android oder Thunderbird. Die Adresse ist persönlich und funktioniert ohne Anmeldung: nicht weitergeben.')}
       </p>
       {error && <p role="alert" className="text-rose-300">{error}</p>}

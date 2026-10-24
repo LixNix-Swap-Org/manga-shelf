@@ -3,13 +3,18 @@ import { Plus, ScrollText } from 'lucide-react';
 import { put } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { getChapterProgress } from '../../utils/volumeHelpers';
+import { formatNumber } from '../../utils/format';
 import { t, tn } from '../../i18n/index.js';
 
 // same bound as MAX_CHAPTERS in core/lib/validate.js
 const MAX_CHAPTERS = 99999;
 
-/** The detail after a PUT /mangas/:id/chapters answer: the own chapter and the own row of chapter_progress. */
+/**
+ * The detail after a PUT /mangas/:id/chapters answer: the own chapter and the own row of chapter_progress. An answer for
+ * another series (an undo tapped after opening the next one) leaves the shown detail as it is.
+ */
 export function withChapter(manga, data, user) {
+  if (data.manga_id !== undefined && data.manga_id !== null && String(data.manga_id) !== String(manga.id)) return manga;
   const rows = (manga.chapter_progress || []).filter((p) => p.user_id !== user?.id);
   if (data.chapters_read > 0) rows.push({ user_id: user?.id, username: user?.username, chapters_read: data.chapters_read, updated_at: null });
   rows.sort((a, b) => a.user_id - b.user_id);
@@ -30,7 +35,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
   const others = (manga.chapter_progress || []).filter((p) => p.user_id !== user?.id);
   const atEnd = total > 0 && read >= total;
   const summary = total > 0
-    ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', total, { read })
+    ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', total, { read: formatNumber(read) })
     : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', read);
 
   const save = async (body, { undo = true } = {}) => {
@@ -40,7 +45,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
       onSaved(data);
       if (undo && data.chapters_read !== data.previous) {
         const text = data.chapters_read > 0
-          ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: data.chapters_read })
+          ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: formatNumber(data.chapters_read) })
           : t('{title}: Kapitelstand zurückgesetzt', { title: manga.title });
         notify.success(text, { action: { label: t('Rückgängig'), onClick: () => save({ chapters_read: data.previous }, { undo: false }) } });
       }
@@ -131,7 +136,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
           <ul className="flex flex-wrap gap-2 text-xs">
             {others.map((p) => (
               <li key={p.user_id} className="px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200">
-                {t('{name}: Kapitel {n}', { name: p.username, n: p.chapters_read })}
+                {t('{name}: Kapitel {n}', { name: p.username, n: formatNumber(p.chapters_read) })}
               </li>
             ))}
           </ul>

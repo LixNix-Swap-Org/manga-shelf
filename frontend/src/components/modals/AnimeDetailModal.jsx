@@ -72,7 +72,8 @@ const formValues = (progress, defaultVisibility) => ({
 
 /**
  * Whether anybody else is in this entry: another account's progress, or community ratings beyond the own one. Without
- * them (a single account) the visibility, the comment and the community block stay hidden.
+ * them (a single account) the visibility, the comment and the community block stay hidden; the own visibility does not
+ * count (the server stores the account default on every new row), only an own comment keeps them so it can be edited.
  */
 function sharedWithOthers(anime) {
   const rows = anime.progress || anime.progress_users || [];
@@ -81,11 +82,7 @@ function sharedWithOthers(anime) {
     ? rows.filter((p) => p.user_id !== mine.user_id).length
     : rows.length - (mine ? 1 : 0);
   const ownCounted = mine?.score && mine.rating_visibility !== 'private' ? 1 : 0;
-  const hasOwnSharingState = Boolean(
-    (mine?.rating_visibility && mine.rating_visibility !== 'public')
-    || mine?.public_comment
-  );
-  return others > 0 || (anime.community?.count || 0) > ownCounted || hasOwnSharingState;
+  return others > 0 || (anime.community?.count || 0) > ownCounted || Boolean(mine?.public_comment);
 }
 
 /**
@@ -1119,10 +1116,12 @@ export default function AnimeDetailModal({
                 </section>
               ))}
 
-              <section className="mt-5 border-t border-slate-800 pt-4">
-                <TagEditor tags={anime.tags || []} known={knownTags} canEdit={canEdit} busy={busy}
-                  onSave={saveTags} />
-              </section>
+              {(canEdit || anime.tags?.length > 0) && (
+                <section className="mt-5 border-t border-slate-800 pt-4">
+                  <TagEditor tags={anime.tags || []} known={knownTags} canEdit={canEdit} busy={busy}
+                    onSave={saveTags} />
+                </section>
+              )}
 
               {canEdit && (
                 <section className="mt-5 border-t border-slate-800 pt-4 grid gap-3 sm:grid-cols-2">

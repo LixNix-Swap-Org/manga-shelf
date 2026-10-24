@@ -64,8 +64,13 @@ export function updateBody(changed, form) {
   return body;
 }
 
-/** Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released volumes). */
+/**
+ * Form values after applying a metadata lookup hit; a running series keeps its total (the catalogue only counts released
+ * volumes). The format of the series never changes (a print series would lose its Manga Passion link on saving); only a
+ * webtoon takes the chapter count of a hit.
+ */
 export function mergeEditLookup(prev, item, coverUrl) {
+  const webtoon = prev.format === 'webtoon';
   return {
     ...prev,
     title: item.title || prev.title,
@@ -73,17 +78,20 @@ export function mergeEditLookup(prev, item, coverUrl) {
     author: item.author || prev.author,
     publisher: (item.publisher && item.publisher !== 'Unbekannt') ? item.publisher : prev.publisher,
     status: normalizeLookupStatus(item.status, prev.status),
-    // a manhwa or manhua hit suggests the webtoon format (no hit switches a chosen format back); its print volume count
-    // says nothing about the webtoon
+    // the print volume count of a manhwa or manhua hit says nothing about this edition
     total_volumes: item.series_format === 'webtoon' ? prev.total_volumes : prefillTotalVolumes(item, prev.total_volumes),
-    format: item.series_format === 'webtoon' ? 'webtoon' : prev.format,
-    total_chapters: item.total_chapters ? String(item.total_chapters) : prev.total_chapters,
+    total_chapters: webtoon && item.total_chapters ? String(item.total_chapters) : prev.total_chapters,
     tags: String(prev.tags ?? '').trim() ? prev.tags : (item.tags || prev.tags),
     description: item.description || prev.description,
     cover_image: coverUrl || prev.cover_image,
-    manga_passion_id: item.manga_passion_id || prev.manga_passion_id
+    manga_passion_id: webtoon ? prev.manga_passion_id : (item.manga_passion_id || prev.manga_passion_id)
   };
 }
+
+/** The line under the edit lookup after applying a hit: a webtoon hit on a print series says that the format stays. */
+export const editLookupHint = (prev, item) => (
+  item?.series_format === 'webtoon' && prev?.format !== 'webtoon' ? t('Treffer ist ein Webtoon – Form bleibt Druck') : ''
+);
 
 export function isFormDirty(base, current) {
   if (!base || !current) return false;
@@ -285,7 +293,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
 
     setFormData(prev => mergeEditLookup(prev, item, localCoverUrl));
     setEditLookupResults(null);
-    setEditLookupError('');
+    setEditLookupError(editLookupHint(formData, item));
   };
 
   const applyMangaData = (data) => {

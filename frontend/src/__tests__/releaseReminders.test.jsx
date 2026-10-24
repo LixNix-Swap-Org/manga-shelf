@@ -8,10 +8,12 @@ import fs from 'fs';
 import path from 'path';
 import { render, screen, renderHook, waitFor, fireEvent } from '@testing-library/react';
 import { fakeResponse } from './fakeResponse';
-import { planReminders, volumeReleases, episodeReleases, REMINDER_DAYS } from '../app/reminders/reminderPlan';
+import { planReminders, volumeReleases, episodeReleases, reminderIdFor, REMINDER_DAYS } from '../app/reminders/reminderPlan';
 import {
-  REMINDER_BUILD, REMINDER_ID_BASE, REMINDER_KEY, reminderBridge, remindersAvailable, canRemind, readEnabled, clearReleaseReminders
+  REMINDER_BUILD, REMINDER_ID_BASE, REMINDER_KEY, reminderBridge, remindersAvailable, canRemind, readEnabled, clearReleaseReminders,
+  releaseRemindersChanged
 } from '../app/reminders/reminderState';
+import { PURCHASE_RECORDED_EVENT } from '../appShell';
 import { startReleaseReminders, refreshReleaseReminders, setReleaseReminders, REFRESH_FLOOR_MS } from '../app/reminders/reminderScheduler';
 import ReminderSwitch, { REMINDER_TEXTS } from '../app/reminders/ReminderSwitch';
 
@@ -33,10 +35,15 @@ const radarOf = (items) => ({ groups: [{ key: '2026-10', items }] });
 const volume = (release_date, extra = {}) => ({ id: Math.random(), manga_title: 'Frieren', volume_number: '12', type: 'volume', status: 'Vorbestellt', release_date, ...extra });
 const anime = (status, next, extra = {}) => ({ id: Math.random(), title: 'Sousou no Frieren', kind: 'anime', my_progress: status ? { status, episodes_watched: 3 } : null, next_airing: next, ...extra });
 
+// Like the plugin: a fired notification leaves the pending list and shows in the shade (`delivered`); on Android cancel()
+// and schedule() of an id also take a shown notification with that id off the shade, on iOS only
+// removeDeliveredNotifications() does.
 function fakeNotificationsBridge({ permission = 'granted', request = 'granted', platform = 'android', pending = [] } = {}) {
   const prefs = new Map();
   const listeners = {};
   let scheduled = pending.map((n) => ({ ...n }));
+  let delivered = [];
+  const without = (list, notifications) => list.filter((n) => !notifications.some((x) => x.id === n.id));
   const LocalNotifications = {
     checkPermissions: vi.fn(async () => ({ display: permission })),
     requestPermissions: vi.fn(async () => {
@@ -45,12 +52,15 @@ function fakeNotificationsBridge({ permission = 'granted', request = 'granted', 
     }),
     getPending: vi.fn(async () => ({ notifications: scheduled.map(({ id, title, body }) => ({ id, title, body })) })),
     schedule: vi.fn(async ({ notifications }) => {
-      scheduled = [...scheduled.filter((n) => !notifications.some((x) => x.id === n.id)), ...notifications];
+      scheduled = [...without(scheduled, notifications), ...notifications];
+      if (platform === 'android') delivered = without(delivered, notifications);
       return { notifications: notifications.map(({ id }) => ({ id })) };
     }),
     cancel: vi.fn(async ({ notifications }) => {
-      scheduled = scheduled.filter((n) => !notifications.some((x) => x.id === n.id));
+      scheduled = without(scheduled, notifications);
+      if (platform === 'android') delivered = without(delivered, notifications);
     }),
+    removeDeliveredNotifications: vi.fn(async ({ notifications }) => { delivered = without(delivered, notifications); }),
     createChannel: vi.fn(async () => {})
   };
   const native = {
@@ -77,7 +87,14 @@ function fakeNotificationsBridge({ permission = 'granted', request = 'granted', 
     LocalNotifications,
     scheduled: () => scheduled,
     own: () => scheduled.filter((n) => n.id >= REMINDER_ID_BASE),
+    delivered: () => delivered,
+    // the system shows a pending notification (its time came)
+    fire: (id) => {
+      delivered = [...delivered, ...scheduled.filter((n) => n.id === id)];
+      scheduled = scheduled.filter((n) => n.id !== id);
+    },
     foreground: () => (listeners.appStateChange || []).forEach((fn) => fn({ isActive: true })),
+    background: () => (listeners.appStateChange || []).forEach((fn) => fn({ isActive: false })),
     listenerCount: () => (listeners.appStateChange || []).length
   };
 }
@@ -118,7 +135,8 @@ describe('planReminders (pure)', () => {
     const list = [anime('Schaue', { episode: 7, at: seconds(new Date(2026, 9, 25, 17, 30)), estimated: false })];
     const plan = planReminders({ radar, anime: list, now: NOW });
     expect(plan).toHaveLength(2);
-    expect(plan.map((n) => n.id)).toEqual([REMINDER_ID_BASE, REMINDER_ID_BASE + 1]);
+    // days since 1970 (20751 and 20754) modulo the 100 ids of the own range
+    expect(plan.map((n) => n.id)).toEqual([REMINDER_ID_BASE + 51, REMINDER_ID_BASE + 54]);
     expect(plan[0].schedule).toEqual({ at: at(2026, 10, 25), allowWhileIdle: true });
     expect(plan[0].title).toBe('3 Neuerscheinungen heute');
     expect(plan[0].body).toBe('Frieren – Band 12\nDandadan – Band 15\nSousou no Frieren – Folge 7');
@@ -135,6 +153,21 @@ describe('planReminders (pure)', () => {
     expect(days(NOW)).toEqual(['2026-10-23', '2026-11-05']);
     // 9:30: today's reminder time has passed, 2026-11-06 09:00 is exactly 14 days ahead
     expect(days(new Date(2026, 9, 23, 9, 30))).toEqual(['2026-11-05', '2026-11-06']);
+  });
+
+  it('the id of a release day stays the same in every plan and differs from every other day of the window', () => {
+    const radar = radarOf([volume('2026-10-23'), volume('2026-10-24'), volume('2026-11-05')]);
+    const idsOf = (now) => Object.fromEntries(planReminders({ radar, now }).map((n) => [n.extra.day, n.id]));
+    const early = idsOf(NOW);
+    const later = idsOf(new Date(2026, 9, 23, 9, 30));
+    expect(later['2026-10-24']).toBe(early['2026-10-24']);
+    expect(later['2026-11-05']).toBe(early['2026-11-05']);
+    expect(later).not.toHaveProperty('2026-10-23');
+    expect(Object.values(later)).not.toContain(early['2026-10-23']);
+    expect(reminderIdFor(at(2026, 10, 24))).toBe(early['2026-10-24']);
+    const daysAhead = Array.from({ length: REMINDER_DAYS + 1 }, (_, i) => reminderIdFor(new Date(2026, 9, 23 + i, 9)));
+    expect(new Set(daysAhead).size).toBe(REMINDER_DAYS + 1);
+    expect(daysAhead.every((id) => id >= REMINDER_ID_BASE && id < REMINDER_ID_BASE + 100)).toBe(true);
   });
 
   it('leaves out month-only and year-only dates, impossible days and estimated or unfollowed airings', () => {
@@ -206,7 +239,9 @@ describe('feature detection and the build gate', () => {
     const app = read('App.jsx');
     expect(app).toMatch(/useReleaseReminders\(user, localMode \? 'local' : activeServer\?\.id/);
     expect(app).not.toMatch(/import .*reminderScheduler|import .*reminderPlan/);
-    expect(app).toMatch(/clearReleaseReminders\(\)\]\)/);
+    // every session cleanup (logout, expiry, server or profile switch) clears them; only a restore keeps the switch
+    expect(app).toMatch(/clearReleaseReminders\(undefined, \{ keepSetting: sameCollection \}\)\]\)/);
+    expect(app.match(/clearSessionData\(\{ sameCollection: true \}\)/g)).toHaveLength(1);
   });
 });
 
@@ -319,11 +354,108 @@ describe('the scheduler', () => {
     expect(fake.listenerCount()).toBe(0);
   });
 
-  it('clearReleaseReminders (session data cleanup) cancels the own reminders without a session', async () => {
-    const fake = fakeNotificationsBridge({ pending: [{ id: REMINDER_ID_BASE + 2, title: 'x', body: '' }, { id: 9, title: 'y', body: '' }] });
-    expect(await clearReleaseReminders({ mangashelfNative: fake.native })).toBe(1);
-    expect(fake.scheduled().map((n) => n.id)).toEqual([9]);
-    expect(await clearReleaseReminders({})).toBe(0);
+  it('clearReleaseReminders (session data cleanup) removes pending and shown reminders and turns the switch off', async () => {
+    for (const platform of ['android', 'ios']) {
+      const fake = fakeNotificationsBridge({ platform, pending: [{ id: REMINDER_ID_BASE + 2, title: 'x', body: '' }, { id: REMINDER_ID_BASE + 7, title: 'heute', body: '' }, { id: 9, title: 'y', body: '' }] });
+      fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+      fake.fire(REMINDER_ID_BASE + 7);
+      fake.fire(9);
+      expect(await clearReleaseReminders({ mangashelfNative: fake.native })).toBe(true);
+      expect(fake.scheduled().map((n) => n.id), platform).toEqual([]);
+      expect(fake.delivered().map((n) => n.id), platform).toEqual([9]);
+      expect(await readEnabled(fake.native), platform).toBe(false);
+    }
+    expect(await clearReleaseReminders({})).toBe(false);
+  });
+
+  it('a restore of the same collection clears the reminders but keeps the switch', async () => {
+    const fake = fakeNotificationsBridge({ pending: [{ id: REMINDER_ID_BASE + 2, title: 'x', body: '' }] });
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    expect(await clearReleaseReminders({ mangashelfNative: fake.native }, { keepSetting: true })).toBe(true);
+    expect(fake.own()).toEqual([]);
+    expect(await readEnabled(fake.native)).toBe(true);
+  });
+
+  it('logout: the next account on the device starts with the switch off and no reminder of the previous one', async () => {
+    const fake = fakeNotificationsBridge();
+    window.mangashelfNative = fake.native;
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    const fetchMock = stubLists({ radar: radarOf([volume('2026-10-23'), volume('2026-10-25')]) });
+    const stop = startReleaseReminders({ user: EDITOR, native: fake.native, now: () => NOW });
+    await waitFor(() => expect(fake.own()).toHaveLength(2));
+    fake.fire(reminderIdFor(at(2026, 10, 23)));
+    // App: clearSessionData, then the user goes and the hook stops the session
+    await clearReleaseReminders();
+    stop();
+    await waitFor(() => expect(fake.scheduled()).toEqual([]));
+    expect(fake.delivered()).toEqual([]);
+
+    fetchMock.mockClear();
+    const next = startReleaseReminders({ user: { id: 8, role: 'editor' }, native: fake.native, now: () => NOW });
+    expect(await refreshReleaseReminders({ now: () => NOW })).toEqual({ ran: false, reason: 'off' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fake.own()).toEqual([]);
+    next();
+  });
+
+  it('a volume marked owned (or bought in the basket) is planned out at once; when that fails, going to the background does it', async () => {
+    const fake = fakeNotificationsBridge();
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    stubLists({ radar: radarOf([volume('2026-10-24'), volume('2026-10-26', { manga_title: 'Dandadan' })]) });
+    let clock = NOW.getTime();
+    const now = () => new Date(clock);
+    const stop = startReleaseReminders({ user: EDITOR, native: fake.native, now });
+    await waitFor(() => expect(fake.own().map((n) => n.extra.day)).toEqual(['2026-10-24', '2026-10-26']));
+    await waitFor(() => expect(fake.listenerCount()).toBe(1));
+
+    // the radar no longer lists an owned volume
+    stubLists({ radar: radarOf([volume('2026-10-26', { manga_title: 'Dandadan' })]) });
+    clock += 60 * 1000;
+    releaseRemindersChanged();
+    await waitFor(() => expect(fake.own().map((n) => n.extra.day)).toEqual(['2026-10-26']));
+
+    // a basket booking whose replan cannot read the lists: the change stays pending
+    const failing = stubLists({ fail: true });
+    clock += 60 * 1000;
+    window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: { volumeId: 2 } }));
+    await waitFor(() => expect(listCalls(failing)).toBe(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fake.own()).toHaveLength(1);
+    const fetchMock = stubLists({ radar: radarOf([]) });
+    clock += 4 * 60 * 1000;
+    fake.background();
+    await waitFor(() => expect(fake.own()).toEqual([]));
+    expect(listCalls(fetchMock)).toBe(1);
+
+    // nothing pending: within 15 minutes going away again reads nothing, later it plans again
+    fake.background();
+    fake.foreground();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(listCalls(fetchMock)).toBe(1);
+    clock += REFRESH_FLOOR_MS;
+    fake.background();
+    await waitFor(() => expect(listCalls(fetchMock)).toBe(2));
+    stop();
+    window.dispatchEvent(new CustomEvent('mangashelf:reminders-changed'));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(listCalls(fetchMock)).toBe(2);
+  });
+
+  it('planning again keeps a reminder already shown today in the shade', async () => {
+    const fake = fakeNotificationsBridge();
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    stubLists({ radar: radarOf([volume('2026-10-23'), volume('2026-10-25')]) });
+    let clock = NOW.getTime();
+    const now = () => new Date(clock);
+    const stop = startReleaseReminders({ user: EDITOR, native: fake.native, now });
+    await waitFor(() => expect(fake.own()).toHaveLength(2));
+    const today = reminderIdFor(at(2026, 10, 23));
+    fake.fire(today);
+    clock = at(2026, 10, 23, 10).getTime();
+    expect(await refreshReleaseReminders({ now })).toMatchObject({ ran: true, scheduled: 1 });
+    expect(fake.own().map((n) => n.id)).toEqual([reminderIdFor(at(2026, 10, 25))]);
+    expect(fake.delivered().map((n) => n.id)).toEqual([today]);
+    stop();
   });
 });
 
@@ -383,6 +515,16 @@ describe('ReminderSwitch', () => {
     await waitFor(() => expect(toggle.checked).toBe(false));
     expect(fake.own()).toEqual([]);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a permission revoked in the system settings (Android then reports "prompt") shows the hint under a switch that is on', async () => {
+    const fake = fakeNotificationsBridge({ permission: 'prompt' });
+    fake.prefs.set(REMINDER_KEY, JSON.stringify({ enabled: true }));
+    window.mangashelfNative = fake.native;
+    render(<ReminderSwitch />);
+    const toggle = await screen.findByRole('checkbox', { name: REMINDER_TEXTS.toggle });
+    await waitFor(() => expect(toggle.checked).toBe(true));
+    expect((await screen.findByRole('alert')).textContent).toBe(REMINDER_TEXTS.denied);
   });
 
   it('renders nothing without the plugin', () => {

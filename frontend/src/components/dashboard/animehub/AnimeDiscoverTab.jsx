@@ -4,6 +4,7 @@ import CoverImage from '../../common/CoverImage';
 import api, { TIMEOUTS } from '../../../utils/api';
 import { notify } from '../../../utils/notify';
 import { formatLabel } from '../../../utils/animeHelpers';
+import { formatNumber } from '../../../utils/format';
 import { t, tn } from '../../../i18n/index.js';
 
 const SEASONS = ['WINTER', 'SPRING', 'SUMMER', 'FALL'];
@@ -23,7 +24,7 @@ function Hit({ hit, because, canEdit, added, busy, onAdd, onOpen }) {
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-white line-clamp-2 break-words">{titleOf(hit)}</p>
         <p className="text-xs text-slate-400 mt-0.5">
-          {[formatLabel(hit.format), hit.episodes ? tn('{n} Folge', '{n} Folgen', hit.episodes) : null, hit.score ? `★ ${(hit.score / 10).toFixed(1)}` : null].filter(Boolean).join(' · ')}
+          {[formatLabel(hit.format), hit.episodes ? tn('{n} Folge', '{n} Folgen', hit.episodes) : null, hit.score ? `★ ${formatNumber(hit.score / 10, 1, { fixed: true })}` : null].filter(Boolean).join(' · ')}
         </p>
         {hit.genres?.length > 0 && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{hit.genres.slice(0, 4).join(', ')}</p>}
         {because?.length > 0 && <p className="text-[11px] text-fuchsia-300 mt-1 line-clamp-2">{t('Weil du {titles} mochtest', { titles: because.join(', ') })}</p>}

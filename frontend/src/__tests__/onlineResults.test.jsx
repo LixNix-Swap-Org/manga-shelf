@@ -161,7 +161,7 @@ describe('OnlineResults', () => {
     expect(onAdd).toHaveBeenCalledWith({
       form: {
         language: 'de', region: 'DE', currency: 'EUR', title: 'Frieren', alt_title: 'Sousou no Frieren', author: 'Kanehito Yamada',
-        publisher: 'Egmont', status: 'Laufend', total_volumes: '', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
+        publisher: 'Egmont', status: 'Laufend', total_volumes: '', format: 'print', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
       },
       volume: null
     });
@@ -499,7 +499,7 @@ describe('lookupPrefill', () => {
   it('maps a hit onto the current form exactly as the add dialog always did', () => {
     expect(hitToForm(MP_HIT, previous)).toEqual({
       ...previous, title: 'Frieren', alt_title: 'Sousou no Frieren', author: 'Kanehito Yamada', publisher: 'Egmont', status: 'Laufend',
-      total_volumes: '5', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
+      total_volumes: '5', format: 'print', tags: '', cover_image: MP_HIT.cover_image, manga_passion_id: 7, work_key: null
     });
     expect(hitToForm({ ...AL_HIT, publisher: 'Unbekannt', status: 'Unbekannt', cover_image: '' }, previous)).toEqual({
       ...previous, title: AL_HIT.title, author: 'Kanehito Yamada', total_volumes: '13', tags: '', work_key: 'anilist:1'

@@ -18,6 +18,9 @@ export const alsoOnLabels = (item) => lookupSourceLabels(item).filter((label) =>
 
 /** The add form after applying a lookup hit to `base` (the current form, or at least its edition language). */
 export function hitToForm(hit, base = {}) {
+  // a manhwa or manhua hit suggests the webtoon format, a picked Manga Passion hit (always a print edition) sets print
+  // again; any other hit keeps the chosen format
+  const format = hit.series_format === 'webtoon' ? 'webtoon' : hit.source === 'manga_passion' ? 'print' : base.format;
   const form = {
     ...base,
     title: hit.title || base.title,
@@ -25,15 +28,14 @@ export function hitToForm(hit, base = {}) {
     author: hit.author || base.author,
     publisher: knownValue(hit.publisher) || base.publisher,
     status: normalizeLookupStatus(hit.status, base.status),
-    // a manhwa or manhua hit suggests the webtoon format (no hit switches a chosen format back); its print volume count
-    // says nothing about the webtoon
+    // the print volume count of a manhwa or manhua hit says nothing about the webtoon
     total_volumes: hit.series_format === 'webtoon' ? base.total_volumes : prefillTotalVolumes(hit, base.total_volumes),
-    format: hit.series_format === 'webtoon' ? 'webtoon' : base.format,
+    format,
     total_chapters: hit.total_chapters ? String(hit.total_chapters) : base.total_chapters,
     tags: hit.tags || '',
     description: hit.description || base.description,
     cover_image: hit.cover_image || base.cover_image,
-    manga_passion_id: isMpEdition({ ...base, format: hit.series_format === 'webtoon' ? 'webtoon' : base.format }) ? (hit.manga_passion_id || null) : null,
+    manga_passion_id: isMpEdition({ ...base, format }) ? (hit.manga_passion_id || null) : null,
     work_key: hit.source === 'manga_passion' ? (hit.work_key || null) : (hit.work_key || workKeyOfHit(hit))
   };
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== undefined));

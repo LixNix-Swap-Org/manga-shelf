@@ -9,6 +9,7 @@ import { applyVolumeChange } from '../utils/volumePatch';
 import { t, tn } from '../i18n/index.js';
 import { askConfirm } from '../components/modals/askConfirm';
 import { serverText } from '../i18n/serverText.js';
+import { releaseRemindersChanged } from '../app/reminders/reminderState';
 
 /** Error text of a failed response: the JSON `error`, else the fallback (proxies answer 502/504/413 with HTML). */
 export async function readApiError(res, fallback) {
@@ -180,6 +181,8 @@ export default function useVolumeActions({
     const { status, res } = result;
     if (status === 'sent' && res?.ok) {
       const data = (await readJson(res)) ?? {};
+      // ownership and status decide what the release radar still lists; a reading mark does not
+      if (change.kind !== 'read') releaseRemindersChanged();
       await fetchManga();
       return data;
     }
@@ -241,6 +244,7 @@ export default function useVolumeActions({
         setNewVolumeReleaseDate('');
         setNewVolumeCoverValue('');
         setNewVolumeType('volume');
+        releaseRemindersChanged();
         await fetchManga();
       } else {
         await reportFailure(res, t('Fehler beim Hinzufügen'));
@@ -307,8 +311,12 @@ export default function useVolumeActions({
     if (String(removed.user_id) !== String(user?.id)) body.user_id = removed.user_id;
     try {
       const res = await apiFetch(`/api/volumes/${vol.id}/owners`, { method: 'POST', body });
-      if (res.ok) await fetchManga();
-      else await reportFailure(res, t(STATUS_FAILED));
+      if (res.ok) {
+        releaseRemindersChanged();
+        await fetchManga();
+      } else {
+        await reportFailure(res, t(STATUS_FAILED));
+      }
     } catch (err) {
       notify.error(err);
     }
@@ -366,6 +374,7 @@ export default function useVolumeActions({
       if (!res.ok && res.status !== 409) {
         await reportFailure(res, t('Rückgängig fehlgeschlagen'));
       } else {
+        releaseRemindersChanged();
         const data = (await readJson(res)) ?? {};
         const conflicts = Array.isArray(data.conflicts) ? data.conflicts : [];
         const gone = Array.isArray(data.not_found) ? data.not_found.length : 0;
@@ -398,6 +407,7 @@ export default function useVolumeActions({
       }
       const data = (await readJson(res)) ?? {};
       if (change.delete && data.ids?.some((volId) => String(volId) === String(activeVolume?.id))) setActiveVolume(null);
+      if (!change.read || change.set || change.owners) releaseRemindersChanged();
       await fetchManga();
       const token = typeof data.undo_token === 'string' && data.undo_token ? data.undo_token : null;
       const skippedCount = data.read_skipped?.length || 0;
@@ -452,6 +462,7 @@ export default function useVolumeActions({
       return;
     }
     if (String(activeVolume?.id) === String(volId)) setActiveVolume(null);
+    releaseRemindersChanged();
     await fetchManga();
     const trashId = res.ok ? (await readJson(res))?.trash_id : null;
     notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, trashId, () => fetchManga());

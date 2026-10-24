@@ -44,3 +44,16 @@ describe('AnimeCalendarTab dates', () => {
     expect(document.getElementById('anime-calendar').textContent).not.toMatch(/\d{1,2}\.\d{1,2}\./);
   });
 });
+
+describe('AnimeCalendarTab view switch', () => {
+  it('exactly the shown view is pressed, also in the year view', async () => {
+    resetI18nForTests();
+    await openCalendar();
+    const pressed = () => ['Woche', 'Monat', 'Jahr'].filter((name) => screen.getByRole('button', { name }).getAttribute('aria-pressed') === 'true');
+    expect(pressed()).toEqual(['Woche']);
+    fireEvent.click(screen.getByRole('button', { name: 'Jahr' }));
+    expect(pressed()).toEqual(['Jahr']);
+    fireEvent.click(screen.getByRole('button', { name: 'Monat' }));
+    expect(pressed()).toEqual(['Monat']);
+  });
+});

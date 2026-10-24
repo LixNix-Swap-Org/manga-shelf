@@ -16,9 +16,13 @@ import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 import { shelfQuery } from '../utils/shelfScope';
 
-async function errorText(res) {
-  return serverText(await readJson(res));
+async function errorOf(res) {
+  const data = await readJson(res);
+  return { text: serverText(data), code: data?.code || null };
 }
+
+/** A batch result: { status, error, httpStatus } and the server's error `code` when it sent one (FORBIDDEN, READ_ONLY …). */
+const batchResult = (status, error, httpStatus, code) => (code ? { status, error, httpStatus, code } : { status, error, httpStatus });
 
 const browserOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
@@ -216,16 +220,16 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
 
   /**
    * Records the purchase as the user's ownership: 'ok', 'queued' (sent later) or 'failed' (user told why). With
-   * { batch: true } nothing is alerted or refetched and the result is { status, error, httpStatus }; a 404 drops the volume.
+   * { batch: true } nothing is alerted or refetched and the result is batchResult(); a 404 drops the volume.
    * `mangaId` names the series of a volume that is not on the list (a scanned volume), so the stored copies follow too.
    */
   const handleQuickBuy = async (volumeId, { batch = false, mangaId = null } = {}) => {
-    const done = (status, error = '', httpStatus = null) => {
+    const done = (status, error = '', httpStatus = null, code = null) => {
       if (!batch) {
         if (status === 'failed' && error) notify.error(error);
         return status;
       }
-      return { status, error, httpStatus };
+      return batchResult(status, error, httpStatus, code);
     };
     setBuyingIds((prev) => addId(prev, volumeId));
     try {
@@ -262,7 +266,8 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
       }
       // 404: the volume no longer exists; other 4xx: the server refused the purchase
       if (res?.status === 404) dropItem(volumeId);
-      return done('failed', (res && await errorText(res)) || t(BUY_FAILED), res?.status ?? null);
+      const refused = res ? await errorOf(res) : { text: '', code: null };
+      return done('failed', refused.text || t(BUY_FAILED), res?.status ?? null, refused.code);
     } finally {
       setBuyingIds((prev) => removeId(prev, volumeId));
     }
@@ -274,12 +279,12 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
    * was created meanwhile) books that volume. Results as handleQuickBuy.
    */
   const handleAddBought = async ({ mangaId, volume }, { batch = false } = {}) => {
-    const done = (status, error = '', httpStatus = null) => {
+    const done = (status, error = '', httpStatus = null, code = null) => {
       if (!batch) {
         if (status === 'failed' && error) notify.error(error);
         return status;
       }
-      return { status, error, httpStatus };
+      return batchResult(status, error, httpStatus, code);
     };
     if (user?.offline || browserOffline()) return done('failed', t(ADD_OFFLINE));
     let res;
@@ -294,7 +299,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
     }
     const data = await readJson(res);
     if (res.status === 409 && data?.existing_id) return handleQuickBuy(data.existing_id, { batch, mangaId });
-    if (!res.ok) return done('failed', serverText(data) || t(BUY_FAILED), res.status);
+    if (!res.ok) return done('failed', serverText(data) || t(BUY_FAILED), res.status, data?.code || null);
     invalidateIsbnIndex();
     window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: { volumeId: data?.id ?? null } }));
     haptic('success');

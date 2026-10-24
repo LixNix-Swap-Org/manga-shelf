@@ -217,7 +217,8 @@ export default function ShoppingListView({
   buyingIds = null,
   user = null,
   shelfName = null,
-  onClearShelf
+  onClearShelf,
+  readOnlySeries = null
 }) {
   const userId = user?.id ?? null;
   const items = useMemo(() => shoppingData?.items || [], [shoppingData]);
@@ -235,6 +236,9 @@ export default function ShoppingListView({
   });
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  // series in shelves where the user is a viewer: their scans are not bookable
+  const scanOptionsRef = useRef(null);
+  scanOptionsRef.current = { readOnlySeries };
 
   // Scan list of this store visit (kept in localStorage for 12 h: survives opening a series, a reload and an app kill)
   const [scanned, setScanned] = useState(() => loadScanList(scanStore(), { userId }));
@@ -274,7 +278,7 @@ export default function ShoppingListView({
     updateScanned((prev) => mergeScanEntry(prev, { isbn: cleanIsbn, kind: 'pending', label: t('{isbn} – wird geprüft…', { isbn: cleanIsbn }) }));
 
     const finish = (entry) => updateScanned((prev) => mergeScanEntry(prev, entry));
-    const checkOffline = async () => finish(classifyShopScanOffline(cleanIsbn, await lookupLocalIsbn(cleanIsbn), itemsRef.current));
+    const checkOffline = async () => finish(classifyShopScanOffline(cleanIsbn, await lookupLocalIsbn(cleanIsbn), itemsRef.current, scanOptionsRef.current));
     const abandon = () => updateScanned((prev) => prev.flatMap((e) => (
       e.isbn === cleanIsbn && e.kind === 'pending' ? (previous ? [previous] : []) : [e]
     )));
@@ -286,7 +290,7 @@ export default function ShoppingListView({
         const hit = await lookupLocalIsbn(cleanIsbn);
         if (hit) {
           const note = localSourceNote(hit.syncedAt ? formatAge(hit.syncedAt) : '');
-          finish(classifyLocalHit(cleanIsbn, hit, itemsRef.current, { note, source: 'local' }));
+          finish(classifyLocalHit(cleanIsbn, hit, itemsRef.current, { ...scanOptionsRef.current, note, source: 'local' }));
         }
       }
       return await checkNetwork(cleanIsbn, { finish, checkOffline, abandon });
@@ -317,7 +321,7 @@ export default function ShoppingListView({
       return;
     }
     if (!data) return checkOffline();
-    finish(classifyShopScan(cleanIsbn, data, itemsRef.current));
+    finish(classifyShopScan(cleanIsbn, data, itemsRef.current, scanOptionsRef.current));
   };
 
   // Quick buy with a short undo window: the PUT is sent when the window ends, the page is hidden or the view closes

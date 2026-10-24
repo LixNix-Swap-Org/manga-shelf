@@ -1493,7 +1493,24 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(updateProgress).toHaveBeenLastCalledWith(1, { score: 9 });
   });
 
-  it('keeps visibility and comment editable when the user already has a non-public rating or comment even without other watchers', async () => {
+  it('a single account with the default "Nur ich": the stored private visibility alone shows no sharing UI', async () => {
+    const alone = entry({
+      my_progress: mine({ rating_visibility: 'private' }),
+      progress: [{ user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: null }],
+      community: { average: null, count: 0, watchers: 1, episodes: {} }
+    });
+    for (const own of [{}, { score: 9 }]) {
+      const view = openShared({ ...alone, my_progress: { ...alone.my_progress, ...own } });
+      await act(async () => {});
+      expect(screen.queryByLabelText('Meine Bewertung sehen')).toBeNull();
+      expect(screen.queryByLabelText('Kommentar zur Bewertung')).toBeNull();
+      expect(screen.queryByText(/^Community:/)).toBeNull();
+      view.unmount();
+    }
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/ratings') || url === '/api/auth/me')).toBe(false);
+  });
+
+  it('keeps visibility and comment editable when the own row carries a comment even without other watchers', async () => {
     const alonePrivate = entry({
       my_progress: mine({ score: 8, rating_visibility: 'private', public_comment: 'Nur für mich' }),
       progress: [{ user_id: ME, username: 'felix', status: 'Schaue', episodes_watched: 7, score: 8 }],
@@ -1548,6 +1565,26 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     await act(async () => { fireEvent.click(within(screen.getByLabelText('Neuer Tag').closest('form')).getByRole('button', { name: 'Hinzufügen' })); });
     expect(update).toHaveBeenLastCalledWith(1, { tags_add: ['Winter'] });
     expect(screen.getByLabelText('Neuer Tag').value).toBe('Winter');
+  });
+
+  it('tags: a labelled field, 44 px remove targets; without edit rights no empty tags block', async () => {
+    const view = openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    const field = screen.getByLabelText('Neuer Tag');
+    expect(document.querySelector(`label[for="${field.id}"]`).textContent).toBe('Neuer Tag');
+    expect(screen.getByRole('button', { name: 'Tag „Fantasy“ entfernen' }).className).toMatch(/\bhit-44\b.*\bw-6 h-6\b/);
+    view.unmount();
+
+    const readOnly = openShared(shared({ tags: [] }), { defaultVisibility: 'public', canEdit: false });
+    await act(async () => {});
+    expect(document.getElementById('anime-tags')).toBeNull();
+    expect(screen.queryByText('Noch keine Tags')).toBeNull();
+    readOnly.unmount();
+
+    openShared(shared({ tags: ['Fantasy'] }), { defaultVisibility: 'public', canEdit: false });
+    await act(async () => {});
+    expect(document.getElementById('anime-tags').textContent).toContain('Fantasy');
+    expect(screen.queryByRole('button', { name: 'Tag „Fantasy“ entfernen' })).toBeNull();
   });
 
   it('shows my status per related film and hides the episode grid of a one-episode film', async () => {

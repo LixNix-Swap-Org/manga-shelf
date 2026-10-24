@@ -48,12 +48,38 @@ export function serial(fn) {
   return run;
 }
 
-/** Cancels the pending reminders of the own id range; resolves their number. Call it inside serial(). */
+/**
+ * Cancels the pending reminders of the own id range (a shown one stays in the notification shade); resolves their number.
+ * Call it inside serial().
+ */
 export async function cancelOwn(native) {
   const pending = (await native.plugins.LocalNotifications.getPending())?.notifications;
   const own = (Array.isArray(pending) ? pending : []).map((n) => Number(n?.id)).filter(isReminderId).map((id) => ({ id }));
   if (own.length) await native.plugins.LocalNotifications.cancel({ notifications: own });
   return own.length;
+}
+
+const OWN_RANGE = Array.from({ length: REMINDER_ID_COUNT }, (_, i) => ({ id: REMINDER_ID_BASE + i }));
+
+/**
+ * Removes every reminder of the own id range, pending and already shown: a fired reminder is no longer pending, Android's
+ * cancel also takes it off the shade, iOS needs removeDeliveredNotifications. Call it inside serial().
+ */
+export async function clearOwn(native) {
+  const plugin = native.plugins.LocalNotifications;
+  await plugin.cancel({ notifications: OWN_RANGE });
+  if (typeof plugin.removeDeliveredNotifications === 'function') await plugin.removeDeliveredNotifications({ notifications: OWN_RANGE });
+}
+
+export const REMINDERS_CHANGED_EVENT = 'mangashelf:reminders-changed';
+
+/**
+ * A write that can change a reminder went through (a volume owned or deleted, a release date, the owners): the running
+ * scheduler plans again. Nothing outside the app build.
+ */
+export function releaseRemindersChanged(win = globalThis.window) {
+  if (!REMINDER_BUILD || !win?.dispatchEvent) return;
+  win.dispatchEvent(new CustomEvent(REMINDERS_CHANGED_EVENT));
 }
 
 // the scheduler session that may still write: start takes a new number, stop and logout end it
@@ -65,12 +91,18 @@ export function endSession(id) {
 }
 
 /**
- * Logout, session end, server or profile switch: the reminders of that collection go (their titles would still show on
- * the lock screen). Never rejects; nothing outside the app build.
+ * Logout, session end, server or profile switch: the reminders of that collection go, pending and shown (their titles
+ * would still show on the lock screen), and the switch goes off, so the next account on this device starts without
+ * them. `keepSetting`: the same collection again (a restore), only the reminders go. Resolves true once done; never
+ * rejects; nothing outside the app build.
  */
-export function clearReleaseReminders(win) {
-  if (!REMINDER_BUILD) return Promise.resolve(0);
+export function clearReleaseReminders(win, { keepSetting = false } = {}) {
+  if (!REMINDER_BUILD) return Promise.resolve(false);
   const native = reminderBridge(win);
-  if (!native) return Promise.resolve(0);
-  return serial(() => cancelOwn(native)).catch(() => 0);
+  if (!native) return Promise.resolve(false);
+  return serial(async () => {
+    const cleared = await clearOwn(native).then(() => true, () => false);
+    if (!keepSetting) await writeEnabled(native, false);
+    return cleared;
+  }).catch(() => false);
 }

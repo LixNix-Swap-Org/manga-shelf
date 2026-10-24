@@ -153,7 +153,7 @@ export default function AnimeCalendarTab({ list, now, onOpen }) {
     <div id="anime-calendar">
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div role="group" aria-label={t('Ansicht')} className="inline-flex gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
-          <button type="button" aria-pressed={!month} className={seg('week')} onClick={() => chooseView('week')}>{t('Woche')}</button>
+          <button type="button" aria-pressed={view === 'week'} className={seg('week')} onClick={() => chooseView('week')}>{t('Woche')}</button>
           <button type="button" aria-pressed={month} className={seg('month')} onClick={() => chooseView('month')}>{t('Monat')}</button>
           <button type="button" aria-pressed={year} className={seg('year')} onClick={() => chooseView('year')}>{t('Jahr')}</button>
         </div>
