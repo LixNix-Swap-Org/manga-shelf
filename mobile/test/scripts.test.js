@@ -153,6 +153,21 @@ describe('signing', () => {
     assert.throws(() => checkReleaseSignature(debug, null), /Debug-Schlüssel/);
   });
 
+  it('reads the apksigner output of build-tools 37 ("V3.0 Signer: certificate …")', () => {
+    const out = [
+      'V3.0 Signer: certificate DN: CN=Manga Shelf, O=Manga Shelf',
+      `V3.0 Signer: certificate SHA-256 digest: ${'ab'.repeat(31)}cd`,
+      'V3.0 Signer: certificate SHA-1 digest: 0011'
+    ].join('\n');
+    assert.deepEqual(apksignerCerts(out), [{ dn: 'CN=Manga Shelf, O=Manga Shelf', sha256: 'ab'.repeat(31) + 'cd' }]);
+    assert.equal(checkReleaseSignature(out, 'ab'.repeat(31) + 'cd').length, 1);
+    const debug = 'V3.0 Signer: certificate DN: CN=Android Debug, O=Android, C=US\nV3.0 Signer: certificate SHA-256 digest: 48a2';
+    assert.throws(() => checkReleaseSignature(debug, null), /Debug-Schlüssel/);
+    const two = 'V3.1 Signer #1: certificate DN: CN=A\nV3.1 Signer #1: certificate SHA-256 digest: 01\n'
+      + 'V3.1 Signer #2: certificate DN: CN=B\nV3.1 Signer #2: certificate SHA-256 digest: 02';
+    assert.deepEqual(apksignerCerts(two), [{ dn: 'CN=A', sha256: '01' }, { dn: 'CN=B', sha256: '02' }]);
+  });
+
   it('create-android-key: PKCS12 key without passwords on the command line, the four secrets in order', () => {
     const args = createKey.keytoolArgs('/x/rel.keystore', 'manga-shelf');
     assert.ok(args.includes('PKCS12'));
