@@ -1236,15 +1236,17 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
 }
 
 const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
 const CHAIN_STEPS = 12;
 
 /**
  * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), at
- * most CHAIN_STEPS each way. `relations` are the stored relations of the start entry. A neighbour in the collection
- * lends its stored AniList relations; only beyond the last of them AniList is asked, one request per step, at most
- * CHAIN_STEPS per call (the walk ends there). Each answer is cached for a day under anime:rel:<anilist_id>, so
- * neighbouring seasons share it and a failed step keeps the steps before it. With AniList switched off only the stored
- * relations count and nothing is asked. Returns { before: [node], after: [node] } with nodes
+ * most CHAIN_STEPS each way. A canon film, OVA or special (BRIDGE_FORMATS) between two seasons is walked through without
+ * being added as a season itself (it stays under Filme & Specials). `relations` are the stored relations of the start
+ * entry. A neighbour in the collection lends its stored AniList relations; only beyond the last of them AniList is asked,
+ * one request per step, at most CHAIN_STEPS per call (the walk ends there). Each answer is cached for a day under
+ * anime:rel:<anilist_id>, so neighbouring seasons share it and a failed step keeps the steps before it. With AniList
+ * switched off only the stored relations count and nothing is asked. Returns { before: [node], after: [node] } with nodes
  * { anilist_id, mal_id, title, season_year, episodes }; rejects with the SourceError of a failed step.
  */
 async function seasonChainOf(ctx, anilistId, relations) {
@@ -1254,7 +1256,10 @@ async function seasonChainOf(ctx, anilistId, relations) {
     const storedRow = ctx.db.prepare('SELECT relations FROM animes WHERE anilist_id = ?');
     let asked = 0;
     let leave = null;
-    const stepOf = (rels, type) => (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && CHAIN_FORMATS.includes(x.format) && x.anilist_id);
+    const stepOf = (rels, type) => {
+        const list = (rels || []).filter((x) => x && x.kind === 'ANIME' && x.relation === type && x.anilist_id);
+        return list.find((x) => CHAIN_FORMATS.includes(x.format)) || list.find((x) => BRIDGE_FORMATS.includes(x.format)) || null;
+    };
     const liveRelations = async (id) => {
         if (!canAsk) return null;
         const key = `anime:rel:${id}`;
@@ -1285,15 +1290,17 @@ async function seasonChainOf(ctx, anilistId, relations) {
         let stored = true;
         for (let i = 0; i < CHAIN_STEPS; i += 1) {
             let r = stepOf(rels, type);
-            // stored relations end the chain: a season announced after the entry was stored is only known to AniList
-            if (!r && stored && canAsk) {
+            // stored relations end the chain or only point to a film/OVA: a season announced later is only known to AniList
+            if ((!r || !CHAIN_FORMATS.includes(r.format)) && stored && canAsk) {
                 rels = await liveRelations(id);
                 stored = false;
                 r = stepOf(rels, type);
             }
             if (!r || seen.has(r.anilist_id)) break;
             seen.add(r.anilist_id);
-            out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
+            if (CHAIN_FORMATS.includes(r.format)) {
+                out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
+            }
             id = r.anilist_id;
             if (i + 1 < CHAIN_STEPS) ({ rels, stored } = await relationsOf(id));
         }

@@ -30,6 +30,7 @@ const TMDB_KINDS = ['movie', 'tv'];
 const TMDB_LABEL = 'TMDB';
 const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
 const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -155,15 +156,19 @@ function seasonChain(ctx, row, relations) {
         my_status: mineOf(entry && entry.id),
         current: false
     });
+    const stepOf = (rels, type) => {
+        const list = (rels || []).filter((x) => x && x.kind === 'ANIME' && x.relation === type);
+        return list.find((x) => SEASON_FORMATS.includes(x.format)) || list.find((x) => BRIDGE_FORMATS.includes(x.format)) || null;
+    };
     const walk = (start, type) => {
         const out = [];
         const seen = new Set([start.id]);
         let rels = relations;
         for (let i = 0; i < 20; i += 1) {
-            const r = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && SEASON_FORMATS.includes(x.format));
+            const r = stepOf(rels, type);
             if (!r) break;
             const entry = found(r);
-            out.push(nodeOf(r, entry));
+            if (SEASON_FORMATS.includes(r.format)) out.push(nodeOf(r, entry));
             if (!entry || seen.has(entry.id)) break;
             seen.add(entry.id);
             rels = store.parseJson(entry.relations, []);
