@@ -106,9 +106,10 @@ export default function MpMonthNav({
             disabled={loadingMp}
             className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
             title={t('Zum aktuellen Monat')}
+            aria-label={t('Aktueller Monat')}
           >
             <CalendarCheck className="w-4 h-4" />
-            <span>{t('Aktueller Monat')}</span>
+            <span className="hidden sm:inline">{t('Aktueller Monat')}</span>
           </button>
         )}
       </div>

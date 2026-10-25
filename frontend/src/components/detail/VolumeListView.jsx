@@ -49,12 +49,12 @@ export default function VolumeListView({
             {selectionMode && <th scope="col" className="py-3 px-3 w-10 text-center"><span className="sr-only">{t('Auswahl')}</span></th>}
             <th scope="col" className="py-3 px-3 w-12 text-center">{t('Cover')}</th>
             <th scope="col" className="py-3 px-3">{t('Band / Titel')}</th>
-            <th scope="col" className="py-3 px-3">{t('Typ')}</th>
+            <th scope="col" className="hidden md:table-cell py-3 px-3">{t('Typ')}</th>
             <th scope="col" className="py-3 px-3">{t('Status')}</th>
             <th scope="col" className="py-3 px-3">{t('Lesestatus')}</th>
-            <th scope="col" className="py-3 px-3">{t('Verlag')}</th>
+            <th scope="col" className="hidden lg:table-cell py-3 px-3">{t('Verlag')}</th>
             <th scope="col" className="py-3 px-3">{t('Preis')}</th>
-            <th scope="col" className="py-3 px-3">{t('Zustand')}</th>
+            <th scope="col" className="hidden lg:table-cell py-3 px-3">{t('Zustand')}</th>
             <th scope="col" className="py-3 px-3 text-right">{t('Aktionen')}</th>
           </tr>
         </thead>
@@ -231,7 +231,7 @@ export default function VolumeListView({
                 </td>
 
                 {/* Typ Badge */}
-                <td className="py-2 px-3">
+                <td className="hidden md:table-cell py-2 px-3">
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${typeClass}`}>
                     {t(typeLabel)}
                   </span>
@@ -299,7 +299,7 @@ export default function VolumeListView({
                 </td>
 
                 {/* Publisher */}
-                <td className="py-2 px-3 text-slate-300">{effectivePublisher}</td>
+                <td className="hidden lg:table-cell py-2 px-3 text-slate-300">{effectivePublisher}</td>
 
                 {/* Price */}
                 <td className="py-2 px-3 font-mono text-emerald-400">
@@ -307,7 +307,7 @@ export default function VolumeListView({
                 </td>
 
                 {/* Condition */}
-                <td className="py-2 px-3 text-slate-400">
+                <td className="hidden lg:table-cell py-2 px-3 text-slate-400">
                   {conditionLabel(vol.condition) || '-'}
                 </td>
 

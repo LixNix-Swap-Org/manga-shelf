@@ -56,7 +56,7 @@ export default function AddVolumeBar({
   return (
     <>
       {canEdit && (
-        <form onSubmit={handleSubmit} aria-labelledby={`${ids}-title`} className="pt-6 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <form onSubmit={handleSubmit} aria-labelledby={`${ids}-title`} className="mt-8 p-4 sm:p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 shadow-lg flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
           <div>
             <h3 id={`${ids}-title`} className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5 text-brand-400" />

@@ -1,4 +1,5 @@
-import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, Library, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, Library, LayoutGrid, List, ListFilter, SlidersHorizontal, Tag, UserPen, X } from 'lucide-react';
 import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, collectFilterLabel, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
 import { t as tr } from '../../i18n/index.js';
@@ -46,12 +47,22 @@ export default function CollectionToolbar({
   shelfFilter = 'ALL',
   setShelfFilter
 }) {
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const tabs = statusTabs || getStatusTabs(filterCounts || {}, statusFilter);
   const chosenTags = Array.isArray(tagFilter) ? tagFilter : [];
   const chosenKeys = new Set(chosenTags.map(t => t.toLowerCase()));
   const tagOptions = availableTags.filter(t => !chosenKeys.has(t.tag.toLowerCase()));
   const filtersActive = statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter) || Boolean(search)
     || chosenTags.length > 0 || languageFilter !== 'ALL' || shelfFilter !== 'ALL';
+  const secondaryFiltersCount = (publisherFilter !== 'ALL' ? 1 : 0)
+    + (collectFilter !== 'ALL' ? 1 : 0)
+    + chosenTags.length
+    + (shelfFilter !== 'ALL' ? 1 : 0)
+    + (languageFilter !== 'ALL' ? 1 : 0)
+    + (groupBy !== 'none' ? 1 : 0)
+    + (authorFilter ? 1 : 0);
+  const mobileSecondaryOpen = showMobileFilters || secondaryFiltersCount > 0;
+  const secondaryChipClass = `${CHIP_LABEL}${mobileSecondaryOpen ? '' : ' max-sm:hidden'}`;
   const showShelves = Boolean(setShelfFilter) && (availableShelves.length > 1 || shelfFilter !== 'ALL');
   const showLanguages = Boolean(setLanguageFilter) && (availableLanguages.length > 1 || languageFilter !== 'ALL');
   return (
@@ -83,7 +94,7 @@ export default function CollectionToolbar({
       {/* Publisher, Sort, Reset & View Mode Controls */}
       <div className="w-full xl:w-auto flex flex-wrap items-center xl:justify-start gap-2 text-xs">
         {/* Publisher Filter */}
-        <label className={CHIP_LABEL}>
+        <label className={secondaryChipClass}>
           <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
           <select
             id="filter-publisher-select"
@@ -101,7 +112,7 @@ export default function CollectionToolbar({
         </label>
 
         {setCollectFilter && (
-          <label className={CHIP_LABEL}>
+          <label className={secondaryChipClass}>
             <ListFilter className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-collect-select"
@@ -122,7 +133,7 @@ export default function CollectionToolbar({
         )}
 
         {setTagFilter && (availableTags.length > 0 || chosenTags.length > 0) && (
-          <label className={CHIP_LABEL}>
+          <label className={secondaryChipClass}>
             <Tag className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-tag-select"
@@ -139,7 +150,7 @@ export default function CollectionToolbar({
         )}
 
         {showShelves && (
-          <label className={CHIP_LABEL}>
+          <label className={secondaryChipClass}>
             <Library className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-shelf-select"
@@ -156,7 +167,7 @@ export default function CollectionToolbar({
         )}
 
         {showLanguages && (
-          <label className={CHIP_LABEL}>
+          <label className={secondaryChipClass}>
             <Languages className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" />
             <select
               id="filter-language-select"
@@ -205,7 +216,7 @@ export default function CollectionToolbar({
         </label>
 
         {setGroupBy && (
-          <label className={CHIP_LABEL}>
+          <label className={secondaryChipClass}>
             <Layers className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" aria-hidden="true" />
             <select
               id="group-by-select"
@@ -221,6 +232,26 @@ export default function CollectionToolbar({
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
           </label>
         )}
+
+        <button
+          id="btn-toggle-mobile-filters"
+          type="button"
+          aria-expanded={mobileSecondaryOpen}
+          onClick={() => setShowMobileFilters(prev => !prev)}
+          className={`sm:hidden basis-[calc(50%-0.25rem)] grow min-w-0 flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 border transition-all font-medium ${
+            mobileSecondaryOpen
+              ? 'bg-brand-600/20 border-brand-500/50 text-brand-200'
+              : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:text-white'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-brand-400 shrink-0" aria-hidden="true" />
+          <span className="truncate">{tr('Status-Filter')}</span>
+          {secondaryFiltersCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-700 text-white font-mono font-bold leading-none shrink-0">
+              {secondaryFiltersCount}
+            </span>
+          )}
+        </button>
 
         {authorFilter && setAuthorFilter && (
           <button

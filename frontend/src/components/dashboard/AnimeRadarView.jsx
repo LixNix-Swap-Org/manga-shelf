@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Bell, CalendarClock, Link2, Tv, Unlink } from 'lucide-react';
+import { BookOpen, Bell, CalendarClock, Link2, Play, Plus, Tv, Unlink } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import useTabList from '../../hooks/useTabList';
-import { countdownText, displayTitle, kindOf, mangaLinks, newEpisodes } from '../../utils/animeHelpers';
+import { openLinkOutside } from '../../app/openExternal';
+import { continueTarget, countdownText, displayTitle, kindOf, mangaLinks, newEpisodes, plusOneDisabled } from '../../utils/animeHelpers';
 import AnimeCalendarTab from './animehub/AnimeCalendarTab';
 import AnimeTogetherTab from './animehub/AnimeTogetherTab';
 import AnimeDiscoverTab from './animehub/AnimeDiscoverTab';
@@ -80,7 +81,7 @@ function AlertsToggle({ alerts }) {
   );
 }
 
-function EpisodesTab({ list, now, onOpen, alerts }) {
+function EpisodesTab({ list, now, onOpen, alerts, canEdit = false, onPlusOne = null }) {
   const { upcoming, behind } = useMemo(() => newEpisodes(list, now), [list, now]);
   if (!upcoming.length && !behind.length) {
     return <><AlertsToggle alerts={alerts} /><Empty>{t('Keine neuen Folgen in Sicht. Anime, die du schaust oder planst, erscheinen hier, sobald ein Termin bekannt ist.')}</Empty></>;
@@ -108,15 +109,48 @@ function EpisodesTab({ list, now, onOpen, alerts }) {
       )}
       {behind.length > 0 && (
         <Section title={t('Zum Nachschauen')} count={behind.length}>
-          {behind.map(({ anime, missing }) => (
-            <Row key={anime.id}>
-              <Thumb anime={anime} />
-              <div className="min-w-0 flex-1">
-                <button type="button" onClick={() => onOpen(anime)} className="text-left font-semibold text-white hover:underline line-clamp-2 break-words">{displayTitle(anime)}</button>
-                <p className="text-xs text-emerald-300 mt-0.5">{tn('{n} Folge offen', '{n} Folgen offen', missing)}</p>
+          {behind.map(({ anime, missing }) => {
+            const title = displayTitle(anime);
+            const next = continueTarget(anime, { search: false });
+            const showPlusOne = Boolean(canEdit && onPlusOne && !plusOneDisabled(anime.my_progress, anime.episodes));
+            const action = (next || showPlusOne) ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {next && (
+                  <a
+                    href={next.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={(e) => openLinkOutside(e, { preferApp: true })}
+                    aria-label={`${next.label}: ${title}`}
+                    className="hit-44 btn-secondary text-xs py-1.5 px-2.5 inline-flex items-center gap-1"
+                  >
+                    <Play className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    <span>{next.label}</span>{/* i18n-ignore: continueTarget() translates the label */}
+                  </a>
+                )}
+                {showPlusOne && (
+                  <button
+                    type="button"
+                    onClick={() => onPlusOne(anime)}
+                    aria-label={t('{title}: eine Folge mehr gesehen', { title })}
+                    title={t('Eine Folge mehr gesehen')}
+                    className="hit-44 btn-primary text-xs py-1.5 px-2.5 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />1
+                  </button>
+                )}
               </div>
-            </Row>
-          ))}
+            ) : null;
+            return (
+              <Row key={anime.id} action={action}>
+                <Thumb anime={anime} />
+                <div className="min-w-0 flex-1">
+                  <button type="button" onClick={() => onOpen(anime)} className="text-left font-semibold text-white hover:underline line-clamp-2 break-words">{title}</button>
+                  <p className="text-xs text-emerald-300 mt-0.5">{tn('{n} Folge offen', '{n} Folgen offen', missing)}</p>
+                </div>
+              </Row>
+            );
+          })}
         </Section>
       )}
     </>
@@ -222,7 +256,7 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
 }
 
 /** Tab "Anime-Radar": new episodes of my anime and the links between anime and series of the shelf. */
-export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, userId, username, onOpen, onOpenId, onLink, onRetry, onRefreshCover, onAddEntry, alerts, now = new Date() }) {
+export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, userId, username, onOpen, onOpenId, onLink, onRetry, onRefreshCover, onAddEntry, onPlusOne = null, alerts, now = new Date() }) {
   const [tab, setTab] = useState('episodes');
   // new entries from a source can arrive without a cover (background download pending or failed): ask the source once each
   useEffect(() => {
@@ -262,7 +296,7 @@ export default function AnimeRadarView({ list, mangas, loaded, error, canEdit, u
       )}
       <div {...panelProps}>
         {!loaded && !list.length ? <Empty>{t('Lädt…')}</Empty>
-          : shown === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} alerts={alerts} />
+          : shown === 'episodes' ? <EpisodesTab list={list} now={now} onOpen={onOpen} alerts={alerts} canEdit={canEdit} onPlusOne={onPlusOne} />
             : shown === 'calendar' ? <AnimeCalendarTab list={list} now={now} onOpen={onOpen} />
               : shown === 'together' ? <AnimeTogetherTab list={list} userId={userId} username={username} onOpen={onOpen} />
                 : shown === 'discover' ? <AnimeDiscoverTab canEdit={canEdit} now={now} onAdd={onAddEntry} onOpenId={onOpenId} />

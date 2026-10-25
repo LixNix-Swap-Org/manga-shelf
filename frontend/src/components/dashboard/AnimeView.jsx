@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useMemo, useState, useEffect } from 'react';
 import { ClipboardPaste, History, KeyRound, Plus, RefreshCw, Search, Tv, X } from 'lucide-react';
 import AnimeCard from './AnimeCard';
-import { formatCount, formatRelative } from '../../utils/format';
+import useProgressiveList from '../../hooks/useProgressiveList';
+import { formatCount, formatNumber, formatRelative } from '../../utils/format';
 import { WATCH_BUILD, useWatchUnmatched } from '../../app/watch/watchState';
 import {
   ALL_FILTER, ANIME_FILTERS, ANIME_SORTS, NO_STATUS, filterAnime, filterCounts, slowHintAllowed, markSlowHint, listSyncKeyError,
@@ -137,6 +138,8 @@ export default function AnimeView({
   const tags = useMemo(() => tagCounts(list), [list]);
   const tag = tags.some((x) => x.name === tagChoice) ? tagChoice : ALL_FILTER;
   const shown = useMemo(() => filterAnime(list, { search, filter, sort, kind, language, tag }), [list, search, filter, sort, kind, language, tag]);
+  const resetKey = `${search}\n${filter}\n${sort}\n${kind}\n${language}\n${tag}`;
+  const { visible: pagedShown, total: totalShown, shown: shownCount, hasMore, showMore, sentinelRef } = useProgressiveList(shown, { step: 60, resetKey });
   const offline = Boolean(user?.offline);
   // apps only: series of the Crunchyroll history the server could not map (always empty elsewhere)
   const unmatched = useUnmatched();
@@ -311,19 +314,29 @@ export default function AnimeView({
       {list.length > 0 && !shown.length && <p className="text-sm text-slate-400">{t('Keine Treffer für diese Auswahl.')}</p>}
 
       {shown.length > 0 && (
-        <div id="anime-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-          {shown.map((anime) => (
-            <AnimeCard
-              key={anime.id}
-              anime={anime}
-              canEdit={canEdit && !offline && !fromCache}
-              userId={user?.id}
-              onOpen={onOpen}
-              onPlusOne={onPlusOne}
-              onStatusChange={onStatusChange}
-            />
-          ))}
-        </div>
+        <>
+          <div id="anime-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+            {pagedShown.map((anime) => (
+              <AnimeCard
+                key={anime.id}
+                anime={anime}
+                canEdit={canEdit && !offline && !fromCache}
+                userId={user?.id}
+                onOpen={onOpen}
+                onPlusOne={onPlusOne}
+                onStatusChange={onStatusChange}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div ref={sentinelRef} className="mt-6 flex flex-col items-center gap-2 text-xs text-slate-400">
+              <p>{t('Zeige {shown} von {total}', { shown: formatNumber(shownCount), total: formatNumber(totalShown) })}</p>
+              <button type="button" onClick={showMore} className="btn-secondary text-xs py-1.5 px-3">
+                {t('Weitere anzeigen')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

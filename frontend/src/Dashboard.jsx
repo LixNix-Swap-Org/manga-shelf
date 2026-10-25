@@ -207,6 +207,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const animeTagNames = useMemo(() => tagCounts(anime.list).map((x) => x.name), [anime.list]);
   const activeViewRef = useRef(activeMainView);
   activeViewRef.current = activeMainView;
+  const shopScanRef = useRef(null);
   const setViewRef = useRef(null);
   const showAnimeView = useCallback(() => {
     if (activeViewRef.current !== ANIME_VIEW) setViewRef.current?.(ANIME_VIEW);
@@ -380,6 +381,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   };
 
   const handleBarcodeDetected = async (scannedCode) => {
+    if (activeViewRef.current === 'shopping' && shopScanRef.current) {
+      return shopScanRef.current(scannedCode);
+    }
     const requestId = ++scanRequestRef.current;
     const isLatest = () => requestId === scanRequestRef.current;
     // a volume of the offline copy opens its series at once, also offline and without asking the server
@@ -642,7 +646,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               handleOpenStats={handleOpenStats}
               isOfflineMode={isOfflineMode}
             />
-            <ContinueReading userId={user?.id} enabled={!isOfflineMode} />
+            <ContinueReading userId={user?.id} enabled={!isOfflineMode} canEdit={canEdit} onReadChanged={fetchMangas} />
 
         {/* Filter & Sort Toolbar */}
         <CollectionToolbar
@@ -745,6 +749,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
         readOnlySeries={readOnlySeries}
+        scanRef={shopScanRef}
       />
     )}
 
@@ -786,6 +791,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           onOpen={handleOpenAnime}
           onOpenId={setAnimeDetailId}
           onAddEntry={anime.add}
+          onPlusOne={handleAnimePlusOne}
           alerts={episodeAlerts}
           onLink={handleAnimeLink}
           onRefreshCover={anime.refresh}

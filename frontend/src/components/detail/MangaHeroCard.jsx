@@ -530,6 +530,18 @@ export default function MangaHeroCard({
               </div>
             </div>
 
+            <div>
+              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Beschreibung')}</label>
+              <textarea 
+                id={`${ids}-description`}
+                rows="3" 
+                className="input-field resize-none" 
+                value={formData.description} 
+                onChange={e => setFormData({ ...formData, description: e.target.value })} 
+              />
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-950/30 p-3.5 space-y-4">
             <EditionFields
               idPrefix={`${ids}-edition`}
               labelClassName="block text-xs font-semibold text-slate-400 mb-1"
@@ -642,16 +654,6 @@ export default function MangaHeroCard({
               suggestions={tagSuggestions}
               offline={isOffline}
             />
-
-            <div>
-              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Beschreibung')}</label>
-              <textarea 
-                id={`${ids}-description`}
-                rows="3" 
-                className="input-field resize-none" 
-                value={formData.description} 
-                onChange={e => setFormData({ ...formData, description: e.target.value })} 
-              />
             </div>
           </form>
         ) : (
@@ -741,14 +743,14 @@ export default function MangaHeroCard({
                     {wishLabel(manga)}
                   </span>
                 )}
-                <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
+                <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold md:hidden">
                   {webtoon
                     ? tr('Gesamt: {total}', { total: manga.total_chapters > 0 ? tn('{n} Kapitel', '{n} Kapitel', manga.total_chapters) : tr('Unbekannt') })
                     : tr('Gesamt: {total}', { total: totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : tr('Unbekannt') })}
                 </span>
                 {/* a webtoon without bought volumes has no collection value */}
                 {(!webtoon || totalOwnedValue > 0) && (
-                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5 md:hidden">
                     <Coins className="w-3.5 h-3.5 text-emerald-400" />
                     {rich('Sammlungswert: {price}', { price: <strong className="text-white font-mono">{formatMoney(totalOwnedValue, currency)}</strong> })}
                   </span>

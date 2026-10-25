@@ -218,7 +218,8 @@ export default function ShoppingListView({
   user = null,
   shelfName = null,
   onClearShelf,
-  readOnlySeries = null
+  readOnlySeries = null,
+  scanRef = null
 }) {
   const userId = user?.id ?? null;
   const items = useMemo(() => shoppingData?.items || [], [shoppingData]);
@@ -298,6 +299,8 @@ export default function ShoppingListView({
       lookupsRef.current.delete(cleanIsbn);
     }
   };
+  if (scanRef) scanRef.current = handleBarcodeScan;
+  useEffect(() => () => { if (scanRef) scanRef.current = null; }, [scanRef]);
 
   const checkNetwork = async (cleanIsbn, { finish, checkOffline, abandon }) => {
     let res;

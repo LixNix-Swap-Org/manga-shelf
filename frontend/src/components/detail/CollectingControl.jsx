@@ -57,11 +57,11 @@ export default function CollectingControl({ manga, canEdit = false, isOffline = 
   };
 
   return (
-    <div className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border font-medium cursor-pointer ${PILL[value]}`} title={HINT[value] ? t(HINT[value]) : t('Wird die Reihe noch gesammelt?')}>
+    <div className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border font-medium cursor-pointer transition-colors hover:border-slate-500 focus-within:ring-2 focus-within:ring-brand-500/40 ${PILL[value]}`} title={HINT[value] ? t(HINT[value]) : t('Wird die Reihe noch gesammelt?')}>
       <label htmlFor={`${id}-collecting`} className="sr-only">{t('Sammelstatus')}</label>
       {/* the select lies transparent over the chip: the chip is as wide as the chosen label, not the longest option */}
       <span aria-hidden="true" data-testid="collecting-label" className="font-semibold whitespace-nowrap">{label}</span>
-      <ChevronDown className="w-3 h-3 opacity-70 shrink-0 pointer-events-none" aria-hidden="true" />
+      <ChevronDown className="w-3 h-3 opacity-75 shrink-0 pointer-events-none" aria-hidden="true" />
       <select
         id={`${id}-collecting`}
         data-testid="collecting-select"

@@ -327,7 +327,7 @@ export default function DashboardHeader({
             if (e.target instanceof Element && e.target.closest('button, input[type="file"]')) return;
             searchInputRef.current?.focus();
           }}
-          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[150px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
+          className={`flex items-center gap-2.5 ${activeMainView === 'shelf' ? 'bg-slate-950/80 border-slate-700/80' : 'bg-slate-950/50 border-slate-800/80'} border hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[150px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner`}
         >
           <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
           <input 

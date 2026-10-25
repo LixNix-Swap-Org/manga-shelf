@@ -651,6 +651,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 p-3.5 space-y-4">
           <FormatFields
             idPrefix={`${ids}-format`}
             value={form}
@@ -752,6 +753,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               value={form.description}
               onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, description: value })); }}
             />
+          </div>
           </div>
           </fieldset>
 

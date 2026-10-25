@@ -38,7 +38,7 @@ export default function CollectionStats({ totalSeries, totalOwnedVolumes, totalC
       disabled={isOfflineMode}
       aria-labelledby={`${tileId}-label ${tileId}-value${otherText ? ` ${tileId}-other` : ''} ${tileId}-hint`}
       title={isOfflineMode ? t('Offline nicht verfügbar') : t('Klicken für das vollständige Finanz- & Statistik-Dashboard')}
-      className="glass-panel w-full text-left p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800/80 enabled:hover:border-emerald-500/50 enabled:hover:bg-slate-900/90 enabled:cursor-pointer disabled:cursor-default transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+      className="glass-panel w-full text-left p-3 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3.5 border border-emerald-500/25 enabled:hover:border-emerald-500/60 enabled:hover:bg-slate-900/90 enabled:cursor-pointer disabled:border-slate-800/80 disabled:cursor-default transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
     >
       <div className="w-9 h-9 sm:w-11 sm:h-11 md:hidden xl:flex rounded-xl bg-emerald-500/10 border border-emerald-500/30 group-enabled:group-hover:scale-105 group-enabled:group-hover:bg-emerald-500/20 transition-all flex items-center justify-center shrink-0">
         <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" aria-hidden="true" />
