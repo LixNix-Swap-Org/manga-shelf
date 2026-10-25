@@ -562,23 +562,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
                 </button>
                 {canEdit && (
-                  <>
-                    <button 
-                      onClick={() => setShowBatchModal(true)} 
-                      className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
-                    </button>
-                    <button 
-                      id="btn-quick-add-volume"
-                      type="button"
-                      onClick={focusAddVolume} 
-                      className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 text-brand-300 hover:text-white border-brand-500/40 hover:bg-brand-500/15 transition-all"
-                      title={t('Band hinzufügen')}
-                    >
-                      <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Einzelband')}
-                    </button>
-                  </>
+                  <button 
+                    onClick={() => setShowBatchModal(true)} 
+                    className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
+                  </button>
                 )}
               </div>
             )}

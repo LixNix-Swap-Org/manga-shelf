@@ -662,8 +662,4 @@ test('lookupVolumeMetadata: matches by ISBN directly in edition volumes or via c
         assert.equal(viaCache.data.notes, 'Band Zwei');
     } finally { global.fetch = realFetch; }
 });
-/*
-    } finally { global.fetch = realFetch; }
-});
 
-*/

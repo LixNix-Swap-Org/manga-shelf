@@ -186,8 +186,6 @@ describe('MangaDetail wiring (round 5 hooks)', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u.startsWith('/api/volumes/lookup?') && u.includes('isbn=9783551000019'))).toBe(true));
     await waitFor(() => expect(screen.getByLabelText(/Seitenzahl/).value).toBe('208'));
     expect(screen.getByLabelText('Verlag').value).toBe('Carlsen Manga');
-    // (duplicate expect below from single-line replacement)
-    expect(screen.queryByText(/^ISBN /)).toBeNull();
   });
 
   it('"Gelesen am" in the reader bar dates the next read toggle', async () => {
