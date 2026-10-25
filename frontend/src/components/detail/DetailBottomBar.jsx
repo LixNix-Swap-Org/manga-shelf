@@ -151,7 +151,7 @@ export default function DetailBottomBar({
         else if (action.title) text = t('Band {number} ({title}) übernommen – bitte prüfen und hinzufügen.', { number: action.number, title: action.title });
         else text = t('Band {number} übernommen – bitte prüfen und hinzufügen.', { number: action.number });
         toast('info', text, { duration: 8000 });
-        onPrefill?.({ ...action, isbn: action.isbn || toIsbn13(code) || '' });
+        onPrefill?.({ ...action, isbn: action.isbn || toIsbn13(code) || '', book: data?.book || null });
         break;
       }
       case 'notice':

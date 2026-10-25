@@ -635,3 +635,35 @@ test('autofillMangaVolumes: a Schuber number the edition does not have stays unt
         assert.deepEqual({ ...row }, { notes: null, price: null, release_date: null, cover_image: null });
     } finally { global.fetch = realFetch; }
 });
+
+test('lookupVolumeMetadata: matches by ISBN directly in edition volumes or via cached ISBN book number', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = offlineFetch;
+        seedEdition([
+            ov('1', { isbn: '9783551000019', release_date: '2020-01-01', pages: 192, cover_image: '/uploads/cov1.jpg' }),
+            ov('2', { release_date: '2020-02-01', pages: 200, cover_image: '/uploads/cov2.jpg', title: 'Band Zwei' })
+        ]);
+        const id = createManga('ISBN-Lookup-Reihe', 2);
+
+        const direct = await mp.lookupVolumeMetadata(id, '', { isbn: '3-551-00001-8' });
+        assert.equal(direct.matched, true);
+        assert.equal(direct.data.volume_number, '1');
+        assert.equal(direct.data.isbn, '9783551000019');
+        assert.equal(direct.data.cover_image, '/uploads/cov1.jpg');
+        assert.equal(direct.data.pages, 192);
+
+        db.prepare('INSERT OR REPLACE INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES (?, ?, ?, ?)')
+            .run('isbn:9783551000026', JSON.stringify({ book: { volume_number: '2', volume_number_known: true } }), Date.now(), Date.now() + 60000);
+        const viaCache = await mp.lookupVolumeMetadata(id, '', { isbn: '9783551000026' });
+        assert.equal(viaCache.matched, true);
+        assert.equal(viaCache.data.volume_number, '2');
+        assert.equal(viaCache.data.cover_image, '/uploads/cov2.jpg');
+        assert.equal(viaCache.data.notes, 'Band Zwei');
+    } finally { global.fetch = realFetch; }
+});
+/*
+    } finally { global.fetch = realFetch; }
+});
+
+*/

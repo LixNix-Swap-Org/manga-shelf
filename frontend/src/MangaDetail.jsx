@@ -24,6 +24,7 @@ import useVolumeGallery from './hooks/useVolumeGallery';
 import useShelfLayout from './hooks/useShelfLayout';
 import useDetailKeyboard from './hooks/useDetailKeyboard';
 import { PURCHASE_RECORDED_EVENT } from './appShell';
+import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
@@ -188,7 +189,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
-    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, readDate, setReadDate,
+    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, setNewVolumeMeta, readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
@@ -317,14 +318,53 @@ export default function MangaDetail({ user, onUnauthorized }) {
     }
     document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' });
   };
-  const prefillScannedVolume = ({ number, price, isbn }) => {
+  const scanLookupSeqRef = useRef(0);
+  const prefillScannedVolume = async ({ number, price, isbn, book }) => {
+    const seq = ++scanLookupSeqRef.current;
+    const scannedIsbn = isbn || '';
     if (number) {
       setNewVolumeType('volume');
       setNewVolumeNum(number);
     }
     if (price) setNewVolumePrice(price);
-    setNewVolumeIsbn(isbn || '');
+    setNewVolumeIsbn(scannedIsbn);
+    setNewVolumeMeta(book ? {
+      ...(book.pages ? { pages: book.pages } : {}),
+      ...(book.release_year ? { release_year: book.release_year } : {}),
+      ...(book.publisher ? { publisher: book.publisher } : {}),
+      ...(book.subtitle ? { notes: book.subtitle } : {})
+    } : null);
     focusAddVolume();
+    if (!mpEnabled || isOffline || (!number && !scannedIsbn)) return;
+    try {
+      const params = new URLSearchParams({
+        manga_id: id ?? '',
+        volume_number: number || '',
+        isbn: scannedIsbn,
+        type: 'volume'
+      });
+      const res = await apiFetch(`/api/volumes/lookup?${params}`, { timeout: TIMEOUTS.lookup });
+      const result = await readJson(res);
+      if (seq !== scanLookupSeqRef.current || !res.ok || !result?.success || !result.data) return;
+      const d = result.data;
+      if (d.volume_number && !number) {
+        setNewVolumeType('volume');
+        setNewVolumeNum(String(d.volume_number));
+      }
+      if (d.price && !price) setNewVolumePrice(String(d.price));
+      if (d.release_date && /^\d{4}-\d{2}-\d{2}$/.test(d.release_date)) setNewVolumeReleaseDate(d.release_date);
+      if (d.cover_image) setNewVolumeCover(d.cover_image);
+      if (d.isbn && !scannedIsbn) setNewVolumeIsbn(d.isbn);
+      setNewVolumeMeta((prev) => ({
+        ...(prev || {}),
+        ...(d.pages != null ? { pages: d.pages } : {}),
+        ...(d.release_year != null ? { release_year: d.release_year } : {}),
+        ...(d.publisher ? { publisher: d.publisher } : {}),
+        ...(d.notes ? { notes: d.notes } : {})
+      }));
+    } catch (_) {
+      // keep the catalogue prefill when Manga Passion is unreachable
+    }
   };
 
   const renderShelfSpine = (item, idx, currentMode = shelfMode) => (
@@ -522,12 +562,23 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
                 </button>
                 {canEdit && (
-                  <button 
-                    onClick={() => setShowBatchModal(true)} 
-                    className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => setShowBatchModal(true)} 
+                      className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
+                    </button>
+                    <button 
+                      id="btn-quick-add-volume"
+                      type="button"
+                      onClick={focusAddVolume} 
+                      className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 text-brand-300 hover:text-white border-brand-500/40 hover:bg-brand-500/15 transition-all"
+                      title={t('Band hinzufügen')}
+                    >
+                      <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Einzelband')}
+                    </button>
+                  </>
                 )}
               </div>
             )}

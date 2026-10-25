@@ -1,6 +1,7 @@
 // Manga Passion API: requests (ctx.http), 12-h cache in manga_passion_cache (ctx.db), edition search, cover download
 // into the uploads (ctx.files). Every function that reads or writes takes the ctx first.
 const { normalizePublisher } = require('../lib/publishers');
+const { normalizeIsbn } = require('../lib/isbn');
 const { md5Hex } = require('../lib/md5');
 const { fetchImage } = require('../lib/imageCheck');
 const { timeoutSignal, anySignal } = require('../lib/signals');
@@ -413,6 +414,7 @@ async function getEditionDetailsAndVolumes(ctx, editionId, forceRefresh = false)
       release_date: dateStr,
       cover_image: v.cover || null,
       pages: v.pages || null,
+      ...(normalizeIsbn(v.isbn13 || v.isbn10 || v.isbn) ? { isbn: normalizeIsbn(v.isbn13 || v.isbn10 || v.isbn) } : {}),
       is_released: isReleased,
       format: v.format ?? 0,
       type: v.type ?? 0,
