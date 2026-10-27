@@ -635,3 +635,9 @@ test('autofillMangaVolumes: a Schuber number the edition does not have stays unt
         assert.deepEqual({ ...row }, { notes: null, price: null, release_date: null, cover_image: null });
     } finally { global.fetch = realFetch; }
 });
+
+test('matchSchuberVolume: the chronological index puts undated boxes last and breaks a same-day tie by arrangement', () => {
+    const box = (id, release_date, arrangement) => ({ id, specialType: 1, type: 3, volume_number: 'Special', title: 'Leerschuber', price: 12, release_date, arrangement });
+    const official = [box(905, null, 50), box(901, '2024-03-12', 10), box(904, '2025-11', 40), box(903, '2025-06-03', 31), box(902, '2025-06-03', 30)];
+    assert.deepEqual([1, 2, 3, 4, 5].map(n => mp.matchSchuberVolume(official, `Schuber ${n}`, 12, '')?.id), [901, 902, 903, 904, 905]);
+});

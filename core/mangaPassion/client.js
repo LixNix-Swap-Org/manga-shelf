@@ -4,7 +4,10 @@ const { normalizePublisher } = require('../lib/publishers');
 const { md5Hex } = require('../lib/md5');
 const { fetchImage } = require('../lib/imageCheck');
 const { timeoutSignal, anySignal } = require('../lib/signals');
-const { scoreEdition, titleRelation, cleanOfficialDate, isOfficialReleased, isConfidentMatch, buildSearchQueries } = require('./classify');
+const {
+  scoreEdition, titleRelation, cleanOfficialDate, isOfficialReleased, isConfidentMatch, buildSearchQueries, expandCombinedVolumes,
+  classifyOfficialVolume
+} = require('./classify');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 const API_BASE = 'https://api.manga-passion.de';
@@ -281,10 +284,20 @@ const normalizeEdition = (edition) => edition
 /** Cached data keeps is_released from fetch time: derive it again from the date (an undated entry keeps its flag). */
 function prepareEditionResult(result) {
   const now = new Date();
+  // cache rows written before double volumes were split still hold "10 & 11" as one entry
+  const volumes = expandCombinedVolumes(result.volumes);
+  const edition = normalizeEdition(result.edition);
+  // Manga Passion counts books (numVolumes 19 for Eyeshield 21, whose list holds 37 volumes): with double volumes the
+  // total is at least the books plus the second halves and never below the listed regular volumes
+  const combined = volumes.filter(v => v.combined);
+  const extra = combined.length - new Set(combined.map(v => v.id)).size;
+  const listed = volumes.filter(v => classifyOfficialVolume(v) === 'volume' && /^\d+$/.test(String(v.volume_number))).length;
   return {
     ...result,
-    edition: normalizeEdition(result.edition),
-    volumes: (result.volumes || []).map(v => (v.release_date ? { ...v, is_released: isOfficialReleased(v.release_date, now) } : v))
+    edition: edition && extra > 0 && edition.total_volumes
+      ? { ...edition, total_volumes: Math.max(edition.total_volumes + extra, listed) }
+      : edition,
+    volumes: volumes.map(v => (v.release_date ? { ...v, is_released: isOfficialReleased(v.release_date, now) } : v))
   };
 }
 
@@ -395,7 +408,7 @@ async function getEditionDetailsAndVolumes(ctx, editionId, forceRefresh = false)
     }
   }
 
-  const volumes = rawList.map(v => {
+  const volumes = expandCombinedVolumes(rawList.map(v => {
     const nrStr = v.numberDisplay || (v.number !== null && v.number !== undefined ? String(v.number) : 'Special');
     const numMatch = nrStr.match(/(\d+(\.\d+)?)/);
     const num = numMatch ? parseFloat(numMatch[1]) : (typeof v.number === 'number' ? v.number : 999999);
@@ -418,20 +431,21 @@ async function getEditionDetailsAndVolumes(ctx, editionId, forceRefresh = false)
       type: v.type ?? 0,
       specialType: v.specialType ?? null,
       number: v.number ?? null,
-      lastNumber: v.lastNumber ?? null
+      lastNumber: v.lastNumber ?? null,
+      arrangement: typeof v.arrangement === 'number' ? v.arrangement : null
     };
-  }).sort((a, b) => a.num - b.num);
+  })).sort((a, b) => a.num - b.num);
 
   if (!complete) {
     // keep serving the last good data (even if older than the TTL) instead of an empty or truncated list;
     // volumes without their edition are unusable (no volume count, Schuber and announcements would be counted)
     return readStaleEditionCache(ctx, cacheKey)
-      || (edition ? { edition, volumes, incomplete: true } : { edition: null, volumes: [], incomplete: true });
+      || (edition ? prepareEditionResult({ edition, volumes, incomplete: true }) : { edition: null, volumes: [], incomplete: true });
   }
 
   const result = { edition, volumes };
   writeCache(ctx, cacheKey, result);
-  return result;
+  return prepareEditionResult(result);
 }
 
 /** Edition metadata only (no volume pages). Reuses a fresh full edition entry; failures are not cached. */
@@ -439,7 +453,7 @@ async function getEditionInfo(ctx, editionId, { signal, timeoutMs } = {}) {
   const id = toEditionId(editionId);
   if (!id) return null;
   const full = readCache(ctx, `mp_edition_vols_${id}`, EDITION_CACHE_TTL_MS);
-  if (full?.edition && full.edition.author !== undefined) return normalizeEdition(full.edition);
+  if (full?.edition && full.edition.author !== undefined) return prepareEditionResult(full).edition;
 
   const cacheKey = `mp_edition_info_${id}`;
   const cached = readCache(ctx, cacheKey, EDITION_CACHE_TTL_MS);
