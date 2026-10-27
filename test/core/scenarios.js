@@ -784,6 +784,11 @@ const scenarios = [
             const adminEn = await newSeries(admin, 'Kern Werk Admin EN', { work_key: work, shelf_id: adminShelf, language: 'en' });
             const adminDe = await newSeries(admin, 'Kern Werk Admin DE', { work_key: work, shelf_id: adminShelf, language: 'de' });
             assert.ok(adminEn < adminDe);
+            // one work with a numeric id for every edition that shares the key, in the list and the detail
+            const rows = (await admin('GET', '/mangas')).body.filter((m) => [adminEn, adminDe].includes(m.id));
+            assert.equal(rows.length, 2);
+            assert.ok(Number.isInteger(rows[0].work_id) && rows[0].work_id === rows[1].work_id, JSON.stringify(rows.map((m) => m.work_id)));
+            assert.equal((await ed('GET', `/mangas/${edSeries}`)).body.work_id, rows[0].work_id);
 
             const created = await ed('POST', '/anime', { title: 'Kern Werk Anime', episodes: 12, manga_id: edSeries });
             assert.equal(created.status, 201, JSON.stringify(created.body));

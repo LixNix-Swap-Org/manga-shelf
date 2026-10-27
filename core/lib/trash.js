@@ -51,7 +51,7 @@ function moveMangaToTrash(ctx, mangaId) {
     });
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
     // the linked anime keep naming the work, so every other edition of it still finds them
-    ctx.db.prepare('UPDATE animes SET work_key = ? WHERE manga_id = ?').run(manga.work_key || null, manga.id);
+    ctx.db.prepare('UPDATE animes SET work_id = ? WHERE manga_id = ?').run(manga.work_id || null, manga.id);
     ctx.db.prepare('DELETE FROM chapter_progress WHERE manga_id = ?').run(manga.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);
     return trashId;

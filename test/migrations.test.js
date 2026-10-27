@@ -378,6 +378,8 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         conn.exec(`
             DELETE FROM schema_migrations WHERE version >= 27;
             DROP INDEX idx_mangas_work_key;
+            DROP TRIGGER trg_mangas_work_insert;
+            DROP TRIGGER trg_mangas_work_update;
             ALTER TABLE mangas DROP COLUMN region;
             ALTER TABLE mangas DROP COLUMN work_key;
             ALTER TABLE mangas DROP COLUMN currency;
@@ -774,27 +776,51 @@ test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter
     }
 });
 
-test('migration 38 adds animes.work_key and fills it from the linked series', () => {
+test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept on the work_key by triggers', () => {
     const schema = require('../core/schema');
-    const file = path.join(dataDir, 'temp', 'anime-work.db');
+    const file = path.join(dataDir, 'temp', 'works.db');
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
         schema.applySchema(conn);
         conn.exec(`
-            DROP INDEX idx_animes_work_key;
-            ALTER TABLE animes DROP COLUMN work_key;
+            DROP TRIGGER trg_mangas_work_insert;
+            DROP TRIGGER trg_mangas_work_update;
+            DROP INDEX idx_mangas_work_id;
+            DROP INDEX idx_animes_work_id;
+            ALTER TABLE mangas DROP COLUMN work_id;
+            ALTER TABLE animes DROP COLUMN work_id;
+            DROP TABLE works;
             DELETE FROM schema_migrations WHERE version >= 38;
-            INSERT INTO mangas (id, title, work_key) VALUES (51, 'Frieren', 'anilist:118586'), (52, 'Ohne Werk', NULL);
-            INSERT INTO animes (id, title, manga_id) VALUES (61, 'Frieren', 51), (62, 'Ohne', 52), (63, 'Frei', NULL);
+            INSERT INTO mangas (id, title, work_key) VALUES (51, 'Frieren', 'anilist:118586'), (52, 'Frieren EN', 'anilist:118586'),
+                (53, 'Berserk', 'mal:2'), (54, 'Ohne Werk', NULL);
+            INSERT INTO animes (id, title, manga_id) VALUES (61, 'Frieren', 52), (62, 'Ohne', 54), (63, 'Frei', NULL);
         `);
         assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [38]);
-        const keys = conn.prepare('SELECT id, work_key FROM animes ORDER BY id').all().map(r => [r.id, r.work_key]);
-        assert.deepEqual(keys, [[61, 'anilist:118586'], [62, null], [63, null]], 'no key is made up for a series without one');
-        assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_animes_work_key'").get());
+        const works = conn.prepare('SELECT id, work_key, anilist_id, mal_id FROM works ORDER BY work_key').all().map(r => ({ ...r }));
+        assert.deepEqual(works.map(w => [w.work_key, w.anilist_id, w.mal_id]), [['anilist:118586', 118586, null], ['mal:2', null, 2]]);
+        const frieren = works[0].id;
+        const work = (table, id) => conn.prepare(`SELECT work_id FROM ${table} WHERE id = ?`).get(id).work_id;
+        assert.deepEqual([work('mangas', 51), work('mangas', 52), work('mangas', 54)], [frieren, frieren, null], 'both editions share one work');
+        assert.deepEqual([work('animes', 61), work('animes', 62), work('animes', 63)], [frieren, null, null], 'no work is made up');
+
+        // the triggers: a new key makes a work, a changed key moves the series and its linked anime, null clears it
+        conn.exec("INSERT INTO mangas (id, title, work_key) VALUES (55, 'Neu', 'manual:aaaaaaaaaaaaaaaaaaaaaaaa')");
+        const manual = conn.prepare("SELECT id FROM works WHERE work_key = 'manual:aaaaaaaaaaaaaaaaaaaaaaaa'").get().id;
+        assert.equal(work('mangas', 55), manual);
+        conn.exec("UPDATE mangas SET work_key = 'mal:2' WHERE id = 52");
+        assert.deepEqual([work('mangas', 52), work('animes', 61)], [works[1].id, works[1].id]);
+        conn.exec('UPDATE mangas SET work_key = NULL WHERE id = 52');
+        assert.deepEqual([work('mangas', 52), work('animes', 61)], [null, null]);
+        // an unlinked anime follows when the last edition of its work moves to another key (a merge of work groups)
+        conn.exec(`UPDATE animes SET work_id = ${manual} WHERE id = 63`);
+        conn.exec("UPDATE mangas SET work_key = 'anilist:118586' WHERE id = 55");
+        assert.equal(work('animes', 63), frieren);
+
         conn.exec('DELETE FROM schema_migrations WHERE version >= 38');
         schema.runSequentialMigrations(conn);
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM works').get().n, 3);
     } finally {
         conn.close();
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });

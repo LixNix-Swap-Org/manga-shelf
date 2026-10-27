@@ -97,18 +97,18 @@ function visibleManga(ctx, mangaId) {
     return manga && access.accessibleShelfIds(ctx).includes(manga.shelf_id) ? { id: manga.id, title: manga.title } : null;
 }
 
-/** The work key a link to this series carries (null without a series or without a key; never made up). */
-function workKeyOf(ctx, mangaId) {
+/** The work (works.id) a link to this series carries (null without a series or without a work; never made up). */
+function workIdOf(ctx, mangaId) {
     if (mangaId === null || mangaId === undefined) return null;
-    const row = ctx.db.prepare('SELECT work_key FROM mangas WHERE id = ?').get(mangaId);
-    return (row && row.work_key) || null;
+    const row = ctx.db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(mangaId);
+    return (row && row.work_id) || null;
 }
 
 /**
  * The series link of anime rows as the caller may see it, with a constant number of queries (animeId narrows it to one row).
  * Returns row => { manga: { id, title } | null, via_work, elsewhere }: the linked series when it is in a shelf the caller
- * can see, else the caller's own edition of the same work (the current key of the linked series, or the stored
- * animes.work_key once that series is gone; the caller's default language first, then the lowest id), else only
+ * can see, else the caller's own edition of the same work (the current work of the linked series, or the stored
+ * animes.work_id once that series is gone; the caller's default language first, then the lowest id), else only
  * `elsewhere` when the linked series lives in a foreign shelf. Nothing about a foreign series leaves this function.
  */
 function mangaLinkResolver(ctx, animeId = null) {
@@ -116,25 +116,25 @@ function mangaLinkResolver(ctx, animeId = null) {
     const animeFilter = animeId === null ? '' : ' AND id = ?';
     const joinedFilter = animeId === null ? '' : ' AND a.id = ?';
     const animeParams = animeId === null ? [] : [animeId];
-    const linked = new Map(ctx.db.prepare(`SELECT id, title, shelf_id, work_key FROM mangas
+    const linked = new Map(ctx.db.prepare(`SELECT id, title, shelf_id, work_id FROM mangas
         WHERE id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL${animeFilter})`).all(...animeParams).map((m) => [m.id, m]));
     const scope = access.inShelves('m.shelf_id', shelves);
-    const editions = ctx.db.prepare(`SELECT m.id, m.title, m.language, m.work_key FROM mangas m
-        WHERE m.work_key IS NOT NULL AND ${scope.sql} AND m.work_key IN (
-            SELECT work_key FROM animes WHERE work_key IS NOT NULL${animeFilter}
-            UNION SELECT l.work_key FROM mangas l JOIN animes a ON a.manga_id = l.id WHERE l.work_key IS NOT NULL${joinedFilter}
+    const editions = ctx.db.prepare(`SELECT m.id, m.title, m.language, m.work_id FROM mangas m
+        WHERE m.work_id IS NOT NULL AND ${scope.sql} AND m.work_id IN (
+            SELECT work_id FROM animes WHERE work_id IS NOT NULL${animeFilter}
+            UNION SELECT l.work_id FROM mangas l JOIN animes a ON a.manga_id = l.id WHERE l.work_id IS NOT NULL${joinedFilter}
         ) ORDER BY m.id`).all(...scope.params, ...animeParams, ...animeParams);
     const language = ctx.user ? readProfile(ctx.db, ctx.user.id).default_language : 'de';
-    const byKey = new Map();
+    const byWork = new Map();
     for (const m of editions) {
-        const best = byKey.get(m.work_key);
-        if (!best || (best.language !== language && m.language === language)) byKey.set(m.work_key, m);
+        const best = byWork.get(m.work_id);
+        if (!best || (best.language !== language && m.language === language)) byWork.set(m.work_id, m);
     }
     return (row) => {
         const series = row.manga_id ? linked.get(row.manga_id) : null;
         if (series && shelves.includes(series.shelf_id)) return { manga: { id: series.id, title: series.title }, via_work: false, elsewhere: false };
-        const key = series ? series.work_key : row.work_key;
-        const own = key ? byKey.get(key) : null;
+        const work = series ? series.work_id : row.work_id;
+        const own = work ? byWork.get(work) : null;
         if (own) return { manga: { id: own.id, title: own.title }, via_work: true, elsewhere: false };
         return { manga: null, via_work: false, elsewhere: Boolean(series) };
     };
@@ -420,7 +420,7 @@ function insertPrepared(ctx, prepared) {
     const existing = duplicateOf(ctx, meta.anilist_id, meta.mal_id, meta.tmdb_id ? meta : null);
     if (existing) return { id: existing, created: false };
     const mangaId = prepared.manga_id ?? null;
-    const id = store.insertFromMeta(ctx, meta, prepared.images || {}, { manga_id: mangaId, work_key: workKeyOf(ctx, mangaId), title: prepared.title ?? null });
+    const id = store.insertFromMeta(ctx, meta, prepared.images || {}, { manga_id: mangaId, work_id: workIdOf(ctx, mangaId), title: prepared.title ?? null });
     writeProgress(ctx, id, ctx.user.id, { status: 'Geplant' });
     return { id, created: true };
 }
@@ -461,11 +461,11 @@ async function create(ctx, { body }) {
         const episodes = cleanEpisodes(body.episodes);
         const kind = cleanKind(body.kind) || 'anime';
         const insert = ctx.db.prepare(`
-            INSERT INTO animes (title, episodes, manga_id, work_key, notes, kind, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO animes (title, episodes, manga_id, work_id, notes, kind, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
         created = ctx.db.transaction(() => {
-            const id = Number(insert.run(title, episodes ?? null, mangaId, workKeyOf(ctx, mangaId), notes, kind, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
+            const id = Number(insert.run(title, episodes ?? null, mangaId, workIdOf(ctx, mangaId), notes, kind, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
             writeProgress(ctx, id, userId, { status: 'Geplant' });
             return { id, watched: watched ? applyWatched(ctx, id, userId, watched) : null };
         });
@@ -510,8 +510,8 @@ function update(ctx, { params, body }) {
         if (mangaId === null && mangaLinkResolver(ctx, id)(row).via_work) throw notFound('Reihe');
         mangaRef(ctx, mangaId);
         columns.manga_id = mangaId;
-        // clearing a link that is already gone keeps the stored key, which still names the work for the other editions
-        if (mangaId !== null || row.manga_id) columns.work_key = workKeyOf(ctx, mangaId);
+        // clearing a link that is already gone keeps the stored work, which still names it for the other editions
+        if (mangaId !== null || row.manga_id) columns.work_id = workIdOf(ctx, mangaId);
     }
     const sourced = Boolean(row.anilist_id || row.mal_id || row.tmdb_id);
     if (body.episodes !== undefined) {
