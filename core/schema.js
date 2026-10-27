@@ -716,6 +716,15 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
                 `);
             }
+        },
+        {
+            version: 37,
+            name: 'add_volumes_sort_after',
+            up: (d) => {
+                // A special (guidebook, fanbook, anthology) can stand right after regular volume N instead of at the end
+                const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!cols.has('sort_after')) d.exec('ALTER TABLE volumes ADD COLUMN sort_after REAL;');
+            }
         }
     ];
 }
@@ -872,6 +881,7 @@ function applySchema(conn, options = {}) {
             target_price REAL,
             manga_passion_volume_id INTEGER DEFAULT NULL,
             language TEXT,
+            sort_after REAL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE
         );

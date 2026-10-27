@@ -209,6 +209,15 @@ export const getVolumeProgressCounts = (volumes) => {
   };
 };
 
+const SORT_AFTER_OFFSET = 0.001;
+
+/** Regular volume a special stands after (volumes.sort_after), as a number; null for none or another type. */
+export const sortAfterOf = (vol) => {
+  if (inferVolumeType(vol) !== 'special' || vol.sort_after === null || vol.sort_after === undefined || vol.sort_after === '') return null;
+  const n = Number(vol.sort_after);
+  return Number.isFinite(n) ? n : null;
+};
+
 export const getVolumeSortInfo = (vol) => {
   const rawType = inferVolumeType(vol);
 
@@ -233,6 +242,11 @@ export const getVolumeSortInfo = (vol) => {
     rank = 2;
     subRank = 2;
   } else if (rawType === 'special') {
+    const after = sortAfterOf(vol);
+    if (after !== null) {
+      // right behind volume N and its special edition, ahead of N.5 (also in descending order); mirrors volumeOrderSql()
+      return { rank: 1, num: after + SORT_AFTER_OFFSET, subRank: 3, raw: String(vol.volume_number), type: rawType };
+    }
     rank = 3;
     subRank = 3;
   } else if (isNaN(parseFloat(vol.volume_number)) && !match) {

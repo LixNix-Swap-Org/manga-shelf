@@ -4,7 +4,7 @@ const { inferVolumeType } = require('./lib/volumeType');
 const { isLegacyReadStatus, OWNED_STATUS } = require('./lib/owners');
 const { canonicalVolumeNumber } = require('./lib/volumeNumber');
 const { msg, msgData, isMsg } = require('./errors');
-const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS } = require('./lib/validate');
+const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, parseSortAfter } = require('./lib/validate');
 const { parseLanguage, normalizeRegion, normalizeCurrency, isWorkKey } = require('./lib/language');
 
 const DELIMITER = ';';
@@ -17,7 +17,8 @@ const COLLECTING_STATUSES = ['aktiv', 'pausiert', 'abgebrochen'];
 // "Reihenverlag" is the series publisher, "Verlag" a volume's differing publisher (empty = the series').
 // The series wish is on every row of the series, the other series fields only on its first row.
 // "Gelesen von" and the owners stay the last columns. "Sprache" is a language code; region, currency and work key of the
-// edition follow it, "Bandsprache" (empty = the series') is a volume's own language. "Format" (empty = print),
+// edition follow it, "Bandsprache" (empty = the series') is a volume's own language, "Einsortiert nach" the regular
+// volume a special stands after (volumes.sort_after). "Format" (empty = print),
 // "Gesamtkapitel" and "Kapitel gelesen von" ("anna: 150, ben: 30") belong to webtoons.
 const COLUMNS = [
     ['series', 'Reihe'], ['series_publisher', 'Reihenverlag'], ['publisher', 'Verlag'], ['author', 'Autor'], ['type', 'Typ'],
@@ -30,7 +31,7 @@ const COLUMNS = [
     ['series_work_key', 'Werk'], ['series_tags', 'Tags'],
     ['series_mp_id', 'Manga-Passion-ID'], ['series_cover', 'Reihen-Cover'], ['series_banner', 'Reihen-Banner'],
     ['series_description', 'Beschreibung'], ['cover_image', 'Band-Cover'], ['images', 'Bilder'], ['mp_volume_id', 'MP-Band-ID'],
-    ['volume_language', 'Bandsprache'], ['series_format', 'Format'], ['series_chapters', 'Gesamtkapitel'],
+    ['volume_language', 'Bandsprache'], ['sort_after', 'Einsortiert nach'], ['series_format', 'Format'], ['series_chapters', 'Gesamtkapitel'],
     ['series_chapter_readers', 'Kapitel gelesen von'], ['readers', 'Gelesen von'], ['owners', 'Besitzer']
 ];
 // Series fields that the export writes only on the first row of a series
@@ -107,7 +108,7 @@ const formatImages = (v) => {
     }
 };
 
-const EXPORT_FORMATTERS = { price: formatAmount, target_price: formatAmount, isbn: formatIsbn, images: formatImages };
+const EXPORT_FORMATTERS = { price: formatAmount, target_price: formatAmount, sort_after: formatAmount, isbn: formatIsbn, images: formatImages };
 
 /** rows: objects keyed by COLUMNS. With a BOM so that Excel detects UTF-8. */
 const csvHeader = () => COLUMNS.map(c => c[1]).join(DELIMITER);
@@ -218,7 +219,7 @@ const HEADER_ALIASES = {
     series_mp_id: ['mangapassionid', 'mangapassionedition', 'mpid'], series_cover: ['reihencover', 'seriescover'],
     series_banner: ['reihenbanner', 'banner'], series_description: ['beschreibung', 'description'],
     cover_image: ['bandcover', 'cover', 'volumecover'], images: ['bilder', 'images', 'fotos'],
-    mp_volume_id: ['mpbandid', 'mpvolumeid'], volume_language: ['bandsprache', 'volumelanguage'],
+    mp_volume_id: ['mpbandid', 'mpvolumeid'], volume_language: ['bandsprache', 'volumelanguage'], sort_after: ['einsortiertnach', 'sortafter'],
     series_format: ['format', 'reihenformat', 'seriesformat'], series_chapters: ['gesamtkapitel', 'totalchapters', 'chapters'],
     series_chapter_readers: ['kapitelgelesenvon', 'chaptersreadby', 'chapterprogress']
 };
@@ -557,6 +558,10 @@ function mapCsvRows(rows) {
         const volumeLanguageRaw = get(row, 'volume_language');
         const volumeLanguage = volumeLanguageRaw ? parseLanguage(volumeLanguageRaw) : null;
         if (volumeLanguageRaw && !volumeLanguage) warnings.push(ignoredValue(line, 'Bandsprache', shorten(volumeLanguageRaw)));
+        // only a special stands after a regular volume; on any other type the cell means nothing
+        const sortAfterRaw = get(row, 'sort_after');
+        const sortAfter = type === 'special' ? parseSortAfter(sortAfterRaw) : { value: null };
+        if (sortAfter.error) warnings.push(ignoredValue(line, 'Einsortiert nach', shorten(sortAfterRaw)));
         const mpVolumeId = parseId(get(row, 'mp_volume_id'));
         if (mpVolumeId.error) return fail(msg('Ungültige MP-Band-ID „{value}“', { value: get(row, 'mp_volume_id') }));
 
@@ -575,6 +580,7 @@ function mapCsvRows(rows) {
             condition: get(row, 'condition') || null, pages: pages.value, notes,
             cover_image: coverImage, images: imageList.length ? JSON.stringify(imageList) : null, manga_passion_volume_id: mpVolumeId.value,
             language: volumeLanguage ? volumeLanguage.language : null,
+            sort_after: sortAfter.error ? null : sortAfter.value,
             series_meta: seriesMeta,
             owners: ownersRaw.split(/[,|]/).map(s => s.trim()).filter(Boolean),
             owners_raw: ownersRaw,

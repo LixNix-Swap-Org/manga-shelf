@@ -231,6 +231,7 @@
   "Ansicht:": "보기:",
   "Anteil jedes Verlags am Wert aller vorhandenen Bände": "보유 중인 모든 권의 가치에서 각 출판사가 차지하는 비율",
   "Anteil:": "비율:",
+  "Anthologie": "앤솔러지",
   "Antwort ist kein JSON": "응답이 JSON이 아니에요",
   "Antwort ohne Bild-URL": "이미지 URL이 없는 응답",
   "Anwenden": "적용",
@@ -243,6 +244,7 @@
   "Art": "종류",
   "Art der Vorschläge": "추천 종류",
   "Art des Eintrags": "항목 종류",
+  "Artbook": "아트북",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "“{name}” 계정에도 비밀번호가 없어요. 이후에 새 비밀번호는 다른 관리자가 사용자 관리에서 설정하거나, 서버에서 콘솔 명령 “{command}”로만 설정할 수 있어요.",
   "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
     "other": "웹툰 {n}개의 화수 진행 상황도 삭제돼요."
@@ -375,6 +377,7 @@
   "Bandnummer": "권 번호",
   "Bandnummer in einer Reihen-Zeile wird ignoriert": "시리즈 행의 권 번호는 무시돼요",
   "Bandnummer unbekannt – bitte eintragen und hinzufügen.": "권 번호를 알 수 없어요 – 입력한 뒤 추가해 주세요.",
+  "Bandnummer von 0 bis 5000, z. B. 12": "0~5000 사이의 권 번호, 예: 12",
   "Bandzahl auf {official_total} korrigieren": "권수를 {official_total}(으)로 수정",
   "Band|Bände": {
     "other": "권"
@@ -879,6 +882,7 @@
   "Einmal mit ALLOW_NEWER_SCHEMA=1 starten ({os}):": "ALLOW_NEWER_SCHEMA=1로 한 번 시작해 주세요 ({os}):",
   "Einrichtungscode": "설정 코드",
   "Einrichtungscode fehlt oder ist falsch. Er steht in der Server-Konsole beim Start (oder in SETUP_TOKEN).": "설정 코드가 없거나 올바르지 않아요. 서버 시작 시 콘솔에 표시돼요 (또는 SETUP_TOKEN).",
+  "Einsortieren nach Band": "다음 권 뒤에 배치",
   "Einspielen": "복원",
   "Einspielen fehlgeschlagen": "복원에 실패했어요",
   "Eintrag \"{name}\" ist beschädigt": "항목 “{name}”이(가) 손상되었어요",
@@ -947,6 +951,7 @@
   "Etwas ist schiefgelaufen": "문제가 발생했어요",
   "FEHLT": "미보유",
   "Falsche Eingaben zählen zur Anmeldesperre deines Kontos.": "잘못 입력하면 내 계정의 로그인 잠금 횟수에 포함돼요.",
+  "Fanbook": "팬북",
   "Fantasy": "판타지",
   "Farbe": "색상",
   "Farben wie in der Liste unten.": "아래 목록과 같은 색이에요.",
@@ -1201,6 +1206,7 @@
   "Gruppieren": "그룹화",
   "Gruppieren: {label}": "그룹화: {label}",
   "Größte Verlage im Regal": "책장의 주요 출판사",
+  "Guidebook": "가이드북",
   "Gut": "좋음",
   "Gut (Normal gelesen)": "좋음 (보통으로 읽음)",
   "Gültige manga_id und Bandnummer erforderlich": "올바른 manga_id와 권 번호가 필요해요",
@@ -1458,6 +1464,7 @@
   "Laden-Scan": "매장 스캔",
   "Laufend": "연재 중",
   "Laufzeit: {n} Min.": "러닝타임: {n}분",
+  "Leer lassen, damit der Eintrag hinter allen Bänden steht.": "비워 두면 모든 권 뒤에 배치됩니다.",
   "Leeren": "비우기",
   "Leertaste": "스페이스바",
   "Lege an…": "만드는 중…",
@@ -2172,6 +2179,7 @@
   "Sonderausgabe/Schuber|Sonderausgaben/Schuber": {
     "other": "특별판/박스 세트"
   },
+  "Sonderband": "특별권",
   "Sonstige ({count})": "기타 ({count})",
   "Sonstiges": "기타",
   "Sortierung": "정렬",
@@ -2383,6 +2391,7 @@
   "Ungültige Outbox-Änderung": "올바르지 않은 Outbox 변경이에요",
   "Ungültige Papierkorb-ID": "올바르지 않은 휴지통 ID예요",
   "Ungültige Parameter": "올바르지 않은 매개변수예요",
+  "Ungültige Position (Bandnummer von 0 bis 5000)": "잘못된 위치(권 번호 0~5000)",
   "Ungültige Priorität (0 bis 3)": "올바르지 않은 우선순위예요 (0~3)",
   "Ungültige Priorität „{value}“ (0 bis 3)": "올바르지 않은 우선순위 “{value}” (0~3)",
   "Ungültige Regal-Rolle (editor oder viewer)": "잘못된 책장 역할이에요 (editor 또는 viewer)",
@@ -2732,6 +2741,7 @@
   "als gelesen markiert": "읽음으로 표시됨",
   "als ungelesen markiert": "안 읽음으로 표시됨",
   "als vorhanden (mir) markiert": "보유(나)로 표시됨",
+  "am Ende": "맨 끝",
   "anderen": "다른 사람",
   "auf diesem Server abgeschaltet (UPDATE_DOWNGRADE)": "이 서버에서는 꺼져 있음 (UPDATE_DOWNGRADE)",
   "auf „{status}“ gesetzt": "“{status}”(으)로 설정됨",

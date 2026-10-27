@@ -95,6 +95,34 @@ const scenarios = [
         }
     },
     {
+        name: 'volumes: special placed after a regular volume (sort_after), Band 0 and half volumes in order',
+        async run({ ed }) {
+            const id = await newSeries(ed, 'Kern Reihe Sonderband');
+            for (const n of ['1', '2', '3', '0', '2.5']) await newVolume(ed, id, n);
+            await newVolume(ed, id, '2', { type: 'special_edition' });
+            const guide = await newVolume(ed, id, 'Guidebook', { type: 'special', sort_after: '2' });
+            await newVolume(ed, id, 'Fanbook', { type: 'special' });
+            const box = await newVolume(ed, id, '1', { type: 'schuber', sort_after: '1' });
+            const order = async () => (await ed('GET', `/mangas/${id}`)).body.volumes.map(v => `${v.type}:${v.volume_number}`);
+            assert.deepEqual(await order(), [
+                'volume:0', 'volume:1', 'volume:2', 'special_edition:2', 'special:Guidebook', 'volume:2.5', 'volume:3',
+                'schuber:1', 'special:Fanbook'
+            ]);
+            const stored = (await ed('GET', `/mangas/${id}`)).body.volumes;
+            assert.deepEqual([stored.find(v => v.id === guide).sort_after, stored.find(v => v.id === box).sort_after], [2, null],
+                'only a special keeps sort_after');
+
+            const bad = await ed('PUT', `/volumes/${guide}`, { sort_after: '-1' });
+            assert.deepEqual([bad.status, bad.body.error], [400, 'Ungültige Position (Bandnummer von 0 bis 5000)']);
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '0,5' })).status, 200);
+            assert.equal((await order()).indexOf('special:Guidebook'), 1, 'after Band 0, before Band 1');
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '' })).status, 200);
+            assert.equal((await order()).at(-1), 'special:Guidebook', 'empty = after everything');
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '3', type: 'volume', volume_number: '4' })).status, 200);
+            assert.equal((await ed('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === guide).sort_after, null, 'a retyped entry drops it');
+        }
+    },
+    {
         name: 'owners: toggle, dates, rights',
         async run({ admin, ed, vis, users }) {
             const id = await newSeries(admin, 'Kern Reihe C');

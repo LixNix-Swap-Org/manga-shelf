@@ -124,6 +124,7 @@ export default function useVolumeActions({
   const [newVolumePrice, setNewVolumePrice] = useState('');
   const [newVolumeCover, setNewVolumeCover] = useState('');
   const [newVolumeIsbn, setNewVolumeIsbn] = useState(''); // a scanned ISBN the new volume is stored with
+  const [newVolumeSortAfter, setNewVolumeSortAfter] = useState(''); // a special: the regular volume it stands after ('' = at the end)
   const [uploadingNewCover, setUploadingNewCover] = useState(false);
   // 'Gelesen am' of the read toggle: only a date the user picked for this series (null = now); `on` is the day of the pick
   const [readPick, setReadPick] = useState(null);
@@ -234,7 +235,8 @@ export default function useVolumeActions({
           price: newVolumePrice ? newVolumePrice.trim() : null,
           cover_image: newVolumeCover || null,
           images: newVolumeCover ? [newVolumeCover] : [],
-          ...(newVolumeIsbn ? { isbn: newVolumeIsbn } : {})
+          ...(newVolumeIsbn ? { isbn: newVolumeIsbn } : {}),
+          ...(newVolumeType === 'special' && newVolumeSortAfter.trim() ? { sort_after: newVolumeSortAfter.trim() } : {})
         }
       });
       if (res.ok) {
@@ -244,6 +246,7 @@ export default function useVolumeActions({
         setNewVolumeReleaseDate('');
         setNewVolumeCoverValue('');
         setNewVolumeType('volume');
+        setNewVolumeSortAfter('');
         releaseRemindersChanged();
         await fetchManga();
       } else {
@@ -472,6 +475,7 @@ export default function useVolumeActions({
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn,
+    newVolumeSortAfter, setNewVolumeSortAfter,
     readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,

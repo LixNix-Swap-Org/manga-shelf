@@ -99,6 +99,7 @@ function VolumeEditDialog({
                   editVolForm={editVolForm}
                   setEditVolForm={setEditVolForm}
                   error={showErrors ? fieldErrors.volume_number : ''}
+                  sortAfterError={showErrors ? fieldErrors.sort_after : ''}
                 />
                 <StatusPriceFields
                   editVolForm={editVolForm}

@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { regularVolumeNumber } from '../../utils/volumeHelpers';
 import { Barcode, Camera, Check, Plus, X } from 'lucide-react';
 import { assetImgProps } from '../../utils/api';
 import FilePickerButton from '../common/FilePickerButton';
@@ -11,6 +12,27 @@ const LABEL = 'block text-xs font-semibold text-slate-400 mb-1 truncate';
 
 /** Stable id of the number field: the scan prefill focuses it. */
 export const ADD_VOLUME_NUMBER_ID = 'add-volume-number';
+
+// i18n
+const SPECIAL_LABELS = ['Guidebook', 'Fanbook', 'Artbook', 'Anthologie'];
+
+/** Highest regular volume number of the series (0 without any). */
+export const highestRegularNumber = (volumes = []) => volumes.reduce((max, v) => Math.max(max, regularVolumeNumber(v) ?? 0), 0);
+
+/**
+ * One-click presets for entries outside the numbered run: { key, name (translated), type, number, sortAfter }. Band 0 and a
+ * half volume stay regular volumes (they sort by their number and count as extras); a guidebook, fanbook, artbook or
+ * anthology is a special that stands right after the highest regular volume.
+ */
+export function specialPresets(volumes = []) {
+  const highest = highestRegularNumber(volumes);
+  const after = highest > 0 ? String(highest) : '';
+  return [
+    { key: 'zero', name: t('Band {number}', { number: '0' }), type: 'volume', number: '0', sortAfter: '' },
+    { key: 'half', name: t('Band {number}', { number: `${highest}.5` }), type: 'volume', number: `${highest}.5`, sortAfter: '' },
+    ...SPECIAL_LABELS.map(label => ({ key: label, name: t(label), type: 'special', number: t(label), sortAfter: after }))
+  ];
+}
 
 /** Inline form to add a single volume, special edition, schuber or special. Purely presentational: state and handlers via props. */
 export default function AddVolumeBar({
@@ -33,6 +55,9 @@ export default function AddVolumeBar({
   onCancelUpload,
   newVolumeIsbn = '',
   setNewVolumeIsbn,
+  newVolumeSortAfter = '',
+  setNewVolumeSortAfter,
+  volumes = [],
   currency = 'EUR'
 }) {
   const ids = useId();
@@ -44,6 +69,13 @@ export default function AddVolumeBar({
       return;
     }
     handleAddSingleVolume(e);
+  };
+
+  const applyPreset = (preset) => {
+    setNewVolumeType(preset.type);
+    setNewVolumeNum(preset.number);
+    setNewVolumeSortAfter?.(preset.sortAfter);
+    document.getElementById(ADD_VOLUME_NUMBER_ID)?.focus();
   };
 
   const handlePickCover = (e) => {
@@ -65,6 +97,22 @@ export default function AddVolumeBar({
             <p className="text-xs text-slate-400 mt-0.5">
               {t('Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben')}
             </p>
+            {setNewVolumeSortAfter && (
+              <div role="group" aria-labelledby={`${ids}-presets`} className="mt-2 flex flex-wrap items-center gap-1.5 [@media(pointer:coarse)]:gap-2.5">
+                <span id={`${ids}-presets`} className="text-xs font-semibold text-slate-400">{t('Sonderband')}</span>
+                {specialPresets(volumes).map(preset => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    data-preset={preset.key}
+                    onClick={() => applyPreset(preset)}
+                    className="hit-44 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-medium text-slate-200 hover:border-brand-500 hover:text-white"
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div id="add-volume-fields" className="grid grid-cols-2 grid-flow-row-dense items-end gap-2.5 w-full sm:flex sm:flex-wrap xl:w-auto">
@@ -99,6 +147,21 @@ export default function AddVolumeBar({
                 onChange={e => setNewVolumeNum(e.target.value)} 
               />
             </div>
+
+            {newVolumeType === 'special' && setNewVolumeSortAfter && (
+              <div className="min-w-0 sm:w-36 sm:shrink-0">
+                <label htmlFor={`${ids}-after`} className={LABEL}>{t('Einsortieren nach Band')}</label>
+                <input
+                  id={`${ids}-after`}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={t('am Ende')}
+                  className="input-field text-base sm:text-sm py-2 px-3 w-full"
+                  value={newVolumeSortAfter}
+                  onChange={e => setNewVolumeSortAfter(e.target.value)}
+                />
+              </div>
+            )}
 
             <div className="min-w-0 col-span-2 sm:w-44 sm:shrink-0">
               <label htmlFor={`${ids}-price`} className={LABEL}>{rich('Preis{hint}', { hint: <span className="sr-only"> {t('in {currency}', { currency: currencyName(currency) })}</span> })}</label>
