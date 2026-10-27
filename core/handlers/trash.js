@@ -181,8 +181,8 @@ function restoreManga(ctx, entry, payload) {
     // volumes of this series deleted on their own follow it, as on a move
     ctx.db.prepare("UPDATE trash SET shelf_id = ? WHERE kind = 'volume' AND manga_id = ?").run(edition.shelf_id, manga.id);
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
-    const relink = ctx.db.prepare('UPDATE animes SET manga_id = ? WHERE id = ? AND manga_id IS NULL');
-    for (const animeId of animeIds) relink.run(manga.id, animeId);
+    const relink = ctx.db.prepare('UPDATE animes SET manga_id = ?, work_key = ? WHERE id = ? AND manga_id IS NULL');
+    for (const animeId of animeIds) relink.run(manga.id, edition.work_key, animeId);
 }
 
 function restoreVolume(ctx, entry, payload) {

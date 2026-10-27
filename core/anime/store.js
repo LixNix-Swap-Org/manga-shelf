@@ -12,7 +12,7 @@ const parseJson = (text, fallback) => {
 const splitList = (text) => (text ? String(text).split(',').map((s) => s.trim()).filter(Boolean) : []);
 const joinList = (list) => (Array.isArray(list) && list.length ? list.join(', ') : null);
 
-/** Snapshot columns of an AnimeMeta (not title/notes/manga_id, which belong to the user). */
+/** Snapshot columns of an AnimeMeta (not title/notes/manga_id/work_key, which belong to the user). */
 function snapshotColumns(meta, nowMs) {
     const next = meta.next_airing;
     return {
@@ -129,7 +129,7 @@ function rememberAired(ctx, row, columns, nowMs) {
     ctx.db.prepare('INSERT OR IGNORE INTO anime_airings (anime_id, episode, at) VALUES (?, ?, ?)').run(row.id, row.next_airing_episode, row.next_airing_at);
 }
 
-function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {}) {
+function insertFromMeta(ctx, meta, images, { manga_id = null, work_key = null, title = null } = {}) {
     const nowMs = ctx.now().getTime();
     const columns = {
         ...snapshotColumns(meta, nowMs),
@@ -141,6 +141,7 @@ function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {
         tmdb_kind: meta.tmdb_kind ?? null,
         title: title || meta.title.preferred || 'Ohne Titel',
         manga_id,
+        work_key,
         updated_by: ctx.user ? ctx.user.id : null,
         updated_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19),
         created_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19)

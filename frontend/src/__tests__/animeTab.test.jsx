@@ -910,6 +910,16 @@ describe('AnimeDetailModal', () => {
       expect(screen.getByText('12 / 1180+')).toBeTruthy();
     });
 
+    it("a series shown through the caller's own edition of the work: the link select is locked and says why", async () => {
+      const update = vi.fn();
+      openEditable(entry({ manga_id: 9, manga_via_work: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
+      await act(async () => {});
+      const select = screen.getByLabelText('Verknüpfte Reihe');
+      expect(select.disabled).toBe(true);
+      expect(select.value).toBe('9');
+      expect(document.getElementById(select.getAttribute('aria-describedby')).textContent).toBe('Über deine Ausgabe dieses Werks verknüpft');
+    });
+
     it('a fresh counter is sent without a status, so the server makes it "Schaue"', async () => {
       const updateProgress = vi.fn(async () => ({}));
       openEditable(entry({ my_progress: null, progress: [] }), { updateProgress });

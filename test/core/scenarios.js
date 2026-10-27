@@ -770,6 +770,58 @@ const scenarios = [
         }
     },
     {
+        name: 'anime linked to the work: each caller sees their own edition, a foreign link stays hidden, the key outlives the series',
+        async run({ admin, ed, vis }) {
+            const work = 'anilist:990001';
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const edShelf = await shelfOf(ed, 'Kern Werk Regal Ed');
+            const adminShelf = await shelfOf(admin, 'Kern Werk Regal Admin');
+            const edSeries = await newSeries(ed, 'Kern Werk Ed', { work_key: work, shelf_id: edShelf });
+            const adminEn = await newSeries(admin, 'Kern Werk Admin EN', { work_key: work, shelf_id: adminShelf, language: 'en' });
+            const adminDe = await newSeries(admin, 'Kern Werk Admin DE', { work_key: work, shelf_id: adminShelf, language: 'de' });
+            assert.ok(adminEn < adminDe);
+
+            const created = await ed('POST', '/anime', { title: 'Kern Werk Anime', episodes: 12, manga_id: edSeries });
+            assert.equal(created.status, 201, JSON.stringify(created.body));
+            const id = created.body.id;
+            const fields = (answer) => Object.fromEntries(Object.entries(answer).filter(([key]) => key.startsWith('manga')));
+            const listed = async (api) => fields((await api('GET', '/anime')).body.find((a) => a.id === id));
+            const detail = async (api) => fields((await api('GET', `/anime/${id}`)).body);
+
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
+            assert.deepEqual(await detail(ed), { manga_id: edSeries, manga: { id: edSeries, title: 'Kern Werk Ed' } });
+            // the caller's own edition of the work, in their default language before the lower id
+            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
+            assert.deepEqual(await detail(admin), { manga_id: adminDe, manga_via_work: true, manga: { id: adminDe, title: 'Kern Werk Admin DE' } });
+            assert.doesNotMatch(JSON.stringify((await admin('GET', `/anime/${id}`)).body), /Kern Werk Ed/);
+            // no edition in a shelf of their own: only the one bit
+            assert.deepEqual(await listed(vis), { manga_id: null, manga_linked_elsewhere: true });
+            assert.deepEqual(await detail(vis), { manga_id: null, manga_linked_elsewhere: true, manga: null });
+
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404, 'a link shown through the work is not the caller\'s to undo');
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: adminDe })).status, 404, 'the foreign link is never overwritten');
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
+
+            // the linked series goes: the stored key still names the work
+            assert.equal((await ed('DELETE', `/mangas/${edSeries}`)).status, 200);
+            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
+            assert.deepEqual(await listed(ed), { manga_id: null });
+            assert.deepEqual(await listed(vis), { manga_id: null });
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404);
+            const relinked = await admin('PUT', `/anime/${id}`, { manga_id: adminEn });
+            assert.equal(relinked.status, 200, JSON.stringify(relinked.body));
+            assert.deepEqual(fields(relinked.body), { manga_id: adminEn, manga: { id: adminEn, title: 'Kern Werk Admin EN' } });
+            assert.deepEqual(await listed(ed), { manga_id: null, manga_linked_elsewhere: true });
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 200, 'a link of the caller\'s own shelf can be undone');
+            assert.deepEqual(await listed(admin), { manga_id: null });
+            assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

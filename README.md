@@ -202,7 +202,7 @@ Never run an old version permanently on the migrated database: what it writes (e
 
 Read the admin notes of the 3.0.0 section in [`CHANGELOG.md`](CHANGELOG.md) first. In short:
 
-* **Database migrations 12–36** run at the first start. Before any pending migration the server writes `data/backups/vor-update-v<old>-auf-v<new>-….zip`; if that fails (disk full, read-only folder) it does not start and changes nothing. `MIGRATE_WITHOUT_SNAPSHOT=1` migrates without it, once and deliberately.
+* **Database migrations 12–38** run at the first start. Before any pending migration the server writes `data/backups/vor-update-v<old>-auf-v<new>-….zip`; if that fails (disk full, read-only folder) it does not start and changes nothing. `MIGRATE_WITHOUT_SNAPSHOT=1` migrates without it, once and deliberately.
 * **Data changes:** migration 22 unifies known publisher spellings (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga"); migration 27 turns series languages into ISO codes ("Deutsch" → `de`), sets the currency `EUR` on every series and sets an unrecognised language to `de`, named in the start log, so check those series afterwards.
 * **Everyone signs in again once:** the session key moves to `data/secret.key`.
 * **Setup code and `TRUST_PROXY`** are new: a server without an admin needs the code, and behind a proxy `TRUST_PROXY` has to name it ([HTTPS and reverse proxy](#https-and-reverse-proxy)).

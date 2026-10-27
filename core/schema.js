@@ -725,6 +725,18 @@ function migrationList(log = silentLog) {
                 const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
                 if (!cols.has('sort_after')) d.exec('ALTER TABLE volumes ADD COLUMN sort_after REAL;');
             }
+        },
+        {
+            version: 38,
+            name: 'add_animes_work_key',
+            up: (d) => {
+                // An anime entry links to the work, so every caller can be shown their own edition of it
+                const cols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!cols.has('work_key')) d.exec('ALTER TABLE animes ADD COLUMN work_key TEXT;');
+                d.exec('CREATE INDEX IF NOT EXISTS idx_animes_work_key ON animes (work_key);');
+                d.exec(`UPDATE animes SET work_key = (SELECT m.work_key FROM mangas m WHERE m.id = animes.manga_id)
+                        WHERE manga_id IS NOT NULL AND work_key IS NULL`);
+            }
         }
     ];
 }
