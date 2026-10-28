@@ -25,6 +25,8 @@ export const buildVolumeForm = (vol) => {
     notes: vol.notes || '',
     // own edition language of the volume; '' = the series language (volumes.language NULL)
     language: vol.language || '',
+    // a special: the regular volume it stands after; '' = at the end (volumes.sort_after NULL)
+    sort_after: vol.sort_after !== null && vol.sort_after !== undefined ? String(vol.sort_after) : '',
     priority: String(vol.priority || 0),
     target_price: vol.target_price !== null && vol.target_price !== undefined ? String(vol.target_price) : '',
     cover_image: vol.cover_image || (volImages.length > 0 ? volImages[0] : ''),

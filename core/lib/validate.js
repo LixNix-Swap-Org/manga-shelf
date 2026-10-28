@@ -38,6 +38,18 @@ const parseIntInRange = (min, max) => (val) => {
     return Number.isInteger(n) && n >= min && n <= max ? { value: n } : { error: true };
 };
 const parsePages = parseIntInRange(1, 99999);
+
+/**
+ * Regular volume a special stands after (volumes.sort_after): 0 to 5000, at most one decimal ("12", "12,5" or 12.5).
+ * Empty clears it.
+ */
+const parseSortAfter = (val) => {
+    if (isBlank(val)) return { value: null };
+    const text = typeof val === 'number' ? String(val) : (typeof val === 'string' ? val.trim().replace(',', '.') : '');
+    if (!/^\d+(\.\d)?$/.test(text)) return { error: true };
+    const n = Number(text);
+    return n <= 5000 ? { value: n } : { error: true };
+};
 const parseYear = parseIntInRange(1900, 2999);
 
 // JSON booleans as well as "true"/"false"/"0"/"1" strings ("false" must not count as true)
@@ -179,7 +191,7 @@ const parseBulkSet = (set) => {
 
 module.exports = {
     VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, BULK_SET_FIELDS,
-    isBlank, parsePrice, parseIntInRange, parsePages, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
+    isBlank, parsePrice, parseIntInRange, parsePages, parseSortAfter, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
     isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId, parseSeriesFormat, parseTotalChapters,
     parseIdList, parseCondition, parseBulkSet
 };

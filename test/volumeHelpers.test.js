@@ -56,6 +56,30 @@ test('getVolumeSortInfo: volumes < numbered special editions < schuber < special
     assert.equal(special.rank, 3);
 });
 
+test('compareVolumesByNumber: a special with sort_after stands right after its volume, in both directions', async () => {
+    const { compareVolumesByNumber, getVolumeSortInfo, sortAfterOf } = await load();
+    const rows = [
+        { type: 'special', volume_number: 'Fanbook' },
+        { type: 'volume', volume_number: '3' },
+        { type: 'special', volume_number: 'Guidebook', sort_after: 2 },
+        { type: 'volume', volume_number: '2.5' },
+        { type: 'special_edition', volume_number: '2' },
+        { type: 'volume', volume_number: '2' },
+        { type: 'volume', volume_number: '0' },
+        { type: 'schuber', volume_number: 'Schuber 1', sort_after: 1 }
+    ];
+    const label = v => `${v.type}:${v.volume_number}`;
+    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b)).map(label), [
+        'volume:0', 'volume:2', 'special_edition:2', 'special:Guidebook', 'volume:2.5', 'volume:3', 'schuber:Schuber 1', 'special:Fanbook'
+    ]);
+    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b, true)).map(label).slice(0, 5), [
+        'volume:3', 'volume:2.5', 'special:Guidebook', 'volume:2', 'special_edition:2'
+    ]);
+    assert.equal(sortAfterOf({ type: 'schuber', volume_number: '1', sort_after: 1 }), null, 'only specials are placed');
+    assert.equal(sortAfterOf({ type: 'special', volume_number: 'Artbook', sort_after: '' }), null);
+    assert.equal(getVolumeSortInfo({ type: 'special', volume_number: 'Artbook', sort_after: '0' }).rank, 1);
+});
+
 test('getVolumeDisplayTitle: adds prefixes without duplicating them', async () => {
     const { getVolumeDisplayTitle } = await load();
     assert.equal(getVolumeDisplayTitle({ volume_number: '3' }), 'Band 3');

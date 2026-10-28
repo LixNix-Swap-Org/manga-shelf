@@ -46,7 +46,7 @@ const EXPORT_SELECT = `
            CASE WHEN v.id IS NULL THEN '${SERIES_ROW_TYPE}' ELSE COALESCE(v.type, 'volume') END AS type, v.volume_number, v.status, v.isbn,
            v.price, v.target_price, NULLIF(v.priority, 0) AS priority, v.release_date, v.release_year, v.purchase_date,
            v.condition, v.pages, v.notes, m.wish_priority AS series_wish,
-           v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id, v.language AS volume_language,
+           v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id, v.language AS volume_language, v.sort_after,
            (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_reads vr JOIN users u ON u.id = vr.user_id WHERE vr.volume_id = v.id) AS readers,
            (SELECT GROUP_CONCAT(username, ', ') FROM (SELECT u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id ORDER BY vo.created_at, vo.rowid)) AS owners
     FROM mangas m LEFT JOIN volumes v ON v.manga_id = m.id`;
@@ -284,8 +284,8 @@ function importCsv(ctx, { body }) {
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
         INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher,
-                             purchase_date, status, notes, type, priority, target_price, cover_image, images, manga_passion_volume_id, language)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             purchase_date, status, notes, type, priority, target_price, cover_image, images, manga_passion_volume_id, language, sort_after)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // v2.19.1 kept "Band 3" next to "3" in one series; when a file carries both, each row stays a volume of its own
@@ -406,7 +406,7 @@ function importCsv(ctx, { body }) {
             const volumePublisher = normalizePublisher(r.publisher);
             const ins = insertVolume.run(series.id, r.volume_number, r.isbn, r.price, r.release_date, r.release_year, r.condition,
                 r.pages, volumePublisher && publisherKey(volumePublisher) !== series.pubKey ? volumePublisher : null,
-                r.purchase_date, r.status, r.notes, r.type, r.priority, r.target_price, r.cover_image, r.images, r.manga_passion_volume_id, r.language);
+                r.purchase_date, r.status, r.notes, r.type, r.priority, r.target_price, r.cover_image, r.images, r.manga_passion_volume_id, r.language, r.sort_after);
             const newVolumeId = Number(ins.lastInsertRowid);
             for (const userId of ownerIds) {
                 addOwner(ctx.db, newVolumeId, userId, { price: r.price, purchase_date: r.purchase_date, condition: r.condition });

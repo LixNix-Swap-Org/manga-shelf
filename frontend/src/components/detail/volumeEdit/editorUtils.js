@@ -38,6 +38,12 @@ export const parsePriceInput = (val) => {
 
 export const isValidPriceInput = (val) => !Number.isNaN(parsePriceInput(val));
 
+/** "Einsortieren nach Band" as core/lib/validate.js parseSortAfter reads it: empty, or 0 to 5000 with one decimal. */
+export const isValidSortAfterInput = (val) => {
+  const s = String(val ?? '').trim().replace(',', '.');
+  return s === '' || (/^\d+(\.\d)?$/.test(s) && Number(s) <= 5000);
+};
+
 /** Price as a plain decimal for query strings (the lookup reads it with parseFloat). */
 export const priceForQuery = (val) => {
   const num = parsePriceInput(val);
@@ -66,11 +72,14 @@ export const validateVolumeForm = (form, initial = null) => {
   else if (num.length > 80 && !unchanged(form, initial, 'volume_number')) errors.volume_number = t('Höchstens 80 Zeichen.');
   if (!isValidPriceInput(form.price) && !unchanged(form, initial, 'price')) errors.price = t('Ungültiger Preis, z. B. 7,50');
   if (!isValidPriceInput(form.target_price) && !unchanged(form, initial, 'target_price')) errors.target_price = t('Ungültiger Zielpreis, z. B. 5,00');
+  if (form.type === 'special' && !isValidSortAfterInput(form.sort_after) && !unchanged(form, initial, 'sort_after')) {
+    errors.sort_after = t('Bandnummer von 0 bis 5000, z. B. 12');
+  }
   return errors;
 };
 
 // i18n
-export const FIELD_NAMES = { volume_number: 'Bandnummer', price: 'Kaufpreis', target_price: 'Zielpreis' };
+export const FIELD_NAMES = { volume_number: 'Bandnummer', price: 'Kaufpreis', target_price: 'Zielpreis', sort_after: 'Einsortieren nach Band' };
 
 const sameField = (a, b) => (Array.isArray(a) || Array.isArray(b)
   ? JSON.stringify(a ?? []) === JSON.stringify(b ?? [])

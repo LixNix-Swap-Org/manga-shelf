@@ -13,7 +13,7 @@ const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
 const { parseLanguage } = require('../lib/language');
 const {
-    VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseYear, parsePriority, isValidDate, parseDate,
+    VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
     parseWholeNumber, parseIdList, parseBulkSet, parseFlag, isValidReadAt
 } = require('../lib/validate');
 
@@ -22,6 +22,10 @@ const MAX_BATCH_VOLUMES = 300;
 const STATUS_ERROR = msg('Ungültiger Status (erlaubt: {allowed})', { allowed: msgList(VOLUME_STATUSES) });
 const TYPE_ERROR = msg('Ungültiger Typ (erlaubt: {allowed})', { allowed: VOLUME_TYPES.join(', ') });
 const DATE_ERROR = 'Ungültiges Datum (erwartet: JJJJ-MM-TT)';
+const SORT_AFTER_ERROR = 'Ungültige Position (Bandnummer von 0 bis 5000)';
+
+/** Only a special stands after a regular volume; every other type keeps its place by its own number. */
+const sortAfterFor = (type, value) => (type === 'special' ? value : null);
 const FIELD_ERRORS = {
     price: 'Ungültiger Preis',
     target_price: 'Ungültiger Zielpreis',
@@ -173,6 +177,9 @@ function create(ctx, { body }) {
     const numeric = parseNumericFields(body, { price: parsePrice, target_price: parsePrice, pages: parsePages, release_year: parseYear });
     if (numeric.error) throw badRequest(numeric.error);
 
+    const sortAfter = parseSortAfter(body.sort_after);
+    if (sortAfter.error) throw badRequest(SORT_AFTER_ERROR);
+
     const notesVal = cleanNotes(notes);
     const language = parseVolumeLanguage(body.language);
     if (language.error) throw badRequest(VOLUME_LANGUAGE_ERROR, 'LANGUAGE_INVALID');
@@ -192,8 +199,8 @@ function create(ctx, { body }) {
     if (duplicate) throw duplicateError(volType, volNumStr, duplicate);
 
     const stmt = ctx.db.prepare(`
-        INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price, language)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price, language, sort_after)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const { price, target_price, pages, release_year } = numeric.values;
@@ -219,7 +226,8 @@ function create(ctx, { body }) {
             volType,
             prio,
             target_price,
-            language.value
+            language.value,
+            sortAfterFor(volType, sortAfter.value)
         );
         newVolumeId = Number(result.lastInsertRowid);
         syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
@@ -342,6 +350,8 @@ function update(ctx, { params, body }) {
     if (priority === null) throw badRequest('Ungültige Priorität (0 bis 3)');
     const language = body.language !== undefined ? parseVolumeLanguage(body.language) : { value: vol.language ?? null };
     if (language.error) throw badRequest(VOLUME_LANGUAGE_ERROR, 'LANGUAGE_INVALID');
+    const sortAfter = updatedField(body, 'sort_after', vol.sort_after ?? null, parseSortAfter);
+    if (sortAfter.error) throw badRequest(SORT_AFTER_ERROR);
 
     let imagesVal = vol.images;
     if (body.images !== undefined) {
@@ -371,7 +381,7 @@ function update(ctx, { params, body }) {
         UPDATE volumes SET 
             volume_number = ?, isbn = ?, price = ?, release_date = ?, release_year = ?, 
             condition = ?, pages = ?, publisher = ?, purchase_date = ?, 
-            status = ?, notes = ?, cover_image = ?, images = ?, type = ?, priority = ?, target_price = ?, language = ?
+            status = ?, notes = ?, cover_image = ?, images = ?, type = ?, priority = ?, target_price = ?, language = ?, sort_after = ?
         WHERE id = ?
     `);
 
@@ -383,7 +393,7 @@ function update(ctx, { params, body }) {
                 ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(next, vol.id, vol[column]);
             }
         }
-        stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, vol.id);
+        stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, sortAfterFor(volType, sortAfter.value ?? null), vol.id);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
     });

@@ -189,7 +189,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
-    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, setNewVolumeMeta, readDate, setReadDate,
+    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, setNewVolumeMeta, newVolumeSortAfter, setNewVolumeSortAfter,
+    readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
@@ -807,6 +808,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
               setNewVolumeReleaseDate={setNewVolumeReleaseDate}
               setNewVolumeStatus={setNewVolumeStatus}
               setNewVolumeType={setNewVolumeType}
+              newVolumeSortAfter={newVolumeSortAfter}
+              setNewVolumeSortAfter={setNewVolumeSortAfter}
+              volumes={volumes}
               uploadingNewCover={uploadingNewCover}
               currency={editionCurrency(manga)}
             />

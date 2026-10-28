@@ -129,6 +129,7 @@ export default function useVolumeActions({
     setNewVolumeIsbnState(val);
     if (!val) setNewVolumeMeta(null);
   };
+  const [newVolumeSortAfter, setNewVolumeSortAfter] = useState(''); // a special: the regular volume it stands after ('' = at the end)
   const [uploadingNewCover, setUploadingNewCover] = useState(false);
   // 'Gelesen am' of the read toggle: only a date the user picked for this series (null = now); `on` is the day of the pick
   const [readPick, setReadPick] = useState(null);
@@ -246,7 +247,8 @@ export default function useVolumeActions({
           ...(extraMeta.pages != null ? { pages: extraMeta.pages } : {}),
           ...(extraMeta.release_year != null ? { release_year: extraMeta.release_year } : {}),
           ...(extraMeta.publisher ? { publisher: extraMeta.publisher } : {}),
-          ...(extraMeta.notes ? { notes: extraMeta.notes } : {})
+          ...(extraMeta.notes ? { notes: extraMeta.notes } : {}),
+          ...(newVolumeType === 'special' && newVolumeSortAfter.trim() ? { sort_after: newVolumeSortAfter.trim() } : {})
         }
       });
       if (res.ok) {
@@ -257,6 +259,7 @@ export default function useVolumeActions({
         setNewVolumeReleaseDate('');
         setNewVolumeCoverValue('');
         setNewVolumeType('volume');
+        setNewVolumeSortAfter('');
         releaseRemindersChanged();
         await fetchManga();
       } else {
@@ -486,6 +489,7 @@ export default function useVolumeActions({
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn,
     newVolumeMeta, setNewVolumeMeta,
+    newVolumeSortAfter, setNewVolumeSortAfter,
     readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,

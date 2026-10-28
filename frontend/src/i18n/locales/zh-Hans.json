@@ -231,6 +231,7 @@
   "Ansicht:": "视图：",
   "Anteil jedes Verlags am Wert aller vorhandenen Bände": "各出版社在所有已拥有卷总价值中的占比",
   "Anteil:": "占比：",
+  "Anthologie": "选集",
   "Antwort ist kein JSON": "响应不是 JSON",
   "Antwort ohne Bild-URL": "响应中没有图片 URL",
   "Anwenden": "应用",
@@ -243,6 +244,7 @@
   "Art": "类型",
   "Art der Vorschläge": "推荐类型",
   "Art des Eintrags": "条目类型",
+  "Artbook": "画集",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "你的账户“{name}”在其中同样没有密码：之后只能由其他管理员在用户管理中设置，或在服务器上执行控制台命令“{command}”来设置新密码。",
   "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
     "other": "{n} 部条漫的章节进度也会被删除。"
@@ -375,6 +377,7 @@
   "Bandnummer": "卷号",
   "Bandnummer in einer Reihen-Zeile wird ignoriert": "系列行中的卷号将被忽略",
   "Bandnummer unbekannt – bitte eintragen und hinzufügen.": "卷号未知——请填写后再添加。",
+  "Bandnummer von 0 bis 5000, z. B. 12": "0 到 5000 的卷号,例如 12",
   "Bandzahl auf {official_total} korrigieren": "将总卷数更正为 {official_total}",
   "Band|Bände": {
     "other": "卷"
@@ -879,6 +882,7 @@
   "Einmal mit ALLOW_NEWER_SCHEMA=1 starten ({os}):": "用 ALLOW_NEWER_SCHEMA=1 启动一次（{os}）：",
   "Einrichtungscode": "设置码",
   "Einrichtungscode fehlt oder ist falsch. Er steht in der Server-Konsole beim Start (oder in SETUP_TOKEN).": "设置码缺失或不正确。它显示在服务器启动时的控制台中（或在 SETUP_TOKEN 中）。",
+  "Einsortieren nach Band": "排在此卷之后",
   "Einspielen": "恢复",
   "Einspielen fehlgeschlagen": "恢复失败",
   "Eintrag \"{name}\" ist beschädigt": "条目“{name}”已损坏",
@@ -947,6 +951,7 @@
   "Etwas ist schiefgelaufen": "出了点问题",
   "FEHLT": "缺失",
   "Falsche Eingaben zählen zur Anmeldesperre deines Kontos.": "输入错误会计入你账户的登录锁定次数。",
+  "Fanbook": "粉丝书",
   "Fantasy": "奇幻",
   "Farbe": "颜色",
   "Farben wie in der Liste unten.": "颜色与下方列表一致。",
@@ -1201,6 +1206,7 @@
   "Gruppieren": "分组",
   "Gruppieren: {label}": "分组：{label}",
   "Größte Verlage im Regal": "书架上最大的出版社",
+  "Guidebook": "指南书",
   "Gut": "良好",
   "Gut (Normal gelesen)": "良好（正常阅读）",
   "Gültige manga_id und Bandnummer erforderlich": "需要有效的 manga_id 和卷号",
@@ -1458,6 +1464,7 @@
   "Laden-Scan": "店内扫描",
   "Laufend": "连载中",
   "Laufzeit: {n} Min.": "片长：{n} 分钟",
+  "Leer lassen, damit der Eintrag hinter allen Bänden steht.": "留空则排在所有卷之后。",
   "Leeren": "清空",
   "Leertaste": "空格键",
   "Lege an…": "正在创建…",
@@ -2172,6 +2179,7 @@
   "Sonderausgabe/Schuber|Sonderausgaben/Schuber": {
     "other": "个Special Edition/套盒"
   },
+  "Sonderband": "特别卷",
   "Sonstige ({count})": "其他（{count}）",
   "Sonstiges": "其他",
   "Sortierung": "排序",
@@ -2383,6 +2391,7 @@
   "Ungültige Outbox-Änderung": "无效的待发送队列更改",
   "Ungültige Papierkorb-ID": "无效的回收站 ID",
   "Ungültige Parameter": "无效的参数",
+  "Ungültige Position (Bandnummer von 0 bis 5000)": "位置无效(卷号为 0 到 5000)",
   "Ungültige Priorität (0 bis 3)": "无效的优先级（0 到 3）",
   "Ungültige Priorität „{value}“ (0 bis 3)": "无效的优先级“{value}”（0 到 3）",
   "Ungültige Regal-Rolle (editor oder viewer)": "书架角色无效（editor 或 viewer）",
@@ -2732,6 +2741,7 @@
   "als gelesen markiert": "已标记为已读",
   "als ungelesen markiert": "已标记为未读",
   "als vorhanden (mir) markiert": "已标记为已拥有（我）",
+  "am Ende": "末尾",
   "anderen": "其他人",
   "auf diesem Server abgeschaltet (UPDATE_DOWNGRADE)": "此服务器上已关闭（UPDATE_DOWNGRADE）",
   "auf „{status}“ gesetzt": "已设为“{status}”",
@@ -3201,6 +3211,7 @@
   "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
     "other": "已评分 {n} 集的平均分 Ø {avg}"
   },
+  "Über deine Ausgabe dieses Werks verknüpft": "通过你的此作品版本关联",
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "通过“添加动画”在 AniList 或 MyAnimeList 中搜索，或手动创建条目。",
   "Übernatürlich": "超自然",
   "Übernehmen": "应用",

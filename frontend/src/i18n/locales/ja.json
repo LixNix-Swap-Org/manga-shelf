@@ -231,6 +231,7 @@
   "Ansicht:": "表示:",
   "Anteil jedes Verlags am Wert aller vorhandenen Bände": "所持している全巻の価値に占める各出版社の割合",
   "Anteil:": "割合:",
+  "Anthologie": "アンソロジー",
   "Antwort ist kein JSON": "応答がJSONではありません",
   "Antwort ohne Bild-URL": "応答に画像URLがありません",
   "Anwenden": "適用",
@@ -243,6 +244,7 @@
   "Art": "種類",
   "Art der Vorschläge": "おすすめの種類",
   "Art des Eintrags": "項目の種類",
+  "Artbook": "アートブック",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "あなたのアカウント「{name}」にもパスワードがありません。その後、新しいパスワードを設定できるのは、ユーザー管理での別の管理者か、サーバー上のコンソールコマンド「{command}」だけです。",
   "Auch der Kapitelstand von {n} Webtoon wird gelöscht.|Auch der Kapitelstand von {n} Webtoons wird gelöscht.": {
     "other": "{n}作品のWebtoonの話数の進捗も削除されます。"
@@ -375,6 +377,7 @@
   "Bandnummer": "巻数",
   "Bandnummer in einer Reihen-Zeile wird ignoriert": "シリーズ行の巻数は無視されます",
   "Bandnummer unbekannt – bitte eintragen und hinzufügen.": "巻数が不明です – 入力してから追加してください。",
+  "Bandnummer von 0 bis 5000, z. B. 12": "0〜5000の巻数(例: 12)",
   "Bandzahl auf {official_total} korrigieren": "巻数を{official_total}に修正",
   "Band|Bände": {
     "other": "巻"
@@ -879,6 +882,7 @@
   "Einmal mit ALLOW_NEWER_SCHEMA=1 starten ({os}):": "ALLOW_NEWER_SCHEMA=1 を付けて一度だけ起動してください({os}):",
   "Einrichtungscode": "セットアップコード",
   "Einrichtungscode fehlt oder ist falsch. Er steht in der Server-Konsole beim Start (oder in SETUP_TOKEN).": "セットアップコードがないか、間違っています。サーバー起動時のコンソール(またはSETUP_TOKEN)に表示されています。",
+  "Einsortieren nach Band": "この巻の後に並べる",
   "Einspielen": "復元",
   "Einspielen fehlgeschlagen": "復元に失敗しました",
   "Eintrag \"{name}\" ist beschädigt": "項目「{name}」が破損しています",
@@ -947,6 +951,7 @@
   "Etwas ist schiefgelaufen": "問題が発生しました",
   "FEHLT": "未所持",
   "Falsche Eingaben zählen zur Anmeldesperre deines Kontos.": "入力を間違えると、アカウントのサインインロックの回数に含まれます。",
+  "Fanbook": "ファンブック",
   "Fantasy": "ファンタジー",
   "Farbe": "色",
   "Farben wie in der Liste unten.": "色は下のリストと同じです。",
@@ -1201,6 +1206,7 @@
   "Gruppieren": "グループ化",
   "Gruppieren: {label}": "グループ化: {label}",
   "Größte Verlage im Regal": "本棚の出版社トップ",
+  "Guidebook": "ガイドブック",
   "Gut": "良い",
   "Gut (Normal gelesen)": "良(通常の読書による使用感)",
   "Gültige manga_id und Bandnummer erforderlich": "有効なmanga_idと巻数が必要です",
@@ -1458,6 +1464,7 @@
   "Laden-Scan": "店頭スキャン",
   "Laufend": "連載中",
   "Laufzeit: {n} Min.": "上映時間: {n}分",
+  "Leer lassen, damit der Eintrag hinter allen Bänden steht.": "空欄にするとすべての巻の後に並びます。",
   "Leeren": "クリア",
   "Leertaste": "スペースキー",
   "Lege an…": "作成中…",
@@ -2172,6 +2179,7 @@
   "Sonderausgabe/Schuber|Sonderausgaben/Schuber": {
     "other": "特別版/ボックスセット"
   },
+  "Sonderband": "特別巻",
   "Sonstige ({count})": "その他({count})",
   "Sonstiges": "その他",
   "Sortierung": "並び順",
@@ -2383,6 +2391,7 @@
   "Ungültige Outbox-Änderung": "送信待ちの変更が正しくありません",
   "Ungültige Papierkorb-ID": "ごみ箱のIDが正しくありません",
   "Ungültige Parameter": "パラメータが正しくありません",
+  "Ungültige Position (Bandnummer von 0 bis 5000)": "無効な位置です(巻数は0〜5000)",
   "Ungültige Priorität (0 bis 3)": "優先度が正しくありません(0～3)",
   "Ungültige Priorität „{value}“ (0 bis 3)": "優先度「{value}」が無効です(0〜3)",
   "Ungültige Regal-Rolle (editor oder viewer)": "無効な本棚のロールです(editorまたはviewer)",
@@ -2732,6 +2741,7 @@
   "als gelesen markiert": "既読にしました",
   "als ungelesen markiert": "未読にしました",
   "als vorhanden (mir) markiert": "所持(自分)にしました",
+  "am Ende": "最後",
   "anderen": "他のユーザー",
   "auf diesem Server abgeschaltet (UPDATE_DOWNGRADE)": "このサーバーでは無効です(UPDATE_DOWNGRADE)",
   "auf „{status}“ gesetzt": "「{status}」に設定しました",
@@ -3201,6 +3211,7 @@
   "Ø {avg} aus {n} bewerteten Folge|Ø {avg} aus {n} bewerteten Folgen": {
     "other": "評価済み {n} 話の平均 Ø {avg}"
   },
+  "Über deine Ausgabe dieses Werks verknüpft": "この作品のあなたの版を通じて紐付け",
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "「アニメを追加」からAniListまたはMyAnimeListで検索するか、項目を手動で作成してください。",
   "Übernatürlich": "超自然",
   "Übernehmen": "適用",

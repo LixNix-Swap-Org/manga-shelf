@@ -1,12 +1,13 @@
 import { useId } from 'react';
-import { Tag, Hash } from 'lucide-react';
+import { Tag, Hash, ListOrdered } from 'lucide-react';
 import { t } from '../../../i18n/index.js';
 
-/** Entry type and volume number. */
+/** Entry type, volume number and, for a special, the regular volume it stands after. */
 export default function TypeNumberFields({
   editVolForm,
   setEditVolForm,
-  error
+  error,
+  sortAfterError
 }) {
   const id = useId();
   return (
@@ -48,6 +49,27 @@ export default function TypeNumberFields({
         />
         {error && <p id={`${id}-number-error`} className="text-[11px] text-red-400 mt-1">{error}</p>}
       </div>
+
+      {editVolForm.type === 'special' && (
+        <div className="sm:col-span-12">
+          <label htmlFor={`${id}-after`} className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+            <ListOrdered className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" /> {t('Einsortieren nach Band')}
+          </label>
+          <input
+            id={`${id}-after`}
+            type="text"
+            inputMode="decimal"
+            placeholder={t('am Ende')}
+            aria-invalid={sortAfterError ? true : undefined}
+            aria-describedby={`${id}-after-hint${sortAfterError ? ` ${id}-after-error` : ''}`}
+            className="input-field py-2.5 text-base sm:text-sm sm:max-w-[12rem]"
+            value={editVolForm.sort_after ?? ''}
+            onChange={e => { const value = e.target.value; setEditVolForm(prev => ({ ...prev, sort_after: value })); }}
+          />
+          <p id={`${id}-after-hint`} className="text-[11px] text-slate-400 mt-1">{t('Leer lassen, damit der Eintrag hinter allen Bänden steht.')}</p>
+          {sortAfterError && <p id={`${id}-after-error`} className="text-[11px] text-red-400 mt-1">{sortAfterError}</p>}
+        </div>
+      )}
     </div>
   );
 }
