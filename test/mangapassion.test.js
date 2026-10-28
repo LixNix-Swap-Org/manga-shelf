@@ -641,3 +641,24 @@ test('matchSchuberVolume: the chronological index puts undated boxes last and br
     const official = [box(905, null, 50), box(901, '2024-03-12', 10), box(904, '2025-11', 40), box(903, '2025-06-03', 31), box(902, '2025-06-03', 30)];
     assert.deepEqual([1, 2, 3, 4, 5].map(n => mp.matchSchuberVolume(official, `Schuber ${n}`, 12, '')?.id), [901, 902, 903, 904, 905]);
 });
+
+test('lookupVolumeMetadata: each half of a double volume gets the split price, not the book price of the volume page', async () => {
+    const realFetch = global.fetch;
+    try {
+        // the volume page of "10 & 11" names the price of the whole book (16 €)
+        global.fetch = async (url) => {
+            if (String(url).endsWith('/volumes/1510')) {
+                return new Response(JSON.stringify({ id: 1510, number: 10, lastNumber: 11, price: 1600, pages: 416, date: '2025-04-08T00:00:00+00:00', year: 2025, month: 4, day: 8 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            throw new Error('network down');
+        };
+        seedEdition([ov('9', { number: 9 }), ov('10', { id: 1510, volume_number: '10 & 11', number: 10, lastNumber: 11, specialType: 3, price: 16 })]);
+        const id = createManga('Doppelband-Preis', 11);
+        for (const n of ['10', '11']) {
+            const lookup = await mp.lookupVolumeMetadata(id, n);
+            assert.equal(lookup.matched, true, n);
+            assert.equal(lookup.data.price, 8, n);
+            assert.equal(lookup.data.release_date, '2025-04-08', n);
+        }
+    } finally { global.fetch = realFetch; }
+});
