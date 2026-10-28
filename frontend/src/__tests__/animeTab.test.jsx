@@ -1678,6 +1678,39 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(calls).toBe(2);
     expect(within(chain).queryByRole('button', { name: 'Weitere Staffeln laden' })).toBeNull();
     expect(chain.textContent).not.toContain('Weitere Staffeln wurden noch nicht geladen.');
+    // the button is gone: the focus lands on the heading of the list, not on the page
+    await waitFor(() => expect(document.activeElement).toBe(within(chain).getByRole('heading', { name: 'Staffeln' })));
+  });
+
+  it('season labels: no numbers while earlier seasons are missing, a side line is named as such', async () => {
+    const front = [
+      { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+      { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+    ];
+    const whole = [
+      { in_collection_id: null, anilist_id: 7, title: 'Live Eins', season_year: 2015, my_status: null, current: false },
+      ...front,
+      { in_collection_id: null, anilist_id: 11, title: 'Live Ableger', season_year: 2021, my_status: null, current: false, branch: true }
+    ];
+    let calls = 0;
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        calls += 1;
+        return calls === 1
+          ? fakeResponse(200, { seasons: front, truncated: { before: true, after: false } })
+          : fakeResponse(200, { seasons: whole, truncated: { before: false, after: false } });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    const labels = () => within(chain).getAllByRole('listitem').map((li) => li.firstChild.textContent);
+    await within(chain).findByText('Weitere Staffeln wurden noch nicht geladen.');
+    expect(labels()).toEqual(['Staffel', 'Staffel']);
+    fireEvent.click(within(chain).getByRole('button', { name: 'Weitere Staffeln laden' }));
+    await waitFor(() => expect(chain.textContent).toContain('Live Ableger'));
+    expect(labels()).toEqual(['Staffel 1', 'Staffel 2', 'Staffel 3', 'Nebenlinie']);
   });
 
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {

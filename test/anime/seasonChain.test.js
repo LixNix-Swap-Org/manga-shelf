@@ -197,6 +197,38 @@ test('season chain: films and OVAs between the seasons do not shorten the line',
     await core.close();
 });
 
+test('season chain: at a fork the TV sequel continues the line and the ONA side line follows it, marked as a branch', async () => {
+    // Prince of Tennis II U-17 World Cup: two sequels, an ONA side story first (as AniList lists it) and the TV semifinal
+    const at = (id, format, title, year) => ({ id, type: 'ANIME', format, status: 'FINISHED', episodes: 12, seasonYear: year, title: { romaji: title } });
+    const wc = at(8501, 'TV', 'World Cup', 2022);
+    const side = at(8502, 'ONA', 'Game of Future', 2021);
+    const semi = at(8503, 'TV', 'Semifinal', 2024);
+    const fin = at(8504, 'TV', 'Final', 2026);
+    const media = {
+        8501: { ...wc, relations: { edges: [{ relationType: 'SEQUEL', node: side }, { relationType: 'SEQUEL', node: semi }] } },
+        8502: { ...side, relations: { edges: [{ relationType: 'PREQUEL', node: wc }] } },
+        8503: { ...semi, relations: { edges: [{ relationType: 'PREQUEL', node: wc }, { relationType: 'SEQUEL', node: fin }] } },
+        8504: { ...fin, relations: { edges: [{ relationType: 'PREQUEL', node: semi }] } }
+    };
+    const fake = aniList(media);
+    const { core, ed } = coreWith(fake);
+    const start = addSeason(core, media, 8501);
+
+    const res = await ed('GET', `/anime/${start}/season-chain`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(titles(res), ['World Cup', 'Semifinal', 'Final', 'Game of Future'], 'the main line first, then the side line');
+    assert.deepEqual(res.body.seasons.map((s) => !!s.branch), [false, false, false, true]);
+    assert.deepEqual(res.body.truncated, { before: false, after: false });
+
+    // the stored chain takes the TV sequel as well
+    const semiId = addSeason(core, media, 8503);
+    addSeason(core, media, 8502);
+    const detail = await ed('GET', `/anime/${start}`);
+    assert.deepEqual(detail.body.season_chain.map((s) => s.title), ['World Cup', 'Semifinal', 'Final']);
+    assert.equal(detail.body.season_chain[1].in_collection_id, semiId);
+    await core.close();
+});
+
 test('ANIME_SOURCES without AniList: the season chain answers the stored chain, discover answers 503, no AniList request', async () => {
     const media = franchise(7400, 4);
     const fake = aniList(media);
