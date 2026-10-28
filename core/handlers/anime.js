@@ -31,6 +31,7 @@ const TMDB_LABEL = 'TMDB';
 const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
 const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
+const OPPOSITE = { SEQUEL: 'PREQUEL', PREQUEL: 'SEQUEL' };
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -210,9 +211,15 @@ function seasonChain(ctx, row, relations) {
         const seen = new Set([start.id]);
         let rels = relations;
         for (let i = 0; i < 20; i += 1) {
-            const r = stepOf(rels, type);
+            let r = stepOf(rels, type);
             if (!r) break;
-            const entry = found(r);
+            let entry = found(r);
+            if (!entry && !SEASON_FORMATS.includes(r.format)) { // a film/OVA outside the collection: the entry after it names it
+                const via = store.relatedEntry(ctx, r.anilist_id, OPPOSITE[type]);
+                if (!via || seen.has(via.entry.id)) break;
+                ({ entry } = via);
+                r = via;
+            }
             if (SEASON_FORMATS.includes(r.format)) out.push(nodeOf(r, entry));
             if (!entry || seen.has(entry.id)) break;
             seen.add(entry.id);

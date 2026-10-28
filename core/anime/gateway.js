@@ -1237,6 +1237,7 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
 
 const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
+const OPPOSITE = { SEQUEL: 'PREQUEL', PREQUEL: 'SEQUEL' };
 const CHAIN_STEPS = 12;
 
 /**
@@ -1288,6 +1289,7 @@ async function seasonChainOf(ctx, anilistId, relations) {
         let id = anilistId;
         let rels = relations;
         let stored = true;
+        let bridge = null; // the film/OVA the walk stands on, when it is one
         for (let i = 0; i < CHAIN_STEPS; i += 1) {
             let r = stepOf(rels, type);
             // stored relations end the chain or only point to a film/OVA: a season announced later is only known to AniList
@@ -1296,12 +1298,15 @@ async function seasonChainOf(ctx, anilistId, relations) {
                 stored = false;
                 r = stepOf(rels, type);
             }
+            // a film/OVA neither in the collection nor known live (AniList off, request cap): the entry after it names it
+            if (!r && bridge && !rels) r = store.relatedEntry(ctx, bridge, OPPOSITE[type]);
             if (!r || seen.has(r.anilist_id)) break;
             seen.add(r.anilist_id);
             if (CHAIN_FORMATS.includes(r.format)) {
                 out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
             }
             id = r.anilist_id;
+            bridge = CHAIN_FORMATS.includes(r.format) ? null : id;
             if (i + 1 < CHAIN_STEPS) ({ rels, stored } = await relationsOf(id));
         }
         return out;
