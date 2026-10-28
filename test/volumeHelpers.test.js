@@ -462,3 +462,15 @@ test('normalizePubName: the server names (setPublisherNames) win, follow a merge
         setPublisherNames(null);
     }
 });
+
+test('compareVolumesByDate: full release date, month and year before undated entries, ties by number', async () => {
+    const { compareVolumesByDate } = await load();
+    const vol = (volume_number, release_date, release_year = release_date ? Number(release_date.slice(0, 4)) : null) =>
+        ({ volume_number, type: 'schuber', release_date, release_year });
+    const list = [vol('Schuber 1', '2024-03-12'), vol('Schuber 10', null), vol('Schuber 2', '2025-06-03'), vol('Schuber 3', '2025-06-03'),
+        vol('Schuber 4', '2025-11'), vol('Schuber 5', '2025-02-01'), vol('Schuber 6', null, 2025)];
+    assert.deepEqual([...list].sort((a, b) => compareVolumesByDate(a, b)).map(v => v.volume_number),
+        ['Schuber 1', 'Schuber 5', 'Schuber 2', 'Schuber 3', 'Schuber 4', 'Schuber 6', 'Schuber 10']);
+    assert.deepEqual([...list].sort((a, b) => compareVolumesByDate(a, b, true)).map(v => v.volume_number),
+        ['Schuber 6', 'Schuber 4', 'Schuber 3', 'Schuber 2', 'Schuber 5', 'Schuber 1', 'Schuber 10']);
+});

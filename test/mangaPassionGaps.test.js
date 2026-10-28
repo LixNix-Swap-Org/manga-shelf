@@ -232,3 +232,46 @@ test('reconcileMangaGaps: an unreachable search is reported as an outage and sto
     assert.match(res.message, /nicht erreichbar/);
     assert.equal(linkOf(id), null);
 });
+
+test('gaps: a double volume ("10 & 11", lastNumber 11) stands for both regular volumes', async () => {
+    const double = (first, last, extra = {}) => ov(String(first), { volume_number: `${first} & ${last}`, number: first, lastNumber: last, specialType: 3, price: 16, ...extra });
+    const edition = seedEdition([ov('9', { number: 9 }), double(10, 11), double(12, 13, { is_released: false, release_date: null }), ov('14', { number: 14 })]);
+    const id = createManga(edition);
+    addVolume(id, '9');
+    addVolume(id, '10');
+
+    const res = await reconcileMangaGaps(id);
+    assert.deepEqual(gapNames(res), ['volume:11', 'volume:12', 'volume:13', 'volume:14']);
+    assert.equal(res.gaps.find(g => g.volume_number === '11').price, 8);
+    assert.equal(res.total_official_volumes, 6); // 4 books, 6 volumes
+
+    const imp = await batchImportGaps(id, ['11', '12', '13'], 'Fehlt', edition);
+    assert.equal(imp.imported_count, 3);
+    const rows = db.prepare("SELECT volume_number, status, price, number_sort FROM volumes WHERE manga_id = ? AND volume_number IN ('11', '12', '13') ORDER BY number_sort").all(id);
+    assert.deepEqual(rows.map(r => [r.volume_number, r.status, r.price, r.number_sort]),
+        [['11', 'Fehlt', 8, 11], ['12', 'Erscheint bald', 8, 12], ['13', 'Erscheint bald', 8, 13]]);
+});
+
+test('gaps: a Schuber or special edition with a number range is not split', async () => {
+    const edition = seedEdition([
+        ov('1', { number: 1 }),
+        ov('1-5', { number: 1, lastNumber: 5, specialType: 1, title: 'Sammelschuber' }),
+        ov('2', { number: 2, lastNumber: 3, type: 3, specialType: 2, title: 'Collectors Edition' })
+    ]);
+    const id = createManga(edition);
+    addVolume(id, '1');
+    const res = await reconcileMangaGaps(id);
+    assert.deepEqual(gapNames(res), ['special_edition:2']);
+});
+
+test('gaps: the announced total counts both volumes of a double volume, not the books', async () => {
+    const double = (first, last) => ov(String(first), { volume_number: `${first} & ${last}`, number: first, lastNumber: last, specialType: 3, price: 16 });
+    // Manga Passion: 3 books (numVolumes 3) holding volumes 1-4
+    const edition = seedEdition([ov('1', { number: 1 }), double(2, 3), ov('4', { number: 4 })], { total_volumes: 3 });
+    const id = Number(db.prepare('INSERT INTO mangas (title, publisher, total_volumes, manga_passion_id) VALUES (?, ?, ?, ?)')
+        .run('Reihe', 'Carlsen Manga', 4, edition).lastInsertRowid);
+    const res = await reconcileMangaGaps(id);
+    assert.equal(res.edition.total_volumes, 4);
+    assert.equal(res.total_official_volumes, 4);
+    assert.equal(res.discrepancy, null);
+});

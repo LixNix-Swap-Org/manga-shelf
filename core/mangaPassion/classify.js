@@ -195,6 +195,28 @@ function classifyOfficialVolume(ov) {
   return 'volume';
 }
 
+// Longest run of regular volumes one official entry may stand for ("10 & 11" = 2); a longer range is no double volume
+const MAX_COMBINED_VOLUMES = 5;
+
+/**
+ * A double volume ("10 & 11": number 10, lastNumber 11; Eyeshield 21 at Egmont) is one book holding two regular
+ * volumes. It is listed as one official entry per volume ("10", "11", same Manga Passion id, the price split), so the
+ * gap check, the import and the shelf count every number. Schuber and special editions with a range stay one entry.
+ */
+function expandCombinedVolumes(volumes) {
+  return (volumes || []).flatMap(ov => {
+    const first = ov.number;
+    const last = ov.lastNumber;
+    if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1 || last <= first
+      || last - first >= MAX_COMBINED_VOLUMES || classifyOfficialVolume(ov) !== 'volume') return [ov];
+    const count = last - first + 1;
+    const price = typeof ov.price === 'number' ? Math.round((ov.price * 100) / count) / 100 : ov.price;
+    return Array.from({ length: count }, (_, i) => ({
+      ...ov, volume_number: String(first + i), num: first + i, number: first + i, lastNumber: null, price, combined: ov.volume_number
+    }));
+  });
+}
+
 /** Volume number as stored for an official entry ("Special" entries use their title). */
 function officialVolumeNumber(ov) {
   const key = String(ov.volume_number || '').trim().toLowerCase();
@@ -367,10 +389,29 @@ function matchSchuberIn(pool, targetNum) {
 
   // 3. By index in chronological order
   if (!matched && targetNum >= 1 && targetNum <= pool.length) {
-    const sorted = [...pool].sort((a, b) => (a.release_date || '').localeCompare(b.release_date || '') || a.id - b.id);
-    matched = sorted[targetNum - 1];
+    matched = [...pool].sort(compareOfficialChronologically)[targetNum - 1];
   }
   return matched || null;
+}
+
+// "2025-06-03" -> [2025, 6, 3]; a month-only date ("2025-11") sorts after the known days of its month, no date last
+function officialDateKey(date) {
+  const m = String(date || '').match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/);
+  if (!m) return [Infinity, 0, 0];
+  return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 13, m[3] ? parseInt(m[3], 10) : 32];
+}
+
+/** Release date, then Manga Passion's display order (arrangement), then id: a stable order for the same day. */
+function compareOfficialChronologically(a, b) {
+  const ka = officialDateKey(a.release_date);
+  const kb = officialDateKey(b.release_date);
+  for (let i = 0; i < 3; i++) {
+    if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+  }
+  const ra = Number.isFinite(a.arrangement) ? a.arrangement : Infinity;
+  const rb = Number.isFinite(b.arrangement) ? b.arrangement : Infinity;
+  if (ra !== rb) return ra < rb ? -1 : 1;
+  return (a.id || 0) - (b.id || 0);
 }
 
 /**
@@ -412,6 +453,7 @@ module.exports = {
   MP_UNREACHABLE_MESSAGE,
   MP_EDITION_NOT_FOUND_MESSAGE,
   classifyOfficialVolume,
+  expandCombinedVolumes,
   officialVolumeNumber,
   resolveOfficialGap,
   matchSchuberVolume,

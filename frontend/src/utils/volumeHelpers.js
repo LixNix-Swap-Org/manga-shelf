@@ -254,6 +254,28 @@ export const compareVolumesByNumber = (a, b, descending = false) => {
     ? infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true })
     : infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
 };
+// release_date "YYYY", "YYYY-MM" or "YYYY-MM-DD" (else release_year) as [year, month, day]; a missing part sorts
+// after the known ones of that year or month, no date at all is null
+const releaseDateKey = (vol) => {
+  const m = String(vol.release_date || '').match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/);
+  if (m) return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 13, m[3] ? parseInt(m[3], 10) : 32];
+  const year = parseInt(vol.release_year, 10);
+  return year > 0 ? [year, 13, 32] : null;
+};
+
+/** Sort by release date (day, month or year as known), undated entries last in both directions, then by number. */
+export const compareVolumesByDate = (a, b, descending = false) => {
+  const ka = releaseDateKey(a);
+  const kb = releaseDateKey(b);
+  if (!ka || !kb) {
+    if (ka || kb) return ka ? -1 : 1;
+  } else {
+    for (let i = 0; i < 3; i++) {
+      if (ka[i] !== kb[i]) return descending ? kb[i] - ka[i] : ka[i] - kb[i];
+    }
+  }
+  return compareVolumesByNumber(a, b, descending);
+};
 // i18n
 const EDITION_PATTERNS = [
   [/collector'?s?\s*edition/i, 'Collectors Edition', 'COLL'],

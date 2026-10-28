@@ -152,7 +152,10 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
     const relYear = officialYear(relDate, fullVol?.year);
     const pages = fullVol?.pages || matchedVolume.pages || null;
     const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
-    const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
+    // a half of a double volume keeps the split price; the volume page of Manga Passion names the price of the whole book
+    const price = matchedVolume.combined
+      ? matchedVolume.price
+      : (fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price);
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
     const localCover = await coverOf(rawCover);
     const title = fullVol?.title || matchedVolume.title || null;
