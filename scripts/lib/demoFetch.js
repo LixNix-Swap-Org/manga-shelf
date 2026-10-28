@@ -1,6 +1,7 @@
 // Live lookups for the demo fixtures (node scripts/seed.js --refresh-fixtures): AniList (manga, anime adaptation),
 // Manga Passion (German print edition, per volume cover/date/pages) and, with TMDB_API_KEY, TMDb. The result goes into
-// scripts/demo-data.json; the normal seed never calls the network.
+// scripts/demo-data.json; the normal seed never calls the network. Descriptions are not fetched: the demo has its own
+// (scripts/lib/demoTexts.js), the texts of the sources are not copied into the repository.
 const anilist = require('../../core/anime/anilist');
 const { mapAniListMedia } = require('../../core/anilist');
 const { SERIES } = require('./demoSpec');
@@ -21,7 +22,7 @@ async function withRetry(fn, label) {
 }
 
 const MANGA_QUERY = `query ($s: String) { Page(page: 1, perPage: 6) { media(search: $s, type: MANGA, sort: SEARCH_MATCH, isAdult: false) {
-  id idMal title { romaji english native } description(asHtml: false) coverImage { extraLarge large medium } bannerImage format status volumes chapters countryOfOrigin genres
+  id idMal title { romaji english native } coverImage { extraLarge large medium } bannerImage format status volumes chapters countryOfOrigin genres
   staff(perPage: 5) { edges { role node { name { full } } } }
   relations { edges { relationType(version: 2) node { id type format startDate { year } } } } } } }`;
 
@@ -40,7 +41,7 @@ async function fetchManga(spec) {
   const adaptations = (hit.relations.edges || []).filter(e => e.relationType === 'ADAPTATION' && e.node.type === 'ANIME' && e.node.format === 'TV')
     .map(e => ({ id: e.node.id, year: e.node.startDate && e.node.startDate.year })).sort((a, b) => (a.year || 9999) - (b.year || 9999) || a.id - b.id);
   return {
-    anilist_id: hit.id, mal_id: hit.idMal || null, title: mapped.title, alt_title: mapped.alt_title, author: mapped.author, description: mapped.description,
+    anilist_id: hit.id, mal_id: hit.idMal || null, title: mapped.title, alt_title: mapped.alt_title, author: mapped.author,
     cover_image: mapped.cover_image, banner_image: mapped.banner_image,
     tags: (hit.genres || []).join(', ') || null, total_chapters: hit.chapters || null, volumes: hit.volumes || null, adaptations: adaptations.map(a => a.id)
   };
@@ -80,7 +81,7 @@ async function fetchMp(spec) {
   }
   const src = edition.sources && edition.sources[0];
   return {
-    id: edition.id, title: edition.title, total_volumes: edition.numVolumes || null, cover_image: edition.cover || null, description: edition.description || null,
+    id: edition.id, title: edition.title, total_volumes: edition.numVolumes || null, cover_image: edition.cover || null,
     author: src && src.contributors ? [...new Set(src.contributors.map(c => c.contributor && c.contributor.name).filter(Boolean))].join(', ') || null : null,
     volumes
   };

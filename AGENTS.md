@@ -206,7 +206,7 @@ manga-shelf/
 │   ├── admin.js                  # console commands as a one-shot call (node scripts/admin.js <command>); db-check <file> and wiederherstellen <backup.zip> for a stopped server; the update prelude comes first; exit codes 78 and 74 pass through
 │   ├── dev.js                    # npm run dev: backend with node --watch + Vite dev server, demo data in data-dev/
 │   ├── seed.js                   # demo collections into an empty DATA_DIR (logins in <DATA_DIR>/seed-users.json): without size flags the lively demo library from demo-data.json (`seedDemo`, offline; `--refresh-fixtures` first rebuilds the file from AniList + Manga Passion), with --series/--volumes/--seed the synthetic bulk data (`seedDatabase`, benchmark)
-│   ├── demo-data.json            # fixtures of the demo library: 8 accounts (password demo1234), 7 shelves with roles, 37 series + 2 wishlist series, volumes with owners/reads, chapter progress, 41 anime entries (18 series, one entry per aired TV season) with per-user progress; generated, edit scripts/lib/demoSpec.js instead
+│   ├── demo-data.json            # fixtures of the demo library: 8 accounts (password demo1234), 7 shelves with roles, 37 series + 2 wishlist series, volumes with owners/reads, chapter progress, 41 anime entries (18 series, one entry per aired TV season) with per-user progress; generated, edit scripts/lib/demoSpec.js (descriptions: scripts/lib/demoTexts.js) instead
 │   ├── bench/                    # benchmark
 │   │   └── run.js                # headless API benchmark against a freshly seeded temp DB (npm run bench)
 │   ├── check-bundle-size.js      # bundle budget against frontend/bundle-budget.json (CI)
@@ -223,6 +223,7 @@ manga-shelf/
 │   │   ├── remote.js             # target URL (argument > REMOTE_URL > REMOTE_HOST/PORT), login, redactUrl
 │   │   ├── rng.js                # mulberry32, the seeded random generator of the seeder and the demo builder
 │   │   ├── demoSpec.js           # editorial part of the demo library (users, shelves, series rules) and buildDemoData() that produces demo-data.json
+│   │   ├── demoTexts.js          # own short descriptions of the demo series and anime entries (the texts of AniList and Manga Passion are never copied into demo-data.json)
 │   │   └── demoFetch.js          # live lookups for --refresh-fixtures (AniList via core/anime/anilist.js, Manga Passion, TMDb with TMDB_API_KEY)
 │   ├── release/                  # release pipeline
 │   │   ├── version.js            # version logic (resolveTargetVersion, writeVersion for every package, syncMobileVersion)
