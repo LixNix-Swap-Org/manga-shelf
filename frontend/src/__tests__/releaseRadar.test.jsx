@@ -477,6 +477,17 @@ describe('PersonalTimeline', () => {
     expect(screen.queryByAltText('Berserk')).toBe(null);
   });
 
+  it('a tap on the cover opens it large in the gallery, Escape closes it', async () => {
+    const item = radarItem({ vol_cover: '/uploads/vol.jpg', manga_cover: '/uploads/series.jpg' });
+    renderPersonal({ radarData: { total_releases: 1, groups: [{ key: 'k', label: 'L', items: [item] }] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cover vergrößern: Berserk' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bildergalerie' });
+    expect(dialog.querySelector('img').getAttribute('src')).toBe('/uploads/vol.jpg');
+    expect(screen.queryByRole('button', { name: 'Als Cover festlegen' })).toBe(null);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Bildergalerie' })).toBe(null);
+  });
+
   it('one live region stays mounted from idle through loading to the list, empty until a load starts', () => {
     const base = {
       setRadarSubView: vi.fn(), radarError: null, onRetry: vi.fn(), radarPublisherFilter: 'ALL', radarStatusFilter: 'ALL',

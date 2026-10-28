@@ -528,6 +528,7 @@
   "Cover": "カバー",
   "Cover ist zu lang (maximal {max} Zeichen)": "カバーが長すぎます(最大{max}文字)",
   "Cover muss ein Text sein": "カバーは文字列である必要があります",
+  "Cover vergrößern: {title}": "表紙を拡大: {title}",
   "Cover wird geladen…": "カバーを読み込み中…",
   "Cover wird hochgeladen…": "カバーをアップロード中…",
   "Cover {n} von {total}…": "カバー {n}/{total}…",

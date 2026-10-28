@@ -558,6 +558,7 @@
   "Cover": "Portada",
   "Cover ist zu lang (maximal {max} Zeichen)": "La portada es demasiado larga (máximo {max} caracteres)",
   "Cover muss ein Text sein": "La portada debe ser un texto",
+  "Cover vergrößern: {title}": "Ampliar portada: {title}",
   "Cover wird geladen…": "Cargando portada…",
   "Cover wird hochgeladen…": "Subiendo portada…",
   "Cover {n} von {total}…": "Portada {n} de {total}…",

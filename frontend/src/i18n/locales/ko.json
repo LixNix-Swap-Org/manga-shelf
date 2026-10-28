@@ -528,6 +528,7 @@
   "Cover": "표지",
   "Cover ist zu lang (maximal {max} Zeichen)": "표지가 너무 길어요 (최대 {max}자)",
   "Cover muss ein Text sein": "표지는 텍스트여야 해요",
+  "Cover vergrößern: {title}": "표지 확대: {title}",
   "Cover wird geladen…": "표지를 불러오는 중…",
   "Cover wird hochgeladen…": "표지를 업로드하는 중…",
   "Cover {n} von {total}…": "표지 {n} / {total}…",

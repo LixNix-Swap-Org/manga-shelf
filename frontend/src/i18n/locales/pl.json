@@ -573,6 +573,7 @@
   "Cover": "Okładka",
   "Cover ist zu lang (maximal {max} Zeichen)": "Okładka jest za długa (maksymalnie {max} znaków)",
   "Cover muss ein Text sein": "Okładka musi być tekstem",
+  "Cover vergrößern: {title}": "Powiększ okładkę: {title}",
   "Cover wird geladen…": "Wczytywanie okładki…",
   "Cover wird hochgeladen…": "Przesyłanie okładki…",
   "Cover {n} von {total}…": "Okładka {n} z {total}…",

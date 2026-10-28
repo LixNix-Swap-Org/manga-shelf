@@ -543,6 +543,7 @@
   "Cover": "Cover",
   "Cover ist zu lang (maximal {max} Zeichen)": "Cover is te lang (maximaal {max} tekens)",
   "Cover muss ein Text sein": "Cover moet een tekst zijn",
+  "Cover vergrößern: {title}": "Cover vergroten: {title}",
   "Cover wird geladen…": "Cover wordt geladen…",
   "Cover wird hochgeladen…": "Cover wordt geupload…",
   "Cover {n} von {total}…": "Cover {n} van {total}…",

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Release radar covers:** the covers in "Deutsche Neuheiten" and "Meine Vorbestellungen" are larger, and a click opens a cover full size in the image gallery ("Original" opens it in a new tab). In "Meine Vorbestellungen" the cover no longer leads to the series; the title and "Details" still do.
+
 ## 3.5.0
 
 ### Before updating

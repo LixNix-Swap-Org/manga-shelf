@@ -543,6 +543,7 @@
   "Cover": "Kapak",
   "Cover ist zu lang (maximal {max} Zeichen)": "Kapak çok uzun (en fazla {max} karakter)",
   "Cover muss ein Text sein": "Kapak bir metin olmalı",
+  "Cover vergrößern: {title}": "Kapağı büyüt: {title}",
   "Cover wird geladen…": "Kapak yükleniyor…",
   "Cover wird hochgeladen…": "Kapak karşıya yükleniyor…",
   "Cover {n} von {total}…": "Kapak {n} / {total}…",
