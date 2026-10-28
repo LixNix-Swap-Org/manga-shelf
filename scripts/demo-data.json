@@ -3,7 +3,7 @@
  "anchor": "2026-10-01",
  "password": "demo1234",
  "fetched_at": "2026-10-28",
- "note": "Erzeugt von node scripts/seed.js --refresh-fixtures (AniList + Manga Passion). Nicht von Hand pflegen: Redaktion in scripts/lib/demoSpec.js.",
+ "note": "Erzeugt von node scripts/seed.js --refresh-fixtures (AniList + Manga Passion). Nicht von Hand pflegen: Redaktion in scripts/lib/demoSpec.js, Beschreibungen in scripts/lib/demoTexts.js.",
  "users": [
   {
    "username": "max",
@@ -151,7 +151,7 @@
    "tags": "Action, Comedy, Drama, Romance, Sci-Fi, Supernatural",
    "total_volumes": 21,
    "total_chapters": null,
-   "description": "Momo Ayase strikes up an unusual friendship with her school’s UFO fanatic, whom she nicknames “Okarun” because he has a name that is not to be said aloud. While Momo believes in spirits, she thinks aliens are nothing but nonsense. Her new friend, meanwhile, thinks the exact opposite. To settle matters, the two set out to prove each other wrong—Momo to a UFO hotspot and Okarun to a haunted tunnel! What unfolds next is a beautiful story of young love…and oddly horny aliens and spirits?\n\n(Source: VIZ Media)\n\nNote: Nominated for the 15th Manga Taisho Award in 2022.",
+   "description": "Momo glaubt an Geister, Okarun an Aliens. Eine Mutprobe beweist beiden, dass sie recht haben, und von da an jagt ein übernatürliches Chaos das nächste.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2023/0109/2252/876122d8d531af2a04d9dcbb24558a6b.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/132029-V1x9JAh3G8QK.jpg",
    "manga_passion_id": 2027,
@@ -581,7 +581,7 @@
    "tags": "Comedy, Sports",
    "total_volumes": 19,
    "total_chapters": null,
-   "description": "Wimpy Sena Kobayakawa has been running away from bullies all his life. But when the football gear comes on, things change—Sena's speed and uncanny ability to elude big bullies just might give him what it takes to become a great high school football hero! Enjoy all the bone-crushing action and slapstick comedy that this heartwarming coming-of-age story has to offer.\n\n(Source: VIZ Media)",
+   "description": "Der schüchterne Sena ist vor allem eins: schnell. Hinter einem grünen Visier wird er zum Geheimstar eines chaotischen Football-Teams.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2023/0930/1001/2bb5d02a532204e391a674be8b8dd447.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30043-sQKHRluHwK2c.jpg",
    "manga_passion_id": 2489,
@@ -799,7 +799,7 @@
    "tags": "Adventure, Drama, Fantasy",
    "total_volumes": 15,
    "total_chapters": null,
-   "description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about.\n\nElf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. With the great struggle over, they all go their separate ways to live a quiet life. But as an elf, Frieren, nearly immortal, will long outlive the rest of her former party. How will she come to terms with the mortality of her friends? How can she find fulfillment in her own life, and can she learn to understand what life means to the humans around her? Frieren begins a new journey to find the answer.\n\n(Source: VIZ Media)\n\nNotes:\n\n- Winner of the Grand Prize at the 14th Manga Taisho Awards.\n\n- Nominated for the 25th Annual Tezuka Osamu Cultural Prize.\n\n- Placed 3rd at the 7th Annual Next Manga Award.",
+   "description": "Der Dämonenkönig ist besiegt, die Heldengruppe geht auseinander. Die Elfe Frieren hat Jahrhunderte vor sich und lernt erst jetzt, was ihr die gemeinsame Reise bedeutet hat.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2022/0802/2222/8604d408d32eb3e6bd23f1727b6890b5.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/118586-R1c7mc72oPvS.jpg",
    "manga_passion_id": 1697,
@@ -1363,7 +1363,7 @@
    "tags": "Action, Comedy, Drama, Horror, Supernatural",
    "total_volumes": 22,
    "total_chapters": null,
-   "description": "The name says it all! Denji's life of poverty is changed forever when he merges with his pet chainsaw dog, Pochita! Now he's living in the big city and an official Devil Hunter. But he's got a lot to learn about his new job and chainsaw powers!\n\n(Source: MANGA Plus)\n\nNotes:\n\n- Nominated for the 2020 Manga Taisho Award.\n\n- Winner of the 2021 Kono Manga ga Sugoi Award.\n\n- Winner of the 66th Shogakukan Manga Award in the shounen category.\n\n- Winner of the 2021 and 2022 Harvey Award for Best Manga.\n\n- Chapters 1-97 were released in Weekly Shounen Jump from Dec 3, 2018 to Dec 13, 2020. The series resumed from Ch. 98 in Shounen Jump+ on July 12, 2022",
+   "description": "Denji arbeitet Schulden ab, bis er mit seinem Kettensägen-Teufel Pochita verschmilzt und als Teufelsjäger anheuert. Laut, blutig und überraschend traurig.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1224/1111/003715f5e34e5400d9.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/105778-ppHaMwown6c9.jpg",
    "manga_passion_id": 269,
@@ -1798,7 +1798,7 @@
    "tags": "Action, Drama, Supernatural",
    "total_volumes": 31,
    "total_chapters": null,
-   "description": "Although Yuji Itadori looks like your average teenager, his immense physical strength is something to behold! Every sports club wants him to join, but Itadori would rather hang out with the school outcasts in the Occult Research Club. One day, the club manages to get their hands on a sealed cursed object. Little do they know the terror they’ll unleash when they break the seal…\n\n(Source: VIZ Media)\n\nNotes:\n\n- Ranked 1st in Japan's Bookstore Employees Top Manga of 2018.\n\n- Nominated for the 25th Annual Tezuka Osamu Cultural Prize in 2021.\n\n- Nominated for the 65th Shogakukan Manga Award in the Shounen Category in 2019.\n\n- Includes one extra chapter.",
+   "description": "Yuji Itadori schluckt den Finger eines uralten Fluchs und teilt sich fortan den Körper mit ihm. An einer Schule für Jujutsu lernt er, Flüche zu bekämpfen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1022/2121/035015fa6d21760c05.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/101517-FrJtb3Th3HtF.jpg",
    "manga_passion_id": 47,
@@ -2399,7 +2399,7 @@
    "tags": "Action, Comedy, Slice of Life, Supernatural",
    "total_volumes": 16,
    "total_chapters": null,
-   "description": "The master spy codenamed <Twilight> has spent his days on undercover missions, all for the dream of a better world. But one day, he receives a particularly difficult new order from command. For his mission, he must form a temporary family and start a new life?! A Spy/Action/Comedy about a one-of-a-kind family!\n\n(Source: MANGA Plus)\n\nNotes:\n\n- Nominated for the 24th Tezuka Osamu Cultural Prize in 2020.\n\n- Nominated for the 13th and 14th Manga Taisho Award in 2020 and 2021.\n\n- Nominated for the 44th Kodansha Manga Award in the Shounen Category in 2020.",
+   "description": "Ein Spion braucht für seinen Auftrag eine Familie. Seine Tochter liest Gedanken, seine Frau ist Auftragsmörderin, und keiner weiß vom anderen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2022/0201/1726/07a781ae70eb0303a7439f072236a6ce.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/108556-iCiPfU0GU4OM.jpg",
    "manga_passion_id": 364,
@@ -2896,7 +2896,7 @@
    "tags": "Adventure, Comedy, Drama, Fantasy",
    "total_volumes": 14,
    "total_chapters": null,
-   "description": "When young adventurer Laios and his company are attacked and soundly thrashed by a dragon deep in a dungeon, the party loses all its money and provisions...and a member! They're eager to go back and save her, but there is just one problem: If they set out with no food or coin to speak of, they're sure to starve on the way! But Laios comes up with a brilliant idea: \"Let's eat the monsters!\" Slimes, basilisks, and even dragons...none are safe from the appetites of these dungeon-crawling gourmands!\n\n(Source: Yen Press)\n\nNotes:\n\n- Nominated in the 9th, 10th, 11th, and 12th Manga Taishou Award in 2016-2019.\n\n- Ranked first in the 2016 Kono Manga ga Sugoi! (Male Readers Division).\n\n- Includes 14 extra chapters.",
+   "description": "Eine Abenteurergruppe will ihre Gefährtin aus dem Bauch eines Drachen retten und hat kein Geld für Proviant. Also wird gekocht, was der Dungeon hergibt.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1010/2109/017495f81faf0407b0.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/86082-L0gxhGsRsDDE.jpg",
    "manga_passion_id": 72,
@@ -3197,7 +3197,7 @@
    "tags": "Action, Adventure, Comedy, Fantasy",
    "total_volumes": 113,
    "total_chapters": null,
-   "description": "As a child, Monkey D. Luffy was inspired to become a pirate by listening to the tales of the buccaneer \"Red-Haired\" Shanks. But his life changed when Luffy accidentally ate the Gum-Gum Devil Fruit and gained the power to stretch like rubber...at the cost of never being able to swim again! Years later, still vowing to become the king of the pirates, Luffy sets out on his adventure...one guy alone in a rowboat, in search of the legendary \"One Piece,\" said to be the greatest treasure in the world...\n\n(Source: VIZ Media)",
+   "description": "Ruffy will König der Piraten werden und sammelt dafür eine Crew um sich. Ein Abenteuer über Freundschaft, Freiheit und sehr viele Inseln.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0725/1842/012425f5a7c4ece2c1.jpeg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30013-hbbRZqC5MjYh.jpg",
    "manga_passion_id": 87,
@@ -3667,7 +3667,7 @@
    "tags": "Action, Adventure, Drama, Fantasy, Horror, Psychological",
    "total_volumes": 21,
    "total_chapters": null,
-   "description": "His name is Guts, the Black Swordsman, a feared warrior spoken of only in whispers. Bearer of a gigantic sword, an iron hand, and the scars of countless battles and tortures, his flesh is also indelibly marked with The Brand, an unholy symbol that draws the forces of darkness to him and dooms him as their sacrifice. But Guts won't take his fate lying down; he'll cut a crimson swath of carnage through the ranks of the damned—and anyone else foolish enough to oppose him! Accompanied by Puck the Elf, more an annoyance than a companion, Guts relentlessly follows a dark, bloodstained path that leads only to death...or vengeance.\n\n(Source: Dark Horse)\n\nNotes:\n\n- Volumes 1-5 contain the 16 prequel chapters 0A - 0P.\n\n- Chapter 83 was omitted from Volume 13 due to the author’s request.\n\n- Volume 14 includes “Berserk: The Prototype”.\n\n- Due to the author's passing, starting from Chapter 365, the manga is illustrated by Studio Gaga (Miura's assistants) and supervised by Kouji Mori (a close friend of Miura's).",
+   "description": "Guts, der Schwarze Schwertkämpfer, zieht mit einem riesigen Schwert durch eine düstere Welt und sucht Rache an dem Mann, der einst sein Freund war.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0816/1931/047715fb82bc1f15e6.webp",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30002-3TuoSMl20fUX.jpg",
    "manga_passion_id": 779,
@@ -3876,7 +3876,7 @@
    "tags": "Action, Adventure, Drama",
    "total_volumes": 29,
    "total_chapters": null,
-   "description": "As a child, Thorfinn sat at the feet of the great Leif Ericson and thrilled to wild tales of a land far to the west. But his youthful fantasies were shattered by a mercenary raid. Raised by the Vikings who murdered his father, Thorfinn became a terrifying warrior, forever seeking to kill the band's leader, Askeladd, and avenge his father. Sustaining Thorfinn through his ordeal are his pride in his family and his dreams of a fertile westward land, a land without war or slavery … the land Leif called Vinland.\n\n(Source: Kodansha USA)\n\nNotes:\n\n- Includes the one-shot \"Sayonara ga Chikai no de\" (For Our Farewell Is Near)\n\n- Includes the one-shot \"Assassin's Creed: Valhalla x Vinland Saga\"\n\n- Includes two extra chapters.\n\n- Won the Grand Prize at the Japan Media Arts Festival in 2009.\n\n- Winner of the 36th Kodansha Manga Award in the General category in 2012.",
+   "description": "Thorfinn wächst unter Wikingern auf und lebt nur für die Rache am Mörder seines Vaters, bis er sich fragen muss, wofür er eigentlich kämpft.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0218/1349/043095fb11a9b6963d.jpeg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30642-MeizzL2WDv6C.jpg",
    "manga_passion_id": 223,
@@ -4183,7 +4183,7 @@
    "tags": "Comedy, Drama, Sports",
    "total_volumes": 45,
    "total_chapters": null,
-   "description": "Shouyou Hinata is out to prove that in volleyball you don’t need to be tall to fly!\n\nAfter losing his first and last volleyball match against Tobio Kageyama, “the King of the Court,” Shouyou Hinata swears to become his rival after graduating middle school. But what happens when the guy he wants to defeat ends up being his teammate?!\n\n(Source: VIZ Media)\n\nNotes:\n\n- Winner of the 61st Shogakukan Manga Award in the Shounen Category in 2017.\n\n- Includes two extra chapters.",
+   "description": "Hinata ist klein, springt aber hoch. Zusammen mit dem genialen Zuspieler Kageyama will er sein Volleyballteam an die Spitze bringen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0810/0755/038955fa9c7a454963.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/65243-naohhXW4M4b9.jpg",
    "manga_passion_id": 131,
@@ -4441,7 +4441,7 @@
    "tags": "Action, Drama, Sports",
    "total_volumes": 30,
    "total_chapters": null,
-   "description": "After a disastrous defeat at the 2018 World Cup, Japan's team struggles to regroup. But what's missing? An absolute Ace Striker, who can guide them to the win. The Japan Football Union is hell-bent on creating a striker who hungers for goals and thirsts for victory, and who can be the decisive instrument in turning around a losing match...and to do so, they've gathered 300 of Japan's best and brightest youth players. Who will emerge to lead the team...and will they be able to out-muscle and out-ego everyone who stands in their way?\n\n(Source: Kodansha USA)\n\nNote: Winner of the 45th Kodansha Manga Award in the Shounen Category in 2021.",
+   "description": "Japans Fußball soll endlich einen echten Stürmer bekommen. Dafür treten 300 junge Spieler in einem harten Auswahlprogramm gegeneinander an.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0707/1854/073146181ad27c3631.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/106130-4UbnMTU80zur.jpg",
    "manga_passion_id": 1156,
@@ -4679,7 +4679,7 @@
    "tags": "Drama, Mystery",
    "total_volumes": 16,
    "total_chapters": null,
-   "description": "Maomao, a young woman trained in the art of herbal medicine, is forced to work as a lowly servant in the inner palace. Though she yearns for life outside its perfumed halls, she isn’t long for a life of drudgery! Using her wits to break a “curse” afflicting the imperial heirs, Maomao attracts the attentions of the handsome eunuch Jinshi and is promoted to attendant food taster. But Jinshi has other plans for the erstwhile apothecary, and soon Maomao is back to brewing potions and…solving mysteries?!\n\n(Source: Square Enix)\n\nNote: Won the Grand Prize in the Printed Manga category at the Tsugi ni Kuru Manga Award 2019.",
+   "description": "Die junge Kräuterkundige Maomao landet als Dienerin im Kaiserpalast. Ihr Wissen über Gifte macht sie bald zur Ermittlerin wider Willen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2022/1002/2210/0cbcca61d6ad3b8059491ebb93861d5c.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/99022-J1LhaA8HbVzV.jpg",
    "manga_passion_id": 1235,
@@ -4906,7 +4906,7 @@
    "tags": "Action, Adventure, Drama, Supernatural",
    "total_volumes": 23,
    "total_chapters": null,
-   "description": "The setting is Taisho era Japan. Tanjirou is a kindhearted young boy who lived peacefully with his family as a coal seller. Their normal life changes completely when his family is slaughtered by demons. The only other survivor, Tanjirou's younger sister Nezuko, has become a ferocious demon. In order to return Nezuko to normal and get revenge on the demon that killed their family, the two of them depart on a journey. From a young talent, an adventure tale of blood and swords begins!\n\n(Source: Shonen Jump)\n\nNotes:\n\n- Includes two extra chapters.\n\n- Nominated to the 24th and 25th Annual Tezuka Osamu Cultural Prize.",
+   "description": "Nachdem Dämonen seine Familie getötet haben, wird Tanjiro Dämonenjäger. Er sucht nach einem Weg, seine Schwester Nezuko wieder zum Menschen zu machen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0124/0048/001685fb4f55e38bca.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/87216-TVKEGfSxAqKs.jpg",
    "manga_passion_id": 123,
@@ -5135,7 +5135,7 @@
    "tags": "Action, Adventure, Comedy, Fantasy",
    "total_volumes": 30,
    "total_chapters": null,
-   "description": "As players of Monster Hunter and Dungeons & Dragons know, the slime is not exactly the king of the fantasy monsters. So when a 37-year-old Tokyo salaryman dies and wakes up in a world of dragons and magic, he's a little disappointed to find he's become a blind, boneless slime monster.\n\n(Source: Kodansha USA)",
+   "description": "Ein Büroangestellter stirbt und wacht als Schleim in einer Fantasywelt auf. Mit seltsamen Fähigkeiten baut er dort nach und nach ein eigenes Reich auf.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0417/1527/005675f2fa86ac74d2.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/86399-Tejvk4pMg9PR.jpg",
    "manga_passion_id": 249,
@@ -5537,7 +5537,7 @@
    "tags": "Action, Adventure, Drama",
    "total_volumes": 37,
    "total_chapters": null,
-   "description": "At seventeen years of age, Miyamoto Musashi--still known by his childhood name, Shinmen Takezo--was a wild young brute just setting out along the way of the sword.\n\nIn the aftermath of the epic Battle of Sekigahara, Takezo finds himself a fugitive survivor on the losing side of the war. Takezo's vicious nature has made him an outcast even in his own village, and he is hunted down like an animal. At this crucial crossroads in Takezo's life, an eccentric monk and a childhood friend are the only ones who can help him find his way.\n\n(Source: VIZ Media)",
+   "description": "Der junge Miyamoto Musashi zieht durch das Japan des frühen 17. Jahrhunderts und sucht im Schwertkampf nach Stärke und nach sich selbst.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2024/0219/0116/12b9736e69ff232c2f49198f13003102.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30656-XYzvRlsc3iK4.jpg",
    "manga_passion_id": 4301,
@@ -5968,7 +5968,7 @@
    "tags": "Drama, Psychological, Slice of Life",
    "total_volumes": 13,
    "total_chapters": null,
-   "description": "Meet Punpun Punyama. He’s an average kid in an average town.\n\nHe wants to win a Nobel Prize and save the world.\n\nHe wants the girl he has a crush on to like him back.\n\nHe wants to find some porn.\n\nThat’s what he wants, but what does he get…?\n\n(Source: VIZ Media)",
+   "description": "Punpun erscheint als kleiner Vogel, doch sein Leben ist alles andere als harmlos. Ein ruhiges, bedrückendes Coming-of-Age über viele Jahre.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0218/1325/015255f6cc30b9de30.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/34632-JULTgA6q6jAH.jpg",
    "manga_passion_id": 515,
@@ -6177,7 +6177,7 @@
    "tags": "Drama, Mystery, Psychological, Sci-Fi, Thriller",
    "total_volumes": 22,
    "total_chapters": null,
-   "description": "Humanity, having faced extinction at the end of the 20th century, would not have entered the new millennium if it weren't for them. In 1969, during their youth, they created a symbol. In 1997, as the coming disaster slowly starts to unfold, that symbol returns. This is the story of a group of boys who try to save the world.\n\nFor Kenji, a simple convenience store manager who once dreamed of becoming a rock 'n' roll musician, a host of memories from his past come rushing back when one of his childhood friends mysteriously commits suicide. Could this new death be related to the rise of a bizarre new cult that's been implicated in several other murders and disappearances? Determined to dig deeper, Kenji reunites with some of his old buddies in the hope of learning the truth behind it all.\n\n(Source: VIZ Media)",
+   "description": "Ein Weltuntergang folgt genau den Spielen, die sich Kenji und seine Freunde als Kinder ausgedacht haben. Ein Mystery-Thriller über mehrere Jahrzehnte.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1201/1111/09251614cc69a86827.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30003-MBm3u1K1uHsi.jpg",
    "manga_passion_id": 1520,
@@ -6427,7 +6427,7 @@
    "tags": "Drama, Mystery, Supernatural, Thriller",
    "total_volumes": 20,
    "total_chapters": null,
-   "description": "It’s 1949 Los Angeles, and Kevin Yamagata, a Japanese American comic book author, is drawing his bestselling character, Billy Bat: a quick-witted detective who is, unsurprisingly, a cartoon bat. Everything is going well for Kevin until he discovers an unfortunate truth: He may have unintentionally plagiarized his beloved character from a drawing he once saw in Japan. Devastated by the news, Kevin returns to war-torn Japan to find the drawing’s original artist . . . but the character’s origins turn out to be far older and more perplexing than he had ever imagined.\n\n(Source: Kana)\n\nNote: Won the Max und Moritz Prize for \"Best international Comic\" in 2014.",
+   "description": "Ein Comiczeichner entdeckt, dass seine Figur, eine Fledermaus, schon vor ihm existierte und in der Geschichte immer wieder auftaucht.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0318/0226/1106661c865d490adb.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/41054-AHdvdNdyRe3M.jpg",
    "manga_passion_id": 1846,
@@ -6652,7 +6652,7 @@
    "tags": "Drama, Psychological, Sports",
    "total_volumes": 15,
    "total_chapters": null,
-   "description": "A motorcycle accident, bone cancer, a speeding truck crashing into a boy on a stolen bicycle--tragic life-changing events turn the worlds of three young men upside down. These three very different personalities have only one thing in common--their passion for basketball.\n\n(Source: VIZ Media)\n\nNote: Won an Excellence Prize for manga at the 2001 Japan Media Arts Festival.",
+   "description": "Drei junge Männer, die das Leben aus der Bahn geworfen hat, finden über Rollstuhlbasketball wieder einen Halt.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0928/2008/031885f9b447ec1625.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30657-jK5aBm6e15lB.jpg",
    "manga_passion_id": 80,
@@ -6808,7 +6808,7 @@
    "tags": "Action, Drama, Fantasy, Psychological",
    "total_volumes": 14,
    "total_chapters": null,
-   "description": "Best friends Tokio and Azuma do everything together, even if most of the time it feels like Tokio is just stumbling along in Azuma’s cooler, more talented footsteps. But when they’re attacked one night by a superhuman mutant called a choujin, Tokio finally has a chance to shine—by turning into a choujin himself!\n\nBeing a superpowered creature isn’t all it’s cracked up to be, though. Tokio has to hide his transformation from his family and dodge a truancy charge at school, all while dealing with the increasingly odd incidents happening around town!\n\n(Source: VIZ Media)\n\nNote: The manga chapters are irregularly released on Tonari no Young Jump. At the same time, it received a serialization in Weekly Young Jump, starting from chapter 1. Some chapters receive a version with fewer pages in the magazine, also counting with additions of new pages in certain situations. After chapter 15, the manga went back to being exclusive to Tonari no YJ, ending the serialization in the magazine.",
+   "description": "Zwei Freunde in einer Welt, in der Menschen zu Übermenschen werden können. Was die neuen Kräfte mit ihnen machen, ist eine ganz andere Frage.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2023/0109/2252/7874584d701538874f236c76fb384fef.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/126693-MuGVrfQfbEx8.jpg",
    "manga_passion_id": 2123,
@@ -7052,7 +7052,7 @@
    "tags": "Drama",
    "total_volumes": 11,
    "total_chapters": null,
-   "description": "Rakugo--the ultimate form of storytelling, where everything in a story is expressed with just your body and words. Shinta and his daughter Akane have been seduced by this wonderful form of classical entertainment. Having observed her father strive to pass the shin'uchi rakugo test, Akane will take her own steps into this unique world!\n\n(Source: MANGA Plus)\n\nNotes:\n\n- Ranked 3rd in the 8th Next Manga Awards print manga category in 2022.\n\n- Ranked 4th in the Kono Manga ga Sugoi! 2023 guidebook for male readers.\n\n- Ranked 3rd in the Nationwide Bookstore Employees' Recommended Comics of 2023.\n\n- Ranked 2nd in the 16th Manga Taisho in 2023.\n\n- Nominated for the 47th Kodansha Manga Award in the shounen category in 2023.\n\n- Included in the New York Public Library's 2023 Best Books for Teens.\n\n- Included in YALSA's 2024 Great Graphic Novels for Teens.",
+   "description": "Akane will Rakugo-Erzählerin werden, so wie ihr Vater es sein wollte. Sie setzt alles daran, die Kunst des Geschichtenerzählens zu meistern.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2025/0215/1337/e9923949acfd7b29064d4cc61dc8cc4c.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/144866-BltObhJaBtT6.jpg",
    "manga_passion_id": 5040,
@@ -7223,7 +7223,7 @@
    "tags": "Action, Drama, Mystery, Psychological, Supernatural, Thriller",
    "total_volumes": 8,
    "total_chapters": null,
-   "description": "Orphaned siblings Agni and Luna, like the Ice Witch who cursed their world, are two of the “blessed,” humans who hold special abilities. However, not all who are blessed are friendly, and after another of their kind attacks Agni and decimates the orphans' village, Agni fights to survive, vowing revenge.\n\n(Source: VIZ Media)",
+   "description": "In einer erfrorenen Welt brennt Agni ununterbrochen und regeneriert sich doch immer wieder. Ein radikaler, verstörender Rachefeldzug.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0608/0517/066776033791593a11.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/87170-gsBzHdIHoyEk.jpg",
    "manga_passion_id": 1029,
@@ -7517,7 +7517,7 @@
    "tags": "Drama, Horror, Mystery, Psychological, Supernatural",
    "total_volumes": 15,
    "total_chapters": null,
-   "description": "Nakoshi Susumu, age 34, is living out of his car. Between spending his days with the homeless and his nights in his vehicle, he has little to his name–but not so little that he’ll agree to be the subject of a scientific experiment. An unnerving medical student is stalking him and offering to pay Nakoshi a significant sum to test trepanation: the ability to draw out a sixth sense by drilling into the skull. Nakoshi refuses. When Nakoshi’s beloved car is towed, though, he finally agrees to cash and the operating table. At first, the experiment seems to bear no fruit, and Nakoshi’s life is unchanged. That is, until Nakoshi realizes his vision has warped in his left eye…showing him the twisted homunculus inside every human.\n\n(Source: Seven Seas Entertainment)",
+   "description": "Ein Mann ohne Wohnung lässt sich auf eine Schädeloperation ein. Danach sieht er die inneren Verletzungen anderer Menschen als seltsame Gestalten.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2022/1010/2246/27e008ec1718c54cc57677865cab3576.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30936-2JwXy6PK3gT0.jpg",
    "manga_passion_id": 2175,
@@ -7683,7 +7683,7 @@
    "tags": "Drama, Psychological",
    "total_volumes": 9,
    "total_chapters": null,
-   "description": "In the 18th century, seeking \"freedom and equality,\" the event that gave birth to modern French society, the French Revolution, began. There was one protagonist that lived within the darkness, Charles-Henri Sanson. He was the fourth-generation head of the Sanson family, and the executioner of Paris. This is the story of a man nobly facing his harsh fate...\n\n(Source: Shueisha, translated)\n\nNotes:\n\n- Nominated for the 18th Tezuka Osamu Cultural Prize \"Reader Award\" in 2014\n\n- Nominated for the 8th Manga Taishou Award in 2015.",
+   "description": "Charles-Henri Sanson soll das Amt des Henkers von Paris übernehmen. Ein kunstvoll gezeichnetes Drama über Gewissen und Revolution.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1007/2133/07053603aa7fe77e5d.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/n85165-1ra5zlLMTYeX.jpg",
    "manga_passion_id": 1113,
@@ -7907,7 +7907,7 @@
    "tags": "Adventure, Drama, Psychological, Sports",
    "total_volumes": 4,
    "total_chapters": null,
-   "description": "Transfer student Buntaro Mori starts his first day at his new school already on the administration’s radar. He’s withdrawn and sullen, and the teachers are just waiting for him to explode. When his annoying classmate Miyamoto promises to leave him alone forever if he climbs to the top of the school, Mori eagerly takes up the challenge and shocks everyone when he makes it all the way to the roof. Flushed with the victory of his first successful climb, Mori can’t resist the lure of the local peak, despite warnings from more experienced climbers about the risks of climbing alone. But Mori doesn’t care. A little danger is nothing in the face of his new obsession.\n\n(Source: VIZ Media)",
+   "description": "Ein stiller Schüler entdeckt das Klettern für sich und kann davon nicht mehr lassen, egal wie hoch und gefährlich die Wand wird.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2026/1013/1248/0853c4578ff3befd47096ab692370ab4.webp",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/37375-CWUiMtQsmdJI.jpg",
    "manga_passion_id": 6231,
@@ -8049,7 +8049,7 @@
    "tags": "Drama, Psychological, Sci-Fi",
    "total_volumes": 2,
    "total_chapters": null,
-   "description": "Takopi travels from his home of Happy Planet to spread happiness across Earth, but meets the unsmiling Shizuka upon landing. Her friends at school and home life seem to be the source of her somber expression—and the pure-hearted Takopi is determined to change things for the better! But what truths await him when the curtains rise in this shocking drama?!\n\n(Source: MANGA Plus)",
+   "description": "Ein Alien kommt auf die Erde, um Menschen glücklich zu machen, und trifft auf ein Mädchen, dessen Probleme kein Gadget lösen kann.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx142568-xPC5wQPxTV1s.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/142568-dHr6C2u01Pp0.jpg",
    "manga_passion_id": null,
@@ -8155,7 +8155,7 @@
    "tags": "Action, Horror, Psychological",
    "total_volumes": 22,
    "total_chapters": null,
-   "description": "A mentally unhinged manga artist witnesses the beginning of a zombie outbreak in Tokyo, and he’s certain of only two things: he’s destined to be the city’s hero, and he possesses something quite rare in Japan—an actual firearm!\n\n(Source: Dark Horse)\n\nNotes:\n\nNominated for the 3rd and 4th Manga Taisho Award (2010).\n\nIncludes a new epilogue chapter that was released 4 years after the official end of the manga.",
+   "description": "Ein erfolgloser Mangazeichner erlebt mit, wie um ihn herum der Alltag in einer Seuche zerbricht. Horror mit sehr menschlichem Helden.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/1022/0933/06633602ae530e28da.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/44440-EsVCieTs3ojl.jpg",
    "manga_passion_id": 1018,
@@ -8409,7 +8409,7 @@
    "tags": "Action, Adventure, Fantasy",
    "total_volumes": 8,
    "total_chapters": 201,
-   "description": "In a world where awakened beings called “Hunters” must battle deadly monsters to protect humanity, Seong Jin-U, nicknamed “the weakest hunter of all mankind,” finds himself in a constant struggle for survival. One day, after a brutal encounter in an overpowered dungeon wipes out his party and threatens to end his life, a mysterious System chooses him as its sole player: Jin-U has been granted the rare opportunity to level up his abilities, possibly beyond any known limits. Follow Jin-U’s journey as he takes on ever-stronger enemies, both human and monster, to discover the secrets deep within the dungeons and the ultimate extent of his powers.\n\n(Source: Tappytoon)\n\nNote: Includes 22 extra chapters.",
+   "description": "Jinwoo ist der schwächste Jäger von allen, bis ihm nach einem fast tödlichen Einsatz eine Art Spielsystem erlaubt, unbegrenzt stärker zu werden.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0404/0303/000035ee80deb5e21a.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/105398-4UrEhdqZukrg.jpg",
    "manga_passion_id": null,
@@ -8736,7 +8736,7 @@
    "tags": "Action, Adventure, Fantasy",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "Back then, Dok-Ja had no idea. He had no idea his favorite web novel 'Three Ways to Survive the Apocalypse' was going to come to life, and that he would become the only person to know how the world was going to end. He also had no idea he would end up becoming the protagonist of this novel-turned-reality. Now, Dok-Ja will go on a journey to change the course of the story and save humankind once and for all.\n\n(Source: WEBTOON, edited)",
+   "description": "Dokja ist der einzige Leser eines endlos langen Webromans. Als die Geschichte plötzlich Wirklichkeit wird, weiß nur er, wie sie ausgehen könnte.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2023/1211/2231/88599900544dc61eea308413688ec6a8.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/119257-RtxJMRCunHXc.jpg",
    "manga_passion_id": null,
@@ -8917,7 +8917,7 @@
    "tags": "Action, Comedy, Supernatural",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "Ji-U is a kind-hearted young man who harnesses the lightning quick reflexes of a cat to secretly make the world a better place – one saved little child or foster pet at a time. Kayden is a secret agent on the run, who finds himself stuck in the body of a…um…decidedly fat old fluffy cat. Together, armed with Ji-U’s super powers and Kayden’s uber-smarts, they’re out to fight those forces who would let evil rule this world. That is, if they can stand each other long enough to get the job done.\n\n(Source: WEBTOON, edited)",
+   "description": "Jiwoo ist blitzschnell und hilfsbereit. Ein grummeliger Kater, der eigentlich ein mächtiger Erwachter ist, nimmt ihn unter seine Fittiche.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx106929-flAUvHZDUz5v.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/106929-jYmT1n3Z0m46.jpg",
    "manga_passion_id": null,
@@ -9097,7 +9097,7 @@
    "tags": "Action, Drama, Sports",
    "total_volumes": 5,
    "total_chapters": 133,
-   "description": "While searching for a final prodigy to train, legendary boxing coach K stumbles across a bewildering scene—an apathetic teenager simply standing still as his bullies throttle him. But Coach K sees more than this, sees the precision, grace, and uncanny perceptiveness in the boy’s movements. He knows right away that this is the fighter he’s been waiting for. Yet when he tries to recruit him, the boy with the lifeless eyes only asks one question: “Is it any fun? Hitting people…Is it fun?”\n\n(Source: Yen Press)\n\nNote: Includes 30 extra chapters.",
+   "description": "Ein legendärer Trainer findet in einem gleichgültigen Schüler ein Talent, wie es keines gibt. Ein Boxdrama über Stärke und Leere.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2023/0630/0100/81bab125f4312201c562d282c19f37f7.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/119174-DoE2aiSp9DOn.jpg",
    "manga_passion_id": null,
@@ -9268,7 +9268,7 @@
    "tags": "Drama, Fantasy, Psychological, Romance",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "This game’s got me obsessed! It’s like it’s taken over my life... wait—HARD MODE ACTIVATED. No-no-no-no-no! It has literally taken me and thrown me into the part of Penelope Eckhart. Love is easy as the heroine, but as the hated villainess, I’m trying very hard not to die… at the hands of my brothers… the prince… a fork… every possible ending is death! This world is stacked against me, but can my wits and insider game knowledge score the affection of these male characters? Or the reset button???\n\n(Source: Tapas)",
+   "description": "Eine Spielerin wacht im Körper der Bösewichtin ihres Lieblingsspiels auf. Jede falsche Entscheidung kann ihr Ende bedeuten.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx118408-zZuOINqjBZYn.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/118408-FT9bkwTdii7D.jpg",
    "manga_passion_id": null,
@@ -9422,7 +9422,7 @@
    "tags": "Action, Adventure, Drama, Fantasy, Mystery",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "What do you desire? Money and wealth? Honor and pride? Authority and power? Revenge? Or something that transcends them all? Whatever you desire—it's here.\n\n(Source: WEBTOON)",
+   "description": "Bam folgt seiner Freundin in einen geheimnisvollen Turm, der jedem, der den Gipfel erreicht, jeden Wunsch erfüllen soll.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx85143-23oup3ETbFJk.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/85143-IKyCdaJKfa2M.jpg",
    "manga_passion_id": null,
@@ -9597,7 +9597,7 @@
    "tags": "Drama, Horror, Mystery, Psychological, Romance, Thriller",
    "total_volumes": 5,
    "total_chapters": 94,
-   "description": "High school life is hard enough, but it’s even harder for Seon Jin. A sickly disabled boy, Jin might as well be invisible. No one ever pays attention to him, except for the bullies who prey on him for being weak. Jin, however, keeps a very dark secret—there’s a serial killer in his house…and it’s his father!\n\n(Source: Seven Seas Entertainment)\n\nNote: Includes one extra chapter.",
+   "description": "Seon Jin hat ein schreckliches Geheimnis: Sein Vater ist ein Serienmörder, der ihn zwingt, ihm zu helfen. Ein beklemmender Thriller.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2026/0416/0915/86ec552b27de00fb4774012a2e7364b3.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/86964-pdcp6HlZ66lq.jpg",
    "manga_passion_id": null,
@@ -9817,7 +9817,7 @@
    "tags": "Drama, Horror, Psychological, Supernatural, Thriller",
    "total_volumes": 6,
    "total_chapters": 141,
-   "description": "After an unexpected family tragedy, a reclusive high school student is forced to leave his home -- only to face something much scarier: a reality where monsters are trying to wipe out humanity. Now he must fight alongside a handful of reluctant heroes to try and save the world before it’s too late.\n\n(Source: WEBTOON)\n\nNote: Includes one extra chapter.",
+   "description": "Ein zurückgezogener Schüler zieht in ein Wohnhaus, als sich Menschen überall in Monster verwandeln. Gemeinsam mit den Nachbarn kämpft er ums Überleben.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2026/0227/0959/bcf90bd919d0cf8cce35634db28f24aa.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/100954-y7f4uDwqvDny.jpg",
    "manga_passion_id": null,
@@ -10041,7 +10041,7 @@
    "tags": "Comedy, Fantasy, Romance",
    "total_volumes": 5,
    "total_chapters": 135,
-   "description": "The story of Athanasia, forsaken princess of the Obelian Empire, ends with her execution at the hands of her own father—or does it? Her tragic tale is the plot of the novel The Lovely Princess. But now, a modern woman who read the book has just woken up as baby Athanasia herself, filled with her own memories and knowledge of the story she’s stuck in! Determined to survive her doomed fate, infant Athanasia embarks on this new life with a plan: avoid attention and hoard valuables to fund her escape. When her plan goes awry, she suddenly needs to charm her way into the good graces of her father, the beautiful tyrant emperor, so he doesn’t kill her again!\n\n(Source: Seven Seas Entertainment)\n\nNote: Includes 10 extra chapters.",
+   "description": "Athanasia erfährt, dass ihr Vater sie in der Romanvorlage hinrichten lässt. Mit viel Charme versucht sie, diesem Schicksal zu entgehen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2022/0802/2221/f4d3ea223c6766f0387b69826d514fa8.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/107521-mIv5O0dYsbFf.jpg",
    "manga_passion_id": null,
@@ -10241,7 +10241,7 @@
    "tags": "Action, Adventure, Fantasy",
    "total_volumes": null,
    "total_chapters": 268,
-   "description": "The worst calamity humankind has ever faced...\n\nShadow Realms have ravaged the earth and decimated almost everyone in their way. The survival of humanity hinges upon the success of just six mages, including analytic fighter Desir Herrman. The remaining heroes make one final stand to end the bloodshed...but to no avail. Desir closes his eyes on what should be the end of his life—only to open them and see the beginning of his school days?! Desir has returned thirteen years back to the past, where he’s been given another chance. A chance to see the loved ones he lost, a chance to meet his fellow warriors again, and a chance to save the world…!\n\n(Source: Yen Press)",
+   "description": "Nach dem Untergang der Menschheit bekommt ein Magier die Chance, in seine Schulzeit zurückzukehren und alles anders zu machen.",
    "cover_image": "https://media.manga-passion.de/volume/cover/2021/0701/1842/07482616890b91b0e3.jpg",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/105393-ERoRkr9cT9B6.jpg",
    "manga_passion_id": null,
@@ -10428,7 +10428,7 @@
    "tags": "Romance, Slice of Life",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "Yuki is a typical college student, whose world revolves around her friends, social media, and the latest sales. But when a chance encounter on a train leads to her meeting friend-of-a-friend and fellow student Itsuomi-san, her world starts to widen. But even though Itsuomi-kun can speak three languages, sign language isn’t one of them. Can the two learn to communicate the budding feelings between them?\n\n(Source: Kodansha USA)\n\nNotes:\n\n- Ranked 17th place for the Tsugimanga Award in the Print Manga Category in 2020.\n\n- Nominated for the 45th and 46th Kodansha Manga Award in the Shoujo Category in 2021 and 2022.\n\n- Nominated for the 68th Shogakukan Manga Award in the Shoujo Category",
+   "description": "Yuki ist gehörlos und lebt ihr Studentenleben ganz normal, bis sie einen weltgewandten Kommilitonen kennenlernt. Eine leise Liebesgeschichte.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx111189-tvPJRVj5nGic.png",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/111189-SvB7s0IMtfmj.jpg",
    "manga_passion_id": null,
@@ -10505,7 +10505,7 @@
    "tags": "Comedy, Drama, Sports",
    "total_volumes": null,
    "total_chapters": null,
-   "description": "Hanamichi Sakuragi's got no game with girls--none at all! It doesn't help that he's known for throwing down at a moment's notice and always coming out on top. A hopeless bruiser, he's been rejected by 50 girls in a row! All that changes when he meets the girl of his dreams, Haruko, and she's actually not afraid of him! When she introduces him to the game of basketball, his life is changed forever...\n\n(Source: VIZ Media)",
+   "description": "Rüpel Hanamichi tritt nur wegen eines Mädchens dem Basketballteam bei und entdeckt dabei, wie viel ihm der Sport bedeutet.",
    "cover_image": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30051-5KJyPlO7z5F4.png",
    "banner_image": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30051-Cp4mFnqb6zhz.jpg",
    "manga_passion_id": null,
@@ -10583,7 +10583,7 @@
      "Science SARU"
     ],
     "score": 83,
-    "description": "This is a story about Momo, a high school girl who comes from a family of spirit mediums, and her classmate Okarun, an occult fanatic. After Momo rescues Okarun from being bullied, they begin talking. However, an argument ensues between them since Momo believes in ghosts but denies aliens exist, and Okarun believes in aliens but denies ghosts exist.\n\nTo prove to each other what they believe in is real, Momo goes to an abandoned hospital where a UFO has been spotted and Okarun goes to a tunnel rumored to be haunted. To their surprise, they each encounter overwhelming paranormal activities that transcend comprehension. Amid these predicaments, Momo awakens her hidden power and Okarun gains the power of a curse to overcome these new dangers! Their fateful love begins as well!?\n\nThe story of the occult battle and adolescence starts!\n\n(Source: Crunchyroll)\n\nNotes:\n\n- Worldwide premiere of Episode 1 before the Japanese television premiere occurred at Anime Expo July 6, 2024.\n\n- Episodes 1-3 titled as DAN DA DAN: FIRST ENCOUNTER was pre-screened in advance in theaters on August 31, 2024 in Asia, September 7, 2024 in Europe and September 13, 2024 in North America. The regular TV broadcast began October 4, 2024.",
+    "description": "Die erste Staffel: Momo und Okarun geraten zwischen Geister und Aliens und müssen sich einiges zurückholen.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -10806,7 +10806,7 @@
      "Science SARU"
     ],
     "score": 83,
-    "description": "While the mission to exorcise Jin \"Jiji\" Enjouji's family home is underway, things are not going as expected. Momo Ayase narrowly evades an attempted abduction while Ken \"Okarun\" Takakura and Jiji are ambushed by the Kitou family—the unsettling landlords of the cursed estate. The trio's efforts threaten the foundation of this enigmatic town shrouded in legends and mysteries.\n\nAs Momo, Okarun, and Jiji are drawn deeper into the maze of folklore and supernatural entities, they must each utilize their unique powers if they want to survive and unravel the secrets of the uncanny town.\n\n(Source: MAL Rewrite)\n\nNote: Worldwide premiere of Episodes 1-3 titled as DAN DA DAN: EVIL EYE before the Japanese premiere was pre-screened in advance in theaters on June 6, 2025 in North America by GKIDS Films and June 7 and 8 in Europe by Piece of Magic Entertainment and Animation Digital Network.",
+    "description": "Die zweite Staffel setzt das Chaos fort, mit neuen Verbündeten und neuen Gegnern.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -11007,7 +11007,7 @@
      "Studio Gallop"
     ],
     "score": 76,
-    "description": "Welcome to the Gridiron of the Damned! Huge, hulking bodies throw themselves at each other, while a tiny, lithe body runs between them toward the goal! No, it’s not a game of football, it’s Sena Kobayakawa trying to evade the monstrous Ha-Ha brothers down the halls of Deimon High School! But wait! Sena’s incredible skills at not getting caught have been spotted by the devilish (possibly actually demonic) captain of the school’s embryonic American-style football team. When Sena asks to be the team’s manager, he gets thrust onto the field as a running back instead! But there are two BIG catches. First, to keep the identity of their new “star” player an absolute secret, Yoichi makes Sena wear an opaque visor on his helmet and gives him the alias of “Eyeshield 21.” And the second catch? Well, in order to hit his fastest “speed of light” running mode, Sena usually has to be absolutely terrified. Not that THAT will be a problem with the monstrous players that he’ll soon find himself running from! The insanity hits the streets when the feet meet the cleats in Eyeshield 21!\n\n(Source: Sentai Filmworks, edited)",
+    "description": "Sena wird als maskierter Runningback zum Herz eines kleinen Football-Teams. Die Serie zur Mangavorlage.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -11481,7 +11481,7 @@
      "MADHOUSE"
     ],
     "score": 91,
-    "description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. But Frieren will long outlive the rest of her former party. How will she come to understand what life means to the people around her? Decades after their victory, the funeral of one her friends confronts Frieren with her own near immortality. Frieren sets out to fulfill the last wishes of her comrades and finds herself beginning a new adventure…\n\n(Source: Crunchyroll)",
+    "description": "Frieren macht sich erneut auf die Reise, diesmal mit einer jungen Schülerin, und begegnet überall Spuren ihrer alten Gruppe.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -11871,7 +11871,7 @@
      "MADHOUSE"
     ],
     "score": 87,
-    "description": "Following the First-Class Mage Exam, the trio—elven mage Frieren, warrior Stark, and first-class mage Fern—gains access to the dangerous Northern Plateau. As the party presses onward toward Aureole, formidable adversaries force Stark to confront his insecurities, solidifying his resolve and his role as the party's frontliner. Meanwhile, Fern continues to cherish the gifts she has been blessed with throughout her life, each a reminder of those she holds dear.\n\nFrieren—still honoring her vow to understand humanity—revisits memories of her journey with the Hero's party and her fleeting encounter with a legendary figure. As she reflects on the passage of time, the elven mage quietly questions whether she has truly changed, yet in the small, almost subtle choices that she makes, there are signs that she might have become more human than she realizes.\n\n(Source: MAL Rewrite)",
+    "description": "Nach der Magierprüfung zieht Frieren mit ihren Begleitern weiter nach Norden.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -12041,7 +12041,7 @@
      "MAPPA"
     ],
     "score": 83,
-    "description": "Denji is a teenage boy living with a Chainsaw Devil named Pochita. Due to the debt his father left behind, he has been living a rock-bottom life while repaying his debt by harvesting devil corpses with Pochita.\n\nOne day, Denji is betrayed and killed. As his consciousness fades, he makes a contract with Pochita and gets revived as \"Chainsaw Man\" — a man with a devil's heart.\n\n(Source: Crunchyroll)",
+    "description": "Denji tritt als Teufelsjäger in den Dienst einer Behörde und lernt seine neuen Kollegen kennen.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -12333,7 +12333,7 @@
      "MAPPA"
     ],
     "score": 84,
-    "description": "A boy fights... for \"the right death.\"\n\nHardship, regret, shame: the negative feelings that humans feel become Curses that lurk in our everyday lives. The Curses run rampant throughout the world, capable of leading people to terrible misfortune and even death. What's more, the Curses can only be exorcised by another Curse.\n\nItadori Yuji is a boy with tremendous physical strength, though he lives a completely ordinary high school life. One day, to save a friend who has been attacked by Curses, he eats the finger of the Double-Faced Specter, taking the Curse into his own soul. From then on, he shares one body with the Double-Faced Specter. Guided by the most powerful of sorcerers, Gojou Satoru, Itadori is admitted to the Tokyo Metropolitan Technical High School of Sorcery, an organization that fights the Curses... and thus begins the heroic tale of a boy who became a Curse to exorcise a Curse, a life from which he could never turn back.\n\n(Source: Crunchyroll)\n\nNote: The first episode received an early web premiere on September 19th, 2020. The regular TV broadcast started on October 3rd, 2020.",
+    "description": "Yuji schließt sich der Jujutsu-Schule an und kämpft mit seinen Mitschülern gegen immer gefährlichere Flüche.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -12684,7 +12684,7 @@
      "MAPPA"
     ],
     "score": 86,
-    "description": "The past comes to light when second-year students Satoru Gojou and Suguru Getou are tasked with escorting young Riko Amanai to Master Tengen. But when a non-sorcerer user tries to kill them, their mission to protect the Star Plasma Vessel threatens to turn them into bitter enemies and cement their destinies—one as the world’s strongest sorcerer, and the other its most twisted curse user!\n\n(Source: Crunchyroll)",
+    "description": "Ein Rückblick auf die Schulzeit zweier Lehrer, danach eskaliert die Lage in Shibuya.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -13006,7 +13006,7 @@
      "MAPPA"
     ],
     "score": 86,
-    "description": "After the Shibuya Incident, a deadly jujutsu battle known as the Culling Game orchestrated by Noritoshi Kamo erupts across ten colonies in Japan.\n\nHaunted by guilt over the mass killings in Shibuya and wary of Sukuna’s interest in Fushiguro, Itadori chooses not to return to Jujutsu High. Instead, he teams up with Choso to exorcise the countless cursed spirits unleashed by Noritoshi Kamo.\nAmid this chaos, the Jujutsu Headquarters revokes Yuji Itadori’s suspended death sentence and appoints special-grade sorcerer Yuta Okkotsu as his executioner.\n\nNewly awakened modern sorcerers and resurrected ancient ones,  now fighting as players in the Culling Game, collide with conflicting motives, driving the world once more toward an age ruled by jujutsu.\n\n(Source: TOHO Animation)",
+    "description": "Nach Shibuya beginnt ein tödliches Spiel, das ganz Japan in Gefahr bringt.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -13165,7 +13165,7 @@
      "WIT STUDIO"
     ],
     "score": 83,
-    "description": "Everyone has a part of themselves they cannot show to anyone else.\n\nAt a time when all nations of the world were involved in a fierce war of information happening behind closed doors, Ostania and Westalis had been in a state of cold war against one another for decades. The Westalis Intelligence Services' Eastern-Focused Division (WISE) sends their most talented spy, \"Twilight,\" on a top-secret mission to investigate the movements of Donovan Desmond, the chairman of Ostania's National Unity Party, who is threatening peace efforts between the two nations.\n\nThis mission is known as \"Operation Strix.\" It consists of \"putting together a family in one week in order to infiltrate social gatherings organized by the elite school that Desmond's son attends.\"\n\n\"Twilight\" takes on the identity of psychiatrist Loid Forger and starts looking for family members. But Anya, the daughter he adopts, turns out to have the ability to read people's minds, while his wife, Yor, is an assassin! With it being in each of their own interests to keep these facts hidden, they start living together while concealing their true identities from one another.\n\nWorld peace is now in the hands of this brand-new family as they embark on an adventure full of surprises.\n\n(Source: Crunchyroll)",
+    "description": "Loid, Anya und Yor werden zur Scheinfamilie. Der erste Teil um Schulaufnahme und Geheimnisse.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -13515,7 +13515,7 @@
      "CloverWorks"
     ],
     "score": 81,
-    "description": "With Anya Forger successfully enrolled at the renowned Eden Academy, Operation Strix advances to its second phase. To investigate Ostanian politician Donovan Desmond, Anya must either befriend his son Damian or collect eight Stella Stars to become an Imperial Scholar. Fortunately, Anya has already acquired her first star. In celebration, her adoptive father, Loid, decides to fulfill her wish to adopt a dog.\n\nDuring their canine search, Loid receives new orders from his superiors, who have found that a band of Berlint University students is plotting to assassinate Westalis' Minister Brantz using bombs worn by trained dogs. While Loid tries to stop their plans, Anya stumbles upon the terrorists' base of operations. There, she befriends a kindhearted, clairvoyant dog who the family later names Bond.\n\nAlthough the Forgers continue to lead their individual lives in secrecy, the family—with a new fluffy addition—remains united through all of the unusual obstacles thrown their way.\n\n(Source: MAL Rewrite)",
+    "description": "Anya ist an der Eliteschule, und die Familie meistert den Alltag zwischen Mission und Missverständnissen.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -13714,7 +13714,7 @@
      "CloverWorks"
     ],
     "score": 80,
-    "description": "The Forger family will face a new familial mission as Yor heads on a cruise ship expedition!\n\n(Source: Crunchyroll News)",
+    "description": "Die zweite Staffel schickt die Familie auf eine Reise, bei der Yor einen gefährlichen Auftrag hat.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -14055,7 +14055,7 @@
      "CloverWorks"
     ],
     "score": 82,
-    "description": "World peace is at stake and secret agent Twilight must undergo his most difficult mission yet—pretend to be a family man. Posing as a loving husband and father, he’ll infiltrate an elite school to get close to a high-profile politician. He has the perfect cover, except his wife’s a deadly assassin and neither knows each other’s identity. But someone does, his adopted daughter who’s a telepath!\n\n(Source: Crunchyroll)",
+    "description": "Die dritte Staffel: Twilight muss für den Frieden wieder alles riskieren.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -14240,7 +14240,7 @@
      "TRIGGER"
     ],
     "score": 85,
-    "description": "When young adventurer Laios and his company are attacked and soundly thrashed by a dragon deep in a dungeon, the party loses all its money and provisions...and a member! They're eager to go back and save her, but there is just one problem: If they set out with no food or coin to speak of, they're sure to starve on the way! But Laios comes up with a brilliant idea: \"Let's eat the monsters!\" Slimes, basilisks, and even dragons...none are safe from the appetites of these dungeon-crawling gourmands!\n\n(Source: Yen Press)\n\nNote: A world premiere screening of Episode 1 was shown in the Studio TRIGGER panel at Anime Expo on July 1, 2023.",
+    "description": "Laios und seine Gruppe steigen in den Dungeon hinab und kochen sich durch seine Bewohner.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -14420,7 +14420,7 @@
      "Toei Animation"
     ],
     "score": 87,
-    "description": "Gold Roger was known as the Pirate King, the strongest and most infamous being to have sailed the Grand Line. The capture and death of Roger by the World Government brought a change throughout the world. His last words before his death revealed the location of the greatest treasure in the world, One Piece. It was this revelation that brought about the Grand Age of Pirates, men who dreamed of finding One Piece (which promises an unlimited amount of riches and fame), and quite possibly the most coveted of titles for the person who found it, the title of the Pirate King.\n\nEnter Monkey D. Luffy, a 17-year-old boy that defies your standard definition of a pirate. Rather than the popular persona of a wicked, hardened, toothless pirate who ransacks villages for fun, Luffy’s reason for being a pirate is one of pure wonder; the thought of an exciting adventure and meeting new and intriguing people, along with finding One Piece, are his reasons of becoming a pirate. Following in the footsteps of his childhood hero, Luffy and his crew travel across the Grand Line, experiencing crazy adventures, unveiling dark mysteries and battling strong enemies, all in order to reach One Piece.\n\n*This includes the following special episodes:\n\n- Chopperman to the Rescue! Protect the TV Station by the Shore! (Episode 336)\n\n- The Strongest Tag-Team! Luffy and Toriko's Hard Struggle! (Episode 492)\n\n- Team Formation! Save Chopper (Episode 542)\n\n- History's Strongest Collaboration vs. Glutton of the Sea (Episode 590)\n\n- 20th Anniversary! Special Romance Dawn (Episode 907)",
+    "description": "Ruffy und seine Strohhutbande segeln über die Grand Line. Die seit 1999 laufende Serie.",
     "next_airing": {
      "episode": 1181,
      "at": 1798985760
@@ -15794,7 +15794,7 @@
      "OLM"
     ],
     "score": 84,
-    "description": "Set during a time that very much resembles Europe during the Middle Ages, Berserk is a story of revenge set in the castle town of Midland. Recently, the town has seen the rise of a wicked king, who uses demonic minions to control and victimise his subjects.\n\nHowever, when a lone soldier enters the town calling himself the Black Swordsman and armed to the teeth, many sense that the king's days of unchecked oppression are over. Soon, the Black Swordsman is plying his trade by hunting down the king's evil servants, giving no quarter, and preparing to exact his vengeance on the king.\n\n(Source: MVM Entertainment)",
+    "description": "Die Serie von 1997 erzählt das goldene Zeitalter von Guts und der Bande des Falken.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -15967,7 +15967,7 @@
      "WIT STUDIO"
     ],
     "score": 87,
-    "description": "Thorfinn is son to one of the Vikings' greatest warriors, but when his father is killed in battle by the mercenary leader Askeladd, he swears to have his revenge. Thorfinn joins Askeladd's band in order to challenge him to a duel, and ends up caught in the middle of a war for the crown of England.\n\n(Source: Kodansha USA)",
+    "description": "Der junge Thorfinn kämpft in einer Söldnertruppe und wartet auf seine Gelegenheit zur Rache.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -16131,7 +16131,7 @@
      "MAPPA"
     ],
     "score": 88,
-    "description": "After his father's death and the destruction of his village at the hands of English raiders, Einar wishes for a peaceful life with his family on their newly rebuilt farms. However, fate has other plans: his village is invaded once again. Einar watches helplessly as the marauding Danes burn his lands and slaughter his family. The invaders capture Einar and take him back to Denmark as a slave.\n\nEinar clings to his mother's final words to survive. He is purchased by Ketil, a kind slave owner and landlord who promises that Einar can regain his freedom in return for working in the fields. Soon, Einar encounters his new partner in farm cultivation—Thorfinn, a dejected and melancholic slave. As Einar and Thorfinn work together toward their freedom, they are haunted by both sins of the past and the ploys of the present. Yet they carry on, grasping for a glimmer of hope, redemption, and peace in a world that is nothing but unjust and unforgiving.\n\n(Source: MAL Rewrite)",
+    "description": "Thorfinn arbeitet als Knecht auf einem Hof und sucht nach einem Leben ohne Krieg.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -16284,7 +16284,7 @@
      "Production I.G"
     ],
     "score": 83,
-    "description": "Inspired after watching a volleyball ace nicknamed \"Little Giant\" in action, small-statured Shouyou Hinata revives the volleyball club at his middle school. The newly-formed team even makes it to a tournament; however, their first match turns out to be their last when they are brutally squashed by the \"King of the Court,\" Tobio Kageyama. Hinata vows to surpass Kageyama, and so after graduating from middle school, he joins Karasuno High School's volleyball team—only to find that his sworn rival, Kageyama, is now his teammate.\n\nThanks to his short height, Hinata struggles to find his role on the team, even with his superior jumping power. Surprisingly, Kageyama has his own problems that only Hinata can help with, and learning to work together appears to be the only way for the team to be successful. Based on Haruichi Furudate's popular shounen manga of the same name, Haikyuu!! is an exhilarating and emotional sports comedy following two determined athletes as they attempt to patch a heated rivalry in order to make their high school volleyball team the best in Japan.",
+    "description": "Hinata und Kageyama landen im selben Volleyballteam und müssen lernen, zusammenzuspielen.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -16520,7 +16520,7 @@
      "Production I.G"
     ],
     "score": 86,
-    "description": "Following their participation at the Inter-High, the Karasuno High School volleyball team attempts to refocus their efforts, aiming to conquer the Spring tournament instead.\n\nWhen they receive an invitation from long-standing rival Nekoma High, Karasuno agrees to take part in a large training camp alongside many notable volleyball teams in Tokyo and even some national level players. By playing with some of the toughest teams in Japan, they hope not only to sharpen their skills, but also come up with new attacks that would strengthen them. Moreover, Hinata and Kageyama attempt to devise a more powerful weapon, one that could possibly break the sturdiest of blocks.\n\nFacing what may be their last chance at victory before the senior players graduate, the members of Karasuno's volleyball team must learn to settle their differences and train harder than ever if they hope to overcome formidable opponents old and new—including their archrival Aoba Jousai and its world-class setter Tooru Oikawa.",
+    "description": "Nach den ersten Turnieren trainiert Karasuno für den nächsten großen Wettbewerb.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -16730,7 +16730,7 @@
      "Production I.G"
     ],
     "score": 87,
-    "description": "After the victory against Aoba Jousai High, Karasuno High School, once called “a fallen powerhouse, a crow that can’t fly,” has finally reached the climax of the heated Spring tournament. Now, to advance to nationals, the Karasuno team has to defeat the powerhouse Shiratorizawa Academy. Karasuno’s greatest hurdle is their adversary’s ace, Wakatoshi Ushijima, the number one player in the Miyagi Prefecture, and one of the country’s top three aces.\n\nOnly the strongest team will make it to the national tournament. Since this match is the third-year players’ last chance to qualify for nationals, Karasuno has to use everything they learned during the training camp and prior matches to attain victory. Filled with restlessness and excitement, both teams are determined to come out on top in the third season of Haikyuu!!.\n\n(Source: MAL Rewrite)",
+    "description": "Ein einziges Finale gegen den Favoriten Shiratorizawa, Satz für Satz.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -16896,7 +16896,7 @@
      "Production I.G"
     ],
     "score": 83,
-    "description": "The Karasuno High School Volleyball Club finally won their way into the nationals after an intense battle for the Miyagi Prefecture Spring Tournament qualifiers. As they were preparing for the nationals, Kageyama is invited to go to All-Japan Youth Training Camp. At the same time, Tsukishima is invited to go to a special rookie select training camp for first-years in Miyagi Prefecture. Hinata feels panic that he’s being left behind as one of the first-years and then decides to show up at the Miyagi Prefecture rookie select training camp anyway...\n\n(Source: Crunchyroll)",
+    "description": "Karasuno fährt zum nationalen Turnier, und jeder im Team sucht seinen eigenen Weg.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -17041,7 +17041,7 @@
      "8-bit"
     ],
     "score": 79,
-    "description": "Japan’s desire for World Cup glory leads the Japanese Football Association to launch a new rigorous training program to find the national team’s next striker. Three hundred high school players are pitted against each other for the position, but only one will come out on top. Who among them will be the striker to usher in a new era of Japanese soccer?\n\n(Source: Crunchyroll)",
+    "description": "Im Blue-Lock-Programm kämpft Isagi gegen 299 andere Stürmer um seinen Platz.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -17221,7 +17221,7 @@
      "8-bit"
     ],
     "score": 75,
-    "description": "The hottest soccer matches start again as the U-20 Japan National Team makes their debut!\n\n(Source: Crunchyroll News)",
+    "description": "Die Blue-Lock-Spieler treten gegen die japanische U-20-Auswahl an.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -17465,7 +17465,7 @@
      "TOHO animation STUDIO"
     ],
     "score": 88,
-    "description": "Maomao lived a peaceful life with her apothecary father. Until one day, she’s sold as a lowly servant to the emperor’s palace. But she wasn’t meant for a compliant life among royalty. So when imperial heirs fall ill, she decides to step in and find a cure! This catches the eye of Jinshi, a handsome palace official who promotes her. Now, she’s making a name for herself solving medical mysteries!\n\n(Source: Crunchyroll)",
+    "description": "Maomao löst im Hinterpalast ein Rätsel nach dem anderen und fällt dabei einem hohen Beamten auf.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -17808,7 +17808,7 @@
      "OLM"
     ],
     "score": 88,
-    "description": "Using her wit and vast knowledge of medicines and poisons alike, Maomao played a pivotal role in solving a series of mysteries and conspiracies that plagued the imperial court. Having recently come to terms with the secrets of her parents, she returns to fulfill her normal duties on behalf of the emperor's highest-ranking consorts. Maomao also works alongside the eunuch Jinshi to better the consorts' many ladies-in-waiting, including helping them learn to read.\n\nHowever, with the arrival of a merchant caravan comes a new wave of intrigue. A pattern of strange coincidences involving the visitors and their wares unsettles Maomao, driving her to investigate the puzzling circumstances behind the convoy. As dangers from both outside and within threaten the balance between the imperial concubines, Maomao continues to utilize her cunning and medical expertise to keep the women safe from harm.\n\n(Source: MAL Rewrite)",
+    "description": "Neue Fälle, neue Intrigen am Hof, und Maomao steckt mittendrin.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -18138,7 +18138,7 @@
      "OLM"
     ],
     "score": 85,
-    "description": "In the aftermath of the Shi Clan’s rebellion, things have finally settled down, and Maomao has returned to her old life as a pharmacist in the pleasure district.\n\nOne day, triggered by a breakfast served at the Verdigris House, Maomao senses an anomaly and begins investigating its true nature.\n\nMeanwhile, Jinshi, who has revealed his true identity as the Imperial brother and begun to face his heavy responsibilities, is deeply troubled by the final message left by Loulan: a warning of an impending \"disaster that will strike the nation.\"\n\nTo make matters worse, rumors of a mysterious shrine maiden who deceives the people begin to spread, casting a dark shadow over the country of Li once again.\n\nFrom the depths of the inner court to the city streets, and across foreign borders—the world grows wider, and the stakes even higher for Maomao and Jinshi.\n\n(Source: Crunchyroll)",
+    "description": "Die dritte Staffel folgt Maomao in eine Zeit nach großen Umbrüchen am Hof.",
     "next_airing": {
      "episode": 5,
      "at": 1793368800
@@ -18356,7 +18356,7 @@
      "ufotable"
     ],
     "score": 82,
-    "description": "It is the Taisho Period in Japan. Tanjiro, a kindhearted boy who sells charcoal for a living, finds his family slaughtered by a demon. To make matters worse, his younger sister Nezuko, the sole survivor, has been transformed into a demon herself. Though devastated by this grim reality, Tanjiro resolves to become a “demon slayer” so that he can turn his sister back into a human, and kill the demon that massacred his family.\n\n(Source: Crunchyroll)",
+    "description": "Tanjiro wird zum Dämonenjäger ausgebildet und zieht mit Nezuko los.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -18735,7 +18735,7 @@
      "ufotable"
     ],
     "score": 82,
-    "description": "In Demon Slayer: Kimetsu no Yaiba Mugen Train Arc, Tanjiro Kamado and his fellow Demon Slayer members embark on a mission aboard the Infinity Train. Their new mission is to investigate a series of mysterious disappearances, carried out by a demon that has been terrorizing passengers and killing the demon slayers who oppose it.\n\nNote: The first episode is entirely anime original. Episodes 2-7 are a re-edited version of the movie featuring new scenes and music.",
+    "description": "Der Mugen-Zug-Bogen als Serie: ein Einsatz an Bord eines Zuges mit dem Flammen-Hashira.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -19072,7 +19072,7 @@
      "ufotable"
     ],
     "score": 86,
-    "description": "After visiting the Rengoku residence, Tanjirou and his comrades volunteer for a mission within the Entertainment District, a place where desires are sold and demons dwell. They journey alongside the flashy Sound Hashira, Tengen Uzui, in search of a monstrous foe terrorizing the town. Sworn to slay creatures of the night, the hunt continues.\n\n(Source: Funimation)\n\nNote:\n\n- The first episode aired with a runtime of ~47 minutes.\n\n- The last episode aired with a runtime of ~33 minutes.",
+    "description": "Tanjiro und seine Freunde ermitteln im Vergnügungsviertel.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -19397,7 +19397,7 @@
      "ufotable"
     ],
     "score": 80,
-    "description": "Tanjiro’s journey leads him to the Swordsmith Village, where he reunites with two Hashira, members of the Demon Slayer Corps’ highest-ranking swordsmen - Mist Hashira Muichiro Tokito and Love Hashira Mitsuri Kanroji. With the shadows of demons lurking near, a new battle begins for Tanjiro and his comrades.\n\nNotes:\n\n• The first episode has a runtime of ~49 minutes, and received an early premiere in cinemas worldwide as part of a special screening alongside the final two episodes of Kimetsu no Yaiba: Yuukaku-hen.\n\n• The final episode has a runtime of ~52 minutes.",
+    "description": "Im Dorf der Schmiede bekommt Tanjiro ein neues Schwert, und die Dämonen folgen ihm.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -19716,7 +19716,7 @@
      "8-bit"
     ],
     "score": 80,
-    "description": "Lonely thirty-seven-year-old Satoru Mikami is stuck in a dead-end job, unhappy with his mundane life, but after dying at the hands of a robber, he awakens to a fresh start in a fantasy realm...as a slime monster! As he acclimates to his goopy new existence, his exploits with the other monsters set off a chain of events that will change his new world forever!\n\n(Source: Yen Press)",
+    "description": "Satoru wird als Schleim Rimuru wiedergeboren und findet in der neuen Welt erste Freunde.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -20155,7 +20155,7 @@
      "8-bit"
     ],
     "score": 82,
-    "description": "Now that the Jura Tempest Alliance is growing even further, they will now be meeting the animal kingdom of Eurazania, reuniting with King Gazel, rising tensions between monsters and humans, and Rimuru encountering the strongest enemy he’s ever faced.\n\n(Source: Funimation)",
+    "description": "Rimurus Land Tempest wächst, und mit ihm die Spannungen zu den Nachbarn.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -20504,7 +20504,7 @@
      "8-bit"
     ],
     "score": 82,
-    "description": "The nation of Tempest is in a festive mood after successfully overcoming the surprise attack from the Falmuth Army and the Western Holy Church. Beyond the festivities lies a meeting between Tempest and its allies to decide the future of the Nation of Monsters. The aftermath of the Falmuth invasion, Milim Nava's suspicious behavior, and the disappearance of Demon Lord Carrion—the problems seem to keep on piling up.\n\nRimuru Tempest, now awakened as a \"True Demon Lord,\" decides to go on the offensive against Clayman. With the fully revived \"Storm Dragon\" Veldora, \"Ultimate Skill\" Raphael, and other powerful comrades, the ruler of the Tempest is confident in taking down his enemies one by one until he can face the man pulling the strings.",
+    "description": "Der zweite Teil der zweiten Staffel: Tempest feiert, doch die nächste Krise ist nicht weit.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -20870,7 +20870,7 @@
      "8-bit"
     ],
     "score": 78,
-    "description": "Rimuru has officially become a Demon Lord after defeating Clayman. Following Walpurgis, the Demon Lords' banquet, Rimuru's domain is expanded to include the entire Great Forest of Jura. Anticipating a flood of representatives from all races showing up to pay their respects, Rimuru decides to throw a festival to commemorate the opening of Tempest, using it as an opportunity to gain new citizens and present Demon Lord Rimuru to the world. Meanwhile, in the Holy Empire of Lubelius, home base of the monster-hating cult of Luminism, Holy Knight Captain Hinata receives a message from Rimuru. But the message is actually a fabricated declaration of war sent by some unknown party. Upon learning that Hinata is heading for Tempest, Rimuru makes a decision... Thus begins a new challenge for Rimuru, striving to distinguish friend from foe in his pursuit of the ideal nation where humans and monsters can prosper together.\n\n(Source: Crunchyroll)",
+    "description": "Rimuru ist jetzt Dämonenkönig und muss sein Reich in einer veränderten Welt behaupten.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -21193,7 +21193,7 @@
      "A-1 Pictures"
     ],
     "score": 80,
-    "description": "They say whatever doesn’t kill you makes you stronger, but that’s not the case for the world’s weakest hunter Seong Jin-U. After being brutally slaughtered by monsters in a high-ranking dungeon, Jin-U came back with the System, a program only he could see, that’s leveling him up in every way. Now, he’s inspired to discover the secrets behind his powers and the dungeon that spawned them.\n\n(Source: Crunchyroll)",
+    "description": "Jinwoo überlebt knapp einen Einsatz und erhält eine Fähigkeit, die nur er besitzt.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -21503,7 +21503,7 @@
      "A-1 Pictures"
     ],
     "score": 84,
-    "description": "Mastering his new abilities in secret, Jin-U must battle humanity's toughest foes to save his mother.\n\n(Source: Crunchyroll News)",
+    "description": "Jinwoo trainiert im Verborgenen und stellt sich immer stärkeren Gegnern.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -21751,7 +21751,7 @@
      "Telecom Animation Film"
     ],
     "score": 74,
-    "description": "There is a tower that summons chosen people called \"Regulars\" with the promise of granting their deepest desires. Whether it be wealth, fame, authority, or something that surpasses them all—everything awaits those who reach the top.\n\nTwenty-Fifth Bam is a boy who had only known a dark cave, a dirty cloth, and an unreachable light his entire life. So when a girl named Rachel came to him through the light, his entire world changed. Becoming close friends with Rachel, he learned various things about the outside world from her. But when Rachel says she must leave him to climb the Tower, his world shatters around him. Vowing to follow after her no matter what it takes, he sets his sight on the tower, and a miracle occurs.\n\nThus begins the journey of Bam, a young boy who was not chosen by the Tower but opened its gates by himself. They call his kind \"Irregulars\"—beings that have shaken the very foundation of the Tower each time they set foot inside it.",
+    "description": "Bam betritt den Turm und muss die ersten Prüfungen bestehen, um seiner Freundin zu folgen.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -22088,7 +22088,7 @@
      "The Answer Studio"
     ],
     "score": 66,
-    "description": "Ja Wangnan can’t seem to pass the 20th Floor. Even after failing time and time again, he refuses to give up. On his journey, he meets a mysterious and powerful character named Viole. Wangnan invites Viole to join his team of Regulars. Their journey continues with new challenges at every turn.\n\n(Source: Crunchyroll)",
+    "description": "Ein neuer Teilnehmer will hoch hinaus, doch der Turm verlangt mehr als Ehrgeiz.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -22386,7 +22386,7 @@
      "Arvo Animation"
     ],
     "score": 69,
-    "description": "Another dimension that continues to taint our world, the Shadow World. Humanity is faced with the worst calamity, known as the Shadow Labyrinth. In spite of their desperate attacks, Desir Herrman and his friends lose their battle to the Destruction Dragon, Boromir Napolitan, and the world comes to an end. When Desir is convinced of his end, he opens his eyes... to find himself 13 years in the past. Desir has gone back in time to the enrollment ceremony of Hebrion Academy, the top school for mages in the Empire.\n\nTo change the future of impending doom, Desir reassembles his friends once again to save the world!\n\n(Source: Crunchyroll)",
+    "description": "Desir kehrt in die Vergangenheit zurück und will mit seinem Wissen den Untergang verhindern.",
     "next_airing": null,
     "next_airing_estimated": false,
     "relations": [
@@ -22608,7 +22608,7 @@
      "Arvo Animation"
     ],
     "score": 69,
-    "description": "In a land dominated by the formidable Shadow Worlds, most of humanity has been destroyed. To rescue their planet from impending doom, six brave heroes fight a perilous battle…and fail. But there’s a glimpse of hope when Desir, one of the last mages, is suddenly sent back in time 13 years! Now armed with knowledge of the grim future, can he alter the course of history and save the world?\n\n(Source: Crunchyroll)",
+    "description": "Desir und seine Gefährten bereiten sich auf die nächste Bedrohung aus den Schattenwelten vor.",
     "next_airing": {
      "episode": 4,
      "at": 1793202300

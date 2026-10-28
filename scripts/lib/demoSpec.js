@@ -2,6 +2,7 @@
 // buildDemoData(fetched) turns it, plus what scripts/lib/demoFetch.js got from AniList and Manga Passion, into the
 // self-contained scripts/demo-data.json that scripts/seed.js reads (offline, deterministic).
 const { mulberry32 } = require('./rng');
+const { SERIES_TEXTS, ANIME_TEXTS } = require('./demoTexts');
 
 const ANCHOR = '2026-10-01'; // "today" of the demo data; read dates and purchases are relative to it
 const PASSWORD = 'demo1234';
@@ -109,7 +110,7 @@ function buildSeries(spec, f, rand, shelfByKey) {
     tags: manga.tags || (mp && mp.tags) || null,
     total_volumes: spec.wishlist ? null : (mp && !spec.web && mp.total_volumes && mp.total_volumes >= spec.n ? mp.total_volumes : (spec.st === 'Abgeschlossen' ? spec.n : null)),
     total_chapters: spec.web ? (manga.total_chapters || null) : null,
-    description: manga.description || (mp && mp.description) || null,
+    description: SERIES_TEXTS[spec.k] || null, // own texts, never the description of a source
     cover_image: (mp && mp.cover_image) || manga.cover_image || null,
     banner_image: manga.banner_image || null,
     manga_passion_id: !spec.web && mp ? mp.id : null,
@@ -256,10 +257,11 @@ function buildAnime(animeSeries, fetchedAnime, rand) {
         });
       }
       previous = progress;
+      const key = n === 0 ? s.k : `${s.k}-s${n + 1}`;
       entries.push({
-        key: n === 0 ? s.k : `${s.k}-s${n + 1}`, series: s.k, season: n + 1,
+        key, series: s.k, season: n + 1,
         tmdb_id: n === 0 ? f.tmdb_id || null : null, tmdb_kind: n === 0 ? f.tmdb_kind || null : null, // one TMDb series, one entry
-        meta, crunchyroll: crunchyrollOf(meta) || (n === 0 ? f.crunchyroll || null : null), airing: running ? AIRING[s.k] : null, progress
+        meta: { ...meta, description: ANIME_TEXTS[key] || null }, crunchyroll: crunchyrollOf(meta) || (n === 0 ? f.crunchyroll || null : null), airing: running ? AIRING[s.k] : null, progress
       });
     });
   });
@@ -276,7 +278,7 @@ function buildDemoData(fetched) {
   const missing = SERIES.filter(s => s.anime && !animeFetched[s.k]).map(s => s.k);
   return {
     format: 1, anchor: ANCHOR, password: PASSWORD, fetched_at: new Date().toISOString().slice(0, 10),
-    note: 'Erzeugt von node scripts/seed.js --refresh-fixtures (AniList + Manga Passion). Nicht von Hand pflegen: Redaktion in scripts/lib/demoSpec.js.',
+    note: 'Erzeugt von node scripts/seed.js --refresh-fixtures (AniList + Manga Passion). Nicht von Hand pflegen: Redaktion in scripts/lib/demoSpec.js, Beschreibungen in scripts/lib/demoTexts.js.',
     users: USERS, shelves: SHELVES, series, anime, missing_anime: missing
   };
 }
