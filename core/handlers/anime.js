@@ -203,9 +203,12 @@ function seasonChain(ctx, row, relations) {
         my_status: mineOf(entry && entry.id),
         current: false
     });
+    // at a fork the best season continues the line, TV before TV_SHORT before ONA (gateway.seasonChainOf likewise)
     const stepOf = (rels, type) => {
         const list = (rels || []).filter((x) => x && x.kind === 'ANIME' && x.relation === type);
-        return list.find((x) => SEASON_FORMATS.includes(x.format)) || list.find((x) => BRIDGE_FORMATS.includes(x.format)) || null;
+        const seasons = list.filter((x) => SEASON_FORMATS.includes(x.format));
+        return seasons.sort((a, b) => SEASON_FORMATS.indexOf(a.format) - SEASON_FORMATS.indexOf(b.format))[0]
+            || list.find((x) => BRIDGE_FORMATS.includes(x.format)) || null;
     };
     const walk = (start, type) => {
         const out = [];
@@ -1109,6 +1112,7 @@ async function adaptations(ctx, { params }) {
  * GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live beyond the entries in the collection
  * (gateway.seasonChainOf); with AniList switched off the chain of the stored relations, without a request. `truncated`
  * ({ before, after }) names the directions the request cap ended early; the next call goes on from the cached steps.
+ * Seasons of a side line (a second sequel or prequel at a fork) carry `branch: true`.
  */
 async function seasonChainLive(ctx, { params }) {
     const id = parseId(params.id);
@@ -1136,7 +1140,8 @@ async function seasonChainLive(ctx, { params }) {
             season_year: (entry && entry.season_year) || n.season_year || null,
             episodes: (entry && entry.episodes) || n.episodes || null,
             my_status: (entry && ctx.user && (status.get(entry.id, ctx.user.id) || {}).status) || null,
-            current: !!current
+            current: !!current,
+            ...(n.branch ? { branch: true } : {})
         };
     };
     const self = { anilist_id: row.anilist_id, mal_id: row.mal_id, title: row.title, season_year: row.season_year, episodes: row.episodes };

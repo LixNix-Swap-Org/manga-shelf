@@ -221,6 +221,22 @@ const EXTRA_FORMATS = ['MOVIE', 'SPECIAL', 'OVA'];
 
 const sectionOf = (sections, episode) => Math.max(0, sections.findIndex((s) => episode >= s.from && episode <= s.to));
 
+const NOT_TRUNCATED = { before: false, after: false };
+
+/**
+ * The label of each season of the line: "Staffel N" along the main line, "Nebenlinie" for a season of a side line (a
+ * second sequel at a fork, `branch`), and only "Staffel" while earlier seasons are not loaded yet (the number would be
+ * wrong). Returns [{ season, label }].
+ */
+function chainSeasonLabels(seasons, earlierMissing) {
+  let n = 0;
+  return seasons.map((season) => {
+    if (season.branch) return { season, label: t('Nebenlinie') };
+    n += 1;
+    return { season, label: earlierMissing ? t('Staffel') : t('Staffel {n}', { n }) };
+  });
+}
+
 /**
  * The grid's seasons for an entry nobody set seasons for: a long run (more than 100 episodes in the grid, the known count
  * or, for a running show without one, the aired episodes; the plain blocks of 100 say little there) asks the TMDb
@@ -758,11 +774,15 @@ export default function AnimeDetailModal({
 
   // the live main line (AniList, beyond the entries in the collection); the detail's own season_chain is the fallback
   const [liveChain, setLiveChain] = useState(null);
-  const [chainTruncated, setChainTruncated] = useState(false);
+  const [chainTruncated, setChainTruncated] = useState(NOT_TRUNCATED);
   const [chainLoading, setChainLoading] = useState(false);
   const [chainRevision, setChainRevision] = useState(0);
+  // "Weitere Staffeln laden" hands the focus back once the answer is there (the button may be gone by then)
+  const chainFocus = useRef(false);
+  const chainHeadingRef = useRef(null);
+  const chainMoreRef = useRef(null);
   const chainId = isOpen && anime?.anilist_id && (anime.kind || 'anime') === 'anime' ? animeId : null;
-  useEffect(() => { setLiveChain(null); setChainTruncated(false); }, [chainId]);
+  useEffect(() => { setLiveChain(null); setChainTruncated(NOT_TRUNCATED); chainFocus.current = false; }, [chainId]);
   useEffect(() => {
     if (!chainId) return undefined;
     const controller = new AbortController();
@@ -772,12 +792,17 @@ export default function AnimeDetailModal({
         if (controller.signal.aborted || !Array.isArray(data?.seasons)) return;
         setLiveChain(data.seasons);
         // the request cap ended a direction early: the next call goes on from the steps AniList already answered
-        setChainTruncated(!!(data.truncated?.before || data.truncated?.after));
+        setChainTruncated({ before: !!data.truncated?.before, after: !!data.truncated?.after });
       })
       .catch((err) => { if (!controller.signal.aborted && chainRevision > 0) notify.error(err); })
       .finally(() => { if (!controller.signal.aborted) setChainLoading(false); });
     return () => controller.abort();
   }, [chainId, chainRevision]);
+  useEffect(() => {
+    if (chainLoading || !chainFocus.current) return;
+    chainFocus.current = false;
+    (chainMoreRef.current || chainHeadingRef.current)?.focus();
+  }, [chainLoading, chainTruncated]);
 
   useEffect(() => {
     if (!isOpen || !animeId) return undefined;
@@ -1080,11 +1105,11 @@ export default function AnimeDetailModal({
 
               {chainSeasons.length > 1 && (
                 <section className="mt-5 border-t border-slate-800 pt-4" aria-labelledby={`${titleId}-chain`}>
-                  <h3 id={`${titleId}-chain`} className="text-sm font-bold text-white mb-2">{t('Staffeln')}</h3>
+                  <h3 id={`${titleId}-chain`} ref={chainHeadingRef} tabIndex={-1} className="text-sm font-bold text-white mb-2 outline-none">{t('Staffeln')}</h3>
                   <ol className="space-y-1.5">
-                    {chainSeasons.map((c, i) => (
+                    {chainSeasonLabels(chainSeasons, chainTruncated.before).map(({ season: c, label }) => (
                       <li key={`${c.anilist_id || c.mal_id || c.in_collection_id}`} className="flex items-center gap-2 text-xs" aria-current={c.current ? 'true' : undefined}>
-                        <span className="text-slate-400 w-32 shrink-0">{t('Staffel {n}', { n: i + 1 })}</span>
+                        <span className="text-slate-400 w-32 shrink-0">{label}</span>
                         <span className={`min-w-0 flex-1 truncate ${c.current ? 'text-white font-semibold' : 'text-slate-200'}`}>
                           {c.title}{c.season_year ? ` (${c.season_year})` : ''}
                           {c.my_status ? <span className="ml-2 text-slate-400">{animeProgressLabel(c.my_status)}</span> : null}
@@ -1100,11 +1125,11 @@ export default function AnimeDetailModal({
                       </li>
                     ))}
                   </ol>
-                  {chainTruncated && (
+                  {(chainTruncated.before || chainTruncated.after) && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                       <span>{t('Weitere Staffeln wurden noch nicht geladen.')}</span>
-                      <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={chainLoading} aria-busy={chainLoading || undefined}
-                        onClick={() => setChainRevision((r) => r + 1)}>
+                      <button type="button" ref={chainMoreRef} className="btn-secondary text-[11px] py-1 px-2" disabled={chainLoading} aria-busy={chainLoading || undefined}
+                        onClick={() => { chainFocus.current = true; setChainRevision((r) => r + 1); }}>
                         {t('Weitere Staffeln laden')}
                       </button>
                     </div>
