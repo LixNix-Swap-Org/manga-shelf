@@ -1238,17 +1238,20 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
 const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
 const OPPOSITE = { SEQUEL: 'PREQUEL', PREQUEL: 'SEQUEL' };
-const CHAIN_STEPS = 12;
+const CHAIN_STEPS = 12; // AniList requests per call, shared by both directions
+const CHAIN_HOPS = 40; // steps per direction, seasons and films alike: only a guard against broken relations
 
 /**
- * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), at
- * most CHAIN_STEPS each way. A canon film, OVA or special (BRIDGE_FORMATS) between two seasons is walked through without
- * being added as a season itself (it stays under Filme & Specials). `relations` are the stored relations of the start
- * entry. A neighbour in the collection lends its stored AniList relations; only beyond the last of them AniList is asked,
- * one request per step, at most CHAIN_STEPS per call (the walk ends there). Each answer is cached for a day under
- * anime:rel:<anilist_id>, so neighbouring seasons share it and a failed step keeps the steps before it. With AniList
- * switched off only the stored relations count and nothing is asked. Returns { before: [node], after: [node] } with nodes
- * { anilist_id, mal_id, title, season_year, episodes }; rejects with the SourceError of a failed step.
+ * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA). A
+ * canon film, OVA or special (BRIDGE_FORMATS) between two seasons is walked through without being added as a season
+ * itself (it stays under Filme & Specials). `relations` are the stored relations of the start entry. A neighbour in the
+ * collection lends its stored AniList relations; only beyond the last of them AniList is asked, one request per step and
+ * at most CHAIN_STEPS per call. Both directions take turns, one step each, so neither uses up the requests of the other.
+ * Each answer is cached for a day under anime:rel:<anilist_id>, so neighbouring seasons share it, a failed step keeps
+ * the steps before it and the next call goes on from where the cap stopped this one. With AniList switched off only the
+ * stored relations count and nothing is asked. Returns { before: [node], after: [node], truncated: { before, after } }
+ * with nodes { anilist_id, mal_id, title, season_year, episodes }; `truncated` is true for a direction the request cap or
+ * CHAIN_HOPS ended before the line did. Rejects with the SourceError of a failed step.
  */
 async function seasonChainOf(ctx, anilistId, relations) {
     remember(ctx);
@@ -1261,12 +1264,16 @@ async function seasonChainOf(ctx, anilistId, relations) {
         const list = (rels || []).filter((x) => x && x.kind === 'ANIME' && x.relation === type && x.anilist_id);
         return list.find((x) => CHAIN_FORMATS.includes(x.format)) || list.find((x) => BRIDGE_FORMATS.includes(x.format)) || null;
     };
-    const liveRelations = async (id) => {
+    // `walker` is told when the request cap held back an answer it needed
+    const liveRelations = async (id, walker) => {
         if (!canAsk) return null;
         const key = `anime:rel:${id}`;
         const hit = cache.read(ctx, key);
         if (hit) return hit.value;
-        if (asked >= CHAIN_STEPS) return null;
+        if (asked >= CHAIN_STEPS) {
+            walker.capped = true;
+            return null;
+        }
         asked += 1;
         if (!leave) leave = enterInteractive(ctx);
         return S().coalescer.run(key, async () => {
@@ -1277,44 +1284,60 @@ async function seasonChainOf(ctx, anilistId, relations) {
         });
     };
     // stored relations of an entry in the collection, else the live (cached) ones; `stored` tells which
-    const relationsOf = async (id) => {
+    const relationsOf = async (id, walker) => {
         const row = storedRow.get(id);
         const stored = row ? store.parseJson(row.relations, []) : [];
         if (Array.isArray(stored) && stored.some((x) => x && x.anilist_id)) return { rels: stored, stored: true };
-        return { rels: await liveRelations(id), stored: false };
+        return { rels: await liveRelations(id, walker), stored: false };
     };
-    const walk = async (type) => {
-        const out = [];
-        const seen = new Set([anilistId]);
-        let id = anilistId;
-        let rels = relations;
-        let stored = true;
-        let bridge = null; // the film/OVA the walk stands on, when it is one
-        for (let i = 0; i < CHAIN_STEPS; i += 1) {
-            let r = stepOf(rels, type);
-            // stored relations end the chain or only point to a film/OVA: a season announced later is only known to AniList
-            if ((!r || !CHAIN_FORMATS.includes(r.format)) && stored && canAsk) {
-                rels = await liveRelations(id);
-                stored = false;
-                r = stepOf(rels, type);
+    const walker = (type) => ({
+        type, out: [], seen: new Set([anilistId]), id: anilistId, rels: relations, stored: true,
+        bridge: null, // the film/OVA the walk stands on, when it is one
+        hops: 0, done: false, capped: false, truncated: false
+    });
+    // one step of a direction; ends it when the line does, the request cap held it back or CHAIN_HOPS is reached
+    const step = async (w) => {
+        let r = stepOf(w.rels, w.type);
+        // the stored relations end the chain: a season announced later is only known to AniList (a stored step to a
+        // film/OVA is followed as it is, the film names the season after it; asking each time would spend the requests)
+        if (!r && w.stored && canAsk) {
+            const live = await liveRelations(w.id, w);
+            if (live) {
+                w.rels = live;
+                w.stored = false;
+                r = stepOf(live, w.type);
             }
-            // a film/OVA neither in the collection nor known live (AniList off, request cap): the entry after it names it
-            if (!r && bridge && !rels) r = store.relatedEntry(ctx, bridge, OPPOSITE[type]);
-            if (!r || seen.has(r.anilist_id)) break;
-            seen.add(r.anilist_id);
-            if (CHAIN_FORMATS.includes(r.format)) {
-                out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
-            }
-            id = r.anilist_id;
-            bridge = CHAIN_FORMATS.includes(r.format) ? null : id;
-            if (i + 1 < CHAIN_STEPS) ({ rels, stored } = await relationsOf(id));
         }
-        return out;
+        // a film/OVA neither in the collection nor known live (AniList off, request cap): the entry after it names it
+        if (!r && w.bridge && !w.rels) r = store.relatedEntry(ctx, w.bridge, OPPOSITE[w.type]);
+        if (!r || w.seen.has(r.anilist_id)) {
+            w.done = true;
+            w.truncated = !r && w.capped;
+            return;
+        }
+        w.seen.add(r.anilist_id);
+        if (CHAIN_FORMATS.includes(r.format)) {
+            w.out.push({ anilist_id: r.anilist_id, mal_id: r.mal_id || null, title: r.title, season_year: r.season_year ?? null, episodes: r.episodes ?? null });
+        }
+        w.id = r.anilist_id;
+        w.bridge = CHAIN_FORMATS.includes(r.format) ? null : w.id;
+        w.hops += 1;
+        if (w.hops >= CHAIN_HOPS) {
+            w.done = true;
+            w.truncated = true;
+            return;
+        }
+        w.capped = false;
+        ({ rels: w.rels, stored: w.stored } = await relationsOf(w.id, w));
     };
     try {
-        const after = await walk('SEQUEL');
-        const before = (await walk('PREQUEL')).reverse();
-        return { before, after };
+        const after = walker('SEQUEL');
+        const before = walker('PREQUEL');
+        while (!after.done || !before.done) {
+            if (!after.done) await step(after);
+            if (!before.done) await step(before);
+        }
+        return { before: before.out.reverse(), after: after.out, truncated: { before: before.truncated, after: after.truncated } };
     } finally {
         if (leave) leave();
     }

@@ -1674,6 +1674,33 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Live Zwei');
   });
 
+  it('a season chain cut by the request cap offers to load the rest, which goes on until it is whole', async () => {
+    const short = [
+      { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+      { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+    ];
+    const whole = [...short, { in_collection_id: null, anilist_id: 10, title: 'Live Vier', season_year: 2024, my_status: null, current: false }];
+    let calls = 0;
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        calls += 1;
+        return calls === 1
+          ? fakeResponse(200, { seasons: short, truncated: { before: false, after: true } })
+          : fakeResponse(200, { seasons: whole, truncated: { before: false, after: false } });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    expect(await within(chain).findByText('Weitere Staffeln wurden noch nicht geladen.')).toBeTruthy();
+    fireEvent.click(within(chain).getByRole('button', { name: 'Weitere Staffeln laden' }));
+    await waitFor(() => expect(chain.textContent).toContain('Live Vier'));
+    expect(calls).toBe(2);
+    expect(within(chain).queryByRole('button', { name: 'Weitere Staffeln laden' })).toBeNull();
+    expect(chain.textContent).not.toContain('Weitere Staffeln wurden noch nicht geladen.');
+  });
+
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {
     const onOpenAnime = vi.fn();
     const linked = () => shared({
