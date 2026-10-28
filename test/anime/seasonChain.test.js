@@ -190,3 +190,43 @@ test('ANIME_SOURCES without AniList: the season chain answers the stored chain, 
     assert.ok(on.http.count('anilist') >= 4);
     await on.core.close();
 });
+
+test('season chain: an OVA between two seasons is walked through in both directions and not listed', async () => {
+    // season 1 -> OVA -> season 2 -> season 3, the shape AniList has for That Time I Got Reincarnated as a Slime
+    const ova = { id: 7901, type: 'ANIME', format: 'OVA', status: 'FINISHED', episodes: 2, seasonYear: 2023, title: { romaji: 'Zwischen-OVA' } };
+    const media = {
+        7900: { ...node(7900), relations: { edges: [{ relationType: 'SEQUEL', node: ova }] } },
+        7901: { ...ova, relations: { edges: [{ relationType: 'PREQUEL', node: node(7900) }, { relationType: 'SEQUEL', node: node(7902) }] } },
+        7902: { ...node(7902), relations: { edges: [{ relationType: 'PREQUEL', node: ova }, { relationType: 'SEQUEL', node: node(7903) }] } },
+        7903: { ...node(7903), relations: { edges: [{ relationType: 'PREQUEL', node: node(7902) }] } }
+    };
+    const fake = aniList(media);
+    const { core, ed } = coreWith(fake);
+    const s1 = addSeason(core, media, 7900);
+    const s3 = addSeason(core, media, 7903);
+    const expected = ['Staffel 0', 'Staffel 2', 'Staffel 3'];
+
+    const forward = await ed('GET', `/anime/${s1}/season-chain`);
+    assert.equal(forward.status, 200, JSON.stringify(forward.body));
+    assert.deepEqual(titles(forward), expected, 'the OVA links season 1 to season 2 but is no season');
+    const backward = await ed('GET', `/anime/${s3}/season-chain`);
+    assert.deepEqual(titles(backward), expected, 'the same line from the last season');
+    assert.ok(!titles(forward).includes('Zwischen-OVA'));
+    await core.close();
+});
+
+test('season chain: the stored chain of the detail also steps through an OVA that is in the collection', async () => {
+    const ova = { id: 7911, type: 'ANIME', format: 'OVA', status: 'FINISHED', episodes: 2, seasonYear: 2023, title: { romaji: 'Zwischen-OVA' } };
+    const media = {
+        7910: { ...node(7910), relations: { edges: [{ relationType: 'SEQUEL', node: ova }] } },
+        7911: { ...ova, relations: { edges: [{ relationType: 'PREQUEL', node: node(7910) }, { relationType: 'SEQUEL', node: node(7912) }] } },
+        7912: { ...node(7912), relations: { edges: [{ relationType: 'PREQUEL', node: ova }] } }
+    };
+    const { core, ed } = coreWith(aniList(media), ['jikan']);
+    const s1 = addSeason(core, media, 7910);
+    core.run('INSERT INTO animes (title, anilist_id, format, relations) VALUES (?, ?, ?, ?)', 'Zwischen-OVA', 7911, 'OVA', storedRelations(media[7911]));
+    addSeason(core, media, 7912);
+    const detail = await ed('GET', `/anime/${s1}`);
+    assert.deepEqual(detail.body.season_chain.map((s) => s.title), ['Staffel 10', 'Staffel 12']);
+    await core.close();
+});
