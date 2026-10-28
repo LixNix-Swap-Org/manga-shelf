@@ -228,7 +228,9 @@ export default function useVolumeActions({
     addingVolumeRef.current = true;
 
     try {
-      const extraMeta = newVolumeMeta || {};
+      // details of a scan only for the volume that was scanned (forNumber '' = the scan named no number)
+      const scanned = newVolumeMeta && (!newVolumeMeta.forNumber || newVolumeMeta.forNumber === newVolumeNum.trim());
+      const extraMeta = scanned ? newVolumeMeta : {};
       const res = await apiFetch('/api/volumes', {
         method: 'POST',
         body: {

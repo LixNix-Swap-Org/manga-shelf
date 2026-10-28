@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Volumes
+- **Scanning a volume fills in more:** scanning an ISBN on a series page (phone) now also fetches the volume from Manga Passion for a German series: the cover, the release date and the price come into the form "Band hinzufügen", and the pages, the release year and the volume title are stored with it. They belong to the scanned volume: when you type another number before adding, they are left out. The volume publisher is only stored when it differs from the series publisher. Scanning the ISBN in the volume editor runs "Auto-Ausfüllen" at once. Manga Passion lists no ISBNs per edition, so the volume is found by the number the library catalogue (DNB, K10plus) names for the ISBN.
+
 ## 3.5.0
 
 ### Before updating

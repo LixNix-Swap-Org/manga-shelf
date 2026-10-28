@@ -51,8 +51,10 @@ function linkedOfficialVolume(officialVolumes, uv, type) {
   return linked;
 }
 
-const officialVolumeIsbn = (ov) => normalizeIsbn(ov?.isbn || ov?.isbn13 || ov?.isbn10);
-
+/**
+ * Volume number of a scanned ISBN from the catalogue answer that GET /lookup/isbn cached (api_cache isbn:<isbn13>).
+ * Manga Passion's volume list of an edition carries no ISBN, so this is how an ISBN alone finds its volume.
+ */
 function cachedIsbnVolumeNumber(ctx, isbn13) {
   if (!isbn13) return null;
   try {
@@ -144,10 +146,7 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
       if (details && details.volumes && details.volumes.length > 0) {
         editionInfo = details.edition;
 
-        const byIsbn = wantedIsbn ? details.volumes.find(v => officialVolumeIsbn(v) === wantedIsbn) : null;
-        if (byIsbn) {
-          matchedVolume = byIsbn;
-        } else if (effectiveVolumeNumber) {
+        if (effectiveVolumeNumber) {
           const type = lookupVolumeType(effectiveVolumeNumber, options);
           matchedVolume = matchOfficialVolume(details.volumes, effectiveVolumeNumber, type, { notes: options.notes, price: options.price });
         }
@@ -175,7 +174,7 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
     const relDate = fullVol?.date ? cleanOfficialDate(fullVol) : matchedVolume.release_date;
     const relYear = officialYear(relDate, fullVol?.year);
     const pages = fullVol?.pages || matchedVolume.pages || null;
-    const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || officialVolumeIsbn(matchedVolume) || options.isbn);
+    const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
     const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
     const localCover = await coverOf(rawCover);
@@ -307,9 +306,7 @@ async function autofillMangaVolumes(ctx, mangaId, options = {}) {
   const matches = [];
   for (const uv of userVolumes) {
     const type = inferVolumeType(uv);
-    const uvIsbn = normalizeIsbn(uv.isbn);
     const matched = linkedOfficialVolume(officialVolumes, uv, type)
-      || (uvIsbn ? officialVolumes.find(ov => officialVolumeIsbn(ov) === uvIsbn) : null)
       || matchOfficialVolume(officialVolumes, uv.volume_number, type, { notes: uv.notes, price: uv.price });
     if (matched) matches.push({ uv, type, matched });
   }

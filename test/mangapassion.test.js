@@ -636,22 +636,19 @@ test('autofillMangaVolumes: a Schuber number the edition does not have stays unt
     } finally { global.fetch = realFetch; }
 });
 
-test('lookupVolumeMetadata: matches by ISBN directly in edition volumes or via cached ISBN book number', async () => {
+test('lookupVolumeMetadata: an ISBN alone finds its volume through the cached catalogue answer of the scan', async () => {
     const realFetch = global.fetch;
     try {
         global.fetch = offlineFetch;
         seedEdition([
-            ov('1', { isbn: '9783551000019', release_date: '2020-01-01', pages: 192, cover_image: '/uploads/cov1.jpg' }),
+            ov('1', { release_date: '2020-01-01', pages: 192, cover_image: '/uploads/cov1.jpg' }),
             ov('2', { release_date: '2020-02-01', pages: 200, cover_image: '/uploads/cov2.jpg', title: 'Band Zwei' })
         ]);
         const id = createManga('ISBN-Lookup-Reihe', 2);
 
-        const direct = await mp.lookupVolumeMetadata(id, '', { isbn: '3-551-00001-8' });
-        assert.equal(direct.matched, true);
-        assert.equal(direct.data.volume_number, '1');
-        assert.equal(direct.data.isbn, '9783551000019');
-        assert.equal(direct.data.cover_image, '/uploads/cov1.jpg');
-        assert.equal(direct.data.pages, 192);
+        // Manga Passion's volume list holds no ISBN: without a catalogue answer the ISBN alone finds nothing
+        const unknown = await mp.lookupVolumeMetadata(id, '', { isbn: '3-551-00001-8' });
+        assert.equal(unknown.matched, false);
 
         db.prepare('INSERT OR REPLACE INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES (?, ?, ?, ?)')
             .run('isbn:9783551000026', JSON.stringify({ book: { volume_number: '2', volume_number_known: true } }), Date.now(), Date.now() + 60000);
