@@ -1134,7 +1134,7 @@ export default function AnimeDetailModal({
                   </form>
                   <div>
                     <label htmlFor={`${titleId}-manga`} className="block text-[11px] text-slate-400 mb-1">{t('Verknüpfte Reihe')}</label>
-                    <select id={`${titleId}-manga`} className="input-field text-base sm:text-sm" value={anime.manga_id || ''} disabled={busy || Boolean(anime.manga_linked_elsewhere || anime.manga_via_work)}
+                    <select id={`${titleId}-manga`} className="input-field text-base sm:text-sm" value={anime.manga_id || ''} disabled={busy || Boolean(anime.manga_linked_elsewhere)}
                       aria-describedby={anime.manga_via_work ? `${titleId}-manga-via` : undefined} onChange={(e) => saveLink(e.target.value)}>
                       <option value="">{t('Keine Verknüpfung')}</option>
                       {sortedMangas.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}

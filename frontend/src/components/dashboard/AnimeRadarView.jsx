@@ -179,7 +179,7 @@ function MangaTab({ list, mangas, canEdit, onLink }) {
       {linked.length > 0 && (
         <Section title={t('Verknüpft')} count={linked.length}>
           {linked.map(({ anime, manga }) => (
-            <Row key={anime.id} action={canEdit && !anime.manga_via_work && (
+            <Row key={anime.id} action={canEdit && !anime.manga_linked_elsewhere && (
               <button type="button" disabled={busy === anime.id} onClick={() => run(anime.id, null)} aria-label={t('Verknüpfung lösen')} title={t('Verknüpfung lösen')}
                 className="hit-44 shrink-0 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-60">
                 <Unlink className="w-4 h-4" aria-hidden="true" />

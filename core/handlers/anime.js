@@ -108,8 +108,10 @@ function workIdOf(ctx, mangaId) {
  * The series link of anime rows as the caller may see it, with a constant number of queries (animeId narrows it to one row).
  * Returns row => { manga: { id, title } | null, via_work, elsewhere }: the linked series when it is in a shelf the caller
  * can see, else the caller's own edition of the same work (the current work of the linked series, or the stored
- * animes.work_id once that series is gone; the caller's default language first, then the lowest id), else only
- * `elsewhere` when the linked series lives in a foreign shelf. Nothing about a foreign series leaves this function.
+ * animes.work_id once that series is gone; the caller's default language first, then the lowest id). `elsewhere` is set
+ * whenever the linked series lives in a foreign shelf, also next to the own edition: that link is not the caller's to
+ * change. Once the linked series is gone the own edition stands alone and may be unlinked. Nothing about a foreign
+ * series leaves this function.
  */
 function mangaLinkResolver(ctx, animeId = null) {
     const shelves = access.accessibleShelfIds(ctx);
@@ -135,7 +137,7 @@ function mangaLinkResolver(ctx, animeId = null) {
         if (series && shelves.includes(series.shelf_id)) return { manga: { id: series.id, title: series.title }, via_work: false, elsewhere: false };
         const work = series ? series.work_id : row.work_id;
         const own = work ? byWork.get(work) : null;
-        if (own) return { manga: { id: own.id, title: own.title }, via_work: true, elsewhere: false };
+        if (own) return { manga: { id: own.id, title: own.title }, via_work: true, elsewhere: Boolean(series) };
         return { manga: null, via_work: false, elsewhere: Boolean(series) };
     };
 }
@@ -501,17 +503,17 @@ function update(ctx, { params, body }) {
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
     if (notes !== undefined) columns.notes = notes;
     if (body.manga_id !== undefined) {
-        // a link into a foreign shelf is never overwritten, and an entry shown through the caller's own edition of the
-        // work is not theirs to unlink (they may still link it to a series of their own once the original is gone)
+        // a link into a foreign shelf is never overwritten or undone (also while the caller sees it through their own
+        // edition of the work); once the linked series is gone, the entry shown through the caller's edition is theirs
         const mangaId = optionalId(body.manga_id, 'manga_id');
         if (row.manga_id && !visibleManga(ctx, row.manga_id) && ctx.db.prepare('SELECT id FROM mangas WHERE id = ?').get(row.manga_id)) {
             throw notFound('Reihe');
         }
-        if (mangaId === null && mangaLinkResolver(ctx, id)(row).via_work) throw notFound('Reihe');
         mangaRef(ctx, mangaId);
         columns.manga_id = mangaId;
-        // clearing a link that is already gone keeps the stored work, which still names it for the other editions
-        if (mangaId !== null || row.manga_id) columns.work_id = workIdOf(ctx, mangaId);
+        // unlinking what the caller sees through their edition drops the stored work too; a caller who saw no link at all
+        // ("Keine Verknüpfung" sent again) keeps it, so it still names the work for the other editions
+        if (mangaId !== null || row.manga_id || mangaLinkResolver(ctx, id)(row).via_work) columns.work_id = workIdOf(ctx, mangaId);
     }
     const sourced = Boolean(row.anilist_id || row.mal_id || row.tmdb_id);
     if (body.episodes !== undefined) {

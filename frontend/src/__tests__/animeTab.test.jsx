@@ -910,14 +910,25 @@ describe('AnimeDetailModal', () => {
       expect(screen.getByText('12 / 1180+')).toBeTruthy();
     });
 
-    it("a series shown through the caller's own edition of the work: the link select is locked and says why", async () => {
+    it("a series shown through the caller's own edition of the work: the link select is locked while the original is in a foreign shelf and says why", async () => {
       const update = vi.fn();
-      openEditable(entry({ manga_id: 9, manga_via_work: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
+      openEditable(entry({ manga_id: 9, manga_via_work: true, manga_linked_elsewhere: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
       await act(async () => {});
       const select = screen.getByLabelText('Verknüpfte Reihe');
       expect(select.disabled).toBe(true);
       expect(select.value).toBe('9');
       expect(document.getElementById(select.getAttribute('aria-describedby')).textContent).toBe('Über deine Ausgabe dieses Werks verknüpft');
+    });
+
+    it("a series shown through the caller's own edition after the original series is gone: the select stays open and unlinks", async () => {
+      const update = vi.fn(async () => entry({ manga_id: null, manga: null }));
+      openEditable(entry({ manga_id: 9, manga_via_work: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
+      await act(async () => {});
+      const select = screen.getByLabelText('Verknüpfte Reihe');
+      expect(select.disabled).toBe(false);
+      expect(document.getElementById(select.getAttribute('aria-describedby')).textContent).toBe('Über deine Ausgabe dieses Werks verknüpft');
+      await act(async () => { fireEvent.change(select, { target: { value: '' } }); });
+      expect(update).toHaveBeenCalledWith(1, { manga_id: null });
     });
 
     it('a fresh counter is sent without a status, so the server makes it "Schaue"', async () => {

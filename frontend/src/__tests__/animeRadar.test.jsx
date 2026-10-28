@@ -146,15 +146,24 @@ describe('AnimeRadarView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfung lösen' }));
     await waitFor(() => expect(onLink).toHaveBeenCalledWith(3, null));
   });
-  it("an entry linked through the caller's own edition of the work: listed as linked, no unlink button, the hint names it", () => {
+  it("an entry linked through the caller's own edition of the work: listed as linked, the hint names it, no unlink while the original is in a foreign shelf", () => {
     const onLink = vi.fn();
-    const list = [entry(4, { manga_id: 9, manga_via_work: true }), entry(5, { manga_id: 8 })];
+    const list = [entry(4, { manga_id: 9, manga_via_work: true, manga_linked_elsewhere: true }), entry(5, { manga_id: 8 })];
     render(<MemoryRouter><AnimeRadarView {...props} onLink={onLink} mangas={[{ id: 8, title: 'Mob' }, { id: 9, title: 'Frieren (DE)' }]} list={list} /></MemoryRouter>);
     fireEvent.click(screen.getByRole('tab', { name: 'Manga-Verknüpfung' }));
     expect(screen.getByRole('heading', { name: 'Verknüpft 2' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Frieren \(DE\)/ }).getAttribute('href')).toBe('/manga/9');
     expect(screen.getAllByText('Über deine Ausgabe dieses Werks verknüpft')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Verknüpfung lösen' })).toHaveLength(1);
+  });
+  it("an entry linked through the caller's own edition whose original series is gone can be unlinked", async () => {
+    const onLink = vi.fn();
+    const list = [entry(4, { manga_id: 9, manga_via_work: true })];
+    render(<MemoryRouter><AnimeRadarView {...props} onLink={onLink} mangas={[{ id: 9, title: 'Frieren (DE)' }]} list={list} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('tab', { name: 'Manga-Verknüpfung' }));
+    expect(screen.getByText('Über deine Ausgabe dieses Werks verknüpft')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfung lösen' }));
+    await waitFor(() => expect(onLink).toHaveBeenCalledWith(4, null));
   });
   it('lists the entries without a link and links one through the series select', async () => {
     let finish;
