@@ -97,6 +97,34 @@ test('season chain: a sequel announced after the newest season was stored is fou
     await core.close();
 });
 
+test('season chain: a canon OVA or movie between two TV seasons is bridged without appearing as a season', async () => {
+    const s1Node = { ...node(7601), title: { romaji: 'Staffel 1' } };
+    const ovaNode = { id: 7602, type: 'ANIME', format: 'OVA', status: 'FINISHED', episodes: 3, seasonYear: 2023, title: { romaji: 'Zwischen-OVA' } };
+    const s2Node = { ...node(7603), title: { romaji: 'Staffel 2' } };
+    const s3Node = { ...node(7604), title: { romaji: 'Staffel 3' } };
+    const media = {
+        7601: { ...s1Node, relations: { edges: [{ relationType: 'SEQUEL', node: ovaNode }] } },
+        7602: { ...ovaNode, relations: { edges: [{ relationType: 'PREQUEL', node: s1Node }, { relationType: 'SEQUEL', node: s2Node }] } },
+        7603: { ...s2Node, relations: { edges: [{ relationType: 'PREQUEL', node: ovaNode }, { relationType: 'SEQUEL', node: s3Node }] } },
+        7604: { ...s3Node, relations: { edges: [{ relationType: 'PREQUEL', node: s2Node }] } }
+    };
+    const fake = aniList(media);
+    const { core, ed } = coreWith(fake);
+    const s1 = addSeason(core, media, 7601);
+
+    const fromOne = await ed('GET', `/anime/${s1}/season-chain`);
+    assert.equal(fromOne.status, 200, JSON.stringify(fromOne.body));
+    assert.deepEqual(titles(fromOne), ['Staffel 1', 'Staffel 2', 'Staffel 3']);
+
+    // also works in the stored season_chain when the bridge OVA and season 2 are in the collection
+    addSeason(core, media, 7602);
+    const s2 = addSeason(core, media, 7603);
+    const detail = await ed('GET', `/anime/${s1}`);
+    assert.deepEqual(detail.body.season_chain.map((s) => s.title), ['Staffel 1', 'Staffel 2', 'Staffel 3']);
+    assert.deepEqual(detail.body.season_chain.map((s) => s.in_collection_id), [s1, s2, null]);
+    await core.close();
+});
+
 test('season chain: a failed step answers 503 and keeps the steps before it; the retry asks only from there', async () => {
     const media = franchise(7200, 6);
     const fail = new Set([7205]);
