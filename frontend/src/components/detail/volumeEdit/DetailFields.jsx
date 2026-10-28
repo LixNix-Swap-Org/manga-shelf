@@ -141,7 +141,10 @@ export default function DetailFields({
                         <BarcodeScannerButton
                           compact
                           buttonText={t('Scannen')}
-                          onDetected={(isbn) => setValue('isbn', isbn)}
+                          onDetected={(isbn) => {
+                            setValue('isbn', isbn);
+                            if (mpLookup && handleAutofillVolumeData) handleAutofillVolumeData({ isbn });
+                          }}
                         />
                       </div>
                       <input

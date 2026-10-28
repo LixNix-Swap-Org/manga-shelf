@@ -71,7 +71,7 @@ export const applyLookupToForm = (prev, d, { forceCover = false } = {}) => {
     updatedFields.push(label);
   };
 
-  if (d.volume_number && isSchuber && !prevNumber.toLowerCase().includes('schuber')) {
+  if (d.volume_number && (isSchuber ? !prevNumber.toLowerCase().includes('schuber') : !prevNumber.trim())) {
     setField('volume_number', d.volume_number, t('Nummer ({number})', { number: d.volume_number }));
   }
   if (d.release_date) setField('release_date', d.release_date, t('Erscheinungsdatum ({date})', { date: d.release_date }));

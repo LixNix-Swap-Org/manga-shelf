@@ -662,3 +662,28 @@ test('lookupVolumeMetadata: each half of a double volume gets the split price, n
         }
     } finally { global.fetch = realFetch; }
 });
+
+test('lookupVolumeMetadata: an ISBN alone finds its volume through the cached catalogue answer of the scan', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = offlineFetch;
+        seedEdition([
+            ov('1', { release_date: '2020-01-01', pages: 192, cover_image: '/uploads/cov1.jpg' }),
+            ov('2', { release_date: '2020-02-01', pages: 200, cover_image: '/uploads/cov2.jpg', title: 'Band Zwei' })
+        ]);
+        const id = createManga('ISBN-Lookup-Reihe', 2);
+
+        // Manga Passion's volume list holds no ISBN: without a catalogue answer the ISBN alone finds nothing
+        const unknown = await mp.lookupVolumeMetadata(id, '', { isbn: '3-551-00001-8' });
+        assert.equal(unknown.matched, false);
+
+        db.prepare('INSERT OR REPLACE INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES (?, ?, ?, ?)')
+            .run('isbn:9783551000026', JSON.stringify({ book: { volume_number: '2', volume_number_known: true } }), Date.now(), Date.now() + 60000);
+        const viaCache = await mp.lookupVolumeMetadata(id, '', { isbn: '9783551000026' });
+        assert.equal(viaCache.matched, true);
+        assert.equal(viaCache.data.volume_number, '2');
+        assert.equal(viaCache.data.cover_image, '/uploads/cov2.jpg');
+        assert.equal(viaCache.data.notes, 'Band Zwei');
+    } finally { global.fetch = realFetch; }
+});
+

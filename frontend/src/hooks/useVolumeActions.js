@@ -123,7 +123,12 @@ export default function useVolumeActions({
   const [newVolumeReleaseDate, setNewVolumeReleaseDate] = useState('');
   const [newVolumePrice, setNewVolumePrice] = useState('');
   const [newVolumeCover, setNewVolumeCover] = useState('');
-  const [newVolumeIsbn, setNewVolumeIsbn] = useState(''); // a scanned ISBN the new volume is stored with
+  const [newVolumeIsbn, setNewVolumeIsbnState] = useState(''); // a scanned ISBN the new volume is stored with
+  const [newVolumeMeta, setNewVolumeMeta] = useState(null);
+  const setNewVolumeIsbn = (val) => {
+    setNewVolumeIsbnState(val);
+    if (!val) setNewVolumeMeta(null);
+  };
   const [uploadingNewCover, setUploadingNewCover] = useState(false);
   // 'Gelesen am' of the read toggle: only a date the user picked for this series (null = now); `on` is the day of the pick
   const [readPick, setReadPick] = useState(null);
@@ -223,6 +228,9 @@ export default function useVolumeActions({
     addingVolumeRef.current = true;
 
     try {
+      // details of a scan only for the volume that was scanned (forNumber '' = the scan named no number)
+      const scanned = newVolumeMeta && (!newVolumeMeta.forNumber || newVolumeMeta.forNumber === newVolumeNum.trim());
+      const extraMeta = scanned ? newVolumeMeta : {};
       const res = await apiFetch('/api/volumes', {
         method: 'POST',
         body: {
@@ -234,12 +242,17 @@ export default function useVolumeActions({
           price: newVolumePrice ? newVolumePrice.trim() : null,
           cover_image: newVolumeCover || null,
           images: newVolumeCover ? [newVolumeCover] : [],
-          ...(newVolumeIsbn ? { isbn: newVolumeIsbn } : {})
+          ...(newVolumeIsbn ? { isbn: newVolumeIsbn } : {}),
+          ...(extraMeta.pages != null ? { pages: extraMeta.pages } : {}),
+          ...(extraMeta.release_year != null ? { release_year: extraMeta.release_year } : {}),
+          ...(extraMeta.publisher ? { publisher: extraMeta.publisher } : {}),
+          ...(extraMeta.notes ? { notes: extraMeta.notes } : {})
         }
       });
       if (res.ok) {
         setNewVolumeNum('');
         setNewVolumeIsbn('');
+        setNewVolumeMeta(null);
         setNewVolumePrice('');
         setNewVolumeReleaseDate('');
         setNewVolumeCoverValue('');
@@ -472,6 +485,7 @@ export default function useVolumeActions({
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn,
+    newVolumeMeta, setNewVolumeMeta,
     readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
