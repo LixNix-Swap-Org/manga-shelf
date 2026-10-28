@@ -230,3 +230,28 @@ test('season chain: the stored chain of the detail also steps through an OVA tha
     assert.deepEqual(detail.body.season_chain.map((s) => s.title), ['Staffel 10', 'Staffel 12']);
     await core.close();
 });
+
+test('season chain: an OVA that is not in the collection is bridged through the season that names it (detail and AniList off)', async () => {
+    // season 1 -> OVA -> season 2 -> season 3; only the three seasons are in the collection, the OVA is not
+    const ova = { id: 7921, type: 'ANIME', format: 'OVA', status: 'FINISHED', episodes: 2, seasonYear: 2023, title: { romaji: 'Zwischen-OVA' } };
+    const media = {
+        7920: { ...node(7920), relations: { edges: [{ relationType: 'SEQUEL', node: ova }] } },
+        7921: { ...ova, relations: { edges: [{ relationType: 'PREQUEL', node: node(7920) }, { relationType: 'SEQUEL', node: node(7922) }] } },
+        7922: { ...node(7922), relations: { edges: [{ relationType: 'PREQUEL', node: ova }, { relationType: 'SEQUEL', node: node(7923) }] } },
+        7923: { ...node(7923), relations: { edges: [{ relationType: 'PREQUEL', node: node(7922) }] } }
+    };
+    const fake = aniList(media);
+    const { core, ed } = coreWith(fake, ['jikan']);
+    const s1 = addSeason(core, media, 7920);
+    addSeason(core, media, 7922);
+    const s3 = addSeason(core, media, 7923);
+    const expected = ['Staffel 20', 'Staffel 22', 'Staffel 23'];
+
+    assert.deepEqual((await ed('GET', `/anime/${s1}`)).body.season_chain.map((s) => s.title), expected, 'forward from season 1');
+    assert.deepEqual((await ed('GET', `/anime/${s3}`)).body.season_chain.map((s) => s.title), expected, 'back from season 3');
+    const live = await ed('GET', `/anime/${s1}/season-chain`);
+    assert.equal(live.status, 200, JSON.stringify(live.body));
+    assert.deepEqual(titles(live), expected, 'the live chain without AniList uses the same stored relations');
+    assert.deepEqual(fake.asked, [], 'nothing is asked from AniList');
+    await core.close();
+});

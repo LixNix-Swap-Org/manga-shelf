@@ -251,7 +251,22 @@ function watchOf(row, progress, rememberedUrl = null) {
     };
 }
 
+/**
+ * The entry of the collection whose stored relations name AniList entry `anilistId` as `relation`, as a relation node
+ * ({ anilist_id, mal_id, title, format, season_year, episodes, entry }), else null. The season chains use it to step
+ * past a film, OVA or special that is not in the collection: the season after it names it as its PREQUEL.
+ */
+function relatedEntry(ctx, anilistId, relation) {
+    if (!anilistId) return null;
+    const rows = ctx.db.prepare("SELECT * FROM animes WHERE relations LIKE ? AND COALESCE(kind, 'anime') = 'anime' ORDER BY id")
+        .all(`%${Number(anilistId)}%`);
+    const row = rows.find((r) => parseJson(r.relations, []).some((x) => x && x.kind === 'ANIME' && x.relation === relation && x.anilist_id === anilistId));
+    if (!row) return null;
+    return { anilist_id: row.anilist_id || null, mal_id: row.mal_id || null, title: row.title, format: row.format, season_year: row.season_year ?? null,
+        episodes: row.episodes ?? null, entry: row };
+}
+
 module.exports = {
-    snapshotColumns, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, linksOf, watchOf, isStale, parseJson,
+    snapshotColumns, relatedEntry, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, linksOf, watchOf, isStale, parseJson,
     splitList, joinList
 };
