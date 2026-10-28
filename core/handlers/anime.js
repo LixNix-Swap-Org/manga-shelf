@@ -32,6 +32,7 @@ const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'publ
 const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
 const BRIDGE_FORMATS = ['MOVIE', 'OVA', 'SPECIAL'];
 const OPPOSITE = { SEQUEL: 'PREQUEL', PREQUEL: 'SEQUEL' };
+const CHAIN_HOPS = 40; // steps of the stored chain per direction, seasons and films alike (gateway.seasonChainOf likewise)
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -165,7 +166,7 @@ function seasonChain(ctx, row, relations) {
         const out = [];
         const seen = new Set([start.id]);
         let rels = relations;
-        for (let i = 0; i < 20; i += 1) {
+        for (let i = 0; i < CHAIN_HOPS; i += 1) {
             let r = stepOf(rels, type);
             if (!r) break;
             let entry = found(r);
@@ -1060,12 +1061,13 @@ async function adaptations(ctx, { params }) {
 
 /**
  * GET /anime/:id/season-chain: the TV main line of an AniList entry, followed live beyond the entries in the collection
- * (gateway.seasonChainOf); with AniList switched off the chain of the stored relations, without a request.
+ * (gateway.seasonChainOf); with AniList switched off the chain of the stored relations, without a request. `truncated`
+ * ({ before, after }) names the directions the request cap ended early; the next call goes on from the cached steps.
  */
 async function seasonChainLive(ctx, { params }) {
     const id = parseId(params.id);
     const row = loadRow(ctx, id);
-    if ((row.kind || 'anime') !== 'anime' || !row.anilist_id) return { body: { seasons: [] } };
+    if ((row.kind || 'anime') !== 'anime' || !row.anilist_id) return { body: { seasons: [], truncated: { before: false, after: false } } };
     let chain;
     try {
         chain = await gateway.seasonChainOf(ctx, row.anilist_id, store.parseJson(row.relations, []));
@@ -1073,7 +1075,8 @@ async function seasonChainLive(ctx, { params }) {
         if (!(err instanceof SourceError)) throw err;
         throw new HttpError(503, 'AniList ist gerade nicht erreichbar. Bitte später erneut versuchen.', 'SOURCES_UNAVAILABLE');
     }
-    if (!chain.before.length && !chain.after.length) return { body: { seasons: [] } };
+    const truncated = { before: !!(chain.truncated && chain.truncated.before), after: !!(chain.truncated && chain.truncated.after) };
+    if (!chain.before.length && !chain.after.length) return { body: { seasons: [], truncated } };
     const byAni = ctx.db.prepare('SELECT * FROM animes WHERE anilist_id = ?');
     const byMal = ctx.db.prepare('SELECT * FROM animes WHERE mal_id = ?');
     const status = ctx.db.prepare('SELECT status FROM anime_progress WHERE anime_id = ? AND user_id = ?');
@@ -1091,7 +1094,7 @@ async function seasonChainLive(ctx, { params }) {
         };
     };
     const self = { anilist_id: row.anilist_id, mal_id: row.mal_id, title: row.title, season_year: row.season_year, episodes: row.episodes };
-    return { body: { seasons: [...chain.before.map((n) => nodeOf(n)), nodeOf(self, true), ...chain.after.map((n) => nodeOf(n))] } };
+    return { body: { seasons: [...chain.before.map((n) => nodeOf(n)), nodeOf(self, true), ...chain.after.map((n) => nodeOf(n))], truncated } };
 }
 
 const CSV_COLUMNS = [

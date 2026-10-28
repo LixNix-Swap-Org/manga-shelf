@@ -758,15 +758,24 @@ export default function AnimeDetailModal({
 
   // the live main line (AniList, beyond the entries in the collection); the detail's own season_chain is the fallback
   const [liveChain, setLiveChain] = useState(null);
+  const [chainTruncated, setChainTruncated] = useState(false);
+  const [chainLoading, setChainLoading] = useState(false);
   const [chainRevision, setChainRevision] = useState(0);
   const chainId = isOpen && anime?.anilist_id && (anime.kind || 'anime') === 'anime' ? animeId : null;
-  useEffect(() => { setLiveChain(null); }, [chainId]);
+  useEffect(() => { setLiveChain(null); setChainTruncated(false); }, [chainId]);
   useEffect(() => {
     if (!chainId) return undefined;
     const controller = new AbortController();
+    setChainLoading(true);
     api.get(`/api/anime/${chainId}/season-chain`, { signal: controller.signal })
-      .then((data) => { if (!controller.signal.aborted && Array.isArray(data?.seasons)) setLiveChain(data.seasons); })
-      .catch(() => {});
+      .then((data) => {
+        if (controller.signal.aborted || !Array.isArray(data?.seasons)) return;
+        setLiveChain(data.seasons);
+        // the request cap ended a direction early: the next call goes on from the steps AniList already answered
+        setChainTruncated(!!(data.truncated?.before || data.truncated?.after));
+      })
+      .catch((err) => { if (!controller.signal.aborted && chainRevision > 0) notify.error(err); })
+      .finally(() => { if (!controller.signal.aborted) setChainLoading(false); });
     return () => controller.abort();
   }, [chainId, chainRevision]);
 
@@ -1091,6 +1100,15 @@ export default function AnimeDetailModal({
                       </li>
                     ))}
                   </ol>
+                  {chainTruncated && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span>{t('Weitere Staffeln wurden noch nicht geladen.')}</span>
+                      <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={chainLoading} aria-busy={chainLoading || undefined}
+                        onClick={() => setChainRevision((r) => r + 1)}>
+                        {t('Weitere Staffeln laden')}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 

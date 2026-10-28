@@ -65,6 +65,7 @@ test('season chain: entries in the collection lend their stored relations; AniLi
     assert.deepEqual(titles(fromTwo), ['Staffel 1', 'Staffel 2', 'Staffel 3', 'Staffel 4', 'Staffel 5', 'Staffel 6']);
     assert.deepEqual(fromTwo.body.seasons.map((s) => s.in_collection_id), [s1, s2, null, null, null, null]);
     assert.deepEqual(fake.asked.sort(), [7001, 7003, 7004, 7005, 7006], 'one request per step outside the collection, plus the stored end (season 1) for a newly announced prequel');
+    assert.deepEqual(fromTwo.body.truncated, { before: false, after: false }, 'the whole line fits into one call');
 
     const fromOne = await ed('GET', `/anime/${s1}/season-chain`);
     assert.deepEqual(titles(fromOne), titles(fromTwo));
@@ -134,17 +135,17 @@ test('season chain: a failed step answers 503 and keeps the steps before it; the
 
     const failed = await ed('GET', `/anime/${s1}/season-chain`);
     assert.deepEqual([failed.status, failed.body.code], [503, 'SOURCES_UNAVAILABLE']);
-    assert.deepEqual(fake.asked, [7202, 7203, 7204, 7205]);
+    assert.deepEqual(fake.asked, [7202, 7201, 7203, 7204, 7205], 'both directions take turns: the stored first season is checked for a prequel in between');
     fail.clear();
     fake.asked.length = 0;
     const retry = await ed('GET', `/anime/${s1}/season-chain`);
     assert.equal(retry.status, 200);
     assert.equal(titles(retry).length, 6);
-    assert.deepEqual(fake.asked, [7205, 7206, 7201], 'steps 2 to 4 come from the cache; then the stored first season is asked once for a prequel');
+    assert.deepEqual(fake.asked, [7205, 7206], 'steps 2 to 4 and the prequel check of season 1 come from the cache');
     await core.close();
 });
 
-test('season chain: at most 12 AniList requests per call, the next call goes on from the cache', async () => {
+test('season chain: at most 12 AniList requests per call, shared by both directions; truncated until the cache holds the whole line', async () => {
     const media = franchise(7300, 30);
     const fake = aniList(media);
     const { core, ed } = coreWith(fake);
@@ -153,10 +154,46 @@ test('season chain: at most 12 AniList requests per call, the next call goes on 
     const first = await ed('GET', `/anime/${middle}/season-chain`);
     assert.equal(first.status, 200);
     assert.equal(fake.asked.length, 12);
-    assert.ok(titles(first).length < 25, 'the cap ends the walk');
-    const longer = await ed('GET', `/anime/${middle}/season-chain`);
-    assert.equal(titles(longer).length, 25, 'the second call walks on from the cached steps: 12 each way');
-    assert.ok(fake.asked.length - 12 <= 12);
+    const at = titles(first).indexOf('Staffel 15');
+    assert.ok(at >= 5 && titles(first).length - at - 1 >= 5, `both directions get their turn: ${titles(first)}`);
+    assert.deepEqual(first.body.truncated, { before: true, after: true });
+
+    let res = first;
+    for (let call = 0; call < 5 && (res.body.truncated.before || res.body.truncated.after); call += 1) {
+        const before = fake.asked.length;
+        res = await ed('GET', `/anime/${middle}/season-chain`);
+        assert.ok(fake.asked.length - before <= 12, 'at most 12 requests per call');
+    }
+    assert.equal(titles(res).length, 30, 'the calls go on from the cached steps until the whole line is there');
+    assert.deepEqual(res.body.truncated, { before: false, after: false });
+    assert.equal(new Set(fake.asked).size, fake.asked.length, 'no step is asked twice');
+    await core.close();
+});
+
+test('season chain: films and OVAs between the seasons do not shorten the line', async () => {
+    // 14 TV seasons with an OVA between each pair: 27 steps each way from season 1, more than the 12 the walk used to take
+    const media = {};
+    const tv = (n) => ({ ...node(8000 + n * 2), title: { romaji: `Staffel ${n}` } });
+    const ova = (n) => ({ id: 8001 + n * 2, type: 'ANIME', format: 'OVA', status: 'FINISHED', episodes: 1, seasonYear: 2001, title: { romaji: `OVA ${n}` } });
+    for (let n = 1; n <= 14; n += 1) {
+        const edges = [];
+        if (n > 1) edges.push({ relationType: 'PREQUEL', node: ova(n - 1) });
+        if (n < 14) edges.push({ relationType: 'SEQUEL', node: ova(n) });
+        media[tv(n).id] = { ...tv(n), relations: { edges } };
+        if (n < 14) media[ova(n).id] = { ...ova(n), relations: { edges: [{ relationType: 'PREQUEL', node: tv(n) }, { relationType: 'SEQUEL', node: tv(n + 1) }] } };
+    }
+    const fake = aniList(media);
+    const { core, ed } = coreWith(fake);
+    const rows = Object.values(media).map((m) => Number(core.run('INSERT INTO animes (title, anilist_id, format, relations) VALUES (?, ?, ?, ?)',
+        m.title.romaji, m.id, m.format, storedRelations(m)).lastInsertRowid));
+    const first = rows[Object.values(media).findIndex((m) => m.id === tv(1).id)];
+    const expected = Array.from({ length: 14 }, (_, i) => `Staffel ${i + 1}`);
+
+    const live = await ed('GET', `/anime/${first}/season-chain`);
+    assert.equal(live.status, 200, JSON.stringify(live.body));
+    assert.deepEqual(titles(live), expected, 'every season, no OVA');
+    assert.deepEqual(live.body.truncated, { before: false, after: false });
+    assert.deepEqual((await ed('GET', `/anime/${first}`)).body.season_chain.map((s) => s.title), expected, 'the stored chain as well');
     await core.close();
 });
 
@@ -253,5 +290,6 @@ test('season chain: an OVA that is not in the collection is bridged through the 
     assert.equal(live.status, 200, JSON.stringify(live.body));
     assert.deepEqual(titles(live), expected, 'the live chain without AniList uses the same stored relations');
     assert.deepEqual(fake.asked, [], 'nothing is asked from AniList');
+    assert.deepEqual(live.body.truncated, { before: false, after: false }, 'AniList switched off is no cut');
     await core.close();
 });
