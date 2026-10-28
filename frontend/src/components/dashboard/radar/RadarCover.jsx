@@ -5,7 +5,7 @@ import { t } from '../../../i18n/index.js';
 
 const LightboxGallery = lazy(() => import('../../detail/LightboxGallery'));
 
-const SIZE = 'w-20 h-[7.5rem] sm:w-24 sm:h-36';
+const SIZE = 'w-24 h-36 sm:w-28 sm:h-[10.5rem]';
 
 const COVER_FALLBACK = (
   <div aria-hidden="true" className={`${SIZE} bg-slate-800 rounded-xl flex items-center justify-center text-slate-500`}>

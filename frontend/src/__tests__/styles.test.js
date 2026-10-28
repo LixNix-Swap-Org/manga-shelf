@@ -69,7 +69,7 @@ describe('generated Tailwind CSS', () => {
   it('generates the custom shades, sizes and effects the components use', () => {
     expect(css).toContain('.hover\\:bg-slate-850:hover');
     expect(css).toContain('.via-slate-850');
-    for (const cls of ['sm\\:w-13', 'sm\\:h-18', 'sm\\:w-24', 'sm\\:h-36', 'h-\\[7\\.5rem\\]']) expect(css, cls).toContain(`.${cls}`);
+    for (const cls of ['sm\\:w-13', 'sm\\:h-18', 'sm\\:w-28', 'sm\\:h-\\[10\\.5rem\\]']) expect(css, cls).toContain(`.${cls}`);
     expect(css).toContain('.shadow-xs');
     expect(css).toMatch(/@keyframes shake/);
     expect(css).toMatch(/\.animate-shake\s*\{[^}]*animation:\s*shake/);
