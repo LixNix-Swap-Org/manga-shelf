@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Anime
+- **Season line through an OVA:** the "Staffeln" list of an anime no longer ends at a season whose only link forward or back is an OVA or special (AniList links season 1 of "That Time I Got Reincarnated as a Slime" only to an OVA). The chain steps through such an OVA or special and does not list it; the stored chain of the detail does the same for one that is in the collection.
+
+### Scripts
+- **Demo library:** `npm run seed` without size flags now fills an empty data folder with a lively demo library from `scripts/demo-data.json` (8 accounts with the password `demo1234`, 7 shelves with owner/editor/viewer roles, 37 series and 2 wishlist series with 274 volumes, owners, reading marks, chapter progress, 41 anime entries over the aired seasons with progress per account). `--refresh-fixtures` rebuilds the file from AniList and Manga Passion (TMDb with `TMDB_API_KEY`); `--series/--volumes/--seed` keep the synthetic bulk data of the benchmark. `scripts/seed-remote.js --library` creates the series and volumes of the file through the API.
+
 ## 3.5.0
 
 ### Before updating

@@ -30,6 +30,7 @@ const TMDB_KINDS = ['movie', 'tv'];
 const TMDB_LABEL = 'TMDB';
 const OWN_RATING_FIELDS = ['score', 'episode_scores', 'rating_visibility', 'public_comment'];
 const SEASON_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const BRIDGE_FORMATS = ['OVA', 'SPECIAL']; // walked through when it is in the collection, never listed
 
 const nowMs = (ctx) => ctx.now().getTime();
 
@@ -160,7 +161,15 @@ function seasonChain(ctx, row, relations) {
         const seen = new Set([start.id]);
         let rels = relations;
         for (let i = 0; i < 20; i += 1) {
-            const r = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && SEASON_FORMATS.includes(x.format));
+            let r = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && SEASON_FORMATS.includes(x.format));
+            if (!r) { // an OVA/special in the collection that links two seasons
+                const bridge = rels.find((x) => x && x.kind === 'ANIME' && x.relation === type && BRIDGE_FORMATS.includes(x.format));
+                const via = bridge && found(bridge);
+                if (via && !seen.has(via.id)) {
+                    seen.add(via.id);
+                    r = store.parseJson(via.relations, []).find((x) => x && x.kind === 'ANIME' && x.relation === type && SEASON_FORMATS.includes(x.format));
+                }
+            }
             if (!r) break;
             const entry = found(r);
             out.push(nodeOf(r, entry));

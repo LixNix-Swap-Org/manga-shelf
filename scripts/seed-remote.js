@@ -1,5 +1,8 @@
 // Seeds three demo series (with covers and volumes) into a running instance; existing titles are skipped.
 //   node scripts/seed-remote.js <url | host [port]> [--wipe] [--yes]   (--wipe recreates only the demo series)
+//   node scripts/seed-remote.js <url | host [port]> --library          the 37 + 2 series of scripts/demo-data.json instead (series, volumes, prices,
+//                                                                      notes, wishlist; remote cover URLs). Everything lands in the shelf and under the
+//                                                                      account of the login; accounts, shelves and anime need scripts/seed.js on a stopped, empty instance.
 // Target and credentials as in scripts/lib/remote.js (REMOTE_*, ADMIN_USER/ADMIN_PASS); SEED_SKIP_COVERS=1 skips covers.
 require('dotenv').config({ quiet: true });
 const readline = require('readline');
@@ -77,7 +80,12 @@ const DEMO_SERIES = [
 const normTitle = t => String(t || '').trim().toLowerCase();
 
 function parseFlags(argv) {
-  return { wipe: argv.includes('--wipe'), yes: argv.includes('--yes') };
+  return { wipe: argv.includes('--wipe'), yes: argv.includes('--yes'), library: argv.includes('--library') };
+}
+
+/** The series of scripts/demo-data.json in the shape the loop below creates (cover_image is a remote URL, no upload). */
+function librarySeries(data) {
+  return data.series.map(s => ({ library: true, ...s }));
 }
 
 /** Which demo series to create and which existing series to delete; never anything but demo titles. */
@@ -131,7 +139,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   if (!existingRes.ok || !Array.isArray(existingRes.data)) {
     throw new Error(`GET /api/mangas lieferte Status ${existingRes.status}`);
   }
-  const plan = planSeed(existingRes.data, flags);
+  const plan = planSeed(existingRes.data, flags, flags.library ? librarySeries(require('./demo-data.json')) : DEMO_SERIES);
   for (const m of plan.skipped) console.log(`↷ "${m.title}" existiert bereits, übersprungen (--wipe legt Demo-Reihen neu an)`);
   if (plan.toDelete.length && !flags.yes) await confirmWipe(target, plan.toDelete.length);
 
@@ -144,8 +152,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
 
   for (const m of plan.toCreate) {
     console.log(`\n▶ "${m.title}"...`);
-    let coverUrl = '';
-    if (!/^(1|true|yes)$/i.test(String(env.SEED_SKIP_COVERS || ''))) {
+    let coverUrl = m.library ? m.cover_image || '' : '';
+    if (!m.library && !/^(1|true|yes)$/i.test(String(env.SEED_SKIP_COVERS || ''))) {
       try {
         coverUrl = await uploadCover(client, await downloadImage(m.coverSourceUrl), m.coverFilename);
         console.log(`  ✓ Cover: ${coverUrl}`);
@@ -161,7 +169,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       status: m.status,
       total_volumes: m.total_volumes,
       description: m.description,
-      cover_image: coverUrl
+      cover_image: coverUrl,
+      ...(m.library ? { alt_title: m.alt_title, tags: m.tags, language: m.language, format: m.format, total_chapters: m.total_chapters, wish_priority: m.wish_priority, manga_passion_id: m.manga_passion_id } : {})
     });
     if (!createRes.ok || !createRes.data?.id) {
       failures++;
@@ -172,7 +181,11 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     console.log(`  ✓ Reihe angelegt (ID ${mangaId})`);
 
     for (const v of m.volumes) {
-      const volRes = await client.request('POST', '/api/volumes', { manga_id: mangaId, ...v });
+      const body = m.library
+        ? { manga_id: mangaId, volume_number: v.number, type: v.type, status: v.status, price: v.price, release_date: v.release_date, release_year: v.release_year, pages: v.pages,
+          notes: v.notes, cover_image: v.cover_image, priority: v.priority, target_price: v.target_price, purchase_date: v.purchase_date, condition: v.condition }
+        : { manga_id: mangaId, ...v };
+      const volRes = await client.request('POST', '/api/volumes', body);
       if (!volRes.ok) {
         failures++;
         console.error(`    ✗ Band ${v.volume_number} fehlgeschlagen (Status ${volRes.status}):`, volRes.data?.error || '');
@@ -192,4 +205,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { planSeed, parseFlags, DEMO_SERIES };
+module.exports = { planSeed, parseFlags, librarySeries, DEMO_SERIES };

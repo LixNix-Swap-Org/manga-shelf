@@ -205,7 +205,8 @@ manga-shelf/
 ├── scripts/                      # helper scripts (only scripts/admin.js is shipped)
 │   ├── admin.js                  # console commands as a one-shot call (node scripts/admin.js <command>); db-check <file> and wiederherstellen <backup.zip> for a stopped server; the update prelude comes first; exit codes 78 and 74 pass through
 │   ├── dev.js                    # npm run dev: backend with node --watch + Vite dev server, demo data in data-dev/
-│   ├── seed.js                   # deterministic demo collection into an empty DATA_DIR (logins in <DATA_DIR>/seed-users.json)
+│   ├── seed.js                   # demo collections into an empty DATA_DIR (logins in <DATA_DIR>/seed-users.json): without size flags the lively demo library from demo-data.json (`seedDemo`, offline; `--refresh-fixtures` first rebuilds the file from AniList + Manga Passion), with --series/--volumes/--seed the synthetic bulk data (`seedDatabase`, benchmark)
+│   ├── demo-data.json            # fixtures of the demo library: 8 accounts (password demo1234), 7 shelves with roles, 37 series + 2 wishlist series, volumes with owners/reads, chapter progress, 41 anime entries (18 series, one entry per aired TV season) with per-user progress; generated, edit scripts/lib/demoSpec.js instead
 │   ├── bench/                    # benchmark
 │   │   └── run.js                # headless API benchmark against a freshly seeded temp DB (npm run bench)
 │   ├── check-bundle-size.js      # bundle budget against frontend/bundle-budget.json (CI)
@@ -218,8 +219,11 @@ manga-shelf/
 │   ├── check-remote.js           # check a remote instance
 │   ├── seed-remote.js            # demo series onto a remote instance (deletes nothing; --wipe only demo series)
 │   ├── verify-remote.js          # screenshots of a running instance (puppeteer-core, remote rules like check-remote)
-│   ├── lib/                      # shared helpers of the remote scripts
-│   │   └── remote.js             # target URL (argument > REMOTE_URL > REMOTE_HOST/PORT), login, redactUrl
+│   ├── lib/                      # shared helpers of the scripts
+│   │   ├── remote.js             # target URL (argument > REMOTE_URL > REMOTE_HOST/PORT), login, redactUrl
+│   │   ├── rng.js                # mulberry32, the seeded random generator of the seeder and the demo builder
+│   │   ├── demoSpec.js           # editorial part of the demo library (users, shelves, series rules) and buildDemoData() that produces demo-data.json
+│   │   └── demoFetch.js          # live lookups for --refresh-fixtures (AniList via core/anime/anilist.js, Manga Passion, TMDb with TMDB_API_KEY)
 │   ├── release/                  # release pipeline
 │   │   ├── version.js            # version logic (resolveTargetVersion, writeVersion for every package, syncMobileVersion)
 │   │   ├── bump-version.js       # CLI for release.yml: <patch/minor/major/none/X.Y.Z> [--write]; writes version/tag to $GITHUB_OUTPUT

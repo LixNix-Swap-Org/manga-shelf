@@ -1236,11 +1236,13 @@ async function refreshDue(ctx, { onlyAiring = false, maxGroups = Infinity, pause
 }
 
 const CHAIN_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+// an OVA or special between two seasons (AniList often links season 1 only to it) is walked through, never listed
+const BRIDGE_FORMATS = ['OVA', 'SPECIAL'];
 const CHAIN_STEPS = 12;
 
 /**
  * The main line of an AniList entry: PREQUEL back to the first and SEQUEL on to the last entry (TV, TV_SHORT, ONA), at
- * most CHAIN_STEPS each way. `relations` are the stored relations of the start entry. A neighbour in the collection
+ * most CHAIN_STEPS each way. An OVA or special that links two seasons is stepped through, not listed. `relations` are the stored relations of the start entry. A neighbour in the collection
  * lends its stored AniList relations; only beyond the last of them AniList is asked, one request per step, at most
  * CHAIN_STEPS per call (the walk ends there). Each answer is cached for a day under anime:rel:<anilist_id>, so
  * neighbouring seasons share it and a failed step keeps the steps before it. With AniList switched off only the stored
@@ -1255,6 +1257,7 @@ async function seasonChainOf(ctx, anilistId, relations) {
     let asked = 0;
     let leave = null;
     const stepOf = (rels, type) => (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && CHAIN_FORMATS.includes(x.format) && x.anilist_id);
+    const bridgeOf = (rels, type) => (rels || []).find((x) => x && x.kind === 'ANIME' && x.relation === type && BRIDGE_FORMATS.includes(x.format) && x.anilist_id);
     const liveRelations = async (id) => {
         if (!canAsk) return null;
         const key = `anime:rel:${id}`;
@@ -1290,6 +1293,13 @@ async function seasonChainOf(ctx, anilistId, relations) {
                 rels = await liveRelations(id);
                 stored = false;
                 r = stepOf(rels, type);
+            }
+            if (!r) { // no season next to it: look past an OVA/special in between (one hop, it costs a step like any other)
+                const bridge = bridgeOf(rels, type);
+                if (bridge && !seen.has(bridge.anilist_id)) {
+                    seen.add(bridge.anilist_id);
+                    r = stepOf((await relationsOf(bridge.anilist_id)).rels, type);
+                }
             }
             if (!r || seen.has(r.anilist_id)) break;
             seen.add(r.anilist_id);
