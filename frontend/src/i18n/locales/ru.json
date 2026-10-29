@@ -576,6 +576,7 @@
   "Cover": "Обложка",
   "Cover ist zu lang (maximal {max} Zeichen)": "Обложка слишком длинная (максимум {max} символов)",
   "Cover muss ein Text sein": "Обложка должна быть текстом",
+  "Cover vergrößern: {title}": "Увеличить обложку: {title}",
   "Cover wird geladen…": "Загрузка обложки…",
   "Cover wird hochgeladen…": "Обложка загружается…",
   "Cover {n} von {total}…": "Обложка {n} из {total}…",

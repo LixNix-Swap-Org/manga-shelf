@@ -561,6 +561,7 @@
   "Cover": "Copertina",
   "Cover ist zu lang (maximal {max} Zeichen)": "La copertina è troppo lunga (massimo {max} caratteri)",
   "Cover muss ein Text sein": "La copertina deve essere un testo",
+  "Cover vergrößern: {title}": "Ingrandisci copertina: {title}",
   "Cover wird geladen…": "Caricamento della copertina…",
   "Cover wird hochgeladen…": "Upload della copertina in corso…",
   "Cover {n} von {total}…": "Copertina {n} di {total}…",

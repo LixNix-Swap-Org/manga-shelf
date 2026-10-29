@@ -546,6 +546,7 @@
   "Cover": "Cover",
   "Cover ist zu lang (maximal {max} Zeichen)": "Cover is too long (maximum {max} characters)",
   "Cover muss ein Text sein": "Cover must be text",
+  "Cover vergrößern: {title}": "Enlarge cover: {title}",
   "Cover wird geladen…": "Loading cover…",
   "Cover wird hochgeladen…": "Uploading cover…",
   "Cover {n} von {total}…": "Cover {n} of {total}…",

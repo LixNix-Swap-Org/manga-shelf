@@ -5,8 +5,8 @@ import {
   selectVisibleRadarGroups, radarViewState, isOrderedStatus, UPCOMING_STATUS, deliveredLabel, formatReleaseDate,
   radarGroupLabel, radarCountdownLabel
 } from '../../../utils/radarHelpers';
-import { Package, Calendar, RefreshCw, BookOpen, Check, BuildingComplex, Coins, Clock, CircleAlert, SearchX } from 'lucide-react';
-import CoverImage from '../../common/CoverImage';
+import { Package, Calendar, RefreshCw, Check, BuildingComplex, Coins, Clock, CircleAlert, SearchX } from 'lucide-react';
+import RadarCover from './RadarCover';
 import { formatCount, formatEuro, formatMoney } from '../../../utils/format';
 import LanguagePill from '../../common/LanguagePill';
 import { editionCurrency } from '../../../utils/editions';
@@ -18,25 +18,8 @@ const EMPTY_SET = new Set();
 // items per month before 'Alle N anzeigen'; long months otherwise mount hundreds of cards at once
 export const GROUP_PREVIEW = 24;
 
-const COVER_FALLBACK = (
-  <div aria-hidden="true" className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500">
-    <BookOpen className="w-6 h-6" />
-  </div>
-);
-
 // i18n
 const LOADING_TEXT = 'Lade deine Vorbestellungen...';
-
-function RadarCover({ item }) {
-  return (
-    <CoverImage
-      src={[item.vol_cover, item.manga_cover]}
-      alt={item.manga_title}
-      fallback={COVER_FALLBACK}
-      className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover/thumb:scale-105 transition-transform duration-300"
-    />
-  );
-}
 
 /** Personal pre-orders grouped by month, with loading, error, empty and no-match states. */
 export default function PersonalTimeline({
@@ -222,14 +205,11 @@ export default function PersonalTimeline({
                           </div>
 
                           <div className="flex gap-3">
-                            <Link
-                              to={`/manga/${item.manga_id}`}
-                              tabIndex={-1}
-                              aria-hidden="true"
-                              className="shrink-0 relative group/thumb overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md"
-                            >
-                              <RadarCover item={item} />
-                            </Link>
+                            <RadarCover
+                              src={[item.vol_cover, item.manga_cover]}
+                              title={item.manga_title}
+                              subtitle={getVolumeDisplayTitle(item)}
+                            />
 
                             <div className="flex-1 min-w-0">
                               <Link

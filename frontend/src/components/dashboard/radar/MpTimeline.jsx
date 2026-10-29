@@ -1,20 +1,15 @@
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { formatReleaseDate, isReleasedDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
-import { Package, Calendar, Star, RefreshCw, BookOpen, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
+import { Package, Calendar, Star, RefreshCw, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
 import { formatCount, formatEuro } from '../../../utils/format';
-import CoverImage from '../../common/CoverImage';
+import RadarCover from './RadarCover';
 import { t, tc } from '../../../i18n/index.js';
 import { statusLabel } from '../../../utils/enumLabels';
 
 const EMPTY_SET = new Set();
 // i18n
 const LOADING_TEXT = 'Lade Neuerscheinungen von Manga Passion...';
-const COVER_FALLBACK = (
-  <div aria-hidden="true" className="w-16 h-24 sm:w-18 sm:h-26 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500">
-    <BookOpen className="w-6 h-6" />
-  </div>
-);
 const BADGE = 'text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border';
 
 /** The series of the entry is no longer collected (mangas.collecting 'abgebrochen'): greyed, never "Einkaufsliste". */
@@ -250,13 +245,7 @@ export default function MpTimeline({
                         </div>
 
                         <div className="flex gap-3">
-                          <div className="shrink-0 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
-                            <CoverImage
-                              src={item.cover_image}
-                              className="w-16 h-24 sm:w-18 sm:h-26 object-cover group-hover:scale-105 transition-transform duration-300"
-                              fallback={COVER_FALLBACK}
-                            />
-                          </div>
+                          <RadarCover src={item.cover_image} title={item.title} subtitle={getVolumeDisplayTitle(item)} />
 
                           <div className="flex-1 min-w-0">
                             {item.in_collection && item.user_manga_id && item.match_kind !== 'prefix' ? (

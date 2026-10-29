@@ -22,6 +22,9 @@
 ### Scripts
 - **Demo library:** `npm run seed` without size flags now fills an empty data folder with a lively demo library from `scripts/demo-data.json` (8 accounts with the password `demo1234`, 7 shelves with owner/editor/viewer roles, 37 series and 2 wishlist series with 274 volumes, owners, reading marks, chapter progress, 41 anime entries over the aired seasons with progress per account). `--refresh-fixtures` rebuilds the file from AniList and Manga Passion (TMDb with `TMDB_API_KEY`); `--series/--volumes/--seed` keep the synthetic bulk data of the benchmark. `scripts/seed-remote.js --library` creates the series and volumes of the file through the API. The series and anime descriptions are short texts of its own (`scripts/lib/demoTexts.js`); the descriptions of AniList and Manga Passion are neither fetched nor stored.
 
+### Release radar
+- **Release radar covers:** the covers in "Deutsche Neuheiten" and "Meine Vorbestellungen" are larger, and a click opens a cover full size in the image gallery ("Original" opens it in a new tab). In "Meine Vorbestellungen" the cover no longer leads to the series; the title and "Details" still do.
+
 ## 3.5.0
 
 ### Before updating

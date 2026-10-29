@@ -561,6 +561,7 @@
   "Cover": "Couverture",
   "Cover ist zu lang (maximal {max} Zeichen)": "La couverture est trop longue ({max} caractères maximum)",
   "Cover muss ein Text sein": "La couverture doit être un texte",
+  "Cover vergrößern: {title}": "Agrandir la couverture : {title}",
   "Cover wird geladen…": "Chargement de la couverture…",
   "Cover wird hochgeladen…": "Envoi de la couverture…",
   "Cover {n} von {total}…": "Couverture {n} sur {total}…",

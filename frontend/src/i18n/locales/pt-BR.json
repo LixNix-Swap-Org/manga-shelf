@@ -561,6 +561,7 @@
   "Cover": "Capa",
   "Cover ist zu lang (maximal {max} Zeichen)": "A capa é longa demais (no máximo {max} caracteres)",
   "Cover muss ein Text sein": "A capa deve ser um texto",
+  "Cover vergrößern: {title}": "Ampliar capa: {title}",
   "Cover wird geladen…": "Carregando a capa…",
   "Cover wird hochgeladen…": "Enviando a capa…",
   "Cover {n} von {total}…": "Capa {n} de {total}…",

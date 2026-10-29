@@ -531,6 +531,7 @@
   "Cover": "封面",
   "Cover ist zu lang (maximal {max} Zeichen)": "封面过长（最多 {max} 个字符）",
   "Cover muss ein Text sein": "封面必须是文本",
+  "Cover vergrößern: {title}": "放大封面：{title}",
   "Cover wird geladen…": "正在加载封面…",
   "Cover wird hochgeladen…": "正在上传封面…",
   "Cover {n} von {total}…": "封面 {n}/{total}…",
