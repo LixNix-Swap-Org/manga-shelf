@@ -190,7 +190,8 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     const form = formRef.current;
     const targetUrl = extraOpts.url || (manualImageUrl && manualImageUrl.includes('manga-passion.de') ? manualImageUrl.trim() : '');
     const mpVolId = extraOpts.mp_volume_id || '';
-    if (!form.volume_number && !form.isbn && !targetUrl && !mpVolId) {
+    const isbn = extraOpts.isbn !== undefined ? extraOpts.isbn : (form.isbn || '');
+    if (!form.volume_number && !isbn && !targetUrl && !mpVolId) {
       setAutofillMessage({ type: 'warning', text: t('Bitte gib zuerst eine Band-Nummer, ISBN oder Manga Passion URL ein.') });
       return;
     }
@@ -200,7 +201,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
       const params = new URLSearchParams({
         manga_id: mangaId ?? '',
         volume_number: form.volume_number || '',
-        isbn: form.isbn || '',
+        isbn,
         type: form.type || '',
         notes: form.notes || '',
         price: priceForQuery(form.price),
@@ -232,7 +233,7 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
       } else {
         setAutofillMessage({
           type: 'warning',
-          text: payloadText(result, 'message') || t('Keine Daten für "{query}" auf Manga Passion gefunden.', { query: form.volume_number || targetUrl })
+          text: payloadText(result, 'message') || t('Keine Daten für "{query}" auf Manga Passion gefunden.', { query: form.volume_number || isbn || targetUrl })
         });
       }
     } catch (err) {

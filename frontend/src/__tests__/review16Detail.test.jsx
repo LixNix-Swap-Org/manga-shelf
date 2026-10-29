@@ -5,7 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 const scan = vi.hoisted(() => ({ code: '' }));
 vi.mock('../components/common/BarcodeScannerButton', () => ({
-  default: ({ id, onDetected, children }) => <button type="button" id={id} onClick={() => onDetected(scan.code)}>{children}</button>
+  default: ({ id, buttonText, onDetected, children }) => <button type="button" id={id} onClick={() => onDetected(scan.code)}>{children || buttonText}</button>
 }));
 vi.mock('../utils/offlineStore', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -102,6 +102,133 @@ describe('MangaDetail wiring (round 5 hooks)', () => {
     expect(await screen.findByText('ISBN 9783551000033')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Gescannte ISBN entfernen' }));
     expect(screen.queryByText(/^ISBN /)).toBeNull();
+  });
+
+  it('a scanned ISBN on the series page also fetches cover and volume metadata via /api/volumes/lookup and sends them on add', async () => {
+    phone();
+    const fetchMock = serve({
+      lookup: () => json(200, {
+        isbn: '9783551000035',
+        found: true,
+        matched_manga: { id: 5 },
+        matched_volume: null,
+        book: { volume_number: '3', volume_number_known: true, price: 7.5, pages: 180 }
+      }),
+      extra: (url, init) => {
+        if (url.startsWith('/api/volumes/lookup?')) {
+          return json(200, {
+            success: true,
+            matched: true,
+            data: {
+              volume_number: '3',
+              cover_image: '/uploads/mp-cover-3.jpg',
+              release_date: '2024-05-01',
+              release_year: 2024,
+              pages: 192,
+              publisher: 'Carlsen Manga',
+              notes: 'Der dritte Band'
+            }
+          });
+        }
+        if (url === '/api/volumes' && init.method === 'POST') return json(200, { id: 60 });
+        return undefined;
+      }
+    });
+    renderPage();
+    await screen.findByText('Server Titel');
+    scan.code = '978-3-551-00003-5';
+    fireEvent.click(document.getElementById('btn-detail-scan'));
+    expect(await screen.findByText('ISBN 9783551000035')).toBeTruthy();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u.startsWith('/api/volumes/lookup?'))).toBe(true));
+    const number = document.getElementById('add-volume-number');
+    fireEvent.submit(number.closest('form'));
+    await waitFor(() => expect(bodiesOf(fetchMock, '/api/volumes')).toHaveLength(1));
+    expect(bodiesOf(fetchMock, '/api/volumes')[0]).toMatchObject({
+      manga_id: '5',
+      volume_number: '3',
+      isbn: '9783551000035',
+      cover_image: '/uploads/mp-cover-3.jpg',
+      release_date: '2024-05-01',
+      release_year: 2024,
+      pages: 192,
+      publisher: 'Carlsen Manga',
+      notes: 'Der dritte Band'
+    });
+  });
+
+  it('a scan sends the publisher only when it differs from the series publisher, and its details only for the scanned number', async () => {
+    phone();
+    const fetchMock = serve({
+      manga: mangaWith({ publisher: 'Carlsen Manga' }),
+      lookup: () => json(200, {
+        isbn: '9783551000035',
+        found: true,
+        matched_manga: { id: 5 },
+        matched_volume: null,
+        book: { volume_number: '3', volume_number_known: true, pages: 180, publisher: 'Carlsen Manga', subtitle: 'Der dritte Band' }
+      }),
+      extra: (url, init) => {
+        if (url.startsWith('/api/volumes/lookup?')) return json(200, { success: true, matched: true, data: { volume_number: '3', pages: 192, publisher: 'Carlsen Manga!' } });
+        if (url === '/api/volumes' && init.method === 'POST') return json(200, { id: 61 });
+        return undefined;
+      }
+    });
+    renderPage();
+    await screen.findByText('Server Titel');
+    scan.code = '978-3-551-00003-5';
+    fireEvent.click(document.getElementById('btn-detail-scan'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u.startsWith('/api/volumes/lookup?'))).toBe(true));
+    const number = document.getElementById('add-volume-number');
+    await waitFor(() => expect(number.value).toBe('3'));
+    // the same volume: pages and title of the scan, no volume publisher (it is the series')
+    fireEvent.submit(number.closest('form'));
+    await waitFor(() => expect(bodiesOf(fetchMock, '/api/volumes')).toHaveLength(1));
+    const first = bodiesOf(fetchMock, '/api/volumes')[0];
+    expect(first).toMatchObject({ volume_number: '3', isbn: '9783551000035', pages: 192, notes: 'Der dritte Band' });
+    expect(first).not.toHaveProperty('publisher');
+
+    // a second scan, then another number typed by hand: the scanned details stay with the scanned volume
+    fireEvent.click(document.getElementById('btn-detail-scan'));
+    await waitFor(() => expect(number.value).toBe('3'));
+    fireEvent.change(number, { target: { value: '4' } });
+    fireEvent.submit(number.closest('form'));
+    await waitFor(() => expect(bodiesOf(fetchMock, '/api/volumes')).toHaveLength(2));
+    const second = bodiesOf(fetchMock, '/api/volumes')[1];
+    expect(second.volume_number).toBe('4');
+    expect(second).not.toHaveProperty('pages');
+    expect(second).not.toHaveProperty('notes');
+  });
+
+  it('scanning an ISBN inside the volume edit modal immediately triggers /api/volumes/lookup with that ISBN', async () => {
+    const fetchMock = serve({
+      extra: (url) => {
+        if (url.startsWith('/api/volumes/lookup?')) {
+          return json(200, {
+            success: true,
+            matched: true,
+            data: {
+              isbn: '9783551000019',
+              cover_image: '/uploads/mp-vol1.jpg',
+              release_date: '2020-01-15',
+              release_year: 2020,
+              pages: 208,
+              publisher: 'Carlsen Manga',
+              notes: 'Auftakt'
+            }
+          });
+        }
+        return undefined;
+      }
+    });
+    renderPage();
+    await screen.findByText('Server Titel');
+    fireEvent.click(document.querySelector('[data-volume-id="51"]'));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    scan.code = '9783551000019';
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Scannen' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u.startsWith('/api/volumes/lookup?') && u.includes('isbn=9783551000019'))).toBe(true));
+    await waitFor(() => expect(screen.getByLabelText(/Seitenzahl/).value).toBe('208'));
+    expect(screen.getByLabelText('Verlag').value).toBe('Carlsen Manga');
   });
 
   it('"Gelesen am" in the reader bar dates the next read toggle', async () => {

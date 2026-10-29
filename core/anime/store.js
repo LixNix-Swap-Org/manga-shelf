@@ -12,7 +12,7 @@ const parseJson = (text, fallback) => {
 const splitList = (text) => (text ? String(text).split(',').map((s) => s.trim()).filter(Boolean) : []);
 const joinList = (list) => (Array.isArray(list) && list.length ? list.join(', ') : null);
 
-/** Snapshot columns of an AnimeMeta (not title/notes/manga_id, which belong to the user). */
+/** Snapshot columns of an AnimeMeta (not title/notes/manga_id/work_id, which belong to the user). */
 function snapshotColumns(meta, nowMs) {
     const next = meta.next_airing;
     return {
@@ -129,7 +129,7 @@ function rememberAired(ctx, row, columns, nowMs) {
     ctx.db.prepare('INSERT OR IGNORE INTO anime_airings (anime_id, episode, at) VALUES (?, ?, ?)').run(row.id, row.next_airing_episode, row.next_airing_at);
 }
 
-function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {}) {
+function insertFromMeta(ctx, meta, images, { manga_id = null, work_id = null, title = null } = {}) {
     const nowMs = ctx.now().getTime();
     const columns = {
         ...snapshotColumns(meta, nowMs),
@@ -141,6 +141,7 @@ function insertFromMeta(ctx, meta, images, { manga_id = null, title = null } = {
         tmdb_kind: meta.tmdb_kind ?? null,
         title: title || meta.title.preferred || 'Ohne Titel',
         manga_id,
+        work_id,
         updated_by: ctx.user ? ctx.user.id : null,
         updated_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19),
         created_at: new Date(nowMs).toISOString().replace('T', ' ').slice(0, 19)
@@ -251,7 +252,22 @@ function watchOf(row, progress, rememberedUrl = null) {
     };
 }
 
+/**
+ * The entry of the collection whose stored relations name AniList entry `anilistId` as `relation`, as a relation node
+ * ({ anilist_id, mal_id, title, format, season_year, episodes, entry }), else null. The season chains use it to step
+ * past a film, OVA or special that is not in the collection: the season after it names it as its PREQUEL.
+ */
+function relatedEntry(ctx, anilistId, relation) {
+    if (!anilistId) return null;
+    const rows = ctx.db.prepare("SELECT * FROM animes WHERE relations LIKE ? AND COALESCE(kind, 'anime') = 'anime' ORDER BY id")
+        .all(`%${Number(anilistId)}%`);
+    const row = rows.find((r) => parseJson(r.relations, []).some((x) => x && x.kind === 'ANIME' && x.relation === relation && x.anilist_id === anilistId));
+    if (!row) return null;
+    return { anilist_id: row.anilist_id || null, mal_id: row.mal_id || null, title: row.title, format: row.format, season_year: row.season_year ?? null,
+        episodes: row.episodes ?? null, entry: row };
+}
+
 module.exports = {
-    snapshotColumns, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, linksOf, watchOf, isStale, parseJson,
+    snapshotColumns, relatedEntry, downloadImage, freshImages, applySnapshot, insertFromMeta, updateRow, entryOf, progressOf, linksOf, watchOf, isStale, parseJson,
     splitList, joinList
 };

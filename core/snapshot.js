@@ -32,7 +32,7 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
             SELECT m.id, m.title, m.alt_title, m.author, m.publisher, m.language, m.status, m.tags, m.total_volumes,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
-                   m.collecting, m.region, m.work_key, m.currency, m.shelf_id, m.format, m.total_chapters,
+                   m.collecting, m.region, m.work_key, m.work_id, m.currency, m.shelf_id, m.format, m.total_chapters,
                    COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.manga_id = m.id AND cp.user_id = ?), 0) as chapters_read,
                    COUNT(DISTINCT CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
                    COUNT(DISTINCT CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,

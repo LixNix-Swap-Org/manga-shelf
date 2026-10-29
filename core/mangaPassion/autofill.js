@@ -11,6 +11,7 @@ const {
 } = require('./classify');
 const { msg, payloadMsg } = require('../errors');
 const { MP_PAYLOAD, germanVolumes } = require('./gaps');
+const cache = require('../anime/cache');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 
@@ -48,6 +49,21 @@ function linkedOfficialVolume(officialVolumes, uv, type) {
     if (m && linked.num !== parseFloat(m[1])) return null;
   }
   return linked;
+}
+
+/**
+ * Volume number of a scanned ISBN from the catalogue answer that GET /lookup/isbn cached (api_cache isbn:<isbn13>).
+ * Manga Passion's volume list of an edition carries no ISBN, so this is how an ISBN alone finds its volume.
+ */
+function cachedIsbnVolumeNumber(ctx, isbn13) {
+  if (!isbn13) return null;
+  try {
+    const cached = cache.read(ctx, `isbn:${isbn13}`);
+    const book = cached?.value?.book;
+    return book?.volume_number_known && book.volume_number ? String(book.volume_number).trim() : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /**
@@ -119,14 +135,21 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
   let matchedVolume = null;
   let editionInfo = null;
 
+  const wantedIsbn = normalizeIsbn(options.isbn);
+  const effectiveVolumeNumber = (volumeNumber && String(volumeNumber).trim())
+    || cachedIsbnVolumeNumber(ctx, wantedIsbn)
+    || '';
+
   if (editionId) {
     try {
       const details = await getEditionDetailsAndVolumes(ctx, editionId, options.force_refresh);
       if (details && details.volumes && details.volumes.length > 0) {
         editionInfo = details.edition;
 
-        const type = lookupVolumeType(volumeNumber, options);
-        matchedVolume = matchOfficialVolume(details.volumes, volumeNumber, type, { notes: options.notes, price: options.price });
+        if (effectiveVolumeNumber) {
+          const type = lookupVolumeType(effectiveVolumeNumber, options);
+          matchedVolume = matchOfficialVolume(details.volumes, effectiveVolumeNumber, type, { notes: options.notes, price: options.price });
+        }
       }
     } catch (e) {
       log(ctx).warn('Error fetching edition volumes:', e.message);
@@ -152,7 +175,10 @@ async function lookupVolumeMetadata(ctx, mangaId, volumeNumber, options = {}) {
     const relYear = officialYear(relDate, fullVol?.year);
     const pages = fullVol?.pages || matchedVolume.pages || null;
     const isbn = normalizeIsbn(fullVol?.isbn13 || fullVol?.isbn10 || options.isbn);
-    const price = fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price;
+    // a half of a double volume keeps the split price; the volume page of Manga Passion names the price of the whole book
+    const price = matchedVolume.combined
+      ? matchedVolume.price
+      : (fullVol?.price ? Math.round(fullVol.price) / 100 : matchedVolume.price);
     const rawCover = fullVol?.cover || matchedVolume.cover_image || null;
     const localCover = await coverOf(rawCover);
     const title = fullVol?.title || matchedVolume.title || null;

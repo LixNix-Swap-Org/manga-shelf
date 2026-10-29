@@ -24,10 +24,11 @@ import useVolumeGallery from './hooks/useVolumeGallery';
 import useShelfLayout from './hooks/useShelfLayout';
 import useDetailKeyboard from './hooks/useDetailKeyboard';
 import { PURCHASE_RECORDED_EVENT } from './appShell';
+import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
-import { inferVolumeType, regularVolumeNumber, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
+import { inferVolumeType, regularVolumeNumber, normalizePubName, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
 import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
@@ -188,7 +189,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
-    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, readDate, setReadDate,
+    newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, setNewVolumeMeta, newVolumeSortAfter, setNewVolumeSortAfter,
+    readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
     handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
@@ -317,14 +319,64 @@ export default function MangaDetail({ user, onUnauthorized }) {
     }
     document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' });
   };
-  const prefillScannedVolume = ({ number, price, isbn }) => {
+  const scanLookupSeqRef = useRef(0);
+  const newVolumeNumRef = useRef(newVolumeNum);
+  newVolumeNumRef.current = newVolumeNum;
+  // a volume publisher is stored only when it differs from the series' (volumes.publisher)
+  const ownPublisher = (name) => (name && normalizePubName(name) !== normalizePubName(manga?.publisher || '') ? name : null);
+  const prefillScannedVolume = async ({ number, price, isbn, book }) => {
+    const seq = ++scanLookupSeqRef.current;
+    const scannedIsbn = isbn || '';
     if (number) {
       setNewVolumeType('volume');
       setNewVolumeNum(number);
     }
     if (price) setNewVolumePrice(price);
-    setNewVolumeIsbn(isbn || '');
+    setNewVolumeIsbn(scannedIsbn);
+    // forNumber: the volume these details belong to; they are dropped when another number is added (useVolumeActions)
+    setNewVolumeMeta(book ? {
+      forNumber: number || '',
+      ...(book.pages ? { pages: book.pages } : {}),
+      ...(book.release_year ? { release_year: book.release_year } : {}),
+      ...(ownPublisher(book.publisher) ? { publisher: ownPublisher(book.publisher) } : {}),
+      ...(book.subtitle ? { notes: book.subtitle } : {})
+    } : null);
     focusAddVolume();
+    if (!mpEnabled || isOffline || (!number && !scannedIsbn)) return;
+    try {
+      const params = new URLSearchParams({
+        manga_id: id ?? '',
+        volume_number: number || '',
+        isbn: scannedIsbn,
+        type: 'volume'
+      });
+      const res = await apiFetch(`/api/volumes/lookup?${params}`, { timeout: TIMEOUTS.lookup });
+      const result = await readJson(res);
+      if (seq !== scanLookupSeqRef.current || !res.ok || !result?.success || !result.data) return;
+      const d = result.data;
+      const target = number || (d.volume_number ? String(d.volume_number) : '');
+      const current = String(newVolumeNumRef.current || '').trim();
+      // the user moved on to another volume meanwhile: these details are not theirs
+      if (current && target && current !== target) return;
+      if (!current && target) {
+        setNewVolumeType('volume');
+        setNewVolumeNum(target);
+      }
+      if (d.price && !price) setNewVolumePrice(String(d.price));
+      if (d.release_date && /^\d{4}-\d{2}-\d{2}$/.test(d.release_date)) setNewVolumeReleaseDate(d.release_date);
+      if (d.cover_image) setNewVolumeCover(d.cover_image);
+      if (d.isbn && !scannedIsbn) setNewVolumeIsbn(d.isbn);
+      setNewVolumeMeta((prev) => ({
+        ...(prev || {}),
+        forNumber: target,
+        ...(d.pages != null ? { pages: d.pages } : {}),
+        ...(d.release_year != null ? { release_year: d.release_year } : {}),
+        ...(ownPublisher(d.publisher) ? { publisher: ownPublisher(d.publisher) } : {}),
+        ...(d.notes ? { notes: d.notes } : {})
+      }));
+    } catch (_) {
+      // keep the catalogue prefill when Manga Passion is unreachable
+    }
   };
 
   const renderShelfSpine = (item, idx, currentMode = shelfMode) => (
@@ -756,6 +808,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
               setNewVolumeReleaseDate={setNewVolumeReleaseDate}
               setNewVolumeStatus={setNewVolumeStatus}
               setNewVolumeType={setNewVolumeType}
+              newVolumeSortAfter={newVolumeSortAfter}
+              setNewVolumeSortAfter={setNewVolumeSortAfter}
+              volumes={volumes}
               uploadingNewCover={uploadingNewCover}
               currency={editionCurrency(manga)}
             />

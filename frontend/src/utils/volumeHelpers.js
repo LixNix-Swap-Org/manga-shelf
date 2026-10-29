@@ -209,6 +209,15 @@ export const getVolumeProgressCounts = (volumes) => {
   };
 };
 
+const SORT_AFTER_OFFSET = 0.001;
+
+/** Regular volume a special stands after (volumes.sort_after), as a number; null for none or another type. */
+export const sortAfterOf = (vol) => {
+  if (inferVolumeType(vol) !== 'special' || vol.sort_after === null || vol.sort_after === undefined || vol.sort_after === '') return null;
+  const n = Number(vol.sort_after);
+  return Number.isFinite(n) ? n : null;
+};
+
 export const getVolumeSortInfo = (vol) => {
   const rawType = inferVolumeType(vol);
 
@@ -233,6 +242,11 @@ export const getVolumeSortInfo = (vol) => {
     rank = 2;
     subRank = 2;
   } else if (rawType === 'special') {
+    const after = sortAfterOf(vol);
+    if (after !== null) {
+      // right behind volume N and its special edition, ahead of N.5 (also in descending order); mirrors volumeOrderSql()
+      return { rank: 1, num: after + SORT_AFTER_OFFSET, subRank: 3, raw: String(vol.volume_number), type: rawType };
+    }
     rank = 3;
     subRank = 3;
   } else if (isNaN(parseFloat(vol.volume_number)) && !match) {
@@ -253,6 +267,28 @@ export const compareVolumesByNumber = (a, b, descending = false) => {
   return descending
     ? infoB.raw.localeCompare(infoA.raw, undefined, { numeric: true })
     : infoA.raw.localeCompare(infoB.raw, undefined, { numeric: true });
+};
+// release_date "YYYY", "YYYY-MM" or "YYYY-MM-DD" (else release_year) as [year, month, day]; a missing part sorts
+// after the known ones of that year or month, no date at all is null
+const releaseDateKey = (vol) => {
+  const m = String(vol.release_date || '').match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/);
+  if (m) return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 13, m[3] ? parseInt(m[3], 10) : 32];
+  const year = parseInt(vol.release_year, 10);
+  return year > 0 ? [year, 13, 32] : null;
+};
+
+/** Sort by release date (day, month or year as known), undated entries last in both directions, then by number. */
+export const compareVolumesByDate = (a, b, descending = false) => {
+  const ka = releaseDateKey(a);
+  const kb = releaseDateKey(b);
+  if (!ka || !kb) {
+    if (ka || kb) return ka ? -1 : 1;
+  } else {
+    for (let i = 0; i < 3; i++) {
+      if (ka[i] !== kb[i]) return descending ? kb[i] - ka[i] : ka[i] - kb[i];
+    }
+  }
+  return compareVolumesByNumber(a, b, descending);
 };
 // i18n
 const EDITION_PATTERNS = [

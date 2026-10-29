@@ -635,3 +635,55 @@ test('autofillMangaVolumes: a Schuber number the edition does not have stays unt
         assert.deepEqual({ ...row }, { notes: null, price: null, release_date: null, cover_image: null });
     } finally { global.fetch = realFetch; }
 });
+
+test('matchSchuberVolume: the chronological index puts undated boxes last and breaks a same-day tie by arrangement', () => {
+    const box = (id, release_date, arrangement) => ({ id, specialType: 1, type: 3, volume_number: 'Special', title: 'Leerschuber', price: 12, release_date, arrangement });
+    const official = [box(905, null, 50), box(901, '2024-03-12', 10), box(904, '2025-11', 40), box(903, '2025-06-03', 31), box(902, '2025-06-03', 30)];
+    assert.deepEqual([1, 2, 3, 4, 5].map(n => mp.matchSchuberVolume(official, `Schuber ${n}`, 12, '')?.id), [901, 902, 903, 904, 905]);
+});
+
+test('lookupVolumeMetadata: each half of a double volume gets the split price, not the book price of the volume page', async () => {
+    const realFetch = global.fetch;
+    try {
+        // the volume page of "10 & 11" names the price of the whole book (16 €)
+        global.fetch = async (url) => {
+            if (String(url).endsWith('/volumes/1510')) {
+                return new Response(JSON.stringify({ id: 1510, number: 10, lastNumber: 11, price: 1600, pages: 416, date: '2025-04-08T00:00:00+00:00', year: 2025, month: 4, day: 8 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            throw new Error('network down');
+        };
+        seedEdition([ov('9', { number: 9 }), ov('10', { id: 1510, volume_number: '10 & 11', number: 10, lastNumber: 11, specialType: 3, price: 16 })]);
+        const id = createManga('Doppelband-Preis', 11);
+        for (const n of ['10', '11']) {
+            const lookup = await mp.lookupVolumeMetadata(id, n);
+            assert.equal(lookup.matched, true, n);
+            assert.equal(lookup.data.price, 8, n);
+            assert.equal(lookup.data.release_date, '2025-04-08', n);
+        }
+    } finally { global.fetch = realFetch; }
+});
+
+test('lookupVolumeMetadata: an ISBN alone finds its volume through the cached catalogue answer of the scan', async () => {
+    const realFetch = global.fetch;
+    try {
+        global.fetch = offlineFetch;
+        seedEdition([
+            ov('1', { release_date: '2020-01-01', pages: 192, cover_image: '/uploads/cov1.jpg' }),
+            ov('2', { release_date: '2020-02-01', pages: 200, cover_image: '/uploads/cov2.jpg', title: 'Band Zwei' })
+        ]);
+        const id = createManga('ISBN-Lookup-Reihe', 2);
+
+        // Manga Passion's volume list holds no ISBN: without a catalogue answer the ISBN alone finds nothing
+        const unknown = await mp.lookupVolumeMetadata(id, '', { isbn: '3-551-00001-8' });
+        assert.equal(unknown.matched, false);
+
+        db.prepare('INSERT OR REPLACE INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES (?, ?, ?, ?)')
+            .run('isbn:9783551000026', JSON.stringify({ book: { volume_number: '2', volume_number_known: true } }), Date.now(), Date.now() + 60000);
+        const viaCache = await mp.lookupVolumeMetadata(id, '', { isbn: '9783551000026' });
+        assert.equal(viaCache.matched, true);
+        assert.equal(viaCache.data.volume_number, '2');
+        assert.equal(viaCache.data.cover_image, '/uploads/cov2.jpg');
+        assert.equal(viaCache.data.notes, 'Band Zwei');
+    } finally { global.fetch = realFetch; }
+});
+

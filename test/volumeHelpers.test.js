@@ -56,6 +56,30 @@ test('getVolumeSortInfo: volumes < numbered special editions < schuber < special
     assert.equal(special.rank, 3);
 });
 
+test('compareVolumesByNumber: a special with sort_after stands right after its volume, in both directions', async () => {
+    const { compareVolumesByNumber, getVolumeSortInfo, sortAfterOf } = await load();
+    const rows = [
+        { type: 'special', volume_number: 'Fanbook' },
+        { type: 'volume', volume_number: '3' },
+        { type: 'special', volume_number: 'Guidebook', sort_after: 2 },
+        { type: 'volume', volume_number: '2.5' },
+        { type: 'special_edition', volume_number: '2' },
+        { type: 'volume', volume_number: '2' },
+        { type: 'volume', volume_number: '0' },
+        { type: 'schuber', volume_number: 'Schuber 1', sort_after: 1 }
+    ];
+    const label = v => `${v.type}:${v.volume_number}`;
+    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b)).map(label), [
+        'volume:0', 'volume:2', 'special_edition:2', 'special:Guidebook', 'volume:2.5', 'volume:3', 'schuber:Schuber 1', 'special:Fanbook'
+    ]);
+    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b, true)).map(label).slice(0, 5), [
+        'volume:3', 'volume:2.5', 'special:Guidebook', 'volume:2', 'special_edition:2'
+    ]);
+    assert.equal(sortAfterOf({ type: 'schuber', volume_number: '1', sort_after: 1 }), null, 'only specials are placed');
+    assert.equal(sortAfterOf({ type: 'special', volume_number: 'Artbook', sort_after: '' }), null);
+    assert.equal(getVolumeSortInfo({ type: 'special', volume_number: 'Artbook', sort_after: '0' }).rank, 1);
+});
+
 test('getVolumeDisplayTitle: adds prefixes without duplicating them', async () => {
     const { getVolumeDisplayTitle } = await load();
     assert.equal(getVolumeDisplayTitle({ volume_number: '3' }), 'Band 3');
@@ -461,4 +485,16 @@ test('normalizePubName: the server names (setPublisherNames) win, follow a merge
         stop();
         setPublisherNames(null);
     }
+});
+
+test('compareVolumesByDate: full release date, month and year before undated entries, ties by number', async () => {
+    const { compareVolumesByDate } = await load();
+    const vol = (volume_number, release_date, release_year = release_date ? Number(release_date.slice(0, 4)) : null) =>
+        ({ volume_number, type: 'schuber', release_date, release_year });
+    const list = [vol('Schuber 1', '2024-03-12'), vol('Schuber 10', null), vol('Schuber 2', '2025-06-03'), vol('Schuber 3', '2025-06-03'),
+        vol('Schuber 4', '2025-11'), vol('Schuber 5', '2025-02-01'), vol('Schuber 6', null, 2025)];
+    assert.deepEqual([...list].sort((a, b) => compareVolumesByDate(a, b)).map(v => v.volume_number),
+        ['Schuber 1', 'Schuber 5', 'Schuber 2', 'Schuber 3', 'Schuber 4', 'Schuber 6', 'Schuber 10']);
+    assert.deepEqual([...list].sort((a, b) => compareVolumesByDate(a, b, true)).map(v => v.volume_number),
+        ['Schuber 6', 'Schuber 4', 'Schuber 3', 'Schuber 2', 'Schuber 5', 'Schuber 1', 'Schuber 10']);
 });

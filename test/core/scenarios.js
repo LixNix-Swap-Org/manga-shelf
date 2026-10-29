@@ -95,6 +95,34 @@ const scenarios = [
         }
     },
     {
+        name: 'volumes: special placed after a regular volume (sort_after), Band 0 and half volumes in order',
+        async run({ ed }) {
+            const id = await newSeries(ed, 'Kern Reihe Sonderband');
+            for (const n of ['1', '2', '3', '0', '2.5']) await newVolume(ed, id, n);
+            await newVolume(ed, id, '2', { type: 'special_edition' });
+            const guide = await newVolume(ed, id, 'Guidebook', { type: 'special', sort_after: '2' });
+            await newVolume(ed, id, 'Fanbook', { type: 'special' });
+            const box = await newVolume(ed, id, '1', { type: 'schuber', sort_after: '1' });
+            const order = async () => (await ed('GET', `/mangas/${id}`)).body.volumes.map(v => `${v.type}:${v.volume_number}`);
+            assert.deepEqual(await order(), [
+                'volume:0', 'volume:1', 'volume:2', 'special_edition:2', 'special:Guidebook', 'volume:2.5', 'volume:3',
+                'schuber:1', 'special:Fanbook'
+            ]);
+            const stored = (await ed('GET', `/mangas/${id}`)).body.volumes;
+            assert.deepEqual([stored.find(v => v.id === guide).sort_after, stored.find(v => v.id === box).sort_after], [2, null],
+                'only a special keeps sort_after');
+
+            const bad = await ed('PUT', `/volumes/${guide}`, { sort_after: '-1' });
+            assert.deepEqual([bad.status, bad.body.error], [400, 'Ungültige Position (Bandnummer von 0 bis 5000)']);
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '0,5' })).status, 200);
+            assert.equal((await order()).indexOf('special:Guidebook'), 1, 'after Band 0, before Band 1');
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '' })).status, 200);
+            assert.equal((await order()).at(-1), 'special:Guidebook', 'empty = after everything');
+            assert.equal((await ed('PUT', `/volumes/${guide}`, { sort_after: '3', type: 'volume', volume_number: '4' })).status, 200);
+            assert.equal((await ed('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === guide).sort_after, null, 'a retyped entry drops it');
+        }
+    },
+    {
         name: 'owners: toggle, dates, rights',
         async run({ admin, ed, vis, users }) {
             const id = await newSeries(admin, 'Kern Reihe C');
@@ -739,6 +767,71 @@ const scenarios = [
             assert.deepEqual([back.format, back.total_chapters, back.chapters_read, back.chapter_progress.length], ['webtoon', 100, 50, 2]);
             assert.equal((await ed('PUT', `/mangas/${id}`, { format: 'print' })).status, 200);
             assert.equal((await ed('GET', `/mangas/${id}`)).body.format, 'print');
+        }
+    },
+    {
+        name: 'anime linked to the work: each caller sees their own edition, a foreign link stays hidden, the key outlives the series',
+        async run({ admin, ed, vis }) {
+            const work = 'anilist:990001';
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const edShelf = await shelfOf(ed, 'Kern Werk Regal Ed');
+            const adminShelf = await shelfOf(admin, 'Kern Werk Regal Admin');
+            const edSeries = await newSeries(ed, 'Kern Werk Ed', { work_key: work, shelf_id: edShelf });
+            const adminEn = await newSeries(admin, 'Kern Werk Admin EN', { work_key: work, shelf_id: adminShelf, language: 'en' });
+            const adminDe = await newSeries(admin, 'Kern Werk Admin DE', { work_key: work, shelf_id: adminShelf, language: 'de' });
+            assert.ok(adminEn < adminDe);
+            // one work with a numeric id for every edition that shares the key, in the list and the detail
+            const rows = (await admin('GET', '/mangas')).body.filter((m) => [adminEn, adminDe].includes(m.id));
+            assert.equal(rows.length, 2);
+            assert.ok(Number.isInteger(rows[0].work_id) && rows[0].work_id === rows[1].work_id, JSON.stringify(rows.map((m) => m.work_id)));
+            assert.equal((await ed('GET', `/mangas/${edSeries}`)).body.work_id, rows[0].work_id);
+
+            const created = await ed('POST', '/anime', { title: 'Kern Werk Anime', episodes: 12, manga_id: edSeries });
+            assert.equal(created.status, 201, JSON.stringify(created.body));
+            const id = created.body.id;
+            const fields = (answer) => Object.fromEntries(Object.entries(answer).filter(([key]) => key.startsWith('manga')));
+            const listed = async (api) => fields((await api('GET', '/anime')).body.find((a) => a.id === id));
+            const detail = async (api) => fields((await api('GET', `/anime/${id}`)).body);
+
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
+            assert.deepEqual(await detail(ed), { manga_id: edSeries, manga: { id: edSeries, title: 'Kern Werk Ed' } });
+            // the caller's own edition of the work, in their default language before the lower id
+            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true, manga_linked_elsewhere: true });
+            assert.deepEqual(await detail(admin), { manga_id: adminDe, manga_via_work: true, manga_linked_elsewhere: true, manga: { id: adminDe, title: 'Kern Werk Admin DE' } });
+            assert.doesNotMatch(JSON.stringify((await admin('GET', `/anime/${id}`)).body), /Kern Werk Ed/);
+            // no edition in a shelf of their own: only the one bit
+            assert.deepEqual(await listed(vis), { manga_id: null, manga_linked_elsewhere: true });
+            assert.deepEqual(await detail(vis), { manga_id: null, manga_linked_elsewhere: true, manga: null });
+
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404, 'a link into a foreign shelf is not the caller\'s to undo');
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: adminDe })).status, 404, 'the foreign link is never overwritten');
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
+
+            // the linked series goes: the stored key still names the work
+            assert.equal((await ed('DELETE', `/mangas/${edSeries}`)).status, 200);
+            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
+            assert.deepEqual(await listed(ed), { manga_id: null });
+            assert.deepEqual(await listed(vis), { manga_id: null });
+            // "Keine Verknüpfung" sent by a caller who sees none keeps the work for the editions of others
+            assert.equal((await ed('PUT', `/anime/${id}`, { manga_id: null })).status, 200);
+            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
+            // with the original gone the link through the own edition is the caller's: unlinking drops the work as well
+            const unlinked = await admin('PUT', `/anime/${id}`, { manga_id: null });
+            assert.equal(unlinked.status, 200, JSON.stringify(unlinked.body));
+            assert.deepEqual(fields(unlinked.body), { manga_id: null, manga: null });
+            assert.deepEqual(await listed(admin), { manga_id: null });
+            assert.deepEqual(await listed(ed), { manga_id: null });
+            const relinked = await admin('PUT', `/anime/${id}`, { manga_id: adminEn });
+            assert.equal(relinked.status, 200, JSON.stringify(relinked.body));
+            assert.deepEqual(fields(relinked.body), { manga_id: adminEn, manga: { id: adminEn, title: 'Kern Werk Admin EN' } });
+            assert.deepEqual(await listed(ed), { manga_id: null, manga_linked_elsewhere: true });
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 200, 'a link of the caller\'s own shelf can be undone');
+            assert.deepEqual(await listed(admin), { manga_id: null });
+            assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
         }
     },
     {

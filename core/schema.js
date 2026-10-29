@@ -45,6 +45,13 @@ const numberSortExpr = (col) => {
 };
 
 /** All schema migrations in order. New ones are appended; shipped ones never change. */
+// works (migration 38): the source ids a work key names, and the trigger body that keeps mangas.work_id on its key
+const WORK_ANILIST_SQL = (col) => `CASE WHEN ${col} LIKE 'anilist:%' THEN CAST(substr(${col}, 9) AS INTEGER) END`;
+const WORK_MAL_SQL = (col) => `CASE WHEN ${col} LIKE 'mal:%' THEN CAST(substr(${col}, 5) AS INTEGER) END`;
+const WORK_TRIGGER_BODY = `INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
+                            SELECT NEW.work_key, ${WORK_ANILIST_SQL('NEW.work_key')}, ${WORK_MAL_SQL('NEW.work_key')} WHERE NEW.work_key IS NOT NULL;
+                        UPDATE mangas SET work_id = (SELECT id FROM works WHERE work_key = NEW.work_key) WHERE id = NEW.id;`;
+
 function migrationList(log = silentLog) {
     return [
         {
@@ -716,6 +723,57 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
                 `);
             }
+        },
+        {
+            version: 37,
+            name: 'add_volumes_sort_after',
+            up: (d) => {
+                // A special (guidebook, fanbook, anthology) can stand right after regular volume N instead of at the end
+                const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!cols.has('sort_after')) d.exec('ALTER TABLE volumes ADD COLUMN sort_after REAL;');
+            }
+        },
+        {
+            version: 38,
+            name: 'add_works',
+            up: (d) => {
+                // One row per work (the work_key of its editions) with a numeric id. mangas.work_id follows mangas.work_key
+                // through triggers on every write path; animes.work_id is the work of the linked series and outlives it
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS works (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        work_key TEXT NOT NULL UNIQUE,
+                        anilist_id INTEGER,
+                        mal_id INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+                const mangaCols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!mangaCols.has('work_id')) d.exec('ALTER TABLE mangas ADD COLUMN work_id INTEGER REFERENCES works(id);');
+                const animeCols = new Set(d.prepare('PRAGMA table_info(animes)').all().map(c => c.name));
+                if (!animeCols.has('work_id')) d.exec('ALTER TABLE animes ADD COLUMN work_id INTEGER REFERENCES works(id);');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_mangas_work_id ON mangas (work_id);
+                    CREATE INDEX IF NOT EXISTS idx_animes_work_id ON animes (work_id);
+                    INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
+                        SELECT DISTINCT work_key, ${WORK_ANILIST_SQL('work_key')}, ${WORK_MAL_SQL('work_key')} FROM mangas WHERE work_key IS NOT NULL;
+                    UPDATE mangas SET work_id = (SELECT w.id FROM works w WHERE w.work_key = mangas.work_key);
+                    UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id) WHERE manga_id IS NOT NULL;
+                    DROP TRIGGER IF EXISTS trg_mangas_work_insert;
+                    CREATE TRIGGER trg_mangas_work_insert AFTER INSERT ON mangas BEGIN
+                        ${WORK_TRIGGER_BODY}
+                    END;
+                    DROP TRIGGER IF EXISTS trg_mangas_work_update;
+                    CREATE TRIGGER trg_mangas_work_update AFTER UPDATE OF work_key ON mangas BEGIN
+                        ${WORK_TRIGGER_BODY}
+                        UPDATE animes SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id) WHERE manga_id = NEW.id;
+                        -- the last edition of a work moved to another key (a merge of work groups): its unlinked anime follow
+                        UPDATE animes SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+                            WHERE manga_id IS NULL AND OLD.work_id IS NOT NULL AND work_id = OLD.work_id AND NEW.work_key IS NOT NULL
+                              AND NOT EXISTS (SELECT 1 FROM mangas WHERE work_id = OLD.work_id);
+                    END;
+                `);
+            }
         }
     ];
 }
@@ -872,6 +930,7 @@ function applySchema(conn, options = {}) {
             target_price REAL,
             manga_passion_volume_id INTEGER DEFAULT NULL,
             language TEXT,
+            sort_after REAL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (manga_id) REFERENCES mangas (id) ON DELETE CASCADE
         );

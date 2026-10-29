@@ -910,6 +910,27 @@ describe('AnimeDetailModal', () => {
       expect(screen.getByText('12 / 1180+')).toBeTruthy();
     });
 
+    it("a series shown through the caller's own edition of the work: the link select is locked while the original is in a foreign shelf and says why", async () => {
+      const update = vi.fn();
+      openEditable(entry({ manga_id: 9, manga_via_work: true, manga_linked_elsewhere: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
+      await act(async () => {});
+      const select = screen.getByLabelText('Verknüpfte Reihe');
+      expect(select.disabled).toBe(true);
+      expect(select.value).toBe('9');
+      expect(document.getElementById(select.getAttribute('aria-describedby')).textContent).toBe('Über deine Ausgabe dieses Werks verknüpft');
+    });
+
+    it("a series shown through the caller's own edition after the original series is gone: the select stays open and unlinks", async () => {
+      const update = vi.fn(async () => entry({ manga_id: null, manga: null }));
+      openEditable(entry({ manga_id: 9, manga_via_work: true, manga: { id: 9, title: 'Frieren (DE)' } }), { update, mangas: [{ id: 9, title: 'Frieren (DE)' }] });
+      await act(async () => {});
+      const select = screen.getByLabelText('Verknüpfte Reihe');
+      expect(select.disabled).toBe(false);
+      expect(document.getElementById(select.getAttribute('aria-describedby')).textContent).toBe('Über deine Ausgabe dieses Werks verknüpft');
+      await act(async () => { fireEvent.change(select, { target: { value: '' } }); });
+      expect(update).toHaveBeenCalledWith(1, { manga_id: null });
+    });
+
     it('a fresh counter is sent without a status, so the server makes it "Schaue"', async () => {
       const updateProgress = vi.fn(async () => ({}));
       openEditable(entry({ my_progress: null, progress: [] }), { updateProgress });
@@ -1651,6 +1672,66 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(chain.textContent).toContain('Live Eins');
     expect(chain.textContent).toContain('Live Drei');
     expect(chain.querySelector('[aria-current="true"]').textContent).toContain('Live Zwei');
+  });
+
+  it('a season chain cut by the request cap offers to load the rest, which goes on until it is whole', async () => {
+    const short = [
+      { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+      { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+    ];
+    const whole = [...short, { in_collection_id: null, anilist_id: 10, title: 'Live Vier', season_year: 2024, my_status: null, current: false }];
+    let calls = 0;
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        calls += 1;
+        return calls === 1
+          ? fakeResponse(200, { seasons: short, truncated: { before: false, after: true } })
+          : fakeResponse(200, { seasons: whole, truncated: { before: false, after: false } });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    expect(await within(chain).findByText('Weitere Staffeln wurden noch nicht geladen.')).toBeTruthy();
+    fireEvent.click(within(chain).getByRole('button', { name: 'Weitere Staffeln laden' }));
+    await waitFor(() => expect(chain.textContent).toContain('Live Vier'));
+    expect(calls).toBe(2);
+    expect(within(chain).queryByRole('button', { name: 'Weitere Staffeln laden' })).toBeNull();
+    expect(chain.textContent).not.toContain('Weitere Staffeln wurden noch nicht geladen.');
+    // the button is gone: the focus lands on the heading of the list, not on the page
+    await waitFor(() => expect(document.activeElement).toBe(within(chain).getByRole('heading', { name: 'Staffeln' })));
+  });
+
+  it('season labels: no numbers while earlier seasons are missing, a side line is named as such', async () => {
+    const front = [
+      { in_collection_id: 1, anilist_id: 8, title: 'Live Zwei', season_year: 2018, my_status: null, current: true },
+      { in_collection_id: null, anilist_id: 9, title: 'Live Drei', season_year: 2022, my_status: null, current: false }
+    ];
+    const whole = [
+      { in_collection_id: null, anilist_id: 7, title: 'Live Eins', season_year: 2015, my_status: null, current: false },
+      ...front,
+      { in_collection_id: null, anilist_id: 11, title: 'Live Ableger', season_year: 2021, my_status: null, current: false, branch: true }
+    ];
+    let calls = 0;
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/anime/1/season-chain') {
+        calls += 1;
+        return calls === 1
+          ? fakeResponse(200, { seasons: front, truncated: { before: true, after: false } })
+          : fakeResponse(200, { seasons: whole, truncated: { before: false, after: false } });
+      }
+      if (url === '/api/anime/1/ratings') return fakeResponse(200, RATINGS);
+      return fakeResponse(404, { error: 'Nicht gefunden' });
+    });
+    openShared(shared({ anilist_id: 8, kind: 'anime' }), { defaultVisibility: 'public' });
+    const chain = (await screen.findByRole('heading', { name: 'Staffeln' })).closest('section');
+    const labels = () => within(chain).getAllByRole('listitem').map((li) => li.firstChild.textContent);
+    await within(chain).findByText('Weitere Staffeln wurden noch nicht geladen.');
+    expect(labels()).toEqual(['Staffel', 'Staffel']);
+    fireEvent.click(within(chain).getByRole('button', { name: 'Weitere Staffeln laden' }));
+    await waitFor(() => expect(chain.textContent).toContain('Live Ableger'));
+    expect(labels()).toEqual(['Staffel 1', 'Staffel 2', 'Staffel 3', 'Nebenlinie']);
   });
 
   it('"Öffnen" on a related anime and the series link ask before unsaved input is dropped', async () => {

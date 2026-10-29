@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
-  normalizePubName, compareVolumesByNumber, getVolumeSortInfo, hasUserRead, inferVolumeType,
+  normalizePubName, compareVolumesByNumber, compareVolumesByDate, getVolumeSortInfo, hasUserRead, inferVolumeType,
   getVolumeDisplayTitle, getEditionLabel, matchesConditionFilter, filtersAllowGaps, VOLUME_CONDITIONS,
   READ_FILTER, UNREAD_FILTER, normalizeVolumeFilter
 } from '../utils/volumeHelpers';
@@ -136,8 +136,6 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
       const priceB = b.price !== null && b.price !== undefined ? b.price : -1;
       const pubA = (a.publisher && a.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
       const pubB = (b.publisher && b.publisher.trim()) || (manga?.publisher && manga.publisher.trim()) || '';
-      const yearA = a.release_year || 0;
-      const yearB = b.release_year || 0;
 
       switch (volumeSort) {
         case 'number_desc':
@@ -151,9 +149,9 @@ export default function useVolumeFilters({ volumes, manga, user, selectedReaderI
         case 'price_asc':
           return (priceA === -1 ? 999999 : priceA) - (priceB === -1 ? 999999 : priceB);
         case 'year_desc':
-          return yearB - yearA;
+          return compareVolumesByDate(a, b, true);
         case 'year_asc':
-          return (yearA || 9999) - (yearB || 9999);
+          return compareVolumesByDate(a, b);
         case 'condition':
           return (a.condition || 'ZZZ').localeCompare(b.condition || 'ZZZ');
         case 'number_asc':

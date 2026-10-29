@@ -6,7 +6,7 @@
 # Stage 1: Build the React / Vite Frontend
 # ===================================================
 # Pinned for reproducible builds (Dependabot keeps it current); node:sqlite needs Node >= 22.13
-FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24 AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22.23.4-alpine3.24 AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -20,7 +20,7 @@ RUN npm run build
 # ===================================================
 # Stage 2: Backend files from the package.json "files" manifest (same list as the Pterodactyl ZIP)
 # ===================================================
-FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24 AS backend-files
+FROM --platform=$BUILDPLATFORM node:22.23.4-alpine3.24 AS backend-files
 WORKDIR /src
 COPY . .
 RUN node scripts/stage-backend.js /backend
@@ -29,7 +29,7 @@ RUN node scripts/stage-backend.js /backend
 # Stage 3: Production dependencies (pure JavaScript, identical for every architecture). Installed on the build
 # platform: npm under QEMU emulation of the arm64 target crashes now and then with "Illegal instruction".
 # ===================================================
-FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24 AS backend-deps
+FROM --platform=$BUILDPLATFORM node:22.23.4-alpine3.24 AS backend-deps
 WORKDIR /deps
 COPY package*.json ./
 # Install production dependencies exactly as locked; none of them needs an install script
@@ -38,7 +38,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 # ===================================================
 # Stage 4: Production Node.js Runtime for Express Backend
 # ===================================================
-FROM node:22.23.3-alpine3.24 AS runner
+FROM node:22.23.4-alpine3.24 AS runner
 WORKDIR /app
 
 ARG VERSION=dev
