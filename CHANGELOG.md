@@ -1,15 +1,20 @@
 # Changelog
 
-## Unreleased
+## 3.6.0
 
 ### Before updating
 - **Database migrations 37 and 38** run at the first start: `volumes.sort_after` (where a special stands, empty for every existing entry) and the table `works` (one row with a numeric id per work, made from the work keys the series already carry), `mangas.work_id` and `animes.work_id` (the work of the linked series, filled in for every linked anime). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.5.0 cannot open the migrated database.
+- **Going back to 3.5.0 restores the backup from before the update, and everything changed since is lost** (new series and volumes, reading state, anime progress, shopping list, users and settings; images in `uploads/` stay). Where the server updates itself (Pterodactyl, a headless binary in a folder of your own), "Zurück zu v3.5.0" in System → Updates does this after you confirm the loss. Every other install type gets the panel with the steps in the same place; the steps are also in the README, "Updating → Going back".
 
 ### Volumes
 - **Scanning a volume fills in more:** scanning an ISBN on a series page (phone) now also fetches the volume from Manga Passion for a German series: the cover, the release date and the price come into the form "Band hinzufügen", and the pages, the release year and the volume title are stored with it. They belong to the scanned volume: when you type another number before adding, they are left out. The volume publisher is only stored when it differs from the series publisher. Scanning the ISBN in the volume editor runs "Auto-Ausfüllen" at once. Manga Passion lists no ISBNs per edition, so the volume is found by the number the library catalogue (DNB, K10plus) names for the ISBN.
 - **Special volumes in one click:** the form "Band, Special Edition oder Schuber hinzufügen" on a series page has a row "Sonderband" with "Band 0", the next half volume ("Band 12.5" after Band 12), "Guidebook", "Fanbook", "Artbook" and "Anthologie". A chip fills in type and number (the specials in the interface language) and puts the cursor into the number field; status, price, date and photo work as before. Band 0 and half volumes stay volumes: they sort by their number and count as extras, not towards the progress.
 - **Specials in their place:** a special (guidebook, fanbook, anthology …) can stand right after a regular volume: the field "Einsortieren nach Band" appears for the type "Special / Extra" in the add form and the volume editor. The chips fill in the highest volume of the series; empty keeps the special at the end as before. The shelf, the grid, the list and the sort by volume number (both directions) follow it, also offline.
 - **CSV and scripts:** the CSV has the column "Einsortiert nach" after "Bandsprache" (specials only; an invalid cell is a warning). `POST`/`PUT /api/volumes` take `sort_after` (0 to 5000 with one decimal, `''`/`null` clears; 400 otherwise); the server keeps it only for the type `special`.
+
+### Manga Passion
+- **Double volumes:** an edition that Manga Passion lists as double volumes ("10 & 11", Eyeshield 21 at Egmont) now counts as one volume each: the gap check, the progress, the ghost spines and the import of gaps know volumes 10 to 21, the price is split between both, and "Bandzahl anpassen" offers the number of volumes instead of the number of books. A "10 & 11" entry imported before this version stays as it is; delete it and import the gaps again.
+- **Schuber dates:** "Schuber N" gets the date of the N-th box set by release date (a month-only date after the exact days of its month, undated box sets last), so an undated box set no longer shifts every date by one. The sort "Erscheinungsjahr" of the volume list compares the full release date, undated entries last in both directions.
 
 ### Anime
 - **Anime linked to the work, not only to one series:** an anime linked to a series now also shows up as linked for everybody who has their own edition of the same work (the same AniList, MyAnimeList or edition group) in a shelf of their own. The card, the detail and the tab "Manga-Verknüpfung" of the Anime-Radar lead to your own edition, with the note "Über deine Ausgabe dieses Werks verknüpft"; while the series it was made with is in somebody else's shelf, that link cannot be undone by you, because it belongs to the person whose series it is. Once that series is deleted, you can unlink it or link another series. Without an edition of your own you still see only that the anime is linked elsewhere, never the series of a shelf you cannot see. The work is remembered with the anime, so the link outlives the series it was made with (deleted into the trash, for example).
@@ -24,6 +29,12 @@
 
 ### Release radar
 - **Release radar covers:** the covers in "Deutsche Neuheiten" and "Meine Vorbestellungen" are larger, and a click opens a cover full size in the image gallery ("Original" opens it in a new tab). In "Meine Vorbestellungen" the cover no longer leads to the series; the title and "Details" still do.
+
+### Security
+- **Desktop app:** Electron 44.9.1 (GHSA-jr5w-w6x2-84p9 and the mitigation for the compromised eMudhra intermediate certificates).
+- **Docker image:** Node 22.23.4 (`node:22.23.4-alpine3.24`).
+- **Build and test tools:** `undici` 7.30.1 and 6.29.1 (GHSA-qrxm-fqhp-jwvm and further advisories) and `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr); neither ships with the server.
+- **Updates without advisories:** `sql.js` 1.15.1 (standalone mode of the apps), `lucide-react` 1.61.0, `postcss` 8.5.31, `vitest` 5.0.5, `eslint` 10.13.0, `js-yaml` 5.5.0, `puppeteer-core` 25.15.0, CodeQL actions 4.39.1.
 
 ## 3.5.0
 
