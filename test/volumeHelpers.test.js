@@ -56,6 +56,17 @@ test('getVolumeSortInfo: volumes < numbered special editions < schuber < special
     assert.equal(special.rank, 3);
 });
 
+test('compareVolumesByNumber: regular volumes without a plain number go to the end, like number_sort on the server', async () => {
+    const { compareVolumesByNumber, getVolumeSortInfo } = await load();
+    const rows = ['<img src=x onerror=alert(1)>', '2', '-5', 'Band 3', '1e3', '0', '1', '12.5'].map(n => ({ type: 'volume', volume_number: n }));
+    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b)).map(v => v.volume_number), [
+        '0', '1', '2', 'Band 3', '12.5', '-5', '<img src=x onerror=alert(1)>', '1e3'
+    ]);
+    assert.equal(getVolumeSortInfo({ type: 'volume', volume_number: 'Bd. 7' }).num, 7);
+    assert.equal(getVolumeSortInfo({ type: 'volume', volume_number: 'Starter 1' }).rank, 4);
+    assert.equal(getVolumeSortInfo({ type: 'schuber', volume_number: 'Schuber 2' }).num, 2, 'other types still read their label');
+});
+
 test('compareVolumesByNumber: a special with sort_after stands right after its volume, in both directions', async () => {
     const { compareVolumesByNumber, getVolumeSortInfo, sortAfterOf } = await load();
     const rows = [

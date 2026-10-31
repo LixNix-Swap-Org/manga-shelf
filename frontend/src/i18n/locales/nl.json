@@ -2419,6 +2419,7 @@
   "Ungültige Anmeldedaten": "Ongeldige inloggegevens",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Ongeldige selectie (1 tot {max_ids} deel-ID's)",
   "Ungültige Backup-Datenbank: {reason}": "Ongeldige back-updatabase: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "Ongeldig volumenummer (een getal van 0 tot {max})",
   "Ungültige Besitzer-Änderung": "Ongeldige eigenaarswijziging",
   "Ungültige Bild-URL": "Ongeldige afbeeldings-URL",
   "Ungültige Bilderliste": "Ongeldige afbeeldingenlijst",

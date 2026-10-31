@@ -2382,6 +2382,7 @@
   "Ungültige Anmeldedaten": "로그인 정보가 올바르지 않아요",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "올바르지 않은 선택이에요 (권 ID 1~{max_ids}개)",
   "Ungültige Backup-Datenbank: {reason}": "올바르지 않은 백업 데이터베이스예요: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "잘못된 권 번호입니다(0~{max} 사이의 숫자)",
   "Ungültige Besitzer-Änderung": "올바르지 않은 보유자 변경이에요",
   "Ungültige Bild-URL": "올바르지 않은 이미지 URL이에요",
   "Ungültige Bilderliste": "올바르지 않은 이미지 목록이에요",
