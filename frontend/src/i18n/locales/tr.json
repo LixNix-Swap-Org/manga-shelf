@@ -2419,6 +2419,7 @@
   "Ungültige Anmeldedaten": "Geçersiz kimlik bilgileri",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Geçersiz seçim (1 ile {max_ids} cilt kimliği)",
   "Ungültige Backup-Datenbank: {reason}": "Geçersiz yedek veritabanı: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "Geçersiz cilt numarası (0 ile {max} arasında bir sayı)",
   "Ungültige Besitzer-Änderung": "Geçersiz sahip değişikliği",
   "Ungültige Bild-URL": "Geçersiz görsel URL'si",
   "Ungültige Bilderliste": "Geçersiz görsel listesi",

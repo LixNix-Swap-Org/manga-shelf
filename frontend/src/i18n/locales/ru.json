@@ -2493,6 +2493,7 @@
   "Ungültige Anmeldedaten": "Неверные данные для входа",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Недопустимый выбор (от 1 до {max_ids} ID томов)",
   "Ungültige Backup-Datenbank: {reason}": "Недопустимая база данных резервной копии: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "Недопустимый номер тома (число от 0 до {max})",
   "Ungültige Besitzer-Änderung": "Недопустимое изменение владельца",
   "Ungültige Bild-URL": "Недопустимый URL изображения",
   "Ungültige Bilderliste": "Недопустимый список изображений",

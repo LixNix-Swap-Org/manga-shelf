@@ -49,13 +49,21 @@ const parseType = (val) => {
 
 const volumeKey = (num, type) => canonicalVolumeNumber(num, type).toLowerCase();
 
+// Like total_volumes and sort_after: no series has more volumes
+const MAX_VOLUME_NUMBER = 5000;
+const NUMBER_RANGE_ERROR = msg('Ungültige Bandnummer (Zahl von 0 bis {max})', { max: MAX_VOLUME_NUMBER });
+
 const parseVolumeNumber = (val, type) => {
     if (!(typeof val === 'string' || (typeof val === 'number' && Number.isFinite(val))) || String(val).trim() === '') {
         return { error: 'Gültige Bandnummer erforderlich' };
     }
     const s = String(val).trim();
     if (s.length > 80) return { error: 'Bandnummer ist zu lang (maximal 80 Zeichen)' };
-    return { value: canonicalVolumeNumber(s, type) };
+    const value = canonicalVolumeNumber(s, type);
+    // A plain number ("-5", "+3", "999999") has to be a real volume number; labels ("Artbook", "Schuber 2") stay free
+    const numeric = /^([+-]?)(\d+(?:[.,]\d+)?)$/.exec(value);
+    if (numeric && (numeric[1] || Number(numeric[2].replace(',', '.')) > MAX_VOLUME_NUMBER)) return { error: NUMBER_RANGE_ERROR };
+    return { value };
 };
 
 /** Another entry of the series with the same type and number (case, spaces and a "Band " prefix ignored). */
@@ -252,7 +260,7 @@ function createBatch(ctx, { body }) {
     const start = parseWholeNumber(from);
     const end = parseWholeNumber(to);
 
-    if (!mId || start === null || end === null || start < 1 || start > end || end - start + 1 > MAX_BATCH_VOLUMES) {
+    if (!mId || start === null || end === null || start < 1 || start > end || end > MAX_VOLUME_NUMBER || end - start + 1 > MAX_BATCH_VOLUMES) {
         throw badRequest(msg('Ungültiger Bereich (maximal {max_volumes} Bände, positive Zahlen)', { max_volumes: MAX_BATCH_VOLUMES }));
     }
     const st = parseStatus(status, { allowEmpty: true });
