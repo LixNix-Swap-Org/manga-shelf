@@ -282,5 +282,5 @@ function foldTmdbHits(metas, tmdbMetas) {
 module.exports = {
     STATUSES, FORMATS, MINUTE, HOUR, DAY, foldUmlauts, searchKey, titleScore, keyScore, rankByTitle, allTitles, fuzzyDate, isoDay,
     cleanDescription, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta, isTmdbAnime, yearOf,
-    tmdbTwinScore, tmdbFoldScore, foldTmdbHits
+    tmdbTwinScore, foldTmdbHits
 };
