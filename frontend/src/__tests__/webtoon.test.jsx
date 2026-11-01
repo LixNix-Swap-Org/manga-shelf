@@ -214,6 +214,26 @@ describe('ChapterProgress', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('half chapters: "12,5" saves 12.5 and shows "12,5"; +1 from 12.5 shows 13; two decimals are refused', async () => {
+    const { rerender } = render(<ChapterProgress manga={manga} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '12,5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ chapters_read: 12.5 });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Speichern' }).disabled).toBe(false));
+
+    const half = { ...manga, chapters_read: 12.5 };
+    rerender(<ChapterProgress manga={half} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    const bar = () => screen.getByRole('progressbar', { name: 'Lesefortschritt' }).getAttribute('aria-valuetext');
+    expect(bar()).toBe('12,5 von 200 Kapiteln gelesen');
+    fireEvent.click(screen.getByRole('button', { name: '+1 – ein Kapitel mehr gelesen' }));
+    expect(bar()).toBe('13 von 200 Kapiteln gelesen');
+
+    fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '12.55' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    expect(toasts.messages('error')).toEqual(['Bitte eine Zahl zwischen 0 und 99999 eingeben, mit höchstens einer Nachkommastelle (z. B. 12.5).']);
+  });
+
   it('withChapter puts the own chapter into the detail', () => {
     expect(withChapter(manga, { chapters_read: 0 }, user)).toMatchObject({ chapters_read: 0, chapter_progress: [{ user_id: 2, chapters_read: 30 }] });
     expect(withChapter(manga, { chapters_read: 160 }, user).chapter_progress.map((p) => [p.username, p.chapters_read])).toEqual([['anna', 160], ['ben', 30]]);

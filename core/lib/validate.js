@@ -50,6 +50,13 @@ const parseSortAfter = (val) => {
     const n = Number(text);
     return n <= 5000 ? { value: n } : { error: true };
 };
+/** A read chapter: 0 to MAX_CHAPTERS with at most one decimal ("12.5" or "12,5" for an extra chapter); null when invalid. */
+const parseChapter = (val) => {
+    const text = typeof val === 'number' ? String(val) : (typeof val === 'string' ? val.trim().replace(',', '.') : '');
+    if (!/^\d+(\.\d)?$/.test(text)) return null;
+    const n = Number(text);
+    return n <= MAX_CHAPTERS ? n : null;
+};
 const parseYear = parseIntInRange(1900, 2999);
 
 // JSON booleans as well as "true"/"false"/"0"/"1" strings ("false" must not count as true)
@@ -191,7 +198,7 @@ const parseBulkSet = (set) => {
 
 module.exports = {
     VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, BULK_SET_FIELDS,
-    isBlank, parsePrice, parseIntInRange, parsePages, parseSortAfter, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
+    isBlank, parsePrice, parseIntInRange, parsePages, parseSortAfter, parseChapter, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
     isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId, parseSeriesFormat, parseTotalChapters,
     parseIdList, parseCondition, parseBulkSet
 };
