@@ -56,15 +56,37 @@ test('getVolumeSortInfo: volumes < numbered special editions < schuber < special
     assert.equal(special.rank, 3);
 });
 
-test('compareVolumesByNumber: regular volumes without a plain number go to the end, like number_sort on the server', async () => {
+test('compareVolumesByNumber: regular volumes without a plain number stand where volumeOrderSql puts them', async () => {
     const { compareVolumesByNumber, getVolumeSortInfo } = await load();
-    const rows = ['<img src=x onerror=alert(1)>', '2', '-5', 'Band 3', '1e3', '0', '1', '12.5'].map(n => ({ type: 'volume', volume_number: n }));
-    assert.deepEqual([...rows].sort((a, b) => compareVolumesByNumber(a, b)).map(v => v.volume_number), [
-        '0', '1', '2', 'Band 3', '12.5', '-5', '<img src=x onerror=alert(1)>', '1e3'
-    ]);
+    const rows = [
+        ...['<img src=x onerror=alert(1)>', '2', '-5', 'Band 3', '1e3', '0', '1', '12.5', '12,5'].map(n => ({ type: 'volume', volume_number: n })),
+        { type: 'schuber', volume_number: 'Schuber 1' }, { type: 'special', volume_number: 'Fanbook' },
+        { type: 'special_edition', volume_number: 'Collectors Edition' }, { type: 'special_edition', volume_number: '2' }
+    ];
+    const client = [...rows].sort((a, b) => compareVolumesByNumber(a, b)).map(v => v.volume_number);
+    // after the numbered volumes and the unnumbered Special Edition, before Schuber and specials ("12,5" is a label on both sides)
+    assert.deepEqual(client.slice(0, 7), ['0', '1', '2', '2', 'Band 3', '12.5', 'Collectors Edition']);
+    assert.deepEqual(client.slice(-2), ['Schuber 1', 'Fanbook']);
     assert.equal(getVolumeSortInfo({ type: 'volume', volume_number: 'Bd. 7' }).num, 7);
-    assert.equal(getVolumeSortInfo({ type: 'volume', volume_number: 'Starter 1' }).rank, 4);
+    assert.equal(getVolumeSortInfo({ type: 'volume', volume_number: 'Starter 1' }).rank, 1.75);
     assert.equal(getVolumeSortInfo({ type: 'schuber', volume_number: 'Schuber 2' }).num, 2, 'other types still read their label');
+
+    // the same rows through the real schema (number_sort trigger) and volumeOrderSql
+    const { DatabaseSync } = require('node:sqlite');
+    const { applySchema } = require('../core/schema');
+    const { volumeOrderSql } = require('../core/lib/volumeNumber');
+    const quiet = { info() {}, warn() {}, debug() {}, error() {}, child() { return quiet; } };
+    const db = new DatabaseSync(':memory:');
+    applySchema(db, { log: quiet });
+    db.prepare("INSERT INTO mangas (id, title) VALUES (1, 'Reihe')").run();
+    const insert = db.prepare('INSERT INTO volumes (manga_id, volume_number, type) VALUES (1, ?, ?)');
+    for (const v of rows) insert.run(v.volume_number, v.type);
+    const server = db.prepare(`SELECT volume_number FROM volumes v WHERE manga_id = 1 ORDER BY ${volumeOrderSql('v')}`).all().map(r => r.volume_number);
+    db.close();
+    // labels among themselves: the server compares bytes, the client numerically; the groups and their order are the same
+    const group = (list) => list.map(n => rows.filter(r => r.volume_number === n).map(r => getVolumeSortInfo(r).rank)[0]);
+    assert.deepEqual(group(client), group(server));
+    assert.deepEqual(new Set(client.slice(7, -2)), new Set(server.slice(7, -2)));
 });
 
 test('compareVolumesByNumber: a special with sort_after stands right after its volume, in both directions', async () => {
