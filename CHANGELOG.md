@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Anime
+- **No double hit for animation from outside Japan:** the anime search folds a TMDb hit into the AniList hit of the same series also when TMDb names another original language, as long as the title is the same and the year matches. "Cyberpunk: Edgerunners" (English on TMDb) showed up twice before, once from AniList and once from TMDb. Japanese animation keeps the looser rule (a title that starts the same is enough).
+
 ## 3.6.0
 
 ### Before updating

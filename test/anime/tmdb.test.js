@@ -256,7 +256,7 @@ test('refresh: without a background key the detail refreshes an old TMDb row wit
     assert.equal(gateway.scheduleOwnTmdbRefresh(ctxAs(core, 'admin'), rowOf(core, 50)), false, 'only with an own key');
 });
 
-test('fold: only Japanese animation, only hits with an AniList id, only in the same year; MAL-only hits stay targets of nothing', () => {
+test('fold: animation only, only hits with an AniList id, only in the same year; MAL-only hits stay targets of nothing', () => {
     const { foldTmdbHits, emptyMeta } = require('../../core/anime/normalize');
     const hit = (fields) => emptyMeta({ kind: 'tv', tmdb_id: 1, tmdb_kind: 'tv', original_language: 'ja', tmdb_genre_ids: [16], season_year: 2023,
         title: { romaji: null, english: 'Frieren – Nach dem Ende der Reise', native: '葬送のフリーレン', preferred: null }, ...fields });
@@ -265,7 +265,15 @@ test('fold: only Japanese animation, only hits with an AniList id, only in the s
     assert.equal(foldTmdbHits([ani], [hit()]).rest.length, 0);
     assert.equal(foldTmdbHits([malOnly], [hit()]).rest.length, 1, 'a MyAnimeList-only hit is no target');
     assert.equal(foldTmdbHits([ani], [hit({ season_year: 2025 })]).rest.length, 1, 'another year');
-    assert.equal(foldTmdbHits([ani], [hit({ original_language: 'en' })]).rest.length, 1, 'not Japanese');
+    // another original language folds only with the same title, a prefix (0.9) is not enough
+    assert.equal(foldTmdbHits([ani], [hit({ original_language: 'en' })]).rest.length, 0, 'not Japanese, same native title');
+    assert.equal(foldTmdbHits([ani], [hit({ original_language: 'en', title: { english: 'Sousou no', native: null } })]).rest.length, 1, 'not Japanese, only a prefix');
+    assert.equal(foldTmdbHits([ani], [hit({ title: { english: 'Sousou no', native: null } })]).rest.length, 0, 'Japanese: a prefix is enough');
+    const edge = emptyMeta({ anilist_id: 120377, season_year: 2022, title: { romaji: 'Cyberpunk: Edgerunners', english: 'Cyberpunk: Edgerunners', native: 'サイバーパンク エッジランナーズ', preferred: null } });
+    const edgeTmdb = hit({ tmdb_id: 105248, original_language: 'en', tmdb_genre_ids: [16, 10759, 10765], season_year: null, start_date: '2022-09-13',
+        title: { english: 'Cyberpunk: Edgerunners', native: 'Cyberpunk: Edgerunners' } });
+    const folded = foldTmdbHits([edge], [edgeTmdb]);
+    assert.deepEqual([folded.rest.length, folded.metas[0].folded_tmdb], [0, { tmdb_kind: 'tv', tmdb_id: 105248 }], 'Cyberpunk: Edgerunners is "en" on TMDb');
     assert.equal(foldTmdbHits([ani], [hit({ tmdb_genre_ids: [10759] })]).rest.length, 1, 'not animation');
     const byStartDate = foldTmdbHits([{ ...ani, season_year: null, start_date: '2023-09-29' }], [hit({ season_year: null, start_date: '2023-10-01' })]);
     assert.deepEqual([byStartDate.rest.length, byStartDate.metas[0].also_on], [0, ['tmdb']], 'the year of start_date counts too');
