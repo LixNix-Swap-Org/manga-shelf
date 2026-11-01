@@ -24,8 +24,8 @@
     "test:electron": "node scripts/electronTest.js"
   },
   "devDependencies": {
-    "electron": "^44.9.1",
-    "electron-builder": "^26.15.3"
+    "electron": "^44.10.0",
+    "electron-builder": "^26.18.0"
   },
   "overrides": {
     "http-cache-semantics": "^4.3.0",
