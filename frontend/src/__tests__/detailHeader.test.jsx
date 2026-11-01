@@ -250,6 +250,15 @@ describe('MangaHeroCard', () => {
     expect(props.setEditing).not.toHaveBeenCalled();
   });
 
+  it('shows the publisher pill only for a real publisher: none for an empty one or the placeholder "Unbekannt"', () => {
+    const { rerender } = render(<MangaHeroCard {...baseProps({ manga: { title: 'Titel', publisher: 'Carlsen Manga' } })} />);
+    expect(screen.getByText('Carlsen Manga')).toBeTruthy();
+    rerender(<MangaHeroCard {...baseProps({ manga: { title: 'Titel', publisher: 'Unbekannt' } })} />);
+    expect(screen.queryByText(/Verlag:/)).toBeNull();
+    rerender(<MangaHeroCard {...baseProps({ manga: { title: 'Titel', publisher: '' } })} />);
+    expect(screen.queryByText(/Verlag:/)).toBeNull();
+  });
+
   it('the decorative glow is clipped by its own wrapper, so the panel gets no scroll range', () => {
     const { container } = render(<MangaHeroCard {...baseProps()} />);
     const panel = container.firstElementChild;

@@ -52,7 +52,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
         </div>
       </td>
       <td className="py-2.5 px-4 hidden sm:table-cell text-slate-300">
-        {manga.publisher ? (
+        {manga.publisher && manga.publisher !== 'Unbekannt' ? ( // i18n-ignore: stored placeholder value
           <span className="flex items-center gap-1">
             <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
             <span>{manga.publisher}</span>

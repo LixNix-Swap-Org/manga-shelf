@@ -1,6 +1,9 @@
 // AniList media in the series-lookup shape (used by core/anime/anilist.js searchManga) and the description cleanup.
 const { decodeHtmlEntities } = require('./isbnLookup');
 
+/** A title on one line, trimmed (AniList sends titles with a trailing line break; same rule as cleanTitle in core/anime/normalize.js). */
+const oneLine = (text) => (typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() || null : null);
+
 /** AniList text: line breaks kept, tags removed, then entities decoded once (in this order, or "&lt;Twilight&gt;" would vanish as a tag). */
 function cleanAniListDescription(raw) {
     if (!raw || typeof raw !== 'string') return null;
@@ -47,9 +50,9 @@ function mapAniListMedia(m) {
         format: m.format || null,
         format_label: FORMAT_LABELS[m.format] || webtoon || null,
         ...(webtoon ? { series_format: 'webtoon' } : {}),
-        title: m.title?.english || m.title?.romaji,
-        alt_title: m.title?.native || m.title?.romaji,
-        alt_titles: [...new Set([m.title?.romaji, m.title?.english, m.title?.native].filter(Boolean))],
+        title: oneLine(m.title?.english) || oneLine(m.title?.romaji),
+        alt_title: oneLine(m.title?.native) || oneLine(m.title?.romaji),
+        alt_titles: [...new Set([m.title?.romaji, m.title?.english, m.title?.native].map(oneLine).filter(Boolean))],
         author: author || null,
         publisher: null,
         description: cleanAniListDescription(m.description),

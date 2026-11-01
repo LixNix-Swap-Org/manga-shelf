@@ -724,10 +724,13 @@ export default function MangaHeroCard({
                     </span>
                   )) : <strong className="text-white">{manga.author || tr('Unbekannt')}</strong> })}
                 </span>
-                <span className="max-w-full min-w-0 bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
-                  <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-                  <span className="min-w-0 break-words">{rich('Verlag: {publisher}', { publisher: <strong className="text-white">{manga.publisher && manga.publisher !== 'Unbekannt' ? manga.publisher : tr('Unbekannt')}</strong> })}</span>
-                </span>
+                {/* no pill for a missing publisher: the placeholder "Unbekannt" (stored by lookups) reads like a real name */}
+                {manga.publisher && manga.publisher !== 'Unbekannt' && ( // i18n-ignore: stored placeholder value
+                  <span className="max-w-full min-w-0 bg-slate-800/90 text-slate-200 px-3 py-1 rounded-xl border border-slate-700/80 font-medium flex items-center gap-1.5">
+                    <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{rich('Verlag: {publisher}', { publisher: <strong className="text-white">{manga.publisher}</strong> })}</span>
+                  </span>
+                )}
                 {/* the edition switcher under the title already names the language of a linked series */}
                 {editionsOf(manga).length === 0 && <LanguagePill language={editionLanguage(manga)} region={editionRegion(manga)} size="md" className="py-1 rounded-xl" />}
                 <span className="bg-sky-500/20 text-sky-300 border border-sky-500/40 px-3 py-1 rounded-xl font-semibold">

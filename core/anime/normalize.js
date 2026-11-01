@@ -90,7 +90,10 @@ function cleanDescription(raw) {
     return text || null;
 }
 
-const preferredTitle = (title) => title.english || title.romaji || title.native || null;
+/** A title from a source: line breaks, tabs and repeated spaces become one space, the ends are trimmed (AniList sends titles with a trailing line break). */
+const cleanTitle = (text) => (typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() || null : null);
+
+const preferredTitle = (title) => cleanTitle(title.english) || cleanTitle(title.romaji) || cleanTitle(title.native) || null;
 
 /**
  * Next check of a stored snapshot (ms): finished 14 days, not yet released daily (and on the start day), releasing at
@@ -205,9 +208,9 @@ function mergeResults(primary, secondary) {
     return out;
 }
 
-/** Empty AnimeMeta with the given fields set (adapters fill it). */
+/** Empty AnimeMeta with the given fields set (adapters fill it); titles and synonyms come out cleaned (cleanTitle). */
 function emptyMeta(fields = {}) {
-    return {
+    const meta = {
         kind: 'anime', mal_id: null, anilist_id: null, tmdb_id: null, tmdb_kind: null, imdb_id: null,
         title: { romaji: null, english: null, native: null, preferred: null }, synonyms: [],
         format: null, episodes: null, duration: null, status: null, season: null, season_year: null, start_date: null, end_date: null,
@@ -219,6 +222,11 @@ function emptyMeta(fields = {}) {
         ...fields,
         urls: { anilist: null, mal: null, tmdb: null, imdb: null, ...(fields.urls || {}) }
     };
+    const t = meta.title || {};
+    meta.title = { ...t, romaji: cleanTitle(t.romaji), english: cleanTitle(t.english), native: cleanTitle(t.native), preferred: cleanTitle(t.preferred) };
+    meta.synonyms = (Array.isArray(meta.synonyms) ? meta.synonyms : []).map(cleanTitle).filter(Boolean);
+    meta.relations = (Array.isArray(meta.relations) ? meta.relations : []).map((r) => (r && typeof r.title === 'string' ? { ...r, title: cleanTitle(r.title) } : r));
+    return meta;
 }
 
 const ANIMATION_GENRE = 16;
@@ -270,6 +278,6 @@ function foldTmdbHits(metas, tmdbMetas) {
 
 module.exports = {
     STATUSES, FORMATS, MINUTE, HOUR, DAY, foldUmlauts, searchKey, titleScore, keyScore, rankByTitle, allTitles, fuzzyDate, isoDay,
-    cleanDescription, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta, isTmdbAnime, yearOf,
+    cleanDescription, cleanTitle, preferredTitle, nextCheckAt, estimateNextAiring, zoneOffset, mergeMeta, mergeResults, emptyMeta, isTmdbAnime, yearOf,
     tmdbTwinScore, foldTmdbHits
 };
