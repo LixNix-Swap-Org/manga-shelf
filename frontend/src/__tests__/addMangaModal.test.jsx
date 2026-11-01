@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import AddMangaModal, { lookupSourceLabels } from '../components/modals/AddMangaModal';
+import ConfirmHost from '../components/modals/askConfirm';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -288,6 +289,7 @@ describe('AddMangaModal: closing', () => {
         { id: 'al_2', source: 'anilist', title: 'Monster (AniList)', status: 'Abgeschlossen' }
       ])
     });
+    render(<ConfirmHost />);
     const { onClose } = renderModal();
     fireEvent.change(titleInput(), { target: { value: 'Monster' } });
     fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
@@ -296,8 +298,58 @@ describe('AddMangaModal: closing', () => {
     expect(escape).toBe(false);
     expect(screen.queryByText('Monster (AniList)')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+    // the typed title would be lost: the dialog asks first
     fireEvent.keyDown(titleInput(), { key: 'Escape' });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('closing with typed input asks first: "Abbrechen" keeps the input, "Verwerfen" closes; untouched it closes at once', async () => {
+    render(<ConfirmHost />);
+    const { onClose, unmount } = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Berserk' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Schließen' })[0]);
+    expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+    fireEvent.click(document.querySelector('[data-confirm] [data-confirm-action="cancel"]'));
+    await waitFor(() => expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(titleInput().value).toBe('Berserk');
+
+    fireEvent.click(document.getElementById('btn-close-add-modal'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    unmount();
+
+    const fresh = renderModal();
+    fireEvent.click(document.getElementById('btn-close-add-modal'));
+    await waitFor(() => expect(fresh.onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
+  });
+
+  it('Back with typed input asks; "Abbrechen" keeps the dialog and its history entry, so Back asks again', async () => {
+    // closing the dialogs of earlier tests went Back on its own: useDialogA11y ignores the next Back for up to 1 s
+    await act(async () => { await new Promise((r) => setTimeout(r, 1100)); });
+    render(<ConfirmHost />);
+    const { onClose } = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Berserk' } });
+    act(() => { window.history.back(); });
+    expect(await screen.findByText('Ungespeicherte Änderungen verwerfen?')).toBeTruthy();
+    fireEvent.click(document.querySelector('[data-confirm] [data-confirm-action="cancel"]'));
+    await waitFor(() => expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull());
+    await new Promise((r) => setTimeout(r, 300));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(titleInput().value).toBe('Berserk');
+    act(() => { window.history.back(); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('a prefill alone (scan) is not input: closing does not ask', async () => {
+    render(<ConfirmHost />);
+    const { onClose } = renderModal({ prefill: scanPrefill() });
+    fireEvent.click(document.getElementById('btn-close-add-modal'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull();
   });
 });
 
