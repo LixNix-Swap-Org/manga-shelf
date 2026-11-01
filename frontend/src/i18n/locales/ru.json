@@ -3413,6 +3413,12 @@
   "{title}: komplett gesehen": "{title}: просмотрено полностью",
   "{title}: welche Folge?": "{title}: какой эпизод?",
   "{title}: zugeordnet": "{title}: сопоставлено",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "few": "{title}: сброшено {n} просмотренных эпизода",
+    "many": "{title}: сброшено {n} просмотренных эпизодов",
+    "one": "{title}: сброшен {n} просмотренный эпизод",
+    "other": "{title}: сброшено {n} просмотренного эпизода"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} из {volumes} обновлено официальными данными.",
   "{username} (du)": "{username} (вы)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

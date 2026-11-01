@@ -4,12 +4,13 @@ import { notify } from '../utils/notify';
 import { getClearGeneration } from '../utils/offlineStore';
 import { formatCount } from '../utils/format';
 import {
-  readAnimeCache, writeAnimeCache, withProgress, predictProgress, predictWatched, listSyncDue, markListSync
+  readAnimeCache, writeAnimeCache, withProgress, predictProgress, predictWatched, listSyncDue, markListSync,
+  resetByPlanned, resetUndoChange, displayTitle
 } from '../utils/animeHelpers';
 import { ANIME_SYNC_EVENT } from '../utils/shareIntake';
 import { WATCH_BUILD, WATCH_SYNC_EVENT, watchAvailable } from '../app/watch/watchState';
 import useLatestRequest from './useLatestRequest';
-import { getLanguage, t } from '../i18n/index.js';
+import { getLanguage, t, tn } from '../i18n/index.js';
 
 // i18n
 export const REFRESH_TEXTS = {
@@ -183,8 +184,12 @@ export default function useAnimeList({ user }) {
     } catch (_) { /* the link keeps its old target until the next list load */ }
   }, [store]);
 
-  /** Optimistic: the list shows the predicted state at once and goes back when the server refuses. */
-  const updateProgress = useCallback(async (id, change) => {
+  const updateRef = useRef(null);
+  /**
+   * Optimistic: the list shows the predicted state at once and goes back when the server refuses. When "Geplant"
+   * alone reset the watched episodes to 0, a toast offers "Rückgängig" (`onUndone` runs after a successful undo).
+   */
+  const updateProgress = useCallback(async (id, change, { onUndone } = {}) => {
     const before = listRef.current.find((a) => a.id === id);
     if (!before) return null;
     const predicted = predictProgress(before.my_progress, change, before.episodes);
@@ -193,6 +198,16 @@ export default function useAnimeList({ user }) {
       const saved = await api.put(`/api/anime/${id}/progress`, change, { fallback: t('Fortschritt konnte nicht gespeichert werden') });
       store(listRef.current.map((a) => (a.id === id ? withProgress(a, saved, user) : a)));
       if (before.watch) refreshWatch(id);
+      const prev = before.my_progress;
+      if (resetByPlanned(prev, change, saved)) {
+        const n = prev.episodes_watched;
+        notify.success(tn('{title}: {n} gesehene Folge zurückgesetzt', '{title}: {n} gesehene Folgen zurückgesetzt', n, { title: displayTitle(before), n }), {
+          action: {
+            label: t('Rückgängig'),
+            onClick: async () => { if (await updateRef.current(id, resetUndoChange(prev))) onUndone?.(); }
+          }
+        });
+      }
       return saved;
     } catch (err) {
       setList((cur) => cur.map((a) => (a.id === id ? before : a)));
@@ -200,6 +215,7 @@ export default function useAnimeList({ user }) {
       return null;
     }
   }, [refreshWatch, store, user]);
+  updateRef.current = updateProgress;
 
   // "Ja, gesehen" of a shared link: POST /anime/:id/watched (never lowers the counter, remembers the page for "Weiter", `remember`
   // links the streaming series to the entry, `complete` allows an episode above the total). Resolves with the answer

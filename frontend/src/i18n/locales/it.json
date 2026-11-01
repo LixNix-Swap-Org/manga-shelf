@@ -3328,6 +3328,11 @@
   "{title}: komplett gesehen": "{title}: visto per intero",
   "{title}: welche Folge?": "{title}: quale episodio?",
   "{title}: zugeordnet": "{title}: associato",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "many": "{title}: {n} di episodi visti azzerati",
+    "one": "{title}: {n} episodio visto azzerato",
+    "other": "{title}: {n} episodi visti azzerati"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} su {volumes} aggiornati con dati ufficiali.",
   "{username} (du)": "{username} (tu)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

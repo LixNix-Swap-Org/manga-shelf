@@ -3158,6 +3158,9 @@
   "{title}: komplett gesehen": "{title}: 전편 시청함",
   "{title}: welche Folge?": "{title}: 몇 화인가요?",
   "{title}: zugeordnet": "{title}: 연결됨",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "other": "{title}: 시청한 {n}화를 초기화했습니다"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{volumes}권 중 {updated}권을 공식 데이터로 업데이트했어요.",
   "{username} (du)": "{username} (나)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

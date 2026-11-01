@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Anime
+- **"Geplant" can be undone:** choosing "Geplant" for an anime with watched episodes still puts the counter back to 0, but a toast now says how many episodes were reset ("Frieren: 7 gesehene Folgen zurückgesetzt") and offers "Rückgängig", in the anime tab and in the detail dialog. The undo restores the status, the counter, single watched episodes and their ratings.
+
 ## 3.6.0
 
 ### Before updating

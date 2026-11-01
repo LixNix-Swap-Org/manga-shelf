@@ -3243,6 +3243,10 @@
   "{title}: komplett gesehen": "{title}: fully watched",
   "{title}: welche Folge?": "{title}: which episode?",
   "{title}: zugeordnet": "{title}: matched",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "one": "{title}: {n} watched episode reset",
+    "other": "{title}: {n} watched episodes reset"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} of {volumes} updated with official data.",
   "{username} (du)": "{username} (you)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

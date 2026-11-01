@@ -3413,6 +3413,12 @@
   "{title}: komplett gesehen": "{title}: obejrzano w całości",
   "{title}: welche Folge?": "{title}: który odcinek?",
   "{title}: zugeordnet": "{title}: przypisano",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "few": "{title}: zresetowano {n} obejrzane odcinki",
+    "many": "{title}: zresetowano {n} obejrzanych odcinków",
+    "one": "{title}: zresetowano {n} obejrzany odcinek",
+    "other": "{title}: zresetowano {n} obejrzanego odcinka"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "Zaktualizowano oficjalnymi danymi: {updated} z {volumes}.",
   "{username} (du)": "{username} (ty)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

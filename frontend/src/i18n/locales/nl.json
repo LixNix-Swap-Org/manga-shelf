@@ -3243,6 +3243,10 @@
   "{title}: komplett gesehen": "{title}: helemaal gezien",
   "{title}: welche Folge?": "{title}: welke aflevering?",
   "{title}: zugeordnet": "{title}: gekoppeld",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "one": "{title}: {n} bekeken aflevering teruggezet",
+    "other": "{title}: {n} bekeken afleveringen teruggezet"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} van {volumes} bijgewerkt met officiële gegevens.",
   "{username} (du)": "{username} (jij)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

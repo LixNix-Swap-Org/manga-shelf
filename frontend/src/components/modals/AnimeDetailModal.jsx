@@ -13,7 +13,7 @@ import { compareNatural } from '../../utils/search';
 import {
   PROGRESS_STATUSES, displayTitle, formatLabel, airingStatusLabel, relationLabel, progressText, countdownText, staleText, shortDescription,
   continueTarget, airedEpisodes, stillAiring, kindOf, kindLabel, seasonEpisodeText, ANIME_KINDS, watchedEpisodesOf, episodeSections,
-  episodeGridCount, episodeScoresOf, averageEpisodeScore
+  episodeGridCount, episodeScoresOf, averageEpisodeScore, resetByPlanned
 } from '../../utils/animeHelpers';
 import { formatNumber } from '../../utils/format';
 import { animeProgressLabel } from '../../utils/enumLabels';
@@ -827,10 +827,15 @@ export default function AnimeDetailModal({
 
   const saveProgress = (change) => {
     setProgressSaving(true);
+    const id = animeId;
+    const prev = anime.my_progress;
     return run(async () => {
-      const saved = await updateProgress(animeId, change);
+      // a reset by "Geplant" gets its own toast with "Rückgängig" from updateProgress, which reloads this dialog after the undo
+      const saved = change.status === 'Geplant' // i18n-ignore: stored value
+        ? await updateProgress(id, change, { onUndone: () => { if (latest.current?.animeId === id) latest.current.load(); } })
+        : await updateProgress(id, change);
       if (saved) {
-        notify.success(t('Fortschritt gespeichert'));
+        if (!resetByPlanned(prev, change, saved)) notify.success(t('Fortschritt gespeichert'));
         await load();
       }
     }).finally(() => setProgressSaving(false));

@@ -3243,6 +3243,10 @@
   "{title}: komplett gesehen": "{title}: tamamı izlendi",
   "{title}: welche Folge?": "{title}: hangi bölüm?",
   "{title}: zugeordnet": "{title}: eşleştirildi",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "one": "{title}: izlenen {n} bölüm sıfırlandı",
+    "other": "{title}: izlenen {n} bölüm sıfırlandı"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{volumes} içinden {updated} resmî verilerle güncellendi.",
   "{username} (du)": "{username} (sen)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {
