@@ -7,9 +7,13 @@ import { startPrefetch, PREFETCH_MANGAS } from './utils/dataCache'
 import { watchServiceWorkerUpdates } from './hooks/usePwaInstall'
 import { installDeepLinkBridge } from './app/deepLink'
 import { initI18n, t } from './i18n/index.js'
+import { installFieldMessages } from './utils/fieldMessages'
 import './index.css'
 
 const appBuild = isAppMode()
+
+// form fields report their errors in the app language, not the browser's
+installFieldMessages(document)
 
 // The shelf list loads in parallel with the session check; useMangaList takes the answer once (a 401 is ignored there).
 // Not while a logout is outstanding: the old session must not be used again. The app build first picks its server.
