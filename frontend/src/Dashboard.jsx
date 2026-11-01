@@ -868,6 +868,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               if (scanPrefill && created?.id) navigateFromDialog(`/manga/${created.id}`);
             }}
             prefill={scanPrefill}
+            mangas={mangas}
+            onOpenExisting={(manga) => navigateFromDialog(`/manga/${manga.id}`)}
           />
         )}
 

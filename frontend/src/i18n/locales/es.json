@@ -801,6 +801,11 @@
   "Diese ISBN gehört zu „{title}“.": "Este ISBN pertenece a «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Este ISBN corresponde a otra serie de la colección.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Esta comprobación es válida hasta las {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Esta serie tiene {n} capítulo; no puede haber más.",
+    "many": "Esta serie tiene {n} de capítulos; no puede haber más.",
+    "other": "Esta serie tiene {n} capítulos; no puede haber más."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Esta serie no está en la colección.",
   "Diese Reihe sammelst du nicht mehr": "Ya no coleccionas esta serie",
   "Diese Reihe steht auf deiner Wunschliste": "Esta serie está en tu lista de deseos",
@@ -820,6 +825,11 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Este tomo falta en tu colección. ¿Cómo quieres registrar el tomo {number}?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Este tomo aún no está registrado en la serie.",
   "Dieser Benutzername existiert bereits": "Este nombre de usuario ya existe",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Esta entrada tiene {n} episodio; no puede haber más.",
+    "many": "Esta entrada tiene {n} de episodios; no puede haber más.",
+    "other": "Esta entrada tiene {n} episodios; no puede haber más."
+  },
   "Dieser Eintrag ist schon in der Liste": "Esta entrada ya está en la lista",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Esta entrada se acaba de actualizar. Inténtalo de nuevo en {seconds} s.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Este manga no existe o se ha eliminado.",
@@ -3446,6 +3456,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "¿Mover «{title}» a «{shelf}»? Quien no vea esa estantería perderá sus marcas de posesión y de lectura de la serie: {people}. Los tomos que después no tenga nadie contarán como «Falta». No se puede deshacer.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "¿Mover «{title}» a «{shelf}»? Quien no vea esa estantería perderá sus marcas de posesión y de lectura de la serie; los tomos que después no tenga nadie contarán como «Falta». No se puede deshacer.",
   "„{title}“ nicht mehr im Besitz": "«{title}» ya no lo tienes",
+  "„{title}“ steht schon in deiner Sammlung.": "«{title}» ya está en tu colección.",
   "„{title}“ wiederhergestellt": "«{title}» restaurado",
   "„{title}“ {entry} endgültig löschen": "Eliminar definitivamente «{title}» {entry}",
   "„{title}“ {entry} wiederherstellen": "Restaurar «{title}» {entry}",

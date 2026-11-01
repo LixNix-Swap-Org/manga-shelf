@@ -801,6 +801,11 @@
   "Diese ISBN gehört zu „{title}“.": "Questo ISBN appartiene a “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Questo ISBN corrisponde a un’altra serie della collezione.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Questa verifica è valida fino alle {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Questa serie ha {n} capitolo: non di più.",
+    "many": "Questa serie ha {n} di capitoli: non di più.",
+    "other": "Questa serie ha {n} capitoli: non di più."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Questa serie non è nella collezione.",
   "Diese Reihe sammelst du nicht mehr": "Non collezioni più questa serie",
   "Diese Reihe steht auf deiner Wunschliste": "Questa serie è nella tua lista dei desideri",
@@ -820,6 +825,11 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Questo volume manca nella tua collezione. Come vuoi registrare il volume {number}?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Questo volume non è ancora registrato nella serie.",
   "Dieser Benutzername existiert bereits": "Questo nome utente esiste già",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Questa voce ha {n} episodio: non di più.",
+    "many": "Questa voce ha {n} di episodi: non di più.",
+    "other": "Questa voce ha {n} episodi: non di più."
+  },
   "Dieser Eintrag ist schon in der Liste": "Questa voce è già nella lista",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Questa voce è stata appena aggiornata. Riprova tra {seconds} s.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Questo manga non esiste o è stato eliminato.",
@@ -3446,6 +3456,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Spostare “{title}” in “{shelf}”? Chi non vede quello scaffale perde i propri segni di possesso e di lettura sulla serie: {people}. I volumi che in seguito non appartengono più a nessuno saranno considerati “Mancante”. L’operazione non si può annullare.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Spostare “{title}” in “{shelf}”? Chi non vede quello scaffale perde i propri segni di possesso e di lettura sulla serie; i volumi che in seguito non appartengono più a nessuno saranno considerati “Mancante”. L’operazione non si può annullare.",
   "„{title}“ nicht mehr im Besitz": "“{title}” non più posseduto",
+  "„{title}“ steht schon in deiner Sammlung.": "“{title}” è già nella tua collezione.",
   "„{title}“ wiederhergestellt": "“{title}” ripristinato",
   "„{title}“ {entry} endgültig löschen": "Elimina definitivamente “{title}” {entry}",
   "„{title}“ {entry} wiederherstellen": "Ripristina “{title}” {entry}",

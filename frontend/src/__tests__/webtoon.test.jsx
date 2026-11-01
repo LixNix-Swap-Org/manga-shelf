@@ -138,15 +138,21 @@ describe('ChapterProgress', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ chapters_read: 170 });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Speichern' }).disabled).toBe(false));
 
-    // the field's max keeps a value above the total from being sent; the server refuses one that a lowered total makes too high
+    // a value above the total is cut to it with a hint (like the anime episodes); the server refuses one that a lowered total makes too high
     fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '201' } });
+    expect(screen.getByLabelText('Gelesen bis Kapitel').value).toBe('200');
+    expect(screen.getByRole('status', { name: '' }).textContent).toBe('Diese Reihe hat 200 Kapitel – mehr geht nicht.');
+    expect(screen.getByLabelText('Gelesen bis Kapitel').getAttribute('aria-describedby')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ chapters_read: 200 });
+    expect(screen.queryByText('Diese Reihe hat 200 Kapitel – mehr geht nicht.')).toBeNull();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Speichern' }).disabled).toBe(false));
     fetchMock.mockImplementationOnce(async () => fakeResponse(400, { error: 'Kapitel 180 gibt es bei dieser Reihe nicht (sie hat 160 Kapitel).', code: 'CHAPTER_ABOVE_TOTAL', total_chapters: 160 }));
     fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '180' } });
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(toasts.messages('error')).toEqual(['Kapitel 180 gibt es bei dieser Reihe nicht (sie hat 160 Kapitel).']));
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledTimes(2);
   });
 
   it('offline or without the right it only shows; +1 stops at the end', () => {

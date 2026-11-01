@@ -817,6 +817,12 @@
   "Diese ISBN gehört zu „{title}“.": "Ten ISBN należy do „{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Ten ISBN pasuje do innej serii w kolekcji.",
   "Diese Prüfung gilt bis {expires} Uhr.": "To sprawdzenie obowiązuje do {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Ta seria ma {n} rozdział – więcej się nie da.",
+    "few": "Ta seria ma {n} rozdziały – więcej się nie da.",
+    "many": "Ta seria ma {n} rozdziałów – więcej się nie da.",
+    "other": "Ta seria ma {n} rozdziału – więcej się nie da."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Tej serii nie ma w kolekcji.",
   "Diese Reihe sammelst du nicht mehr": "Tej serii już nie kolekcjonujesz",
   "Diese Reihe steht auf deiner Wunschliste": "Ta seria jest na twojej liście życzeń",
@@ -836,6 +842,12 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Tego tomu brakuje w twojej kolekcji. Jak chcesz dodać tom {number}?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Ten tom nie został jeszcze dodany do serii.",
   "Dieser Benutzername existiert bereits": "Ta nazwa użytkownika już istnieje",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Ta pozycja ma {n} odcinek – więcej się nie da.",
+    "few": "Ta pozycja ma {n} odcinki – więcej się nie da.",
+    "many": "Ta pozycja ma {n} odcinków – więcej się nie da.",
+    "other": "Ta pozycja ma {n} odcinka – więcej się nie da."
+  },
   "Dieser Eintrag ist schon in der Liste": "Ten wpis jest już na liście",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Ten wpis został właśnie zaktualizowany. Spróbuj ponownie za {seconds} s.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Ta manga nie istnieje lub została usunięta.",
@@ -3539,6 +3551,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Przenieść „{title}” do „{shelf}”? Kto nie widzi tej półki, traci swoje oznaczenia posiadania i przeczytania w tej serii: {people}. Tomy, których potem nikt nie posiada, będą miały status „Brakuje”. Tego nie można cofnąć.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Przenieść „{title}” do „{shelf}”? Kto nie widzi tej półki, traci swoje oznaczenia posiadania i przeczytania w tej serii; tomy, których potem nikt nie posiada, będą miały status „Brakuje”. Tego nie można cofnąć.",
   "„{title}“ nicht mehr im Besitz": "„{title}” nie jest już posiadane",
+  "„{title}“ steht schon in deiner Sammlung.": "„{title}” jest już w twojej kolekcji.",
   "„{title}“ wiederhergestellt": "Przywrócono „{title}”",
   "„{title}“ {entry} endgültig löschen": "Trwale usuń „{title}” {entry}",
   "„{title}“ {entry} wiederherstellen": "Przywróć „{title}” {entry}",

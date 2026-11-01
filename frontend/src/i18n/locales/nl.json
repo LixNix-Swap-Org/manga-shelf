@@ -785,6 +785,10 @@
   "Diese ISBN gehört zu „{title}“.": "Dit ISBN hoort bij “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Dit ISBN past bij een andere reeks in de collectie.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Deze controle geldt tot {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Deze reeks heeft {n} hoofdstuk – meer kan niet.",
+    "other": "Deze reeks heeft {n} hoofdstukken – meer kan niet."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Deze reeks staat niet in de collectie.",
   "Diese Reihe sammelst du nicht mehr": "Deze reeks verzamel je niet meer",
   "Diese Reihe steht auf deiner Wunschliste": "Deze reeks staat op je verlanglijst",
@@ -804,6 +808,10 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Dit deel ontbreekt in je collectie. Hoe wil je deel {number} registreren?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Dit deel is nog niet in de reeks geregistreerd.",
   "Dieser Benutzername existiert bereits": "Deze gebruikersnaam bestaat al",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Deze titel heeft {n} aflevering – meer kan niet.",
+    "other": "Deze titel heeft {n} afleveringen – meer kan niet."
+  },
   "Dieser Eintrag ist schon in der Liste": "Dit item staat al in de lijst",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Dit item is zojuist bijgewerkt. Probeer het over {seconds} s opnieuw.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Deze manga bestaat niet of is verwijderd.",
@@ -3353,6 +3361,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "“{title}” naar “{shelf}” verplaatsen? Wie die plank niet ziet, verliest zijn markeringen voor bezit en lezen bij de reeks: {people}. Delen die daarna niemand meer bezit, gelden als “Ontbreekt”. Dit kan niet ongedaan worden gemaakt.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "“{title}” naar “{shelf}” verplaatsen? Wie die plank niet ziet, verliest zijn markeringen voor bezit en lezen bij de reeks; delen die daarna niemand meer bezit, gelden als “Ontbreekt”. Dit kan niet ongedaan worden gemaakt.",
   "„{title}“ nicht mehr im Besitz": "“{title}” niet meer in bezit",
+  "„{title}“ steht schon in deiner Sammlung.": "‘{title}’ staat al in je verzameling.",
   "„{title}“ wiederhergestellt": "“{title}” hersteld",
   "„{title}“ {entry} endgültig löschen": "“{title}” {entry} definitief verwijderen",
   "„{title}“ {entry} wiederherstellen": "“{title}” {entry} herstellen",

@@ -817,6 +817,12 @@
   "Diese ISBN gehört zu „{title}“.": "Этот ISBN принадлежит «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Этот ISBN относится к другой серии коллекции.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Эта проверка действует до {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "В этой серии {n} глава — больше нельзя.",
+    "few": "В этой серии {n} главы — больше нельзя.",
+    "many": "В этой серии {n} глав — больше нельзя.",
+    "other": "В этой серии {n} главы — больше нельзя."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Этой серии нет в коллекции.",
   "Diese Reihe sammelst du nicht mehr": "Вы больше не собираете эту серию",
   "Diese Reihe steht auf deiner Wunschliste": "Эта серия в вашем списке желаемого",
@@ -836,6 +842,12 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Этого тома нет в вашей коллекции. Как внести том {number}?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Этот том ещё не внесён в серию.",
   "Dieser Benutzername existiert bereits": "Такое имя пользователя уже существует",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "В этой записи {n} эпизод — больше нельзя.",
+    "few": "В этой записи {n} эпизода — больше нельзя.",
+    "many": "В этой записи {n} эпизодов — больше нельзя.",
+    "other": "В этой записи {n} эпизода — больше нельзя."
+  },
   "Dieser Eintrag ist schon in der Liste": "Эта запись уже есть в списке",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Эта запись только что обновлена. Повторите попытку через {seconds} с.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Этой манги не существует или она удалена.",
@@ -3539,6 +3551,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Переместить «{title}» на полку «{shelf}»? Те, кто не видит эту полку, потеряют свои отметки о наличии и прочтении по этой серии: {people}. Тома, которых после этого ни у кого нет, получат статус «Нет в наличии». Это нельзя отменить.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Переместить «{title}» на полку «{shelf}»? Те, кто не видит эту полку, потеряют свои отметки о наличии и прочтении по этой серии; тома, которых после этого ни у кого нет, получат статус «Нет в наличии». Это нельзя отменить.",
   "„{title}“ nicht mehr im Besitz": "«{title}» больше нет в наличии",
+  "„{title}“ steht schon in deiner Sammlung.": "«{title}» уже есть в вашей коллекции.",
   "„{title}“ wiederhergestellt": "«{title}» восстановлено",
   "„{title}“ {entry} endgültig löschen": "Удалить безвозвратно: «{title}» {entry}",
   "„{title}“ {entry} wiederherstellen": "Восстановить: «{title}» {entry}",

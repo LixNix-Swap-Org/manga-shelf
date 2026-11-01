@@ -785,6 +785,10 @@
   "Diese ISBN gehört zu „{title}“.": "This ISBN belongs to “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "This ISBN matches another series in the collection.",
   "Diese Prüfung gilt bis {expires} Uhr.": "This check is valid until {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "This series has {n} chapter – no more possible.",
+    "other": "This series has {n} chapters – no more possible."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "This series is not in the collection.",
   "Diese Reihe sammelst du nicht mehr": "You no longer collect this series",
   "Diese Reihe steht auf deiner Wunschliste": "This series is on your wishlist",
@@ -804,6 +808,10 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "This volume is missing from your collection. How do you want to add volume {number}?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "This volume has not been added to the series yet.",
   "Dieser Benutzername existiert bereits": "This username already exists",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "This entry has {n} episode – no more possible.",
+    "other": "This entry has {n} episodes – no more possible."
+  },
   "Dieser Eintrag ist schon in der Liste": "This entry is already in the list",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "This entry was just updated. Please try again in {seconds} s.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "This manga does not exist or has been deleted.",
@@ -3353,6 +3361,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Move “{title}” to “{shelf}”? Anyone who cannot see that shelf loses their ownership and reading marks on the series: {people}. Volumes that nobody owns afterwards count as “Missing”. This cannot be undone.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Move “{title}” to “{shelf}”? Anyone who cannot see that shelf loses their ownership and reading marks on the series; volumes that nobody owns afterwards count as “Missing”. This cannot be undone.",
   "„{title}“ nicht mehr im Besitz": "“{title}” no longer owned",
+  "„{title}“ steht schon in deiner Sammlung.": "“{title}” is already in your collection.",
   "„{title}“ wiederhergestellt": "“{title}” restored",
   "„{title}“ {entry} endgültig löschen": "Delete “{title}” {entry} permanently",
   "„{title}“ {entry} wiederherstellen": "Restore “{title}” {entry}",

@@ -16,7 +16,8 @@ import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
-import { editionDefaults, isMpEdition } from '../../utils/editions';
+import { editionDefaults, editionLanguage, isMpEdition } from '../../utils/editions';
+import { foldText } from '../../utils/search';
 import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
 export { lookupSourceLabels };
@@ -77,7 +78,20 @@ async function cacheRemoteCover(url) {
 
 // prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume.
 // onSeriesCreated(manga) fires when the series exists but the dialog stays open because the scanned volume failed.
-export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null }) {
+/**
+ * Series of the collection that this form would duplicate: the same title (or alternative title) after folding,
+ * the same edition language and the same format. A second edition stays allowed; the dialog only points at them.
+ */
+export function sameTitleSeries(mangas, form) {
+  const key = foldText(form?.title).trim();
+  if (!key || !Array.isArray(mangas)) return [];
+  const language = editionLanguage(form);
+  const format = form.format || 'print';
+  return mangas.filter((m) => m && [m.title, m.alt_title].some((title) => title && foldText(title).trim() === key)
+    && editionLanguage(m) === language && (m.format || 'print') === format);
+}
+
+export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null, mangas = null, onOpenExisting = null }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [shelves, setShelves] = useState([]);
@@ -173,12 +187,15 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const isDirty = () => !createdManga && (Boolean(coverFile)
     || Object.keys(form).some((key) => String(form[key] ?? '') !== String(openedFormRef.current[key] ?? '')));
 
+  // the question before input is thrown away; callers ask it only while isDirty(), so an untouched dialog closes at once
+  const askDiscard = () => askConfirm(t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
+    title: t('Ungespeicherte Änderungen verwerfen?'), confirmLabel: t('Verwerfen')
+  });
+
   // Close, Abbrechen, Escape, the backdrop and Back (useDialogA11y presses Escape) ask before discarding input
   const requestClose = async () => {
     if (submitting) return;
-    if (isDirty() && !(await askConfirm(t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
-      title: t('Ungespeicherte Änderungen verwerfen?'), confirmLabel: t('Verwerfen')
-    }))) return;
+    if (isDirty() && !(await askDiscard())) return;
     handleClose();
   };
 
@@ -391,6 +408,14 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   if (!isOpen) return null;
 
   const seriesLocked = Boolean(createdManga);
+  const duplicates = sameTitleSeries(mangas, form);
+  // opening the existing series discards this form, so it asks like every other way out
+  const requestOpenExisting = async (manga) => {
+    if (submitting) return;
+    if (isDirty() && !(await askDiscard())) return;
+    handleClose();
+    onOpenExisting(manga);
+  };
   const applying = applyingId !== null;
   const submitLabel = seriesLocked ? (scanVolume?.enabled ? t('Band anlegen') : t('Fertig')) : t('Manga anlegen');
 
@@ -497,6 +522,19 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               </button>
             </div>
           </div>
+
+          {/* same title, language and format already in the collection: a hint with a way to it, creating stays allowed */}
+          {!seriesLocked && duplicates.length > 0 && (
+            <div id={`${ids}-duplicate`} role="status" className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-2.5 rounded-xl text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
+              <TriangleAlert className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+              <span>{t('„{title}“ steht schon in deiner Sammlung.', { title: duplicates[0].title })}</span>
+              {onOpenExisting && (
+                <button type="button" className="underline underline-offset-2 font-semibold hover:text-white" onClick={() => requestOpenExisting(duplicates[0])}>
+                  {t('Zur Reihe')}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Lookup Error Banner */}
           {lookupError && (
