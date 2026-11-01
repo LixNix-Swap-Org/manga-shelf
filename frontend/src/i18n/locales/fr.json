@@ -141,6 +141,7 @@
   "Alle gelesenen Bände anzeigen": "Afficher tous les tomes lus",
   "Alle haben ihn gesehen": "Tout le monde l'a vu",
   "Alle im Abschnitt gesehen": "Toute la section vue",
+  "Alle im Anime-Tab": "Tout dans l’onglet Anime",
   "Alle mit Namen": "Tout le monde, avec mon nom",
   "Alle {count} anzeigen": "Afficher les {count}",
   "Alle {visible} ({count})": "Tous les {visible} ({count})",
@@ -1312,6 +1313,7 @@
   "In Ordnung": "OK",
   "In Ordnung: {checks}": "OK : {checks}",
   "In Originalgröße in neuem Tab öffnen": "Ouvrir en taille originale dans un nouvel onglet",
+  "In deiner Anime-Liste": "Dans ta liste d’anime",
   "In deiner Liste": "Dans ta liste",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "Dans les paramètres, sous « API », demande une clé pour un usage non commercial.",
   "In der Anime-Liste suchen...": "Rechercher dans la liste d'animes...",
@@ -3247,6 +3249,11 @@
     "one": "{n} jour",
     "many": "{n} jours",
     "other": "{n} jours"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} résultat",
+    "many": "{n} de résultats",
+    "other": "{n} résultats"
   },
   "{n} abgeschlossen": "{n} terminés",
   "{n} eigene Staffel|{n} eigene Staffeln": {

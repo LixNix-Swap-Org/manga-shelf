@@ -462,6 +462,7 @@ manga-shelf/
 │           │   ├── DashboardFooter.jsx # version, online state, offline copy, outbox, app installation; in standalone mode profile and save state of the device
 │           │   ├── ShoppingListView.jsx # shopping list, wishlist series, shop scan, share/print
 │           │   ├── ReleaseRadarView.jsx # release radar (calendar / Meine Vorbestellungen)
+│           │   ├── AnimeSearchHits.jsx # "In deiner Anime-Liste" under the shelf toolbar: anime entries matching the header search (filterAnime, from 2 characters, at most 6, "Alle im Anime-Tab"); Dashboard loads the anime list once for it
 │           │   ├── ContinueReading.jsx # bar "Weiterlesen" above the toolbar (continueReadingItems, CONTINUE_READING_LIMIT = 3)
 │           │   ├── CsvExchangeModal.jsx # CSV export and import (editors; guests export only)
 │           │   ├── ScanCandidatesDialog.jsx # barcode scan with several matching series

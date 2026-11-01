@@ -138,6 +138,7 @@
   "Alle gelesenen Bände anzeigen": "Show all read volumes",
   "Alle haben ihn gesehen": "Everybody has watched it",
   "Alle im Abschnitt gesehen": "All in section watched",
+  "Alle im Anime-Tab": "All in the Anime tab",
   "Alle mit Namen": "Everyone, with my name",
   "Alle {count} anzeigen": "Show all {count}",
   "Alle {visible} ({count})": "All {visible} ({count})",
@@ -1291,6 +1292,7 @@
   "In Ordnung": "OK",
   "In Ordnung: {checks}": "OK: {checks}",
   "In Originalgröße in neuem Tab öffnen": "Open at original size in a new tab",
+  "In deiner Anime-Liste": "In your anime list",
   "In deiner Liste": "In your list",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "In the settings under “API”, request a key for non-commercial use.",
   "In der Anime-Liste suchen...": "Search anime list...",
@@ -3169,6 +3171,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} day",
     "other": "{n} days"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} match",
+    "other": "{n} matches"
   },
   "{n} abgeschlossen": "{n} completed",
   "{n} eigene Staffel|{n} eigene Staffeln": {

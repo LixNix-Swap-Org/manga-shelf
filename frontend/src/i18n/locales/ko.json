@@ -135,6 +135,7 @@
   "Alle gelesenen Bände anzeigen": "읽은 권 모두 보기",
   "Alle haben ihn gesehen": "모두 시청함",
   "Alle im Abschnitt gesehen": "이 구간 모두 시청",
+  "Alle im Anime-Tab": "애니 탭에서 모두 보기",
   "Alle mit Namen": "모두에게 이름과 함께",
   "Alle {count} anzeigen": "{count}개 모두 보기",
   "Alle {visible} ({count})": "{visible} 전체 ({count})",
@@ -1270,6 +1271,7 @@
   "In Ordnung": "정상",
   "In Ordnung: {checks}": "정상: {checks}",
   "In Originalgröße in neuem Tab öffnen": "원본 크기로 새 탭에서 열기",
+  "In deiner Anime-Liste": "내 애니 목록",
   "In deiner Liste": "내 목록에 있음",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "설정의 “API”에서 비상업적 용도의 키를 신청해요.",
   "In der Anime-Liste suchen...": "애니메이션 목록에서 검색...",
@@ -3091,6 +3093,9 @@
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}일"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "other": "{n}건"
   },
   "{n} abgeschlossen": "{n}개 완료",
   "{n} eigene Staffel|{n} eigene Staffeln": {

@@ -7,6 +7,7 @@ import DashboardHeader, { opensCollection } from './components/dashboard/Dashboa
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
+import AnimeSearchHits, { animeSearchHits, ANIME_SEARCH_MIN_CHARS } from './components/dashboard/AnimeSearchHits';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
@@ -353,6 +354,16 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const onlineFocusRef = useRef(false);
 
   const shelfQuery = deferredSearch.trim();
+  // the header search also names matching entries of the anime list; the list loads once for it (cached copy first)
+  const animeHits = useMemo(() => (activeMainView === 'shelf' ? animeSearchHits(anime.list, shelfQuery) : []), [activeMainView, anime.list, shelfQuery]);
+  const animeLoadAsked = useRef(false);
+  useEffect(() => {
+    if (activeMainView !== 'shelf' || shelfQuery.length < ANIME_SEARCH_MIN_CHARS || !user || isOfflineMode) return;
+    if (anime.loaded || anime.loading || animeLoadAsked.current) return;
+    animeLoadAsked.current = true;
+    anime.fetchAnime();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAnime is stable; one load per page
+  }, [activeMainView, shelfQuery, user, isOfflineMode, anime.loaded, anime.loading]);
   const showOnline = lookupAvailable && (onlineQuery !== '' || (onlinePending && searchScope.scope === 'online'));
   const searchExtras = useMemo(() => {
     if (!shelfQuery) return null;
@@ -677,6 +688,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           shelfFilter={shelfFilter}
           setShelfFilter={setShelfFilter}
         />
+        <AnimeSearchHits hits={animeHits} onOpen={handleOpenAnime} onShowAll={() => setView(ANIME_VIEW)} />
         {/* Grid or Empty State */}
         <MangaCollectionGrid
           canEdit={canEdit}

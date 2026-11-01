@@ -138,6 +138,7 @@
   "Alle gelesenen Bände anzeigen": "Alle gelezen delen tonen",
   "Alle haben ihn gesehen": "Iedereen heeft het gezien",
   "Alle im Abschnitt gesehen": "Hele sectie gezien",
+  "Alle im Anime-Tab": "Alles in het tabblad Anime",
   "Alle mit Namen": "Iedereen, met mijn naam",
   "Alle {count} anzeigen": "Alle {count} tonen",
   "Alle {visible} ({count})": "Alle {visible} ({count})",
@@ -1291,6 +1292,7 @@
   "In Ordnung": "In orde",
   "In Ordnung: {checks}": "In orde: {checks}",
   "In Originalgröße in neuem Tab öffnen": "In originele grootte in een nieuw tabblad openen",
+  "In deiner Anime-Liste": "In je animelijst",
   "In deiner Liste": "In je lijst",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "Vraag in de instellingen onder “API” een sleutel aan voor niet-commercieel gebruik.",
   "In der Anime-Liste suchen...": "In de animelijst zoeken...",
@@ -3169,6 +3171,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} dag",
     "other": "{n} dagen"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} treffer",
+    "other": "{n} treffers"
   },
   "{n} abgeschlossen": "{n} afgerond",
   "{n} eigene Staffel|{n} eigene Staffeln": {

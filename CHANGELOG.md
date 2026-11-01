@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Anime
+- **The header search finds anime too:** while you search the collection, a row "In deiner Anime-Liste" under the toolbar names up to six matching anime, films and shows (with your own status); a tap opens the entry, "Alle im Anime-Tab" switches to the tab. The anime list loads once for it when you have not opened the tab yet.
+
 ## 3.6.0
 
 ### Before updating
