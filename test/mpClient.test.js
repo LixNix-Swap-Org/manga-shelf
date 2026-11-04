@@ -523,3 +523,27 @@ test('edition details: a month-only volume keeps "YYYY-MM" instead of the last d
     const { isOfficialReleased } = require('../services/mangaPassion/classify');
     assert.equal(cached.volumes[0].is_released, isOfficialReleased('2026-11'));
 });
+
+test('cache pruning: old months and unlinked editions go, a linked edition keeps its volume list', () => {
+    const coreClient = require('../core/mangaPassion/client');
+    const { createCtx } = require('../db');
+    const day = 24 * 60 * 60 * 1000;
+    const old = Date.now() - 100 * day;
+    const linked = Number(db.prepare("INSERT INTO mangas (title, manga_passion_id) VALUES ('Verknüpft', 9101)").run().lastInsertRowid);
+    seedCache('mp_edition_vols_9101', { edition: edition(9101), volumes: [] }, old);
+    seedCache('mp_edition_vols_9102', { edition: edition(9102), volumes: [] }, old);
+    seedCache('mp_edition_vols_9103', { edition: edition(9103), volumes: [] }, Date.now() - 2 * day);
+    seedCache('mp_releases_2020_1', [], old);
+    seedCache('mp_releases_2026_11', [], Date.now() - 2 * day);
+    try {
+        assert.ok(coreClient.pruneCache(createCtx(), { force: true }) >= 2);
+        // the stale fallback of a linked edition's gap check stays, whatever its age
+        assert.ok(cacheRow('mp_edition_vols_9101'));
+        assert.equal(cacheRow('mp_edition_vols_9102'), undefined);
+        assert.ok(cacheRow('mp_edition_vols_9103'));
+        assert.equal(cacheRow('mp_releases_2020_1'), undefined);
+        assert.ok(cacheRow('mp_releases_2026_11'));
+    } finally {
+        db.prepare('DELETE FROM mangas WHERE id = ?').run(linked);
+    }
+});

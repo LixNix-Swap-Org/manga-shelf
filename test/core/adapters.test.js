@@ -140,6 +140,25 @@ if (SQL_JS) {
         copy.close();
     });
 
+    test('sql.js: run() reports the id of its own insert, also after export() and an export past the adapter', async () => {
+        const SQL = await loadSqlJs();
+        const database = new SQL.Database();
+        const conn = connectionFromSqlJs(database);
+        applySchema(conn);
+        const insert = (title) => conn.prepare('INSERT INTO mangas (title) VALUES (?)').run(title);
+        const first = insert('Eins');
+        const second = insert('Zwei');
+        assert.equal(second.lastInsertRowid, first.lastInsertRowid + 1);
+        assert.equal(second.changes, 1);
+        conn.export();
+        assert.equal(insert('Drei').lastInsertRowid, second.lastInsertRowid + 1);
+        database.export();
+        assert.equal(insert('Vier').lastInsertRowid, second.lastInsertRowid + 2);
+        // an UPDATE keeps reporting the last insert, as node:sqlite does
+        assert.equal(conn.prepare("UPDATE mangas SET title = 'Vier!' WHERE title = 'Vier'").run().lastInsertRowid, second.lastInsertRowid + 2);
+        conn.close();
+    });
+
     runScenarios('sql.js', () => createCore('sql.js'));
 
     test('node:sqlite and sql.js answer a seeded collection identically', async () => {

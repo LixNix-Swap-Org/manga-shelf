@@ -25,25 +25,27 @@ const VOLUME_SEARCH_SQL = `(SELECT SUBSTR(GROUP_CONCAT(t, char(10)), 1, ${VOLUME
 /**
  * Series list with aggregates for the dashboard (also the snapshot's `mangas`), without detail-only columns.
  * wished (0|1): wish_priority set and no volume owned. { volumeSearch: true } adds volume_search (snapshot only).
+ * One row per volume: the volume_reads join is on its primary key (volume_id, user_id) for one user, so plain COUNTs
+ * and SUMs are exact; only regular_owned counts distinct numbers.
  */
 function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.accessibleShelfIds(ctx) } = {}) {
     const scope = access.inShelves('m.shelf_id', shelfIds);
     return ctx.db.prepare(`
             SELECT m.id, m.title, m.alt_title, m.author, m.publisher, m.language, m.status, m.tags, m.total_volumes,
-                   COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
+                   COUNT(CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
                    m.collecting, m.region, m.work_key, m.work_id, m.currency, m.shelf_id, m.format, m.total_chapters,
                    COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.manga_id = m.id AND cp.user_id = ?), 0) as chapters_read,
-                   COUNT(DISTINCT CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
-                   COUNT(DISTINCT CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
+                   COUNT(CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
+                   COUNT(CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
                    CASE WHEN m.wish_priority IS NOT NULL AND COUNT(CASE WHEN v.status = 'Vorhanden' THEN 1 END) = 0 THEN 1 ELSE 0 END as wished,
                    COALESCE(SUM(CASE WHEN v.status = 'Vorhanden' THEN v.price ELSE 0 END), 0) as total_value,
                    COALESCE(SUM(v.price), 0) as full_value,
-                   COUNT(DISTINCT v.id) as volume_count,
+                   COUNT(v.id) as volume_count,
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND ${REGULAR} THEN v.number_sort END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
                    MAX(CASE WHEN ${REGULAR} THEN v.number_sort END) as max_regular_number, -- highest existing regular number, any status: a missing volume 4 keeps 3 of 3 from being complete
-                   COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND NOT ${REGULAR} THEN v.id END) as extras_owned,
-                   COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' THEN vr.volume_id END) as read_volume_count${volumeSearch ? `,
+                   COUNT(CASE WHEN v.status = 'Vorhanden' AND NOT ${REGULAR} THEN v.id END) as extras_owned,
+                   COUNT(CASE WHEN v.status = 'Vorhanden' THEN vr.volume_id END) as read_volume_count${volumeSearch ? `,
                    ${VOLUME_SEARCH_SQL} as volume_search` : ''}
             FROM mangas m
             LEFT JOIN volumes v ON m.id = v.manga_id

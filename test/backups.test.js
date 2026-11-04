@@ -1445,3 +1445,41 @@ test('openZip reads archives only from the data directory', async () => {
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+test('backup copies leave the cache tables empty and keep everything else; the live caches stay', async () => {
+    dbm.db.prepare("INSERT OR REPLACE INTO api_cache (cache_key, json_data, created_at, expires_at) VALUES ('isbn:9783551745811', '{\"book\":null}', 1, 9e15)").run();
+    dbm.db.prepare("INSERT OR REPLACE INTO manga_passion_cache (cache_key, json_data, created_at) VALUES ('mp_releases_2026_11', '[]', ?)").run(Date.now());
+    dbm.db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('cache_probe', 'kept')").run();
+    const stream = await fetch(`${ctx.base}/backup`, { headers: { Cookie: admin.cookie } });
+    assert.equal(stream.status, 200);
+    const zip = new AdmZip(Buffer.from(await stream.arrayBuffer()));
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-cache-copy-')), 'manga.db');
+    fs.writeFileSync(file, zip.getEntry('manga.db').getData());
+    const copy = new DatabaseSync(file, { readOnly: true });
+    try {
+        assert.equal(copy.prepare('SELECT count(*) AS n FROM api_cache').get().n, 0);
+        assert.equal(copy.prepare('SELECT count(*) AS n FROM manga_passion_cache').get().n, 0);
+        assert.equal(copy.prepare("SELECT value FROM app_settings WHERE key = 'cache_probe'").get().value, 'kept');
+        assert.equal(copy.prepare('SELECT count(*) AS n FROM mangas').get().n, mangaCount());
+    } finally {
+        copy.close();
+    }
+    assert.ok(dbm.db.prepare("SELECT 1 FROM api_cache WHERE cache_key = 'isbn:9783551745811'").get());
+    assert.ok(dbm.db.prepare("SELECT 1 FROM manga_passion_cache WHERE cache_key = 'mp_releases_2026_11'").get());
+});
+
+test('the live connection waits for locks and caps the WAL file; the daily maintenance analyses and logs integrity', () => {
+    assert.equal(dbm.db.prepare('PRAGMA busy_timeout').get().timeout, 3000);
+    assert.equal(dbm.db.prepare('PRAGMA journal_size_limit').get().journal_size_limit, 32 * 1024 * 1024);
+    const scheduler = require('../services/scheduler');
+    const day = 24 * 60 * 60 * 1000;
+    // the test server's own scheduler may have run it already: start two days later
+    const later = Date.now() + 2 * day;
+    const report = scheduler.runDatabaseMaintenanceIfDue(later);
+    assert.ok(report, 'due after more than a day');
+    assert.deepEqual(report.violations, []);
+    assert.equal(report.outsideShelves, 0);
+    assert.ok(dbm.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_stat1'").get(), 'planner statistics exist');
+    assert.equal(scheduler.runDatabaseMaintenanceIfDue(later + 60 * 1000), null, 'not due again on the same connection within a day');
+    assert.ok(scheduler.runDatabaseMaintenanceIfDue(later + day + 1), 'due again a day later');
+});
