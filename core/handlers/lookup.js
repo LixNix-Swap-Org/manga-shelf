@@ -246,8 +246,8 @@ async function lookupIsbn(ctx, { query }) {
     const isbn13 = normalizeIsbn(cleanIsbn);
 
     // a volume of the collection with this ISBN is certain and needs no catalogue (also works without internet)
-    const mine = access.scopedCtx(ctx, access.accessibleShelfIds(ctx));
-    const known = mine.db.prepare('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1').get(isbn13);
+    const shelfIds = access.accessibleShelfIds(ctx);
+    const known = access.scopedCtx(ctx, shelfIds).db.prepare('SELECT 1 FROM {volumes} WHERE isbn = ? LIMIT 1').get(isbn13);
     const book = known ? null : await catalogueBook(ctx, cleanIsbn, isbn13);
     if (!book && !known) {
         return {
@@ -260,7 +260,7 @@ async function lookupIsbn(ctx, { query }) {
     }
 
     const bookData = book || { title: '', volume_number: '1', volume_number_known: false, source: 'Sammlung' };
-    const match = matchCollection(mine.db, bookData, isbn13);
+    const match = matchCollection(ctx.db, bookData, isbn13, shelfIds);
     if (match.number_in_title) {
         // "Eyeshield 21": the number belongs to the series name, the catalogue did not say which volume this is
         bookData.volume_number = '1';

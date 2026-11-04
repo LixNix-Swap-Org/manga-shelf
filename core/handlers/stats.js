@@ -38,11 +38,11 @@ const PURCHASE_MONTH = `(${PURCHASE_YEAR} AND TRIM(purchase_date) GLOB '[0-9][0-
  * volumes with a year only (absent from the month chart) and volumes without a usable purchase date. One pass over the volumes.
  */
 function buildSpending(ctx, now = new Date()) {
-    const rows = ctx.db.prepare(`
+    const rows = access.prepareScoped(ctx.db, `
         SELECT CASE WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) END AS month,
                CASE WHEN ${PURCHASE_YEAR} THEN CAST(SUBSTR(TRIM(purchase_date), 1, 4) AS INTEGER) END AS year,
-               count(*) AS volumes, sum(COALESCE(${EURO_PRICE}, 0)) AS total
-        FROM volumes v JOIN mangas m ON m.id = v.manga_id
+               count(*) AS volume_count, sum(COALESCE(${EURO_PRICE}, 0)) AS total
+        FROM {volumes} v JOIN {mangas} m ON m.id = v.manga_id
         WHERE v.status = 'Vorhanden'
         GROUP BY month, year
     `).all();
@@ -50,7 +50,7 @@ function buildSpending(ctx, now = new Date()) {
     const byYear = new Map();
     const yearOnly = { volumes: 0, total: 0 };
     const none = { volumes: 0, total: 0 };
-    const add = (target, row) => { target.volumes += row.volumes; target.total += row.total || 0; };
+    const add = (target, row) => { target.volumes += row.volume_count; target.total += row.total || 0; };
     for (const row of rows) {
         if (row.year === null) { add(none, row); continue; }
         if (!byYear.has(row.year)) byYear.set(row.year, { volumes: 0, total: 0 });
@@ -60,7 +60,7 @@ function buildSpending(ctx, now = new Date()) {
     }
     return {
         by_year: [...byYear.entries()].sort((a, b) => a[0] - b[0]).map(([year, y]) => ({ year, volumes: y.volumes, total: round2(y.total) })),
-        by_month: lastMonthKeys(now, 12).map(k => ({ month: k, volumes: byMonth.get(k)?.volumes || 0, total: round2(byMonth.get(k)?.total) })),
+        by_month: lastMonthKeys(now, 12).map(k => ({ month: k, volumes: byMonth.get(k)?.volume_count || 0, total: round2(byMonth.get(k)?.total) })),
         year_only: { volumes: yearOnly.volumes, total: round2(yearOnly.total) },
         without_date: { volumes: none.volumes, total: round2(none.total) }
     };
@@ -73,13 +73,13 @@ const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2
  * creation date of a series or volume; today without data.
  */
 function derivedStartDate(ctx, now) {
-    const row = ctx.db.prepare(`
+    const row = access.prepareScoped(ctx.db, `
         SELECT (SELECT MIN(CASE WHEN TRIM(purchase_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' THEN SUBSTR(TRIM(purchase_date), 1, 10)
                                 WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) || '-01'
                                 ELSE SUBSTR(TRIM(purchase_date), 1, 4) || '-01-01' END)
-                FROM volumes WHERE ${PURCHASE_YEAR}) AS purchased,
-               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM volumes) AS volume_added,
-               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM mangas) AS series_added
+                FROM {volumes} WHERE ${PURCHASE_YEAR}) AS purchased,
+               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM {volumes}) AS volume_added,
+               (SELECT SUBSTR(MIN(created_at), 1, 10) FROM {mangas}) AS series_added
     `).get() || {};
     const dates = [row.purchased, row.volume_added, row.series_added].filter(d => parseStartDate(d)).sort();
     const today = isoDate(now);
@@ -92,11 +92,11 @@ function derivedStartDate(ctx, now) {
  * highest existing regular number when that is higher (a missing volume above the total keeps the series open).
  */
 const COMPLETED_SERIES_SQL = `
-    SELECT count(*) AS count FROM mangas m
+    SELECT count(*) AS count FROM {mangas} m
     WHERE m.total_volumes > 0
-      AND (SELECT COUNT(DISTINCT v.number_sort) FROM volumes v
+      AND (SELECT COUNT(DISTINCT v.number_sort) FROM {volumes} v
            WHERE v.manga_id = m.id AND v.status = 'Vorhanden' AND ${regularNumberedSql('v')})
-          >= MAX(m.total_volumes, COALESCE((SELECT MAX(v.number_sort) FROM volumes v
+          >= MAX(m.total_volumes, COALESCE((SELECT MAX(v.number_sort) FROM {volumes} v
            WHERE v.manga_id = m.id AND ${regularNumberedSql('v')}), 0))
 `;
 
@@ -112,8 +112,8 @@ const PUBLISHERS_SQL = `
            AVG(CASE WHEN v.status = 'Vorhanden' THEN ${EURO_PRICE} END) AS avg_price,
            SUM(CASE WHEN v.status = 'Fehlt' THEN 1 ELSE 0 END) AS missing_count,
            SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(${EURO_PRICE}, 0) ELSE 0 END) AS missing_value
-    FROM volumes v
-    JOIN mangas m ON v.manga_id = m.id
+    FROM {volumes} v
+    JOIN {mangas} m ON v.manga_id = m.id
     WHERE v.status IN ('Vorhanden', 'Fehlt')
     GROUP BY pub_name
     HAVING volume_count > 0
@@ -127,8 +127,8 @@ const TOP_SERIES_SQL = `
            SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(v.price, 0) ELSE 0 END) AS missing_value,
            AVG(CASE WHEN v.status = 'Vorhanden' THEN v.price END) AS avg_price,
            SUM(CASE WHEN v.status = 'Vorhanden' AND v.price IS NULL THEN 1 ELSE 0 END) AS unpriced
-    FROM mangas m
-    JOIN volumes v ON v.manga_id = m.id
+    FROM {mangas} m
+    JOIN {volumes} v ON v.manga_id = m.id
     WHERE ${EURO}
     GROUP BY m.id
     HAVING owned_value > 0
@@ -139,62 +139,83 @@ const TOP_SERIES_SQL = `
 // Value per owner at list price (volumes.price), like all other figures; shared volumes count in full for each owner
 const OWNER_STATS_SQL = `
     SELECT u.id as user_id, u.username,
-           count(v.id) as volume_count,
-           COALESCE(SUM(COALESCE(${EURO_PRICE}, 0)), 0) as total_value,
-           COUNT(DISTINCT v.manga_id) as series_count,
-           COALESCE(SUM(CASE WHEN v.id IS NOT NULL AND (SELECT count(*) FROM volume_owners o2 WHERE o2.volume_id = vo.volume_id) > 1 THEN 1 ELSE 0 END), 0) as shared_count
+           COALESCE(o.volume_count, 0) as volume_count,
+           COALESCE(o.total_value, 0) as total_value,
+           COALESCE(o.series_count, 0) as series_count,
+           COALESCE(o.shared_count, 0) as shared_count
     FROM users u
-    LEFT JOIN volume_owners vo ON vo.user_id = u.id
-    LEFT JOIN volumes v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
-    LEFT JOIN mangas m ON m.id = v.manga_id
-    GROUP BY u.id
+    LEFT JOIN (
+        SELECT vo.user_id, count(*) AS volume_count, SUM(COALESCE(${EURO_PRICE}, 0)) AS total_value,
+               COUNT(DISTINCT v.manga_id) AS series_count, SUM(CASE WHEN oc.owners > 1 THEN 1 ELSE 0 END) AS shared_count
+        FROM {volume_owners} vo
+        JOIN {volumes} v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
+        JOIN {mangas} m ON m.id = v.manga_id
+        JOIN (SELECT volume_id, count(*) AS owners FROM {volume_owners} GROUP BY volume_id) oc ON oc.volume_id = vo.volume_id
+        GROUP BY vo.user_id
+    ) o ON o.user_id = u.id
     ORDER BY u.id
 `;
 
 const OWNER_PUBLISHERS_SQL = `
     SELECT u.id AS user_id, u.username, ${EFF_PUB} AS pub_name, COUNT(*) AS volume_count,
            SUM(COALESCE(${EURO_PRICE}, 0)) AS total_value
-    FROM volume_owners vo
+    FROM {volume_owners} vo
     JOIN users u ON u.id = vo.user_id
-    JOIN volumes v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
-    JOIN mangas m ON m.id = v.manga_id
+    JOIN {volumes} v ON v.id = vo.volume_id AND v.status = 'Vorhanden'
+    JOIN {mangas} m ON m.id = v.manga_id
     GROUP BY u.id, pub_name
     ORDER BY u.id, total_value DESC, volume_count DESC, pub_name
 `;
 
 
-// series by their language, volumes by their own language (NULL = the series')
-const LANGUAGE_SERIES_SQL = "SELECT COALESCE(language, 'de') AS language, count(*) AS series FROM mangas GROUP BY 1";
-const LANGUAGE_VOLUMES_SQL = `
-    SELECT COALESCE(v.language, m.language, 'de') AS language, count(*) AS volumes,
-           SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS owned_volumes
-    FROM volumes v JOIN mangas m ON m.id = v.manga_id
-    GROUP BY 1`;
-
-const CURRENCIES_SQL = `
-    SELECT m.currency, count(DISTINCT m.id) AS series,
-           SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS owned_volumes,
+// Series per language and currency (series by their language), and one pass over the volumes per series currency and
+// volume language (NULL = the series'). Every total, `languages` and `currencies` of GET /stats come from these two.
+const SERIES_TOTALS_SQL = "SELECT COALESCE(language, 'de') AS language, currency, count(*) AS series FROM {mangas} GROUP BY 1, 2";
+const VOLUME_TOTALS_SQL = `
+    SELECT m.currency, COALESCE(v.language, m.language, 'de') AS language,
+           count(*) AS volume_count, SUM(COALESCE(v.price, 0)) AS full_value,
+           SUM(CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END) AS owned,
            SUM(CASE WHEN v.status = 'Vorhanden' THEN COALESCE(v.price, 0) ELSE 0 END) AS owned_value,
+           SUM(CASE WHEN v.status = 'Vorhanden' AND v.price IS NOT NULL THEN 1 ELSE 0 END) AS owned_priced,
+           SUM(CASE WHEN v.status = 'Fehlt' THEN 1 ELSE 0 END) AS missing,
            SUM(CASE WHEN v.status = 'Fehlt' THEN COALESCE(v.price, 0) ELSE 0 END) AS missing_value
-    FROM mangas m LEFT JOIN volumes v ON v.manga_id = m.id
-    GROUP BY m.currency`;
+    FROM {volumes} v JOIN {mangas} m ON m.id = v.manga_id
+    GROUP BY 1, 2`;
+
+/** Sums per key of `rows` ({ key: { field: sum } } in first-seen order). */
+function sumBy(rows, keyOf, fields) {
+    const map = new Map();
+    for (const row of rows) {
+        const key = keyOf(row);
+        const entry = map.get(key) || Object.fromEntries(fields.map(f => [f, 0]));
+        for (const f of fields) entry[f] += row[f] || 0;
+        map.set(key, entry);
+    }
+    return map;
+}
 
 /** `languages` of GET /stats: [{ language, series, volumes, owned_volumes }], most owned first. */
-function languageStats(ctx) {
+function languageStats(seriesRows, volumeRows) {
     const byLanguage = new Map();
     const entry = (language) => {
         if (!byLanguage.has(language)) byLanguage.set(language, { language, series: 0, volumes: 0, owned_volumes: 0 });
         return byLanguage.get(language);
     };
-    for (const row of ctx.db.prepare(LANGUAGE_SERIES_SQL).all()) entry(row.language).series = row.series;
-    for (const row of ctx.db.prepare(LANGUAGE_VOLUMES_SQL).all()) Object.assign(entry(row.language), { volumes: row.volumes, owned_volumes: row.owned_volumes || 0 });
+    for (const [language, sums] of sumBy(seriesRows, r => r.language, ['series'])) entry(language).series = sums.series;
+    for (const [language, sums] of sumBy(volumeRows, r => r.language, ['volume_count', 'owned'])) {
+        Object.assign(entry(language), { volumes: sums.volume_count, owned_volumes: sums.owned });
+    }
     return [...byLanguage.values()].sort((a, b) => b.owned_volumes - a.owned_volumes || b.series - a.series || a.language.localeCompare(b.language));
 }
 
 /** `currencies` of GET /stats: owned and missing value per series currency, euro first (the totals count only euro). */
-function currencyStats(ctx) {
-    return ctx.db.prepare(CURRENCIES_SQL).all()
-        .map(r => ({ currency: r.currency, series: r.series, owned_volumes: r.owned_volumes || 0, owned_value: round2(r.owned_value), missing_value: round2(r.missing_value) }))
+function currencyStats(seriesRows, volumeRows) {
+    const volumes = sumBy(volumeRows, r => r.currency, ['owned', 'owned_value', 'missing_value']);
+    return [...sumBy(seriesRows, r => r.currency, ['series'])]
+        .map(([currency, { series }]) => {
+            const v = volumes.get(currency) || { owned: 0, owned_value: 0, missing_value: 0 };
+            return { currency, series, owned_volumes: v.owned, owned_value: round2(v.owned_value), missing_value: round2(v.missing_value) };
+        })
         .sort((a, b) => (a.currency === 'EUR' ? -1 : b.currency === 'EUR' ? 1 : a.currency.localeCompare(b.currency)));
 }
 
@@ -221,27 +242,21 @@ const avgOrNull = (n) => (n === null || n === undefined ? null : round2(n));
 function stats(realCtx, { query } = {}) {
     const shelfIds = access.requestedShelfIds(realCtx, qstr(query && query.shelf_id));
     const ctx = access.scopedCtx(realCtx, shelfIds);
-    const totalSeriesRow = ctx.db.prepare('SELECT count(*) as count FROM mangas').get();
-    const totalSeries = totalSeriesRow ? totalSeriesRow.count : 0;
-
-    const ownedRow = ctx.db.prepare(`
-        SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as total_value, count(v.price) as priced_count,
-               count(${EURO_PRICE}) as euro_priced_count, avg(${EURO_PRICE}) as avg_price
-        FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Vorhanden'`).get();
-    const totalOwnedVolumes = ownedRow ? ownedRow.count : 0;
-    const totalOwnedValue = round2(ownedRow?.total_value);
+    const seriesRows = ctx.db.prepare(SERIES_TOTALS_SQL).all();
+    const volumeRows = ctx.db.prepare(VOLUME_TOTALS_SQL).all();
+    const totalSeries = seriesRows.reduce((sum, r) => sum + r.series, 0);
+    const all = sumBy(volumeRows, () => 'all', ['volume_count', 'owned', 'owned_priced', 'missing']).get('all')
+        || { volume_count: 0, owned: 0, owned_priced: 0, missing: 0 };
+    const euro = sumBy(volumeRows.filter(r => r.currency === 'EUR'), () => 'EUR', ['owned_value', 'owned_priced', 'missing_value', 'full_value']).get('EUR')
+        || { owned_value: 0, owned_priced: 0, missing_value: 0, full_value: 0 };
+    const totalOwnedVolumes = all.owned;
+    const totalOwnedValue = round2(euro.owned_value);
     // priced in any currency: a USD volume has a price, it is just not part of the euro average
-    const pricedOwnedVolumes = ownedRow ? ownedRow.priced_count : 0;
-
-    const missingRow = ctx.db.prepare(`
-        SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as missing_value
-        FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Fehlt'`).get();
-    const totalMissingVolumes = missingRow ? missingRow.count : 0;
-    const totalMissingValue = round2(missingRow?.missing_value);
-
-    const allVolsRow = ctx.db.prepare(`SELECT count(*) as count, sum(COALESCE(${EURO_PRICE}, 0)) as full_value FROM volumes v JOIN mangas m ON m.id = v.manga_id`).get();
-    const totalVolumesRecorded = allVolsRow ? allVolsRow.count : 0;
-    const totalPossibleValue = round2(allVolsRow?.full_value);
+    const pricedOwnedVolumes = all.owned_priced;
+    const totalMissingVolumes = all.missing;
+    const totalMissingValue = round2(euro.missing_value);
+    const totalVolumesRecorded = all.volume_count;
+    const totalPossibleValue = round2(euro.full_value);
 
     const completedSeries = ctx.db.prepare(COMPLETED_SERIES_SQL).get()?.count || 0;
 
@@ -257,7 +272,7 @@ function stats(realCtx, { query } = {}) {
     const totalYears = (totalDays / 365.25).toFixed(2);
     const avgMonthlySpending = round2(totalOwnedValue / totalMonths);
     // A stored price of 0 (gift) counts; volumes without a price do not.
-    const avgPricePerVolume = ownedRow?.euro_priced_count > 0 ? round2(ownedRow.avg_price) : 0;
+    const avgPricePerVolume = euro.owned_priced > 0 ? round2(euro.owned_value / euro.owned_priced) : 0;
 
     const publishers = ctx.db.prepare(PUBLISHERS_SQL).all().map(p => ({
         publisher: p.pub_name,
@@ -275,14 +290,12 @@ function stats(realCtx, { query } = {}) {
     // User Reading Stats (Multi-User)
     const allUsers = statsUsers(realCtx, shelfIds);
     const named = new Set(allUsers.map(u => u.id));
+    const readsByUser = new Map(ctx.db.prepare(`
+        SELECT vr.user_id, count(*) AS n FROM {volume_reads} vr JOIN {volumes} v ON vr.volume_id = v.id
+        WHERE v.status = 'Vorhanden' GROUP BY vr.user_id
+    `).all().map(r => [r.user_id, r.n]));
     const userReadingStats = allUsers.map(u => {
-        const readRow = ctx.db.prepare(`
-            SELECT count(vr.volume_id) as count
-            FROM volume_reads vr
-            JOIN volumes v ON vr.volume_id = v.id
-            WHERE vr.user_id = ? AND v.status = 'Vorhanden'
-        `).get(u.id);
-        const readCount = readRow ? readRow.count : 0;
+        const readCount = readsByUser.get(u.id) || 0;
         const pct = totalOwnedVolumes > 0 ? Math.round((readCount / totalOwnedVolumes) * 1000) / 10 : 0;
         return {
             user_id: u.id,
@@ -352,8 +365,8 @@ function stats(realCtx, { query } = {}) {
             owner_publishers: ownerPublishers,
             top_series: topSeries,
             spending: buildSpending(ctx, now),
-            languages: languageStats(ctx),
-            currencies: currencyStats(ctx),
+            languages: languageStats(seriesRows, volumeRows),
+            currencies: currencyStats(seriesRows, volumeRows),
             ...animeBlock(ctx)
         }
     };
@@ -390,26 +403,26 @@ function continueReading(ctx, userId) {
     return ctx.db.prepare(`
         SELECT * FROM (
             SELECT m.id AS manga_id, m.title, m.cover_image, r.last_read_at, r.last_number,
-                   (SELECT v2.id FROM volumes v2
+                   (SELECT v2.id FROM {volumes} v2
                     WHERE v2.manga_id = m.id AND v2.status = 'Vorhanden' AND ${regularNumberedSql('v2')} AND v2.number_sort > r.last_number
-                      AND NOT EXISTS (SELECT 1 FROM volume_reads x WHERE x.volume_id = v2.id AND x.user_id = ?)
+                      AND NOT EXISTS (SELECT 1 FROM {volume_reads} x WHERE x.volume_id = v2.id AND x.user_id = ?)
                     ORDER BY v2.number_sort, v2.id LIMIT 1) AS next_id,
-                   (SELECT count(*) FROM volumes v3
+                   (SELECT count(*) FROM {volumes} v3
                     WHERE v3.manga_id = m.id AND v3.status = 'Vorhanden' AND ${regularNumberedSql('v3')} AND v3.number_sort > r.last_number
-                      AND NOT EXISTS (SELECT 1 FROM volume_reads x WHERE x.volume_id = v3.id AND x.user_id = ?)) AS unread_after
+                      AND NOT EXISTS (SELECT 1 FROM {volume_reads} x WHERE x.volume_id = v3.id AND x.user_id = ?)) AS unread_after
             FROM (
                 SELECT v.manga_id, MAX(v.number_sort) AS last_number, MAX(vr.read_at) AS last_read_at
-                FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id
+                FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id
                 WHERE vr.user_id = ? AND ${REGULAR_V}
                 GROUP BY v.manga_id
             ) r
-            JOIN mangas m ON m.id = r.manga_id
+            JOIN {mangas} m ON m.id = r.manga_id
         )
         WHERE next_id IS NOT NULL
         ORDER BY last_read_at IS NULL, last_read_at DESC, title COLLATE NOCASE
         LIMIT ${CONTINUE_LIMIT}
     `).all(userId, userId, userId).map((row) => {
-        const next = ctx.db.prepare('SELECT id, volume_number, cover_image FROM volumes WHERE id = ?').get(row.next_id);
+        const next = ctx.db.prepare('SELECT id, volume_number, cover_image FROM {volumes} WHERE id = ?').get(row.next_id);
         return {
             manga_id: row.manga_id,
             title: row.title,
@@ -440,22 +453,22 @@ function reading(realCtx, { query }) {
     const currentKey = keys[keys.length - 1];
 
     const monthRows = ctx.db.prepare(`
-        SELECT SUBSTR(vr.read_at, 1, 7) AS month, count(*) AS volumes, SUM(COALESCE(v.pages, 0)) AS pages, COUNT(DISTINCT v.manga_id) AS series
-        FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id
+        SELECT SUBSTR(vr.read_at, 1, 7) AS month, count(*) AS volume_count, SUM(COALESCE(v.pages, 0)) AS pages, COUNT(DISTINCT v.manga_id) AS series
+        FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id
         WHERE vr.user_id = ? AND vr.read_at IS NOT NULL
         GROUP BY month
     `).all(userId);
     const byMonthMap = new Map(monthRows.map(r => [r.month, r]));
-    const unknownDate = ctx.db.prepare('SELECT count(*) AS n FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id WHERE vr.user_id = ? AND vr.read_at IS NULL').get(userId).n;
+    const unknownDate = ctx.db.prepare('SELECT count(*) AS n FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id WHERE vr.user_id = ? AND vr.read_at IS NULL').get(userId).n;
 
     // backlog: owned volumes (household) by purchase month, minus this reader's reads of owned volumes by read month
     const owned = ctx.db.prepare(`
         SELECT CASE WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) ELSE NULL END AS month, count(*) AS n
-        FROM volumes WHERE status = 'Vorhanden' GROUP BY month
+        FROM {volumes} WHERE status = 'Vorhanden' GROUP BY month
     `).all();
     const readOwned = ctx.db.prepare(`
         SELECT SUBSTR(vr.read_at, 1, 7) AS month, count(*) AS n
-        FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id
+        FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id
         WHERE vr.user_id = ? AND v.status = 'Vorhanden' GROUP BY month
     `).all(userId);
     const startCount = (rows) => rows.filter(r => !r.month || r.month < first).reduce((sum, r) => sum + r.n, 0);
@@ -473,7 +486,7 @@ function reading(realCtx, { query }) {
     const thisYear = now.getFullYear();
     const yearTotals = (year) => monthRows
         .filter(r => r.month && r.month.startsWith(`${year}-`))
-        .reduce((acc, r) => ({ year, volumes: acc.volumes + r.volumes, pages: acc.pages + (r.pages || 0) }), { year, volumes: 0, pages: 0 });
+        .reduce((acc, r) => ({ year, volumes: acc.volumes + r.volume_count, pages: acc.pages + (r.pages || 0) }), { year, volumes: 0, pages: 0 });
 
     return {
         body: {
@@ -481,7 +494,7 @@ function reading(realCtx, { query }) {
             months: READING_MONTHS,
             by_month: keys.map(month => {
                 const r = byMonthMap.get(month);
-                return { month, volumes: r?.volumes || 0, pages: r?.pages || 0, series: r?.series || 0 };
+                return { month, volumes: r?.volume_count || 0, pages: r?.pages || 0, series: r?.series || 0 };
             }),
             backlog_by_month: backlog,
             this_year: yearTotals(thisYear),
@@ -499,7 +512,7 @@ function chapterTotals(ctx, userId) {
     const row = ctx.db.prepare(`
         SELECT count(*) AS series, COALESCE(SUM(cp.chapters_read), 0) AS read,
                COALESCE(SUM(CASE WHEN m.total_chapters > 0 AND cp.chapters_read >= m.total_chapters THEN 1 ELSE 0 END), 0) AS finished
-        FROM chapter_progress cp JOIN mangas m ON m.id = cp.manga_id
+        FROM {chapter_progress} cp JOIN {mangas} m ON m.id = cp.manga_id
         WHERE cp.user_id = ? AND m.format = 'webtoon'
     `).get(userId);
     return { series: row.series, read: row.read, finished: row.finished };

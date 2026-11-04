@@ -19,7 +19,7 @@ const SERIES_CHECKS = [
 const OWNED = "v.status = 'Vorhanden'";
 // status and volume_owners disagree (core/lib/owners.js keeps them in sync on every handler path; raw SQL may not).
 // A legacy 'Gelesen' volume has its own check and fix.
-const HAS_OWNER = 'EXISTS (SELECT 1 FROM volume_owners o WHERE o.volume_id = v.id)';
+const HAS_OWNER = 'EXISTS (SELECT 1 FROM {volume_owners} o WHERE o.volume_id = v.id)';
 const OWNED_WITHOUT_OWNER = `${OWNED} AND NOT ${HAS_OWNER}`;
 const OWNERS_NOT_OWNED = `v.status IS NOT 'Vorhanden' AND LOWER(TRIM(COALESCE(v.status, ''))) <> 'gelesen' AND ${HAS_OWNER}`;
 const VOLUME_CHECKS = [
@@ -33,19 +33,19 @@ const VOLUME_CHECKS = [
 
 const VOLUME_SELECT = `
     SELECT v.id, v.manga_id, m.title, v.volume_number, v.type, v.status, v.isbn, v.release_date
-    FROM volumes v JOIN mangas m ON m.id = v.manga_id`;
+    FROM {volumes} v JOIN {mangas} m ON m.id = v.manga_id`;
 const VOLUME_ORDER = 'ORDER BY m.title COLLATE NOCASE, v.number_sort, v.id';
 
 // One quality check over series: { id, count, items (first ITEM_LIMIT) }.
 function seriesCheck(ctx, { id, where }) {
-    const count = ctx.db.prepare(`SELECT count(*) AS n FROM mangas m WHERE ${where}`).get().n;
-    const items = count ? ctx.db.prepare(`SELECT m.id, m.title, m.publisher, m.cover_image FROM mangas m WHERE ${where} ORDER BY m.title COLLATE NOCASE LIMIT ${ITEM_LIMIT}`).all() : [];
+    const count = ctx.db.prepare(`SELECT count(*) AS n FROM {mangas} m WHERE ${where}`).get().n;
+    const items = count ? ctx.db.prepare(`SELECT m.id, m.title, m.publisher, m.cover_image FROM {mangas} m WHERE ${where} ORDER BY m.title COLLATE NOCASE LIMIT ${ITEM_LIMIT}`).all() : [];
     return { id, count, items };
 }
 
 // Same for volumes joined to their series; `fix` names the offered fix action.
 function volumeCheck(ctx, { id, where, fix }, params = []) {
-    const count = ctx.db.prepare(`SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE ${where}`).get(...params).n;
+    const count = ctx.db.prepare(`SELECT count(*) AS n FROM {volumes} v JOIN {mangas} m ON m.id = v.manga_id WHERE ${where}`).get(...params).n;
     const items = count ? ctx.db.prepare(`${VOLUME_SELECT} WHERE ${where} ${VOLUME_ORDER} LIMIT ${ITEM_LIMIT}`).all(...params) : [];
     return fix ? { id, count, items, fix } : { id, count, items };
 }
@@ -53,11 +53,11 @@ function volumeCheck(ctx, { id, where, fix }, params = []) {
 /** Series sharing a title (case and spaces ignored); same title with another publisher is often a second edition. */
 function duplicateTitles(ctx) {
     const groups = ctx.db.prepare(`
-        SELECT LOWER(TRIM(title)) AS key FROM mangas GROUP BY key HAVING count(*) > 1 ORDER BY key
+        SELECT LOWER(TRIM(title)) AS key FROM {mangas} GROUP BY key HAVING count(*) > 1 ORDER BY key
     `).all();
     const members = ctx.db.prepare(`
-        SELECT m.id, m.title, m.publisher, m.cover_image, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count
-        FROM mangas m WHERE LOWER(TRIM(m.title)) = ? ORDER BY m.id
+        SELECT m.id, m.title, m.publisher, m.cover_image, (SELECT count(*) FROM {volumes} v WHERE v.manga_id = m.id) AS volume_count
+        FROM {mangas} m WHERE LOWER(TRIM(m.title)) = ? ORDER BY m.id
     `);
     const items = groups.slice(0, ITEM_LIMIT).map(g => {
         const series = members.all(g.key);
@@ -76,7 +76,7 @@ function invalidIsbns(ctx) {
 function publisherChecks(ctx) {
     const counts = new Map();
     for (const table of ['mangas', 'volumes']) {
-        for (const r of ctx.db.prepare(`SELECT publisher AS name, count(*) AS n FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher`).all()) {
+        for (const r of ctx.db.prepare(`SELECT publisher AS name, count(*) AS n FROM {${table}} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher`).all()) {
             const entry = counts.get(r.name) || { name: r.name, series_count: 0, volume_count: 0 };
             entry[table === 'mangas' ? 'series_count' : 'volume_count'] += r.n;
             counts.set(r.name, entry);
@@ -117,15 +117,20 @@ function quality(realCtx) {
     return { body: { generated_at: ctx.now().toISOString(), today, limit: ITEM_LIMIT, checks } };
 }
 
-// Rewrites stored publisher names to their canonical spelling; returns the number of changed rows.
-function normalizeStoredPublishers(ctx) {
+// Rewrites the stored publisher names of these shelves to their canonical spelling; returns the number of changed rows.
+function normalizeStoredPublishers(ctx, shelfIds) {
+    const scope = access.inShelves('shelf_id', shelfIds);
+    const where = {
+        mangas: scope.sql,
+        volumes: `manga_id IN (SELECT id FROM mangas WHERE ${scope.sql})`
+    };
     let changed = 0;
     for (const table of ['mangas', 'volumes']) {
-        const rows = ctx.db.prepare(`SELECT DISTINCT publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> ''`).all();
-        const update = ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE publisher = ?`);
+        const rows = ctx.db.prepare(`SELECT DISTINCT publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' AND ${where[table]}`).all(...scope.params);
+        const update = ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE publisher = ? AND ${where[table]}`);
         for (const { publisher } of rows) {
             const canonical = normalizePublisher(publisher);
-            if (canonical && canonical !== publisher) changed += update.run(canonical, publisher).changes;
+            if (canonical && canonical !== publisher) changed += update.run(canonical, publisher, ...scope.params).changes;
         }
     }
     return changed;
@@ -143,14 +148,12 @@ function convertLegacyReads(ctx, shelfIds) {
 
 /** Ids of the volumes of these shelves that match `where` (a check's condition on v). */
 function volumeIdsWhere(ctx, shelfIds, where) {
-    const scope = access.inShelves('m.shelf_id', shelfIds);
-    return ctx.db.prepare(`SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE ${where} AND ${scope.sql}`)
-        .all(...scope.params).map(r => r.id);
+    return access.scopedCtx(ctx, shelfIds).db.prepare(`SELECT v.id FROM {volumes} v WHERE ${where}`).all().map(r => r.id);
 }
 
 const FIXES = {
     legacy_read: convertLegacyReads,
-    normalize_publishers: (ctx, shelfIds) => normalizeStoredPublishers(access.scopedCtx(ctx, shelfIds)),
+    normalize_publishers: normalizeStoredPublishers,
     // owned without an owner: the caller (a member there) becomes the owner, as when the status is set by hand
     assign_owner: (ctx, shelfIds) => {
         const ids = volumeIdsWhere(ctx, shelfIds, OWNED_WITHOUT_OWNER);
