@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { db, dataDir, uploadsDir, tempDir, closeDb, initDb, validateDbFile, migrateDbFile, openRawDb } = require('../db');
 const { ALLOWED_IMAGE_EXTS, stripImageFileSync } = require('../middleware/upload');
-const { createBackupSnapshot, PRE_RESTORE_PREFIX } = require('./scheduler');
+const { createBackupSnapshot, databaseCopiesSettled, PRE_RESTORE_PREFIX } = require('./scheduler');
 const { invalidBackup, notAZip, readDbFacts, latestSchemaVersion, openZip, extractEntry, findDbEntry } = require('./backupArchive');
 const disk = require('../utils/disk');
 const { config } = require('../utils/config');
@@ -179,7 +179,7 @@ function acceptNewerSchema(file) {
     removeJournalFiles(file);
 }
 
-const isDiskFull = (err) => err && (err.code === 'ENOSPC' || (err.errcode & 0xff) === 13 /* SQLITE_FULL from VACUUM INTO */);
+const isDiskFull = (err) => err && (err.code === 'ENOSPC' || (err.errcode & 0xff) === 13 /* SQLITE_FULL from VACUUM INTO or backup() */);
 
 /** Restorable covers next to the archive's manga.db and their (claimed) uncompressed size. */
 function restorableUploads(entries, prefix) {
@@ -266,6 +266,8 @@ async function runRestore(source, { allowNewerSchema = false, preRestoreSnapshot
         }
 
         const safety = preRestoreSnapshot ? await takePreRestoreSnapshot() : null;
+        // a backup copying the live database page by page must finish before the file under it is replaced
+        await databaseCopiesSettled();
         const mangaCount = swapInStagedDb();
         const restoredImagesCount = moveRestoredUploads(stagingDir, images);
         return { mangaCount, restoredImagesCount, preRestoreSnapshot: safety ? safety.filename : null };

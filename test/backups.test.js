@@ -1483,3 +1483,28 @@ test('the live connection waits for locks and caps the WAL file; the daily maint
     assert.equal(scheduler.runDatabaseMaintenanceIfDue(later + 60 * 1000), null, 'not due again on the same connection within a day');
     assert.ok(scheduler.runDatabaseMaintenanceIfDue(later + day + 1), 'due again a day later');
 });
+
+test('a database copy for a backup runs in steps: other work keeps running while it copies', { skip: typeof require('node:sqlite').backup !== 'function' && 'node:sqlite without backup() (Node < 22.16)' }, async () => {
+    seedMangas(4000, 'Kopie');
+    const scheduler = require('../services/scheduler');
+    let ticks = 0;
+    let copying = true;
+    const tick = () => { if (!copying) return; ticks++; setImmediate(tick); };
+    setImmediate(tick);
+    const copy = await scheduler.copyDatabaseToTemp();
+    copying = false;
+    try {
+        assert.ok(ticks > 1, `the event loop ran ${ticks} times during the copy`);
+        const probe = new DatabaseSync(copy, { readOnly: true });
+        try {
+            assert.equal(probe.prepare('SELECT count(*) AS c FROM mangas').get().c, mangaCount());
+            assert.equal(probe.prepare('PRAGMA journal_mode').get().journal_mode, 'delete');
+            assert.equal(probe.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+        } finally {
+            probe.close();
+        }
+        assert.ok(!fs.existsSync(copy + '-wal'));
+    } finally {
+        fs.unlinkSync(copy);
+    }
+});

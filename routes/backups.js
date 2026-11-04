@@ -277,7 +277,7 @@ router.get('/backup', requireAdmin, async (req, res) => {
     const dropCopy = () => { if (dbCopy) { try { fs.unlinkSync(dbCopy); } catch (e) { /* already gone */ } } };
     try {
         // consistent copy of the live database (zipping manga.db directly could catch a write half done)
-        dbCopy = copyDatabaseToTemp();
+        dbCopy = await copyDatabaseToTemp();
         res.on('close', dropCopy);
         const uploads = listUploads();
         const manifest = await manifestForCopy(dbCopy, { category: 'download', uploads });

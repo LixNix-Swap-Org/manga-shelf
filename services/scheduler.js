@@ -2,7 +2,7 @@
 // trash purge, metadata stripping, anime refresh and AniList list sync. Snapshots are ZIPs in data/backups with a JSON sidecar.
 const fs = require('fs');
 const path = require('path');
-const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb, getConnectionGeneration } = require('../db');
+const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb, getConnectionGeneration, ensureDbOpen: liveConnection } = require('../db');
 const log = require('../utils/logger').child('scheduler');
 const { config, ENTRIES, KEEP_ALL } = require('../utils/config');
 const lifecycle = require('./lifecycle');
@@ -219,34 +219,78 @@ function sqlString(value) {
 }
 
 const CACHE_TABLES = ['api_cache', 'manga_passion_cache'];
+// node:sqlite's online backup (Node >= 22.16): copies page by page on the thread pool, so requests keep being answered
+const sqlite = (() => { try { return require('node:sqlite'); } catch (e) { return null; } })();
+const asyncBackup = sqlite && typeof sqlite.backup === 'function' ? sqlite.backup : null;
+const BACKUP_PAGES_PER_STEP = 256;
+
+/** Removes from a database copy what no backup carries: the legacy jwt_secret and the cache tables. */
+function scrubCopy(conn, schemaName = 'main') {
+    const tables = new Set(conn.prepare(`SELECT name FROM ${schemaName}.sqlite_master WHERE type = 'table'`).all().map(r => r.name));
+    if (tables.has('app_settings')) conn.exec(`DELETE FROM ${schemaName}.app_settings WHERE key = 'jwt_secret'`);
+    // answers of external services are fetched again on demand: they only make the archive bigger
+    for (const cache of CACHE_TABLES) if (tables.has(cache)) conn.exec(`DELETE FROM ${schemaName}.${cache}`);
+}
+
+let activeCopies = 0;
+let copiesIdle = [];
+
+/** Resolves once no database copy runs (a restore waits for it before it swaps the file). */
+function databaseCopiesSettled() {
+    return activeCopies === 0 ? Promise.resolve() : new Promise(resolve => copiesIdle.push(resolve));
+}
 
 /**
- * Writes a consistent copy of the live database to a temp file (VACUUM INTO) and returns its path; the caller deletes it.
- * A legacy jwt_secret row in app_settings is removed from the copy (secure_delete), so a backup cannot sign tokens; the
+ * Writes a consistent copy of the live database to a temp file and resolves with its path; the caller deletes it. With
+ * node:sqlite's backup() the copy runs in steps without blocking the server, else (Node < 22.16, better-sqlite3) as one
+ * VACUUM INTO. A legacy jwt_secret row is removed from the copy (secure_delete), so a backup cannot sign tokens; the
  * cache tables are emptied (their zeroed pages compress to almost nothing in the ZIP).
  */
-function copyDatabaseToTemp() {
+async function copyDatabaseToTemp() {
     fs.mkdirSync(tempDir, { recursive: true });
     const target = path.join(tempDir, `backup-db-${Date.now()}-${Math.round(Math.random() * 1e9)}.db`);
-    try {
-        // a VACUUM INTO that fails halfway (disk full) leaves a partial copy and its journal behind
-        db.exec(`VACUUM INTO ${sqlString(target)}`);
-        db.exec(`ATTACH DATABASE ${sqlString(target)} AS backup_copy`);
-        try {
-            db.exec('PRAGMA backup_copy.journal_mode = DELETE');
-            db.exec('PRAGMA backup_copy.secure_delete = ON');
-            const tables = new Set(db.prepare("SELECT name FROM backup_copy.sqlite_master WHERE type = 'table'").all().map(r => r.name));
-            if (tables.has('app_settings')) db.exec("DELETE FROM backup_copy.app_settings WHERE key = 'jwt_secret'");
-            // answers of external services are fetched again on demand: they only make the archive bigger
-            for (const cache of CACHE_TABLES) if (tables.has(cache)) db.exec(`DELETE FROM backup_copy.${cache}`);
-        } finally {
-            db.exec('DETACH DATABASE backup_copy');
-        }
-    } catch (err) {
+    const removeCopy = () => {
         for (const file of [target, target + '-journal', target + '-wal', target + '-shm']) {
             try { fs.unlinkSync(file); } catch (e) { /* not there */ }
         }
+    };
+    activeCopies++;
+    try {
+        const live = liveConnection();
+        if (asyncBackup && live instanceof sqlite.DatabaseSync) {
+            await asyncBackup(live, target, { rate: BACKUP_PAGES_PER_STEP });
+            const copy = openRawDb(target);
+            try {
+                copy.exec('PRAGMA journal_mode = DELETE; PRAGMA secure_delete = ON;');
+                scrubCopy(copy);
+            } finally {
+                copy.close();
+            }
+            for (const file of [target + '-wal', target + '-shm']) {
+                try { fs.unlinkSync(file); } catch (e) { /* not there */ }
+            }
+        } else {
+            // a VACUUM INTO that fails halfway (disk full) leaves a partial copy and its journal behind
+            db.exec(`VACUUM INTO ${sqlString(target)}`);
+            db.exec(`ATTACH DATABASE ${sqlString(target)} AS backup_copy`);
+            try {
+                db.exec('PRAGMA backup_copy.journal_mode = DELETE');
+                db.exec('PRAGMA backup_copy.secure_delete = ON');
+                scrubCopy(db, 'backup_copy');
+            } finally {
+                db.exec('DETACH DATABASE backup_copy');
+            }
+        }
+    } catch (err) {
+        removeCopy();
         throw err;
+    } finally {
+        activeCopies--;
+        if (activeCopies === 0) {
+            const waiting = copiesIdle;
+            copiesIdle = [];
+            for (const resolve of waiting) resolve();
+        }
     }
     return target;
 }
@@ -305,7 +349,7 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup', { includeUplo
     const dbBytes = disk.fileSize(dbPath) + disk.fileSize(dbPath + '-wal');
     disk.ensureFreeSpace(backupsDir, Math.ceil(SNAPSHOT_SPACE_FACTOR * (dbBytes + uploadBytes)), 'snapshot');
 
-    const dbCopy = copyDatabaseToTemp();
+    const dbCopy = await copyDatabaseToTemp();
     const created = new Date();
     const filename = `${prefix}-${created.toISOString().replace(/[:.]/g, '-')}.zip`;
     const category = categoryOf(filename);
@@ -624,6 +668,7 @@ module.exports = {
     categoryOf,
     retentionFor,
     copyDatabaseToTemp,
+    databaseCopiesSettled,
     createBackupSnapshot,
     listSnapshots,
     lastVerifiedSnapshot,
