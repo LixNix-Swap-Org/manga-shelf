@@ -769,6 +769,9 @@
   "Diese ISBN gehört zu „{title}“.": "该 ISBN 属于“{title}”。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "该 ISBN 对应收藏中的另一个系列。",
   "Diese Prüfung gilt bis {expires} Uhr.": "本次检查在 {expires} 前有效。",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "other": "该系列共 {n} 话，不能再多。"
+  },
   "Diese Reihe ist nicht in der Sammlung.": "该系列不在收藏中。",
   "Diese Reihe sammelst du nicht mehr": "你已不再收集该系列",
   "Diese Reihe steht auf deiner Wunschliste": "该系列在你的愿望清单中",
@@ -788,6 +791,9 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "你的收藏中缺少这一卷。你想如何登记第 {number} 卷？",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "该卷尚未登记到系列中。",
   "Dieser Benutzername existiert bereits": "该用户名已存在",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "other": "该条目共 {n} 集，不能再多。"
+  },
   "Dieser Eintrag ist schon in der Liste": "此条目已在列表中",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "该条目刚刚更新过。请在 {seconds} 秒后重试。",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "该漫画不存在或已被删除。",
@@ -3264,6 +3270,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "要将“{title}”移到“{shelf}”吗？看不到该书架的人会失去他们在此系列上的拥有标记和已读标记：{people}。之后无人拥有的卷会算作“缺失”。此操作无法撤销。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "要将“{title}”移到“{shelf}”吗？看不到该书架的人会失去他们在此系列上的拥有标记和已读标记；之后无人拥有的卷会算作“缺失”。此操作无法撤销。",
   "„{title}“ nicht mehr im Besitz": "不再拥有“{title}”",
+  "„{title}“ steht schon in deiner Sammlung.": "“{title}”已在你的收藏中。",
   "„{title}“ wiederhergestellt": "已恢复“{title}”",
   "„{title}“ {entry} endgültig löschen": "永久删除“{title}”（{entry}）",
   "„{title}“ {entry} wiederherstellen": "恢复“{title}”（{entry}）",

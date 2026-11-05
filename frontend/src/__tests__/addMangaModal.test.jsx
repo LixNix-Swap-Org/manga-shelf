@@ -532,3 +532,40 @@ describe('AddMangaModal: phones', () => {
     expect(document.getElementById('btn-close-add-modal-x').className).toContain('hit-44');
   });
 });
+
+describe('AddMangaModal: same title already in the collection', () => {
+  const collection = [
+    { id: 4, title: 'Berserk', alt_title: 'ベルセルク', language: 'de', format: 'print' },
+    { id: 5, title: 'Solo Leveling', language: 'de', format: 'webtoon' },
+    { id: 6, title: 'Frieren', language: 'en', format: 'print' }
+  ];
+
+  it('sameTitleSeries matches title or alternative title after folding, only in the same language and format', async () => {
+    const { sameTitleSeries } = await import('../components/modals/AddMangaModal');
+    const ids = (form) => sameTitleSeries(collection, { language: 'de', format: 'print', ...form }).map((m) => m.id);
+    expect(ids({ title: '  berserk ' })).toEqual([4]);
+    expect(ids({ title: 'ベルセルク' })).toEqual([4]);
+    expect(ids({ title: 'Berserk Deluxe' })).toEqual([]);
+    expect(ids({ title: 'Solo Leveling' })).toEqual([]);
+    expect(ids({ title: 'Solo Leveling', format: 'webtoon' })).toEqual([5]);
+    expect(ids({ title: 'Frieren' })).toEqual([]);
+    expect(ids({ title: 'Frieren', language: 'en' })).toEqual([6]);
+    expect(ids({ title: '' })).toEqual([]);
+    expect(sameTitleSeries(null, { title: 'Berserk' })).toEqual([]);
+  });
+
+  it('shows a hint that leads to the series; creating stays possible; leaving asks about the typed input', async () => {
+    mockFetch({});
+    render(<ConfirmHost />);
+    const onOpenExisting = vi.fn();
+    const { onClose } = renderModal({ mangas: collection, onOpenExisting });
+    expect(screen.queryByText(/steht schon in deiner Sammlung/)).toBeNull();
+    fireEvent.change(titleInput(), { target: { value: 'Berserk' } });
+    expect(screen.getByRole('status').textContent).toContain('„Berserk“ steht schon in deiner Sammlung.');
+    expect(submitButton().disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Reihe' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(onOpenExisting).toHaveBeenCalledWith(collection[0]));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

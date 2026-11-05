@@ -97,6 +97,7 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
   const seeded = useRef(null);
   if (seeded.current === null) seeded.current = formValues(progress, defaultVisibility);
   const [episodes, setEpisodes] = useState(seeded.current.episodes);
+  const [capped, setCapped] = useState(false);
   const [status, setStatus] = useState(seeded.current.status);
   const [score, setScore] = useState(seeded.current.score);
   const [notes, setNotes] = useState(seeded.current.notes);
@@ -138,6 +139,7 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
   const clamp = (n) => Math.max(0, max ? Math.min(max, n) : n);
   const save = (e) => {
     e.preventDefault();
+    setCapped(false);
     const change = {};
     if (episodes !== (progress?.episodes_watched ?? 0)) change.episodes_watched = Number(episodes) || 0;
     if (status !== (progress?.status || 'Geplant')) change.status = status; // i18n-ignore: stored value
@@ -160,12 +162,19 @@ function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyChange, d
         {!movie && <div>
           <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired }) : t('Gesehene Folgen')}</label>
           <div className="flex items-center gap-1">
-            <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => setEpisodes((n) => clamp(Number(n) - 1))}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
+            <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => { setCapped(false); setEpisodes((n) => clamp(Number(n) - 1)); }}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             <input id={`${ids}-ep`} type="number" min="0" max={max} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}
-              onChange={(e) => setEpisodes(e.target.value === '' ? '' : clamp(parseInt(e.target.value, 10) || 0))} />
+              aria-describedby={capped ? `${ids}-ep-capped` : undefined}
+              onChange={(e) => {
+                const n = e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0;
+                // a number above the episode count is cut to it, and the hint says so (same rule as the chapter field)
+                setCapped(Boolean(max) && n !== '' && n > max);
+                setEpisodes(n === '' ? '' : clamp(n));
+              }} />
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge mehr')} onClick={() => setEpisodes((n) => clamp(Number(n) + 1))}><Plus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             {episodeAt && <span className="text-xs font-mono text-slate-300 ml-1">{episodeAt}</span>}
           </div>
+          {capped && <p id={`${ids}-ep-capped`} role="status" className="text-[11px] text-amber-300 mt-1">{tn('Dieser Eintrag hat {n} Folge – mehr geht nicht.', 'Dieser Eintrag hat {n} Folgen – mehr geht nicht.', max)}</p>}
         </div>}
         <div>
           <label htmlFor={`${ids}-status`} className="block text-[11px] text-slate-400 mb-1">{t('Status')}</label>

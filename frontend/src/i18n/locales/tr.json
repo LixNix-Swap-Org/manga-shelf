@@ -785,6 +785,10 @@
   "Diese ISBN gehört zu „{title}“.": "Bu ISBN “{title}” serisine ait.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Bu ISBN koleksiyondaki başka bir seriyle eşleşiyor.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Bu kontrol {expires} saatine kadar geçerli.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Bu seride {n} bölüm var – daha fazlası olmaz.",
+    "other": "Bu seride {n} bölüm var – daha fazlası olmaz."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Bu seri koleksiyonda değil.",
   "Diese Reihe sammelst du nicht mehr": "Bu seriyi artık toplamıyorsun",
   "Diese Reihe steht auf deiner Wunschliste": "Bu seri istek listende",
@@ -804,6 +808,10 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Bu cilt koleksiyonunda eksik. {number}. cildi nasıl eklemek istersin?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Bu cilt seriye henüz eklenmemiş.",
   "Dieser Benutzername existiert bereits": "Bu kullanıcı adı zaten var",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Bu kayıtta {n} bölüm var – daha fazlası olmaz.",
+    "other": "Bu kayıtta {n} bölüm var – daha fazlası olmaz."
+  },
   "Dieser Eintrag ist schon in der Liste": "Bu kayıt zaten listede",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Bu kayıt az önce güncellendi. Lütfen {seconds} sn sonra tekrar dene.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Bu manga yok veya silinmiş.",
@@ -3358,6 +3366,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "“{title}”, “{shelf}” rafına taşınsın mı? O rafı görmeyenler, serideki sahiplik ve okuma işaretlerini kaybeder: {people}. Bundan sonra kimsenin sahip olmadığı ciltler “Eksik” sayılır. Bu işlem geri alınamaz.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "“{title}”, “{shelf}” rafına taşınsın mı? O rafı görmeyenler, serideki sahiplik ve okuma işaretlerini kaybeder; bundan sonra kimsenin sahip olmadığı ciltler “Eksik” sayılır. Bu işlem geri alınamaz.",
   "„{title}“ nicht mehr im Besitz": "“{title}” artık sahip olunmuyor",
+  "„{title}“ steht schon in deiner Sammlung.": "“{title}” zaten koleksiyonunda.",
   "„{title}“ wiederhergestellt": "“{title}” geri yüklendi",
   "„{title}“ {entry} endgültig löschen": "“{title}” {entry} kalıcı olarak sil",
   "„{title}“ {entry} wiederherstellen": "“{title}” {entry} geri yükle",

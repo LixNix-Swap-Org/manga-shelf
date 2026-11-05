@@ -4,9 +4,11 @@
 
 ### Series
 - **No more lost input when closing "Neuen Manga anlegen":** Back, Escape, a click on the backdrop, "Abbrechen" and the X now ask "Ungespeicherte Änderungen verwerfen?" once something was typed or picked. A dialog opened by a scan or from the online results and left untouched still closes at once.
+- **Same title already there:** while you type a title in "Neuen Manga anlegen" that the collection already has in the same language and format (title or alternative title, case and accents ignored), a hint says so and "Zur Reihe" opens that series. Creating a second edition stays possible.
 
 ### Webtoons
 - **Fast "+1" taps count:** every tap on "+1" in the chapter panel now counts. The chapter goes up at once, and taps within a short pause are saved together (one undo for all of them). Taps during a running save follow right after it, and leaving the page inside the pause still saves them.
+- **One rule for numbers above the total:** "Gelesen bis Kapitel" and "Gesehene Folgen" in the anime detail both cut a number above the known total to the total and say so below the field ("Diese Reihe hat 200 Kapitel – mehr geht nicht."). Before, the anime field cut it without a word and the chapter field showed the browser's own message.
 
 ## 3.6.0
 

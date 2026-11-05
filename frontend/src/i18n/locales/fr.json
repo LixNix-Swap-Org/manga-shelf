@@ -801,6 +801,11 @@
   "Diese ISBN gehört zu „{title}“.": "Cet ISBN correspond à « {title} ».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Cet ISBN correspond à une autre série de la collection.",
   "Diese Prüfung gilt bis {expires} Uhr.": "Cette vérification est valable jusqu'à {expires}.",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "one": "Cette série a {n} chapitre – pas plus.",
+    "many": "Cette série a {n} de chapitres – pas plus.",
+    "other": "Cette série a {n} chapitres – pas plus."
+  },
   "Diese Reihe ist nicht in der Sammlung.": "Cette série n'est pas dans la collection.",
   "Diese Reihe sammelst du nicht mehr": "Tu ne collectionnes plus cette série",
   "Diese Reihe steht auf deiner Wunschliste": "Cette série est dans ta liste de souhaits",
@@ -820,6 +825,11 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "Ce tome manque dans ta collection. Comment veux-tu enregistrer le tome {number} ?",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "Ce tome n'est pas encore enregistré dans la série.",
   "Dieser Benutzername existiert bereits": "Ce nom d'utilisateur existe déjà",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "one": "Cette entrée a {n} épisode – pas plus.",
+    "many": "Cette entrée a {n} d’épisodes – pas plus.",
+    "other": "Cette entrée a {n} épisodes – pas plus."
+  },
   "Dieser Eintrag ist schon in der Liste": "Cette entrée est déjà dans la liste",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "Cette entrée vient d'être actualisée. Réessaie dans {seconds} s.",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "Ce manga n'existe pas ou a été supprimé.",
@@ -3452,6 +3462,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Déplacer « {title} » vers « {shelf} » ? Les personnes qui ne voient pas cette étagère perdent leurs marques de possession et de lecture sur la série : {people}. Les tomes que plus personne ne possède ensuite passent au statut « Manquant ». Cette action est irréversible.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "Déplacer « {title} » vers « {shelf} » ? Les personnes qui ne voient pas cette étagère perdent leurs marques de possession et de lecture sur la série ; les tomes que plus personne ne possède ensuite passent au statut « Manquant ». Cette action est irréversible.",
   "„{title}“ nicht mehr im Besitz": "« {title} » n'est plus possédé",
+  "„{title}“ steht schon in deiner Sammlung.": "« {title} » est déjà dans ta collection.",
   "„{title}“ wiederhergestellt": "« {title} » restauré",
   "„{title}“ {entry} endgültig löschen": "Supprimer définitivement {entry} de « {title} »",
   "„{title}“ {entry} wiederherstellen": "Restaurer {entry} de « {title} »",

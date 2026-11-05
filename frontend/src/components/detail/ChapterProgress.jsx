@@ -42,6 +42,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
   const read = stored.read + (total > 0 ? Math.min(sending + pending, Math.max(0, total - stored.read)) : sending + pending);
   const { pct } = getChapterProgress({ chapters_read: read, total_chapters: total });
   const [draft, setDraft] = useState(stored.read ? String(stored.read) : '');
+  const [capped, setCapped] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setDraft(stored.read ? String(stored.read) : ''); }, [stored.read]);
   const others = (manga.chapter_progress || []).filter((p) => p.user_id !== user?.id);
@@ -107,6 +108,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
 
   const submit = (e) => {
     e.preventDefault();
+    setCapped(false);
     const text = draft.trim();
     const value = text === '' ? 0 : Number(text);
     if (!Number.isInteger(value) || value < 0 || value > MAX_CHAPTERS) {
@@ -172,9 +174,17 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
                 step="1"
                 className="input-field w-28"
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                aria-describedby={capped ? `${ids}-capped` : undefined}
+                onChange={(e) => {
+                  // a number above the known chapter count is cut to it, and the hint says so (same rule as the anime episodes)
+                  const n = Number(e.target.value);
+                  const over = total > 0 && e.target.value.trim() !== '' && Number.isFinite(n) && n > total;
+                  setCapped(over);
+                  setDraft(over ? String(total) : e.target.value);
+                }}
                 disabled={busy}
               />
+              {capped && <p id={`${ids}-capped`} role="status" className="text-[11px] text-amber-300 mt-1">{tn('Diese Reihe hat {n} Kapitel – mehr geht nicht.', 'Diese Reihe hat {n} Kapitel – mehr geht nicht.', total)}</p>}
             </div>
             <button type="submit" className="btn-secondary text-sm py-2.5 px-3" disabled={busy}>{t('Speichern')}</button>
           </form>

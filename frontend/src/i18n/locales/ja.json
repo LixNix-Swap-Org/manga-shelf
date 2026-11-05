@@ -769,6 +769,9 @@
   "Diese ISBN gehört zu „{title}“.": "このISBNは「{title}」のものです。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "このISBNは、コレクション内の別のシリーズに一致します。",
   "Diese Prüfung gilt bis {expires} Uhr.": "この確認は{expires}まで有効です。",
+  "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
+    "other": "このシリーズは全{n}話です。それ以上は入力できません。"
+  },
   "Diese Reihe ist nicht in der Sammlung.": "このシリーズはコレクションにありません。",
   "Diese Reihe sammelst du nicht mehr": "このシリーズはもう集めていません",
   "Diese Reihe steht auf deiner Wunschliste": "このシリーズはウィッシュリストにあります",
@@ -788,6 +791,9 @@
   "Dieser Band fehlt in deiner Sammlung. Wie möchtest du Band {number} erfassen?": "この巻はコレクションにありません。{number}巻をどのように登録しますか？",
   "Dieser Band ist in der Reihe noch nicht erfasst.": "この巻はまだシリーズに登録されていません。",
   "Dieser Benutzername existiert bereits": "このユーザー名はすでに存在します",
+  "Dieser Eintrag hat {n} Folge – mehr geht nicht.|Dieser Eintrag hat {n} Folgen – mehr geht nicht.": {
+    "other": "このエントリーは全{n}話です。それ以上は入力できません。"
+  },
   "Dieser Eintrag ist schon in der Liste": "この項目はすでにリストにあります",
   "Dieser Eintrag wurde gerade aktualisiert. Bitte in {seconds} s erneut versuchen.": "この項目は先ほど更新されました。{seconds}秒後にもう一度お試しください。",
   "Dieser Manga existiert nicht oder wurde gelöscht.": "このマンガは存在しないか、削除されました。",
@@ -3264,6 +3270,7 @@
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "「{title}」を「{shelf}」に移動しますか？その本棚を見られない人は、このシリーズの所持・既読の印を失います: {people}。その後だれも所持していない巻は「未所持」になります。この操作は元に戻せません。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.": "「{title}」を「{shelf}」に移動しますか？その本棚を見られない人は、このシリーズの所持・既読の印を失います。その後だれも所持していない巻は「未所持」になります。この操作は元に戻せません。",
   "„{title}“ nicht mehr im Besitz": "「{title}」を所持しなくなりました",
+  "„{title}“ steht schon in deiner Sammlung.": "「{title}」はすでにコレクションにあります。",
   "„{title}“ wiederhergestellt": "「{title}」を復元しました",
   "„{title}“ {entry} endgültig löschen": "「{title}」の{entry}を完全に削除",
   "„{title}“ {entry} wiederherstellen": "「{title}」の{entry}を復元",
