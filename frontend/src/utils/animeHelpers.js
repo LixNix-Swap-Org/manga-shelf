@@ -259,6 +259,25 @@ export function withProgress(anime, progress, user) {
 }
 
 /**
+ * Whether a saved change was "Geplant" alone that the server answered by resetting watched episodes to 0 (the rule of
+ * writeProgress). Undo paths (`restore`) and an explicit counter do not count: the user asked for that number.
+ */
+export function resetByPlanned(before, change, saved) {
+  return Boolean(before && saved && change && !change.restore
+    && change.status === 'Geplant' && change.episodes_watched === undefined && change.watched_episodes === undefined
+    && (before.episodes_watched || 0) > 0 && saved.status === 'Geplant' && (saved.episodes_watched || 0) === 0);
+}
+
+/** The change that puts `before` back after resetByPlanned: status, counter, single episodes and their ratings. */
+export function resetUndoChange(before) {
+  return {
+    status: before.status, episodes_watched: before.episodes_watched || 0, restore: true,
+    ...(before.watched_episodes !== undefined ? { watched_episodes: before.watched_episodes } : {}),
+    ...(before.episode_scores !== undefined ? { episode_scores: before.episode_scores } : {})
+  };
+}
+
+/**
  * `progress` with the episodes of `list` marked as watched, by the server's rule (episodeMarks.withEpisodes): { marks, count }
  * with `marks` null for the plain counter, which past MAX_MARKS runs up to the highest episode of the union.
  */

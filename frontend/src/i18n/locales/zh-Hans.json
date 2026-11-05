@@ -3159,6 +3159,9 @@
   "{title}: komplett gesehen": "{title}：已全部看完",
   "{title}: welche Folge?": "{title}：看到哪一集？",
   "{title}: zugeordnet": "{title}：已匹配",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "other": "{title}：已重置 {n} 集已看剧集"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "已用官方数据更新 {updated}/{volumes}。",
   "{username} (du)": "{username}（你）",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

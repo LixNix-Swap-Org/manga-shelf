@@ -3329,6 +3329,11 @@
   "{title}: komplett gesehen": "{title}: assistido por completo",
   "{title}: welche Folge?": "{title}: qual episódio?",
   "{title}: zugeordnet": "{title}: associado",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "many": "{title}: {n} de episódios assistidos redefinidos",
+    "one": "{title}: {n} episódio assistido redefinido",
+    "other": "{title}: {n} episódios assistidos redefinidos"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} de {volumes} atualizados com dados oficiais.",
   "{username} (du)": "{username} (você)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

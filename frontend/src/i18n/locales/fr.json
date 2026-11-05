@@ -3329,6 +3329,11 @@
   "{title}: komplett gesehen": "{title} : vu en entier",
   "{title}: welche Folge?": "{title} : quel épisode ?",
   "{title}: zugeordnet": "{title} : associé",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "many": "{title} : {n} d’épisodes vus réinitialisés",
+    "one": "{title} : {n} épisode vu réinitialisé",
+    "other": "{title} : {n} épisodes vus réinitialisés"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{updated} sur {volumes} mis à jour avec les données officielles.",
   "{username} (du)": "{username} (toi)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {

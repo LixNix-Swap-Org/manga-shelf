@@ -3159,6 +3159,9 @@
   "{title}: komplett gesehen": "{title}: 全話視聴済み",
   "{title}: welche Folge?": "{title}: 何話ですか？",
   "{title}: zugeordnet": "{title}: 割り当てました",
+  "{title}: {n} gesehene Folge zurückgesetzt|{title}: {n} gesehene Folgen zurückgesetzt": {
+    "other": "{title}: 視聴済みの{n}話をリセットしました"
+  },
   "{updated} von {volumes} mit offiziellen Daten aktualisiert.": "{volumes}のうち{updated}巻を公式データで更新しました。",
   "{username} (du)": "{username}(あなた)",
   "{username}: {status}, {n} Folgen|{username}: {status}, {n} Folgen": {
