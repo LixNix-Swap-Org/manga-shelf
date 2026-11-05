@@ -774,6 +774,38 @@ function migrationList(log = silentLog) {
                     END;
                 `);
             }
+        },
+        {
+            version: 39,
+            name: 'add_data_versions',
+            up: (d) => {
+                // One counter per area that triggers raise on every row written there (any connection): the ETags of the
+                // collection endpoints follow it instead of every write of the database (caches, feeds, sessions)
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS data_versions (scope TEXT PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0);
+                    INSERT OR IGNORE INTO data_versions (scope, version) VALUES ('collection', 0), ('anime', 0);
+                `);
+                const areas = {
+                    collection: ['mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress', 'shelves', 'shelf_members', 'users'],
+                    anime: ['animes', 'anime_progress']
+                };
+                for (const [scope, tables] of Object.entries(areas)) {
+                    for (const table of tables) {
+                        for (const [suffix, event] of [['ins', 'INSERT'], ['upd', 'UPDATE'], ['del', 'DELETE']]) {
+                            d.exec(`CREATE TRIGGER IF NOT EXISTS trg_dv_${table}_${suffix} AFTER ${event} ON ${table} BEGIN
+                                UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
+                            END;`);
+                        }
+                    }
+                }
+                // the collection start date is part of GET /stats
+                for (const [suffix, event, row] of [['ins', 'INSERT', 'NEW'], ['upd', 'UPDATE', 'NEW'], ['del', 'DELETE', 'OLD']]) {
+                    d.exec(`CREATE TRIGGER IF NOT EXISTS trg_dv_app_settings_${suffix} AFTER ${event} ON app_settings
+                        WHEN ${row}.key = 'collection_start_date' BEGIN
+                            UPDATE data_versions SET version = version + 1 WHERE scope = 'collection';
+                        END;`);
+                }
+            }
         }
     ];
 }
@@ -834,10 +866,14 @@ function runSequentialMigrations(database, options = {}) {
     if (options.beforeMigrations) options.beforeMigrations(database, pending);
 
     const totalChanges = () => database.prepare('SELECT total_changes() AS n').get().n;
+    // every row a migration writes in a versioned table also raises a data_versions counter (migration 39): not counted
+    const versionBumps = () => (database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'data_versions'").get()
+        ? database.prepare('SELECT COALESCE(SUM(version), 0) AS n FROM data_versions').get().n : 0);
     const report = [];
     for (const mig of pending) {
         const started = Date.now();
         const changesBefore = totalChanges();
+        const bumpsBefore = versionBumps();
         database.exec('BEGIN TRANSACTION;');
         try {
             mig.up(database);
@@ -848,8 +884,8 @@ function runSequentialMigrations(database, options = {}) {
             log.error(`[Database Migration] Failed migration v${mig.version} (${mig.name}):`, err);
             throw err;
         }
-        // minus the schema_migrations row itself
-        const entry = { version: mig.version, name: mig.name, changes: totalChanges() - changesBefore - 1, ms: Date.now() - started };
+        // minus the schema_migrations row itself and the counter updates of the data version triggers
+        const entry = { version: mig.version, name: mig.name, changes: totalChanges() - changesBefore - 1 - (versionBumps() - bumpsBefore), ms: Date.now() - started };
         report.push(entry);
         if (fresh) continue;
         log.info(`[Database Migration] v${entry.version} ${entry.name}: ${entry.changes.toLocaleString('de-DE')} Zeilen geändert, ${entry.ms} ms`);

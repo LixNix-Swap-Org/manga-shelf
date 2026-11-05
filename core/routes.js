@@ -67,7 +67,8 @@ const routes = [
     { method: 'POST', path: '/volumes/batch-read', role: 'editor', handler: reads.batchRead },
     { method: 'GET', path: '/volumes/lookup', role: 'editor', limit: 'lookup', handler: mangaPassion.volumeLookup },
 
-    { method: 'GET', path: '/stats', role: 'auth', conditional: true, handler: stats.stats },
+    // the anime block of /stats follows the anime list
+    { method: 'GET', path: '/stats', role: 'auth', conditional: { scopes: ['collection', 'anime'] }, handler: stats.stats },
     { method: 'PUT', path: '/stats/settings', role: 'admin', handler: (ctx, input) => stats.clearStartDate(ctx, input) || settings.updateSettings(ctx, input) },
     { method: 'GET', path: '/users/:id/stats', role: 'auth', handler: reads.userStats },
     { method: 'GET', path: '/stats/reading', role: 'auth', handler: stats.reading },
