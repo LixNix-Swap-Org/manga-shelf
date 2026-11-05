@@ -36,7 +36,7 @@ test('parseId takes a safe positive integer or a plain digit string, nothing els
     }
 });
 
-test('scopedCtx refuses statements it cannot confine to the shelves and scopes the ones it can', () => {
+test('scopedCtx: only reads, protected tables only as {tokens} (bare, quoted, main., comma joins refused)', () => {
     const conn = new DatabaseSync(':memory:');
     applySchema(conn);
     conn.exec(`
@@ -49,23 +49,37 @@ test('scopedCtx refuses statements it cannot confine to the shelves and scopes t
     `);
     const scoped = access.scopedCtx(createCtx({ db: dbFromConnection(conn) }), [2]).db;
     for (const sql of [
+        // writes
         "UPDATE volumes SET status = 'Vorhanden'",
-        'UPDATE volumes SET purchase_date = (SELECT MIN(purchase_date) FROM volume_owners vo WHERE vo.volume_id = volumes.id) WHERE id = ?',
+        "UPDATE {volumes} SET status = 'Vorhanden' WHERE id = 1",
         'DELETE FROM volumes WHERE id = ?',
         "INSERT INTO volumes (manga_id, volume_number) VALUES (1, '2')",
+        // a protected table named any other way than as its token
         'SELECT count(*) AS n FROM volume_reads WHERE user_id = ?',
         'SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1',
         'SELECT count(*) AS n FROM chapter_progress WHERE user_id = ?',
-        'SELECT count(*) AS n FROM trash'
+        'SELECT count(*) AS n FROM trash',
+        'SELECT id FROM mangas',
+        'SELECT count(*) AS n FROM {volume_reads} vr JOIN volumes v ON v.id = vr.volume_id',
+        'SELECT m.id FROM {mangas} m, volumes v WHERE v.manga_id = m.id',
+        'SELECT id FROM "mangas"',
+        'SELECT id FROM `mangas`',
+        'SELECT id FROM [mangas]',
+        'SELECT id FROM main.mangas',
+        "SELECT name FROM sqlite_master WHERE name = 'mangas'",
+        'SELECT 1 AS volumes FROM {mangas}'
     ]) {
         assert.throws(() => scoped.prepare(sql), /scopedCtx/, sql);
     }
-    assert.equal(scoped.prepare('SELECT count(*) AS n FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id WHERE vr.user_id = ?').get(1).n, 1);
-    assert.equal(scoped.prepare('SELECT SUM(cp.chapters_read) AS n FROM chapter_progress cp JOIN mangas m ON m.id = cp.manga_id WHERE cp.user_id = ?').get(1).n, 20,
-        'chapter progress only through the series of the shelves');
-    assert.deepEqual(scoped.prepare('SELECT id FROM mangas').all().map(r => r.id), [2]);
-    assert.equal(scoped.prepare("UPDATE mangas SET title = 'X' WHERE title IS NOT NULL").run().changes, 1);
-    assert.deepEqual(conn.prepare('SELECT title FROM mangas ORDER BY id').all().map(r => r.title), ['Eins', 'X']);
+    assert.equal(scoped.prepare('SELECT count(*) AS n FROM {volume_reads} WHERE user_id = ?').get(1).n, 1);
+    assert.equal(scoped.prepare('SELECT count(*) AS n FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id WHERE vr.user_id = ?').get(1).n, 1);
+    assert.equal(scoped.prepare('SELECT SUM(chapters_read) AS n FROM {chapter_progress} WHERE user_id = ?').get(1).n, 20,
+        'chapter progress only of the series of the shelves');
+    assert.deepEqual(scoped.prepare('SELECT id FROM {mangas}').all().map(r => r.id), [2]);
+    // columns and aliases that merely contain a table name are fine
+    assert.equal(scoped.prepare('SELECT count(*) AS owned_volumes, MAX(m.total_volumes) AS total_volumes FROM {mangas} m').get().owned_volumes, 1);
+    // no shelf at all: every token matches nothing
+    assert.equal(access.scopedCtx(createCtx({ db: dbFromConnection(conn) }), []).db.prepare('SELECT count(*) AS n FROM {volumes}').get().n, 0);
 });
 
 const kinds = SQL_JS ? Object.keys(ADAPTERS) : ['node:sqlite'];

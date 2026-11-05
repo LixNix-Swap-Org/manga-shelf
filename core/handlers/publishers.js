@@ -15,10 +15,10 @@ function list(realCtx) {
         entry[field] += count;
         byName.set(name, entry);
     };
-    for (const r of ctx.db.prepare("SELECT publisher AS name, count(*) AS n FROM mangas WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher").all()) {
+    for (const r of ctx.db.prepare("SELECT publisher AS name, count(*) AS n FROM {mangas} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher").all()) {
         add(r.name, 'series_count', r.n);
     }
-    for (const r of ctx.db.prepare("SELECT publisher AS name, count(*) AS n FROM volumes WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher").all()) {
+    for (const r of ctx.db.prepare("SELECT publisher AS name, count(*) AS n FROM {volumes} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' GROUP BY publisher").all()) {
         add(r.name, 'volume_count', r.n);
     }
     const publishers = [...byName.values()]

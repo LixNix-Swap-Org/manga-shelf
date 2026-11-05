@@ -4,6 +4,7 @@ const { normalizePublisher } = require('./lib/publishers');
 const { normalizeIsbn } = require('./lib/isbn');
 const { titleKey } = require('./mangaPassion/classify');
 const { credentialsOf } = require('./sources/credentials');
+const { inShelves } = require('./lib/access');
 
 const log = (ctx) => ctx.log.child('isbn-lookup');
 
@@ -405,20 +406,23 @@ function exactMatchRank(book, manga) {
 
 const MIN_LEAD = 15;
 const VOLUME_COLUMNS = 'id, manga_id, volume_number, status, isbn, price, publisher, pages, release_year';
+const VOLUME_COLUMNS_V = VOLUME_COLUMNS.split(', ').map(c => `v.${c}`).join(', ');
 
 // Finds the series / volume of the collection a book belongs to: the same ISBN on a stored volume (certain), else the
 // best clearly standing-out title match (exact hits ranked own title, alt title, publisher; a tie gives candidates),
 // then the volume by number, only when the catalogue really knew it. Returns { manga, volume, reason, candidates,
 // number_in_title }; number_in_title = the number is part of the series name ("Eyeshield 21"), so the volume is unknown.
-function matchCollection(db, book, isbn13) {
-    const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS} FROM volumes WHERE isbn = ? ORDER BY id LIMIT 1`).get(isbn13) : null;
+function matchCollection(db, book, isbn13, shelfIds = null) {
+    // shelfIds limits the match to these shelves (null: the whole database)
+    const scope = shelfIds ? inShelves('m.shelf_id', shelfIds) : { sql: '1', params: [] };
+    const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS_V} FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.isbn = ? AND ${scope.sql} ORDER BY v.id LIMIT 1`).get(isbn13, ...scope.params) : null;
     if (byIsbn) {
         const manga = db.prepare('SELECT id, title, alt_title, publisher, cover_image, currency FROM mangas WHERE id = ?').get(byIsbn.manga_id);
         return { manga: manga || null, volume: byIsbn, reason: 'isbn', candidates: [], number_in_title: false };
     }
 
     const bookPublisher = normalizePublisher(book.publisher);
-    const scored = db.prepare('SELECT id, title, alt_title, publisher, cover_image, currency FROM mangas ORDER BY id').all()
+    const scored = db.prepare(`SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.currency FROM mangas m WHERE ${scope.sql} ORDER BY m.id`).all(...scope.params)
         .map(m => ({
             manga: m,
             score: titleMatchScore([book.series, book.title], m),
