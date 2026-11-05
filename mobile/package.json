@@ -22,14 +22,14 @@
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^7.1.6",
     "@capacitor-mlkit/barcode-scanning": "^7.5.0",
-    "@capacitor/android": "^7.6.9",
+    "@capacitor/android": "^7.6.10",
     "@capacitor/app": "^7.1.2",
     "@capacitor/app-launcher": "^7.0.4",
     "@capacitor/browser": "^7.0.5",
-    "@capacitor/core": "^7.6.9",
+    "@capacitor/core": "^7.6.10",
     "@capacitor/filesystem": "^7.1.9",
     "@capacitor/haptics": "^7.0.5",
-    "@capacitor/ios": "^7.6.9",
+    "@capacitor/ios": "^7.6.10",
     "@capacitor/local-notifications": "^7.0.7",
     "@capacitor/network": "^7.0.4",
     "@capacitor/preferences": "^7.0.4",
@@ -38,7 +38,7 @@
     "mangashelf-native": "file:plugins/mangashelf-native"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.6.9",
+    "@capacitor/cli": "^7.6.10",
     "esbuild": "^0.28.2",
     "typescript": "^5.6.0"
   }
