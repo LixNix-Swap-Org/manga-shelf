@@ -135,6 +135,7 @@
   "Alle gelesenen Bände anzeigen": "既読の巻をすべて表示",
   "Alle haben ihn gesehen": "全員が視聴済み",
   "Alle im Abschnitt gesehen": "この区間をすべて視聴済みに",
+  "Alle im Anime-Tab": "アニメタブですべて表示",
   "Alle mit Namen": "全員に名前付きで",
   "Alle {count} anzeigen": "{count}件すべて表示",
   "Alle {visible} ({count})": "{visible}件すべて({count})",
@@ -1294,6 +1295,7 @@
   "In Ordnung": "正常",
   "In Ordnung: {checks}": "正常: {checks}",
   "In Originalgröße in neuem Tab öffnen": "元のサイズで新しいタブに開く",
+  "In deiner Anime-Liste": "あなたのアニメリスト",
   "In deiner Liste": "リストにあります",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "設定の「API」で、非商用利用向けのキーを申請します。",
   "In der Anime-Liste suchen...": "アニメリストで検索...",
@@ -3116,6 +3118,9 @@
   },
   "{n} Tag|{n} Tage": {
     "other": "{n}日"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "other": "{n}件"
   },
   "{n} abgeschlossen": "{n}件完結",
   "{n} eigene Staffel|{n} eigene Staffeln": {

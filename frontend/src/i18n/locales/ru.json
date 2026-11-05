@@ -144,6 +144,7 @@
   "Alle gelesenen Bände anzeigen": "Показать все прочитанные тома",
   "Alle haben ihn gesehen": "Все посмотрели",
   "Alle im Abschnitt gesehen": "Весь раздел просмотрен",
+  "Alle im Anime-Tab": "Все во вкладке «Аниме»",
   "Alle mit Namen": "Все, с моим именем",
   "Alle {count} anzeigen": "Показать все {count}",
   "Alle {visible} ({count})": "Все {visible} ({count})",
@@ -1369,6 +1370,7 @@
   "In Ordnung": "В порядке",
   "In Ordnung: {checks}": "В порядке: {checks}",
   "In Originalgröße in neuem Tab öffnen": "Открыть в исходном размере в новой вкладке",
+  "In deiner Anime-Liste": "В вашем списке аниме",
   "In deiner Liste": "В вашем списке",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "В настройках в разделе «API» запросите ключ для некоммерческого использования.",
   "In der Anime-Liste suchen...": "Искать в списке аниме...",
@@ -3362,6 +3364,12 @@
     "few": "{n} дня",
     "many": "{n} дней",
     "other": "{n} дня"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} совпадение",
+    "few": "{n} совпадения",
+    "many": "{n} совпадений",
+    "other": "{n} совпадения"
   },
   "{n} abgeschlossen": "{n} завершено",
   "{n} eigene Staffel|{n} eigene Staffeln": {

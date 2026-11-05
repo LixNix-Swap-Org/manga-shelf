@@ -135,6 +135,7 @@
   "Alle gelesenen Bände anzeigen": "显示所有已读的卷",
   "Alle haben ihn gesehen": "所有人都看过了",
   "Alle im Abschnitt gesehen": "整个区段已看",
+  "Alle im Anime-Tab": "在动画标签页中查看全部",
   "Alle mit Namen": "所有人（显示名字）",
   "Alle {count} anzeigen": "显示全部 {count} 个",
   "Alle {visible} ({count})": "全部{visible}（{count}）",
@@ -1294,6 +1295,7 @@
   "In Ordnung": "正常",
   "In Ordnung: {checks}": "正常：{checks}",
   "In Originalgröße in neuem Tab öffnen": "在新标签页中以原始大小打开",
+  "In deiner Anime-Liste": "在你的动画列表中",
   "In deiner Liste": "已在你的列表中",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "在设置的“API”中申请用于非商业用途的密钥。",
   "In der Anime-Liste suchen...": "在动画列表中搜索...",
@@ -3116,6 +3118,9 @@
   },
   "{n} Tag|{n} Tage": {
     "other": "{n} 天"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "other": "{n} 个结果"
   },
   "{n} abgeschlossen": "{n} 部完结",
   "{n} eigene Staffel|{n} eigene Staffeln": {

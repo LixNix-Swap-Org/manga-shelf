@@ -141,6 +141,7 @@
   "Alle gelesenen Bände anzeigen": "Mostrar todos os volumes lidos",
   "Alle haben ihn gesehen": "Todos já assistiram",
   "Alle im Abschnitt gesehen": "Seção inteira assistida",
+  "Alle im Anime-Tab": "Todos na aba Anime",
   "Alle mit Namen": "Todos, com meu nome",
   "Alle {count} anzeigen": "Mostrar todos os {count}",
   "Alle {visible} ({count})": "Todos os {visible} ({count})",
@@ -1344,6 +1345,7 @@
   "In Ordnung": "Em ordem",
   "In Ordnung: {checks}": "Em ordem: {checks}",
   "In Originalgröße in neuem Tab öffnen": "Abrir em tamanho original em nova aba",
+  "In deiner Anime-Liste": "Na sua lista de animes",
   "In deiner Liste": "Na sua lista",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "Nas configurações, em “API”, solicite uma chave para uso não comercial.",
   "In der Anime-Liste suchen...": "Buscar na lista de animes...",
@@ -3280,6 +3282,11 @@
     "one": "{n} dia",
     "many": "{n} dias",
     "other": "{n} dias"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} resultado",
+    "many": "{n} de resultados",
+    "other": "{n} resultados"
   },
   "{n} abgeschlossen": "{n} concluídos",
   "{n} eigene Staffel|{n} eigene Staffeln": {

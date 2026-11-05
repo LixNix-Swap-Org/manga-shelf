@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-### Languages
-- **Form messages in the app language:** when a field holds a value the form does not take (empty but required, above or below its limits, not a whole number, not a web address …), the message under it is now in the language of the app, not the browser's ("The value must be at most 200." in English, "Der Wert darf höchstens 200 sein." in German). It goes away as soon as you change the value.
+### Anime
+- **The header search finds anime too:** while you search the collection, a row "In deiner Anime-Liste" under the toolbar names up to six matching anime, films and shows (with your own status); a tap opens the entry, "Alle im Anime-Tab" switches to the tab. The anime list loads once for it when you have not opened the tab yet.
 
 ## 3.6.0
 

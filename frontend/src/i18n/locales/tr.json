@@ -138,6 +138,7 @@
   "Alle gelesenen Bände anzeigen": "Okunan tüm ciltleri göster",
   "Alle haben ihn gesehen": "Herkes izledi",
   "Alle im Abschnitt gesehen": "Aralığın tamamı izlendi",
+  "Alle im Anime-Tab": "Tümü Anime sekmesinde",
   "Alle mit Namen": "Herkes, adımla",
   "Alle {count} anzeigen": "Tüm {count} öğeyi göster",
   "Alle {visible} ({count})": "Tümü {visible} ({count})",
@@ -1319,6 +1320,7 @@
   "In Ordnung": "Sorun yok",
   "In Ordnung: {checks}": "Sorun yok: {checks}",
   "In Originalgröße in neuem Tab öffnen": "Orijinal boyutta yeni sekmede aç",
+  "In deiner Anime-Liste": "Anime listende",
   "In deiner Liste": "Listende",
   "In den Einstellungen unter „API“ einen Schlüssel für nicht-kommerzielle Nutzung beantragen.": "Ayarlardaki “API” bölümünden ticari olmayan kullanım için bir anahtar iste.",
   "In der Anime-Liste suchen...": "Anime listesinde ara...",
@@ -3198,6 +3200,10 @@
   "{n} Tag|{n} Tage": {
     "one": "{n} gün",
     "other": "{n} gün"
+  },
+  "{n} Treffer|{n} Treffer": {
+    "one": "{n} sonuç",
+    "other": "{n} sonuç"
   },
   "{n} abgeschlossen": "{n} tamamlandı",
   "{n} eigene Staffel|{n} eigene Staffeln": {
