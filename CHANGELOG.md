@@ -2,11 +2,8 @@
 
 ## Unreleased
 
-### Series
-- **No placeholder publisher:** a series without a publisher no longer shows the pill "Verlag: Unbekannt" on its page; the card and the list row leave the stored placeholder "Unbekannt" out too.
-
 ### Anime
-- **Clean titles from the sources:** titles from AniList, MyAnimeList, Jikan and TMDb come out on one line. A trailing line break, tabs and double spaces are dropped (AniList sent some titles with a line break at the end). The series search of "Neuen Manga anlegen" applies the same rule to AniList hits.
+- **No double hit for animation from outside Japan:** the anime search folds a TMDb hit into the AniList hit of the same series also when TMDb names another original language, as long as the title is the same and the year matches. "Cyberpunk: Edgerunners" (English on TMDb) showed up twice before, once from AniList and once from TMDb. Japanese animation keeps the looser rule (a title that starts the same is enough).
 
 ## 3.6.0
 

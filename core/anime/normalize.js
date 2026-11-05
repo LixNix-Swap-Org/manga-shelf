@@ -244,7 +244,17 @@ function yearOf(meta) {
 /** Best titleScore of a TMDb hit's titles (localised and original) against `titles`. */
 const tmdbTwinScore = (meta, titles) => Math.max(0, ...[meta.title?.english, meta.title?.native].filter(Boolean).map((t) => titleScore(t, titles)));
 
-/** TMDb anime hits folded into the same-year AniList hit whose titles match at 0.9 or more: { metas, rest }. */
+/**
+ * The title score a TMDb hit needs to fold into an AniList hit: 0.9 for a Japanese animation (isTmdbAnime), 1 (the same
+ * title) for an animation in another original language (Cyberpunk: Edgerunners is "en" on TMDb but an anime on AniList),
+ * none for anything else.
+ */
+const tmdbFoldScore = (meta) => {
+    if (isTmdbAnime(meta)) return 0.9;
+    return meta && meta.tmdb_id && (meta.tmdb_genre_ids || []).includes(ANIMATION_GENRE) ? 1 : null;
+};
+
+/** TMDb animation hits folded into the same-year AniList hit whose titles match well enough (tmdbFoldScore): { metas, rest }. */
 function foldTmdbHits(metas, tmdbMetas) {
     const out = metas.slice();
     const rest = [];
@@ -252,11 +262,12 @@ function foldTmdbHits(metas, tmdbMetas) {
         const year = yearOf(hit);
         let best = -1;
         let bestScore = 0;
-        if (isTmdbAnime(hit) && year) {
+        const needed = tmdbFoldScore(hit);
+        if (needed && year) {
             out.forEach((meta, i) => {
                 if (!meta.anilist_id || yearOf(meta) !== year) return;
                 const score = tmdbTwinScore(hit, allTitles(meta));
-                if (score >= 0.9 && score > bestScore) {
+                if (score >= needed && score > bestScore) {
                     best = i;
                     bestScore = score;
                 }
