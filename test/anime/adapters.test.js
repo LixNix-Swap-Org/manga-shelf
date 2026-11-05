@@ -195,3 +195,21 @@ test('AniList details of several ids: one id_in request with relations and links
     assert.deepEqual(await anilist.byIdsDetail(ctx, []), { metas: [], rate: null });
     assert.equal(calls.length, 1);
 });
+
+test('titles from a source come out on one line: a trailing line break, tabs and double spaces are dropped', () => {
+    const { mapAniListMedia } = require('../../core/anilist');
+    const meta = anilist.normalize({
+        id: 1, idMal: 2, type: 'ANIME', format: 'TV', title: { romaji: 'Cyberpunk: Edgerunners\r\n', english: '  Cyberpunk:\tEdgerunners ', native: null },
+        synonyms: ['Edgerunners\n', '  '], relations: { edges: [{ relationType: 'SEQUEL', node: { id: 3, type: 'ANIME', title: { romaji: 'Zweite\r\n' } } }] }
+    }, NOW);
+    assert.deepEqual(
+        [meta.title.romaji, meta.title.english, meta.title.native, meta.title.preferred],
+        ['Cyberpunk: Edgerunners', 'Cyberpunk: Edgerunners', null, 'Cyberpunk: Edgerunners']
+    );
+    assert.deepEqual(meta.synonyms, ['Edgerunners']);
+    assert.equal(meta.relations[0].title, 'Zweite');
+    assert.deepEqual(emptyMeta({ title: { romaji: ' \r\n' } }).title, { romaji: null, english: null, native: null, preferred: null });
+
+    const hit = mapAniListMedia({ id: 5, format: 'MANGA', title: { romaji: 'Berserk\r\n', english: null, native: 'ベルセルク\n' } });
+    assert.deepEqual([hit.title, hit.alt_title, hit.alt_titles], ['Berserk', 'ベルセルク', ['Berserk', 'ベルセルク']]);
+});

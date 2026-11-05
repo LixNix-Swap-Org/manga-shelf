@@ -167,7 +167,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
               <AuthorButtons names={authors} onAuthorClick={onAuthorClick} buttonClassName={AUTHOR_BUTTON_CLASS} />
             </p>
           )}
-          {manga.publisher && (
+          {manga.publisher && manga.publisher !== 'Unbekannt' && ( // i18n-ignore: stored placeholder value
             <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate" title={t('Verlag: {publisher}', { publisher: manga.publisher })}>
               <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" aria-hidden="true" />
               <span className="truncate">{manga.publisher}</span>
