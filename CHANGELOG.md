@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-### Anime
-- **No double hit for animation from outside Japan:** the anime search folds a TMDb hit into the AniList hit of the same series also when TMDb names another original language, as long as the title is the same and the year matches. "Cyberpunk: Edgerunners" (English on TMDb) showed up twice before, once from AniList and once from TMDb. Japanese animation keeps the looser rule (a title that starts the same is enough).
+### Languages
+- **Form messages in the app language:** when a field holds a value the form does not take (empty but required, above or below its limits, not a whole number, not a web address …), the message under it is now in the language of the app, not the browser's ("The value must be at most 200." in English, "Der Wert darf höchstens 200 sein." in German). It goes away as soon as you change the value.
 
 ## 3.6.0
 

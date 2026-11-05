@@ -397,6 +397,7 @@ manga-shelf/
 │       │   └── useVolumeEditForm.js # volume editor: form, photos, autofill, buildSaveBody/rebaseForm, save, delete
 │       ├── utils/                # logic without React
 │       │   ├── api.js            # API client: apiFetch/get/post/put/del/upload, transport web/remote/local, TIMEOUTS, assetUrl/assetImgProps, downloadFile
+│       │   ├── fieldMessages.js  # installFieldMessages (main.jsx): one capture listener per document replaces the own form field messages of the browser (required, min/max, step, url …) with texts in the UI language; the next input clears them
 │       │   ├── notify.js         # toasts: notify.error/success/info/update/dismiss/subscribe, notifyResponseError
 │       │   ├── format.js         # every number, price and date format (Intl, locale of the UI language: getLocaleTag(), default de-DE); formatCount translates the word pair via tn(); formatMoney (price in a currency), currencySymbol
 │       │   ├── search.js         # shared search: foldText, createSearch, prepareQuery, compareNatural
