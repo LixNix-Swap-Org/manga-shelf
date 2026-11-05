@@ -21,12 +21,19 @@ export const CHECKS = {
   invalid_isbns: { label: 'Ungültige ISBNs', hint: 'Prüfziffer falsch oder keine Buchnummer.', kind: 'volumes' },
   overdue_preorders: { label: 'Vorbestellungen, vermutlich erschienen', hint: 'Der Erscheinungstag ist vorbei.', kind: 'volumes' },
   legacy_read_status: { label: 'Alter Status „Gelesen“', hint: 'Wird zu „Vorhanden“ plus Lesestand.', kind: 'volumes' },
+  owned_without_owner: { label: 'Im Besitz, aber ohne Besitzer', hint: 'Zählen als Besitz, gehören aber niemandem. Die Korrektur trägt dich als Besitzer ein.', kind: 'volumes' },
+  owners_not_owned: { label: 'Bände mit Besitzer, aber nicht im Besitz', hint: 'Jemand besitzt den Band, der Status sagt etwas anderes. Die Korrektur setzt ihn auf „Im Besitz“.', kind: 'volumes' },
   publishers_outdated: { label: 'Verlage in alter Schreibweise', kind: 'publishers' },
   publishers_unknown: { label: 'Verlage außerhalb der Verlagsliste', hint: 'Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?', kind: 'publishers' }
 };
 
 // i18n
-const FIX_LABELS = { legacy_read: 'Jetzt umstellen', normalize_publishers: 'Schreibweisen vereinheitlichen' };
+const FIX_LABELS = {
+  legacy_read: 'Jetzt umstellen',
+  normalize_publishers: 'Schreibweisen vereinheitlichen',
+  assign_owner: 'Mich als Besitzer eintragen',
+  status_from_owners: 'Auf „Im Besitz“ setzen'
+};
 
 function Items({ check, onNavigate }) {
   const kind = CHECKS[check.id]?.kind;

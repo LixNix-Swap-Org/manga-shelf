@@ -248,6 +248,9 @@ function ensureInstanceId(conn) {
     }
 }
 
+const BUSY_TIMEOUT_MS = 3000;
+const WAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024;
+
 const EXIT_SCHEMA_NEWER = 78;
 const allowNewerFromEnv = () => /^(true|1|yes|on|ja)$/i.test(String(process.env.ALLOW_NEWER_SCHEMA || '').trim());
 
@@ -303,6 +306,11 @@ function initDb({ allowNewerSchema = false } = {}) {
         // recommended with WAL: a crash of the app loses nothing, a power cut at most the last commits; no corruption
         conn.exec('PRAGMA synchronous = NORMAL;');
         conn.exec('PRAGMA foreign_keys = ON;');
+        // a second process (scripts/admin.js next to the running server) waits briefly for a lock instead of failing
+        // at once; kept short because the wait blocks the event loop
+        conn.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS};`);
+        // a big import or migration leaves the -wal file at its peak size; after a checkpoint it shrinks to this
+        conn.exec(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
         checkNewerSchema(conn, allowNewerSchema);
         lastMigrationReport = applySchema(conn, { safetySnapshot: true });
     } catch (err) {

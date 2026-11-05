@@ -24,6 +24,10 @@ const EDITION_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const SEARCH_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const EMPTY_SEARCH_CACHE_TTL_MS = 60 * 60 * 1000;
 const EDITION_INFO_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// volume lists of editions no series links (search candidates, unlinked or deleted series)
+const UNLINKED_EDITION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// a calendar month nobody opened for that long is fetched again anyway; its stale fallback is of no use
+const RELEASES_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const CACHE_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 const MAX_VOLUME_PAGES = 20;
 // The lookup chooser loads edition details (author, description) only for candidates at least this similar
@@ -129,16 +133,30 @@ function readCache(ctx, cacheKey, ttlMs) {
 }
 
 let lastPrune = 0;
-function pruneSearchCache(ctx) {
+/**
+ * Drops cache rows nothing needs any more (at most hourly; created_at is in ms): old searches and edition infos, old
+ * calendar months, and the volume lists of editions no series links. A linked edition keeps its list as the stale
+ * fallback of the gap check. Returns the number of removed rows (0 when skipped); `force` ignores the hourly gap.
+ */
+function pruneCache(ctx, { force = false } = {}) {
   const now = Date.now();
-  if (now - lastPrune < CACHE_PRUNE_INTERVAL_MS) return;
+  if (!force && now - lastPrune < CACHE_PRUNE_INTERVAL_MS) return 0;
   lastPrune = now;
+  let removed = 0;
   try {
-    ctx.db.prepare("DELETE FROM manga_passion_cache WHERE cache_key LIKE 'mp\\_search\\_q\\_%' ESCAPE '\\' AND created_at < ?")
-      .run(now - SEARCH_CACHE_TTL_MS);
-    ctx.db.prepare("DELETE FROM manga_passion_cache WHERE cache_key LIKE 'mp\\_edition\\_info\\_%' ESCAPE '\\' AND created_at < ?")
-      .run(now - EDITION_INFO_MAX_AGE_MS);
-  } catch (e) { log(ctx).warn('Pruning the Manga Passion search cache failed:', e); }
+    removed += ctx.db.prepare("DELETE FROM manga_passion_cache WHERE cache_key LIKE 'mp\\_search\\_q\\_%' ESCAPE '\\' AND created_at < ?")
+      .run(now - SEARCH_CACHE_TTL_MS).changes;
+    removed += ctx.db.prepare("DELETE FROM manga_passion_cache WHERE cache_key LIKE 'mp\\_edition\\_info\\_%' ESCAPE '\\' AND created_at < ?")
+      .run(now - EDITION_INFO_MAX_AGE_MS).changes;
+    removed += ctx.db.prepare("DELETE FROM manga_passion_cache WHERE cache_key LIKE 'mp\\_releases\\_%' ESCAPE '\\' AND created_at < ?")
+      .run(now - RELEASES_MAX_AGE_MS).changes;
+    removed += ctx.db.prepare(`
+      DELETE FROM manga_passion_cache
+      WHERE cache_key LIKE 'mp\\_edition\\_vols\\_%' ESCAPE '\\' AND created_at < ?
+        AND CAST(substr(cache_key, ${'mp_edition_vols_'.length + 1}) AS INTEGER) NOT IN (SELECT manga_passion_id FROM mangas WHERE manga_passion_id IS NOT NULL)
+    `).run(now - UNLINKED_EDITION_MAX_AGE_MS).changes;
+  } catch (e) { log(ctx).warn('Pruning the Manga Passion cache failed:', e); }
+  return removed;
 }
 
 const searchCacheKey = (q) => `mp_search_q_${q.trim().toLowerCase()}`;
@@ -214,7 +232,7 @@ async function searchMangaPassionEditions(ctx, title, publisher = '', totalVolum
       .filter(e => e && e.id != null && typeof e.title === 'string' && !e.digital && !e.title.toLowerCase().includes('(ebook)'))
       .map(slimSearchItem);
     writeCache(ctx, cacheKey, { items });
-    pruneSearchCache(ctx);
+    pruneCache(ctx);
     return items;
   };
 
@@ -570,5 +588,6 @@ module.exports = {
   saveEditionLink,
   linkRecommendedEdition,
   readCache,
-  writeCache
+  writeCache,
+  pruneCache
 };

@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-### Anime
-- **The header search finds anime too:** while you search the collection, a row "In deiner Anime-Liste" under the toolbar names up to six matching anime, films and shows (with your own status); a tap opens the entry, "Alle im Anime-Tab" switches to the tab. The anime list loads once for it when you have not opened the tab yet.
+### Database
+- **Steadier server database:** the server waits up to 3 s for a lock that a second process holds (for example `node scripts/admin.js` next to the running server) instead of failing at once, and the `-wal` file shrinks back to at most 32 MB after a big import. Once a day and after every restore it refreshes the statistics SQLite plans its queries with (`PRAGMA optimize`) and writes a warning to the log when foreign keys are broken or a series lies in no shelf; nothing is repaired automatically.
+- **Smaller backups:** snapshots, the backup download and "Vom Server holen" leave the caches of the lookups (AniList, MyAnimeList, TMDB, ISBN catalogues, Manga Passion) empty; they fill again on demand. Manga Passion calendar months nobody opened for 90 days and the volume lists of editions that no series links are deleted after 30 days; a linked edition keeps its list.
+- **Two new checks in "Sammlung aufräumen":** "Im Besitz, aber ohne Besitzer" (the fix enters you as the owner) and "Bände mit Besitzer, aber nicht im Besitz" (the fix sets them to "Im Besitz" and keeps the owners with their price and date).
+- **A little faster:** the series list counts its volumes with one temporary index instead of seven (about 25 % less time for that query), and in the app without a server a write needs about 45 % less time per statement.
 
 ## 3.6.0
 

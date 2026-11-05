@@ -2,7 +2,7 @@
 // trash purge, metadata stripping, anime refresh and AniList list sync. Snapshots are ZIPs in data/backups with a JSON sidecar.
 const fs = require('fs');
 const path = require('path');
-const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb } = require('../db');
+const { db, dataDir, dbPath, tempDir, uploadsDir, openRawDb, getConnectionGeneration } = require('../db');
 const log = require('../utils/logger').child('scheduler');
 const { config, ENTRIES, KEEP_ALL } = require('../utils/config');
 const lifecycle = require('./lifecycle');
@@ -218,9 +218,12 @@ function sqlString(value) {
     return `'${value.replace(/'/g, "''")}'`;
 }
 
+const CACHE_TABLES = ['api_cache', 'manga_passion_cache'];
+
 /**
  * Writes a consistent copy of the live database to a temp file (VACUUM INTO) and returns its path; the caller deletes it.
- * A legacy jwt_secret row in app_settings is removed from the copy (secure_delete), so a backup cannot sign tokens.
+ * A legacy jwt_secret row in app_settings is removed from the copy (secure_delete), so a backup cannot sign tokens; the
+ * cache tables are emptied (their zeroed pages compress to almost nothing in the ZIP).
  */
 function copyDatabaseToTemp() {
     fs.mkdirSync(tempDir, { recursive: true });
@@ -232,8 +235,10 @@ function copyDatabaseToTemp() {
         try {
             db.exec('PRAGMA backup_copy.journal_mode = DELETE');
             db.exec('PRAGMA backup_copy.secure_delete = ON');
-            const hasSettings = db.prepare("SELECT 1 AS ok FROM backup_copy.sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
-            if (hasSettings) db.exec("DELETE FROM backup_copy.app_settings WHERE key = 'jwt_secret'");
+            const tables = new Set(db.prepare("SELECT name FROM backup_copy.sqlite_master WHERE type = 'table'").all().map(r => r.name));
+            if (tables.has('app_settings')) db.exec("DELETE FROM backup_copy.app_settings WHERE key = 'jwt_secret'");
+            // answers of external services are fetched again on demand: they only make the archive bigger
+            for (const cache of CACHE_TABLES) if (tables.has(cache)) db.exec(`DELETE FROM backup_copy.${cache}`);
         } finally {
             db.exec('DETACH DATABASE backup_copy');
         }
@@ -489,6 +494,33 @@ function purgeTrashIfDue(now = new Date()) {
     return removed;
 }
 
+const DB_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let dbMaintenance = { at: 0, generation: null };
+
+/**
+ * Once a day and after every reopen of the database (restore): planner statistics (PRAGMA optimize analyses only the
+ * tables whose size changed enough, each on a sample), the Manga Passion cache pruned, and an integrity log of foreign
+ * key violations and series outside every shelf (nothing is repaired). Returns the report, or null when not due.
+ */
+function runDatabaseMaintenanceIfDue(now = Date.now()) {
+    const generation = getConnectionGeneration();
+    if (dbMaintenance.generation === generation && now - dbMaintenance.at < DB_MAINTENANCE_INTERVAL_MS) return null;
+    dbMaintenance = { at: now, generation };
+    const started = process.hrtime.bigint();
+    db.exec('PRAGMA analysis_limit = 1000; PRAGMA optimize = 0x10002;');
+    const { pruneCache } = require('../core/mangaPassion/client');
+    const { createCtx } = require('../db');
+    const prunedCacheRows = pruneCache(createCtx(), { force: true });
+    const violations = db.prepare('SELECT "table" AS name, count(*) AS n FROM pragma_foreign_key_check GROUP BY "table" ORDER BY "table"').all();
+    const outsideShelves = db.prepare('SELECT count(*) AS n FROM mangas WHERE shelf_id IS NULL OR shelf_id NOT IN (SELECT id FROM shelves)').get().n;
+    const report = { ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6), prunedCacheRows, violations, outsideShelves };
+    if (violations.length) log.warn(`[Datenbank] Verletzte Fremdschlüssel: ${violations.map(v => `${v.name} ${v.n}`).join(', ')} (PRAGMA foreign_key_check)`);
+    if (outsideShelves) log.warn(`[Datenbank] ${outsideShelves} Reihen liegen in keinem Regal und sind für niemanden sichtbar`);
+    if (prunedCacheRows) log.info(`[Datenbank] ${prunedCacheRows} veraltete Manga-Passion-Cache-Einträge gelöscht`);
+    log.debug(`[Datenbank] Wartung in ${report.ms} ms`);
+    return report;
+}
+
 const ANIME_REFRESH_DAY_KEY = 'anime_refresh_day';
 // spreads the daily sweep's groups of 50 over the hour after the backup
 const ANIME_GROUP_PAUSE_MS = 60 * 1000;
@@ -559,6 +591,11 @@ function initScheduler() {
             log.warn('[Papierkorb] Aufräumen fehlgeschlagen:', e);
         }
         try {
+            runDatabaseMaintenanceIfDue();
+        } catch (e) {
+            log.warn('[Datenbank] Wartung fehlgeschlagen:', e);
+        }
+        try {
             await runAnimeRefreshIfDue(new Date(), backupSchedule(), { shouldStop: () => stopped });
         } catch (e) {
             log.warn('[Anime] Aktualisierung fehlgeschlagen:', e);
@@ -605,6 +642,7 @@ module.exports = {
     runAnimeRefreshIfDue,
     runAnimeListSyncIfDue,
     purgeTrashIfDue,
+    runDatabaseMaintenanceIfDue,
     sweepTempArtefacts,
     stripExistingUploadsOnce,
     initScheduler

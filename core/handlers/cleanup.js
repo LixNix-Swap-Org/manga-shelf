@@ -3,7 +3,7 @@ const access = require('../lib/access');
 const { badRequest } = require('../errors');
 const { isValidIsbn } = require('../lib/isbn');
 const { normalizePublisher, isKnownPublisher } = require('../lib/publishers');
-const { LEGACY_READ_STATUS, convertLegacyRead } = require('../lib/owners');
+const { LEGACY_READ_STATUS, convertLegacyRead, syncOwnersWithStatus, syncStatusWithOwners } = require('../lib/owners');
 const { zonedToday } = require('../radar');
 
 const ITEM_LIMIT = 50;
@@ -17,11 +17,18 @@ const SERIES_CHECKS = [
 ];
 
 const OWNED = "v.status = 'Vorhanden'";
+// status and volume_owners disagree (core/lib/owners.js keeps them in sync on every handler path; raw SQL may not).
+// A legacy 'Gelesen' volume has its own check and fix.
+const HAS_OWNER = 'EXISTS (SELECT 1 FROM volume_owners o WHERE o.volume_id = v.id)';
+const OWNED_WITHOUT_OWNER = `${OWNED} AND NOT ${HAS_OWNER}`;
+const OWNERS_NOT_OWNED = `v.status IS NOT 'Vorhanden' AND LOWER(TRIM(COALESCE(v.status, ''))) <> 'gelesen' AND ${HAS_OWNER}`;
 const VOLUME_CHECKS = [
     { id: 'volumes_without_price', where: `${OWNED} AND v.price IS NULL` },
     { id: 'volumes_without_purchase_date', where: `${OWNED} AND (v.purchase_date IS NULL OR TRIM(v.purchase_date) = '')` },
     { id: 'volumes_without_isbn', where: `${OWNED} AND (v.isbn IS NULL OR TRIM(v.isbn) = '')` },
-    { id: 'legacy_read_status', where: "LOWER(TRIM(v.status)) = 'gelesen'", fix: 'legacy_read' }
+    { id: 'legacy_read_status', where: "LOWER(TRIM(v.status)) = 'gelesen'", fix: 'legacy_read' },
+    { id: 'owned_without_owner', where: OWNED_WITHOUT_OWNER, fix: 'assign_owner' },
+    { id: 'owners_not_owned', where: OWNERS_NOT_OWNED, fix: 'status_from_owners' }
 ];
 
 const VOLUME_SELECT = `
@@ -103,6 +110,8 @@ function quality(realCtx) {
         // release date passed: "vermutlich erschienen"; the client marks them owned through POST /volumes/bulk
         volumeCheck(ctx, { id: 'overdue_preorders', where: "v.status IN ('Vorbestellt', 'Bestellt') AND v.release_date IS NOT NULL AND SUBSTR(v.release_date, 1, 10) < ?" }, [today]),
         volumeCheck(ctx, VOLUME_CHECKS[3]),
+        volumeCheck(ctx, VOLUME_CHECKS[4]),
+        volumeCheck(ctx, VOLUME_CHECKS[5]),
         ...publisherChecks(ctx)
     ];
     return { body: { generated_at: ctx.now().toISOString(), today, limit: ITEM_LIMIT, checks } };
@@ -132,12 +141,31 @@ function convertLegacyReads(ctx, shelfIds) {
     return rows.length;
 }
 
+/** Ids of the volumes of these shelves that match `where` (a check's condition on v). */
+function volumeIdsWhere(ctx, shelfIds, where) {
+    const scope = access.inShelves('m.shelf_id', shelfIds);
+    return ctx.db.prepare(`SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE ${where} AND ${scope.sql}`)
+        .all(...scope.params).map(r => r.id);
+}
+
 const FIXES = {
     legacy_read: convertLegacyReads,
-    normalize_publishers: (ctx, shelfIds) => normalizeStoredPublishers(access.scopedCtx(ctx, shelfIds))
+    normalize_publishers: (ctx, shelfIds) => normalizeStoredPublishers(access.scopedCtx(ctx, shelfIds)),
+    // owned without an owner: the caller (a member there) becomes the owner, as when the status is set by hand
+    assign_owner: (ctx, shelfIds) => {
+        const ids = volumeIdsWhere(ctx, shelfIds, OWNED_WITHOUT_OWNER);
+        for (const id of ids) syncOwnersWithStatus(ctx.db, id, ctx.user.id);
+        return ids.length;
+    },
+    // owners on a volume with another status: the owners stay (they carry price and date), the volume becomes owned
+    status_from_owners: (ctx, shelfIds) => {
+        const ids = volumeIdsWhere(ctx, shelfIds, OWNERS_NOT_OWNED);
+        for (const id of ids) syncStatusWithOwners(ctx.db, id);
+        return ids.length;
+    }
 };
 
-/** { check: 'legacy_read' | 'normalize_publishers' } -> { success, changed }; only in the caller's editable shelves. */
+/** { check: 'legacy_read' | 'normalize_publishers' | 'assign_owner' | 'status_from_owners' } -> { success, changed }; only in the caller's editable shelves. */
 function fix(ctx, { body }) {
     const run = Object.prototype.hasOwnProperty.call(FIXES, body.check) ? FIXES[body.check] : null;
     if (!run) throw badRequest('Unbekannte Korrektur', 'FIX_UNKNOWN');
