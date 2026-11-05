@@ -1,9 +1,33 @@
 # Changelog
 
-## Unreleased
+## 3.7.0
 
 ### Before updating
-- **Database migration 39** runs at the first start: the table `data_versions` and triggers on the collection and anime tables that count every row written there. As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.6.0 cannot open the migrated database; going back restores that backup, and everything changed since is lost.
+- **Database migration 39** runs at the first start: the table `data_versions` and triggers on the collection and anime tables that count every row written there. As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.6.0 cannot open the migrated database.
+- **Going back to 3.6.0 restores the backup from before the update, and everything changed since is lost** (new series and volumes, reading state, anime progress, shopping list, users and settings; images in `uploads/` stay). Where the server updates itself (Pterodactyl, a headless binary in a folder of your own), "Zurück zu v3.6.0" in System → Updates does this after you confirm the loss. Every other install type gets the panel with the steps in the same place; the steps are also in the README, "Updating → Going back".
+
+### Series
+- **No more lost input when closing "Neuen Manga anlegen":** Back, Escape, a click on the backdrop, "Abbrechen" and the X now ask "Ungespeicherte Änderungen verwerfen?" once something was typed or picked. A dialog opened by a scan or from the online results and left untouched still closes at once.
+- **Same title already there:** while you type a title in "Neuen Manga anlegen" that the collection already has in the same language and format (title or alternative title, case and accents ignored), a hint says so and "Zur Reihe" opens that series. Creating a second edition stays possible.
+- **No placeholder publisher:** a series without a publisher no longer shows the pill "Verlag: Unbekannt" on its page; the card and the list row leave the stored placeholder "Unbekannt" out too.
+
+### Volumes
+- **Volume numbers in range:** a volume number that is a plain number now has to lie between 0 and 5000 without a sign ("-5", "+3" and "999999" answer "Ungültige Bandnummer (Zahl von 0 bis 5000)"), in the add form, the volume editor, `POST`/`PUT /api/volumes` and the batch range; labels such as "Artbook" stay free. Entries stored before keep their number until it is changed.
+- **Sort by volume number:** a regular volume whose number is not a plain number ("Starter 1", "-5", "1e3") now sorts after the numbered volumes and the unnumbered Special Editions and before Schuber and specials, instead of next to the first digit in its label; that is where the server puts it, so the order no longer jumps between a reload and a sort on the page.
+
+### Webtoons
+- **Fast "+1" taps count:** every tap on "+1" in the chapter panel now counts. The chapter goes up at once, and taps within a short pause are saved together (one undo for all of them). Taps during a running save follow right after it, and leaving the page inside the pause still saves them.
+- **Half chapters:** "Gelesen bis Kapitel" takes one decimal, for an extra chapter such as 12.5 ("12,5" works too); cards, lists, the chapter panel and the statistics show it as "12,5". "+1" counts on from the whole chapter (12.5 → 13). The CSV keeps it ("anna: 12.5"). `PUT /api/mangas/:id/chapters` takes `chapters_read` with one decimal; `add` stays a whole number.
+- **One rule for numbers above the total:** "Gelesen bis Kapitel" and "Gesehene Folgen" in the anime detail both cut a number above the known total to the total and say so below the field ("Diese Reihe hat 200 Kapitel – mehr geht nicht."). Before, the anime field cut it without a word and the chapter field showed the browser's own message.
+
+### Anime
+- **The header search finds anime too:** while you search the collection, a row "In deiner Anime-Liste" under the toolbar names up to six matching anime, films and shows (with your own status); a tap opens the entry, "Alle im Anime-Tab" switches to the tab. The anime list loads once for it when you have not opened the tab yet.
+- **"Geplant" can be undone:** choosing "Geplant" for an anime with watched episodes still puts the counter back to 0, but a toast now says how many episodes were reset ("Frieren: 7 gesehene Folgen zurückgesetzt") and offers "Rückgängig", in the anime tab and in the detail dialog. The undo restores the status, the counter, single watched episodes and their ratings.
+- **No double hit for animation from outside Japan:** the anime search folds a TMDb hit into the AniList hit of the same series also when TMDb names another original language, as long as the title is the same and the year matches. "Cyberpunk: Edgerunners" (English on TMDb) showed up twice before, once from AniList and once from TMDb. Japanese animation keeps the looser rule (a title that starts the same is enough).
+- **Clean titles from the sources:** titles from AniList, MyAnimeList, Jikan and TMDb come out on one line. A trailing line break, tabs and double spaces are dropped (AniList sent some titles with a line break at the end). The series search of "Neuen Manga anlegen" applies the same rule to AniList hits.
+
+### Languages
+- **Form messages in the app language:** when a field holds a value the form does not take (empty but required, above or below its limits, not a whole number, not a web address …), the message under it is now in the language of the app, not the browser's ("The value must be at most 200." in English, "Der Wert darf höchstens 200 sein." in German). It goes away as soon as you change the value.
 
 ### Database
 - **The offline copy is downloaded again only when the collection changed:** the ETags of the series list, the detail, the offline copy, the shopping list, the radar and the statistics now follow a counter per area (collection, anime) that triggers raise on every written row, also from another process. A search that fills a cache, a calendar app fetching its feed, a sign-in or a logout no longer make the apps fetch everything again (the offline copy is 35 MB for 45,000 volumes). An anime change refreshes only the statistics.
@@ -15,6 +39,9 @@
 - **Backups without a pause:** snapshots (daily, manual, before a restore or an update) and the backup download copy the database in steps with SQLite's online backup, so the server keeps answering meanwhile; before, the copy held every request for about 130 ms per 15 MB of database. A restore waits for a copy that is still running before it swaps the file. Below Node 22.16 the copy works as before.
 - **App without a server saves calmer:** the app waits for a quiet moment before it saves the collection on the device, longer when the last save took longer (at most 2 s), and saves a stream of changes at the latest after 5 s. Before, every change started a full save after 300 ms, and a long run of changes was only saved once it stopped. Closing or hiding the app still saves at once.
 - **A little faster:** the series list counts its volumes with one temporary index instead of seven (about 25 % less time for that query), and in the app without a server a write needs about 45 % less time per statement.
+
+### Security
+- **Updates without advisories:** Electron 44.10.0, `electron-builder` 26.18.0, Capacitor 7.6.10, `sql.js` 1.15.2 (standalone mode of the apps), `lucide-react` 1.64.0, `react-router-dom` 7.18.5, `postcss` 8.5.32, `autoprefixer` 10.6.2, `dotenv` 18.0.9, `puppeteer-core` 25.16.0, `docker/login-action` 4.7.0.
 
 ## 3.6.0
 
