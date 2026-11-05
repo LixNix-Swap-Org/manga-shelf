@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-### Anime
-- **"Geplant" can be undone:** choosing "Geplant" for an anime with watched episodes still puts the counter back to 0, but a toast now says how many episodes were reset ("Frieren: 7 gesehene Folgen zurückgesetzt") and offers "Rückgängig", in the anime tab and in the detail dialog. The undo restores the status, the counter, single watched episodes and their ratings.
+### Series
+- **No more lost input when closing "Neuen Manga anlegen":** Back, Escape, a click on the backdrop, "Abbrechen" and the X now ask "Ungespeicherte Änderungen verwerfen?" once something was typed or picked. A dialog opened by a scan or from the online results and left untouched still closes at once.
+
+### Webtoons
+- **Fast "+1" taps count:** every tap on "+1" in the chapter panel now counts. The chapter goes up at once, and taps within a short pause are saved together (one undo for all of them). Taps during a running save follow right after it, and leaving the page inside the pause still saves them.
 
 ## 3.6.0
 

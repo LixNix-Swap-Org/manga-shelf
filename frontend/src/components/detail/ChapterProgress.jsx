@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus, ScrollText } from 'lucide-react';
 import { put } from '../../utils/api';
 import { notify } from '../../utils/notify';
@@ -8,6 +8,8 @@ import { t, tn } from '../../i18n/index.js';
 
 // same bound as MAX_CHAPTERS in core/lib/validate.js
 const MAX_CHAPTERS = 99999;
+// +1 taps within this pause go out as one { add: n }
+export const PLUS_ONE_DELAY_MS = 400;
 
 /**
  * The detail after a PUT /mangas/:id/chapters answer: the own chapter and the own row of chapter_progress. An answer for
@@ -28,10 +30,20 @@ export function withChapter(manga, data, user) {
  */
 export default function ChapterProgress({ manga, user, canChange, isOffline, onSaved }) {
   const ids = useId();
-  const { read, total, pct } = getChapterProgress(manga);
-  const [draft, setDraft] = useState(read ? String(read) : '');
+  const stored = getChapterProgress(manga);
+  // +1 taps not saved yet: shown at once, sent together after a short pause or after the request that runs
+  const [pending, setPending] = useState(0);
+  // taps already sent: still shown until the answer replaces the stored chapter
+  const [sending, setSending] = useState(0);
+  const pendingRef = useRef(0);
+  const inFlight = useRef(false);
+  const timer = useRef(null);
+  const total = stored.total;
+  const read = stored.read + (total > 0 ? Math.min(sending + pending, Math.max(0, total - stored.read)) : sending + pending);
+  const { pct } = getChapterProgress({ chapters_read: read, total_chapters: total });
+  const [draft, setDraft] = useState(stored.read ? String(stored.read) : '');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setDraft(read ? String(read) : ''); }, [read]);
+  useEffect(() => { setDraft(stored.read ? String(stored.read) : ''); }, [stored.read]);
   const others = (manga.chapter_progress || []).filter((p) => p.user_id !== user?.id);
   const atEnd = total > 0 && read >= total;
   const summary = total > 0
@@ -39,6 +51,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
     : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', read);
 
   const save = async (body, { undo = true } = {}) => {
+    inFlight.current = true;
     setBusy(true);
     try {
       const data = await put(`/api/mangas/${encodeURIComponent(manga.id)}/chapters`, body, { fallback: t('Kapitelstand konnte nicht gespeichert werden') });
@@ -51,11 +64,46 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
       }
     } catch (err) {
       notify.error(err);
-      setDraft(read ? String(read) : '');
+      setDraft(stored.read ? String(stored.read) : '');
     } finally {
+      inFlight.current = false;
+      setSending(0);
       setBusy(false);
+      // taps that came in meanwhile go out next
+      if (pendingRef.current > 0 && !timer.current) flushRef.current();
     }
   };
+
+  const flushRef = useRef(null);
+  flushRef.current = () => {
+    clearTimeout(timer.current);
+    timer.current = null;
+    const n = pendingRef.current;
+    if (!n || inFlight.current) return;
+    pendingRef.current = 0;
+    setPending(0);
+    setSending(n);
+    save({ add: n });
+  };
+
+  const plusOne = () => {
+    if (atEnd) return;
+    pendingRef.current += 1;
+    setPending(pendingRef.current);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => flushRef.current(), PLUS_ONE_DELAY_MS);
+  };
+
+  // leaving the page (or another series) inside the pause still saves the taps, without a toast
+  const sendLeftover = useCallback((id) => {
+    clearTimeout(timer.current);
+    timer.current = null;
+    const n = pendingRef.current;
+    pendingRef.current = 0;
+    setPending(0);
+    if (n > 0) put(`/api/mangas/${encodeURIComponent(id)}/chapters`, { add: n }).catch((err) => notify.error(err));
+  }, []);
+  useEffect(() => () => sendLeftover(manga.id), [manga.id, sendLeftover]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -65,7 +113,12 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
       notify.error(t('Bitte eine ganze Zahl zwischen 0 und {max} eingeben.', { max: MAX_CHAPTERS }));
       return;
     }
-    if (value !== read) save({ chapters_read: value });
+    // a typed chapter wins over +1 taps that wait
+    clearTimeout(timer.current);
+    timer.current = null;
+    pendingRef.current = 0;
+    setPending(0);
+    if (value !== stored.read) save({ chapters_read: value });
   };
 
   return (
@@ -99,8 +152,8 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
           <button
             type="button"
             id="btn-chapter-plus-one"
-            onClick={() => save({ add: 1 })}
-            disabled={busy || atEnd}
+            onClick={plusOne}
+            disabled={atEnd}
             className="hit-44 btn-primary text-sm py-2 px-3.5 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label={t('+1 – ein Kapitel mehr gelesen')}
             title={atEnd ? t('Alle Kapitel gelesen') : t('Ein Kapitel mehr gelesen')}

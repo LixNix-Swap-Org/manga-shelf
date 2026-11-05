@@ -8,6 +8,7 @@ import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
+import { askConfirm } from './askConfirm';
 import { prepareImageForUpload } from '../../utils/imageResize';
 import { PRIORITY_OPTIONS, DEFAULT_WISH_PRIORITY } from '../../utils/priority';
 import { t } from '../../i18n/index.js';
@@ -101,6 +102,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const applySeqRef = useRef(0);
   const prefillCoverRef = useRef(null);
   const backdropDownRef = useRef(false);
+  // the form as it opened (defaults and prefill): closing asks only when something differs from it
+  const openedFormRef = useRef(EMPTY_FORM);
   const ids = useId();
 
   const replacePreview = (next) => setCoverPreview(prev => {
@@ -117,7 +120,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       replacePreview('');
       return undefined;
     }
-    setForm({ ...EMPTY_FORM, ...editionDefaults(), ...(prefill?.form || {}) });
+    const opened = { ...EMPTY_FORM, ...editionDefaults(), ...(prefill?.form || {}) };
+    openedFormRef.current = opened;
+    setForm(opened);
     setScanVolume(prefill?.volume || null);
     setReleasedHint(null);
     setCreatedManga(null);
@@ -140,6 +145,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     setCoverCaching(true);
     promise.then(local => {
       if (cancelled) return;
+      if (openedFormRef.current.cover_image === remoteCover) openedFormRef.current = { ...openedFormRef.current, cover_image: local };
       setForm(prev => (prev.cover_image === remoteCover ? { ...prev, cover_image: local } : prev));
       setCoverPreview(prev => (prev === remoteCover ? local : prev));
       setCoverCaching(false);
@@ -163,8 +169,17 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     onClose();
   };
 
-  const requestClose = () => {
-    if (!submitting) handleClose();
+  // typed or picked input that closing would throw away (not once the series exists: then only the scanned volume is left)
+  const isDirty = () => !createdManga && (Boolean(coverFile)
+    || Object.keys(form).some((key) => String(form[key] ?? '') !== String(openedFormRef.current[key] ?? '')));
+
+  // Close, Abbrechen, Escape, the backdrop and Back (useDialogA11y presses Escape) ask before discarding input
+  const requestClose = async () => {
+    if (submitting) return;
+    if (isDirty() && !(await askConfirm(t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
+      title: t('Ungespeicherte Änderungen verwerfen?'), confirmLabel: t('Verwerfen')
+    }))) return;
+    handleClose();
   };
 
   const handleLookupMetadata = async () => {
@@ -418,7 +433,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           <button
             id="btn-close-add-modal-x"
             type="button"
-            onClick={handleClose}
+            onClick={requestClose}
             disabled={submitting}
             aria-label={t('Schließen')}
             className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
@@ -806,7 +821,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             <button
               id="btn-close-add-modal"
               type="button"
-              onClick={handleClose}
+              onClick={requestClose}
               className="btn-secondary text-sm"
               disabled={submitting}
             >

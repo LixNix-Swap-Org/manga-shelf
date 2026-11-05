@@ -157,6 +157,57 @@ describe('ChapterProgress', () => {
     expect(screen.getByRole('button', { name: '+1 – ein Kapitel mehr gelesen' }).disabled).toBe(true);
   });
 
+  it('fast +1 taps show at once and go out as one { add: n }; taps during a request follow after it', async () => {
+    let release;
+    fetchMock.mockImplementationOnce(async (url, init) => {
+      await new Promise((r) => { release = r; });
+      const body = JSON.parse(init.body);
+      return fakeResponse(200, { success: true, manga_id: 9, chapters_read: 150 + body.add, previous: 150, total_chapters: 200 });
+    });
+    render(<ChapterProgress manga={manga} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    const plus = screen.getByRole('button', { name: '+1 – ein Kapitel mehr gelesen' });
+    const bar = () => screen.getByRole('progressbar', { name: 'Lesefortschritt' }).getAttribute('aria-valuetext');
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    expect(bar()).toBe('153 von 200 Kapiteln gelesen');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ add: 3 });
+    // the request still runs: the button takes more taps, the shown chapter keeps the sent ones
+    expect(plus.disabled).toBe(false);
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    expect(bar()).toBe('155 von 200 Kapiteln gelesen');
+    release();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ add: 2 });
+  });
+
+  it('+1 taps stop at the total; leaving the page inside the pause still saves them', async () => {
+    const near = { ...manga, chapters_read: 198 };
+    const { unmount } = render(<ChapterProgress manga={near} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    const plus = screen.getByRole('button', { name: '+1 – ein Kapitel mehr gelesen' });
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    expect(plus.disabled).toBe(true);
+    fireEvent.click(plus);
+    unmount();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ add: 2 });
+  });
+
+  it('a typed chapter drops +1 taps that wait', async () => {
+    render(<ChapterProgress manga={manga} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '+1 – ein Kapitel mehr gelesen' }));
+    fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ chapters_read: 170 });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('withChapter puts the own chapter into the detail', () => {
     expect(withChapter(manga, { chapters_read: 0 }, user)).toMatchObject({ chapters_read: 0, chapter_progress: [{ user_id: 2, chapters_read: 30 }] });
     expect(withChapter(manga, { chapters_read: 160 }, user).chapter_progress.map((p) => [p.username, p.chapters_read])).toEqual([['anna', 160], ['ben', 30]]);
