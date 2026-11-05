@@ -2382,6 +2382,7 @@
   "Ungültige Anmeldedaten": "サインイン情報が正しくありません",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "選択が正しくありません(巻IDを1～{max_ids}件)",
   "Ungültige Backup-Datenbank: {reason}": "バックアップのデータベースが無効です: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "巻数が無効です（0〜{max}の数値）",
   "Ungültige Besitzer-Änderung": "所有者の変更が正しくありません",
   "Ungültige Bild-URL": "画像URLが正しくありません",
   "Ungültige Bilderliste": "画像リストが正しくありません",

@@ -345,6 +345,23 @@ test('volumes: volume numbers must be non-empty strings or numbers of at most 80
     assert.equal((await editor('PUT', `/volumes/${long}`, { volume_number: 'y'.repeat(90), status: 'Fehlt' })).status, 200);
 });
 
+test('volumes: a plain number must lie between 0 and 5000 without a sign; labels stay free', async () => {
+    const id = await newSeries('Bandnummer-Grenzen');
+    for (const volume_number of ['-5', '+3', '-0', '5001', '999999', 'Band 6000', 999999, -1]) {
+        const res = await editor('POST', '/volumes', { manga_id: id, volume_number });
+        assert.deepEqual([res.status, res.body.error], [400, 'Ungültige Bandnummer (Zahl von 0 bis 5000)'], JSON.stringify(volume_number));
+    }
+    for (const volume_number of ['0', '5000', '12.5', 'Artbook 2024', '1e3']) {
+        assert.equal((await editor('POST', '/volumes', { manga_id: id, volume_number })).status, 200, volume_number);
+    }
+    const vid = (await detailOf(id)).volumes.find(v => v.volume_number === '0').id;
+    assert.equal((await editor('PUT', `/volumes/${vid}`, { volume_number: '-2' })).status, 400);
+    assert.equal((await editor('POST', '/volumes/batch', { manga_id: id, from: 4999, to: 5001 })).status, 400);
+    // a legacy row with such a number stays editable as long as the number is not touched
+    const legacy = seedRaw(id, '-7');
+    assert.equal((await editor('PUT', `/volumes/${legacy}`, { volume_number: '-7', status: 'Fehlt' })).status, 200);
+});
+
 test('volumes: "Band 5" and "5" are the same regular volume; other labels stay as typed', async () => {
     const id = await newSeries('Praefix Doppelte');
     const add = (volume_number, type) => editor('POST', '/volumes', { manga_id: id, volume_number, type });

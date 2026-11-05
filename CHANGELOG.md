@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Volumes
+- **Volume numbers in range:** a volume number that is a plain number now has to lie between 0 and 5000 without a sign ("-5", "+3" and "999999" answer "Ungültige Bandnummer (Zahl von 0 bis 5000)"), in the add form, the volume editor, `POST`/`PUT /api/volumes` and the batch range; labels such as "Artbook" stay free. Entries stored before keep their number until it is changed.
+- **Sort by volume number:** a regular volume whose number is not a plain number ("Starter 1", "-5", "1e3") now sorts after the numbered volumes and the unnumbered Special Editions and before Schuber and specials, instead of next to the first digit in its label; that is where the server puts it, so the order no longer jumps between a reload and a sort on the page.
+
 ## 3.6.0
 
 ### Before updating

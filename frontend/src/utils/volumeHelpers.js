@@ -221,14 +221,20 @@ export const sortAfterOf = (vol) => {
 export const getVolumeSortInfo = (vol) => {
   const rawType = inferVolumeType(vol);
 
-  // Check for number in volume_number
-  const match = String(vol.volume_number).match(/(\d+(\.\d+)?)/);
-  const num = match ? parseFloat(match[1]) : (parseFloat(vol.volume_number) || 999999);
+  // A regular volume counts as numbered only when its number is a plain number ("12", "12.5", "Band 12"), like
+  // volumes.number_sort on the server. Labels such as "Starter 1", "-5" or "1e3" come after the unnumbered Special
+  // Editions and before Schuber and specials, where volumeOrderSql puts them (rank 2 with sub-rank 0; here 1.75, because
+  // this side orders Schuber by the number in their label). Other types read the first number of their label.
+  const plain = rawType === 'volume'
+    ? String(vol.volume_number ?? '').trim().match(/^(?:band\s*|bd\.?\s*)?(\d+(?:\.\d+)?)$/i)
+    : null;
+  const match = rawType === 'volume' ? plain : String(vol.volume_number).match(/(\d+(\.\d+)?)/);
+  const num = match ? parseFloat(match[1]) : (rawType === 'volume' ? 999999 : (parseFloat(vol.volume_number) || 999999));
 
   let rank = 1;
   let subRank = 0;
   if (rawType === 'volume') {
-    rank = 1;
+    rank = match ? 1 : 1.75;
     subRank = 0;
   } else if (rawType === 'special_edition') {
     if (match) {

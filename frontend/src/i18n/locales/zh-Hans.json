@@ -2382,6 +2382,7 @@
   "Ungültige Anmeldedaten": "登录凭据无效",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "选择无效（1 到 {max_ids} 个卷 ID）",
   "Ungültige Backup-Datenbank: {reason}": "无效的备份数据库：{reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "卷号无效（0 到 {max} 之间的数字）",
   "Ungültige Besitzer-Änderung": "无效的拥有者更改",
   "Ungültige Bild-URL": "无效的图片 URL",
   "Ungültige Bilderliste": "无效的图片列表",

@@ -2419,6 +2419,7 @@
   "Ungültige Anmeldedaten": "Invalid credentials",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Invalid selection (1 to {max_ids} volume IDs)",
   "Ungültige Backup-Datenbank: {reason}": "Invalid backup database: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "Invalid volume number (a number from 0 to {max})",
   "Ungültige Besitzer-Änderung": "Invalid owner change",
   "Ungültige Bild-URL": "Invalid image URL",
   "Ungültige Bilderliste": "Invalid image list",

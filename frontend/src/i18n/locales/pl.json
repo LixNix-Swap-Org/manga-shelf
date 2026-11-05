@@ -2493,6 +2493,7 @@
   "Ungültige Anmeldedaten": "Nieprawidłowe dane logowania",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Nieprawidłowy wybór (od 1 do {max_ids} ID tomów)",
   "Ungültige Backup-Datenbank: {reason}": "Nieprawidłowa baza danych kopii zapasowej: {reason}",
+  "Ungültige Bandnummer (Zahl von 0 bis {max})": "Nieprawidłowy numer tomu (liczba od 0 do {max})",
   "Ungültige Besitzer-Änderung": "Nieprawidłowa zmiana właściciela",
   "Ungültige Bild-URL": "Nieprawidłowy URL obrazu",
   "Ungültige Bilderliste": "Nieprawidłowa lista obrazów",
