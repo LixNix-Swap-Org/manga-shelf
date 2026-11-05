@@ -25,6 +25,10 @@ export const BUSY_TEXT = 'Die Sammlung wird gerade ersetzt – bitte gleich noch
 // a follower's profile that the stored database does not have yet: no row until this window holds the lock
 export const PENDING_PROFILE_ID = -1;
 const PERSIST_DELAY_MS = 300;
+// a save writes the whole database (on the phones as base64 over the bridge): the quiet time it waits for grows with
+// what the last save cost, and a stream of writes is saved at the latest after PERSIST_MAX_WAIT_MS
+const PERSIST_IDLE_MAX_MS = 2000;
+const PERSIST_MAX_WAIT_MS = 5000;
 const RETRY_FIRST_MS = 1000;
 const RETRY_MAX_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -185,10 +189,12 @@ function requestLock(locks, name, options = {}) {
 
 /**
  * The core on the device. Options: `files`, `locks` (one window holds the database), `channel(name)`, `win`/`doc`
- * (flush on pagehide/hidden), `now`, `windowLocks` (lock kept by a previous runtime via close({ keepLock: true })).
+ * (flush on pagehide/hidden), `now`, `windowLocks` (lock kept by a previous runtime via close({ keepLock: true })),
+ * `persistDelayMs` (the shortest quiet time before a save) and `persistMaxWaitMs` (the longest a change waits).
  */
 export async function createLocalRuntime({
   SQL, store, http, files: givenFiles = null, profile = {}, secureCredentials = false, persistDelayMs = PERSIST_DELAY_MS,
+  persistMaxWaitMs = PERSIST_MAX_WAIT_MS,
   appVersion = '', now = () => new Date(), locks = globalThis.navigator?.locks, win = globalThis.window, doc = globalThis.document,
   channel = (name) => (typeof BroadcastChannel === 'function' ? new BroadcastChannel(name) : null),
   windowLocks = sharedWindowLocks
@@ -224,13 +230,23 @@ export async function createLocalRuntime({
     try { win?.dispatchEvent?.(new CustomEvent(LOCAL_STORE_EVENT, { detail })); } catch (_) { /* no window */ }
   };
 
+  // what the last save took (export, encoding, store) and since when changes wait for one
+  let lastSaveMs = 0;
+  let dirtySince = null;
+  const idleDelay = () => Math.max(persistDelayMs, Math.min(PERSIST_IDLE_MAX_MS, lastSaveMs * 2));
+  const scheduleSave = () => {
+    clearTimeout(timer);
+    if (dirtySince === null) dirtySince = Date.now();
+    const left = dirtySince + persistMaxWaitMs - Date.now();
+    timer = setTimeout(save, Math.max(0, Math.min(idleDelay(), left)));
+  };
+
   const markDirty = () => {
     if (follower || closed) return;
     dirty = true;
     // while saving fails the retry timer stays: a new write must not hammer the store
     if (lastError || replacing) return;
-    clearTimeout(timer);
-    timer = setTimeout(save, persistDelayMs);
+    scheduleSave();
   };
 
   // a write to a connection that is no longer the live one (a handler still running on the replaced database) is not saved
@@ -305,13 +321,17 @@ export async function createLocalRuntime({
   const retryDelay = () => Math.min(RETRY_MAX_MS, RETRY_FIRST_MS * 2 ** Math.max(0, failures - 1));
 
   function persistNow(bytes) {
-    const run = saving.then(() => persist(bytes));
+    const run = saving.then(async () => {
+      const started = Date.now();
+      await persist(bytes);
+      lastSaveMs = Date.now() - started;
+    });
     saving = run.then(() => {
       const recovered = Boolean(lastError);
       lastError = null;
       failures = 0;
       // a write during a retry only set `dirty` (markDirty leaves the retry timer alone)
-      if (dirty && !timer && !closed && !replacing && !follower && !conflict) timer = setTimeout(save, persistDelayMs);
+      if (dirty && !timer && !closed && !replacing && !follower && !conflict) scheduleSave();
       savedAt = Date.now();
       if (recovered) emit('status');
       try { bus?.postMessage({ type: 'saved', seq }); } catch (_) { /* channel closed */ }
@@ -336,6 +356,7 @@ export async function createLocalRuntime({
     timer = null;
     if (follower || conflict || replacing) return saving;
     dirty = false;
+    dirtySince = null;
     persistNow(conn.export()).catch(() => {});
     return saving;
   }
@@ -572,7 +593,7 @@ export async function createLocalRuntime({
       } finally {
         replacing = false;
         // a failed replace keeps the old database: what changed there before is still to be saved
-        if (dirty && !timer && !lastError && !closed && !follower && !conflict) timer = setTimeout(save, persistDelayMs);
+        if (dirty && !timer && !lastError && !closed && !follower && !conflict) scheduleSave();
       }
       emit('replaced');
       return user;

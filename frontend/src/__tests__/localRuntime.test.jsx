@@ -311,6 +311,36 @@ describe('device persistence never acknowledges what it cannot keep', () => {
     await vi.waitFor(async () => expect(await saved()).toEqual(['Im Hintergrund', 'Vor dem Wechsel']));
   });
 
+  it('a stream of writes is saved at the latest after the longest wait, not only once it stops', async () => {
+    const store = memoryStore();
+    const rt = await newRuntime({ store, persistDelayMs: 80, persistMaxWaitMs: 150 });
+    await rt.flush();
+    const puts = vi.spyOn(store, 'put');
+    const dbPuts = () => puts.mock.calls.filter(([, key]) => key === DB_KEY).length;
+    for (let i = 0; i < 12; i++) {
+      await rt.request('POST', '/api/mangas', { title: `Strom ${i}` });
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    // 12 writes 40 ms apart never leave 80 ms of quiet: without the longest wait nothing would be saved yet
+    expect(dbPuts()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a slow save makes the next one wait for a longer quiet time', async () => {
+    const base = memoryStore();
+    let slow = false;
+    const store = { ...base, put: async (area, key, value) => { if (slow && key === DB_KEY) await new Promise((r) => setTimeout(r, 120)); return base.put(area, key, value); } };
+    const rt = await newRuntime({ store, persistDelayMs: 10 });
+    slow = true;
+    await rt.request('POST', '/api/mangas', { title: 'Langsam' });
+    await rt.flush();
+    const puts = vi.spyOn(store, 'put');
+    await rt.request('POST', '/api/mangas', { title: 'Danach' });
+    await new Promise((r) => setTimeout(r, 60));
+    // the last save took about 120 ms: the next one waits about twice that, not the 10 ms floor
+    expect(puts.mock.calls.filter(([, key]) => key === DB_KEY)).toHaveLength(0);
+    await vi.waitFor(() => expect(puts.mock.calls.some(([, key]) => key === DB_KEY)).toBe(true), { timeout: 2000 });
+  });
+
   it('the status reaches the window as an event', async () => {
     const win = new EventTarget();
     const seen = [];
