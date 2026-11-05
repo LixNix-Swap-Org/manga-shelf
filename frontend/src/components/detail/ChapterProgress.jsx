@@ -8,6 +8,9 @@ import { t, tn } from '../../i18n/index.js';
 
 // same bound as MAX_CHAPTERS in core/lib/validate.js
 const MAX_CHAPTERS = 99999;
+// a read chapter may carry one decimal (an extra chapter such as 12.5), as core/lib/validate.js parseChapter
+const CHAPTER_RE = /^\d+(\.\d)?$/;
+const chapterText = (n) => formatNumber(n, 1);
 // +1 taps within this pause go out as one { add: n }
 export const PLUS_ONE_DELAY_MS = 400;
 
@@ -39,7 +42,10 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
   const inFlight = useRef(false);
   const timer = useRef(null);
   const total = stored.total;
-  const read = stored.read + (total > 0 ? Math.min(sending + pending, Math.max(0, total - stored.read)) : sending + pending);
+  // +1 counts on from the whole chapter (12.5 + 1 = 13), like the server's { add }
+  const taps = sending + pending;
+  const base = taps > 0 ? Math.floor(stored.read) : stored.read;
+  const read = base + (total > 0 ? Math.min(taps, Math.max(0, total - base)) : taps);
   const { pct } = getChapterProgress({ chapters_read: read, total_chapters: total });
   const [draft, setDraft] = useState(stored.read ? String(stored.read) : '');
   const [capped, setCapped] = useState(false);
@@ -48,7 +54,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
   const others = (manga.chapter_progress || []).filter((p) => p.user_id !== user?.id);
   const atEnd = total > 0 && read >= total;
   const summary = total > 0
-    ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', total, { read: formatNumber(read) })
+    ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', total, { read: chapterText(read) })
     : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', read);
 
   const save = async (body, { undo = true } = {}) => {
@@ -59,7 +65,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
       onSaved(data);
       if (undo && data.chapters_read !== data.previous) {
         const text = data.chapters_read > 0
-          ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: formatNumber(data.chapters_read) })
+          ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: chapterText(data.chapters_read) })
           : t('{title}: Kapitelstand zurückgesetzt', { title: manga.title });
         notify.success(text, { action: { label: t('Rückgängig'), onClick: () => save({ chapters_read: data.previous }, { undo: false }) } });
       }
@@ -109,10 +115,10 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
   const submit = (e) => {
     e.preventDefault();
     setCapped(false);
-    const text = draft.trim();
+    const text = draft.trim().replace(',', '.');
     const value = text === '' ? 0 : Number(text);
-    if (!Number.isInteger(value) || value < 0 || value > MAX_CHAPTERS) {
-      notify.error(t('Bitte eine ganze Zahl zwischen 0 und {max} eingeben.', { max: MAX_CHAPTERS }));
+    if ((text !== '' && !CHAPTER_RE.test(text)) || value > MAX_CHAPTERS) {
+      notify.error(t('Bitte eine Zahl zwischen 0 und {max} eingeben, mit höchstens einer Nachkommastelle (z. B. 12.5).', { max: MAX_CHAPTERS }));
       return;
     }
     // a typed chapter wins over +1 taps that wait
@@ -167,17 +173,16 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
               <label htmlFor={`${ids}-chapter`} className="block text-xs font-semibold text-slate-400 mb-1">{t('Gelesen bis Kapitel')}</label>
               <input
                 id={`${ids}-chapter`}
-                type="number"
-                inputMode="numeric"
-                min="0"
-                max={total > 0 ? total : MAX_CHAPTERS}
-                step="1"
+                // text, not number: a number field drops "12,5" in some locales and would then save an empty field as 0
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 className="input-field w-28"
                 value={draft}
                 aria-describedby={capped ? `${ids}-capped` : undefined}
                 onChange={(e) => {
                   // a number above the known chapter count is cut to it, and the hint says so (same rule as the anime episodes)
-                  const n = Number(e.target.value);
+                  const n = Number(e.target.value.replace(',', '.'));
                   const over = total > 0 && e.target.value.trim() !== '' && Number.isFinite(n) && n > total;
                   setCapped(over);
                   setDraft(over ? String(total) : e.target.value);
@@ -199,7 +204,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
           <ul className="flex flex-wrap gap-2 text-xs">
             {others.map((p) => (
               <li key={p.user_id} className="px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200">
-                {t('{name}: Kapitel {n}', { name: p.username, n: formatNumber(p.chapters_read) })}
+                {t('{name}: Kapitel {n}', { name: p.username, n: chapterText(p.chapters_read) })}
               </li>
             ))}
           </ul>

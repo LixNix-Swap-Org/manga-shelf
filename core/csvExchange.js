@@ -424,7 +424,7 @@ function parseChapterReaders(raw) {
         const part = parts[i];
         const colon = part.lastIndexOf(':');
         const count = colon >= 0 ? part.slice(colon + 1).trim() : '';
-        if (/^\d+$/.test(count)) {
+        if (/^\d+(\.\d)?$/.test(count)) {
             const who = (name + part.slice(0, colon)).trim();
             const chapters = Number(count);
             if (!who || chapters > MAX_CHAPTERS) return null;

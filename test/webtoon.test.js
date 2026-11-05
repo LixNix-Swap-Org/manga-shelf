@@ -168,3 +168,31 @@ test('PUT /mangas/:id: switching the format keeps the Manga Passion link; manga_
     const fresh = (await admin('POST', '/mangas', { title: 'Neues Webtoon', format: 'webtoon', manga_passion_id: 98 })).body.id;
     assert.equal((await admin('GET', `/mangas/${fresh}`)).body.manga_passion_id, null, 'a new webtoon still gets no link');
 });
+
+test('half chapters: chapters_read takes one decimal (12.5 or "12,5"), +1 counts on from the whole chapter, the CSV keeps them', async () => {
+    wipe();
+    const id = (await admin('POST', '/mangas', { title: 'Halbe Kapitel', format: 'webtoon', total_chapters: 200 })).body.id;
+    const put = (body) => admin('PUT', `/mangas/${id}/chapters`, body);
+    let res = await put({ chapters_read: 12.5 });
+    assert.deepEqual([res.status, res.body.chapters_read], [200, 12.5]);
+    assert.equal((await admin('GET', `/mangas/${id}`)).body.chapters_read, 12.5);
+    res = await put({ add: 1 });
+    assert.deepEqual([res.body.chapters_read, res.body.previous], [13, 12.5], '+1 from 12.5 is chapter 13');
+    res = await put({ chapters_read: '20,5' });
+    assert.equal(res.body.chapters_read, 20.5);
+    for (const bad of [12.55, '12.55', -1, '1e3', 'zwölf', 99999.5]) {
+        res = await put({ chapters_read: bad });
+        assert.equal(res.status, 400, `${bad}`);
+        assert.equal(res.body.error, 'Gelesene Kapitel muss eine Zahl zwischen 0 und 99999 sein, mit höchstens einer Nachkommastelle');
+    }
+    assert.equal((await put({ add: 1.5 })).status, 400, 'add stays whole');
+    assert.equal((await put({ chapters_read: 200.5 })).body.code, 'CHAPTER_ABOVE_TOTAL');
+
+    const csv = await exportCsv();
+    assert.match(csv, /admin: 20\.5/);
+    wipe();
+    const imported = await admin('POST', '/import/csv', { csv });
+    assert.equal(imported.status, 200, JSON.stringify(imported.body));
+    const back = require('../db').db.prepare('SELECT chapters_read FROM chapter_progress').get();
+    assert.equal(back.chapters_read, 20.5);
+});

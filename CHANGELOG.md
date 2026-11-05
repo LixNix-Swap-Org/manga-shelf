@@ -8,6 +8,7 @@
 
 ### Webtoons
 - **Fast "+1" taps count:** every tap on "+1" in the chapter panel now counts. The chapter goes up at once, and taps within a short pause are saved together (one undo for all of them). Taps during a running save follow right after it, and leaving the page inside the pause still saves them.
+- **Half chapters:** "Gelesen bis Kapitel" takes one decimal, for an extra chapter such as 12.5 ("12,5" works too); cards, lists, the chapter panel and the statistics show it as "12,5". "+1" counts on from the whole chapter (12.5 → 13). The CSV keeps it ("anna: 12.5"). `PUT /api/mangas/:id/chapters` takes `chapters_read` with one decimal; `add` stays a whole number.
 - **One rule for numbers above the total:** "Gelesen bis Kapitel" and "Gesehene Folgen" in the anime detail both cut a number above the known total to the total and say so below the field ("Diese Reihe hat 200 Kapitel – mehr geht nicht."). Before, the anime field cut it without a word and the chapter field showed the browser's own message.
 
 ## 3.6.0

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
 import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
-import { formatCount, formatMoney } from '../../utils/format';
+import { formatCount, formatMoney, formatNumber } from '../../utils/format';
 import { splitAuthors } from '../../utils/seriesMeta';
 import { langFor } from '../common/lang';
 import { t, tn } from '../../i18n/index.js';
@@ -22,7 +22,7 @@ export function seriesSummary(manga, { owned, total, extras }, readState, defaul
     const chapters = getChapterProgress(manga);
     parts.push(t('Webtoon'));
     parts.push(chapters.total > 0
-      ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: chapters.read })
+      ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: formatNumber(chapters.read, 1) })
       : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', chapters.read));
     if (owned > 0) parts.push(formatCount(owned, 'Band', 'Bände'));
     return parts.filter(Boolean).join(', ');

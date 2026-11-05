@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
 import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
 import { getReadState } from '../../utils/collectionHelpers';
-import { formatCount, formatMoney } from '../../utils/format';
+import { formatCount, formatMoney, formatNumber } from '../../utils/format';
 import { langFor } from '../common/lang';
 import { splitAuthors } from '../../utils/seriesMeta';
 import { AuthorButtons } from './MangaCard';
@@ -81,7 +81,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
                 aria-valuenow={chapters.pct}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuetext={tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: chapters.read })}
+                aria-valuetext={tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', chapters.total, { read: formatNumber(chapters.read, 1) })}
                 aria-label={t('Fortschritt')}
                 className="w-24 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-1"
               >

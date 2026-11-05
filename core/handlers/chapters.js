@@ -1,9 +1,11 @@
 // Chapter progress of webtoons and manhwa: each user's own "read up to chapter N" (PUT /mangas/:id/chapters).
 const access = require('../lib/access');
 const { msg, badRequest, notFound } = require('../errors');
-const { parseWholeNumber, parseTrueFlag, MAX_CHAPTERS } = require('../lib/validate');
+const { parseChapter, parseWholeNumber, parseTrueFlag, MAX_CHAPTERS } = require('../lib/validate');
 
 const CHAPTERS_ERROR = msg('Gelesene Kapitel muss eine ganze Zahl zwischen 0 und {max} sein', { max: MAX_CHAPTERS });
+// chapters_read may carry one decimal (an extra chapter such as 12.5); `add` stays whole
+const CHAPTER_ERROR = msg('Gelesene Kapitel muss eine Zahl zwischen 0 und {max} sein, mit höchstens einer Nachkommastelle', { max: MAX_CHAPTERS });
 
 const chapterAboveTotal = (chapter, total) => badRequest(
     msg('Kapitel {chapter} gibt es bei dieser Reihe nicht (sie hat {total} Kapitel).', { chapter, total }),
@@ -15,8 +17,9 @@ const chaptersOf = (ctx, mangaId, userId) => ctx.db.prepare('SELECT chapters_rea
     .get(mangaId, userId)?.chapters_read || 0;
 
 /**
- * { chapters_read } sets the own chapter (lower too, 0 removes the row) or { add } counts on; monotonic: true never goes
- * back. Above a known total only while it stays at or below the stored chapter (a total lowered later).
+ * { chapters_read } sets the own chapter (lower too, 0 removes the row; one decimal allowed: 12.5) or { add } counts on
+ * from the whole chapter (12.5 + 1 = 13); monotonic: true never goes back. Above a known total only while it stays at
+ * or below the stored chapter (a total lowered later).
  * Viewer rights in the shelf are enough, like reading marks.
  */
 function setChapters(ctx, { params, body }) {
@@ -26,8 +29,9 @@ function setChapters(ctx, { params, body }) {
     access.mangaAccess(ctx, manga.id, 'viewer');
     const absolute = body.chapters_read !== undefined;
     if (absolute === (body.add !== undefined)) throw badRequest('Entweder chapters_read oder add angeben');
-    const amount = parseWholeNumber(absolute ? body.chapters_read : body.add);
-    if (amount === null || amount > MAX_CHAPTERS || (!absolute && amount < 1)) throw badRequest(CHAPTERS_ERROR);
+    const amount = absolute ? parseChapter(body.chapters_read) : parseWholeNumber(body.add);
+    if (absolute && amount === null) throw badRequest(CHAPTER_ERROR);
+    if (!absolute && (amount === null || amount > MAX_CHAPTERS || amount < 1)) throw badRequest(CHAPTERS_ERROR);
     const monotonic = parseTrueFlag(body.monotonic, false);
     const userId = ctx.user.id;
 
@@ -35,7 +39,7 @@ function setChapters(ctx, { params, body }) {
     let next = 0;
     ctx.db.transaction(() => {
         previous = chaptersOf(ctx, manga.id, userId);
-        next = absolute ? amount : previous + amount;
+        next = absolute ? amount : Math.floor(previous) + amount;
         if (monotonic) next = Math.max(next, previous);
         if (next > MAX_CHAPTERS) throw badRequest(CHAPTERS_ERROR);
         if (manga.total_chapters && next > manga.total_chapters && next > previous) throw chapterAboveTotal(next, manga.total_chapters);
