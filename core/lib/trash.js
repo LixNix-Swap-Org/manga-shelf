@@ -1,12 +1,14 @@
 // Trash: a deleted series or volume leaves its tables (so no list, statistic or export can see it) and is kept as JSON
-// in `trash` for TRASH_RETENTION_DAYS; core/handlers/trash.js lists, restores and purges it.
+// in `trash` for TRASH_RETENTION_DAYS; core/handlers/trash.js lists, restores and purges it. Reading marks and chapter
+// progress sit on the catalog (migration 42) and stay: other shelves holding the edition still show them, and the same
+// edition added again (or restored) shows them again. The payload keeps a copy as the shelf showed it.
 const TRASH_RETENTION_DAYS = 30;
 
 /** 'YYYY-MM-DD HH:MM:SS' in UTC, the form of SQLite's CURRENT_TIMESTAMP. */
 const sqlTimestamp = (date) => date.toISOString().slice(0, 19).replace('T', ' ');
 
 const OWNERS_SQL = 'SELECT vo.* FROM volume_owners vo WHERE vo.volume_id = ? ORDER BY vo.created_at, vo.rowid';
-const READS_SQL = 'SELECT vr.* FROM volume_reads vr WHERE vr.volume_id = ? ORDER BY vr.read_at, vr.rowid';
+const READS_SQL = 'SELECT vr.* FROM shelf_volume_reads vr WHERE vr.volume_id = ? ORDER BY vr.read_at, vr.user_id';
 
 function volumeParts(ctx, volumeIds) {
     const owners = [];
@@ -29,13 +31,13 @@ function insertTrash(ctx, { kind, refId, mangaId, title, payload, shelfId }) {
 }
 
 function deleteVolumeRows(ctx, volumeId) {
-    ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ?').run(volumeId);
     ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ?').run(volumeId);
     ctx.db.prepare('DELETE FROM volumes WHERE id = ?').run(volumeId);
 }
 
 /**
- * Moves a series with its volumes, owners, reads and chapter progress into the trash; call it inside a transaction.
+ * Moves a series with its volumes and owners into the trash (a copy of its reads and chapter progress goes into the
+ * payload); call it inside a transaction.
  * Returns the trash id, or null when the series does not exist.
  */
 function moveMangaToTrash(ctx, mangaId) {
@@ -44,7 +46,7 @@ function moveMangaToTrash(ctx, mangaId) {
     const volumes = ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ? ORDER BY id').all(manga.id);
     const { owners, reads } = volumeParts(ctx, volumes.map(v => v.id));
     const animeIds = ctx.db.prepare('SELECT id FROM animes WHERE manga_id = ? ORDER BY id').all(manga.id).map(r => r.id);
-    const chapters = ctx.db.prepare('SELECT * FROM chapter_progress WHERE manga_id = ? ORDER BY user_id').all(manga.id);
+    const chapters = ctx.db.prepare('SELECT * FROM shelf_chapter_progress WHERE manga_id = ? ORDER BY user_id').all(manga.id);
     const trashId = insertTrash(ctx, {
         kind: 'manga', refId: manga.id, mangaId: manga.id, title: manga.title,
         payload: { manga, volumes, owners, reads, anime_ids: animeIds, chapters }, shelfId: manga.shelf_id
@@ -52,12 +54,11 @@ function moveMangaToTrash(ctx, mangaId) {
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
     // the linked anime keep naming the work, so every other edition of it still finds them
     ctx.db.prepare('UPDATE animes SET work_id = ? WHERE manga_id = ?').run(manga.work_id || null, manga.id);
-    ctx.db.prepare('DELETE FROM chapter_progress WHERE manga_id = ?').run(manga.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);
     return trashId;
 }
 
-/** Moves one volume (row, owners, reads) into the trash; inside a transaction. Returns the trash id or null. */
+/** Moves one volume (row, owners; a copy of its reads) into the trash; inside a transaction. Returns the trash id or null. */
 function moveVolumeToTrash(ctx, volumeId) {
     const volume = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?').get(volumeId);
     if (!volume) return null;

@@ -11,6 +11,7 @@ const { resolveTargetUser } = access;
 const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
+const { addRead, removeRead } = require('../lib/marks');
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
@@ -477,7 +478,7 @@ function bulkSnapshot(ctx, vol, { readUser, readOnly = false }) {
         : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id) };
     if (readUser) {
         entry.read_user = readUser;
-        entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
+        entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
     }
     return entry;
 }
@@ -521,13 +522,12 @@ function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
 /** Sets one reader's state; "read" only counts for owned volumes (as batch-read). Returns false when skipped. */
 function applyReadOp(ctx, volumeId, { userId, read, readAt }) {
     if (!read) {
-        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(volumeId, userId);
+        removeRead(ctx.db, volumeId, userId);
         return true;
     }
     const status = ctx.db.prepare('SELECT status FROM volumes WHERE id = ?').get(volumeId)?.status;
     if (status !== OWNED_STATUS) return false;
-    if (readAt) ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)').run(volumeId, userId, readAt);
-    else ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, userId);
+    addRead(ctx.db, volumeId, userId, readAt || undefined);
     return true;
 }
 
@@ -655,8 +655,7 @@ function restoreOwners(ctx, volumeId, owners) {
 }
 
 function restoreReads(ctx, volumeId, reads) {
-    const insert = ctx.db.prepare('INSERT OR REPLACE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
-    for (const r of reads) insert.run(volumeId, r.user_id, r.read_at);
+    for (const r of reads) addRead(ctx.db, volumeId, r.user_id, r.read_at ?? undefined, { replace: true });
 }
 
 // { revert: undo_token } restores exactly what that bulk edit changed: fields, owner rows, reads, and deleted volumes
@@ -721,7 +720,7 @@ function revertBulk(ctx, token) {
                         putOwners(snap.id, snap.owners, shelfId);
                     }
                     if (snap.read_user) {
-                        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(snap.id, snap.read_user);
+                        removeRead(ctx.db, snap.id, snap.read_user);
                         restoreReads(ctx, snap.id, members(snap.reads, shelfId).filter((r) => r.user_id === snap.read_user));
                     }
                 }

@@ -6,6 +6,7 @@ const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL } = require('./lib/catalog');
+const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -85,6 +86,35 @@ function replaceOnce(sql, pattern, replacement, what) {
     if (!matches || matches.length !== 1) throw new Error(`${what}: expected exactly one match of ${pattern}`);
     return sql.replace(pattern, replacement);
 }
+
+/**
+ * Migration 13 with the SQL of its time (volume_reads by volume_id; owners.js writes catalog marks since migration 42):
+ * every volume with the legacy status 'Gelesen' becomes 'Vorhanden'. Without an owner the oldest admin owns it; without a
+ * read entry its owners become its readers. Returns the count. Frozen.
+ */
+function convertLegacyReadStatusV13(d) {
+    const rows = d.prepare("SELECT id FROM volumes WHERE LOWER(TRIM(status)) = LOWER('Gelesen')").all();
+    if (!rows.length) return 0;
+    const fallback = d.prepare("SELECT id FROM users ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id LIMIT 1").get()?.id ?? null;
+    for (const { id } of rows) {
+        const vol = d.prepare('SELECT price, purchase_date, condition FROM volumes WHERE id = ?').get(id);
+        if (!d.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1').get(id) && fallback) {
+            d.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)')
+                .run(id, fallback, vol.price ?? null, vol.purchase_date ?? null, vol.condition ?? null);
+        }
+        if (!d.prepare('SELECT 1 FROM volume_reads WHERE volume_id = ? LIMIT 1').get(id)) {
+            d.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) SELECT volume_id, user_id FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid').run(id);
+        }
+        d.prepare("UPDATE volumes SET status = 'Vorhanden' WHERE id = ?").run(id);
+    }
+    return rows.length;
+}
+
+/** The data_versions triggers of `table` (migration 39) for `scope`. */
+const dataVersionTriggersSql = (table, scope) => [['ins', 'INSERT'], ['upd', 'UPDATE'], ['del', 'DELETE']].map(([suffix, event]) => `
+    CREATE TRIGGER IF NOT EXISTS trg_dv_${table}_${suffix} AFTER ${event} ON ${table} BEGIN
+        UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
+    END;`).join('\n');
 
 const WORK_TRIGGER_BODY = `INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                             SELECT NEW.work_key, ${WORK_ANILIST_SQL('NEW.work_key')}, ${WORK_MAL_SQL('NEW.work_key')} WHERE NEW.work_key IS NOT NULL;
@@ -173,9 +203,10 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_volumes_manga_id ON volumes (manga_id);
                     CREATE INDEX IF NOT EXISTS idx_volumes_status ON volumes (status);
                     CREATE INDEX IF NOT EXISTS idx_volume_reads_user ON volume_reads (user_id);
-                    CREATE INDEX IF NOT EXISTS idx_volume_reads_vol ON volume_reads (volume_id);
                     CREATE INDEX IF NOT EXISTS idx_mangas_passion_id ON mangas (manga_passion_id);
                 `);
+                // migration 12 drops it again; a replay on marks keyed by the catalog (migration 42) has no volume_id
+                if (!marksOnCatalog(d)) d.exec('CREATE INDEX IF NOT EXISTS idx_volume_reads_vol ON volume_reads (volume_id);');
             }
         },
         {
@@ -306,7 +337,8 @@ function migrationList(log = silentLog) {
             version: 13,
             name: 'convert_legacy_gelesen_status',
             up: (d) => {
-                const converted = migrateLegacyReadStatus(d);
+                // replayed on a database whose marks are on the catalog already (migration 42): the current rules of owners.js
+                const converted = marksOnCatalog(d) ? migrateLegacyReadStatus(d) : convertLegacyReadStatusV13(d);
                 if (converted) log.info(`[Database Migration] Converted ${converted} volumes with legacy status 'Gelesen' to 'Vorhanden' plus a read entry`);
             }
         },
@@ -979,6 +1011,69 @@ function migrationList(log = silentLog) {
                         && f.on_delete === target.split(' ON DELETE ')[1]));
                     if (!done) rebuildTable(d, table, sql => withForeignKeys(sql, keys));
                 }
+            }
+        },
+        {
+            version: 42,
+            name: 'marks_on_catalog',
+            up: (d) => {
+                // Reading marks and chapter progress move from the shelf rows to the catalog (core/lib/marks.js): volume_reads
+                // by catalog_volume_id, chapter_progress by catalog_series_id. Rows of shelves holding the same edition merge
+                // (earliest read, highest chapter). The views shelf_volume_reads/shelf_chapter_progress show them per row.
+                for (const name of MARK_VIEWS) d.exec(`DROP VIEW IF EXISTS ${name};`);
+                for (const name of MARK_FOLLOW_TRIGGERS) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                // each table once (a replayed migration finds it keyed by the catalog already)
+                const move = (table, { keyed, ddl, unlinkedSql, copySql, hiddenSql }) => {
+                    if (keyed(d)) return;
+                    const unlinked = d.prepare(unlinkedSql).get().n;
+                    if (unlinked) throw new Error(`${table}: ${unlinked} rows of series or volumes without a catalog entry`);
+                    const before = d.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+                    const hidden = d.prepare(hiddenSql).get().n;
+                    d.exec(`${ddl.replace('{name}', `${table}_catalog`)}; ${copySql}; DROP TABLE ${table};`);
+                    // nothing else names the table; the legacy rename does not re-check the triggers of other tables
+                    d.exec('PRAGMA legacy_alter_table = ON;');
+                    try { d.exec(`ALTER TABLE ${table}_catalog RENAME TO ${table};`); } finally { d.exec('PRAGMA legacy_alter_table = OFF;'); }
+                    const after = d.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+                    if (before) log.info(`[Database Migration] v42: ${table} ${before} -> ${after} rows on the catalog (${hidden} of users outside the shelf, kept hidden)`);
+                };
+                const outsideShelf = (alias, mangaAlias) => `NOT EXISTS (SELECT 1 FROM shelf_members sm WHERE sm.shelf_id = ${mangaAlias}.shelf_id AND sm.user_id = ${alias}.user_id)`;
+                move('volume_reads', {
+                    keyed: marksOnCatalog,
+                    ddl: `CREATE TABLE {name} (
+                            catalog_volume_id INTEGER NOT NULL REFERENCES catalog_volumes(id),
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (catalog_volume_id, user_id)
+                        )`,
+                    unlinkedSql: 'SELECT count(*) AS n FROM volume_reads r JOIN volumes v ON v.id = r.volume_id WHERE v.catalog_volume_id IS NULL',
+                    hiddenSql: `SELECT count(*) AS n FROM volume_reads r JOIN volumes v ON v.id = r.volume_id JOIN mangas m ON m.id = v.manga_id WHERE ${outsideShelf('r', 'm')}`,
+                    copySql: `INSERT INTO volume_reads_catalog (catalog_volume_id, user_id, read_at)
+                        SELECT v.catalog_volume_id, r.user_id, MIN(r.read_at) FROM volume_reads r JOIN volumes v ON v.id = r.volume_id
+                        GROUP BY v.catalog_volume_id, r.user_id`
+                });
+                move('chapter_progress', {
+                    keyed: chaptersOnCatalog,
+                    ddl: `CREATE TABLE {name} (
+                            catalog_series_id INTEGER NOT NULL REFERENCES catalog_series(id),
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            chapters_read INTEGER NOT NULL,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (catalog_series_id, user_id)
+                        )`,
+                    unlinkedSql: 'SELECT count(*) AS n FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id WHERE m.catalog_series_id IS NULL',
+                    hiddenSql: `SELECT count(*) AS n FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id WHERE ${outsideShelf('p', 'm')}`,
+                    copySql: `INSERT INTO chapter_progress_catalog (catalog_series_id, user_id, chapters_read, updated_at)
+                        SELECT m.catalog_series_id, p.user_id, MAX(p.chapters_read), MAX(p.updated_at) FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id
+                        GROUP BY m.catalog_series_id, p.user_id`
+                });
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_volume_reads_user ON volume_reads (user_id);
+                    CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
+                    ${dataVersionTriggersSql('volume_reads', 'collection')}
+                    ${dataVersionTriggersSql('chapter_progress', 'collection')}
+                    ${MARK_VIEWS_SQL}
+                    ${MARK_FOLLOW_TRIGGERS_SQL}
+                `);
             }
         }
     ];

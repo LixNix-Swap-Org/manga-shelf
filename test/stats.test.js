@@ -442,7 +442,7 @@ test('reading over time: reads per month, backlog curve, years, streaks and the 
     const b1 = await addVolume(b, '1', { pages: 100 });
     const b2 = await addVolume(b, '2', { pages: 100 });
     await addVolume(a, '5', { status: 'Fehlt' });
-    const setRead = (volumeId, month) => db.prepare('INSERT OR REPLACE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)')
+    const setRead = (volumeId, month) => db.prepare('INSERT OR REPLACE INTO volume_reads (catalog_volume_id, user_id, read_at) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?, ?)')
         .run(volumeId, me, month ? `${month}-10 12:00:00` : null);
     setRead(aIds[0], monthKey(2));
     setRead(aIds[1], monthKey(1));

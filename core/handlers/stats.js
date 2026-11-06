@@ -231,7 +231,7 @@ function statsUsers(ctx, shelfIds) {
     return ctx.db.prepare(`
         SELECT u.id, u.username, u.role FROM users u
         WHERE EXISTS (SELECT 1 FROM shelf_members sm WHERE sm.user_id = u.id AND ${members.sql})
-           OR ${marked('volume_owners', 'vo')} OR ${marked('volume_reads', 'vr')}
+           OR ${marked('volume_owners', 'vo')} OR ${marked('shelf_volume_reads', 'vr')}
         ORDER BY u.id
     `).all(...members.params, ...series.params, ...series.params);
 }

@@ -91,7 +91,7 @@ test('migration v12: ISBN lookups use an index, the redundant volume_reads index
     const plan = (sql) => db.prepare('EXPLAIN QUERY PLAN ' + sql).all().map(r => r.detail).join(' | ');
     assert.match(plan('SELECT 1 FROM volumes WHERE isbn = ? LIMIT 1'), /INDEX idx_volumes_isbn/);
     assert.doesNotMatch(plan('SELECT id FROM volumes WHERE isbn = ? ORDER BY id LIMIT 1'), /TEMP B-TREE/);
-    assert.match(plan('DELETE FROM volume_reads WHERE volume_id = ?'), /SEARCH volume_reads USING (COVERING )?INDEX sqlite_autoindex_volume_reads_1/);
+    assert.match(plan('DELETE FROM volume_reads WHERE catalog_volume_id = ?'), /SEARCH volume_reads USING (COVERING )?INDEX sqlite_autoindex_volume_reads_1/);
 });
 
 test('migration v13 turns legacy Gelesen volumes into owned volumes with a read entry, once', () => {
@@ -105,7 +105,7 @@ test('migration v13 turns legacy Gelesen volumes into owned volumes with a read 
     const state = () => ({
         status: db.prepare('SELECT status FROM volumes WHERE id = ?').get(volId).status,
         owners: db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ?').all(volId).map(r => r.user_id),
-        reads: db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(volId).map(r => r.user_id),
+        reads: db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(volId).map(r => r.user_id),
         owned: db.prepare('SELECT owned_volumes FROM mangas WHERE id = ?').get(mangaId).owned_volumes
     });
     try {
@@ -273,7 +273,7 @@ test('restoring a backup with legacy Gelesen volumes converts them on the staged
     assert.equal(vol.status, 'Vorhanden');
     assert.equal(vol.owned_volumes, 1);
     assert.deepEqual(db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
-    assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
+    assert.deepEqual(db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
     assert.equal(db.prepare("SELECT count(*) AS c FROM volumes WHERE status = 'Gelesen'").get().c, 0);
 });
 

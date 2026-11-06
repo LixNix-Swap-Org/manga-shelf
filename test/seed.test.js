@@ -29,7 +29,7 @@ function dump(dataDir) {
       mangas: db.prepare('SELECT * FROM mangas ORDER BY id').all().map(({ created_at, updated_at, ...m }) => m),
       volumes: db.prepare('SELECT * FROM volumes ORDER BY id').all().map(({ created_at, ...v }) => v),
       owners: db.prepare('SELECT volume_id, user_id, price, purchase_date, condition FROM volume_owners ORDER BY volume_id, user_id').all(),
-      reads: db.prepare('SELECT volume_id, user_id FROM volume_reads ORDER BY volume_id, user_id').all()
+      reads: db.prepare('SELECT volume_id, user_id FROM shelf_volume_reads ORDER BY volume_id, user_id').all()
     };
   } finally {
     db.close();

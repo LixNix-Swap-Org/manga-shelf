@@ -4,6 +4,7 @@ const { csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, rowNote, CsvFormatErr
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { inferVolumeType } = require('../lib/volumeType');
 const { addOwner, syncOwnersWithStatus, markRead, OWNED_STATUS } = require('../lib/owners');
+const { setChapterProgress } = require('../lib/marks');
 const { HttpError, badRequest, msg } = require('../errors');
 const { DEFAULT_CURRENCY, DEFAULT_LANGUAGE, isManualWorkKey, manualWorkKey } = require('../lib/language');
 const { readProfile } = require('../lib/locales');
@@ -35,7 +36,7 @@ const SERIES_DETAILS_SELECT = `
            cover_image AS series_cover, banner_image AS series_banner, description AS series_description,
            NULLIF(format, 'print') AS series_format, total_chapters AS series_chapters,
            (SELECT GROUP_CONCAT(entry, ', ') FROM (
-               SELECT u.username || ': ' || cp.chapters_read AS entry FROM chapter_progress cp JOIN users u ON u.id = cp.user_id
+               SELECT u.username || ': ' || cp.chapters_read AS entry FROM shelf_chapter_progress cp JOIN users u ON u.id = cp.user_id
                WHERE cp.manga_id = mangas.id ORDER BY cp.user_id
            )) AS series_chapter_readers
     FROM mangas`;
@@ -47,7 +48,7 @@ const EXPORT_SELECT = `
            v.price, v.target_price, NULLIF(v.priority, 0) AS priority, v.release_date, v.release_year, v.purchase_date,
            v.condition, v.pages, v.notes, m.wish_priority AS series_wish,
            v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id, v.language AS volume_language, v.sort_after,
-           (SELECT GROUP_CONCAT(u.username, ', ') FROM volume_reads vr JOIN users u ON u.id = vr.user_id WHERE vr.volume_id = v.id) AS readers,
+           (SELECT GROUP_CONCAT(u.username, ', ') FROM shelf_volume_reads vr JOIN users u ON u.id = vr.user_id WHERE vr.volume_id = v.id) AS readers,
            (SELECT GROUP_CONCAT(username, ', ') FROM (SELECT u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id WHERE vo.volume_id = v.id ORDER BY vo.created_at, vo.rowid)) AS owners
     FROM mangas m LEFT JOIN volumes v ON v.manga_id = m.id`;
 
@@ -279,7 +280,6 @@ function importCsv(ctx, { body }) {
                             format, total_chapters)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const insertChapters = ctx.db.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
@@ -347,7 +347,7 @@ function importCsv(ctx, { body }) {
                 result.warnings.push(rowNote(r.line, msg('Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)', { name })));
                 continue;
             }
-            if (chapters > 0 && mangaId > 0) insertChapters.run(mangaId, userId, chapters);
+            if (chapters > 0 && mangaId > 0) setChapterProgress(ctx.db, mangaId, userId, chapters);
         }
     };
 

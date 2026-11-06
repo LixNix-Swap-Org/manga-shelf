@@ -172,7 +172,7 @@ test('owners and reads of a user deleted meanwhile stay out; the linked anime is
     assert.equal((await editor('POST', `/trash/${del.body.trash_id}/restore`)).status, 200);
     const owners = db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(v1).map(r => r.user_id);
     assert.deepEqual(owners, [editorId]);
-    assert.equal(db.prepare('SELECT count(*) AS n FROM volume_reads WHERE volume_id = ?').get(v1).n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM shelf_volume_reads WHERE volume_id = ?').get(v1).n, 0);
     assert.equal(db.prepare('SELECT manga_id FROM animes WHERE id = ?').get(animeId).manga_id, id);
 });
 

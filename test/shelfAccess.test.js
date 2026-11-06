@@ -49,7 +49,7 @@ async function volume(client, mangaId, number, extra = {}) {
 }
 
 const ownersOf = (volumeId) => db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(volumeId).map(r => r.user_id);
-const readersOf = (volumeId) => db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(volumeId).map(r => r.user_id);
+const readersOf = (volumeId) => db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ? ORDER BY user_id').all(volumeId).map(r => r.user_id);
 
 test('POST /volumes and /volumes/batch take manga_id as a plain id only: "1e1" and friends never reach another series', async () => {
     const ben = await account('a1_ben');
@@ -299,7 +299,7 @@ test('statistics name only the accounts of the requested shelves; reading stats 
     const own = (await ute('POST', '/shelves', { name: 'Ute privat' })).body.id;
     const homeVol = await volume(admin, await series(admin, 'A6 Haushalt'), '1', { status: 'Vorhanden' });
     const ownVol = await volume(ute, await series(ute, 'A6 Ute', { shelf_id: own }), '1', { status: 'Vorhanden' });
-    for (const v of [homeVol, ownVol]) db.prepare('INSERT INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, NULL)').run(v, ute.id);
+    for (const v of [homeVol, ownVol]) db.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id, read_at) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?, NULL)').run(v, ute.id);
     assert.equal((await ute('GET', '/stats/reading')).body.unknown_date, 2);
     assert.equal((await ute('GET', `/stats/reading?shelf_id=${own}`)).body.unknown_date, 1);
     const ownStats = (await ute('GET', `/stats?shelf_id=${own}`)).body;
@@ -425,9 +425,9 @@ test('the move preview names whose marks a move deletes; the shelf detail counts
     assert.deepEqual([ownersOf(v2), readersOf(v1), readersOf(v2)], [[], [], []]);
 });
 
-const chaptersOf = (mangaId) => db.prepare('SELECT user_id, chapters_read FROM chapter_progress WHERE manga_id = ? ORDER BY user_id').all(mangaId).map(r => [r.user_id, r.chapters_read]);
+const chaptersOf = (mangaId) => db.prepare('SELECT user_id, chapters_read FROM shelf_chapter_progress WHERE manga_id = ? ORDER BY user_id').all(mangaId).map(r => [r.user_id, r.chapters_read]);
 
-test('webtoon chapters: a shelf viewer sets their own, other shelves see 404; leaving and moving delete them like reads', async () => {
+test('webtoon chapters: a shelf viewer sets their own, other shelves see 404; leaving and moving hide them, rejoining shows them again', async () => {
     const anna = await account('a13_anna');
     const carl = await account('a13_carl');
     const dora = await account('a13_dora');
@@ -449,10 +449,14 @@ test('webtoon chapters: a shelf viewer sets their own, other shelves see 404; le
     assert.deepEqual(marks, { a13_anna: 1, a13_carl: 1, a13_dora: 2 });
 
     assert.equal((await dora('DELETE', `/shelves/${shelf}/members/${dora.id}`)).status, 200);
-    assert.deepEqual([chaptersOf(id), chaptersOf(other)], [[[anna.id, 200], [carl.id, 30]], []], 'leaving deletes them');
+    assert.deepEqual([chaptersOf(id), chaptersOf(other)], [[[anna.id, 200], [carl.id, 30]], []], 'leaving hides them');
+    await anna('POST', `/shelves/${shelf}/members`, { user_id: dora.id, role: 'editor' });
+    assert.deepEqual([chaptersOf(id), chaptersOf(other)], [[[anna.id, 200], [carl.id, 30], [dora.id, 12]], [[dora.id, 5]]], 'rejoining shows them again');
 
     const preview = (await anna('GET', `/mangas/${id}/shelf-move?shelf_id=${target}`)).body.affected;
-    assert.deepEqual(preview, [{ user_id: carl.id, username: 'a13_carl', owned: 0, read: 0, chapters: 30 }]);
+    assert.deepEqual(preview, [], 'chapters stay, so only owners would lose something');
     assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: target })).status, 200);
-    assert.deepEqual(chaptersOf(id), [[anna.id, 200]], 'a move deletes the chapters of non-members');
+    assert.deepEqual(chaptersOf(id), [[anna.id, 200]], 'the target shelf shows its members only');
+    assert.equal((await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: shelf })).status, 200);
+    assert.deepEqual(chaptersOf(id), [[anna.id, 200], [carl.id, 30], [dora.id, 12]], 'moved back, nothing was lost');
 });

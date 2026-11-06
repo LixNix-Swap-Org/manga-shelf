@@ -5,7 +5,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const COUNTED_TABLES = ['users', 'mangas', 'volumes', 'volume_owners', 'volume_reads'];
+// volume_reads and chapter_progress may shrink once (migration 42 merges the marks of shelves holding the same edition)
+const COUNTED_TABLES = ['users', 'mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress'];
 
 function usage(message) {
     if (message) console.error(message);
@@ -92,7 +93,7 @@ function main() {
             for (const m of report) console.log(`  v${m.version} ${m.name}: ${fmt(m.changes)} Zeilen geändert, ${m.ms} ms`);
         }
         console.log('Zeilen (vorher -> nachher):');
-        for (const t of COUNTED_TABLES) console.log(`  ${t.padEnd(14)} ${fmt(countsBefore[t])} -> ${fmt(countsAfter[t])}`);
+        for (const t of COUNTED_TABLES) console.log(`  ${t.padEnd(16)} ${fmt(countsBefore[t])} -> ${fmt(countsAfter[t])}`);
         console.log(`integrity_check:   ${integrity.join('; ')}`);
         console.log(`foreign_key_check: ${foreignKeyErrors.length ? `${foreignKeyErrors.length} Verstöße` : 'ok'}`);
         for (const v of foreignKeyErrors.slice(0, 20)) console.log(`  ${v.table} rowid ${v.rowid} -> ${v.parent}`);

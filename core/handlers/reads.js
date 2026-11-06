@@ -3,6 +3,7 @@ const access = require('../lib/access');
 const { resolveTargetUser } = access;
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parseFlag, isValidReadAt } = require('../lib/validate');
+const { addRead, removeRead, readOf } = require('../lib/marks');
 
 function toggleRead(ctx, { params, body }) {
     const volumeId = parseInt(params.id, 10);
@@ -13,19 +14,18 @@ function toggleRead(ctx, { params, body }) {
     const readAt = body.read_at;
     if (!isBlank(readAt) && !isValidReadAt(readAt)) throw badRequest('Ungültiger Lesezeitpunkt (erwartet: JJJJ-MM-TT HH:MM:SS, UTC)');
 
-    const existing = ctx.db.prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').get(volumeId, targetUserId);
+    const existing = readOf(ctx.db, volumeId, targetUserId);
     const explicitRead = body.read !== undefined ? body.read : body.is_read;
     const isRead = explicitRead !== undefined ? parseFlag(explicitRead) : !existing;
     let previousReadAt = null;
     if (isRead && !existing) {
-        if (isBlank(readAt)) ctx.db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, targetUserId);
-        else ctx.db.prepare('INSERT INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)').run(volumeId, targetUserId, readAt.trim());
+        addRead(ctx.db, volumeId, targetUserId, isBlank(readAt) ? undefined : readAt.trim());
     } else if (!isRead && existing) {
-        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(volumeId, targetUserId);
+        removeRead(ctx.db, volumeId, targetUserId);
         previousReadAt = existing.read_at;
     }
 
-    const readRows = ctx.db.prepare('SELECT vr.user_id, u.username, vr.read_at FROM volume_reads vr JOIN users u ON vr.user_id = u.id WHERE vr.volume_id = ?').all(volumeId);
+    const readRows = ctx.db.prepare('SELECT vr.user_id, u.username, vr.read_at FROM shelf_volume_reads vr JOIN users u ON vr.user_id = u.id WHERE vr.volume_id = ?').all(volumeId);
     const readBy = readRows.map(r => r.user_id);
 
     const answer = { success: true, is_read: isRead, read_by: readBy, read_users: readRows };
@@ -54,9 +54,7 @@ function batchRead(ctx, { body }) {
         return !isNaN(num) && num <= maxVol;
     });
 
-    const insertStmt = ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
-    const readAtValue = isBlank(readAt) ? null : readAt.trim();
-    const deleteStmt = ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ? RETURNING read_at');
+    const readAtValue = isBlank(readAt) ? undefined : readAt.trim();
 
     // changed_ids: the entries whose read state this request flipped, so a client can undo exactly those;
     // previous_read_at (unread only) lets that undo restore the original dates
@@ -65,10 +63,10 @@ function batchRead(ctx, { body }) {
     ctx.db.transaction(() => {
         for (const v of targetVols) {
             if (read) {
-                if (insertStmt.run(v.id, targetUserId, readAtValue).changes > 0) changedIds.push(v.id);
+                if (addRead(ctx.db, v.id, targetUserId, readAtValue)) changedIds.push(v.id);
                 continue;
             }
-            const removed = deleteStmt.get(v.id, targetUserId);
+            const removed = removeRead(ctx.db, v.id, targetUserId);
             if (removed) {
                 changedIds.push(v.id);
                 previousReadAt[v.id] = removed.read_at;
@@ -92,7 +90,7 @@ function userStats(ctx, { params }) {
     const readVolumes = ctx.db.prepare(`
         SELECT strftime('%Y-%m-%dT%H:%M:%SZ', vr.read_at) AS read_at, v.id, v.volume_number, v.type, v.notes, v.pages,
                m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
-        FROM volume_reads vr
+        FROM shelf_volume_reads vr
         JOIN volumes v ON vr.volume_id = v.id
         JOIN mangas m ON v.manga_id = m.id
         WHERE vr.user_id = ? AND v.status = 'Vorhanden' AND ${scope.sql}

@@ -52,14 +52,15 @@ const openShelf = async (name) => {
 };
 
 describe('memberRemovalText', () => {
-  it('names the counts, says they are deleted, and stays general without counts', () => {
+  it('names the owned volumes that go, says reading marks stay, and stays general without counts', () => {
     expect(memberRemovalText(member(2, 'erika', 'editor', { owned: 3, read: 1 })))
-      .toBe('„erika“ aus diesem Regal entfernen? Die Markierungen von erika in diesem Regal werden gelöscht: 3 Bände im Besitz, 1 Band gelesen. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.');
+      .toBe('„erika“ aus diesem Regal entfernen? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.');
     expect(memberRemovalText({ user_id: 2, username: 'erika', role: 'editor' }))
-      .toMatch(/^„erika“ aus diesem Regal entfernen\? Die Besitz- und Lesemarkierungen von erika in diesem Regal werden gelöscht\./);
-    expect(memberRemovalText(member(2, 'erika', 'viewer'))).toBe('„erika“ aus diesem Regal entfernen? erika hat hier keine Besitz- oder Lesemarkierungen.');
+      .toMatch(/^„erika“ aus diesem Regal entfernen\? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht\. .*Die Lesemarkierungen bleiben erhalten\./);
+    expect(memberRemovalText(member(2, 'erika', 'viewer'))).toBe('„erika“ aus diesem Regal entfernen? erika besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.');
+    expect(memberRemovalText(member(2, 'erika', 'viewer', { owned: 0, read: 4 })), 'reads alone are no loss').toMatch(/besitzt hier keine Bände/);
     expect(memberRemovalText(member(1, 'admin', 'editor', { owned: 2, read: 7 }), { self: true }))
-      .toMatch(/^Du verlierst den Zugriff auf dieses Regal, und deine Markierungen darin werden gelöscht: 2 Bände im Besitz, 7 Bände gelesen\./);
+      .toMatch(/^Du verlierst den Zugriff auf dieses Regal, und deine Besitzmarkierungen darin werden gelöscht \(2 Bände\)\. .*Deine Lesemarkierungen bleiben erhalten und erscheinen wieder/);
     expect(memberRemovalText(member(1, 'admin', 'editor'), { self: true })).toBe('Du verlierst den Zugriff auf dieses Regal. Wirklich verlassen?');
   });
 });
@@ -110,7 +111,8 @@ describe('ShelvesModal', () => {
     remove.focus();
     fireEvent.click(remove);
     let question = await screen.findByRole('dialog', { name: 'Mitglied entfernen' });
-    expect(question.textContent).toContain('Die Markierungen von erika in diesem Regal werden gelöscht: 3 Bände im Besitz, 5 Bände gelesen.');
+    expect(question.textContent).toContain('Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände).');
+    expect(question.textContent).toContain('Die Lesemarkierungen bleiben erhalten.');
     expect(question.textContent).toContain('gelten als „Fehlt“');
     fireEvent.click(within(question).getByRole('button', { name: 'Abbrechen' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Mitglied entfernen' })).toBeNull());
@@ -132,7 +134,7 @@ describe('ShelvesModal', () => {
     expect(screen.queryByRole('combobox', { name: 'admin: Rolle' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'admin: Entfernen' }));
     const question = await screen.findByRole('dialog', { name: 'Regal verlassen' });
-    expect(question.textContent).toContain('deine Markierungen darin werden gelöscht: 1 Band im Besitz, 0 Bände gelesen.');
+    expect(question.textContent).toContain('deine Besitzmarkierungen darin werden gelöscht (1 Band).');
     fireEvent.click(within(question).getByRole('button', { name: 'Verlassen' }));
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Mitglieder' })).toBeNull());
     expect(calls('DELETE')).toEqual([['/api/shelves/2/members/1', undefined]]);
