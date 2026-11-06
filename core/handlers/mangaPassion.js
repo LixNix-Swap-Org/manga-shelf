@@ -389,14 +389,14 @@ async function importRelease(ctx, { body }) {
         let existingVol = mpVolumeId
             ? ctx.db.prepare(`
                 SELECT id, status FROM volumes
-                WHERE manga_id = ? AND manga_passion_volume_id = ? AND COALESCE(type, 'volume') = ?
+                WHERE manga_id = ? AND manga_passion_volume_id = ? AND type = ?
                 ORDER BY id
             `).get(mangaId, mpVolumeId, type)
             : null;
         if (!existingVol && dedupeByNumber) {
             existingVol = ctx.db.prepare(`
                 SELECT id, status FROM volumes
-                WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND COALESCE(type, 'volume') = ?
+                WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND type = ?
                 ORDER BY id
             `).get(mangaId, volNumStr, type);
         }
@@ -410,7 +410,7 @@ async function importRelease(ctx, { body }) {
             existingVol = ctx.db.prepare(`
                 SELECT id, status FROM volumes
                 WHERE manga_id = ? AND manga_passion_volume_id IS NULL AND LOWER(TRIM(volume_number)) = LOWER(?)
-                  AND COALESCE(type, 'volume') = ? AND notes IS ?
+                  AND type = ? AND notes IS ?
                 ORDER BY id
             `).get(mangaId, volNumStr, type, notes);
         }

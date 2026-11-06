@@ -14,7 +14,7 @@ const AdmZip = require('adm-zip');
 const dbm = require('../db');
 
 const { CATALOG_TRIGGERS } = require('../core/lib/catalog');
-/** The catalog triggers (migration 40) name most series and volume columns: a test that drops one of them drops these first. */
+/** The catalog triggers (migration 41) name most series and volume columns: a test that drops one of them drops these first. */
 const dropCatalogTriggers = (conn) => { for (const name of CATALOG_TRIGGERS) conn.exec(`DROP TRIGGER IF EXISTS ${name};`); };
 /** applySchema without the migrations from `version` on (they are recorded as applied, so a test can delete and replay them). */
 function applySchemaBefore(conn, version) {
@@ -614,8 +614,8 @@ test('migration 32 puts every series and trash entry into shelf 1 and every acco
     const conn = dbm.openRawDb(file);
     const all = (sql) => conn.prepare(sql).all().map(r => ({ ...r }));
     try {
-        // without migration 41: its foreign key on mangas.shelf_id would keep the column from being dropped
-        applySchemaBefore(conn, 41);
+        // without migration 42: its foreign key on mangas.shelf_id would keep the column from being dropped
+        applySchemaBefore(conn, 42);
         dropCatalogTriggers(conn);
         conn.exec(`
             DROP TRIGGER trg_mangas_shelf_default;
@@ -772,6 +772,8 @@ test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter
         dropCatalogTriggers(conn);
         conn.exec(`
             DROP TABLE chapter_progress;
+            DROP TRIGGER trg_check_mangas_format_ins;
+            DROP TRIGGER trg_check_mangas_format_upd;
             ALTER TABLE mangas DROP COLUMN format;
             ALTER TABLE mangas DROP COLUMN total_chapters;
             DELETE FROM schema_migrations WHERE version >= 36;
@@ -867,4 +869,54 @@ test('migration 39 adds data_versions with triggers that count writes per area a
     conn.prepare('DELETE FROM schema_migrations WHERE version = 39').run();
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [39], 'a second run is harmless');
     assert.equal(conn.prepare('SELECT count(*) AS n FROM data_versions').get().n, 2);
+});
+
+test('migration 40 sets missing volume types, keeps one household shelf and refuses unknown values', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const { VOLUME_STATUSES, VOLUME_TYPES, SERIES_FORMATS } = require('../core/lib/validate');
+    const { COLLECTING_STATUSES } = require('../core/handlers/mangas');
+    const conn = new DatabaseSync(':memory:');
+    schema.applySchema(conn);
+    // the state before migration 40: its triggers and index gone, a NULL type, a second household shelf, an outlier
+    for (const { name } of conn.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND (name LIKE 'trg_check_%' OR name LIKE 'trg_volumes_type_default_%')").all()) {
+        conn.exec(`DROP TRIGGER ${name}`);
+    }
+    conn.exec('DROP INDEX idx_shelves_one_default');
+    const manga = Number(conn.prepare("INSERT INTO mangas (title) VALUES ('Typen')").run().lastInsertRowid);
+    const untyped = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, type) VALUES (?, '1', NULL)").run(manga).lastInsertRowid);
+    const odd = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, '2', 'Verliehen')").run(manga).lastInsertRowid);
+    conn.prepare("INSERT INTO shelves (name, is_default) VALUES ('Zweites', 1)").run();
+    conn.prepare('DELETE FROM schema_migrations WHERE version = 40').run();
+    const warnings = [];
+    const log = { debug() {}, info() {}, warn: (m) => warnings.push(m), error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [40]);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(untyped).type, 'volume');
+    assert.deepEqual(conn.prepare('SELECT id FROM shelves WHERE is_default = 1').all().map(r => r.id), [1]);
+    assert.ok(warnings.some(w => /1 rows of volumes\.status/.test(w)), 'the stored outlier is named');
+    assert.ok(warnings.some(w => /2 household shelves/.test(w)));
+
+    const refuse = (sql, ...params) => assert.throws(() => conn.prepare(sql).run(...params), /invalid|UNIQUE/);
+    refuse("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, '3', 'Verliehen')", manga);
+    refuse("INSERT INTO volumes (manga_id, volume_number, type) VALUES (?, '3', 'box')", manga);
+    refuse("UPDATE mangas SET collecting = 'irgendwann' WHERE id = ?", manga);
+    refuse("UPDATE mangas SET format = 'ebook' WHERE id = ?", manga);
+    refuse("INSERT INTO shelves (name, is_default) VALUES ('Drittes', 1)");
+    // the outlier stays editable as long as its status is not changed to another unknown value
+    conn.prepare("UPDATE volumes SET notes = 'bleibt' WHERE id = ?").run(odd);
+    conn.prepare("UPDATE volumes SET status = 'Verliehen' WHERE id = ?").run(odd);
+    conn.prepare("UPDATE volumes SET status = 'Fehlt' WHERE id = ?").run(odd);
+    // an empty type becomes a regular volume, NULL statuses and the legacy Gelesen pass
+    const empty = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, type, status) VALUES (?, '4', '', NULL)").run(manga).lastInsertRowid);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(empty).type, 'volume');
+    conn.prepare("UPDATE volumes SET type = NULL, status = 'Gelesen' WHERE id = ?").run(empty);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(empty).type, 'volume');
+    // every value the app writes passes (the frozen lists cover core/lib/validate.js)
+    for (const status of VOLUME_STATUSES) conn.prepare('UPDATE volumes SET status = ? WHERE id = ?').run(status, empty);
+    for (const type of VOLUME_TYPES) conn.prepare('UPDATE volumes SET type = ? WHERE id = ?').run(type, empty);
+    for (const format of SERIES_FORMATS) conn.prepare('UPDATE mangas SET format = ? WHERE id = ?').run(format, manga);
+    for (const collecting of COLLECTING_STATUSES) conn.prepare('UPDATE mangas SET collecting = ? WHERE id = ?').run(collecting, manga);
+
+    conn.prepare('DELETE FROM schema_migrations WHERE version = 40').run();
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [40], 'a second run is harmless');
 });
