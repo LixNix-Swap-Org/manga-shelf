@@ -74,7 +74,9 @@ test('every table is either part of a data version or known to leave it alone', 
         'animes', 'anime_progress', 'app_settings']);
     // read by no endpoint with an ETag (or only through a versioned table): a new table has to be put in one of the lists
     const unversioned = new Set(['api_cache', 'manga_passion_cache', 'schema_migrations', 'data_versions', 'trash', 'publisher_aliases',
-        'user_api_credentials', 'anime_links', 'anime_sync', 'anime_airings', 'works', 'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4']);
+        'user_api_credentials', 'anime_links', 'anime_sync', 'anime_airings', 'works', 'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4',
+        // written only by triggers of versioned tables (mangas, volumes, animes, works through mangas)
+        'catalog_series', 'catalog_volumes', 'catalog_merge_log', 'anime_work_links']);
     const tables = dbm.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
     for (const name of tables) assert.ok(versioned.has(name) || unversioned.has(name), `table ${name} is in neither list`);
     const triggers = new Set(dbm.db.prepare("SELECT tbl_name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'trg_dv_%'").all().map(r => r.tbl_name));

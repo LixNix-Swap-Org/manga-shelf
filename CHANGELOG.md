@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Before updating
+- **Database migrations 40 and 41** run at the first start, after the usual backup `backups/vor-update-v<old>-auf-v<new>-…zip`. Migration 40 builds the **global catalog**: every edition and every volume of it exists once, however many shelves hold it (same Manga Passion edition, a shared ISBN, or the same title, language, format and publisher). Nothing in the shelves changes; what the merge papered over (different volume counts, two ISBNs for one volume) is listed in the table `catalog_merge_log`. Migration 41 gives `mangas`, `trash`, `shelves` and `animes` the foreign keys they lacked: a series or trash entry pointing to a shelf that no longer exists moves into the household shelf, a reference to a deleted account is cleared, and the start log names how many rows that were. 3.7.0 cannot open the migrated database; going back means restoring the backup from before the update.
+
+### Anime
+- Anime and manga works are now linked many-to-many in the database (`anime_work_links`): the series an anime is linked to and every manga in its AniList relations that the collection knows. Nothing reads them yet; they prepare the cross-media views.
+
 ## 3.7.0
 
 ### Before updating
@@ -323,7 +331,7 @@ State: base v2.19.1 (`f0c2a64`), the commits after it up to the tip of the branc
 - **`TRUST_PROXY` defaults to `loopback`.** Behind a proxy on another host enter its address (no hop count), in front of Pterodactyl/Docker only the gateway address of the Docker network (e.g. `loopback, 172.18.0.1`, never the whole subnet), and make the app port reachable only through the proxy.
 - **Every session ends once:** the signing key now lives in `data/secret.key` (no longer in the database and therefore in no backup).
 - **Import the Pterodactyl egg again** (install container with `ash`, installation without install scripts, variable `TRUST_PROXY`).
-- **Database migrations 12–39** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility, migration 34 with anime tags, migration 35 with aired episodes, migration 36 with webtoons, migration 37 with the place of special volumes, migration 38 with the table of works, migration 39 with the data versions); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
+- **Database migrations 12–41** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility, migration 34 with anime tags, migration 35 with aired episodes, migration 36 with webtoons, migration 37 with the place of special volumes, migration 38 with the table of works, migration 39 with the data versions, migrations 40 and 41 with the global catalog and the missing foreign keys); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
 - **Migration 22 unifies known publisher spellings** in series and volumes (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga", "EMA" → "Egmont Manga", "TOKYOPOP GmbH" → "TOKYOPOP", appended legal forms of built-in publishers). Deleting an alias later does not undo that.
 - **Migration 27 turns the stored series languages into codes** ("Deutsch" → `de`, "English" → `en`, `en-US` → `en` with the region `US`). A text it does not recognise becomes `de` and is named in the start log ("unknown series languages set to 'de'"); check those series afterwards. Every existing series gets the currency `EUR`.
 - **No automatic way back:** going back to the old version only works by starting the old version and immediately restoring the backup `vor-update-…zip` (README, "Upgrading from v2.19.1"). Do not run the old version permanently on the new database: new "Gelesen" (read) volumes it writes are not converted by a later update any more.
