@@ -812,7 +812,8 @@ describe('every write of the device reaches the store', () => {
       expect(release).toBeTypeOf('function');
       rt.useProfile({ name: 'Zweitprofil' });
       release();
-      await vi.advanceTimersByTimeAsync(10);
+      // the next save waits twice as long as the last one took (real time, at most PERSIST_IDLE_MAX_MS)
+      await vi.advanceTimersByTimeAsync(2100);
       expect(rt.status().saveError).toBeNull();
       expect(puts).toBe(4);
       const again = await reopen(store);
