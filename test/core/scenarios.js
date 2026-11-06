@@ -770,7 +770,7 @@ const scenarios = [
         }
     },
     {
-        name: 'anime linked to the work: each caller sees their own edition, a foreign link stays hidden, the key outlives the series',
+        name: 'anime linked to the work: each shelf sees its own edition and links on its own, a foreign link stays hidden, the work outlives the series',
         async run({ admin, ed, vis }) {
             const work = 'anilist:990001';
             const shelfOf = async (api, name) => {
@@ -797,40 +797,45 @@ const scenarios = [
             const listed = async (api) => fields((await api('GET', '/anime')).body.find((a) => a.id === id));
             const detail = async (api) => fields((await api('GET', `/anime/${id}`)).body);
 
+            // the link names the work: the shelf that linked sees its edition, everyone else their own edition of the work
             assert.deepEqual(await listed(ed), { manga_id: edSeries });
             assert.deepEqual(await detail(ed), { manga_id: edSeries, manga: { id: edSeries, title: 'Kern Werk Ed' } });
-            // the caller's own edition of the work, in their default language before the lower id
-            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true, manga_linked_elsewhere: true });
-            assert.deepEqual(await detail(admin), { manga_id: adminDe, manga_via_work: true, manga_linked_elsewhere: true, manga: { id: adminDe, title: 'Kern Werk Admin DE' } });
+            assert.deepEqual(await listed(admin), { manga_id: adminDe }, 'their default language before the lower id');
+            assert.deepEqual(await detail(admin), { manga_id: adminDe, manga: { id: adminDe, title: 'Kern Werk Admin DE' } });
             assert.doesNotMatch(JSON.stringify((await admin('GET', `/anime/${id}`)).body), /Kern Werk Ed/);
-            // no edition in a shelf of their own: only the one bit
-            assert.deepEqual(await listed(vis), { manga_id: null, manga_linked_elsewhere: true });
-            assert.deepEqual(await detail(vis), { manga_id: null, manga_linked_elsewhere: true, manga: null });
-
-            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404, 'a link into a foreign shelf is not the caller\'s to undo');
-            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: adminDe })).status, 404, 'the foreign link is never overwritten');
-            assert.deepEqual(await listed(ed), { manga_id: edSeries });
-
-            // the linked series goes: the stored key still names the work
-            assert.equal((await ed('DELETE', `/mangas/${edSeries}`)).status, 200);
-            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
-            assert.deepEqual(await listed(ed), { manga_id: null });
+            // no edition in a shelf of their own: nothing, not even a hint
             assert.deepEqual(await listed(vis), { manga_id: null });
-            // "Keine Verknüpfung" sent by a caller who sees none keeps the work for the editions of others
+            assert.deepEqual(await detail(vis), { manga_id: null, manga: null });
+
+            // each shelf decides for itself: unlinking hides the link there, linking pins that edition there
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 200);
+            assert.deepEqual(await listed(admin), { manga_id: null });
+            assert.deepEqual(await listed(ed), { manga_id: edSeries }, 'the other shelf keeps its link');
+            const pinned = await admin('PUT', `/anime/${id}`, { manga_id: adminEn });
+            assert.equal(pinned.status, 200, JSON.stringify(pinned.body));
+            assert.deepEqual(fields(pinned.body), { manga_id: adminEn, manga: { id: adminEn, title: 'Kern Werk Admin EN' } }, 'the edition picked, not the default language');
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
+            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: edSeries })).status, 404, 'a series of a foreign shelf cannot be linked');
+
+            // the linked series goes: its shelf sees nothing, the work still links the other editions
+            const trashed = await ed('DELETE', `/mangas/${edSeries}`);
+            assert.equal(trashed.status, 200);
+            assert.deepEqual(await listed(ed), { manga_id: null });
+            assert.deepEqual(await listed(admin), { manga_id: adminEn });
+            // "Keine Verknüpfung" from a caller who sees none changes nothing
             assert.equal((await ed('PUT', `/anime/${id}`, { manga_id: null })).status, 200);
-            assert.deepEqual(await listed(admin), { manga_id: adminDe, manga_via_work: true });
-            // with the original gone the link through the own edition is the caller's: unlinking drops the work as well
+            assert.deepEqual(await listed(admin), { manga_id: adminEn });
+            // every edition of the work is in the caller's shelves now: unlinking takes the link away for everyone
             const unlinked = await admin('PUT', `/anime/${id}`, { manga_id: null });
             assert.equal(unlinked.status, 200, JSON.stringify(unlinked.body));
             assert.deepEqual(fields(unlinked.body), { manga_id: null, manga: null });
             assert.deepEqual(await listed(admin), { manga_id: null });
-            assert.deepEqual(await listed(ed), { manga_id: null });
             const relinked = await admin('PUT', `/anime/${id}`, { manga_id: adminEn });
             assert.equal(relinked.status, 200, JSON.stringify(relinked.body));
             assert.deepEqual(fields(relinked.body), { manga_id: adminEn, manga: { id: adminEn, title: 'Kern Werk Admin EN' } });
-            assert.deepEqual(await listed(ed), { manga_id: null, manga_linked_elsewhere: true });
-            assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 200, 'a link of the caller\'s own shelf can be undone');
-            assert.deepEqual(await listed(admin), { manga_id: null });
+            // the restored series is an edition of the work again, its shelf sees the link
+            assert.equal((await ed('POST', `/trash/${trashed.body.trash_id}/restore`)).status, 200);
+            assert.deepEqual(await listed(ed), { manga_id: edSeries });
             assert.equal((await admin('DELETE', `/anime/${id}`)).status, 200);
         }
     },

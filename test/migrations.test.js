@@ -821,7 +821,8 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
-        schema.applySchema(conn);
+        // migration 45 (anime links on the work) is held back: this test is about the animes.manga_id of its time
+        applySchemaBefore(conn, 45);
         dropCatalogTriggers(conn);
         conn.exec(`
             DROP TRIGGER trg_mangas_work_insert;
@@ -831,12 +832,12 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
             ALTER TABLE mangas DROP COLUMN work_id;
             ALTER TABLE animes DROP COLUMN work_id;
             DROP TABLE works;
-            DELETE FROM schema_migrations WHERE version >= 38;
+            DELETE FROM schema_migrations WHERE version >= 38 AND version < 45;
             INSERT INTO mangas (id, title, work_key) VALUES (51, 'Frieren', 'anilist:118586'), (52, 'Frieren EN', 'anilist:118586'),
                 (53, 'Berserk', 'mal:2'), (54, 'Ohne Werk', NULL);
             INSERT INTO animes (id, title, manga_id) VALUES (61, 'Frieren', 52), (62, 'Ohne', 54), (63, 'Frei', NULL);
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(38));
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(38).filter(v => v < 45));
         const works = conn.prepare('SELECT id, work_key, anilist_id, mal_id FROM works ORDER BY work_key').all().map(r => ({ ...r }));
         assert.deepEqual(works.map(w => [w.work_key, w.anilist_id, w.mal_id]), [['anilist:118586', 118586, null], ['mal:2', null, 2]]);
         const frieren = works[0].id;
@@ -857,7 +858,7 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
         conn.exec("UPDATE mangas SET work_key = 'anilist:118586' WHERE id = 55");
         assert.equal(work('animes', 63), frieren);
 
-        conn.exec('DELETE FROM schema_migrations WHERE version >= 38');
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 38 AND version < 45');
         schema.runSequentialMigrations(conn);
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
         assert.equal(conn.prepare('SELECT count(*) AS n FROM works').get().n, 3);
@@ -936,4 +937,50 @@ test('migration 40 sets missing volume types, keeps one household shelf and refu
 
     conn.prepare('DELETE FROM schema_migrations WHERE version = 40').run();
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [40], 'a second run is harmless');
+});
+
+test('migration 45 moves series links of anime onto the work, pins the chosen edition for its shelf and drops animes.manga_id', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 45);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 45;
+        INSERT INTO shelves (id, name) VALUES (7, 'Zweites');
+        INSERT INTO mangas (id, title, work_key, shelf_id, language) VALUES (71, 'Frieren', 'anilist:118586', 1, 'de'), (72, 'Frieren EN', 'anilist:118586', 1, 'en'),
+            (73, 'Ohne Werk', NULL, 7, 'de');
+        INSERT INTO animes (id, title, manga_id) VALUES (81, 'Frieren', 72), (82, 'Ohne', 73), (83, 'Frei', NULL);
+    `);
+    const infos = [];
+    const log = { debug() {}, info: (m) => infos.push(m), warn() {}, error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [45]);
+    assert.ok(infos.some(line => /v45: 2 anime links -> links to the work, 1 series got a work of their own/.test(line)), infos.join('\n'));
+    assert.ok(!conn.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id'), 'the column is gone');
+    assert.equal(conn.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'idx_animes_manga'").get().n, 0);
+    const workOf = (table, id) => conn.prepare(`SELECT work_id FROM ${table} WHERE id = ?`).get(id).work_id;
+    const own = conn.prepare('SELECT work_key FROM mangas WHERE id = 73').get().work_key;
+    assert.match(own, /^manual:[0-9a-f]{24}$/, 'a series linked without a work gets a manual key of its own');
+    assert.deepEqual([workOf('animes', 81), workOf('animes', 82), workOf('animes', 83)], [workOf('mangas', 72), workOf('mangas', 73), null]);
+    const pins = conn.prepare("SELECT anime_id, work_id, scope_shelf_id, manga_id, hidden FROM anime_work_links WHERE origin = 'manual' ORDER BY anime_id").all().map(r => ({ ...r }));
+    assert.deepEqual(pins, [
+        { anime_id: 81, work_id: workOf('mangas', 72), scope_shelf_id: 1, manga_id: 72, hidden: 0 },
+        { anime_id: 82, work_id: workOf('mangas', 73), scope_shelf_id: 7, manga_id: 73, hidden: 0 }
+    ], 'the edition chosen so far stays the one its shelf sees');
+    assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
+
+    // the new work trigger: a pinned series that moves to another work takes its pin along; the last edition of a work
+    // moving away takes the anime along
+    conn.exec("UPDATE mangas SET work_key = 'mal:2' WHERE id = 72");
+    const mal = workOf('mangas', 72);
+    assert.equal(conn.prepare('SELECT work_id FROM anime_work_links WHERE anime_id = 81 AND origin = \'manual\'').get().work_id, mal);
+    assert.equal(workOf('animes', 81), workOf('mangas', 71), 'Frieren DE still carries the work for everyone');
+    conn.exec("UPDATE mangas SET work_key = 'mal:2' WHERE id = 71");
+    assert.equal(workOf('animes', 81), mal, 'its last edition left the work: the anime follows');
+
+    // replays: 45 and the migrations that named animes.manga_id (18 and 38) run again on such a database
+    conn.exec('DELETE FROM schema_migrations WHERE version IN (18, 38, 45)');
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [18, 38, 45], 'a second run is harmless');
+    assert.equal(conn.prepare("SELECT count(*) AS n FROM anime_work_links WHERE origin = 'manual'").get().n, 2);
+    assert.match(conn.prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_mangas_work_update'").get().sql, /anime_work_links/);
 });

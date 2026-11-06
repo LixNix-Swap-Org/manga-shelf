@@ -7,6 +7,7 @@ const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners'
 const { addRead, setChapterProgress } = require('../lib/marks');
 const { addCopy, hasOwner, dropHouseholdCopies } = require('../lib/copies');
 const access = require('../lib/access');
+const animeLinks = require('../lib/animeLinks');
 const { qstr } = require('../lib/query');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('../lib/language');
 
@@ -170,8 +171,11 @@ function restoreManga(ctx, entry, payload) {
     // an entry trashed before migration 27 still carries a language name ('Deutsch')
     const language = parseLanguage(manga.language);
     const edition = { language: (language && language.language) || DEFAULT_LANGUAGE, region: manga.region || (language && language.region) || null };
-    // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries
-    edition.work_key = manga.work_key && ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key) ? manga.work_key : null;
+    // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries, or one an anime
+    // link still names (the work outlives its last edition, core/lib/animeLinks.js)
+    edition.work_key = manga.work_key && (ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key)
+        || ctx.db.prepare(`SELECT 1 AS ok FROM works w WHERE w.work_key = ? AND (EXISTS (SELECT 1 FROM animes a WHERE a.work_id = w.id)
+            OR EXISTS (SELECT 1 FROM anime_work_links l WHERE l.work_id = w.id AND l.origin = 'manual' AND l.hidden = 0))`).get(manga.work_key)) ? manga.work_key : null;
     edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id);
@@ -183,11 +187,16 @@ function restoreManga(ctx, entry, payload) {
     }
     // volumes of this series deleted on their own follow it, as on a move
     ctx.db.prepare("UPDATE trash SET shelf_id = ? WHERE kind = 'volume' AND manga_id = ?").run(edition.shelf_id, manga.id);
+    // an entry trashed before migration 45 lost the link of its anime with the series (manga_id): they link to its work again
+    // while they name no work; anime linked since then kept the work all along
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
-    // work_id of the restored row comes from its work_key (trigger), never from the payload
-    const workId = (ctx.db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(manga.id) || {}).work_id ?? null;
-    const relink = ctx.db.prepare('UPDATE animes SET manga_id = ?, work_id = ? WHERE id = ? AND manga_id IS NULL');
-    for (const animeId of animeIds) relink.run(manga.id, workId, animeId);
+    const unlinked = ctx.db.prepare('SELECT id FROM animes WHERE id = ? AND work_id IS NULL');
+    const orphans = animeIds.filter((animeId) => unlinked.get(animeId));
+    if (orphans.length) {
+        const workId = animeLinks.ensureWork(ctx, manga.id);
+        const relink = ctx.db.prepare('UPDATE animes SET work_id = ? WHERE id = ? AND work_id IS NULL');
+        for (const animeId of orphans) relink.run(workId, animeId);
+    }
 }
 
 function restoreVolume(ctx, entry, payload) {
