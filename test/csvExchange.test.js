@@ -300,7 +300,7 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
     const admin = ctx.client();
     const exportCsv = async () => (await fetch(ctx.base + '/export/csv', { headers: { Cookie: admin.cookie } })).text();
     const titles = async () => (await admin('GET', '/mangas')).body.map(m => m.title).sort();
-    // reading marks and chapters sit on the catalog (migration 42) and outlive their series: a clean slate clears them too
+    // reading marks and chapters sit on the catalog (migration 43) and outlive their series: a clean slate clears them too
     const wipe = () => db.exec('DELETE FROM mangas; DELETE FROM volume_reads; DELETE FROM chapter_progress;');
     try {
         assert.equal((await admin('POST', '/setup', { username: 'admin', password: 'password123' })).status, 200);

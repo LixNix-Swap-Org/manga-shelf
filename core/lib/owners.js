@@ -1,4 +1,4 @@
-// Per-user ownership on top of the copies (core/lib/copies.js, migration 43): an owner is a person with a copy of the
+// Per-user ownership on top of the copies (core/lib/copies.js, migration 44): an owner is a person with a copy of the
 // volume, volume_owners is the view of those copies. volumes.status = 'Vorhanden' follows the copies through triggers
 // (a household copy counts too), so these functions only add what a trigger cannot know: who the acting user is.
 // All functions are synchronous; the caller is expected to be in a transaction already if it needs one.

@@ -93,7 +93,7 @@ test('owner checks: owned without an owner (household copy) and, prevented by th
     const visId = db.prepare("SELECT id FROM users WHERE username = 'vis'").get().id;
     db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date) VALUES (?, ?, ?, ?)').run(missing, visId, 9, '2024-02-02');
     db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(legacy, visId);
-    // a copy makes its volume owned (migration 43); a legacy 'Gelesen' is left to its own check
+    // a copy makes its volume owned (migration 44); a legacy 'Gelesen' is left to its own check
     assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(missing).status, 'Vorhanden');
     assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(legacy).status, 'Gelesen');
 

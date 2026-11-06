@@ -1,4 +1,4 @@
-// Reading marks and chapter progress on the catalog (migration 42, core/lib/marks.js): the merge of the shelf rows, the views
+// Reading marks and chapter progress on the catalog (migration 43, core/lib/marks.js): the merge of the shelf rows, the views
 // that show a mark only to members of a row's shelf, the follow triggers, a replayed catalog backfill and deletions.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -7,7 +7,7 @@ const schema = require('../../core/schema');
 const marks = require('../../core/lib/marks');
 
 const quiet = { debug() {}, info() {}, warn() {}, error() {} };
-const HELD = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 41 }, (_, i) => 42 + i);
+const HELD = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 42 }, (_, i) => 43 + i);
 
 /**
  * Two shelves hold the same German edition (Manga Passion 87) and the same webtoon. bob reads volume 1 in both shelves,
@@ -41,7 +41,7 @@ const readers = (d, volumeId) => d.prepare('SELECT user_id, read_at FROM shelf_v
 const chapters = (d, mangaId) => d.prepare('SELECT user_id, chapters_read FROM shelf_chapter_progress WHERE manga_id = ? ORDER BY user_id').all(mangaId).map(r => [r.user_id, r.chapters_read]);
 const catalogVolume = (d, volumeId) => d.prepare('SELECT catalog_volume_id AS id FROM volumes WHERE id = ?').get(volumeId).id;
 
-test('migration 42 merges the marks of rows sharing a catalog entry and shows them to members of each shelf', () => {
+test('migration 43 merges the marks of rows sharing a catalog entry and shows them to members of each shelf', () => {
     const { conn: d, infos } = migratedFrom41();
     assert.equal(catalogVolume(d, 11), catalogVolume(d, 21), 'one edition in two shelves');
     assert.equal(d.prepare('SELECT count(*) AS n FROM volume_reads').get().n, 3, "bob's two reads of volume 1 became one");
@@ -49,7 +49,7 @@ test('migration 42 merges the marks of rows sharing a catalog entry and shows th
     assert.deepEqual(readers(d, 21), [[2, '2023-05-05 09:00:00']], 'alice is no member of shelf 2');
     assert.deepEqual(readers(d, 12), [], "carl's mark is kept but hidden: he is in no shelf");
     assert.deepEqual([chapters(d, 3), chapters(d, 4)], [[[2, 25]], [[2, 25]]], 'the highest chapter wins');
-    assert.ok(infos.some(line => /v42: volume_reads 4 -> 3 rows on the catalog \(1 of users outside the shelf/.test(line)), infos.join('\n'));
+    assert.ok(infos.some(line => /v43: volume_reads 4 -> 3 rows on the catalog \(1 of users outside the shelf/.test(line)), infos.join('\n'));
     const triggers = new Set(d.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all().map(r => r.name));
     for (const name of ['trg_dv_volume_reads_ins', 'trg_dv_chapter_progress_del', ...marks.MARK_FOLLOW_TRIGGERS]) assert.ok(triggers.has(name), name);
     assert.deepEqual(d.prepare('PRAGMA foreign_key_check').all(), []);
@@ -79,12 +79,12 @@ test('joining a shelf shows the marks again, a changed volume number takes the m
     assert.deepEqual([chapters(d, 3), chapters(d, 4)], [[[2, 25]], [[2, 25]]]);
 });
 
-test('a replayed migration 40 rebuilds the catalog and keeps every mark a row shows', () => {
+test('a replayed migration 41 rebuilds the catalog and keeps every mark a row shows', () => {
     const { conn: d } = migratedFrom41();
     const shown = () => [readers(d, 11), readers(d, 12), readers(d, 21), chapters(d, 3), chapters(d, 4)];
     const before = shown();
-    d.exec('DELETE FROM schema_migrations WHERE version >= 40');
-    assert.deepEqual(schema.runSequentialMigrations(d, { log: quiet }).map(r => r.version), Array.from({ length: schema.LATEST_SCHEMA_VERSION - 39 }, (_, i) => 40 + i));
+    d.exec('DELETE FROM schema_migrations WHERE version >= 41');
+    assert.deepEqual(schema.runSequentialMigrations(d, { log: quiet }).map(r => r.version), Array.from({ length: schema.LATEST_SCHEMA_VERSION - 40 }, (_, i) => 41 + i));
     assert.deepEqual(shown(), before);
     assert.deepEqual(d.prepare('PRAGMA foreign_key_check').all(), []);
 });

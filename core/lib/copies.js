@@ -1,4 +1,4 @@
-// Copies (migration 43): volume_copies is the one truth about ownership. A copy belongs to a person (owner_user_id) or
+// Copies (migration 44): volume_copies is the one truth about ownership. A copy belongs to a person (owner_user_id) or
 // to the household (NULL: owned, nobody named). volumes.status 'Vorhanden' follows the copies through triggers on every
 // write path, so status and ownership can no longer disagree:
 //   * a copy makes its volume 'Vorhanden'; a personal copy replaces a household one (the household placeholder);
@@ -77,7 +77,7 @@ function cached(db, sql) {
     return stmt;
 }
 
-/** Whether ownership lives in volume_copies already (migration 43 ran). */
+/** Whether ownership lives in volume_copies already (migration 44 ran). */
 const copiesInPlace = (d) => Boolean(d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'volume_copies'").get());
 
 /** A personal copy of `userId` (no-op when there is one); `extra` = { price, purchase_date, condition, created_at }. Returns true when added. */

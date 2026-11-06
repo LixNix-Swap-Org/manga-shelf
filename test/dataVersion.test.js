@@ -70,7 +70,7 @@ test('data version: the collection start date counts for the collection, anime w
 });
 
 test('every table is either part of a data version or known to leave it alone', () => {
-    // volume_owners is a view of volume_copies since migration 43
+    // volume_owners is a view of volume_copies since migration 44
     const versioned = new Set(['mangas', 'volumes', 'volume_copies', 'volume_reads', 'chapter_progress', 'shelves', 'shelf_members', 'users',
         'animes', 'anime_progress', 'app_settings']);
     // read by no endpoint with an ETag (or only through a versioned table): a new table has to be put in one of the lists

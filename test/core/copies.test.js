@@ -1,4 +1,4 @@
-// Copies instead of an owner flag (migration 43, core/lib/copies.js): the conversion of volume_owners, the triggers that
+// Copies instead of an owner flag (migration 44, core/lib/copies.js): the conversion of volume_owners, the triggers that
 // keep volumes.status on the copies, the household copy, setOwners and a replay of the older migrations.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,10 +8,10 @@ const copies = require('../../core/lib/copies');
 const owners = require('../../core/lib/owners');
 
 const quiet = { debug() {}, info() {}, warn() {}, error() {} };
-const HELD = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 42 }, (_, i) => 43 + i);
+const HELD = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 43 }, (_, i) => 44 + i);
 
 /**
- * Before 43: volume 1 owned by bob, 2 'Vorhanden' without owner, 3 'Fehlt' with an owner row (raw SQL), 4 legacy 'Gelesen'
+ * Before 44: volume 1 owned by bob, 2 'Vorhanden' without owner, 3 'Fehlt' with an owner row (raw SQL), 4 legacy 'Gelesen'
  * with an owner, 5 'Fehlt' without one.
  */
 function migratedFrom42() {
@@ -41,7 +41,7 @@ const copiesOf = (d, volumeId) => d.prepare('SELECT owner_user_id AS owner, purc
     .all(volumeId).map(r => ({ ...r }));
 const statusOf = (d, volumeId) => ({ ...d.prepare('SELECT status, purchase_date FROM volumes WHERE id = ?').get(volumeId) });
 
-test('migration 43 turns owner rows into personal copies and owned volumes without owner into household copies', () => {
+test('migration 44 turns owner rows into personal copies and owned volumes without owner into household copies', () => {
     const { conn: d, infos } = migratedFrom42();
     assert.deepEqual(copiesOf(d, 1), [{ owner: 2, price: 6.5, purchase_date: '2024-01-01', condition: 'neu' }]);
     assert.deepEqual(copiesOf(d, 2), [{ owner: null, price: 8, purchase_date: '2024-02-02', condition: 'gut' }], 'a household copy');
@@ -54,7 +54,7 @@ test('migration 43 turns owner rows into personal copies and owned volumes witho
         { volume_id: 3, user_id: 1, price: 9, created_at: '2024-03-03 10:00:00' },
         { volume_id: 4, user_id: 2, price: null, created_at: '2023-01-01 00:00:00' }
     ], 'the view keeps the old owner shape');
-    assert.ok(infos.some(line => /v43: 3 owner rows -> personal copies, 1 owned volumes without owner -> household copies, 1 volumes with owners/.test(line)), infos.join('\n'));
+    assert.ok(infos.some(line => /v44: 3 owner rows -> personal copies, 1 owned volumes without owner -> household copies, 1 volumes with owners/.test(line)), infos.join('\n'));
     const triggers = new Set(d.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all().map(r => r.name));
     for (const name of ['trg_dv_volume_copies_ins', ...copies.COPY_TRIGGERS]) assert.ok(triggers.has(name), name);
     assert.deepEqual(d.prepare('PRAGMA foreign_key_check').all(), []);
@@ -101,7 +101,7 @@ test('the acting user takes the household copy; setOwners never passes through "
     assert.deepEqual([copiesOf(d, 1), statusOf(d, 1)], [[], { status: 'Fehlt', purchase_date: null }]);
 });
 
-test('replayed migrations 11 to 43 leave the copies alone', () => {
+test('replayed migrations 11 to 44 leave the copies alone', () => {
     const { conn: d } = migratedFrom42();
     const all = () => d.prepare('SELECT volume_id, owner_user_id, purchase_price, purchase_date FROM volume_copies ORDER BY id').all().map(r => ({ ...r }));
     const before = all();

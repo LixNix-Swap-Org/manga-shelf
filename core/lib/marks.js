@@ -1,4 +1,4 @@
-// Reading marks and chapter progress on the catalog (migration 42): volume_reads is keyed by catalog_volume_id and
+// Reading marks and chapter progress on the catalog (migration 43): volume_reads is keyed by catalog_volume_id and
 // chapter_progress by catalog_series_id, so a volume read in one shelf counts as read in every shelf that holds the same
 // catalog volume. Leaving a shelf or moving a series deletes nothing; a mark only shows where its user is a member.
 //
@@ -56,14 +56,14 @@ const MARK_FOLLOW_TRIGGERS = ['trg_volumes_reads_follow', 'trg_mangas_chapters_f
 
 const hasColumn = (d, table, column) => d.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
 
-/** Whether volume_reads is keyed by the catalog already (migration 42 ran). */
+/** Whether volume_reads is keyed by the catalog already (migration 43 ran). */
 const marksOnCatalog = (d) => hasColumn(d, 'volume_reads', 'catalog_volume_id');
 
-/** Whether chapter_progress is keyed by the catalog already (migration 42 ran). */
+/** Whether chapter_progress is keyed by the catalog already (migration 43 ran). */
 const chaptersOnCatalog = (d) => hasColumn(d, 'chapter_progress', 'catalog_series_id');
 
 /**
- * Before the catalog is rebuilt (migration 40 replayed after 42): the marks by the shelf rows that show them. Every row
+ * Before the catalog is rebuilt (migration 41 replayed after 43): the marks by the shelf rows that show them. Every row
  * holding a catalog entry gets the mark, so it survives whatever the rebuild merges or splits. Each table only once
  * it is keyed by the catalog.
  */

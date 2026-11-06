@@ -146,7 +146,7 @@ function insertRow(conn, table, columns, row) {
 
 // computed by buildMangaDetail or the triggers, never copied: owned_volumes is counted again by the volume inserts,
 // and the device has only its own shelf 1, which the trigger gives every series without shelf_id
-// The catalog links (migration 40) are the server's ids: the device's triggers link its own catalog.
+// The catalog links (migration 41) are the server's ids: the device's triggers link its own catalog.
 const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id', 'catalog_series_id']);
 const SKIP_VOLUME = new Set(['number_sort', 'owners', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id']);
 const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));

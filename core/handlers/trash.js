@@ -124,7 +124,7 @@ function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
         else if (!vanished.has(o.volume_id)) vanished.set(o.volume_id, o);
     }
     // the catalog usually still holds these marks (they stay there, see core/lib/trash.js); an entry trashed before
-    // migration 42 brings them back. A mark the catalog has kept its date.
+    // migration 43 brings them back. A mark the catalog has kept its date.
     for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) addRead(ctx.db, r.volume_id, r.user_id, r.read_at ?? null);
     // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there);
     // otherwise one whose owners could not come back is missing, and one that had none keeps its household copy

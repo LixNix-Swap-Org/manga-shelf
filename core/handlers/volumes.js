@@ -71,7 +71,7 @@ const parseVolumeNumber = (val, type) => {
 /** Another entry of the series with the same type and number (case, spaces and a "Band " prefix ignored). */
 function findDuplicate(ctx, mangaId, volumeNumber, type, excludeId = null) {
     const key = volumeKey(volumeNumber, type);
-    const rows = ctx.db.prepare("SELECT id, status, volume_number, language FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = ?").all(mangaId, type);
+    const rows = ctx.db.prepare("SELECT id, status, volume_number, language FROM volumes WHERE manga_id = ? AND type = ?").all(mangaId, type);
     return rows.find(r => r.id !== excludeId && volumeKey(r.volume_number, type) === key) || null;
 }
 
@@ -274,7 +274,7 @@ function createBatch(ctx, { body }) {
     access.mangaAccess(ctx, mId, 'editor');
 
     // Special editions, Schuber and Specials carry their own numbers and never block a regular volume
-    const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'").all(mId);
+    const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND type = 'volume'").all(mId);
     const existingSet = new Set(existing.map(v => volumeKey(v.volume_number, 'volume')));
 
     const insertStmt = ctx.db.prepare(`
