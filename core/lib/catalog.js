@@ -349,7 +349,7 @@ function backfillCatalog(d, log) {
         catalog_volumes: catalogVolumes,
         conflicts: d.prepare('SELECT count(*) AS n FROM catalog_merge_log').get().n
     };
-    if (series.length && log) log.info(`[Database Migration] v40: ${report.series} series -> ${report.catalog_series} catalog series, ${report.volumes} volumes -> ${report.catalog_volumes} catalog volumes, ${report.conflicts} entries in catalog_merge_log`);
+    if (series.length && log) log.info(`[Database Migration] v41: ${report.series} series -> ${report.catalog_series} catalog series, ${report.volumes} volumes -> ${report.catalog_volumes} catalog volumes, ${report.conflicts} entries in catalog_merge_log`);
     return report;
 }
 
