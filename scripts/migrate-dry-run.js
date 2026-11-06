@@ -6,7 +6,8 @@ const os = require('os');
 const path = require('path');
 
 // volume_reads and chapter_progress may shrink once (migration 42 merges the marks of shelves holding the same edition)
-const COUNTED_TABLES = ['users', 'mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress'];
+// volume_owners is a view of volume_copies since migration 43 (counted all the same)
+const COUNTED_TABLES = ['users', 'mangas', 'volumes', 'volume_owners', 'volume_copies', 'volume_reads', 'chapter_progress'];
 
 function usage(message) {
     if (message) console.error(message);
@@ -40,7 +41,7 @@ function copyDatabase(source, target) {
 }
 
 function tableCounts(conn) {
-    const tables = new Set(conn.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name));
+    const tables = new Set(conn.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").all().map(r => r.name));
     const counts = {};
     for (const t of COUNTED_TABLES) counts[t] = tables.has(t) ? conn.prepare(`SELECT count(*) AS n FROM "${t}"`).get().n : null;
     return counts;
@@ -93,7 +94,7 @@ function main() {
             for (const m of report) console.log(`  v${m.version} ${m.name}: ${fmt(m.changes)} Zeilen geändert, ${m.ms} ms`);
         }
         console.log('Zeilen (vorher -> nachher):');
-        for (const t of COUNTED_TABLES) console.log(`  ${t.padEnd(16)} ${fmt(countsBefore[t])} -> ${fmt(countsAfter[t])}`);
+        for (const t of COUNTED_TABLES) console.log(`  ${t.padEnd(17)} ${fmt(countsBefore[t])} -> ${fmt(countsAfter[t])}`);
         console.log(`integrity_check:   ${integrity.join('; ')}`);
         console.log(`foreign_key_check: ${foreignKeyErrors.length ? `${foreignKeyErrors.length} Verstöße` : 'ok'}`);
         for (const v of foreignKeyErrors.slice(0, 20)) console.log(`  ${v.table} rowid ${v.rowid} -> ${v.parent}`);

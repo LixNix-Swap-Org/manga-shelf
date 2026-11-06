@@ -83,7 +83,7 @@ test('fixes: visitors may not run them; normalize_publishers and legacy_read cha
     assert.equal((await checksOf()).legacy_read_status.count, 0);
 });
 
-test('owner checks: owned without an owner and owners on a volume that is not owned, with their fixes', async () => {
+test('owner checks: owned without an owner (household copy) and, prevented by the copy triggers, owners on a volume that is not owned', async () => {
     const m = Number(db.prepare("INSERT INTO mangas (title) VALUES ('Besitzprobe')").run().lastInsertRowid);
     const vol = db.prepare('INSERT INTO volumes (manga_id, volume_number, status, price, purchase_date) VALUES (?, ?, ?, ?, ?)');
     const lonely = Number(vol.run(m, '1', 'Vorhanden', 7.5, '2024-03-01').lastInsertRowid);
@@ -91,14 +91,17 @@ test('owner checks: owned without an owner and owners on a volume that is not ow
     const legacy = Number(vol.run(m, '3', 'Gelesen', null, null).lastInsertRowid);
     const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
     const visId = db.prepare("SELECT id FROM users WHERE username = 'vis'").get().id;
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date) VALUES (?, ?, ?, ?)').run(missing, visId, 9, '2024-02-02');
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(legacy, visId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date) VALUES (?, ?, ?, ?)').run(missing, visId, 9, '2024-02-02');
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(legacy, visId);
+    // a copy makes its volume owned (migration 43); a legacy 'Gelesen' is left to its own check
+    assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(missing).status, 'Vorhanden');
+    assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(legacy).status, 'Gelesen');
 
     const c = await checksOf(visitor);
     assert.ok(c.owned_without_owner.items.some(v => v.id === lonely));
     assert.equal(c.owned_without_owner.fix, 'assign_owner');
     // the legacy 'Gelesen' volume has its own check
-    assert.deepEqual(c.owners_not_owned.items.map(v => v.id), [missing]);
+    assert.deepEqual(c.owners_not_owned.items.map(v => v.id), []);
     assert.equal(c.owners_not_owned.fix, 'status_from_owners');
     assert.equal((await visitor('POST', '/maintenance/fix', { check: 'assign_owner' })).status, 403);
 
@@ -109,7 +112,7 @@ test('owner checks: owned without an owner and owners on a volume that is not ow
         [{ user_id: adminId, price: 7.5, purchase_date: '2024-03-01' }]);
 
     const statuses = await admin('POST', '/maintenance/fix', { check: 'status_from_owners' });
-    assert.equal(statuses.body.changed, 1);
+    assert.equal(statuses.body.changed, 0);
     assert.equal(db.prepare('SELECT status FROM volumes WHERE id = ?').get(missing).status, 'Vorhanden');
     // the owner row (price, date of that purchase) stays as it was
     assert.deepEqual(db.prepare('SELECT user_id, price, purchase_date FROM volume_owners WHERE volume_id = ?').all(missing).map(r => ({ ...r })),

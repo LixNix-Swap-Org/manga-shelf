@@ -8,6 +8,7 @@ import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
 import marks from '../../../core/lib/marks.js';
+import copies from '../../../core/lib/copies.js';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 
@@ -162,7 +163,6 @@ export function fillFromSnapshot(conn, snapshot) {
   conn.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'admin')").run(me.id, me.username, LOCAL_PASSWORD_HASH);
   const mangaCols = columnsOf(conn, 'mangas');
   const volumeCols = columnsOf(conn, 'volumes');
-  const insertOwner = conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
     if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);
@@ -175,8 +175,10 @@ export function fillFromSnapshot(conn, snapshot) {
       insertRow(conn, 'volumes', volumeCols, vol);
       for (const o of v.owners || []) {
         if (o.user_id !== me.id) continue;
-        insertOwner.run(v.id, me.id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, hasText(o.created_at) ? o.created_at : null);
+        copies.addCopy(conn, v.id, me.id, { price: o.price, purchase_date: o.purchase_date, condition: o.condition, created_at: hasText(o.created_at) ? o.created_at : null });
       }
+      // the volume insert gave an owned volume a household copy; without an own copy it counts as missing, as before copies
+      if (!copies.hasCopy(conn, v.id, me.id)) copies.dropHouseholdCopies(conn, v.id);
       if ((v.read_by || []).includes(me.id)) {
         const read = (v.read_users || []).find((r) => (r.user_id ?? r.id) === me.id);
         marks.addRead(conn, v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
