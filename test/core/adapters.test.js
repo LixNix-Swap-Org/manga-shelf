@@ -114,6 +114,26 @@ for (const kind of kinds) {
         assert.deepEqual(db.prepare('SELECT title FROM mangas ORDER BY id').all().map(r => r.title), ['A']);
         await core.close();
     });
+
+    test(`${kind}: a nested ctx.db.transaction is a savepoint`, async () => {
+        const core = await createCore(kind);
+        const { db } = core.ctx;
+        const insert = (title) => db.prepare('INSERT INTO mangas (title) VALUES (?)').run(title);
+        db.transaction(() => {
+            insert('aussen');
+            assert.throws(() => db.transaction(() => { insert('innen weg'); throw new Error('innen'); }), /innen/);
+            db.transaction(() => db.transaction(() => insert('tief')));
+        });
+        assert.throws(() => db.transaction(() => {
+            db.transaction(() => insert('mit weg'));
+            throw new Error('aussen');
+        }), /aussen/);
+        assert.deepEqual(db.prepare('SELECT title FROM mangas ORDER BY id').all().map(r => r.title), ['aussen', 'tief']);
+        // the depth is back at zero: the next call opens a real transaction again
+        db.transaction(() => insert('danach'));
+        assert.equal(db.prepare('SELECT count(*) AS n FROM mangas').get().n, 3);
+        await core.close();
+    });
 }
 
 if (SQL_JS) {

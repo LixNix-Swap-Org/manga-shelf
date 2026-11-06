@@ -25,26 +25,56 @@ function randomId() {
     return `${s.slice(0, 8)}-${s.slice(8, 12)}-4${s.slice(13, 16)}-${s.slice(16, 20)}-${s.slice(20, 32)}`;
 }
 
+// Open transactions per connection: a nested call becomes a SAVEPOINT, so a helper with its own transaction
+// (saveProgress, moveMangaToTrash …) also runs inside a caller's one.
+const depthOf = new WeakMap();
+
 /**
- * Synchronous transaction on a connection with exec(): BEGIN IMMEDIATE, commit on success, rollback on error.
- * An async callback is refused: whatever it does after its first await would run outside the transaction.
+ * Runs fn synchronously in a transaction on a connection with exec(): BEGIN IMMEDIATE at the outermost level,
+ * SAVEPOINT inside another one; commit/release on success, rollback on error (a nested error rolls back only its
+ * savepoint and is rethrown). An async callback is refused: whatever it does after its first await would run outside.
  */
-function transactionFor(conn, log = silentLog) {
-    return (fn) => {
-        conn.exec('BEGIN IMMEDIATE;');
-        try {
-            const result = fn(conn);
-            if (result && typeof result.then === 'function') {
-                result.then(null, noop);
-                throw new Error('runTransaction: asynchrone Callbacks sind nicht erlaubt');
-            }
-            conn.exec('COMMIT;');
-            return result;
-        } catch (err) {
-            try { conn.exec('ROLLBACK;'); } catch (rbErr) { log.warn('ROLLBACK failed:', rbErr.message); }
-            throw err;
+function runInTransaction(conn, fn, log = silentLog) {
+    const depth = depthOf.get(conn) || 0;
+    const savepoint = depth > 0 ? `tx_${depth}` : null;
+    conn.exec(savepoint ? `SAVEPOINT ${savepoint};` : 'BEGIN IMMEDIATE;');
+    depthOf.set(conn, depth + 1);
+    try {
+        const result = fn(conn);
+        if (result && typeof result.then === 'function') {
+            result.then(null, noop);
+            throw new Error('runTransaction: asynchrone Callbacks sind nicht erlaubt');
         }
+        conn.exec(savepoint ? `RELEASE ${savepoint};` : 'COMMIT;');
+        return result;
+    } catch (err) {
+        try {
+            conn.exec(savepoint ? `ROLLBACK TO ${savepoint}; RELEASE ${savepoint};` : 'ROLLBACK;');
+        } catch (rbErr) { log.warn('ROLLBACK failed:', rbErr.message); }
+        throw err;
+    } finally {
+        depthOf.set(conn, depth);
+    }
+}
+
+/**
+ * `db` whose prepare() hands out one statement per SQL text, for a synchronous loop that runs the same few
+ * statements thousands of times (CSV import). Use it only inside that loop: a reopened database (restore) would
+ * leave the cached statements on the closed connection.
+ */
+function withStatementCache(db) {
+    const cache = new Map();
+    const cached = Object.create(db);
+    cached.prepare = (sql) => {
+        let stmt = cache.get(sql);
+        if (!stmt) { stmt = db.prepare(sql); cache.set(sql, stmt); }
+        return stmt;
     };
+    return cached;
+}
+
+function transactionFor(conn, log = silentLog) {
+    return (fn) => runInTransaction(conn, fn, log);
 }
 
 /** ctx.db over a raw connection (prepare/exec), e.g. node:sqlite's DatabaseSync. */
@@ -93,4 +123,4 @@ function createCtx(parts) {
 /** The same host parts for one caller (and request-scoped extras such as signal and limit). */
 const withUser = (ctx, user, extra = {}) => ({ ...ctx, user: user || null, ...extra });
 
-module.exports = { createCtx, withUser, dbFromConnection, transactionFor, silentLog, ANSWERED };
+module.exports = { createCtx, withUser, dbFromConnection, transactionFor, runInTransaction, withStatementCache, silentLog, ANSWERED };

@@ -47,15 +47,33 @@ function entryId(params) {
 /** Entries newest first with what the dialog shows; the payload itself stays on the server. */
 function list(ctx, { query } = {}) {
     const scope = access.inShelves('t.shelf_id', access.requestedShelfIds(ctx, qstr(query && query.shelf_id)));
+    // The list needs a few fields of each payload, so SQLite reads them (json_extract) instead of the whole JSON being
+    // parsed per row; a payload that is no valid JSON reads as empty, as parsePayload does.
     const rows = ctx.db.prepare(`
-        SELECT t.*, u.username AS deleted_by_name FROM trash t LEFT JOIN users u ON u.id = t.deleted_by
+        SELECT t.id, t.kind, t.ref_id, t.manga_id, t.title, t.deleted_at, t.deleted_by,
+               u.username AS deleted_by_name, m.id IS NOT NULL AS series_live, p.*
+        FROM trash t
+        LEFT JOIN users u ON u.id = t.deleted_by
+        LEFT JOIN mangas m ON m.id = t.manga_id
+        LEFT JOIN (
+            SELECT id AS pid,
+                   NULLIF(json_extract(payload, '$.manga.cover_image'), '') AS manga_cover,
+                   NULLIF(json_extract(payload, '$.manga.publisher'), '') AS manga_publisher,
+                   CASE json_type(payload, '$.volumes') WHEN 'array' THEN json_array_length(payload, '$.volumes') ELSE 0 END AS volume_count,
+                   CASE json_type(payload, '$.volumes') WHEN 'array' THEN (
+                       SELECT COUNT(*) FROM json_each(payload, '$.volumes') WHERE json_extract(value, '$.status') = 'Vorhanden'
+                   ) ELSE 0 END AS owned_count,
+                   json_extract(payload, '$.volume.volume_number') AS volume_number,
+                   NULLIF(json_extract(payload, '$.volume.type'), '') AS volume_type,
+                   NULLIF(json_extract(payload, '$.volume.status'), '') AS volume_status,
+                   NULLIF(json_extract(payload, '$.volume.cover_image'), '') AS volume_cover
+            FROM trash WHERE json_valid(payload) AND json_type(payload) = 'object'
+        ) p ON p.pid = t.id
         WHERE ${scope.sql}
         ORDER BY t.deleted_at DESC, t.id DESC
     `).all(...scope.params);
-    const seriesExists = ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE id = ?');
     const trashedSeries = new Set(rows.filter(r => r.kind === 'manga').map(r => r.ref_id));
     const items = rows.map((row) => {
-        const payload = parsePayload(row);
         const base = {
             id: row.id,
             kind: row.kind,
@@ -68,24 +86,22 @@ function list(ctx, { query } = {}) {
             purge_at: purgeDate(row.deleted_at)
         };
         if (row.kind === 'manga') {
-            const volumes = Array.isArray(payload.volumes) ? payload.volumes : [];
             return {
                 ...base,
-                cover_image: payload.manga?.cover_image || null,
-                publisher: payload.manga?.publisher || null,
-                volume_count: volumes.length,
-                owned_count: volumes.filter(v => v.status === 'Vorhanden').length,
+                cover_image: row.manga_cover ?? null,
+                publisher: row.manga_publisher ?? null,
+                volume_count: row.volume_count || 0,
+                owned_count: row.owned_count || 0,
                 restorable: true
             };
         }
-        const volume = payload.volume || {};
-        const seriesLive = Boolean(seriesExists.get(row.manga_id));
+        const seriesLive = Boolean(row.series_live);
         return {
             ...base,
-            volume_number: volume.volume_number ?? null,
-            type: volume.type || 'volume',
-            status: volume.status || null,
-            cover_image: volume.cover_image || null,
+            volume_number: row.volume_number ?? null,
+            type: row.volume_type || 'volume',
+            status: row.volume_status ?? null,
+            cover_image: row.volume_cover ?? null,
             restorable: seriesLive,
             series_in_trash: !seriesLive && trashedSeries.has(row.manga_id)
         };

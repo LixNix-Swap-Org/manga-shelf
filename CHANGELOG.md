@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Transactions can be nested: a transaction inside another one is a savepoint, so a helper with its own transaction also runs inside a caller's one. The shelf membership that a first read sets up for an account without a shelf is written in one transaction.
+- The trash list reads cover, counts and volume fields straight from the stored entries instead of parsing every entry, and checks the series of all volume entries in one query.
+- The CSV import reuses its statements for owners and reads: 15,000 rows take about 0.7 s instead of 1.5 s.
+
 ## 3.7.0
 
 ### Before updating
