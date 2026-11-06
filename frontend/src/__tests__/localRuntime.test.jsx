@@ -788,7 +788,9 @@ describe('every write of the device reaches the store', () => {
   });
 
   it('a write during a retry that then succeeds is saved too', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // Date too: the idle delay grows with the measured save time (runtime.js idleDelay), and a real clock lets a
+    // slow first save under load push the retry past advanceTimersByTimeAsync(0).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     try {
       const base = memoryStore();
       let puts = 0;
