@@ -300,7 +300,8 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
     const admin = ctx.client();
     const exportCsv = async () => (await fetch(ctx.base + '/export/csv', { headers: { Cookie: admin.cookie } })).text();
     const titles = async () => (await admin('GET', '/mangas')).body.map(m => m.title).sort();
-    const wipe = () => db.exec('DELETE FROM mangas;');
+    // reading marks and chapters sit on the catalog (migration 43) and outlive their series: a clean slate clears them too
+    const wipe = () => db.exec('DELETE FROM mangas; DELETE FROM volume_reads; DELETE FROM chapter_progress;');
     try {
         assert.equal((await admin('POST', '/setup', { username: 'admin', password: 'password123' })).status, 200);
 
@@ -484,7 +485,7 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             assert.equal(vol.status, 'Vorhanden');
             const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
             assert.deepEqual(db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
-            assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
+            assert.deepEqual(db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(vol.id).map(r => r.user_id), [adminId]);
             assert.equal((await admin('GET', '/stats')).body.summary.total_owned_volumes, before + 1);
         });
 
@@ -571,10 +572,10 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             ]);
             const marks = (table, num) => db.prepare(`SELECT t.user_id FROM ${table} t JOIN volumes v ON v.id = t.volume_id
                 JOIN mangas m ON m.id = v.manga_id WHERE m.title = 'Vorrang' AND v.volume_number = ? ORDER BY t.user_id`).all(num).map(r => r.user_id);
-            assert.deepEqual([marks('volume_owners', '1'), marks('volume_reads', '1')], [[oemer], [oemer]], 'the member spelled in another case wins the exact non-member');
+            assert.deepEqual([marks('volume_owners', '1'), marks('shelf_volume_reads', '1')], [[oemer], [oemer]], 'the member spelled in another case wins the exact non-member');
             assert.deepEqual(marks('volume_owners', '2'), [jo, ann].sort((a, b) => a - b), 'two members win the longer name of a non-member');
             const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
-            assert.deepEqual([marks('volume_owners', '3'), marks('volume_reads', '3')], [[adminId], []]);
+            assert.deepEqual([marks('volume_owners', '3'), marks('shelf_volume_reads', '3')], [[adminId], []]);
         });
 
         await t.test('Fehlerhafte Zeilen vorhandener Bände zählen als übersprungen', async () => {
@@ -662,13 +663,13 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
                 WHERE v.volume_number = ? ORDER BY t.user_id`).all(num).map(r => r.user_id);
             assert.equal(db.prepare("SELECT count(*) AS c FROM volumes WHERE volume_number = '1'").get().c, 0);
             assert.deepEqual(usersOf('volume_owners', '2'), [edId]);
-            assert.deepEqual(usersOf('volume_reads', '2'), []);
+            assert.deepEqual(usersOf('shelf_volume_reads', '2'), []);
             assert.ok(!usersOf('volume_owners', '1').includes(adminId));
 
             const asAdmin = (await admin('POST', '/import/csv', { csv: 'Reihe;Bandnummer;Gelesen von;Besitzer\nRechte;3;csved;admin\n' })).body;
             assert.deepEqual(asAdmin.warnings, []);
             assert.deepEqual(usersOf('volume_owners', '3'), [adminId]);
-            assert.deepEqual(usersOf('volume_reads', '3'), [edId]);
+            assert.deepEqual(usersOf('shelf_volume_reads', '3'), [edId]);
         });
 
         await t.test('Lese-Einträge überstehen Export und Import', async () => {
@@ -679,13 +680,13 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
             const [v1, v2] = db.prepare('SELECT id FROM volumes WHERE manga_id = ? ORDER BY volume_number').all(id).map(v => v.id);
             assert.equal((await admin('POST', `/volumes/${v1}/read`, { read: true })).status, 200);
             const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
-            db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(v2, adminId);
+            db.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)').run(v2, adminId);
             const csv = await exportCsv();
             assert.ok(csv.split('\r\n')[0].endsWith(';Gelesen von;Besitzer'));
             wipe();
             const res = (await admin('POST', '/import/csv', { csv })).body;
             assert.deepEqual(res.errors, []);
-            const reads = db.prepare(`SELECT v.volume_number, vr.user_id FROM volume_reads vr JOIN volumes v ON v.id = vr.volume_id
+            const reads = db.prepare(`SELECT v.volume_number, vr.user_id FROM shelf_volume_reads vr JOIN volumes v ON v.id = vr.volume_id
                 ORDER BY v.volume_number`).all();
             assert.deepEqual(reads.map(r => [r.volume_number, r.user_id]), [['1', adminId], ['2', adminId]]);
         });

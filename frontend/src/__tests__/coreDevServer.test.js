@@ -43,7 +43,7 @@ describe('CommonJS core in the dev server', () => {
   afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('turns links.js and the core/lib files of takeover.js into ESM with the same exports, run by Node itself', () => {
-    const rels = ['watch/links.js', 'lib/imageCheck.js', 'lib/owners.js'];
+    const rels = ['watch/links.js', 'lib/imageCheck.js', 'lib/owners.js', 'lib/marks.js'];
     const files = writeTransformed(dir, rels);
     const result = importInNode(files);
     rels.forEach((rel, i) => {

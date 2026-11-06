@@ -87,7 +87,7 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
-    const insRead = db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
+    const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id) SELECT catalog_volume_id, ? FROM volumes WHERE id = ?');
 
     for (let s = 0; s < series; s++) {
       const size = sizes[s];
@@ -156,7 +156,7 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
         }
         for (const userId of owners) { insOwner.run(volumeId, userId, price, purchase, condition); stats.owners++; }
         const readShare = [0.7, 0.4, 0.15];
-        for (let k = 0; k < users.length; k++) if (rand() < readShare[k]) { insRead.run(volumeId, users[k]); stats.reads++; }
+        for (let k = 0; k < users.length; k++) if (rand() < readShare[k]) { insRead.run(users[k], volumeId); stats.reads++; }
       }
     }
     db.exec("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes v WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden')");
@@ -195,8 +195,8 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, price, release_date, release_year, condition, pages, purchase_date, status, notes, cover_image, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
-    const insRead = db.prepare('INSERT INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
-    const insChapter = db.prepare('INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
+    const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id, read_at) SELECT catalog_volume_id, ?, ? FROM volumes WHERE id = ?');
+    const insChapter = db.prepare('INSERT OR IGNORE INTO chapter_progress (catalog_series_id, user_id, chapters_read) SELECT catalog_series_id, ?, ? FROM mangas WHERE id = ?');
     const mangaId = {};
     for (const s of data.series) {
       mangaId[s.key] = Number(insManga.run(s.title, s.alt_title, s.author, s.publisher, s.status, s.tags, s.total_volumes, s.description, s.cover_image, s.banner_image,
@@ -207,9 +207,9 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
           v.cover_image, v.type, v.priority, v.target_price).lastInsertRowid);
         stats.volumes++;
         for (const o of v.owners) { insOwner.run(volumeId, userId[o.user], o.price, o.purchase_date, o.condition); stats.owners++; }
-        for (const r of v.reads) { insRead.run(volumeId, userId[r.user], r.read_at); stats.reads++; }
+        for (const r of v.reads) { insRead.run(userId[r.user], r.read_at, volumeId); stats.reads++; }
       }
-      for (const c of s.chapters) { insChapter.run(mangaId[s.key], userId[c.user], c.chapters_read); stats.chapters++; }
+      for (const c of s.chapters) { insChapter.run(userId[c.user], c.chapters_read, mangaId[s.key]); stats.chapters++; }
     }
     db.exec("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes v WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden')");
 

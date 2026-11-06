@@ -14,8 +14,15 @@ const AdmZip = require('adm-zip');
 const dbm = require('../db');
 
 const { CATALOG_TRIGGERS } = require('../core/lib/catalog');
-/** The catalog triggers (migration 41) name most series and volume columns: a test that drops one of them drops these first. */
-const dropCatalogTriggers = (conn) => { for (const name of CATALOG_TRIGGERS) conn.exec(`DROP TRIGGER IF EXISTS ${name};`); };
+const { MARK_FOLLOW_TRIGGERS, MARK_VIEWS } = require('../core/lib/marks');
+/**
+ * The catalog triggers (migration 41) and the mark views and triggers (migration 43) name most series and volume columns:
+ * a test that drops one of them drops these first.
+ */
+const dropCatalogTriggers = (conn) => {
+    for (const name of [...CATALOG_TRIGGERS, ...MARK_FOLLOW_TRIGGERS]) conn.exec(`DROP TRIGGER IF EXISTS ${name};`);
+    for (const name of MARK_VIEWS) conn.exec(`DROP VIEW IF EXISTS ${name};`);
+};
 /** applySchema without the migrations from `version` on (they are recorded as applied, so a test can delete and replay them). */
 function applySchemaBefore(conn, version) {
     const schema = require('../core/schema');
@@ -258,12 +265,14 @@ test('migration 13 (v2.19.1 data): the oldest admin owns legacy Gelesen volumes 
         const vol = (n) => Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, ?, 'Gelesen')").run(manga, n).lastInsertRowid);
         const readByEditor = vol('1');
         const readByNobody = vol('2');
-        conn.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(readByEditor, editor);
+        conn.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)').run(readByEditor, editor);
         conn.exec('DELETE FROM schema_migrations WHERE version >= 13');
 
         schema.runSequentialMigrations(conn);
         const owners = (id) => conn.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(id).map(r => r.user_id);
-        const readers = (id) => conn.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(id).map(r => r.user_id);
+        // the accounts are in no shelf here: the marks on the catalog, not the per-shelf view
+        const readers = (id) => conn.prepare(`SELECT r.user_id FROM volume_reads r JOIN volumes v ON v.catalog_volume_id = r.catalog_volume_id
+            WHERE v.id = ? ORDER BY r.user_id`).all(id).map(r => r.user_id);
         for (const id of [readByEditor, readByNobody]) {
             assert.equal(conn.prepare('SELECT status FROM volumes WHERE id = ?').get(id).status, 'Vorhanden');
             assert.deepEqual(owners(id), [admin]);
@@ -762,7 +771,7 @@ test('migrations 34 and 35 add animes.tags and anime_airings to existing rows an
     }
 });
 
-test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter_progress, which cascades with its series', () => {
+test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter_progress (on the catalog since 43)', () => {
     const schema = require('../core/schema');
     const file = path.join(dataDir, 'temp', 'webtoon.db');
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -782,16 +791,24 @@ test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter
         `);
         assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(36));
         assert.deepEqual({ ...conn.prepare('SELECT format, total_chapters FROM mangas WHERE id = 41').get() }, { format: 'print', total_chapters: null });
-        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (42, 'Neu', 'webtoon', 200); INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (42, 31, 150)");
+        const chapterOf = (mangaId) => conn.prepare(`SELECT p.chapters_read AS n FROM chapter_progress p JOIN mangas m ON m.catalog_series_id = p.catalog_series_id
+            WHERE m.id = ? AND p.user_id = 31`).get(mangaId)?.n ?? null;
+        const setChapter = (mangaId, n) => conn.prepare(`INSERT INTO chapter_progress (catalog_series_id, user_id, chapters_read)
+            SELECT catalog_series_id, 31, ? FROM mangas WHERE id = ?`).run(n, mangaId);
+        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (42, 'Neu', 'webtoon', 200)");
+        setChapter(42, 150);
         conn.exec('PRAGMA foreign_keys = ON; DELETE FROM mangas WHERE id = 42');
-        assert.equal(conn.prepare('SELECT count(*) AS n FROM chapter_progress').get().n, 0, 'progress goes with its series');
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM chapter_progress').get().n, 1, 'the progress stays on the catalog series');
+        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (43, 'Neu', 'webtoon', 200)");
+        assert.equal(chapterOf(43), 150, 'the same edition added again shows it again');
 
-        conn.exec("UPDATE mangas SET format = 'webtoon', total_chapters = 12 WHERE id = 41; INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (41, 31, 3)");
+        conn.exec("UPDATE mangas SET format = 'webtoon', total_chapters = 12 WHERE id = 41");
+        setChapter(41, 3);
         conn.exec('DELETE FROM schema_migrations WHERE version >= 36');
         schema.runSequentialMigrations(conn);
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
         assert.deepEqual({ ...conn.prepare('SELECT format, total_chapters FROM mangas WHERE id = 41').get() }, { format: 'webtoon', total_chapters: 12 });
-        assert.equal(conn.prepare('SELECT chapters_read AS n FROM chapter_progress WHERE manga_id = 41').get().n, 3);
+        assert.equal(chapterOf(41), 3);
     } finally {
         conn.close();
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });

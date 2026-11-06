@@ -25,8 +25,9 @@ const VOLUME_SEARCH_SQL = `(SELECT SUBSTR(GROUP_CONCAT(t, char(10)), 1, ${VOLUME
 /**
  * Series list with aggregates for the dashboard (also the snapshot's `mangas`), without detail-only columns.
  * wished (0|1): wish_priority set and no volume owned. { volumeSearch: true } adds volume_search (snapshot only).
- * One row per volume: the volume_reads join is on its primary key (volume_id, user_id) for one user, so plain COUNTs
- * and SUMs are exact; only regular_owned counts distinct numbers.
+ * One row per volume: the volume_reads join is on its primary key (catalog_volume_id, user_id) for one user, so plain
+ * COUNTs and SUMs are exact; only regular_owned counts distinct numbers. The marks of `userId` need no member check:
+ * the list only holds shelves `userId` belongs to (the caller's own).
  */
 function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.accessibleShelfIds(ctx) } = {}) {
     const scope = access.inShelves('m.shelf_id', shelfIds);
@@ -35,7 +36,7 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
                    COUNT(CASE WHEN v.status = 'Vorhanden' THEN v.id END) as owned_volumes,
                    m.cover_image, m.banner_image, m.manga_passion_id, m.created_at, m.updated_at, m.updated_by, m.wish_priority,
                    m.collecting, m.region, m.work_key, m.work_id, m.currency, m.shelf_id, m.format, m.total_chapters,
-                   COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.manga_id = m.id AND cp.user_id = ?), 0) as chapters_read,
+                   COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.catalog_series_id = m.catalog_series_id AND cp.user_id = ?), 0) as chapters_read,
                    COUNT(CASE WHEN v.status = 'Fehlt' THEN v.id END) as missing_count,
                    COUNT(CASE WHEN v.status IN ('Vorbestellt', 'Bestellt') THEN v.id END) as preorder_count,
                    CASE WHEN m.wish_priority IS NOT NULL AND COUNT(CASE WHEN v.status = 'Vorhanden' THEN 1 END) = 0 THEN 1 ELSE 0 END as wished,
@@ -45,11 +46,11 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND ${REGULAR} THEN v.number_sort END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
                    MAX(CASE WHEN ${REGULAR} THEN v.number_sort END) as max_regular_number, -- highest existing regular number, any status: a missing volume 4 keeps 3 of 3 from being complete
                    COUNT(CASE WHEN v.status = 'Vorhanden' AND NOT ${REGULAR} THEN v.id END) as extras_owned,
-                   COUNT(CASE WHEN v.status = 'Vorhanden' THEN vr.volume_id END) as read_volume_count${volumeSearch ? `,
+                   COUNT(CASE WHEN v.status = 'Vorhanden' THEN vr.catalog_volume_id END) as read_volume_count${volumeSearch ? `,
                    ${VOLUME_SEARCH_SQL} as volume_search` : ''}
             FROM mangas m
             LEFT JOIN volumes v ON m.id = v.manga_id
-            LEFT JOIN volume_reads vr ON v.id = vr.volume_id AND vr.user_id = ?
+            LEFT JOIN volume_reads vr ON vr.catalog_volume_id = v.catalog_volume_id AND vr.user_id = ?
             WHERE ${scope.sql}
             GROUP BY m.id
             ORDER BY m.title ASC
@@ -79,7 +80,7 @@ function volumeColumns(ctx) {
 
 const READS_SELECT = `
         SELECT vr.volume_id, vr.user_id, u.username, vr.read_at
-        FROM volume_reads vr
+        FROM shelf_volume_reads vr
         JOIN users u ON vr.user_id = u.id`;
 
 const OWNERS_SELECT = `
@@ -89,7 +90,7 @@ const OWNERS_SELECT = `
 
 const CHAPTERS_SELECT = `
         SELECT cp.manga_id, cp.user_id, u.username, cp.chapters_read, cp.updated_at
-        FROM chapter_progress cp
+        FROM shelf_chapter_progress cp
         JOIN users u ON cp.user_id = u.id`;
 
 const USERS_SQL = 'SELECT id, username, role FROM users ORDER BY id ASC';
@@ -229,7 +230,7 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
     if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) return null;
     const volumes = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id = ? ORDER BY ${volumeOrderSql('v')}, v.id ASC`).all(mangaId);
-    const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.rowid`).all(mangaId);
+    const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.user_id`).all(mangaId);
     const owners = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id = ? ORDER BY vo.created_at, vo.rowid`).all(mangaId);
     const users = ctx.db.prepare(USERS_SQL).all();
     const readsByVolume = groupBy(reads, 'volume_id');
@@ -263,7 +264,7 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
     const editionScope = access.inShelves('m.shelf_id', shelfIds);
     const editionsByWork = groupBy(ctx.db.prepare(`${EDITIONS_SELECT} WHERE m.work_key IS NOT NULL AND ${editionScope.sql} ${EDITIONS_ORDER}`).all(...editionScope.params), 'work_key');
     const volumesStmt = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id BETWEEN ? AND ? ORDER BY v.manga_id, ${volumeOrderSql('v')}, v.id ASC`);
-    const readsStmt = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vr.volume_id, vr.read_at, vr.rowid`);
+    const readsStmt = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vr.volume_id, vr.read_at, vr.user_id`);
     const ownersStmt = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vo.volume_id, vo.created_at, vo.rowid`);
     const chaptersStmt = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id BETWEEN ? AND ? ORDER BY cp.manga_id, cp.user_id`);
 
