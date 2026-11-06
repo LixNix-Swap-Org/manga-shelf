@@ -88,7 +88,7 @@ function replaceOnce(sql, pattern, replacement, what) {
 }
 
 /**
- * Migration 13 with the SQL of its time (volume_reads by volume_id; owners.js writes catalog marks since migration 42):
+ * Migration 13 with the SQL of its time (volume_reads by volume_id; owners.js writes catalog marks since migration 43):
  * every volume with the legacy status 'Gelesen' becomes 'Vorhanden'. Without an owner the oldest admin owns it; without a
  * read entry its owners become its readers. Returns the count. Frozen.
  */
@@ -205,7 +205,7 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_volume_reads_user ON volume_reads (user_id);
                     CREATE INDEX IF NOT EXISTS idx_mangas_passion_id ON mangas (manga_passion_id);
                 `);
-                // migration 12 drops it again; a replay on marks keyed by the catalog (migration 42) has no volume_id
+                // migration 12 drops it again; a replay on marks keyed by the catalog (migration 43) has no volume_id
                 if (!marksOnCatalog(d)) d.exec('CREATE INDEX IF NOT EXISTS idx_volume_reads_vol ON volume_reads (volume_id);');
             }
         },
@@ -337,7 +337,7 @@ function migrationList(log = silentLog) {
             version: 13,
             name: 'convert_legacy_gelesen_status',
             up: (d) => {
-                // replayed on a database whose marks are on the catalog already (migration 42): the current rules of owners.js
+                // replayed on a database whose marks are on the catalog already (migration 43): the current rules of owners.js
                 const converted = marksOnCatalog(d) ? migrateLegacyReadStatus(d) : convertLegacyReadStatusV13(d);
                 if (converted) log.info(`[Database Migration] Converted ${converted} volumes with legacy status 'Gelesen' to 'Vorhanden' plus a read entry`);
             }
@@ -879,6 +879,58 @@ function migrationList(log = silentLog) {
         },
         {
             version: 40,
+            name: 'harden_value_columns',
+            up: (d) => {
+                // A volume without a type is a regular volume: stored as such, so queries compare type directly
+                // (and the index on manga_id, type, number_sort applies)
+                d.exec("UPDATE volumes SET type = 'volume' WHERE type IS NULL OR TRIM(type) = '';");
+                // One household shelf: older code could only ever create shelf 1 as the default, keep the lowest one
+                const defaults = d.prepare('SELECT id FROM shelves WHERE is_default = 1 ORDER BY id').all();
+                if (defaults.length > 1) {
+                    log.warn(`[Database] ${defaults.length} household shelves found; shelf ${defaults[0].id} stays the household shelf.`);
+                    d.prepare('UPDATE shelves SET is_default = 0 WHERE is_default = 1 AND id <> ?').run(defaults[0].id);
+                }
+                d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_shelves_one_default ON shelves (is_default) WHERE is_default = 1;');
+                // The value lists of core/lib/validate.js as a safety net under every write path (handlers, CSV import,
+                // raw SQL of the seeder and the takeover). Frozen here: a new value needs a migration that replaces
+                // the triggers. An unchanged stored value passes an UPDATE, so older rows stay editable.
+                const checks = [
+                    // NULL passes (NOT IN is NULL); an empty type becomes 'volume' through the trigger below
+                    // 'Gelesen' is the legacy status that migration 13, the quality check and convertLegacyRead still handle
+                    ['volumes', 'status', "'Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 'Bestellt', 'Gelesen'"],
+                    ['volumes', 'type', "'volume', 'special_edition', 'schuber', 'special'", "TRIM(NEW.type) <> ''"],
+                    ['mangas', 'collecting', "'aktiv', 'pausiert', 'abgebrochen'"],
+                    ['mangas', 'format', "'print', 'webtoon'"]
+                ];
+                for (const [table, column, values, extra] of checks) {
+                    const bad = `NEW.${column} NOT IN (${values})${extra ? ` AND ${extra}` : ''}`;
+                    const stored = d.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${bad.replace(/NEW\./g, '')}`).get().n;
+                    if (stored) log.warn(`[Database] ${stored} rows of ${table}.${column} hold a value outside the list; they stay as they are.`);
+                    d.exec(`
+                        CREATE TRIGGER IF NOT EXISTS trg_check_${table}_${column}_ins BEFORE INSERT ON ${table} WHEN ${bad} BEGIN
+                            SELECT RAISE(ABORT, 'invalid ${table}.${column}');
+                        END;
+                        CREATE TRIGGER IF NOT EXISTS trg_check_${table}_${column}_upd BEFORE UPDATE OF ${column} ON ${table}
+                            WHEN NEW.${column} IS NOT OLD.${column} AND ${bad} BEGIN
+                            SELECT RAISE(ABORT, 'invalid ${table}.${column}');
+                        END;
+                    `);
+                }
+                // an explicit NULL type (raw SQL, an older offline snapshot in the takeover) becomes a regular volume
+                d.exec(`
+                    CREATE TRIGGER IF NOT EXISTS trg_volumes_type_default_ins AFTER INSERT ON volumes
+                        WHEN NEW.type IS NULL OR TRIM(NEW.type) = '' BEGIN
+                        UPDATE volumes SET type = 'volume' WHERE id = NEW.id;
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS trg_volumes_type_default_upd AFTER UPDATE OF type ON volumes
+                        WHEN NEW.type IS NULL OR TRIM(NEW.type) = '' BEGIN
+                        UPDATE volumes SET type = 'volume' WHERE id = NEW.id;
+                    END;
+                `);
+            }
+        },
+        {
+            version: 41,
             name: 'add_catalog',
             up: (d) => {
                 // Global catalog, stage 1 (core/lib/catalog.js): one row per edition and per volume of it for every shelf that
@@ -967,7 +1019,7 @@ function migrationList(log = silentLog) {
             }
         },
         {
-            version: 41,
+            version: 42,
             name: 'add_missing_foreign_keys',
             foreignKeys: false,
             up: (d) => {
@@ -984,7 +1036,7 @@ function migrationList(log = silentLog) {
                 if (!d.prepare('SELECT 1 FROM shelves WHERE id = 1').get()) d.exec("INSERT INTO shelves (id, name, is_default) VALUES (1, 'Sammlung', 1);");
                 for (const [what, sql] of repairs) {
                     const changed = d.prepare(sql).run().changes;
-                    if (changed) log.warn(`[Database Migration] v41: ${changed} ${what}`);
+                    if (changed) log.warn(`[Database Migration] v42: ${changed} ${what}`);
                 }
                 const withForeignKeys = (sql, keys) => {
                     let out = sql;
@@ -1014,7 +1066,7 @@ function migrationList(log = silentLog) {
             }
         },
         {
-            version: 42,
+            version: 43,
             name: 'marks_on_catalog',
             up: (d) => {
                 // Reading marks and chapter progress move from the shelf rows to the catalog (core/lib/marks.js): volume_reads
@@ -1034,7 +1086,7 @@ function migrationList(log = silentLog) {
                     d.exec('PRAGMA legacy_alter_table = ON;');
                     try { d.exec(`ALTER TABLE ${table}_catalog RENAME TO ${table};`); } finally { d.exec('PRAGMA legacy_alter_table = OFF;'); }
                     const after = d.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
-                    if (before) log.info(`[Database Migration] v42: ${table} ${before} -> ${after} rows on the catalog (${hidden} of users outside the shelf, kept hidden)`);
+                    if (before) log.info(`[Database Migration] v43: ${table} ${before} -> ${after} rows on the catalog (${hidden} of users outside the shelf, kept hidden)`);
                 };
                 const outsideShelf = (alias, mangaAlias) => `NOT EXISTS (SELECT 1 FROM shelf_members sm WHERE sm.shelf_id = ${mangaAlias}.shelf_id AND sm.user_id = ${alias}.user_id)`;
                 move('volume_reads', {

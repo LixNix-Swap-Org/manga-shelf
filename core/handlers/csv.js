@@ -44,7 +44,7 @@ const SERIES_DETAILS_SELECT = `
 // LEFT JOIN: series without volumes appear as a series row (type "Reihe", no volume number)
 const EXPORT_SELECT = `
     SELECT m.id AS manga_id, m.title AS series, m.publisher AS series_publisher, NULLIF(TRIM(v.publisher), '') AS publisher, m.author,
-           CASE WHEN v.id IS NULL THEN '${SERIES_ROW_TYPE}' ELSE COALESCE(v.type, 'volume') END AS type, v.volume_number, v.status, v.isbn,
+           CASE WHEN v.id IS NULL THEN '${SERIES_ROW_TYPE}' ELSE v.type END AS type, v.volume_number, v.status, v.isbn,
            v.price, v.target_price, NULLIF(v.priority, 0) AS priority, v.release_date, v.release_year, v.purchase_date,
            v.condition, v.pages, v.notes, m.wish_priority AS series_wish,
            v.cover_image, v.images, v.manga_passion_volume_id AS mp_volume_id, v.language AS volume_language, v.sort_after,
@@ -131,7 +131,7 @@ function importCsv(ctx, { body }) {
     const knownVolumes = new Set();
     // stored volumes once more by their own spelling: "3" as plain number, "Band 3" by its label
     const knownLabels = new Set();
-    for (const v of ctx.db.prepare("SELECT manga_id, COALESCE(type, 'volume') AS type, volume_number FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id = ?)").all(shelfId)) {
+    for (const v of ctx.db.prepare("SELECT manga_id, type, volume_number FROM volumes WHERE manga_id IN (SELECT id FROM mangas WHERE shelf_id = ?)").all(shelfId)) {
         knownVolumes.add(volumeKey(v.manga_id, v.type, v.volume_number));
         knownLabels.add(labelKey(v.manga_id, v.type, v.volume_number));
     }

@@ -584,7 +584,7 @@ describe('"Vom Server holen" through the offline snapshot', () => {
     const rows = (sql) => { const r = copy.exec(sql)[0]; return r ? r.values : []; };
     expect(rows('SELECT owned_volumes FROM mangas')).toEqual([[1]]);
     expect(rows('SELECT id, status FROM volumes ORDER BY id')).toEqual([[70, 'Vorhanden'], [71, 'Fehlt'], [72, 'Fehlt']]);
-    // marks on the catalog (migration 42); the profile joins its shelf on the first request, so not through the view
+    // marks on the catalog (migration 43); the profile joins its shelf on the first request, so not through the view
     expect(rows('SELECT v.id, r.read_at FROM volume_reads r JOIN volumes v ON v.catalog_volume_id = r.catalog_volume_id ORDER BY v.id')).toEqual([[70, '2025-04-01 20:00:00'], [71, null]]);
     expect(rows('SELECT volume_id, user_id, price, purchase_date, condition, created_at FROM volume_owners')).toEqual([[70, 2, 6.5, '2025-03-01', 'gut', '2025-03-02 10:00:00']]);
     expect(rows('SELECT id, images FROM volumes ORDER BY id')).toEqual([[70, null], [71, null], [72, '["/uploads/a.png","/uploads/b.png"]']]);

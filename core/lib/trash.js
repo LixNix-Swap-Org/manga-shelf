@@ -1,6 +1,6 @@
 // Trash: a deleted series or volume leaves its tables (so no list, statistic or export can see it) and is kept as JSON
 // in `trash` for TRASH_RETENTION_DAYS; core/handlers/trash.js lists, restores and purges it. Reading marks and chapter
-// progress sit on the catalog (migration 42) and stay: other shelves holding the edition still show them, and the same
+// progress sit on the catalog (migration 43) and stay: other shelves holding the edition still show them, and the same
 // edition added again (or restored) shows them again. The payload keeps a copy as the shelf showed it.
 const TRASH_RETENTION_DAYS = 30;
 

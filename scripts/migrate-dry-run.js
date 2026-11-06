@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-// volume_reads and chapter_progress may shrink once (migration 42 merges the marks of shelves holding the same edition)
+// volume_reads and chapter_progress may shrink once (migration 43 merges the marks of shelves holding the same edition)
 const COUNTED_TABLES = ['users', 'mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress'];
 
 function usage(message) {

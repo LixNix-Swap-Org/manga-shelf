@@ -1,4 +1,4 @@
-// Global catalog stage 1 (migrations 40 and 41, core/lib/catalog.js): backfill with deduplication, the triggers that keep
+// Global catalog stage 1 (migrations 41 and 42, core/lib/catalog.js): backfill with deduplication, the triggers that keep
 // mangas/volumes linked on every write path, anime <-> work links and the foreign keys added by the rebuild.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -6,10 +6,10 @@ const { DatabaseSync } = require('node:sqlite');
 const schema = require('../../core/schema');
 
 const quiet = { debug() {}, info() {}, warn() {}, error() {} };
-// 40 and 41, plus the later migrations that build on the catalog (42: marks on the catalog)
-const CATALOG_MIGRATIONS = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 39 }, (_, i) => 40 + i);
+// 41 and 42, plus the later migrations that build on the catalog (43: marks on the catalog)
+const CATALOG_MIGRATIONS = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 40 }, (_, i) => 41 + i);
 
-/** A database at schema v39 with `seed` applied, then migrated to the latest version. */
+/** A database at schema v40 with `seed` applied, then migrated to the latest version. */
 function migratedFrom39(seed) {
     const conn = new DatabaseSync(':memory:');
     conn.exec('PRAGMA foreign_keys = ON;');
@@ -64,7 +64,7 @@ const seedDuplicates = (d) => d.exec(`
 const catalogOf = (d, mangaId) => d.prepare('SELECT catalog_series_id AS c FROM mangas WHERE id = ?').get(mangaId).c;
 const catalogVolumeOf = (d, volumeId) => d.prepare('SELECT catalog_volume_id AS c FROM volumes WHERE id = ?').get(volumeId).c;
 
-test('migration 40 folds duplicates into one catalog series per edition and one catalog volume per number', () => {
+test('migration 41 folds duplicates into one catalog series per edition and one catalog volume per number', () => {
     const d = migratedFrom39(seedDuplicates);
     assert.equal(catalogOf(d, 1), catalogOf(d, 2), 'same Manga Passion edition in two shelves');
     assert.equal(catalogOf(d, 1), catalogOf(d, 3), 'title key ignores case and punctuation');
@@ -87,7 +87,7 @@ test('migration 40 folds duplicates into one catalog series per edition and one 
     assert.equal(d.prepare('SELECT count(*) AS n FROM mangas WHERE catalog_series_id IS NULL').get().n, 0);
 });
 
-test('migration 40 links anime to works: the linked series and the AniList relations', () => {
+test('migration 41 links anime to works: the linked series and the AniList relations', () => {
     const d = migratedFrom39(seedDuplicates);
     const links = d.prepare('SELECT anime_id, work_id, relation, origin FROM anime_work_links ORDER BY anime_id, origin').all().map(r => ({ ...r }));
     const work = d.prepare('SELECT work_id FROM mangas WHERE id = 1').get().work_id;
@@ -104,7 +104,7 @@ test('migration 40 links anime to works: the linked series and the AniList relat
     assert.equal(d.prepare('SELECT count(*) AS n FROM anime_work_links WHERE anime_id = 2').get().n, 0);
 });
 
-test('migration 41 adds the missing foreign keys and keeps rows, indexes, triggers and AUTOINCREMENT state', () => {
+test('migration 42 adds the missing foreign keys and keeps rows, indexes, triggers and AUTOINCREMENT state', () => {
     const d = migratedFrom39((conn) => {
         seedDuplicates(conn);
         conn.exec("INSERT INTO mangas (id, title, shelf_id) VALUES (90, 'Verwaist', 77)");   // shelf 77 never existed
@@ -231,4 +231,18 @@ test('a fresh database runs every migration including the catalog ones', () => {
     assert.deepEqual(report.slice(-CATALOG_MIGRATIONS.length).map(r => r.version), CATALOG_MIGRATIONS);
     assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(conn.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+});
+
+test('a volume written without a type or with a blank one links to the regular catalog volume and leaves no stray one', () => {
+    const d = new DatabaseSync(':memory:');
+    d.exec('PRAGMA foreign_keys = ON;');
+    schema.applySchema(d, { log: quiet });
+    const manga = Number(d.prepare("INSERT INTO mangas (title) VALUES ('Typlos')").run().lastInsertRowid);
+    const insert = d.prepare('INSERT INTO volumes (manga_id, volume_number, type) VALUES (?, ?, ?)');
+    [[null, '1'], ['', '2'], ['  ', '3'], ['volume', '4']].forEach(([type, number]) => insert.run(manga, number, type));
+    // migration 40 turns the type into 'volume' after the insert; the catalog link must not keep a row of the blank type
+    assert.deepEqual(d.prepare('SELECT DISTINCT volume_type FROM catalog_volumes').all().map(r => r.volume_type), ['volume']);
+    assert.equal(d.prepare('SELECT count(*) AS n FROM catalog_volumes c WHERE NOT EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = c.id)').get().n, 0);
+    d.prepare("UPDATE volumes SET type = '' WHERE volume_number = '4'").run();
+    assert.equal(d.prepare('SELECT count(*) AS n FROM catalog_volumes').get().n, 4);
 });

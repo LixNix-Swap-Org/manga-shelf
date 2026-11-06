@@ -1,4 +1,4 @@
-// Global catalog, stage 1 (migration 40): one catalog_series per edition and one catalog_volumes row per volume of it,
+// Global catalog, stage 1 (migration 41): one catalog_series per edition and one catalog_volumes row per volume of it,
 // shared by every shelf that holds the edition. mangas.catalog_series_id and volumes.catalog_volume_id follow their row
 // through triggers on every write path (like works / number_sort); handlers keep writing mangas and volumes.
 // The match keys are SQL expressions, so the backfill (JS) and the triggers (SQL) always agree. Frozen once shipped.
@@ -55,11 +55,14 @@ const LINK_SERIES_BODY = `
         banner_image = COALESCE(banner_image, NEW.banner_image)
      WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = NEW.id);`;
 
+/** The type a volume row stands for: NULL and blank are a regular volume (migration 40 turns them into one after the insert). */
+const volumeTypeSql = (c) => `COALESCE(NULLIF(trim(${c}), ''), 'volume')`;
+
 /** Statements (trigger body) that link the volumes `where` selects (alias v) to catalog volumes of their series. */
 const linkVolumesBody = (where) => `
     INSERT OR IGNORE INTO catalog_volumes (series_id, volume_type, volume_number, isbn, language, publisher, release_date, pages,
         list_price, mp_volume_id, cover_image, sort_after)
-    SELECT m.catalog_series_id, COALESCE(v.type, 'volume'), trim(v.volume_number),
+    SELECT m.catalog_series_id, ${volumeTypeSql('v.type')}, trim(v.volume_number),
         CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes c WHERE c.isbn = ${isbnSql('v.isbn')}) THEN ${isbnSql('v.isbn')} END,
         v.language, v.publisher, v.release_date, v.pages, v.price,
         CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes c WHERE c.mp_volume_id = v.manga_passion_volume_id) THEN v.manga_passion_volume_id END,
@@ -67,24 +70,24 @@ const linkVolumesBody = (where) => `
     FROM volumes v JOIN mangas m ON m.id = v.manga_id
     WHERE ${where} AND m.catalog_series_id IS NOT NULL;
     INSERT OR IGNORE INTO catalog_volumes (series_id, volume_type, volume_number)
-    SELECT m.catalog_series_id, COALESCE(v.type, 'volume'), trim(v.volume_number)
+    SELECT m.catalog_series_id, ${volumeTypeSql('v.type')}, trim(v.volume_number)
     FROM volumes v JOIN mangas m ON m.id = v.manga_id
     WHERE ${where} AND m.catalog_series_id IS NOT NULL;
     UPDATE volumes SET catalog_volume_id = (
         SELECT c.id FROM catalog_volumes c JOIN mangas m ON m.id = volumes.manga_id
-         WHERE c.series_id = m.catalog_series_id AND c.volume_type = COALESCE(volumes.type, 'volume') AND c.volume_number = trim(volumes.volume_number))
+         WHERE c.series_id = m.catalog_series_id AND c.volume_type = ${volumeTypeSql('volumes.type')} AND c.volume_number = trim(volumes.volume_number))
     WHERE id IN (SELECT v.id FROM volumes v WHERE ${where});`;
 
 /**
  * The same for the single volume NEW (insert and identity triggers): the ISBN and Manga Passion id checks keep the insert from
  * failing on a unique key, so one insert and the link are enough.
  */
-const sameVolumeSql = (c) => `${c}.series_id = m.catalog_series_id AND ${c}.volume_type = COALESCE(NEW.type, 'volume')
+const sameVolumeSql = (c) => `${c}.series_id = m.catalog_series_id AND ${c}.volume_type = ${volumeTypeSql('NEW.type')}
     AND ${c}.volume_number = trim(NEW.volume_number)`;
 const LINK_VOLUME_ROW_BODY = `
     INSERT INTO catalog_volumes (series_id, volume_type, volume_number, isbn, language, publisher, release_date, pages, list_price,
         mp_volume_id, cover_image, sort_after)
-    SELECT m.catalog_series_id, COALESCE(NEW.type, 'volume'), trim(NEW.volume_number),
+    SELECT m.catalog_series_id, ${volumeTypeSql('NEW.type')}, trim(NEW.volume_number),
         CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes c WHERE c.isbn = ${isbnSql('NEW.isbn')}) THEN ${isbnSql('NEW.isbn')} END,
         NEW.language, NEW.publisher, NEW.release_date, NEW.pages, NEW.price,
         CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes c WHERE c.mp_volume_id = NEW.manga_passion_volume_id) THEN NEW.manga_passion_volume_id END,
@@ -234,14 +237,14 @@ class SeriesGroups {
 const blank = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
 
 /**
- * Fills the catalog from the stored series and volumes (migration 40; the triggers do not exist yet). Series are grouped by
+ * Fills the catalog from the stored series and volumes (migration 41; the triggers do not exist yet). Series are grouped by
  * Manga Passion id, then a shared valid ISBN-13, then title key + language + format + publisher key; one catalog series per
  * group (values of the preferred row first: with Manga Passion id, more volumes, newest change), one catalog volume per
  * (type, number) of it. Differences the grouping papers over go to catalog_merge_log. Returns the counts.
  */
 function backfillCatalog(d, log) {
     // a second run (a migration replayed from an older version) rebuilds the catalog from scratch; reading marks and chapter
-    // progress on it (migration 42) are kept by the shelf rows that show them and put back on the new entries
+    // progress on it (migration 43) are kept by the shelf rows that show them and put back on the new entries
     for (const name of [...CATALOG_TRIGGERS, ...MARK_FOLLOW_TRIGGERS]) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
     const marks = stashMarks(d);
     d.exec(`
@@ -313,7 +316,7 @@ function backfillCatalog(d, log) {
         const byNumber = new Map();
         for (const s of group) {
             for (const v of volsOf.get(s.id)) {
-                const key = `${v.type || 'volume'}\u0000${String(v.volume_number).trim()}`;
+                const key = `${(v.type && String(v.type).trim()) || 'volume'}\u0000${String(v.volume_number).trim()}`;
                 if (!byNumber.has(key)) byNumber.set(key, []);
                 byNumber.get(key).push(v);
             }
