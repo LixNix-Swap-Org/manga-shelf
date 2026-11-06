@@ -848,7 +848,7 @@ test('bulk: an undo restores stored values the input rules would refuse (long co
     const condition = 'leichte Gebrauchsspuren '.repeat(10).trim();
     assert.equal((await editor('PUT', `/volumes/${ids[0]}`, { condition })).status, 200);
     rawDb().prepare('UPDATE volumes SET notes = ? WHERE id = ?').run('ä'.repeat(12000), ids[1]);
-    rawDb().prepare("UPDATE volume_owners SET purchase_date = '09.04.2021' WHERE volume_id = ?").run(ids[2]);
+    rawDb().prepare("UPDATE volume_copies SET purchase_date = '09.04.2021' WHERE volume_id = ? AND owner_user_id IS NOT NULL").run(ids[2]);
 
     let res = await editor('POST', '/volumes/bulk', { ids, set: { priority: 3 } });
     res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });

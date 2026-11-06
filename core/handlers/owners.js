@@ -2,6 +2,7 @@
 const {
     OWNED_STATUS, isLegacyReadStatus, addOwner, listOwners, syncStatusWithOwners, convertLegacyRead, purchaseDateFromRemainingOwners
 } = require('../lib/owners');
+const { hasCopy, hasOwner, updateCopy, removeCopy } = require('../lib/copies');
 const { resolveTargetUser, volumeAccess } = require('../lib/access');
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parsePrice, parseFlag, isValidDate, parseDate } = require('../lib/validate');
@@ -23,9 +24,9 @@ function toggleOwner(ctx, { params, body }) {
     let status;
     let removedOwner = null;
     ctx.db.transaction(() => {
-        const isOwner = () => Boolean(ctx.db.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? AND user_id = ?').get(volumeId, targetUserId));
+        const isOwner = () => hasCopy(ctx.db, volumeId, targetUserId);
         const wasOwner = isOwner();
-        const hadOwners = Boolean(ctx.db.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1').get(volumeId));
+        const hadOwners = hasOwner(ctx.db, volumeId);
         const wantOwned = body.owned !== undefined ? parseFlag(body.owned) : !wasOwner;
         const ownerPriceValue = ownerPrice.value ?? vol.price;
         const ownerDate = isBlank(body.purchase_date) ? vol.purchase_date : String(body.purchase_date).trim();
@@ -34,15 +35,14 @@ function toggleOwner(ctx, { params, body }) {
         const ownsNow = isOwner();
         if (wantOwned && !wasOwner) {
             if (ownsNow) {
-                ctx.db.prepare('UPDATE volume_owners SET price = ?, purchase_date = ? WHERE volume_id = ? AND user_id = ?')
-                    .run(ownerPriceValue, ownerDate, volumeId, targetUserId);
+                updateCopy(ctx.db, volumeId, targetUserId, { price: ownerPriceValue, purchase_date: ownerDate });
             } else {
                 addOwner(ctx.db, volumeId, targetUserId, { price: ownerPriceValue, purchase_date: ownerDate, condition: vol.condition });
             }
         } else if (!wantOwned && ownsNow) {
             removedOwner = ctx.db.prepare('SELECT user_id, price, purchase_date, condition FROM volume_owners WHERE volume_id = ? AND user_id = ?')
                 .get(volumeId, targetUserId);
-            ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ? AND user_id = ?').run(volumeId, targetUserId);
+            removeCopy(ctx.db, volumeId, targetUserId);
         }
         status = syncStatusWithOwners(ctx.db, volumeId);
         if (removedOwner && status === OWNED_STATUS) purchaseDateFromRemainingOwners(ctx.db, volumeId);

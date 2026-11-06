@@ -216,7 +216,7 @@ test('owners: migrateLegacyReadStatus stellt Altdaten um und zählt neu', async 
     const owned = seedVolume(id, '2', 'Gelesen');
     const missing = seedVolume(id, '3', 'Fehlt');
     const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(owned, edId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(owned, edId);
 
     assert.equal(migrateLegacyReadStatus(db), 2);
     const m = await detail(admin, id);
@@ -246,7 +246,7 @@ test('owners: Besitz-Umschalten auf einem Altstatus-Gelesen-Band stellt erst um,
     const claimed = seedVolume(id, '1', 'Gelesen');
     const released = seedVolume(id, '2', 'Gelesen');
     const shared = seedVolume(id, '3', 'Gelesen');
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(shared, edId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(shared, edId);
     const reads = (volId) => db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ? ORDER BY user_id').all(volId).map(r => r.user_id);
 
     let res = await editor('POST', `/volumes/${claimed}/owners`, { owned: true });
@@ -277,7 +277,7 @@ test('owners: der einzige Besitzer eines Altstatus-Gelesen-Bands gibt ihn ab, be
     const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Remove' })).body.id;
     const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
     const vol = seedVolume(id, '1', 'Gelesen');
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(vol, edId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(vol, edId);
 
     const res = await editor('POST', `/volumes/${vol}/owners`, { owned: false });
     assert.equal(res.status, 200);

@@ -86,7 +86,7 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
     let previous = null;
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
+    const insOwner = db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
     const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id) SELECT catalog_volume_id, ? FROM volumes WHERE id = ?');
 
     for (let s = 0; s < series; s++) {
@@ -194,7 +194,7 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
       manga_passion_id, wish_priority, collecting, format, total_chapters, shelf_id, updated_by) VALUES (?, ?, ?, ?, 'de', 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, 'aktiv', ?, ?, ?, ?)`);
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, price, release_date, release_year, condition, pages, purchase_date, status, notes, cover_image, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
+    const insOwner = db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
     const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id, read_at) SELECT catalog_volume_id, ?, ? FROM volumes WHERE id = ?');
     const insChapter = db.prepare('INSERT OR IGNORE INTO chapter_progress (catalog_series_id, user_id, chapters_read) SELECT catalog_series_id, ?, ? FROM mangas WHERE id = ?');
     const mangaId = {};

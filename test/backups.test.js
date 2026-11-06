@@ -242,7 +242,10 @@ test('a backup that passes validation but cannot be migrated is rejected with 40
 test('an older-schema backup is migrated to the latest version on restore', async () => {
     const data = await snapshotDbBuffer((d) => {
         d.exec(`
-            DROP TABLE volume_owners;
+            DROP VIEW volume_owners;
+            DROP TABLE volume_copies;
+            DROP TRIGGER trg_volumes_copies_status;
+            DROP TRIGGER trg_volumes_copies_insert;
             ALTER TABLE volumes DROP COLUMN priority;
             ALTER TABLE volumes DROP COLUMN target_price;
             DROP INDEX IF EXISTS idx_volumes_isbn;
