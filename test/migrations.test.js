@@ -983,4 +983,5 @@ test('migration 45 moves series links of anime onto the work, pins the chosen ed
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [18, 38, 45], 'a second run is harmless');
     assert.equal(conn.prepare("SELECT count(*) AS n FROM anime_work_links WHERE origin = 'manual'").get().n, 2);
     assert.match(conn.prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_mangas_work_update'").get().sql, /anime_work_links/);
+    assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE name = 'trg_mangas_anime_pins_shelf'").get(), 'a pin moves with its series');
 });

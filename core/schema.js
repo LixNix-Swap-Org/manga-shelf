@@ -134,6 +134,14 @@ const WORK_UPDATE_TRIGGER_SQL = () => `
         UPDATE OR IGNORE anime_work_links SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
             WHERE origin = 'manual' AND manga_id = NEW.id AND NEW.work_key IS NOT NULL;
     END;`;
+/** A shelf pin (migration 45) moves with the series it names: the shelf that holds the edition now shows its link. */
+const ANIME_PIN_SHELF_TRIGGER_SQL = `
+    CREATE TRIGGER IF NOT EXISTS trg_mangas_anime_pins_shelf AFTER UPDATE OF shelf_id ON mangas WHEN NEW.shelf_id IS NOT OLD.shelf_id BEGIN
+        UPDATE OR IGNORE anime_work_links SET scope_shelf_id = NEW.shelf_id
+         WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+        -- the target shelf already pins that work: its own choice stays
+        DELETE FROM anime_work_links WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+    END;`;
 const WORK_TRIGGER_BODY = `INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                             SELECT NEW.work_key, ${WORK_ANILIST_SQL('NEW.work_key')}, ${WORK_MAL_SQL('NEW.work_key')} WHERE NEW.work_key IS NOT NULL;
                         UPDATE mangas SET work_id = (SELECT id FROM works WHERE work_key = NEW.work_key) WHERE id = NEW.id;`;
@@ -1229,6 +1237,7 @@ function migrationList(log = silentLog) {
                 }
                 d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
                 d.exec(WORK_UPDATE_TRIGGER_SQL());
+                d.exec(ANIME_PIN_SHELF_TRIGGER_SQL);
             }
         }
     ];
