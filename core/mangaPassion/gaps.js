@@ -4,6 +4,7 @@ const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { HttpError, msg, msgList, payloadMsg } = require('../errors');
 const { normalizeTags } = require('../lib/tags');
 const { isMpLanguage } = require('../lib/language');
+const catalogWrite = require('../lib/catalogWrite');
 
 const log = (ctx) => ctx.log.child('manga-passion');
 const {
@@ -380,7 +381,8 @@ async function batchImportGaps(ctx, mangaId, gapVolumeNumbers, targetStatus = 'F
           skippedOwned.push(existing.id);
           continue;
         }
-        updateStmt.run(status, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id);
+        // Manga Passion is a source: its volume data goes to the catalog for everyone (core/lib/catalogWrite.js)
+        catalogWrite.track(ctx, 'volume', existing.id, () => updateStmt.run(status, price, releaseDate, coverImage, targetType, notes, mpVolId, existing.id), { source: true });
         updatedIds.push(existing.id);
       } else {
         const ins = insertStmt.run(mangaId, volNumber, status, price, releaseDate, publisher, coverImage, targetType, notes, mpVolId);
@@ -449,7 +451,8 @@ async function syncMangaWithEdition(ctx, mangaId, editionId, options = {}) {
   params.push(mangaId);
 
   const sql = `UPDATE mangas SET ${updates.join(', ')} WHERE id = ?`;
-  ctx.db.prepare(sql).run(...params);
+  // Manga Passion is a source: the edition data goes to the catalog for everyone (core/lib/catalogWrite.js)
+  catalogWrite.track(ctx, 'series', mangaId, () => ctx.db.prepare(sql).run(...params), { source: true });
 
   const updatedManga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   return updatedManga;

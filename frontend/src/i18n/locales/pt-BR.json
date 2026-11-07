@@ -261,6 +261,7 @@
   },
   "Auf Crunchyroll suchen": "Buscar no Crunchyroll",
   "Auf Einkaufsliste setzen": "Colocar na lista de compras",
+  "Auf Katalogstand zurücksetzen": "Restaurar valores do catálogo",
   "Auf Server übertragen": "Enviar ao servidor",
   "Auf Wunschliste": "Na lista de desejos",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Já existem dados no servidor – eles seriam substituídos. “Mesclar” serve para um servidor que já tem dados.",
@@ -805,6 +806,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "O endereço antigo deixa de funcionar imediatamente.",
   "Die beiden neuen Passwörter sind nicht gleich.": "As duas senhas novas não coincidem.",
   "Die eigene Rolle kann hier nicht geändert werden": "Aqui não é possível alterar a própria função",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Os valores próprios desta estante serão substituídos pelos do catálogo.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "O arquivo instalado informa uma versão diferente da esperada.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Não foi possível criar a coleção local.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "A nova versão não passou na verificação prévia.",
@@ -816,6 +818,8 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Configure o serviço novamente com este arquivo e inicie-o:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Não foi possível exibir esta tela. Recarregar costuma resolver.",
   "Diese Ausgabe lösen": "Desvincular esta edição",
+  "Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.": "Esta edição também está em uma estante que você não vê. Os valores do catálogo dela não podem ser usados aqui.",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Esta edição também está em outra estante. Suas alterações valem só para esta estante.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Outros usuários possuem estes volumes em séries que você também coleciona.",
   "Diese ISBN gehört zu „{title}“.": "Este ISBN pertence a “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Este ISBN corresponde a outra série da coleção.",
@@ -1063,6 +1067,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Erro ao restaurar o backup (detalhes no log do servidor)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Erro ao restaurar o backup: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Erro ao restaurar: {reason}",
+  "Fehler beim Zurücksetzen": "Erro ao restaurar",
   "Fehler beim automatischen Ausfüllen": "Erro no preenchimento automático",
   "Fehler beim Ändern des Status": "Erro ao alterar o status",
   "Fehler beim Übernehmen des Bands": "Erro ao adotar o volume",
@@ -1419,6 +1424,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Não foi possível salvar o progresso de capítulos",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "O progresso de “{name}” passa do total de capítulos (ignorado)",
   "Karten": "Cartões",
+  "Katalogstand übernommen": "Valores do catálogo adotados",
   "Kaufdatum": "Data da compra",
   "Kaufdatum…": "Data da compra…",
   "Kaufpreis": "Preço de compra",
@@ -3187,6 +3193,11 @@
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} campo tem um valor próprio nesta estante.",
+    "many": "{n} campos têm um valor próprio nesta estante.",
+    "other": "{n} campos têm um valor próprio nesta estante."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} episódio assistido",

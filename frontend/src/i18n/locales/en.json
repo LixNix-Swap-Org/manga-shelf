@@ -257,6 +257,7 @@
   },
   "Auf Crunchyroll suchen": "Search on Crunchyroll",
   "Auf Einkaufsliste setzen": "Add to shopping list",
+  "Auf Katalogstand zurücksetzen": "Reset to catalog values",
   "Auf Server übertragen": "Transfer to server",
   "Auf Wunschliste": "On wishlist",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "The server already holds data – it would be replaced. “Merge” is meant for a server with data.",
@@ -788,6 +789,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "The old address stops working immediately.",
   "Die beiden neuen Passwörter sind nicht gleich.": "The two new passwords do not match.",
   "Die eigene Rolle kann hier nicht geändert werden": "You cannot change your own role here",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "This shelf's own values will be replaced by the catalog values.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "The installed file reports a different version than expected.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "The local collection could not be created.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "The new version failed the preliminary check.",
@@ -799,6 +801,8 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Set up the service again with this file and start it:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "This view could not be displayed. Reloading usually fixes it.",
   "Diese Ausgabe lösen": "Unlink this edition",
+  "Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.": "This edition is also on a shelf you can't see. Its catalog values can't be taken over here.",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "This edition is also on another shelf. Your changes only apply to this shelf.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Other users own these volumes in series you also collect.",
   "Diese ISBN gehört zu „{title}“.": "This ISBN belongs to “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "This ISBN matches another series in the collection.",
@@ -1043,6 +1047,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Error restoring the backup (details in the server log)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Error restoring the backup: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Error during restore: {reason}",
+  "Fehler beim Zurücksetzen": "Error while resetting",
   "Fehler beim automatischen Ausfüllen": "Error filling in automatically",
   "Fehler beim Ändern des Status": "Error changing the status",
   "Fehler beim Übernehmen des Bands": "Error adding the volume",
@@ -1393,6 +1398,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Could not save the chapter progress",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "Chapter progress of “{name}” is above the total number of chapters (ignored)",
   "Karten": "Cards",
+  "Katalogstand übernommen": "Catalog values taken over",
   "Kaufdatum": "Purchase date",
   "Kaufdatum…": "Purchase date…",
   "Kaufpreis": "Purchase price",
@@ -3125,6 +3131,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extras"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} field has its own value on this shelf.",
+    "other": "{n} fields have their own value on this shelf."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} episode watched",

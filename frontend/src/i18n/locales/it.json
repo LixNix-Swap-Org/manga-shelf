@@ -261,6 +261,7 @@
   },
   "Auf Crunchyroll suchen": "Cerca su Crunchyroll",
   "Auf Einkaufsliste setzen": "Metti nella lista della spesa",
+  "Auf Katalogstand zurücksetzen": "Ripristina i valori del catalogo",
   "Auf Server übertragen": "Trasferisci sul server",
   "Auf Wunschliste": "In lista dei desideri",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Sul server ci sono già dei dati – verrebbero sostituiti. “Unisci” è pensato per un server con dati.",
@@ -805,6 +806,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "Il vecchio indirizzo smette di funzionare subito.",
   "Die beiden neuen Passwörter sind nicht gleich.": "Le due nuove password non coincidono.",
   "Die eigene Rolle kann hier nicht geändert werden": "Qui non puoi cambiare il tuo ruolo",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "I valori propri di questo scaffale verranno sostituiti con quelli del catalogo.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Il file installato riporta una versione diversa da quella prevista.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Impossibile creare la collezione locale.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "La nuova versione non ha superato la verifica preliminare.",
@@ -816,6 +818,8 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Configura di nuovo il servizio con questo file e avvialo:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Impossibile mostrare questa vista. Di solito basta ricaricare.",
   "Diese Ausgabe lösen": "Scollega questa edizione",
+  "Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.": "Questa edizione si trova anche in uno scaffale che non vedi. I suoi valori del catalogo non possono essere ripresi qui.",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Questa edizione si trova anche in un altro scaffale. Le tue modifiche valgono solo per questo scaffale.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Questi volumi li possiedono altri utenti in serie che collezioni anche tu.",
   "Diese ISBN gehört zu „{title}“.": "Questo ISBN appartiene a “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Questo ISBN corrisponde a un’altra serie della collezione.",
@@ -1063,6 +1067,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Errore nel ripristino del backup (dettagli nel log del server)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Errore nel ripristino del backup: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Errore nel ripristino: {reason}",
+  "Fehler beim Zurücksetzen": "Errore durante il ripristino",
   "Fehler beim automatischen Ausfüllen": "Errore nella compilazione automatica",
   "Fehler beim Ändern des Status": "Errore nel cambio di stato",
   "Fehler beim Übernehmen des Bands": "Errore nell’acquisizione del volume",
@@ -1419,6 +1424,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Impossibile salvare l’avanzamento dei capitoli",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "L’avanzamento di “{name}” supera il numero totale di capitoli (ignorato)",
   "Karten": "Schede",
+  "Katalogstand übernommen": "Valori del catalogo ripresi",
   "Kaufdatum": "Data di acquisto",
   "Kaufdatum…": "Data di acquisto…",
   "Kaufpreis": "Prezzo di acquisto",
@@ -3187,6 +3193,11 @@
     "one": "{n} extra",
     "many": "{n} extra",
     "other": "{n} extra"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} campo ha un valore proprio in questo scaffale.",
+    "many": "{n} campi hanno un valore proprio in questo scaffale.",
+    "other": "{n} campi hanno un valore proprio in questo scaffale."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} episodio visto",

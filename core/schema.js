@@ -5,7 +5,7 @@ const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases
 const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
-const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL } = require('./lib/catalog');
+const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
 const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
@@ -1238,6 +1238,41 @@ function migrationList(log = silentLog) {
                 d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
                 d.exec(WORK_UPDATE_TRIGGER_SQL());
                 d.exec(ANIME_PIN_SHELF_TRIGGER_SQL);
+            }
+        },
+        {
+            version: 46,
+            name: 'catalog_owns_editions',
+            up: (d) => {
+                // Catalog stage 3 (core/lib/catalog.js, core/lib/catalogWrite.js): the catalog owns the edition data. The rows keep
+                // their columns as a copy a shelf can override per field (local_fields); a catalog change flows into every row
+                // where the field is not local, a row write reaches the catalog only through catalogWrite.js. Everything a row
+                // has that differs from its entry is local from the start, so no shelf sees another value than before.
+                const cols = (t) => new Set(d.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name));
+                if (!cols('catalog_series').has('tags')) d.exec('ALTER TABLE catalog_series ADD COLUMN tags TEXT;');
+                if (!cols('catalog_volumes').has('release_year')) d.exec('ALTER TABLE catalog_volumes ADD COLUMN release_year INTEGER;');
+                if (!cols('mangas').has('local_fields')) d.exec('ALTER TABLE mangas ADD COLUMN local_fields TEXT;');
+                if (!cols('volumes').has('local_fields')) d.exec('ALTER TABLE volumes ADD COLUMN local_fields TEXT;');
+                // the new catalog columns from the rows, the way the stage 1 backfill picked: the first row that has one
+                d.exec(`
+                    UPDATE catalog_series SET tags = (SELECT m.tags FROM mangas m WHERE m.catalog_series_id = catalog_series.id
+                        AND m.tags IS NOT NULL AND trim(m.tags) <> '' ORDER BY m.id LIMIT 1) WHERE tags IS NULL
+                        AND EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = catalog_series.id AND m.tags IS NOT NULL AND trim(m.tags) <> '');
+                    UPDATE catalog_volumes SET release_year = (SELECT v.release_year FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id
+                        AND v.release_year IS NOT NULL ORDER BY v.id LIMIT 1) WHERE release_year IS NULL
+                        AND EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id AND v.release_year IS NOT NULL);
+                `);
+                for (const name of ['trg_mangas_catalog_insert', 'trg_mangas_catalog_identity', 'trg_mangas_catalog_shared', 'trg_mangas_catalog_relink',
+                    'trg_volumes_catalog_insert', 'trg_volumes_catalog_identity', 'trg_volumes_catalog_shared',
+                    'trg_catalog_series_overlay', 'trg_catalog_volumes_overlay']) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                d.exec(`
+                    ${MARK_SERIES_LOCAL('1 = 1')}
+                    ${MARK_VOLUMES_LOCAL('1 = 1')}
+                `);
+                d.exec(CATALOG_TRIGGERS_V3_SQL);
+                const series = d.prepare('SELECT count(*) AS n FROM mangas WHERE local_fields IS NOT NULL').get().n;
+                const volumes = d.prepare('SELECT count(*) AS n FROM volumes WHERE local_fields IS NOT NULL').get().n;
+                if (series || volumes) log.info(`[Database Migration] v46: ${series} series and ${volumes} volumes keep values of their own (local fields)`);
             }
         }
     ];

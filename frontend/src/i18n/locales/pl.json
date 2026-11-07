@@ -265,6 +265,7 @@
   },
   "Auf Crunchyroll suchen": "Szukaj w Crunchyroll",
   "Auf Einkaufsliste setzen": "Dodaj do listy zakupów",
+  "Auf Katalogstand zurücksetzen": "Przywróć wartości z katalogu",
   "Auf Server übertragen": "Prześlij na serwer",
   "Auf Wunschliste": "Na liście życzeń",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Na serwerze są już dane – zostałyby zastąpione. Dla serwera z danymi przeznaczone jest „Scal”.",
@@ -822,6 +823,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "Stary adres natychmiast przestaje działać.",
   "Die beiden neuen Passwörter sind nicht gleich.": "Oba nowe hasła nie są takie same.",
   "Die eigene Rolle kann hier nicht geändert werden": "Własnej roli nie można tu zmienić",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Własne wartości tej półki zostaną zastąpione wartościami z katalogu.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Zainstalowany plik zgłasza inną wersję, niż oczekiwano.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Nie udało się utworzyć kolekcji lokalnej.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "Nowa wersja nie przeszła kontroli wstępnej.",
@@ -833,6 +835,8 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Skonfiguruj usługę ponownie za pomocą tego pliku i uruchom ją:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Nie udało się wyświetlić tego widoku. Ponowne wczytanie zwykle to naprawia.",
   "Diese Ausgabe lösen": "Odłącz to wydanie",
+  "Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.": "To wydanie jest też na półce, której nie widzisz. Jego wartości z katalogu nie można tu przejąć.",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "To wydanie jest też na innej półce. Twoje zmiany dotyczą tylko tej półki.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Te tomy posiadają inni użytkownicy w seriach, które ty też kolekcjonujesz.",
   "Diese ISBN gehört zu „{title}“.": "Ten ISBN należy do „{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Ten ISBN pasuje do innej serii w kolekcji.",
@@ -1083,6 +1087,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Błąd przywracania kopii zapasowej (szczegóły w logu serwera)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Błąd przywracania kopii zapasowej: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Błąd przywracania: {reason}",
+  "Fehler beim Zurücksetzen": "Błąd podczas przywracania",
   "Fehler beim automatischen Ausfüllen": "Błąd automatycznego uzupełniania",
   "Fehler beim Ändern des Status": "Błąd zmiany statusu",
   "Fehler beim Übernehmen des Bands": "Błąd przejmowania tomu",
@@ -1445,6 +1450,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Nie udało się zapisać postępu rozdziałów",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "Postęp „{name}” przekracza łączną liczbę rozdziałów (pominięto)",
   "Karten": "Karty",
+  "Katalogstand übernommen": "Przejęto wartości z katalogu",
   "Kaufdatum": "Data zakupu",
   "Kaufdatum…": "Data zakupu…",
   "Kaufpreis": "Cena zakupu",
@@ -3249,6 +3255,12 @@
     "few": "{n} dodatki",
     "many": "{n} dodatków",
     "other": "{n} dodatku"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} pole ma na tej półce własną wartość.",
+    "few": "{n} pola mają na tej półce własną wartość.",
+    "many": "{n} pól ma na tej półce własną wartość.",
+    "other": "{n} pola ma na tej półce własną wartość."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} odcinek obejrzany",

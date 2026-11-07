@@ -257,6 +257,7 @@
   },
   "Auf Crunchyroll suchen": "Crunchyroll'da ara",
   "Auf Einkaufsliste setzen": "Alışveriş listesine koy",
+  "Auf Katalogstand zurücksetzen": "Katalog değerlerine dön",
   "Auf Server übertragen": "Sunucuya aktar",
   "Auf Wunschliste": "İstek listesinde",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Sunucuda zaten veri var – bunların yerine yazılır. Veri bulunan bir sunucu için “Birleştir” seçeneği tasarlandı.",
@@ -788,6 +789,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "Eski adres hemen çalışmayı bırakır.",
   "Die beiden neuen Passwörter sind nicht gleich.": "İki yeni parola aynı değil.",
   "Die eigene Rolle kann hier nicht geändert werden": "Kendi rolün burada değiştirilemez",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Bu rafın kendi değerleri katalog değerleriyle değiştirilecek.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Yüklenen dosya beklenenden farklı bir sürüm bildiriyor.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Yerel koleksiyon oluşturulamadı.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "Yeni sürüm ön kontrolü geçemedi.",
@@ -799,6 +801,8 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Hizmeti bu dosyayla yeniden kur ve başlat:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Bu görünüm gösterilemedi. Yeniden yüklemek çoğunlukla sorunu çözer.",
   "Diese Ausgabe lösen": "Bu baskının bağlantısını kaldır",
+  "Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.": "Bu baskı göremediğin bir rafta da var. Katalog değerleri burada alınamaz.",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Bu baskı başka bir rafta da var. Değişikliklerin yalnızca bu raf için geçerli.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Bu ciltlere, senin de koleksiyonunu yaptığın serilerde diğer kullanıcılar sahip.",
   "Diese ISBN gehört zu „{title}“.": "Bu ISBN “{title}” serisine ait.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Bu ISBN koleksiyondaki başka bir seriyle eşleşiyor.",
@@ -1043,6 +1047,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Yedek geri yüklenirken hata oluştu (ayrıntılar sunucu günlüğünde)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Yedek geri yüklenirken hata oluştu: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Geri yükleme hatası: {reason}",
+  "Fehler beim Zurücksetzen": "Sıfırlama sırasında hata",
   "Fehler beim automatischen Ausfüllen": "Otomatik doldurma hatası",
   "Fehler beim Ändern des Status": "Durum değiştirilirken hata oluştu",
   "Fehler beim Übernehmen des Bands": "Cilt devralınırken hata oluştu",
@@ -1393,6 +1398,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Bölüm ilerlemesi kaydedilemedi",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "“{name}” ilerlemesi toplam bölüm sayısını aşıyor (yok sayıldı)",
   "Karten": "Kartlar",
+  "Katalogstand übernommen": "Katalog değerleri alındı",
   "Kaufdatum": "Satın alma tarihi",
   "Kaufdatum…": "Satın alma tarihi…",
   "Kaufpreis": "Satın alma fiyatı",
@@ -3125,6 +3131,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} ekstra",
     "other": "{n} ekstra"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} alanın bu rafta kendine ait bir değeri var.",
+    "other": "{n} alanın bu rafta kendine ait bir değeri var."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} bölüm izlendi",

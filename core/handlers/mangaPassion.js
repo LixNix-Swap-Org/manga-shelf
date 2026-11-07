@@ -10,6 +10,7 @@ const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../
 const { parseOptionalId, parseTrueFlag: parseFlag } = require('../lib/validate');
 const { zonedToday, isValidReleaseDate } = require('../radar');
 const client = require('../mangaPassion/client');
+const catalogWrite = require('../lib/catalogWrite');
 const gapsLib = require('../mangaPassion/gaps');
 const autofill = require('../mangaPassion/autofill');
 const releases = require('../mangaPassion/releases');
@@ -423,7 +424,8 @@ async function importRelease(ctx, { body }) {
             if (effStatus === 'Fehlt' && ORDERED_STATUSES.includes(existingVol.status)) {
                 return { volumeId: existingVol.id, status: existingVol.status, skippedOwned: false, skippedOrdered: true, seriesCreated };
             }
-            ctx.db.prepare(`
+            // calendar data is source data: it goes to the catalog for everyone (core/lib/catalogWrite.js)
+            catalogWrite.track(ctx, 'volume', existingVol.id, () => ctx.db.prepare(`
                 UPDATE volumes
                 SET status = ?,
                     price = COALESCE(?, price),
@@ -433,7 +435,7 @@ async function importRelease(ctx, { body }) {
                     notes = COALESCE(notes, ?),
                     manga_passion_volume_id = COALESCE(manga_passion_volume_id, ?)
                 WHERE id = ?
-            `).run(effStatus, price, releaseDate, publisher, coverImage, notes, linkMpId, existingVol.id);
+            `).run(effStatus, price, releaseDate, publisher, coverImage, notes, linkMpId, existingVol.id), { source: true });
             return { volumeId: existingVol.id, status: effStatus, skippedOwned: false, seriesCreated };
         }
 

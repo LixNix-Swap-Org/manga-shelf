@@ -9,6 +9,7 @@ const { readProfile } = require('../lib/locales');
 const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority, parseSeriesFormat, parseTotalChapters, MAX_CHAPTERS } = require('../lib/validate');
 const snapshot = require('../snapshot');
 const access = require('../lib/access');
+const catalogWrite = require('../lib/catalogWrite');
 const { moveMangaToTrash } = require('../lib/trash');
 const { normalizeTags, splitTags } = require('../lib/tags');
 
@@ -300,7 +301,8 @@ function update(ctx, { params, body }) {
     const language = fields.language === null ? defaultLanguageOf(ctx) : (pick('language') || DEFAULT_LANGUAGE);
     const format = pick('format') || 'print';
 
-    ctx.db.prepare(`
+    // the edition fields go to the catalog or stay local to this shelf (core/lib/catalogWrite.js)
+    ctx.db.transaction(() => catalogWrite.track(ctx, 'series', manga.id, () => ctx.db.prepare(`
         UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?,
         language = ?, region = ?, currency = ?, status = ?, tags = ?, total_volumes = ?,
         description = ?, cover_image = ?,
@@ -327,8 +329,17 @@ function update(ctx, { params, body }) {
         pick('total_chapters') ?? null,
         ctx.user.id,
         params.id
-    );
+    )));
     return { body: { success: true } };
+}
+
+/** POST /mangas/:id/catalog-reset { fields? }: the series takes the catalog values of its local fields (all or the named ones) again. */
+function catalogReset(ctx, { params, body }) {
+    const fields = catalogWrite.readResetFields(body, 'series');
+    let local = null;
+    ctx.db.transaction(() => { local = catalogWrite.reset(ctx, 'series', Number(params.id), fields); });
+    if (local === null) throw notFound('Manga');
+    return { body: { success: true, local_fields: local } };
 }
 
 /**
@@ -417,4 +428,4 @@ function remove(ctx, { params }) {
     return { body: { success: true, trash_id: trashId } };
 }
 
-module.exports = { list, create, detail, update, remove, tags, createEdition, linkWork, readMangaFields, COLLECTING_STATUSES };
+module.exports = { list, create, detail, update, catalogReset, remove, tags, createEdition, linkWork, readMangaFields, COLLECTING_STATUSES };

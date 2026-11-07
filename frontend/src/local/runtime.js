@@ -131,6 +131,8 @@ const REFERENCE_COLUMNS = {
   mangas: ['cover_image', 'banner_image', 'description', 'manga_passion_edition_data'],
   volumes: ['cover_image', 'images', 'notes'],
   animes: ['cover_image', 'banner_image'],
+  catalog_series: ['cover_image', 'banner_image', 'description'],
+  catalog_volumes: ['cover_image'],
   trash: ['payload']
 };
 const TOKEN_NAME = /^[A-Za-z0-9._-]+$/;
