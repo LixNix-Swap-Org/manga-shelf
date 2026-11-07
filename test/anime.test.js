@@ -600,7 +600,7 @@ test('films and TV shows: search parameters, TMDb hits in the collection, create
     assert.equal((await admin('DELETE', '/auth/api-keys/tmdb')).status, 200);
 });
 
-test('a link into a foreign shelf: list and detail say only manga_linked_elsewhere, never the series id or title; the series stays unreachable', async () => {
+test('a link into a foreign shelf: list and detail say nothing about it, never the series id or title; the series stays unreachable, each shelf links on its own', async () => {
     assert.equal((await admin('POST', '/users', { username: 'nora', password: 'password123', role: 'editor', shelf_mode: 'personal' })).status, 200);
     const nora = ctx.client();
     assert.equal((await nora('POST', '/auth/login', { username: 'nora', password: 'password123' })).status, 200);
@@ -615,12 +615,11 @@ test('a link into a foreign shelf: list and detail say only manga_linked_elsewhe
     for (const client of [admin, visitor]) {
         const listed = (await client('GET', '/anime')).body.find((a) => a.id === id);
         assert.equal(listed.manga_id, null);
-        assert.equal(listed.manga_linked_elsewhere, true);
         const detail = (await client('GET', `/anime/${id}`)).body;
-        assert.deepEqual([detail.manga_id, detail.manga, detail.manga_linked_elsewhere], [null, null, true]);
+        assert.deepEqual([detail.manga_id, detail.manga], [null, null]);
         const mangaFields = (answer) => Object.entries(answer).filter(([key]) => key.includes('manga')).sort();
-        assert.deepEqual(mangaFields(listed), [['manga_id', null], ['manga_linked_elsewhere', true]], 'one bit, no id');
-        assert.deepEqual(mangaFields(detail), [['manga', null], ['manga_id', null], ['manga_linked_elsewhere', true]]);
+        assert.deepEqual(mangaFields(listed), [['manga_id', null]], 'no id, not even a bit');
+        assert.deepEqual(mangaFields(detail), [['manga', null], ['manga_id', null]]);
         assert.doesNotMatch(JSON.stringify([listed, detail]), /Noras Reihe/, 'no title of the foreign series');
         assert.equal((await client('GET', `/mangas/${series.body.id}/adaptations`)).status, 404);
     }
@@ -629,9 +628,14 @@ test('a link into a foreign shelf: list and detail say only manga_linked_elsewhe
     const refused = await admin('PUT', `/anime/${id}`, { manga_id: series.body.id });
     assert.equal(refused.status, 404);
     assert.doesNotMatch(JSON.stringify(refused.body), /Noras Reihe/);
-    assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 404, 'cannot unlink a foreign shelf series');
-    assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: ownSeries.body.id })).status, 404, 'cannot overwrite a foreign shelf series link');
+    // unlinking what the caller does not see changes nothing; linking their own series pins it for their shelf only
+    assert.equal((await admin('PUT', `/anime/${id}`, { manga_id: null })).status, 200, 'nothing to unlink for this caller');
     assert.equal((await nora('GET', `/anime/${id}`)).body.manga_id, series.body.id, 'the foreign shelf link remains intact');
+    const own = await admin('PUT', `/anime/${id}`, { manga_id: ownSeries.body.id });
+    assert.equal(own.status, 200, JSON.stringify(own.body));
+    assert.deepEqual(own.body.manga, { id: ownSeries.body.id, title: 'Admins Reihe' });
+    assert.equal((await nora('GET', `/anime/${id}`)).body.manga_id, series.body.id, 'the foreign shelf keeps its own link');
+    assert.equal((await visitor('GET', `/anime/${id}`)).body.manga_id, ownSeries.body.id, 'a member of that shelf sees its pin');
     assert.equal((await nora('DELETE', `/anime/${id}`)).status, 200);
 });
 

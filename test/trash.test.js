@@ -164,16 +164,22 @@ test('owners and reads of a user deleted meanwhile stay out; the linked anime is
     const v1 = await volume(id, '1');
     assert.equal((await admin('POST', `/volumes/${v1}/owners`, { user_id: goneId, owned: true })).status, 200);
     assert.equal((await admin('POST', `/volumes/${v1}/read`, { user_id: goneId, read: true })).status, 200);
-    const animeId = Number(db.prepare("INSERT INTO animes (title, manga_id) VALUES ('Verwaister Anime', ?)").run(id).lastInsertRowid);
+    const anime = await editor('POST', '/anime', { title: 'Verwaister Anime', episodes: 12, manga_id: id });
+    assert.equal(anime.status, 201, JSON.stringify(anime.body));
+    const animeId = anime.body.id;
+    const linkOf = async () => (await editor('GET', `/anime/${animeId}`)).body.manga_id;
+    assert.equal(await linkOf(), id);
 
     const del = await editor('DELETE', `/mangas/${id}`);
-    assert.equal(db.prepare('SELECT manga_id FROM animes WHERE id = ?').get(animeId).manga_id, null);
+    // the link stays on the work (a manual key of its own, migration 45) while the series is in the trash
+    assert.ok(db.prepare('SELECT work_id FROM animes WHERE id = ?').get(animeId).work_id);
+    assert.equal(await linkOf(), null);
     assert.equal((await admin('DELETE', `/users/${goneId}`)).status, 200);
     assert.equal((await editor('POST', `/trash/${del.body.trash_id}/restore`)).status, 200);
     const owners = db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(v1).map(r => r.user_id);
     assert.deepEqual(owners, [editorId]);
     assert.equal(db.prepare('SELECT count(*) AS n FROM shelf_volume_reads WHERE volume_id = ?').get(v1).n, 0);
-    assert.equal(db.prepare('SELECT manga_id FROM animes WHERE id = ?').get(animeId).manga_id, id);
+    assert.equal(await linkOf(), id, 'the restored series keeps the work its anime still names');
 });
 
 test('entries older than 30 days are purged by the scheduler; only admins empty the trash', async () => {
