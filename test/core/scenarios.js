@@ -962,7 +962,7 @@ const scenarios = [
             const adminShelf = await shelfOf(admin, 'Kern Kopie Fremd');
             const sourceId = await newSeries(ed, 'Kern Kopie Reihe', {
                 publisher: 'Kern Kopie Verlag', description: 'Text von Ed', author: 'Autorin Kopie', total_volumes: 9, wish_priority: 2, shelf_id: shelfA,
-                work_key: 'anilist:990001'
+                work_key: 'anilist:990077'
             });
             await newVolume(ed, sourceId, '1', { pages: 180, isbn: '9783551000002', status: 'Vorhanden' });
             await newVolume(ed, sourceId, '2', { notes: 'meine Notiz' });
