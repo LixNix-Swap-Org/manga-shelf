@@ -415,7 +415,8 @@ function linkWork(ctx, { params, body }) {
             ctx.db.prepare('UPDATE mangas SET work_key = ? WHERE id IN (?, ?)').run(workKey, manga.id, target.id);
         });
     }
-    return { body: { success: true, work_key: workKey, editions: snapshot.loadEditions(ctx, { id: manga.id, work_key: workKey }) } };
+    const entry = ctx.db.prepare('SELECT catalog_series_id FROM mangas WHERE id = ?').get(manga.id);
+    return { body: { success: true, work_key: workKey, editions: snapshot.loadEditions(ctx, { id: manga.id, work_key: workKey, catalog_series_id: entry ? entry.catalog_series_id : null }) } };
 }
 
 /** The series goes to the trash (restorable for 30 days); `trash_id` is what POST /trash/:id/restore takes. */

@@ -16,6 +16,7 @@ import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
+import LanguagePill from '../common/LanguagePill';
 import { editionDefaults, editionLanguage, isMpEdition } from '../../utils/editions';
 import { foldText } from '../../utils/search';
 import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
@@ -595,7 +596,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                 {copyHits.map((hit) => (
                   <li key={hit.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div className="min-w-0">
-                      <p className="font-semibold text-white break-words">{hit.title}</p>
+                      <p className="font-semibold text-white break-words">
+                        {hit.title} <LanguagePill language={hit.language} />
+                      </p>
                       <p className="text-slate-400">
                         {t('in „{shelf}“', { shelf: hit.shelf_name })} · {tn('{n} Band', '{n} Bände', hit.volume_count)}
                       </p>

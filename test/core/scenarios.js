@@ -961,7 +961,8 @@ const scenarios = [
             const shelfB = await shelfOf(ed, 'Kern Kopie B');
             const adminShelf = await shelfOf(admin, 'Kern Kopie Fremd');
             const sourceId = await newSeries(ed, 'Kern Kopie Reihe', {
-                publisher: 'Kern Kopie Verlag', description: 'Text von Ed', author: 'Autorin Kopie', total_volumes: 9, wish_priority: 2, shelf_id: shelfA
+                publisher: 'Kern Kopie Verlag', description: 'Text von Ed', author: 'Autorin Kopie', total_volumes: 9, wish_priority: 2, shelf_id: shelfA,
+                work_key: 'anilist:990001'
             });
             await newVolume(ed, sourceId, '1', { pages: 180, isbn: '9783551000002', status: 'Vorhanden' });
             await newVolume(ed, sourceId, '2', { notes: 'meine Notiz' });
@@ -991,9 +992,17 @@ const scenarios = [
             assert.deepEqual(copy.volumes.map(v => [v.volume_number, v.status, v.pages, v.notes, v.owners.length]),
                 [['1', 'Fehlt', 180, null, 0], ['2', 'Fehlt', null, null, 0], ['3', 'Erscheint bald', null, null, 0]]);
             assert.deepEqual(copy.catalog.local_fields, []);
+            // the same edition in another shelf is no other edition; an English edition of the work is one for both rows
+            assert.deepEqual([copy.editions, (await detail(ed, sourceId)).editions], [[], []]);
+            const english = await ed('POST', `/mangas/${sourceId}/editions`, { language: 'en' });
+            assert.equal(english.status, 201, JSON.stringify(english.body));
+            assert.deepEqual((await detail(ed, copied.body.id)).editions.map(e => [e.id, e.language]), [[english.body.id, 'en']]);
+            assert.deepEqual((await detail(ed, sourceId)).editions.map(e => e.id), [english.body.id]);
+            assert.equal('catalog_series_id' in (await detail(ed, sourceId)).editions[0], false);
+            // shelf B holds the German edition now: only the English one is still offered
+            assert.deepEqual((await search('kern kopie', shelfB)).results.map(r => [r.id, r.language]), [[english.body.id, 'en']]);
             assert.equal((await ed('POST', '/mangas/copy', { from: sourceId, shelf_id: shelfB })).body.code, 'COPY_EXISTS');
             assert.equal((await ed('POST', '/mangas/copy', { from: copied.body.id, shelf_id: shelfB })).status, 409);
-            assert.deepEqual((await search('kern kopie', shelfB)).results, []);
 
             // both rows are ed's: an edit of one reaches the other through the catalog
             assert.equal((await ed('PUT', `/mangas/${sourceId}`, { description: 'Neuer Text' })).status, 200);
