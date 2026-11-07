@@ -298,3 +298,15 @@ describe('ConfirmDialog', () => {
     expect(document.activeElement).toBe(trigger);
   });
 });
+
+describe('ConfirmDialog icon', () => {
+  it('shows the trash can for a danger by default and the given icon instead', () => {
+    const Mark = (props) => <svg data-testid="move-mark" {...props} />;
+    const { unmount } = render(<ConfirmDialog isOpen title="Löschen?" message="Weg damit" onConfirm={() => {}} onCancel={() => {}} />);
+    expect(document.querySelector('[data-confirm] svg[class*="trash"]')).not.toBeNull();
+    unmount();
+    render(<ConfirmDialog isOpen title="Reihe verschieben" message="Verschieben?" confirmLabel="Verschieben" icon={Mark} onConfirm={() => {}} onCancel={() => {}} />);
+    expect(screen.getByTestId('move-mark').getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector('[data-confirm] svg[class*="trash"]')).toBeNull();
+  });
+});

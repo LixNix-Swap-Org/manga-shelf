@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
+import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X, ArrowRightLeft } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
@@ -874,6 +874,7 @@ export default function MangaHeroCard({
         <ConfirmDialog
           isOpen
           title={tr('Reihe verschieben')}
+          icon={ArrowRightLeft}
           message={shelfMove.text}
           confirmLabel={tr('Verschieben')}
           cancelLabel={tr('Abbrechen')}
