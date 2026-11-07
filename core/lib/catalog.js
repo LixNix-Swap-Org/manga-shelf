@@ -393,9 +393,42 @@ const MARK_SERIES_LOCAL = markLocal('mangas', SERIES_OVERLAY_FIELDS, 'catalog_se
 const MARK_VOLUMES_LOCAL = markLocal('volumes', VOLUME_OVERLAY_FIELDS, 'catalog_volumes', 'catalog_volume_id');
 
 /**
- * Link of the series row NEW (stage 3): like stage 1, but empty catalog fields take the row's values only while no other row
- * shows the entry (a restored series on its old, now empty entry: the fill never reaches another row), and afterwards every
- * field in which the row differs from its entry is local, so a later catalog change never overwrites what this row has.
+ * An entry that only the row `rowId` (an SQL expression, may be correlated to the outer catalog table) shows takes every
+ * overlay value of that row: what rows that are gone left in it (texts of another shelf, of a deleted series) never stays
+ * behind for the next holder, and source_fields is cleared (the values are the row's now, not a source's).
+ */
+const ADOPT_SERIES_SQL = (rowId, scope = '1 = 1') => {
+    const entries = Object.entries(SERIES_OVERLAY_FIELDS);
+    return `UPDATE catalog_series SET (${entries.map(([, cc]) => cc).join(', ')}, title_key, publisher_key, work_id, source_fields, updated_at) =
+        (SELECT ${entries.map(([col]) => `m.${col}`).join(', ')}, ${titleKeySql('m.title')}, ${publisherKeySql('m.publisher')},
+            COALESCE(catalog_series.work_id, m.work_id), NULL, CURRENT_TIMESTAMP FROM mangas m WHERE m.id = ${rowId})
+     WHERE ${scope} AND id = (SELECT catalog_series_id FROM mangas WHERE id = ${rowId})
+       AND NOT EXISTS (SELECT 1 FROM mangas o WHERE o.catalog_series_id = catalog_series.id AND o.id <> ${rowId})
+       AND (source_fields IS NOT NULL OR EXISTS (SELECT 1 FROM mangas m WHERE m.id = ${rowId}
+            AND (${entries.map(([col, cc]) => `catalog_series.${cc} IS NOT m.${col}`).join(' OR ')})));`;
+};
+
+const ADOPT_VOLUME_SQL = (rowId, scope = '1 = 1') => {
+    // a unique ISBN-13 / Manga Passion id another entry holds stays out (the row then keeps it as a local field)
+    const value = {
+        isbn: `CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes o WHERE o.isbn = ${isbnSql('v.isbn')} AND o.id <> catalog_volumes.id) THEN ${isbnSql('v.isbn')} END`,
+        manga_passion_volume_id: `CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes o WHERE o.mp_volume_id = v.manga_passion_volume_id AND o.id <> catalog_volumes.id)
+            THEN v.manga_passion_volume_id END`
+    };
+    const entries = Object.entries(VOLUME_OVERLAY_FIELDS);
+    const expr = (col) => value[col] || `v.${col}`;
+    return `UPDATE catalog_volumes SET (${entries.map(([, cc]) => cc).join(', ')}, source_fields, updated_at) =
+        (SELECT ${entries.map(([col]) => expr(col)).join(', ')}, NULL, CURRENT_TIMESTAMP FROM volumes v WHERE v.id = ${rowId})
+     WHERE ${scope} AND id = (SELECT catalog_volume_id FROM volumes WHERE id = ${rowId})
+       AND NOT EXISTS (SELECT 1 FROM volumes o WHERE o.catalog_volume_id = catalog_volumes.id AND o.id <> ${rowId})
+       AND (source_fields IS NOT NULL OR EXISTS (SELECT 1 FROM volumes v WHERE v.id = ${rowId}
+            AND (${entries.map(([col, cc]) => `catalog_volumes.${cc} IS NOT ${expr(col)}`).join(' OR ')})));`;
+};
+
+/**
+ * Link of the series row NEW (stage 3): like stage 1, but an entry no other row shows takes the row's values (ADOPT_SERIES_SQL:
+ * nothing a gone row left stays), and afterwards every field in which the row differs from its entry is local, so a later
+ * catalog change never overwrites what this row has.
  */
 const LINK_SERIES_BODY_V3 = `
     INSERT INTO catalog_series (work_id, title, title_key, publisher, publisher_key, language, region, format, alt_title, author,
@@ -409,17 +442,13 @@ const LINK_SERIES_BODY_V3 = `
     UPDATE catalog_series SET mp_series_id = ${mpOfSql('NEW')}
      WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = NEW.id) AND mp_series_id IS NULL AND ${mpOfSql('NEW')} IS NOT NULL
        AND NOT EXISTS (SELECT 1 FROM catalog_series o WHERE o.mp_series_id = ${mpOfSql('NEW')});
-    UPDATE catalog_series SET
-        work_id = COALESCE(work_id, (SELECT work_id FROM mangas WHERE id = NEW.id)), alt_title = COALESCE(alt_title, NEW.alt_title),
-        author = COALESCE(author, NEW.author), region = COALESCE(region, NEW.region), pub_status = COALESCE(pub_status, NEW.status),
-        total_volumes = COALESCE(total_volumes, NEW.total_volumes), total_chapters = COALESCE(total_chapters, NEW.total_chapters),
-        description = COALESCE(description, NEW.description), cover_image = COALESCE(cover_image, NEW.cover_image),
-        banner_image = COALESCE(banner_image, NEW.banner_image), tags = COALESCE(tags, NEW.tags)
-     WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = NEW.id)
-       AND NOT EXISTS (SELECT 1 FROM mangas o WHERE o.catalog_series_id = catalog_series.id AND o.id <> NEW.id);
+    UPDATE catalog_series SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+     WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = NEW.id) AND work_id IS NULL
+       AND (SELECT work_id FROM mangas WHERE id = NEW.id) IS NOT NULL;
+    ${ADOPT_SERIES_SQL('NEW.id')}
     ${MARK_SERIES_LOCAL('id = NEW.id')}`;
 
-/** The same for the single volume NEW: a new catalog volume carries all its values, an existing one is only filled. */
+/** The same for the single volume NEW: a new catalog volume carries all its values, one no other row shows takes them. */
 const LINK_VOLUME_ROW_BODY_V3 = `
     INSERT INTO catalog_volumes (series_id, volume_type, volume_number, isbn, language, publisher, release_date, release_year, pages,
         list_price, mp_volume_id, cover_image, sort_after)
@@ -433,16 +462,7 @@ const LINK_VOLUME_ROW_BODY_V3 = `
       AND NOT EXISTS (SELECT 1 FROM catalog_volumes c WHERE ${sameVolumeSql('c')});
     UPDATE volumes SET catalog_volume_id = (SELECT c.id FROM catalog_volumes c JOIN mangas m ON m.id = NEW.manga_id WHERE ${sameVolumeSql('c')})
     WHERE id = NEW.id;
-    UPDATE catalog_volumes SET
-        isbn = COALESCE(isbn, CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes o WHERE o.isbn = ${isbnSql('NEW.isbn')}) THEN ${isbnSql('NEW.isbn')} END),
-        mp_volume_id = COALESCE(mp_volume_id, CASE WHEN NOT EXISTS (SELECT 1 FROM catalog_volumes o WHERE o.mp_volume_id = NEW.manga_passion_volume_id)
-            THEN NEW.manga_passion_volume_id END),
-        language = COALESCE(language, NEW.language), publisher = COALESCE(publisher, NEW.publisher),
-        release_date = COALESCE(release_date, NEW.release_date), release_year = COALESCE(release_year, NEW.release_year),
-        pages = COALESCE(pages, NEW.pages), list_price = COALESCE(list_price, NEW.price), cover_image = COALESCE(cover_image, NEW.cover_image),
-        sort_after = COALESCE(sort_after, NEW.sort_after)
-     WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = NEW.id)
-       AND NOT EXISTS (SELECT 1 FROM volumes o WHERE o.catalog_volume_id = catalog_volumes.id AND o.id <> NEW.id);
+    ${ADOPT_VOLUME_SQL('NEW.id')}
     ${MARK_VOLUMES_LOCAL('id = NEW.id')}`;
 
 /** Catalog change -> every linked row where the field changed and is not local (one statement per table). */
@@ -481,6 +501,7 @@ const CATALOG_TRIGGERS_V3_SQL = `
     CREATE TRIGGER trg_mangas_catalog_relink AFTER UPDATE OF catalog_series_id ON mangas
     WHEN NEW.catalog_series_id IS NOT OLD.catalog_series_id BEGIN
         ${linkVolumesBody('v.manga_id = NEW.id')}
+        ${ADOPT_VOLUME_SQL('(SELECT v2.id FROM volumes v2 WHERE v2.catalog_volume_id = catalog_volumes.id AND v2.manga_id = NEW.id)', 'series_id = NEW.catalog_series_id')}
         ${MARK_VOLUMES_LOCAL('manga_id = NEW.id')}
     END;
     CREATE TRIGGER trg_volumes_catalog_insert AFTER INSERT ON volumes BEGIN
@@ -507,6 +528,8 @@ module.exports = {
     OVERLAY_TRIGGERS,
     MARK_SERIES_LOCAL,
     MARK_VOLUMES_LOCAL,
+    ADOPT_SERIES_SQL,
+    ADOPT_VOLUME_SQL,
     titleKeySql,
     publisherKeySql,
     isbnSql,

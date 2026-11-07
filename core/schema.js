@@ -5,7 +5,7 @@ const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases
 const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
-const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL } = require('./lib/catalog');
+const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
 const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
@@ -1253,6 +1253,9 @@ function migrationList(log = silentLog) {
                 if (!cols('catalog_volumes').has('release_year')) d.exec('ALTER TABLE catalog_volumes ADD COLUMN release_year INTEGER;');
                 if (!cols('mangas').has('local_fields')) d.exec('ALTER TABLE mangas ADD COLUMN local_fields TEXT;');
                 if (!cols('volumes').has('local_fields')) d.exec('ALTER TABLE volumes ADD COLUMN local_fields TEXT;');
+                // the overlay fields whose catalog value came from a source (Manga Passion): the only values a reset may show
+                if (!cols('catalog_series').has('source_fields')) d.exec('ALTER TABLE catalog_series ADD COLUMN source_fields TEXT;');
+                if (!cols('catalog_volumes').has('source_fields')) d.exec('ALTER TABLE catalog_volumes ADD COLUMN source_fields TEXT;');
                 // the new catalog columns from the rows, the way the stage 1 backfill picked: the first row that has one
                 d.exec(`
                     UPDATE catalog_series SET tags = (SELECT m.tags FROM mangas m WHERE m.catalog_series_id = catalog_series.id
@@ -1265,7 +1268,11 @@ function migrationList(log = silentLog) {
                 for (const name of ['trg_mangas_catalog_insert', 'trg_mangas_catalog_identity', 'trg_mangas_catalog_shared', 'trg_mangas_catalog_relink',
                     'trg_volumes_catalog_insert', 'trg_volumes_catalog_identity', 'trg_volumes_catalog_shared',
                     'trg_catalog_series_overlay', 'trg_catalog_volumes_overlay']) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                // an entry only one row shows takes that row's values (stage 1 kept values of rows deleted since), then
+                // whatever a row of a shared entry has of its own is local
                 d.exec(`
+                    ${ADOPT_SERIES_SQL('(SELECT m2.id FROM mangas m2 WHERE m2.catalog_series_id = catalog_series.id ORDER BY m2.id LIMIT 1)')}
+                    ${ADOPT_VOLUME_SQL('(SELECT v2.id FROM volumes v2 WHERE v2.catalog_volume_id = catalog_volumes.id ORDER BY v2.id LIMIT 1)')}
                     ${MARK_SERIES_LOCAL('1 = 1')}
                     ${MARK_VOLUMES_LOCAL('1 = 1')}
                 `);

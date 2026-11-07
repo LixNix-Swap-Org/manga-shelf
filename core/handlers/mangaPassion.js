@@ -70,13 +70,21 @@ async function gaps(ctx, { params, query }) {
     return { body: result };
 }
 
+/** A series row as an answer carries it: without the internal catalog link and the shelf's own field list (migration 46). */
+function seriesAnswer(row) {
+    if (!row) return row;
+    const rest = { ...row };
+    for (const key of ['catalog_series_id', 'local_fields', 'manga_passion_edition_data']) delete rest[key];
+    return rest;
+}
+
 // { tags_only: true } fills empty genres from the linked edition only ("Genres nachladen"); edition_id is not needed
 async function syncEdition(ctx, { params, body }) {
     const mangaId = mangaExists(ctx, params);
     const { edition_id, update_total_volumes, update_status, update_publisher } = body;
     if (parseFlag(body.tags_only, false)) {
         const { manga, ...result } = await fillTagsFromEdition(ctx, mangaId);
-        return { body: { ...result, manga } };
+        return { body: { ...result, manga: seriesAnswer(manga) } };
     }
     if (edition_id === undefined || edition_id === null || edition_id === '') {
         throw badRequest('edition_id ist erforderlich');
@@ -90,7 +98,7 @@ async function syncEdition(ctx, { params, body }) {
         update_publisher: parseFlag(update_publisher, false)
     });
 
-    return { body: { success: true, manga: updatedManga } };
+    return { body: { success: true, manga: seriesAnswer(updatedManga) } };
 }
 
 const MAX_GAP_ENTRIES = 500;

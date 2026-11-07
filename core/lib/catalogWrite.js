@@ -4,6 +4,8 @@
 //     source (Manga Passion, AniList): the overlay triggers then carry it into every linked row where the field is not local,
 //   - else into local_fields of this row only, so the catalog and the other shelves keep theirs.
 // reset() puts catalog values back into a row. Nothing here ever changes a row of another shelf directly.
+// A catalog value either came from a source or from the row of a shelf (maybe one the caller never saw, maybe of a series
+// deleted since); source_fields of the entry names the first kind, and only those are ever offered or taken by a reset.
 // What the caller learns (seriesFlags, view): nothing about a shelf they do not belong to. Whether such a shelf holds the
 // same edition changes where a write goes, but never an answer: its local fields are not reported, a reset is a no-op.
 const access = require('./access');
@@ -74,11 +76,21 @@ function seriesFlags(ctx) {
     return (id) => ({ editable: !readOnly.has(id), resettable: true, hidden: foreign.has(id) });
 }
 
-/** The `catalog` object of a detail answer (see seriesFlags); null for a row without an entry. */
-function view(catalogId, localText, flags) {
+/** Local fields of a row a reset could take: those whose catalog value came from a source. */
+const resettableOf = (localText, sourceText) => {
+    const sourced = new Set(parseLocal(sourceText));
+    return parseLocal(localText).filter(f => sourced.has(f)).sort();
+};
+
+/**
+ * The `catalog` object of a detail answer (see seriesFlags); null for a row without an entry. local_fields names only the
+ * fields a reset would take (local here, and a source value in the catalog); every other local field is the shelf's own
+ * business and tells nothing anybody needs.
+ */
+function view(catalogId, localText, sourceText, flags) {
     if (catalogId === null || catalogId === undefined) return null;
     const f = flags || { editable: true, resettable: true, hidden: true };
-    return { editable: f.editable, resettable: f.resettable, local_fields: f.hidden ? [] : parseLocal(localText) };
+    return { editable: f.editable, resettable: f.resettable, local_fields: f.hidden ? [] : resettableOf(localText, sourceText) };
 }
 
 /** Whether the catalog values of the entry of `kind` may be shown to the caller (see seriesFlags). */
@@ -122,10 +134,16 @@ function commit(ctx, kind, before, { source = false } = {}) {
 
     const local = new Set(parseLocal(after.local_fields));
     let toCatalog = [];
+    const entry = ctx.db.prepare(`SELECT source_fields FROM ${spec.catalog} WHERE id = ?`).get(after[spec.link]);
+    const sourced = new Set(parseLocal(entry?.source_fields));
     if (source || ownsEntry(ctx, kind, after[spec.link])) {
         const conflicts = kind === 'volume' ? volumeConflicts(ctx, after, changed) : new Set();
         toCatalog = changed.filter(f => !conflicts.has(f));
-        for (const f of toCatalog) local.delete(f);
+        for (const f of toCatalog) {
+            local.delete(f);
+            // a source value may be offered back later; a value a shelf wrote never is
+            if (source) sourced.add(f); else sourced.delete(f);
+        }
         for (const f of conflicts) local.add(f);
     } else {
         for (const f of changed) local.add(f);
@@ -133,8 +151,8 @@ function commit(ctx, kind, before, { source = false } = {}) {
     const stored = storeLocal(local);
     if (stored !== (after.local_fields ?? null)) ctx.db.prepare(`UPDATE ${spec.table} SET local_fields = ? WHERE id = ?`).run(stored, after.id);
     if (toCatalog.length) {
-        ctx.db.prepare(`UPDATE ${spec.catalog} SET ${toCatalog.map(f => `${spec.fields[f]} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-            .run(...toCatalog.map(f => after[f] ?? null), after[spec.link]);
+        ctx.db.prepare(`UPDATE ${spec.catalog} SET ${toCatalog.map(f => `${spec.fields[f]} = ?`).join(', ')}, source_fields = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .run(...toCatalog.map(f => after[f] ?? null), storeLocal(sourced), after[spec.link]);
     }
     return { catalog: toCatalog, local: changed.filter(f => !toCatalog.includes(f)) };
 }
@@ -148,9 +166,10 @@ function track(ctx, kind, id, write, options = {}) {
 }
 
 /**
- * Puts the catalog values of `fields` (default: every local field) back into the row and drops them from local_fields.
- * Returns the remaining local fields, or null when the row has no catalog entry. While the caller may not see the entry's
- * values (canSeeEntry) nothing changes and the answer is an empty list.
+ * Puts the catalog values of `fields` (default: every local field) back into the row and drops them from local_fields, but
+ * only for fields whose catalog value came from a source (source_fields); the others stay as they are.
+ * Returns what is still resettable (view's local_fields), or null when the row has no catalog entry. While the caller may
+ * not see the entry's values (canSeeEntry) nothing changes and the answer is an empty list.
  */
 function reset(ctx, kind, id, fields = null) {
     const spec = KINDS[kind];
@@ -162,16 +181,19 @@ function reset(ctx, kind, id, fields = null) {
         return [];
     }
     const local = new Set(parseLocal(row.local_fields));
-    const wanted = (fields || [...local]).filter(f => f in spec.fields);
     const entry = ctx.db.prepare(`SELECT * FROM ${spec.catalog} WHERE id = ?`).get(row[spec.link]);
-    if (!entry) return [...local].sort();
+    if (!entry) return [];
+    const sourced = new Set(parseLocal(entry.source_fields));
+    const wanted = (fields || [...local]).filter(f => f in spec.fields && local.has(f) && sourced.has(f));
     // the title of a series is never empty
     const take = wanted.filter(f => !(f === 'title' && !entry.title));
     for (const f of take) local.delete(f);
     const sets = take.map(f => `${f} = ?`);
-    ctx.db.prepare(`UPDATE ${spec.table} SET ${[...sets, 'local_fields = ?'].join(', ')} WHERE id = ?`)
-        .run(...take.map(f => entry[spec.fields[f]] ?? null), storeLocal(local), id);
-    return [...local].sort();
+    if (take.length) {
+        ctx.db.prepare(`UPDATE ${spec.table} SET ${[...sets, 'local_fields = ?'].join(', ')} WHERE id = ?`)
+            .run(...take.map(f => entry[spec.fields[f]] ?? null), storeLocal(local), id);
+    }
+    return resettableOf(storeLocal(local), entry.source_fields);
 }
 
 /** `fields` of a reset body: null (every local field) or a list of overlay fields of `kind`; anything else is a 400. */
