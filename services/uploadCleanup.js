@@ -18,6 +18,12 @@ const REFERENCE_COLUMNS = {
     catalog_volumes: ['cover_image'],
     trash: ['payload']
 };
+// a catalog entry names an upload only while a series or volume still links to it: an entry whose last row was deleted for
+// good keeps no file alive (the trash payload covers a row that may come back)
+const REFERENCE_WHERE = {
+    catalog_series: 'EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = catalog_series.id)',
+    catalog_volumes: 'EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id)'
+};
 
 /** Every column value that can name an upload (cover/banner URLs, JSON image lists, markdown/HTML in texts). */
 function referenceValues(conn = db) {
@@ -27,7 +33,8 @@ function referenceValues(conn = db) {
         const present = new Set(conn.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
         const columns = wanted.filter(c => present.has(c));
         if (!columns.length) continue;
-        for (const row of conn.prepare(`SELECT ${columns.join(', ')} FROM ${table}`).all()) {
+        const where = REFERENCE_WHERE[table] ? ` WHERE ${REFERENCE_WHERE[table]}` : '';
+        for (const row of conn.prepare(`SELECT ${columns.join(', ')} FROM ${table}${where}`).all()) {
             for (const c of columns) values.push(row[c]);
         }
     }
