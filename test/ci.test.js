@@ -136,6 +136,19 @@ describe('workflows', () => {
             `Flatpak step ${flatpak['timeout-minutes']} min, job ${job['timeout-minutes']} min`);
     });
 
+    test('every optional step stops on its own before its job limit', () => {
+        for (const f of files) {
+            for (const [name, job] of jobsOf(f)) {
+                for (const step of job.steps || []) {
+                    if (step['continue-on-error'] !== true) continue;
+                    const label = `${f} job ${name}: ${step.name || step.uses || step.run}`;
+                    assert.ok(step['timeout-minutes'] > 0, `${label} has no timeout-minutes`);
+                    assert.ok(step['timeout-minutes'] < job['timeout-minutes'], `${label}: ${step['timeout-minutes']} min, job ${job['timeout-minutes']} min`);
+                }
+            }
+        }
+    });
+
     test('steps that use signing secrets only run when the detection step found them', () => {
         const signingSecret = /secrets\.(WIN_CSC_LINK|MAC_CSC_LINK)\b/;
         const names = new Set([...steps()].map(({ step }) => step.name));
