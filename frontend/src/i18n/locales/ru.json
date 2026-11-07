@@ -282,6 +282,7 @@
   "Aufräumen fehlgeschlagen": "Не удалось очистить",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Очистка заблокирована: список изображений снимка резервной копии не читается.",
   "Aus CSV importieren": "Импорт из CSV",
+  "Aus deinen Regalen": "С ваших полок",
   "Aus deinen Reihen": "Из ваших серий",
   "Aus dem Sendeplatz geschätzt": "Оценено по времени выхода в эфир",
   "Aus der App": "Из приложения",
@@ -568,12 +569,15 @@
   "Bände": "Тома",
   "Bände / Fortschritt": "Тома / прогресс",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Дополнить тома можно только после подтверждения издания.",
+  "Bände aus deinen Regalen übernehmen": "Перенести тома с ваших полок",
   "Bände durchsuchen": "Поиск по томам",
   "Bände generieren": "Создать тома",
   "Bände hinzufügen": "Добавить тома",
   "Bände im Besitz": "Тома в наличии",
   "Bände mit Besitzer, aber nicht im Besitz": "Тома с владельцем, но не в наличии",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Сначала показывать тома с высоким приоритетом желания",
+  "Bände mitnehmen (als „Fehlt“)": "Взять тома (как «Нет в наличии»)",
+  "Bände übernehmen": "Перенести тома",
   "Bände-Checkliste": "Чек-лист томов",
   "CSV herunterladen": "Скачать CSV",
   "CSV-Datei auswählen": "Выбрать файл CSV",
@@ -836,6 +840,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Не удалось показать этот экран. Обычно помогает перезагрузка.",
   "Diese Ausgabe lösen": "Отвязать это издание",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Это издание есть и на другой полке. Ваши изменения действуют только для этой полки.",
+  "Diese Ausgabe steht schon in diesem Regal": "Это издание уже стоит на этой полке",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Эти тома есть у других пользователей в сериях, которые вы тоже собираете.",
   "Diese ISBN gehört zu „{title}“.": "Этот ISBN принадлежит «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Этот ISBN относится к другой серии коллекции.",
@@ -846,6 +851,7 @@
     "many": "В этой серии {n} глав — больше нельзя.",
     "other": "В этой серии {n} главы — больше нельзя."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Эта серия — не то же издание, или в ней нет недостающих томов",
   "Diese Reihe ist nicht in der Sammlung.": "Этой серии нет в коллекции.",
   "Diese Reihe sammelst du nicht mehr": "Вы больше не собираете эту серию",
   "Diese Reihe steht auf deiner Wunschliste": "Эта серия в вашем списке желаемого",
@@ -1089,6 +1095,8 @@
   "Fehler beim Zurücksetzen": "Ошибка при сбросе",
   "Fehler beim automatischen Ausfüllen": "Ошибка при автозаполнении",
   "Fehler beim Ändern des Status": "Ошибка при смене статуса",
+  "Fehler beim Übernehmen der Bände": "Ошибка при переносе томов",
+  "Fehler beim Übernehmen der Reihe": "Ошибка при переносе серии",
   "Fehler beim Übernehmen des Bands": "Ошибка при добавлении тома",
   "Fehler-ID: {ref}": "ID ошибки: {ref}",
   "Fehlerhafte Zeilen": "Строки с ошибками",
@@ -1383,6 +1391,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "В этом месяце не выходит ни одного эпизода ваших аниме. Как только дата станет известна, она появится здесь.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "За этот период ничего не было отмечено прочитанным с датой.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "На этой неделе не выходит ни одного эпизода ваших аниме. Как только дата станет известна, она появится здесь.",
+  "In dieses Regal übernehmen": "Перенести на эту полку",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Добавьте эту строку в {file}, затем перезапустите контейнер:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Добавьте эту строку в {file}, запустите сервер и сразу восстановите {backup} в диалоге «Резервные копии»; до этого ничего не меняйте. После этого удалите строку.",
   "In {file} diese Zeile eintragen:": "Добавьте эту строку в {file}:",
@@ -2925,6 +2934,7 @@
   "beschädigt": "повреждён",
   "bisher {n} erschienen": "пока вышло: {n}",
   "collecting::Pausiert": "На паузе",
+  "copy::Übernehmen": "Перенести",
   "das Backup von vor dem Update fehlt": "нет резервной копии, созданной перед обновлением",
   "das Backup von vor dem Update wurde verändert": "резервная копия, созданная перед обновлением, изменена",
   "diesen Band": "этот том",
@@ -2952,6 +2962,7 @@
   "fehlt ({count})": "нет ({count})",
   "festgelegt": "задано",
   "freier Speicher unbekannt": "свободное место неизвестно",
+  "from muss die ID einer Reihe sein": "from должен быть ID серии",
   "gehört zu einem anderen Manga-Shelf-Server": "принадлежит другому серверу Manga Shelf",
   "gelesen": "прочитано",
   "gelöscht": "удалено",
@@ -2981,6 +2992,7 @@
     "many": "через {n} дней",
     "other": "через {n} дня"
   },
+  "in „{shelf}“": "на полке «{shelf}»",
   "kein Inhaltsverzeichnis gefunden": "оглавление не найдено",
   "kein JPG, PNG, WebP, GIF oder AVIF": "не JPG, PNG, WebP, GIF или AVIF",
   "kein Manga-Shelf-Server": "не сервер Manga Shelf",
@@ -3060,7 +3072,9 @@
     "many": "осиротевших файлов",
     "other": "осиротевшего файла"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids должен быть списком из 1–{max} ID томов",
   "volume_numbers Array ist erforderlich": "Нужен массив volume_numbers",
+  "volumes muss true oder false sein": "volumes должен быть true или false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "отмеченное изменение",
     "few": "отмеченных изменения",
@@ -3231,11 +3245,35 @@
     "many": "создано {n} томов",
     "other": "создано {n} тома"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "Здесь не хватает {n} тома с полки «{shelf}».",
+    "few": "Здесь не хватает {n} томов с полки «{shelf}».",
+    "many": "Здесь не хватает {n} томов с полки «{shelf}».",
+    "other": "Здесь не хватает {n} тома с полки «{shelf}»."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "Сегодня выходит {n} том",
     "few": "Сегодня выходят {n} тома",
     "many": "Сегодня выходят {n} томов",
     "other": "Сегодня выходят {n} тома"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} том будет добавлен сюда как «Нет в наличии».",
+    "few": "{n} тома будут добавлены сюда как «Нет в наличии».",
+    "many": "{n} томов будут добавлены сюда как «Нет в наличии».",
+    "other": "{n} тома будут добавлены сюда как «Нет в наличии»."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "Перенесён {n} том",
+    "few": "Перенесено {n} тома",
+    "many": "Перенесено {n} томов",
+    "other": "Перенесено {n} тома"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} том",
+    "few": "{n} тома",
+    "many": "{n} томов",
+    "other": "{n} тома"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} том",
@@ -3559,6 +3597,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Найдите аниме в AniList или MyAnimeList через «Добавить аниме» либо создайте запись вручную.",
   "Übernatürlich": "Сверхъестественное",
   "Übernehmen": "Применить",
+  "Übernehmen: {title}": "Перенести: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Переносит название, автора, жанры, описание, число томов и обложку; тома и наличие у каждого издания остаются отдельными.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Берёт ваш прогресс из AniList и отправляет новые эпизоды отсюда в AniList. Побеждает большее число эпизодов, назад — никогда.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Переносит просмотренные эпизоды из вашей истории Crunchyroll в список аниме. Побеждает большее число эпизодов, назад — никогда.",

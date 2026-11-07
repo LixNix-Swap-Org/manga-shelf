@@ -274,6 +274,7 @@
   "Aufräumen fehlgeschlagen": "Cleanup failed",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Cleanup is locked: the image list of a backup snapshot cannot be read.",
   "Aus CSV importieren": "Import from CSV",
+  "Aus deinen Regalen": "From your shelves",
   "Aus deinen Reihen": "From your series",
   "Aus dem Sendeplatz geschätzt": "Estimated from the broadcast slot",
   "Aus der App": "From the app",
@@ -538,12 +539,15 @@
   "Bände": "Volumes",
   "Bände / Fortschritt": "Volumes / progress",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Enriching volumes only works once the edition is confirmed.",
+  "Bände aus deinen Regalen übernehmen": "Copy volumes from your shelves",
   "Bände durchsuchen": "Search volumes",
   "Bände generieren": "Create volumes",
   "Bände hinzufügen": "Add volumes",
   "Bände im Besitz": "Volumes owned",
   "Bände mit Besitzer, aber nicht im Besitz": "Volumes with an owner that are not owned",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Show volumes with a high wish priority first",
+  "Bände mitnehmen (als „Fehlt“)": "Include the volumes (as “Missing”)",
+  "Bände übernehmen": "Copy volumes",
   "Bände-Checkliste": "Volume checklist",
   "CSV herunterladen": "Download CSV",
   "CSV-Datei auswählen": "Choose CSV file",
@@ -802,6 +806,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "This view could not be displayed. Reloading usually fixes it.",
   "Diese Ausgabe lösen": "Unlink this edition",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "This edition is also on another shelf. Your changes only apply to this shelf.",
+  "Diese Ausgabe steht schon in diesem Regal": "This edition is already on this shelf",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Other users own these volumes in series you also collect.",
   "Diese ISBN gehört zu „{title}“.": "This ISBN belongs to “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "This ISBN matches another series in the collection.",
@@ -810,6 +815,7 @@
     "one": "This series has {n} chapter – no more possible.",
     "other": "This series has {n} chapters – no more possible."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "This series is not the same edition or has no missing volumes",
   "Diese Reihe ist nicht in der Sammlung.": "This series is not in the collection.",
   "Diese Reihe sammelst du nicht mehr": "You no longer collect this series",
   "Diese Reihe steht auf deiner Wunschliste": "This series is on your wishlist",
@@ -1049,6 +1055,8 @@
   "Fehler beim Zurücksetzen": "Error while resetting",
   "Fehler beim automatischen Ausfüllen": "Error filling in automatically",
   "Fehler beim Ändern des Status": "Error changing the status",
+  "Fehler beim Übernehmen der Bände": "Error copying the volumes",
+  "Fehler beim Übernehmen der Reihe": "Error copying the series",
   "Fehler beim Übernehmen des Bands": "Error adding the volume",
   "Fehler-ID: {ref}": "Error ID: {ref}",
   "Fehlerhafte Zeilen": "Rows with errors",
@@ -1335,6 +1343,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "No episode of your anime airs this month. As soon as a date is known, it appears here.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "Nothing was marked as read with a date in this period.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "No episode of your anime airs this week. As soon as a date is known, it appears here.",
+  "In dieses Regal übernehmen": "Copy to this shelf",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Add this line to {file}, then restart the container:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Add this line to {file}, start the server and restore {backup} in the Backups dialog right away; change nothing beforehand. Then remove the line again.",
   "In {file} diese Zeile eintragen:": "Add this line to {file}:",
@@ -2835,6 +2844,7 @@
   "beschädigt": "damaged",
   "bisher {n} erschienen": "{n} released so far",
   "collecting::Pausiert": "Paused",
+  "copy::Übernehmen": "Copy",
   "das Backup von vor dem Update fehlt": "the backup from before the update is missing",
   "das Backup von vor dem Update wurde verändert": "the backup from before the update has been altered",
   "diesen Band": "this volume",
@@ -2860,6 +2870,7 @@
   "fehlt ({count})": "missing ({count})",
   "festgelegt": "set",
   "freier Speicher unbekannt": "free space unknown",
+  "from muss die ID einer Reihe sein": "from must be the ID of a series",
   "gehört zu einem anderen Manga-Shelf-Server": "belongs to a different Manga Shelf server",
   "gelesen": "read",
   "gelöscht": "deleted",
@@ -2885,6 +2896,7 @@
     "one": "in {n} day",
     "other": "in {n} days"
   },
+  "in „{shelf}“": "in “{shelf}”",
   "kein Inhaltsverzeichnis gefunden": "no table of contents found",
   "kein JPG, PNG, WebP, GIF oder AVIF": "not a JPG, PNG, WebP, GIF or AVIF",
   "kein Manga-Shelf-Server": "not a Manga Shelf server",
@@ -2958,7 +2970,9 @@
     "one": "orphaned file",
     "other": "orphaned files"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids must be a list of 1 to {max} volume IDs",
   "volume_numbers Array ist erforderlich": "volume_numbers array is required",
+  "volumes muss true oder false sein": "volumes must be true or false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "pending change goes",
     "other": "pending changes go"
@@ -3115,9 +3129,25 @@
     "one": "{n} volume created",
     "other": "{n} volumes created"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "{n} volume from “{shelf}” is missing here.",
+    "other": "{n} volumes from “{shelf}” are missing here."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "{n} volume out today",
     "other": "{n} volumes out today"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} volume will be added here as “Missing”.",
+    "other": "{n} volumes will be added here as “Missing”."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} volume copied",
+    "other": "{n} volumes copied"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} volume",
+    "other": "{n} volumes"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} volume",
@@ -3361,6 +3391,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Search AniList or MyAnimeList via “Add anime”, or create an entry by hand.",
   "Übernatürlich": "Supernatural",
   "Übernehmen": "Apply",
+  "Übernehmen: {title}": "Copy: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Copies title, author, genres, description, volume count and cover; volumes and ownership stay separate for each edition.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Takes your progress from AniList and sends new episodes from here to AniList. The higher episode count wins, never backwards.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Takes watched episodes from your Crunchyroll history into your anime list. The higher episode count wins, never backwards.",

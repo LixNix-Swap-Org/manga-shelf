@@ -274,6 +274,7 @@
   "Aufräumen fehlgeschlagen": "Temizleme başarısız oldu",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Temizleme kilitli: bir yedek anlık görüntüsünün görsel listesi okunamıyor.",
   "Aus CSV importieren": "CSV'den içe aktar",
+  "Aus deinen Regalen": "Raflarından",
   "Aus deinen Reihen": "Serilerinden",
   "Aus dem Sendeplatz geschätzt": "Yayın saatinden tahmin edildi",
   "Aus der App": "Uygulamadan",
@@ -538,12 +539,15 @@
   "Bände": "Ciltler",
   "Bände / Fortschritt": "Ciltler / ilerleme",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Baskı onaylanmadan ciltler zenginleştirilemez.",
+  "Bände aus deinen Regalen übernehmen": "Raflarından cilt aktar",
   "Bände durchsuchen": "Ciltlerde ara",
   "Bände generieren": "Cilt oluştur",
   "Bände hinzufügen": "Cilt ekle",
   "Bände im Besitz": "Sahip olunan ciltler",
   "Bände mit Besitzer, aber nicht im Besitz": "Sahibi olan ama sahip olunan olmayan ciltler",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Yüksek istek önceliğine sahip ciltleri önce göster",
+  "Bände mitnehmen (als „Fehlt“)": "Ciltleri de al (“Eksik” olarak)",
+  "Bände übernehmen": "Ciltleri aktar",
   "Bände-Checkliste": "Cilt kontrol listesi",
   "CSV herunterladen": "CSV indir",
   "CSV-Datei auswählen": "CSV dosyası seç",
@@ -802,6 +806,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Bu görünüm gösterilemedi. Yeniden yüklemek çoğunlukla sorunu çözer.",
   "Diese Ausgabe lösen": "Bu baskının bağlantısını kaldır",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Bu baskı başka bir rafta da var. Değişikliklerin yalnızca bu raf için geçerli.",
+  "Diese Ausgabe steht schon in diesem Regal": "Bu baskı zaten bu rafta",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Bu ciltlere, senin de koleksiyonunu yaptığın serilerde diğer kullanıcılar sahip.",
   "Diese ISBN gehört zu „{title}“.": "Bu ISBN “{title}” serisine ait.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Bu ISBN koleksiyondaki başka bir seriyle eşleşiyor.",
@@ -810,6 +815,7 @@
     "one": "Bu seride {n} bölüm var – daha fazlası olmaz.",
     "other": "Bu seride {n} bölüm var – daha fazlası olmaz."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Bu seri aynı baskı değil ya da eksik cildi yok",
   "Diese Reihe ist nicht in der Sammlung.": "Bu seri koleksiyonda değil.",
   "Diese Reihe sammelst du nicht mehr": "Bu seriyi artık toplamıyorsun",
   "Diese Reihe steht auf deiner Wunschliste": "Bu seri istek listende",
@@ -1049,6 +1055,8 @@
   "Fehler beim Zurücksetzen": "Sıfırlama sırasında hata",
   "Fehler beim automatischen Ausfüllen": "Otomatik doldurma hatası",
   "Fehler beim Ändern des Status": "Durum değiştirilirken hata oluştu",
+  "Fehler beim Übernehmen der Bände": "Ciltler aktarılırken hata oluştu",
+  "Fehler beim Übernehmen der Reihe": "Seri aktarılırken hata oluştu",
   "Fehler beim Übernehmen des Bands": "Cilt devralınırken hata oluştu",
   "Fehler-ID: {ref}": "Hata kimliği: {ref}",
   "Fehlerhafte Zeilen": "Hatalı satırlar",
@@ -1335,6 +1343,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Bu ay animelerinden hiçbir bölüm çıkmıyor. Bir tarih belli olunca burada görünür.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "Bu dönemde tarihle okundu olarak işaretlenen bir şey yok.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Bu hafta animelerinden hiçbir bölüm çıkmıyor. Bir tarih belli olunca burada görünür.",
+  "In dieses Regal übernehmen": "Bu rafa aktar",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Bu satırı {file} dosyasına ekle, ardından kapsayıcıyı yeniden başlat:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Şu satırı {file} dosyasına ekle, sunucuyu başlat ve Yedekler penceresinde {backup} dosyasını hemen geri yükle; öncesinde hiçbir şeyi değiştirme. Sonra satırı yine kaldır.",
   "In {file} diese Zeile eintragen:": "Şu satırı {file} dosyasına ekle:",
@@ -2835,6 +2844,7 @@
   "beschädigt": "bozuk",
   "bisher {n} erschienen": "şimdiye kadar {n} cilt çıktı",
   "collecting::Pausiert": "Duraklatıldı",
+  "copy::Übernehmen": "Aktar",
   "das Backup von vor dem Update fehlt": "güncellemeden önceki yedek eksik",
   "das Backup von vor dem Update wurde verändert": "güncellemeden önceki yedek değiştirilmiş",
   "diesen Band": "bu cilt",
@@ -2860,6 +2870,7 @@
   "fehlt ({count})": "eksik ({count})",
   "festgelegt": "belirlendi",
   "freier Speicher unbekannt": "boş alan bilinmiyor",
+  "from muss die ID einer Reihe sein": "from bir serinin kimliği olmalıdır",
   "gehört zu einem anderen Manga-Shelf-Server": "başka bir Manga Shelf sunucusuna ait",
   "gelesen": "okundu",
   "gelöscht": "silindi",
@@ -2885,6 +2896,7 @@
     "one": "{n} gün içinde",
     "other": "{n} gün içinde"
   },
+  "in „{shelf}“": "“{shelf}” rafında",
   "kein Inhaltsverzeichnis gefunden": "içindekiler tablosu bulunamadı",
   "kein JPG, PNG, WebP, GIF oder AVIF": "JPG, PNG, WebP, GIF veya AVIF değil",
   "kein Manga-Shelf-Server": "Manga Shelf sunucusu değil",
@@ -2958,7 +2970,9 @@
     "one": "yetim dosya",
     "other": "yetim dosya"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids 1 ile {max} arasında cilt kimliğinden oluşan bir liste olmalıdır",
   "volume_numbers Array ist erforderlich": "volume_numbers dizisi gerekli",
+  "volumes muss true oder false sein": "volumes true ya da false olmalıdır",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "bekleyen değişiklik",
     "other": "bekleyen değişiklik"
@@ -3115,9 +3129,25 @@
     "one": "{n} cilt oluşturuldu",
     "other": "{n} cilt oluşturuldu"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "“{shelf}” rafındaki {n} cilt burada eksik.",
+    "other": "“{shelf}” rafındaki {n} cilt burada eksik."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "Bugün {n} cilt çıkıyor",
     "other": "Bugün {n} cilt çıkıyor"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} cilt buraya “Eksik” olarak eklenecek.",
+    "other": "{n} cilt buraya “Eksik” olarak eklenecek."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} cilt aktarıldı",
+    "other": "{n} cilt aktarıldı"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} cilt",
+    "other": "{n} cilt"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} cilt",
@@ -3361,6 +3391,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "“Anime ekle” ile AniList veya MyAnimeList'te ara ya da bir kaydı elle oluştur.",
   "Übernatürlich": "Doğaüstü",
   "Übernehmen": "Uygula",
+  "Übernehmen: {title}": "Aktar: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Başlığı, yazarı, türleri, açıklamayı, cilt sayısını ve kapağı devralır; ciltler ve sahiplik her baskıda ayrı kalır.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "İlerlemeni AniList'ten devralır ve buradaki yeni bölümleri AniList'e gönderir. Yüksek olan bölüm sayısı kazanır, asla geriye gitmez.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Crunchyroll geçmişindeki izlenen bölümleri anime listene aktarır. Yüksek olan bölüm sayısı kazanır, asla geriye gitmez.",

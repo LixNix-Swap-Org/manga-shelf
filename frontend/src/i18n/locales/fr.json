@@ -278,6 +278,7 @@
   "Aufräumen fehlgeschlagen": "Échec du nettoyage",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Nettoyage verrouillé : la liste d'images d'un instantané de sauvegarde est illisible.",
   "Aus CSV importieren": "Importer depuis un CSV",
+  "Aus deinen Regalen": "De tes étagères",
   "Aus deinen Reihen": "Issus de tes séries",
   "Aus dem Sendeplatz geschätzt": "Estimé d'après le créneau de diffusion",
   "Aus der App": "Depuis l'app",
@@ -553,12 +554,15 @@
   "Bände": "Tomes",
   "Bände / Fortschritt": "Tomes / progression",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "L'enrichissement des tomes n'est possible qu'une fois l'édition confirmée.",
+  "Bände aus deinen Regalen übernehmen": "Copier des tomes de tes étagères",
   "Bände durchsuchen": "Rechercher dans les tomes",
   "Bände generieren": "Générer les tomes",
   "Bände hinzufügen": "Ajouter les tomes",
   "Bände im Besitz": "Tomes possédés",
   "Bände mit Besitzer, aber nicht im Besitz": "Tomes avec propriétaire, mais non possédés",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Afficher d'abord les tomes à haute priorité de souhait",
+  "Bände mitnehmen (als „Fehlt“)": "Inclure les tomes (comme « Manquant »)",
+  "Bände übernehmen": "Copier les tomes",
   "Bände-Checkliste": "Liste de contrôle des tomes",
   "CSV herunterladen": "Télécharger le CSV",
   "CSV-Datei auswählen": "Choisir un fichier CSV",
@@ -819,6 +823,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Impossible d'afficher cette vue. Un rechargement règle généralement le problème.",
   "Diese Ausgabe lösen": "Délier cette édition",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Cette édition se trouve aussi sur une autre étagère. Tes modifications ne s’appliquent qu’à cette étagère.",
+  "Diese Ausgabe steht schon in diesem Regal": "Cette édition est déjà sur cette étagère",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Ces tomes sont possédés par d'autres utilisateurs dans des séries que tu collectionnes aussi.",
   "Diese ISBN gehört zu „{title}“.": "Cet ISBN correspond à « {title} ».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Cet ISBN correspond à une autre série de la collection.",
@@ -828,6 +833,7 @@
     "many": "Cette série a {n} de chapitres – pas plus.",
     "other": "Cette série a {n} chapitres – pas plus."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Cette série n'est pas la même édition ou n'a aucun tome manquant",
   "Diese Reihe ist nicht in der Sammlung.": "Cette série n'est pas dans la collection.",
   "Diese Reihe sammelst du nicht mehr": "Tu ne collectionnes plus cette série",
   "Diese Reihe steht auf deiner Wunschliste": "Cette série est dans ta liste de souhaits",
@@ -1069,6 +1075,8 @@
   "Fehler beim Zurücksetzen": "Erreur lors de la réinitialisation",
   "Fehler beim automatischen Ausfüllen": "Erreur lors du remplissage automatique",
   "Fehler beim Ändern des Status": "Erreur lors du changement de statut",
+  "Fehler beim Übernehmen der Bände": "Erreur lors de la copie des tomes",
+  "Fehler beim Übernehmen der Reihe": "Erreur lors de la copie de la série",
   "Fehler beim Übernehmen des Bands": "Erreur lors de la reprise du tome",
   "Fehler-ID: {ref}": "ID d'erreur : {ref}",
   "Fehlerhafte Zeilen": "Lignes erronées",
@@ -1359,6 +1367,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Aucun épisode de tes anime ne sort ce mois-ci. Dès qu'une date est connue, elle apparaît ici.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "Rien n'a été marqué comme lu avec une date sur cette période.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Aucun épisode de tes anime ne sort cette semaine. Dès qu'une date est connue, elle apparaît ici.",
+  "In dieses Regal übernehmen": "Copier sur cette étagère",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Ajoute cette ligne dans {file}, puis redémarre le conteneur :",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Ajoute cette ligne dans {file}, démarre le serveur et restaure aussitôt {backup} dans la boîte de dialogue Sauvegardes ; ne modifie rien avant. Retire ensuite la ligne.",
   "In {file} diese Zeile eintragen:": "Ajoute cette ligne dans {file} :",
@@ -2880,6 +2889,7 @@
   "beschädigt": "endommagé",
   "bisher {n} erschienen": "{n} parus à ce jour",
   "collecting::Pausiert": "En pause",
+  "copy::Übernehmen": "Copier",
   "das Backup von vor dem Update fehlt": "la sauvegarde d'avant la mise à jour est manquante",
   "das Backup von vor dem Update wurde verändert": "la sauvegarde d'avant la mise à jour a été modifiée",
   "diesen Band": "ce tome",
@@ -2906,6 +2916,7 @@
   "fehlt ({count})": "manquants ({count})",
   "festgelegt": "défini",
   "freier Speicher unbekannt": "espace libre inconnu",
+  "from muss die ID einer Reihe sein": "from doit être l'ID d'une série",
   "gehört zu einem anderen Manga-Shelf-Server": "appartient à un autre serveur Manga Shelf",
   "gelesen": "lu",
   "gelöscht": "supprimé(s)",
@@ -2933,6 +2944,7 @@
     "many": "dans {n} jours",
     "other": "dans {n} jours"
   },
+  "in „{shelf}“": "dans « {shelf} »",
   "kein Inhaltsverzeichnis gefunden": "aucune table des matières trouvée",
   "kein JPG, PNG, WebP, GIF oder AVIF": "pas un JPG, PNG, WebP, GIF ou AVIF",
   "kein Manga-Shelf-Server": "pas un serveur Manga Shelf",
@@ -3009,7 +3021,9 @@
     "many": "fichiers orphelins",
     "other": "fichiers orphelins"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids doit être une liste de 1 à {max} ID de tomes",
   "volume_numbers Array ist erforderlich": "Le tableau volume_numbers est requis",
+  "volumes muss true oder false sein": "volumes doit valoir true ou false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "modification en attente sera perdue",
     "many": "modifications en attente seront perdues",
@@ -3173,10 +3187,30 @@
     "many": "{n} tomes créés",
     "other": "{n} tomes créés"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "{n} tome de « {shelf} » manque ici.",
+    "many": "{n} tomes de « {shelf} » manquent ici.",
+    "other": "{n} tomes de « {shelf} » manquent ici."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "{n} tome sort aujourd’hui",
     "many": "{n} tomes sortent aujourd’hui",
     "other": "{n} tomes sortent aujourd’hui"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} tome sera ajouté ici comme « Manquant ».",
+    "many": "{n} tomes seront ajoutés ici comme « Manquant ».",
+    "other": "{n} tomes seront ajoutés ici comme « Manquant »."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} tome copié",
+    "many": "{n} tomes copiés",
+    "other": "{n} tomes copiés"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} tome",
+    "many": "{n} tomes",
+    "other": "{n} tomes"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} tome",
@@ -3460,6 +3494,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Cherche via « Ajouter un anime » sur AniList ou MyAnimeList, ou crée une entrée à la main.",
   "Übernatürlich": "Surnaturel",
   "Übernehmen": "Appliquer",
+  "Übernehmen: {title}": "Copier : {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Reprend le titre, l'auteur, les genres, la description, le nombre de tomes et la couverture ; les tomes et la possession restent propres à chaque édition.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Reprend ta progression depuis AniList et envoie d'ici les nouveaux épisodes à AniList. Le nombre d'épisodes le plus élevé l'emporte, jamais en arrière.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Reprend les épisodes vus de ton historique Crunchyroll dans ta liste d'animes. Le nombre d'épisodes le plus élevé l'emporte, jamais en arrière.",

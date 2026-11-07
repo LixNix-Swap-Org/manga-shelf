@@ -278,6 +278,7 @@
   "Aufräumen fehlgeschlagen": "La limpieza ha fallado",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "La limpieza está bloqueada: no se puede leer la lista de imágenes de una instantánea de copia de seguridad.",
   "Aus CSV importieren": "Importar desde CSV",
+  "Aus deinen Regalen": "De tus estanterías",
   "Aus deinen Reihen": "De tus series",
   "Aus dem Sendeplatz geschätzt": "Estimado según el horario de emisión",
   "Aus der App": "De la app",
@@ -553,12 +554,15 @@
   "Bände": "Tomos",
   "Bände / Fortschritt": "Tomos / progreso",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Completar tomos solo es posible cuando la edición está confirmada.",
+  "Bände aus deinen Regalen übernehmen": "Copiar tomos de tus estanterías",
   "Bände durchsuchen": "Buscar tomos",
   "Bände generieren": "Generar tomos",
   "Bände hinzufügen": "Añadir tomos",
   "Bände im Besitz": "Tomos que tienes",
   "Bände mit Besitzer, aber nicht im Besitz": "Tomos con propietario que no están en «Lo tengo»",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Mostrar primero los tomos con prioridad alta en la lista de deseos",
+  "Bände mitnehmen (als „Fehlt“)": "Incluir los tomos (como «Falta»)",
+  "Bände übernehmen": "Copiar tomos",
   "Bände-Checkliste": "Lista de tomos",
   "CSV herunterladen": "Descargar CSV",
   "CSV-Datei auswählen": "Elegir archivo CSV",
@@ -819,6 +823,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "No se pudo mostrar esta vista. Recargar suele solucionarlo.",
   "Diese Ausgabe lösen": "Desvincular esta edición",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Esta edición también está en otra estantería. Tus cambios solo se aplican a esta estantería.",
+  "Diese Ausgabe steht schon in diesem Regal": "Esta edición ya está en esta estantería",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Otros usuarios tienen estos tomos en series que tú también coleccionas.",
   "Diese ISBN gehört zu „{title}“.": "Este ISBN pertenece a «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Este ISBN corresponde a otra serie de la colección.",
@@ -828,6 +833,7 @@
     "many": "Esta serie tiene {n} de capítulos; no puede haber más.",
     "other": "Esta serie tiene {n} capítulos; no puede haber más."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Esta serie no es la misma edición o no tiene tomos que falten",
   "Diese Reihe ist nicht in der Sammlung.": "Esta serie no está en la colección.",
   "Diese Reihe sammelst du nicht mehr": "Ya no coleccionas esta serie",
   "Diese Reihe steht auf deiner Wunschliste": "Esta serie está en tu lista de deseos",
@@ -1069,6 +1075,8 @@
   "Fehler beim Zurücksetzen": "Error al restablecer",
   "Fehler beim automatischen Ausfüllen": "Error al rellenar automáticamente",
   "Fehler beim Ändern des Status": "Error al cambiar el estado",
+  "Fehler beim Übernehmen der Bände": "Error al copiar los tomos",
+  "Fehler beim Übernehmen der Reihe": "Error al copiar la serie",
   "Fehler beim Übernehmen des Bands": "Error al incorporar el tomo",
   "Fehler-ID: {ref}": "ID de error: {ref}",
   "Fehlerhafte Zeilen": "Filas con errores",
@@ -1359,6 +1367,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Este mes no sale ningún episodio de tus anime. En cuanto se conozca una fecha, aparecerá aquí.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "En este periodo no se marcó nada como leído con fecha.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Esta semana no sale ningún episodio de tus anime. En cuanto se conozca una fecha, aparecerá aquí.",
+  "In dieses Regal übernehmen": "Copiar a esta estantería",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Añade esta línea a {file} y reinicia el contenedor:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Añade esta línea a {file}, inicia el servidor y restaura {backup} enseguida en el diálogo de copias de seguridad; no cambies nada antes. Después vuelve a quitar la línea.",
   "In {file} diese Zeile eintragen:": "Añade esta línea a {file}:",
@@ -2880,6 +2889,7 @@
   "beschädigt": "dañado",
   "bisher {n} erschienen": "{n} publicados hasta ahora",
   "collecting::Pausiert": "En pausa",
+  "copy::Übernehmen": "Copiar",
   "das Backup von vor dem Update fehlt": "falta la copia de seguridad anterior a la actualización",
   "das Backup von vor dem Update wurde verändert": "la copia de seguridad anterior a la actualización se ha modificado",
   "diesen Band": "este tomo",
@@ -2906,6 +2916,7 @@
   "fehlt ({count})": "falta ({count})",
   "festgelegt": "establecido",
   "freier Speicher unbekannt": "espacio libre desconocido",
+  "from muss die ID einer Reihe sein": "from debe ser el ID de una serie",
   "gehört zu einem anderen Manga-Shelf-Server": "pertenece a otro servidor de Manga Shelf",
   "gelesen": "leído",
   "gelöscht": "eliminado",
@@ -2933,6 +2944,7 @@
     "many": "en {n} días",
     "other": "en {n} días"
   },
+  "in „{shelf}“": "en «{shelf}»",
   "kein Inhaltsverzeichnis gefunden": "no se encontró ningún índice",
   "kein JPG, PNG, WebP, GIF oder AVIF": "no es JPG, PNG, WebP, GIF ni AVIF",
   "kein Manga-Shelf-Server": "no es un servidor de Manga Shelf",
@@ -3009,7 +3021,9 @@
     "many": "archivos huérfanos eliminados",
     "other": "archivos huérfanos eliminados"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids debe ser una lista de 1 a {max} IDs de tomos",
   "volume_numbers Array ist erforderlich": "volume_numbers (array) es obligatorio",
+  "volumes muss true oder false sein": "volumes debe ser true o false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "cambio en cola se perderá",
     "many": "cambios en cola se perderán",
@@ -3173,10 +3187,30 @@
     "many": "{n} tomos creados",
     "other": "{n} tomos creados"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "Aquí falta {n} tomo de «{shelf}».",
+    "many": "Aquí faltan {n} tomos de «{shelf}».",
+    "other": "Aquí faltan {n} tomos de «{shelf}»."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "{n} tomo sale hoy",
     "many": "{n} tomos salen hoy",
     "other": "{n} tomos salen hoy"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "Se añadirá {n} tomo aquí como «Falta».",
+    "many": "Se añadirán {n} tomos aquí como «Falta».",
+    "other": "Se añadirán {n} tomos aquí como «Falta»."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} tomo copiado",
+    "many": "{n} tomos copiados",
+    "other": "{n} tomos copiados"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} tomo",
+    "many": "{n} tomos",
+    "other": "{n} tomos"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} tomo",
@@ -3460,6 +3494,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Busca en AniList o MyAnimeList con «Añadir anime» o crea una entrada a mano.",
   "Übernatürlich": "Sobrenatural",
   "Übernehmen": "Aplicar",
+  "Übernehmen: {title}": "Copiar: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Copia título, autor, géneros, descripción, número de tomos y portada; los tomos y lo que posees son independientes en cada edición.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Toma tu progreso de AniList y envía a AniList los episodios nuevos desde aquí. Gana el número de episodios más alto, nunca hacia atrás.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Pasa los episodios vistos de tu historial de Crunchyroll a tu lista de anime. Gana el número de episodios más alto, nunca hacia atrás.",

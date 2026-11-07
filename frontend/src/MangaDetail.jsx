@@ -11,6 +11,7 @@ import ChapterProgress, { withChapter } from './components/detail/ChapterProgres
 import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
+import CopyVolumesNotice from './components/detail/CopyVolumesNotice';
 import ShelfSpine from './components/detail/ShelfSpine';
 import BulkActionBar from './components/detail/BulkActionBar';
 import DetailBottomBar, { revealAboveKeyboard } from './components/detail/DetailBottomBar';
@@ -143,7 +144,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
   } = useMangaData({ id, user, canEdit: baseCanEdit, onUnauthorized });
 
   // A viewer of the series' shelf reads only but keeps their own reading marks (the server answers 403 for the rest)
-  const { viewer: viewerHere, movableShelves } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline, user?.id);
+  const { viewer: viewerHere, movableShelves, shelfCount } = useShelfAccess(manga?.shelf_id, Boolean(baseCanEdit) && !isOffline, user?.id);
   const canEdit = baseCanEdit && !viewerHere;
   const offlineEditor = isOffline && ['admin', 'editor'].includes(user?.realRole);
   const canToggle = Boolean(baseCanEdit || offlineEditor);
@@ -655,6 +656,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
             selectionMode={selecting}
             onToggleSelectionMode={selection.toggleMode}
           />
+
+          {/* the same edition in another own shelf with volumes this one lacks (catalog stage c2) */}
+          <CopyVolumesNotice mangaId={id} enabled={Boolean(canEdit) && !isOffline && shelfCount > 1} version={volumes.length} onCopied={fetchManga} />
 
           {/* Edition confirmation, duplicates, Manga-Passion discrepancy and gaps: also above an empty (filtered) list */}
           <GapNotices
