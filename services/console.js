@@ -383,6 +383,44 @@ function sourcesNoticeOnce() {
     return 'Quellen: kein eigener API-Schlüssel hinterlegt, Suche läuft mit dem gemeinsamen Limit — "quellen anleitung" zeigt die Schritte.';
 }
 
+const CATALOG_CLEANUP_WORDS = new Set(['aufraeumen', 'aufräumen', 'cleanup']);
+const CATALOG_LOG_LIMIT = 20;
+const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** "katalog": figures of the catalog; "katalog log": the newest merge log rows; "katalog aufraeumen": the purge now. */
+async function cmdCatalog(arg, out) {
+    const maintenance = require('../core/lib/catalogMaintenance');
+    const sub = String(arg || '').trim().toLowerCase();
+    const figures = maintenance.stats(db);
+    if (!figures) {
+        out('Diese Datenbank hat noch keinen Katalog.');
+        return false;
+    }
+    if (CATALOG_CLEANUP_WORDS.has(sub)) {
+        const { createCtx } = require('../db');
+        const done = maintenance.purgeOrphans(createCtx());
+        out(`Katalog aufgeräumt: ${counted(done.series, 'Reihe', 'Reihen')} und ${counted(done.volumes, 'Band', 'Bände')} ohne Regal und ohne Markierungen gelöscht.`);
+        return true;
+    }
+    if (sub === 'log') {
+        const rows = maintenance.mergeLog(db, CATALOG_LOG_LIMIT);
+        if (!rows.length) out('Das Protokoll der Zusammenführung ist leer.');
+        for (const row of rows) out(`  #${row.id} ${row.kind} (Katalog ${row.catalog_id ?? '–'}, Zeilen ${row.old_ids || '[]'}): ${row.detail || ''}`);
+        return true;
+    }
+    if (sub) {
+        out('Unbekannter Unterbefehl. Möglich: "katalog", "katalog log", "katalog aufraeumen".');
+        return false;
+    }
+    out(`Katalog: ${counted(figures.series, 'Ausgabe', 'Ausgaben')} mit ${counted(figures.volumes, 'Band', 'Bänden')}`);
+    out(`  in mehreren Regalen: ${counted(figures.shared, 'Ausgabe', 'Ausgaben')}`);
+    out(`  mit eigenen Werten eines Regals: ${counted(figures.localSeries, 'Reihe', 'Reihen')}, ${counted(figures.localVolumes, 'Band', 'Bände')}`);
+    out(`  ohne Regal und ohne Markierungen: ${counted(figures.orphanSeries, 'Ausgabe', 'Ausgaben')}, ${counted(figures.orphanVolumes, 'Band', 'Bände')} ("katalog aufraeumen" löscht sie, sonst die tägliche Wartung)`);
+    const logText = figures.log.length ? figures.log.map(r => `${r.kind} ${r.n}`).join(', ') : 'leer';
+    out(`  Protokoll der Zusammenführung: ${logText} ("katalog log" zeigt die neuesten ${CATALOG_LOG_LIMIT})`);
+    return true;
+}
+
 const COMMANDS = [
     { names: ['hilfe', 'help', '?'], usage: 'hilfe', text: 'Zeigt diese Liste', run: cmdHelp },
     { names: ['status'], usage: 'status', text: 'Version, Datenordner, Datenbank, Speicherplatz, letztes Backup', run: cmdStatus },
@@ -391,6 +429,7 @@ const COMMANDS = [
     { names: ['passwort-reset', 'reset-password'], usage: 'passwort-reset <name>', text: 'Setzt ein zufälliges Passwort (im Terminal angezeigt, sonst als Datei im Datenordner)', run: cmdPasswordReset },
     { names: ['admin', 'promote'], usage: 'admin <name>', text: 'Macht <name> zum Administrator, nur wenn es keinen gibt', run: cmdPromote },
     { names: ['rollback-aufraeumen', 'rollback-cleanup'], usage: 'rollback-aufraeumen [bestaetigen]', text: 'Prüft manga.db und löscht danach eine liegengebliebene manga.db.bak', run: cmdRollbackCleanup },
+    { names: ['katalog', 'catalog'], usage: 'katalog [log|aufraeumen]', text: 'Zahlen zum Katalog, das Protokoll der Zusammenführung, verwaiste Einträge jetzt löschen', run: cmdCatalog },
     { names: ['quellen', 'sources'], usage: 'quellen [anleitung|setzen|entfernen]', text: 'API-Schlüssel für AniList, MyAnimeList, TMDB, Google Books: Zustand, Anleitung, setzen (verdeckt), entfernen', run: cmdSources, quietArgs: true }
 ];
 

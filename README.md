@@ -126,6 +126,7 @@ Admins add further accounts under Users: **Editor** (changes the collection), **
 | `passwort-reset <name>` | random new password (shown in the terminal, otherwise written to a file in the data folder); ends the user's sessions and calendar feed address |
 | `admin <name>` | make `<name>` an admin, only when there is none |
 | `rollback-aufraeumen [bestaetigen]` | check `manga.db` and delete a leftover `manga.db.bak` |
+| `katalog [log\|aufraeumen]` | figures of the catalog; `log` shows what the merge at the update papered over, `aufraeumen` deletes entries no series shows and nobody has marks on (the daily maintenance does it too) |
 | `quellen …` | API keys: state, guide, set, remove ([API keys](#api-keys)) |
 
 Two more commands run only as a one-shot call, not in the console: `node scripts/admin.js wiederherstellen <backup.zip>` restores a backup into a stopped server, and `node scripts/admin.js db-check <file>` tests on a copy whether this version can open and migrate a database (the headless binary has them as the subcommands `restore` and `db-check`; [Updating](#updating)).

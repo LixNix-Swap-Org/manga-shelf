@@ -197,6 +197,24 @@ test('backup creates a verified manual snapshot', async () => {
     assert.match((await run('status')).text, /Letztes geprüftes Backup: manual-/);
 });
 
+test('katalog shows the figures, the merge log and deletes orphaned entries on request', async () => {
+    db.prepare("INSERT INTO mangas (title) VALUES ('Konsole Katalog Waise')").run();
+    const orphan = db.prepare("SELECT id, catalog_series_id FROM mangas WHERE title = 'Konsole Katalog Waise'").get();
+    db.prepare("INSERT INTO catalog_merge_log (kind, catalog_id, old_ids, detail) VALUES ('series_field', ?, '[]', 'Konsolen-Testzeile')").run(orphan.catalog_series_id);
+    db.prepare('DELETE FROM mangas WHERE id = ?').run(orphan.id);
+    const figures = await run('katalog');
+    assert.equal(figures.ok, true);
+    assert.match(figures.text, /Katalog: \d+ Ausgaben? mit \d+ B(and|änden)/);
+    assert.match(figures.text, /ohne Regal und ohne Markierungen: [1-9]\d* Ausgaben?/);
+    assert.match(figures.text, /series_field 1/);
+    assert.match((await run('katalog log')).text, /series_field .*Konsolen-Testzeile/);
+    assert.equal((await run('katalog unsinn')).ok, false);
+    assert.match((await run('katalog aufraeumen')).text, /Katalog aufgeräumt: [1-9]\d* Reihen?/);
+    assert.equal(db.prepare('SELECT 1 AS hit FROM catalog_series WHERE id = ?').get(orphan.catalog_series_id), undefined);
+    assert.match((await run('catalog')).text, /ohne Regal und ohne Markierungen: 0 Ausgaben, 0 Bände/);
+    assert.match((await run('katalog log')).text, /Protokoll der Zusammenführung ist leer/);
+});
+
 test('rollback-aufraeumen checks the live database and deletes manga.db.bak only when confirmed', async () => {
     const bak = dbPath + '.bak';
     assert.match((await run('rollback-aufraeumen')).text, /nichts aufzuräumen/);
