@@ -877,7 +877,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             onSeriesCreated={() => fetchMangas()}
             onSuccess={(created) => {
               fetchMangas();
-              if (scanPrefill && created?.id) navigateFromDialog(`/manga/${created.id}`);
+              // a scan and a copy from another shelf lead to the new series
+              if ((scanPrefill || created?.copied) && created?.id) navigateFromDialog(`/manga/${created.id}`);
             }}
             prefill={scanPrefill}
             mangas={mangas}

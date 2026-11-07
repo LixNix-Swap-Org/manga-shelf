@@ -274,6 +274,7 @@
   "Aufräumen fehlgeschlagen": "Opruimen mislukt",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Opruimen is geblokkeerd: de afbeeldingenlijst van een back-upsnapshot is niet leesbaar.",
   "Aus CSV importieren": "Importeren uit CSV",
+  "Aus deinen Regalen": "Uit je planken",
   "Aus deinen Reihen": "Uit je reeksen",
   "Aus dem Sendeplatz geschätzt": "Geschat op basis van het uitzendschema",
   "Aus der App": "Uit de app",
@@ -538,12 +539,15 @@
   "Bände": "Delen",
   "Bände / Fortschritt": "Delen / voortgang",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Delen aanvullen kan pas als de editie is bevestigd.",
+  "Bände aus deinen Regalen übernehmen": "Delen uit je planken overnemen",
   "Bände durchsuchen": "Delen doorzoeken",
   "Bände generieren": "Delen genereren",
   "Bände hinzufügen": "Delen toevoegen",
   "Bände im Besitz": "Delen in bezit",
   "Bände mit Besitzer, aber nicht im Besitz": "Delen met een eigenaar die niet in bezit zijn",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Delen met hoge wensprioriteit eerst tonen",
+  "Bände mitnehmen (als „Fehlt“)": "Delen meenemen (als “Ontbreekt”)",
+  "Bände übernehmen": "Delen overnemen",
   "Bände-Checkliste": "Deelchecklist",
   "CSV herunterladen": "CSV downloaden",
   "CSV-Datei auswählen": "CSV-bestand kiezen",
@@ -802,6 +806,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Deze weergave kon niet worden getoond. Opnieuw laden lost dit meestal op.",
   "Diese Ausgabe lösen": "Deze editie ontkoppelen",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Deze uitgave staat ook op een andere plank. Je wijzigingen gelden alleen voor deze plank.",
+  "Diese Ausgabe steht schon in diesem Regal": "Deze editie staat al op deze plank",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Deze delen zijn in bezit van andere gebruikers in reeksen die jij ook verzamelt.",
   "Diese ISBN gehört zu „{title}“.": "Dit ISBN hoort bij “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Dit ISBN past bij een andere reeks in de collectie.",
@@ -810,6 +815,7 @@
     "one": "Deze reeks heeft {n} hoofdstuk – meer kan niet.",
     "other": "Deze reeks heeft {n} hoofdstukken – meer kan niet."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Deze reeks is niet dezelfde editie of heeft geen ontbrekende delen",
   "Diese Reihe ist nicht in der Sammlung.": "Deze reeks staat niet in de collectie.",
   "Diese Reihe sammelst du nicht mehr": "Deze reeks verzamel je niet meer",
   "Diese Reihe steht auf deiner Wunschliste": "Deze reeks staat op je verlanglijst",
@@ -1049,6 +1055,8 @@
   "Fehler beim Zurücksetzen": "Fout bij het terugzetten",
   "Fehler beim automatischen Ausfüllen": "Fout bij het automatisch invullen",
   "Fehler beim Ändern des Status": "Fout bij het wijzigen van de status",
+  "Fehler beim Übernehmen der Bände": "Fout bij het overnemen van de delen",
+  "Fehler beim Übernehmen der Reihe": "Fout bij het overnemen van de reeks",
   "Fehler beim Übernehmen des Bands": "Fout bij het overnemen van het deel",
   "Fehler-ID: {ref}": "Fout-ID: {ref}",
   "Fehlerhafte Zeilen": "Foutieve regels",
@@ -1335,6 +1343,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Deze maand verschijnt er geen aflevering van je anime. Zodra een datum bekend is, staat die hier.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "In deze periode is niets met datum als gelezen gemarkeerd.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Deze week verschijnt er geen aflevering van je anime. Zodra een datum bekend is, staat die hier.",
+  "In dieses Regal übernehmen": "Naar deze plank overnemen",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Zet deze regel in {file} en start de container daarna opnieuw op:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Zet deze regel in {file}, start de server en zet {backup} meteen terug in het venster Back-ups; wijzig vooraf niets. Haal de regel daarna weer weg.",
   "In {file} diese Zeile eintragen:": "Zet deze regel in {file}:",
@@ -2835,6 +2844,7 @@
   "beschädigt": "beschadigd",
   "bisher {n} erschienen": "tot nu toe {n} verschenen",
   "collecting::Pausiert": "Gepauzeerd",
+  "copy::Übernehmen": "Overnemen",
   "das Backup von vor dem Update fehlt": "de back-up van vóór de update ontbreekt",
   "das Backup von vor dem Update wurde verändert": "de back-up van vóór de update is gewijzigd",
   "diesen Band": "dit deel",
@@ -2860,6 +2870,7 @@
   "fehlt ({count})": "ontbreekt ({count})",
   "festgelegt": "ingesteld",
   "freier Speicher unbekannt": "vrije ruimte onbekend",
+  "from muss die ID einer Reihe sein": "from moet de ID van een reeks zijn",
   "gehört zu einem anderen Manga-Shelf-Server": "hoort bij een andere Manga Shelf-server",
   "gelesen": "gelezen",
   "gelöscht": "verwijderd",
@@ -2885,6 +2896,7 @@
     "one": "over {n} dag",
     "other": "over {n} dagen"
   },
+  "in „{shelf}“": "in “{shelf}”",
   "kein Inhaltsverzeichnis gefunden": "geen inhoudsopgave gevonden",
   "kein JPG, PNG, WebP, GIF oder AVIF": "geen JPG, PNG, WebP, GIF of AVIF",
   "kein Manga-Shelf-Server": "geen Manga Shelf-server",
@@ -2958,7 +2970,9 @@
     "one": "verweesd bestand",
     "other": "verweesde bestanden"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids moet een lijst van 1 tot {max} deel-ID’s zijn",
   "volume_numbers Array ist erforderlich": "volume_numbers-array is vereist",
+  "volumes muss true oder false sein": "volumes moet true of false zijn",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "genoteerde wijziging gaat",
     "other": "genoteerde wijzigingen gaan"
@@ -3115,9 +3129,25 @@
     "one": "{n} deel aangemaakt",
     "other": "{n} delen aangemaakt"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "{n} deel uit “{shelf}” ontbreekt hier.",
+    "other": "{n} delen uit “{shelf}” ontbreken hier."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "{n} deel verschijnt vandaag",
     "other": "{n} delen verschijnen vandaag"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} deel wordt hier als “Ontbreekt” toegevoegd.",
+    "other": "{n} delen worden hier als “Ontbreekt” toegevoegd."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} deel overgenomen",
+    "other": "{n} delen overgenomen"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} deel",
+    "other": "{n} delen"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} deel",
@@ -3361,6 +3391,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Zoek via “Anime toevoegen” bij AniList of MyAnimeList of maak een item handmatig aan.",
   "Übernatürlich": "Bovennatuurlijk",
   "Übernehmen": "Toepassen",
+  "Übernehmen: {title}": "Overnemen: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Neemt titel, auteur, genres, beschrijving, aantal delen en cover over; delen en bezit blijven per editie afzonderlijk.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Neemt je voortgang over van AniList en stuurt nieuwe afleveringen vanaf hier naar AniList. Het hoogste aantal afleveringen wint, nooit achteruit.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Neemt bekeken afleveringen uit je Crunchyroll-geschiedenis over in je animelijst. Het hoogste aantal afleveringen wint, nooit achteruit.",

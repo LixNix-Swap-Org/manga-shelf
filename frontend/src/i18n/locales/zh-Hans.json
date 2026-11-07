@@ -270,6 +270,7 @@
   "Aufräumen fehlgeschlagen": "清理失败",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "清理已被锁定：无法读取某个备份快照的图片列表。",
   "Aus CSV importieren": "从 CSV 导入",
+  "Aus deinen Regalen": "来自你的书架",
   "Aus deinen Reihen": "来自你的系列",
   "Aus dem Sendeplatz geschätzt": "根据播出时段估算",
   "Aus der App": "来自应用",
@@ -523,12 +524,15 @@
   "Bände": "卷",
   "Bände / Fortschritt": "卷 / 进度",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "确认版本后才能补充卷的信息。",
+  "Bände aus deinen Regalen übernehmen": "从你的书架导入卷",
   "Bände durchsuchen": "搜索卷",
   "Bände generieren": "生成卷",
   "Bände hinzufügen": "添加卷",
   "Bände im Besitz": "已拥有的卷",
   "Bände mit Besitzer, aber nicht im Besitz": "有拥有者但未标为已拥有的卷",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "优先显示愿望优先级高的卷",
+  "Bände mitnehmen (als „Fehlt“)": "同时导入卷（标为“缺失”）",
+  "Bände übernehmen": "导入卷",
   "Bände-Checkliste": "卷清单",
   "CSV herunterladen": "下载 CSV",
   "CSV-Datei auswählen": "选择 CSV 文件",
@@ -785,6 +789,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "无法显示此视图。重新加载通常可以解决。",
   "Diese Ausgabe lösen": "取消关联此版本",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "此版本也在另一个书架上。你的更改只对此书架生效。",
+  "Diese Ausgabe steht schon in diesem Regal": "这个版本已经在这个书架上了",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "这些卷由其他用户拥有，所属系列你也在收集。",
   "Diese ISBN gehört zu „{title}“.": "该 ISBN 属于“{title}”。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "该 ISBN 对应收藏中的另一个系列。",
@@ -792,6 +797,7 @@
   "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
     "other": "该系列共 {n} 话，不能再多。"
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "这个系列不是同一版本，或没有缺少的卷",
   "Diese Reihe ist nicht in der Sammlung.": "该系列不在收藏中。",
   "Diese Reihe sammelst du nicht mehr": "你已不再收集该系列",
   "Diese Reihe steht auf deiner Wunschliste": "该系列在你的愿望清单中",
@@ -1029,6 +1035,8 @@
   "Fehler beim Zurücksetzen": "恢复时出错",
   "Fehler beim automatischen Ausfüllen": "自动填写时出错",
   "Fehler beim Ändern des Status": "更改状态时出错",
+  "Fehler beim Übernehmen der Bände": "导入卷时出错",
+  "Fehler beim Übernehmen der Reihe": "导入系列时出错",
   "Fehler beim Übernehmen des Bands": "采用该卷时出错",
   "Fehler-ID: {ref}": "错误 ID：{ref}",
   "Fehlerhafte Zeilen": "有问题的行",
@@ -1311,6 +1319,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "本月你的动画没有新集播出。一旦确定日期，就会显示在这里。",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "在此期间没有带日期标记为已读的内容。",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "本周你的动画没有新集播出。一旦确定日期，就会显示在这里。",
+  "In dieses Regal übernehmen": "导入到这个书架",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "将这一行写入 {file}，然后重启容器：",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "将这一行写入 {file}，启动服务器，并立即在“备份”对话框中恢复 {backup}；在此之前不要更改任何内容。之后再删除这一行。",
   "In {file} diese Zeile eintragen:": "将这一行写入 {file}：",
@@ -2790,6 +2799,7 @@
   "beschädigt": "已损坏",
   "bisher {n} erschienen": "目前已发售 {n} 卷",
   "collecting::Pausiert": "已暂停",
+  "copy::Übernehmen": "导入",
   "das Backup von vor dem Update fehlt": "缺少更新前的备份",
   "das Backup von vor dem Update wurde verändert": "更新前的备份已被更改",
   "diesen Band": "此卷",
@@ -2814,6 +2824,7 @@
   "fehlt ({count})": "缺失（{count}）",
   "festgelegt": "已设定",
   "freier Speicher unbekannt": "可用空间未知",
+  "from muss die ID einer Reihe sein": "from 必须是一个系列的 ID",
   "gehört zu einem anderen Manga-Shelf-Server": "属于另一个 Manga Shelf 服务器",
   "gelesen": "已读",
   "gelöscht": "已删除",
@@ -2837,6 +2848,7 @@
   "in {n} Tag|in {n} Tagen": {
     "other": "{n} 天后"
   },
+  "in „{shelf}“": "在“{shelf}”中",
   "kein Inhaltsverzeichnis gefunden": "未找到目录",
   "kein JPG, PNG, WebP, GIF oder AVIF": "不是 JPG、PNG、WebP、GIF 或 AVIF",
   "kein Manga-Shelf-Server": "不是 Manga Shelf 服务器",
@@ -2907,7 +2919,9 @@
   "verwaiste Datei|verwaiste Dateien": {
     "other": "个孤立文件"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids 必须是包含 1 到 {max} 个卷 ID 的列表",
   "volume_numbers Array ist erforderlich": "需要 volume_numbers 数组",
+  "volumes muss true oder false sein": "volumes 必须为 true 或 false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "other": "项待同步的更改"
   },
@@ -3057,8 +3071,20 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "已创建 {n} 卷"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "other": "这里缺少“{shelf}”中的 {n} 卷。"
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "other": "今天有 {n} 卷发售"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "other": "将在这里以“缺失”添加 {n} 卷。"
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "other": "已导入 {n} 卷"
+  },
+  "{n} Band|{n} Bände": {
+    "other": "{n} 卷"
   },
   "{n} Bände|{n} Bände": {
     "other": "{n} 卷"
@@ -3262,6 +3288,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "通过“添加动画”在 AniList 或 MyAnimeList 中搜索，或手动创建条目。",
   "Übernatürlich": "超自然",
   "Übernehmen": "应用",
+  "Übernehmen: {title}": "导入：{title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "会采用标题、作者、类型、简介、卷数和封面；卷和拥有情况在每个版本中各自独立。",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "从 AniList 获取你的进度，并把这里新增的集数发送给 AniList。取较大的集数，绝不倒退。",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "把你 Crunchyroll 观看记录中已看的集数写入你的动画列表。取较大的集数，绝不倒退。",

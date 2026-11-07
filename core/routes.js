@@ -21,6 +21,7 @@ const trash = require('./handlers/trash');
 const publishers = require('./handlers/publishers');
 const cleanup = require('./handlers/cleanup');
 const shelves = require('./handlers/shelves');
+const copy = require('./handlers/copy');
 const { guidesHandler } = require('./sources/guides');
 const { listVolumeSearch } = require('./snapshot');
 const { HttpError, AUTH_TEXTS, notFound } = require('./errors');
@@ -32,6 +33,9 @@ const routes = [
     { method: 'POST', path: '/mangas', role: 'editor', handler: mangas.create },
     // before /mangas/:id; the list leaves the search text out, the dashboard loads it on demand
     { method: 'GET', path: '/mangas/volume-search', role: 'auth', conditional: true, handler: (ctx, { query }) => ({ body: listVolumeSearch(ctx, access.requestedShelfIds(ctx, qstr(query.shelf_id))) }) },
+    // also before /mangas/:id: a series from another shelf of the caller (catalog stage c2, core/handlers/copy.js)
+    { method: 'GET', path: '/mangas/copy-candidates', role: 'editor', handler: copy.candidates },
+    { method: 'POST', path: '/mangas/copy', role: 'editor', handler: copy.copySeries },
     { method: 'GET', path: '/mangas/:id', role: 'auth', conditional: true, handler: mangas.detail },
     // the 30 MB copy never lands in the HTTP cache; the client sends If-None-Match by hand
     { method: 'GET', path: '/offline-snapshot', role: 'auth', conditional: { cacheControl: 'private, no-store' }, handler: snapshot.offlineSnapshot },
@@ -40,6 +44,8 @@ const routes = [
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
+    { method: 'GET', path: '/mangas/:id/volume-sources', role: 'editor', handler: copy.volumeSources },
+    { method: 'POST', path: '/mangas/:id/volumes/copy', role: 'editor', handler: copy.copyVolumes },
     // the caller's own chapter of a webtoon; viewer rights in the shelf are enough, like reading marks
     { method: 'PUT', path: '/mangas/:id/chapters', role: 'editor', handler: chapters.setChapters },
     { method: 'GET', path: '/mangas/:id/shelf-move', role: 'editor', handler: shelves.movePreview },
