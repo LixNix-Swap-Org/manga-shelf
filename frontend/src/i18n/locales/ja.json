@@ -253,6 +253,7 @@
   },
   "Auf Crunchyroll suchen": "Crunchyrollで検索",
   "Auf Einkaufsliste setzen": "買い物リストに入れる",
+  "Auf Katalogstand zurücksetzen": "カタログの値に戻す",
   "Auf Server übertragen": "サーバーに転送",
   "Auf Wunschliste": "ウィッシュリスト登録済み",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "サーバーにはすでにデータがあります – 置き換えられてしまいます。データのあるサーバーには「統合」を使ってください。",
@@ -771,6 +772,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "古いアドレスはすぐに使えなくなります。",
   "Die beiden neuen Passwörter sind nicht gleich.": "新しいパスワードが2つとも一致しません。",
   "Die eigene Rolle kann hier nicht geändert werden": "ここでは自分のロールを変更できません",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "この本棚独自の値がカタログの値に置き換えられます。",
   "Die installierte Datei meldet eine andere Version als erwartet.": "インストールされたファイルが、想定と異なるバージョンを報告しています。",
   "Die lokale Sammlung konnte nicht angelegt werden.": "ローカルコレクションを作成できませんでした。",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "新しいバージョンは事前チェックに合格しませんでした。",
@@ -782,6 +784,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "このファイルでサービスを再設定して起動してください:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "この画面を表示できませんでした。再読み込みすると、たいてい直ります。",
   "Diese Ausgabe lösen": "この版のリンクを解除",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "この版は別の本棚にもあります。変更はこの本棚にだけ適用されます。",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "これらの巻は、あなたも集めているシリーズで他のユーザーが所持しています。",
   "Diese ISBN gehört zu „{title}“.": "このISBNは「{title}」のものです。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "このISBNは、コレクション内の別のシリーズに一致します。",
@@ -1023,6 +1026,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "バックアップの復元中にエラーが発生しました(詳細はサーバーログを参照)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "バックアップの復元中にエラーが発生しました: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "復元中にエラーが発生しました: {reason}",
+  "Fehler beim Zurücksetzen": "リセット中にエラーが発生しました",
   "Fehler beim automatischen Ausfüllen": "自動入力中にエラーが発生しました",
   "Fehler beim Ändern des Status": "ステータスの変更中にエラーが発生しました",
   "Fehler beim Übernehmen des Bands": "巻の取り込み中にエラーが発生しました",
@@ -1367,6 +1371,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "話数の進捗を保存できませんでした",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "「{name}」の進捗が全話数を超えています(無視されました)",
   "Karten": "カード",
+  "Katalogstand übernommen": "カタログの値を引き継ぎました",
   "Kaufdatum": "購入日",
   "Kaufdatum…": "購入日…",
   "Kaufpreis": "購入価格",
@@ -3063,6 +3068,9 @@
   },
   "{n} Extras|{n} Extras": {
     "other": "特典{n}件"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "other": "{n} 件の項目がこの本棚独自の値を持っています。"
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "other": "{n}話視聴済み"

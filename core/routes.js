@@ -36,6 +36,7 @@ const routes = [
     // the 30 MB copy never lands in the HTTP cache; the client sends If-None-Match by hand
     { method: 'GET', path: '/offline-snapshot', role: 'auth', conditional: { cacheControl: 'private, no-store' }, handler: snapshot.offlineSnapshot },
     { method: 'PUT', path: '/mangas/:id', role: 'editor', handler: mangas.update },
+    { method: 'POST', path: '/mangas/:id/catalog-reset', role: 'editor', handler: mangas.catalogReset },
     { method: 'DELETE', path: '/mangas/:id', role: 'editor', handler: mangas.remove },
     { method: 'POST', path: '/mangas/:id/editions', role: 'editor', handler: mangas.createEdition },
     { method: 'PUT', path: '/mangas/:id/work', role: 'editor', handler: mangas.linkWork },
@@ -61,6 +62,7 @@ const routes = [
     { method: 'POST', path: '/volumes/batch', role: 'editor', handler: volumes.createBatch },
     { method: 'POST', path: '/volumes/bulk', role: 'editor', handler: volumes.bulk },
     { method: 'PUT', path: '/volumes/:id', role: 'editor', handler: volumes.update },
+    { method: 'POST', path: '/volumes/:id/catalog-reset', role: 'editor', handler: volumes.catalogReset },
     { method: 'DELETE', path: '/volumes/:id', role: 'editor', handler: volumes.remove },
     { method: 'POST', path: '/volumes/:id/owners', role: 'editor', handler: owners.toggleOwner },
     { method: 'POST', path: '/volumes/:id/read', role: 'editor', handler: reads.toggleRead },

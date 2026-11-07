@@ -3,6 +3,7 @@
 const { normalizeTags } = require('../lib/tags');
 const { HttpError, notFound, conflict } = require('../errors');
 const client = require('./client');
+const catalogWrite = require('../lib/catalogWrite');
 
 const { toEditionId, readCache, getEditionInfo } = client;
 // a cached 404 expires like getEditionInfo's own entry (client.js EDITION_CACHE_TTL_MS); edition data stays usable at any age
@@ -57,10 +58,11 @@ async function fillTagsFromEdition(ctx, mangaId) {
 
   const tags = normalizeTags(known.edition.tags);
   if (!tags) return { success: true, updated: false, source: known.source, tags: null, manga };
-  const info = ctx.db.prepare(`
+  // genres of the edition are source data: they go to the catalog for everyone (core/lib/catalogWrite.js)
+  const info = catalogWrite.track(ctx, 'series', mangaId, () => ctx.db.prepare(`
     UPDATE mangas SET tags = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND (tags IS NULL OR TRIM(tags) = '')
-  `).run(tags, ctx.user?.id ?? null, mangaId);
+  `).run(tags, ctx.user?.id ?? null, mangaId), { source: true });
   const updated = select();
   return { success: true, updated: info.changes === 1, source: known.source, tags: updated.tags, manga: updated };
 }

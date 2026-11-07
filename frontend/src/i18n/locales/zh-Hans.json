@@ -253,6 +253,7 @@
   },
   "Auf Crunchyroll suchen": "在 Crunchyroll 上搜索",
   "Auf Einkaufsliste setzen": "加入购物清单",
+  "Auf Katalogstand zurücksetzen": "恢复为目录中的值",
   "Auf Server übertragen": "传输到服务器",
   "Auf Wunschliste": "在愿望清单中",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "服务器上已有数据——这些数据将被替换。如果服务器上已有数据，请使用“合并”。",
@@ -771,6 +772,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "旧地址会立即失效。",
   "Die beiden neuen Passwörter sind nicht gleich.": "两次输入的新密码不一致。",
   "Die eigene Rolle kann hier nicht geändert werden": "无法在此更改自己的角色",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "此书架自己的值将被目录中的值替换。",
   "Die installierte Datei meldet eine andere Version als erwartet.": "已安装的文件报告的版本与预期不符。",
   "Die lokale Sammlung konnte nicht angelegt werden.": "无法创建本地收藏。",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "新版本未通过预检。",
@@ -782,6 +784,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "用这个文件重新设置服务并启动：",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "无法显示此视图。重新加载通常可以解决。",
   "Diese Ausgabe lösen": "取消关联此版本",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "此版本也在另一个书架上。你的更改只对此书架生效。",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "这些卷由其他用户拥有，所属系列你也在收集。",
   "Diese ISBN gehört zu „{title}“.": "该 ISBN 属于“{title}”。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "该 ISBN 对应收藏中的另一个系列。",
@@ -1023,6 +1026,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "恢复备份时出错（详情见服务器日志）",
   "Fehler beim Wiederherstellen des Backups: {reason}": "恢复备份时出错：{reason}",
   "Fehler beim Wiederherstellen: {reason}": "恢复时出错：{reason}",
+  "Fehler beim Zurücksetzen": "恢复时出错",
   "Fehler beim automatischen Ausfüllen": "自动填写时出错",
   "Fehler beim Ändern des Status": "更改状态时出错",
   "Fehler beim Übernehmen des Bands": "采用该卷时出错",
@@ -1367,6 +1371,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "无法保存章节进度",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "“{name}”的进度超过了总话数（已忽略）",
   "Karten": "卡片",
+  "Katalogstand übernommen": "已采用目录中的值",
   "Kaufdatum": "购买日期",
   "Kaufdatum…": "购买日期…",
   "Kaufpreis": "购买价格",
@@ -3063,6 +3068,9 @@
   },
   "{n} Extras|{n} Extras": {
     "other": "{n} 个附赠"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "other": "{n} 个字段在此书架上有自己的值。"
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "other": "已看 {n} 集"

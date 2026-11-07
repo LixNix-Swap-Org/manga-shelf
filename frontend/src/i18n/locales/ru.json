@@ -265,6 +265,7 @@
   },
   "Auf Crunchyroll suchen": "Искать на Crunchyroll",
   "Auf Einkaufsliste setzen": "В список покупок",
+  "Auf Katalogstand zurücksetzen": "Вернуть значения каталога",
   "Auf Server übertragen": "Перенести на сервер",
   "Auf Wunschliste": "В списке желаемого",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "На сервере уже есть данные — они будут заменены. Для сервера с данными предназначено «Объединить».",
@@ -822,6 +823,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "Прежний адрес сразу перестанет работать.",
   "Die beiden neuen Passwörter sind nicht gleich.": "Два новых пароля не совпадают.",
   "Die eigene Rolle kann hier nicht geändert werden": "Свою роль здесь изменить нельзя",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Собственные значения этой полки будут заменены значениями из каталога.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Установленный файл сообщает не ту версию, которая ожидалась.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Не удалось создать локальную коллекцию.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "Новая версия не прошла предварительную проверку.",
@@ -833,6 +835,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Заново настройте службу с этим файлом и запустите её:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Не удалось показать этот экран. Обычно помогает перезагрузка.",
   "Diese Ausgabe lösen": "Отвязать это издание",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Это издание есть и на другой полке. Ваши изменения действуют только для этой полки.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Эти тома есть у других пользователей в сериях, которые вы тоже собираете.",
   "Diese ISBN gehört zu „{title}“.": "Этот ISBN принадлежит «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Этот ISBN относится к другой серии коллекции.",
@@ -1083,6 +1086,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Ошибка при восстановлении резервной копии (подробности в журнале сервера)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Ошибка при восстановлении резервной копии: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Ошибка при восстановлении: {reason}",
+  "Fehler beim Zurücksetzen": "Ошибка при сбросе",
   "Fehler beim automatischen Ausfüllen": "Ошибка при автозаполнении",
   "Fehler beim Ändern des Status": "Ошибка при смене статуса",
   "Fehler beim Übernehmen des Bands": "Ошибка при добавлении тома",
@@ -1445,6 +1449,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Не удалось сохранить прогресс по главам",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "Прогресс «{name}» больше общего числа глав (игнорируется)",
   "Karten": "Карточки",
+  "Katalogstand übernommen": "Значения каталога перенесены",
   "Kaufdatum": "Дата покупки",
   "Kaufdatum…": "Дата покупки…",
   "Kaufpreis": "Цена покупки",
@@ -3249,6 +3254,12 @@
     "few": "{n} экстра",
     "many": "{n} экстра",
     "other": "{n} экстра"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} поле имеет на этой полке собственное значение.",
+    "few": "{n} поля имеют на этой полке собственное значение.",
+    "many": "{n} полей имеют на этой полке собственное значение.",
+    "other": "{n} поля имеют на этой полке собственное значение."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} эпизод просмотрен",

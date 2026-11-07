@@ -7,6 +7,7 @@ const {
 } = require('../lib/owners');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const access = require('../lib/access');
+const catalogWrite = require('../lib/catalogWrite');
 const { resolveTargetUser } = access;
 const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
@@ -402,11 +403,22 @@ function update(ctx, { params, body }) {
             if (next !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], next);
         }
         stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, sortAfterFor(volType, sortAfter.value ?? null), vol.id);
+        // the edition fields go to the catalog or stay local to this shelf (core/lib/catalogWrite.js)
+        catalogWrite.commit(ctx, 'volume', vol);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
     });
 
     return { body: { success: true } };
+}
+
+/** POST /volumes/:id/catalog-reset { fields? }: the volume takes the catalog values of its local fields (all or the named ones) again. */
+function catalogReset(ctx, { params, body }) {
+    const fields = catalogWrite.readResetFields(body, 'volume');
+    let local = null;
+    ctx.db.transaction(() => { local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields); });
+    if (local === null) throw notFound('Band');
+    return { body: { success: true, local_fields: local } };
 }
 
 function remove(ctx, { params }) {
@@ -490,6 +502,7 @@ function applyBulkSet(ctx, vol, set) {
         if (column in set && set[column] !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], set[column]);
     }
     ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => set[k]), vol.id);
+    catalogWrite.commit(ctx, 'volume', vol);
     if ('status' in set) syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
 }
 
@@ -512,7 +525,8 @@ function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
     const status = syncStatusWithOwners(ctx.db, volumeId);
     if (removed && status === OWNED_STATUS) purchaseDateFromRemainingOwners(ctx.db, volumeId);
     if (!hadOwners && status === OWNED_STATUS && given.length) {
-        ctx.db.prepare(`UPDATE volumes SET ${given.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...given.map((c) => details[c]), volumeId);
+        catalogWrite.track(ctx, 'volume', volumeId, () => ctx.db.prepare(`UPDATE volumes SET ${given.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
+            .run(...given.map((c) => details[c]), volumeId));
     }
 }
 
@@ -710,6 +724,7 @@ function revertBulk(ctx, token) {
                         const keys = BULK_SET_FIELDS.filter((k) => (snap.volume[k] ?? null) !== (stored[k] ?? null));
                         if (keys.length) {
                             ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
+                            catalogWrite.commit(ctx, 'volume', stored);
                         }
                         putOwners(snap.id, snap.owners, shelfId);
                     }
@@ -751,6 +766,6 @@ function revertBulk(ctx, token) {
 }
 
 module.exports = {
-    create, createBatch, update, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
+    create, createBatch, update, catalogReset, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
     UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL
 };

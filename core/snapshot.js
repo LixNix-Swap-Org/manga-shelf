@@ -1,6 +1,7 @@
 // Series list, series detail and the offline snapshot: the read shapes of GET /mangas, /mangas/:id, /offline-snapshot.
 const { regularNumberedSql, volumeOrderSql } = require('./lib/volumeNumber');
 const access = require('./lib/access');
+const catalogWrite = require('./lib/catalogWrite');
 
 // Series per block of the offline snapshot; between blocks other requests get the event loop. Tests lower it.
 const options = { chunkSize: 200 };
@@ -157,9 +158,14 @@ function groupBy(rows, key) {
  * owners, read info, parsed images, values, reader_stats and the chapter progress (`chapters`: its chapter_progress
  * rows). Shared by the detail route and the offline snapshot.
  */
-function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = []) {
+function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = [], catalogFlags = null) {
     delete manga.manga_passion_edition_data;
-    delete manga.catalog_series_id;   // internal catalog link (migration 41), kept by triggers
+    // the catalog entry (migration 41) and what this shelf set itself (migration 46): never anything about a shelf the
+    // caller does not belong to (catalogWrite.seriesFlags), and no catalog id (a reused id would tell the entry existed)
+    manga.catalog = catalogWrite.view(manga.catalog_series_id, manga.local_fields, manga.catalog_source_fields, catalogFlags);
+    delete manga.catalog_series_id;
+    delete manga.catalog_source_fields;
+    delete manga.local_fields;
     manga.editions = editions;
     manga.volumes = volumes;
     manga.chapter_progress = chapters.map(r => ({ user_id: r.user_id, username: r.username, chapters_read: r.chapters_read, updated_at: r.updated_at }));
@@ -182,6 +188,7 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
             user_id: o.user_id, username: o.username, price: o.price, purchase_date: o.purchase_date, condition: o.condition, created_at: o.created_at
         }));
         v.owned_by_me = v.owners.some(o => o.user_id === userId);
+        delete v.local_fields;   // a volume reset exists (POST /volumes/:id/catalog-reset), the interface does not use it yet
 
         // both keys: POST /volumes/:id/read answers with user_id, older clients read id
         v.read_users = (readsByVolume.get(v.id) || []).map(r => ({ id: r.user_id, user_id: r.user_id, username: r.username, read_at: r.read_at }));
@@ -227,7 +234,7 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
 
 /** Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id; null if missing. */
 function loadMangaDetail(ctx, mangaId, userId) {
-    const manga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
+    const manga = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields FROM mangas WHERE id = ?`).get(mangaId);
     if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) return null;
     const volumes = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id = ? ORDER BY ${volumeOrderSql('v')}, v.id ASC`).all(mangaId);
     const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.user_id`).all(mangaId);
@@ -237,7 +244,9 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const ownersByVolume = groupBy(owners, 'volume_id');
     const scoped = usersOfSeries(users, loadMembers(ctx), manga, userId, volumes, readsByVolume, ownersByVolume);
     const chapters = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id = ? ORDER BY cp.user_id`).all(mangaId);
-    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters);
+    const flags = manga.catalog_series_id === null || manga.catalog_series_id === undefined ? null
+        : catalogWrite.seriesFlags(ctx)(manga.catalog_series_id);
+    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags);
 }
 
 function assertSameConnection(ctx, generation) {
@@ -258,7 +267,7 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
     assertSameConnection(ctx, generation);
 
     const shelfScope = access.inShelves('shelf_id', shelfIds);
-    const series = ctx.db.prepare(`SELECT * FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
+    const series = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
     const users = ctx.db.prepare(USERS_SQL).all();
     const members = loadMembers(ctx);
     const editionScope = access.inShelves('m.shelf_id', shelfIds);
@@ -268,6 +277,7 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
     const ownersStmt = ctx.db.prepare(`${OWNERS_SELECT} JOIN volumes v ON vo.volume_id = v.id WHERE v.manga_id BETWEEN ? AND ? ORDER BY vo.volume_id, vo.created_at, vo.rowid`);
     const chaptersStmt = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id BETWEEN ? AND ? ORDER BY cp.manga_id, cp.user_id`);
 
+    const flagsOf = catalogWrite.seriesFlags(ctx);
     const details = {};
     const size = Math.max(1, options.chunkSize);
     for (let i = 0; i < series.length; i += size) {
@@ -286,7 +296,8 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
             const volumes = volumesByManga.get(m.id) || [];
             details[m.id] = buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
                 usersOfSeries(users, members, m, user.id, volumes, readsByVolume, ownersByVolume), user.id,
-                editionsOf(m, editionsByWork.get(m.work_key) || []), chaptersByManga.get(m.id) || []);
+                editionsOf(m, editionsByWork.get(m.work_key) || []), chaptersByManga.get(m.id) || [],
+                m.catalog_series_id === null ? null : flagsOf(m.catalog_series_id));
         }
     }
     assertSameConnection(ctx, generation);

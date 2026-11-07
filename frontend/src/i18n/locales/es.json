@@ -261,6 +261,7 @@
   },
   "Auf Crunchyroll suchen": "Buscar en Crunchyroll",
   "Auf Einkaufsliste setzen": "Poner en la lista de la compra",
+  "Auf Katalogstand zurücksetzen": "Restablecer los valores del catálogo",
   "Auf Server übertragen": "Transferir al servidor",
   "Auf Wunschliste": "En la lista de deseos",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "El servidor ya tiene datos y se reemplazarían. «Combinar» está pensado para un servidor con datos.",
@@ -805,6 +806,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "La dirección antigua deja de funcionar al instante.",
   "Die beiden neuen Passwörter sind nicht gleich.": "Las dos contraseñas nuevas no coinciden.",
   "Die eigene Rolle kann hier nicht geändert werden": "Aquí no se puede cambiar el propio rol",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Los valores propios de esta estantería se sustituirán por los del catálogo.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "El archivo instalado indica una versión distinta de la esperada.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "No se pudo crear la colección local.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "La nueva versión no ha superado la comprobación previa.",
@@ -816,6 +818,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Vuelve a configurar el servicio con este archivo e inícialo:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "No se pudo mostrar esta vista. Recargar suele solucionarlo.",
   "Diese Ausgabe lösen": "Desvincular esta edición",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Esta edición también está en otra estantería. Tus cambios solo se aplican a esta estantería.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Otros usuarios tienen estos tomos en series que tú también coleccionas.",
   "Diese ISBN gehört zu „{title}“.": "Este ISBN pertenece a «{title}».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Este ISBN corresponde a otra serie de la colección.",
@@ -1063,6 +1066,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Error al restaurar la copia de seguridad (detalles en el registro del servidor)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Error al restaurar la copia de seguridad: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Error al restaurar: {reason}",
+  "Fehler beim Zurücksetzen": "Error al restablecer",
   "Fehler beim automatischen Ausfüllen": "Error al rellenar automáticamente",
   "Fehler beim Ändern des Status": "Error al cambiar el estado",
   "Fehler beim Übernehmen des Bands": "Error al incorporar el tomo",
@@ -1419,6 +1423,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "No se pudo guardar el progreso de capítulos",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "El progreso de «{name}» supera el total de capítulos (se ignora)",
   "Karten": "Tarjetas",
+  "Katalogstand übernommen": "Valores del catálogo adoptados",
   "Kaufdatum": "Fecha de compra",
   "Kaufdatum…": "Fecha de compra…",
   "Kaufpreis": "Precio de compra",
@@ -3187,6 +3192,11 @@
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} campo tiene un valor propio en esta estantería.",
+    "many": "{n} campos tienen un valor propio en esta estantería.",
+    "other": "{n} campos tienen un valor propio en esta estantería."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} episodio visto",

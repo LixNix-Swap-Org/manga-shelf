@@ -163,14 +163,23 @@ test('triggers link new series and volumes to the catalog on every write path', 
     assert.equal(english.isbn, null, 'an ISBN of another catalog volume is not taken twice, the volume still links');
     assert.equal(d.prepare('SELECT list_price FROM catalog_volumes WHERE id = ?').get(catalogVolumeOf(d, 11)).list_price, 7);
 
-    // shared fields: last write wins, NULL never clears
+    // stage 3 (migration 46): a raw row write no longer reaches the catalog (core/lib/catalogWrite.js decides), a catalog change
+    // reaches every linked row that did not set the field itself; a row linked to an entry with other values keeps them local
+    assert.deepEqual(d.prepare('SELECT id, local_fields FROM volumes WHERE id IN (11, 21, 31) ORDER BY id').all().map(r => ({ ...r })),
+        [{ id: 11, local_fields: null }, { id: 21, local_fields: '["price"]' }, { id: 31, local_fields: '["isbn","price"]' }]);
     d.exec("UPDATE volumes SET price = 7.5, release_date = '2025-03' WHERE id = 21");
-    d.exec('UPDATE volumes SET price = NULL WHERE id = 11');
     assert.deepEqual({ ...d.prepare('SELECT list_price, release_date FROM catalog_volumes WHERE id = ?').get(catalogVolumeOf(d, 11)) },
-        { list_price: 7.5, release_date: '2025-03' });
-    d.exec("UPDATE mangas SET total_volumes = 20, author = 'Yukinobu Tatsu' WHERE id = 2");
-    assert.deepEqual({ ...d.prepare('SELECT total_volumes, author FROM catalog_series WHERE id = ?').get(catalogOf(d, 1)) },
-        { total_volumes: 20, author: 'Yukinobu Tatsu' });
+        { list_price: 7, release_date: null });
+    d.exec("UPDATE catalog_volumes SET release_date = '2025-04', list_price = 8 WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 11)");
+    assert.deepEqual(d.prepare('SELECT id, price, release_date FROM volumes WHERE id IN (11, 21, 31) ORDER BY id').all().map(r => ({ ...r })),
+        [{ id: 11, price: 8, release_date: '2025-04' }, { id: 21, price: 7.5, release_date: '2025-04' }, { id: 31, price: null, release_date: '2025-04' }]);
+    d.exec("UPDATE catalog_series SET total_volumes = 20, author = 'Yukinobu Tatsu' WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = 1)");
+    assert.deepEqual(d.prepare('SELECT id, total_volumes, author FROM mangas WHERE id IN (1, 2, 3) ORDER BY id').all().map(r => ({ ...r })),
+        [1, 2, 3].map(id => ({ id, total_volumes: 20, author: 'Yukinobu Tatsu' })));
+    // the title follows a catalog rename where it is not local, and the match key with it
+    d.exec("UPDATE catalog_series SET title = 'Dandadan Neu' WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = 1)");
+    assert.equal(d.prepare('SELECT title_key FROM catalog_series WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = 1)').get().title_key, 'dandadan neu');
+    assert.deepEqual(d.prepare('SELECT title FROM mangas WHERE id IN (1, 2, 3) ORDER BY id').all().map(r => r.title), ['Dandadan Neu', 'Dandadan Neu', 'Dandadan!']);
 
     // a new volume number creates the catalog volume, a renumbered one relinks
     d.exec("INSERT INTO volumes (id, manga_id, volume_number, status) VALUES (12, 1, '2', 'Fehlt')");
@@ -181,7 +190,7 @@ test('triggers link new series and volumes to the catalog on every write path', 
     assert.equal(catalogVolumeOf(d, 12), two);
 });
 
-test('renaming a series renames its catalog series while it is the only edition, else moves the row', () => {
+test('a renamed series stays on its catalog series, another language moves it unless it is the only edition', () => {
     const d = fresh();
     d.exec(`
         INSERT INTO mangas (id, title, publisher, language, shelf_id) VALUES (1, 'Friren', 'Egmont', 'de', 1);
@@ -189,10 +198,12 @@ test('renaming a series renames its catalog series while it is the only edition,
     `);
     const original = catalogOf(d, 1);
     const volume = catalogVolumeOf(d, 11);
+    // the title is content since stage 3: the row keeps its entry (catalogWrite.js renames the entry when the caller may)
     d.exec("UPDATE mangas SET title = 'Frieren' WHERE id = 1");
-    assert.equal(catalogOf(d, 1), original, 'typo fix of the only edition: same catalog row');
-    assert.equal(d.prepare('SELECT title FROM catalog_series WHERE id = ?').get(original).title, 'Frieren');
+    assert.equal(catalogOf(d, 1), original);
+    assert.equal(d.prepare('SELECT title FROM catalog_series WHERE id = ?').get(original).title, 'Friren');
     assert.equal(catalogVolumeOf(d, 11), volume);
+    d.prepare("UPDATE catalog_series SET title = 'Frieren' WHERE id = ?").run(original);
 
     d.exec("INSERT INTO mangas (id, title, publisher, language, shelf_id) VALUES (2, 'Frieren', 'Egmont', 'de', 2)");
     assert.equal(catalogOf(d, 2), original);
