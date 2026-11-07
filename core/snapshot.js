@@ -160,11 +160,10 @@ function groupBy(rows, key) {
  */
 function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = [], catalogFlags = null) {
     delete manga.manga_passion_edition_data;
-    // the catalog entry (migration 41) and what this shelf set itself (migration 46, core/lib/catalogWrite.js): editable =
-    // a change of the caller goes to the catalog for every shelf, else it stays local; resettable = its values may be taken
-    const flags = catalogFlags || { editable: false, resettable: false };
-    manga.catalog = manga.catalog_series_id === null || manga.catalog_series_id === undefined ? null
-        : { id: manga.catalog_series_id, editable: flags.editable, resettable: flags.resettable, local_fields: catalogWrite.parseLocal(manga.local_fields) };
+    // the catalog entry (migration 41) and what this shelf set itself (migration 46): never anything about a shelf the
+    // caller does not belong to (catalogWrite.seriesFlags), and no catalog id (a reused id would tell the entry existed)
+    manga.catalog = catalogWrite.view(manga.catalog_series_id, manga.local_fields, catalogFlags);
+    const hideLocal = !manga.catalog || !catalogFlags || catalogFlags.hidden;
     delete manga.catalog_series_id;
     delete manga.local_fields;
     manga.editions = editions;
@@ -189,7 +188,7 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
             user_id: o.user_id, username: o.username, price: o.price, purchase_date: o.purchase_date, condition: o.condition, created_at: o.created_at
         }));
         v.owned_by_me = v.owners.some(o => o.user_id === userId);
-        v.local_fields = catalogWrite.parseLocal(v.local_fields);
+        v.local_fields = hideLocal ? [] : catalogWrite.parseLocal(v.local_fields);
 
         // both keys: POST /volumes/:id/read answers with user_id, older clients read id
         v.read_users = (readsByVolume.get(v.id) || []).map(r => ({ id: r.user_id, user_id: r.user_id, username: r.username, read_at: r.read_at }));
@@ -246,7 +245,7 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const scoped = usersOfSeries(users, loadMembers(ctx), manga, userId, volumes, readsByVolume, ownersByVolume);
     const chapters = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id = ? ORDER BY cp.user_id`).all(mangaId);
     const flags = manga.catalog_series_id === null || manga.catalog_series_id === undefined ? null
-        : { editable: catalogWrite.ownsEntry(ctx, 'series', manga.catalog_series_id), resettable: catalogWrite.canSeeEntry(ctx, 'series', manga.catalog_series_id) };
+        : catalogWrite.seriesFlags(ctx)(manga.catalog_series_id);
     return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags);
 }
 

@@ -4,9 +4,11 @@
 //     source (Manga Passion, AniList): the overlay triggers then carry it into every linked row where the field is not local,
 //   - else into local_fields of this row only, so the catalog and the other shelves keep theirs.
 // reset() puts catalog values back into a row. Nothing here ever changes a row of another shelf directly.
+// What the caller learns (seriesFlags, view): nothing about a shelf they do not belong to. Whether such a shelf holds the
+// same edition changes where a write goes, but never an answer: its local fields are not reported, a reset is a no-op.
 const access = require('./access');
 const { SERIES_OVERLAY_FIELDS, VOLUME_OVERLAY_FIELDS } = require('./catalog');
-const { badRequest, conflict } = require('../errors');
+const { badRequest } = require('../errors');
 
 const KINDS = {
     series: { table: 'mangas', link: 'catalog_series_id', catalog: 'catalog_series', fields: SERIES_OVERLAY_FIELDS },
@@ -46,28 +48,37 @@ function ownsEntry(ctx, kind, catalogId) {
     return !ctx.db.prepare(sql).get(catalogId, ...outside.params);
 }
 
-/** Catalog series ids with a row outside the shelves the caller has with `minRole` (null: the caller has none at all). */
-function seriesOutside(ctx, minRole) {
-    const shelves = ctx.user ? access.accessibleShelfIds(ctx, minRole) : [];
-    if (!shelves.length) return null;
+/** Catalog series ids with a row in (`inside` true) or outside the shelves `shelves`. */
+function seriesWithRows(ctx, shelves, inside) {
+    if (!shelves.length) {
+        return new Set(inside ? [] : ctx.db.prepare('SELECT DISTINCT catalog_series_id AS id FROM mangas WHERE catalog_series_id IS NOT NULL').all().map(r => r.id));
+    }
     return new Set(ctx.db.prepare(`SELECT DISTINCT catalog_series_id AS id FROM mangas
-        WHERE catalog_series_id IS NOT NULL AND COALESCE(shelf_id, 1) NOT IN (${shelves.map(() => '?').join(',')})`).all(...shelves).map(r => r.id));
+        WHERE catalog_series_id IS NOT NULL AND COALESCE(shelf_id, 1) ${inside ? '' : 'NOT '}IN (${shelves.map(() => '?').join(',')})`).all(...shelves).map(r => r.id));
 }
 
 /**
- * id -> { editable, resettable } for the catalog series of the caller's rows, with two queries for any number of rows
- * (detail, offline copy). editable: a change goes to the catalog for every shelf (every row in shelves the caller edits).
- * resettable: the catalog values may be shown to the caller (no row in a shelf the caller does not belong to: a catalog
- * value may have come from such a row, even for an entry with a Manga Passion id), so "Auf Katalogstand zurücksetzen"
- * never shows a text of another shelf.
+ * id -> { editable, resettable, hidden } for the catalog series of the caller's rows, with two queries for any number of
+ * rows (detail, offline copy). Only shelves the caller belongs to are ever told apart:
+ *   editable: no row of the entry lies in a shelf the caller only reads (else the edit form says a change stays local);
+ *   hidden: a row lies in a shelf the caller does not belong to. The catalog values may come from there (even for an entry
+ *     with a Manga Passion id), so they are never shown: local fields are not reported and a reset changes nothing, and
+ *     the answer looks as for an entry of the caller alone;
+ *   resettable: true in every answer (kept for the client); a reset of a hidden entry is a no-op.
  */
 function seriesFlags(ctx) {
-    const notEditable = seriesOutside(ctx, 'editor');
-    const notReadable = seriesOutside(ctx, 'viewer');
-    return (id) => ({
-        editable: notEditable !== null && !notEditable.has(id),
-        resettable: notReadable !== null && !notReadable.has(id)
-    });
+    const viewer = ctx.user ? access.accessibleShelfIds(ctx, 'viewer') : [];
+    const editor = new Set(ctx.user ? access.accessibleShelfIds(ctx, 'editor') : []);
+    const readOnly = seriesWithRows(ctx, viewer.filter(id => !editor.has(id)), true);
+    const foreign = seriesWithRows(ctx, viewer, false);
+    return (id) => ({ editable: !readOnly.has(id), resettable: true, hidden: foreign.has(id) });
+}
+
+/** The `catalog` object of a detail answer (see seriesFlags); null for a row without an entry. */
+function view(catalogId, localText, flags) {
+    if (catalogId === null || catalogId === undefined) return null;
+    const f = flags || { editable: true, resettable: true, hidden: true };
+    return { editable: f.editable, resettable: f.resettable, local_fields: f.hidden ? [] : parseLocal(localText) };
 }
 
 /** Whether the catalog values of the entry of `kind` may be shown to the caller (see seriesFlags). */
@@ -138,15 +149,17 @@ function track(ctx, kind, id, write, options = {}) {
 
 /**
  * Puts the catalog values of `fields` (default: every local field) back into the row and drops them from local_fields.
- * Returns the remaining local fields, or null when the row has no catalog entry; 409 CATALOG_PRIVATE when the caller may
- * not see the entry's values (canSeeEntry).
+ * Returns the remaining local fields, or null when the row has no catalog entry. While the caller may not see the entry's
+ * values (canSeeEntry) nothing changes and the answer is an empty list.
  */
 function reset(ctx, kind, id, fields = null) {
     const spec = KINDS[kind];
     const row = ctx.db.prepare(`SELECT * FROM ${spec.table} WHERE id = ?`).get(id);
     if (!row || row[spec.link] === null || row[spec.link] === undefined) return null;
     if (!canSeeEntry(ctx, kind, row[spec.link])) {
-        throw conflict('Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.', 'CATALOG_PRIVATE');
+        // the catalog values may come from a shelf the caller does not see: nothing is taken, and the answer looks as for
+        // an entry without local fields (seriesFlags reports none for it)
+        return [];
     }
     const local = new Set(parseLocal(row.local_fields));
     const wanted = (fields || [...local]).filter(f => f in spec.fields);
@@ -171,4 +184,4 @@ function readResetFields(body, kind) {
     return [...new Set(raw)];
 }
 
-module.exports = { KINDS, parseLocal, ownsEntry, seriesFlags, canSeeEntry, commit, track, reset, readResetFields };
+module.exports = { KINDS, parseLocal, ownsEntry, seriesFlags, view, canSeeEntry, commit, track, reset, readResetFields };

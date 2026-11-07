@@ -47,7 +47,7 @@ describe('CatalogNotice', () => {
 
   it('a refused reset shows the server text and does not reload', async () => {
     const toasts = recordToasts();
-    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(409, { error: 'Diese Ausgabe steht auch in einem Regal, das du nicht siehst. Ihre Katalogwerte lassen sich hier nicht übernehmen.', code: 'CATALOG_PRIVATE' })));
+    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(404, { error: 'Manga nicht gefunden', code: 'NOT_FOUND' })));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const onReset = vi.fn();
     render(<CatalogNotice manga={manga({ id: 1, editable: true, resettable: true, local_fields: ['author'] })} onReset={onReset} />);
