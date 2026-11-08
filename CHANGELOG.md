@@ -19,6 +19,9 @@
 - Renaming a series no longer moves it to another catalog entry; only another language, format or Manga Passion edition does.
 - The cleanup of unused uploads keeps the covers the catalog still names.
 
+### Shopping list
+- **No second purchase by mistake:** a missing volume whose edition is already owned or ordered in another of your shelves says so on the shopping list and in the shop scan: "Schon vorhanden in: Wohnzimmer (lena)" or "Schon bestellt in: …". It stays bookable (a second copy can be wanted). Only your own shelves count. `GET /api/shopping-list` and `GET /api/lookup/isbn` carry it as `owned_elsewhere`.
+
 ### Reading marks
 - A volume you read counts as read in every shelf that holds the same edition, and a webtoon chapter likewise. Others see your marks only in shelves you are a member of.
 - Leaving a shelf or moving a series into a shelf you are not in no longer deletes your reading marks and chapters: they are hidden there and show again when you are back. Only ownership marks are still deleted; the confirmation texts say so.

@@ -1031,6 +1031,42 @@ const scenarios = [
         }
     },
     {
+        name: 'owned elsewhere: the shopping list and the ISBN lookup warn about an edition volume owned or ordered in another own shelf, never in a foreign one',
+        async run({ admin, ed }) {
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const shelfA = await shelfOf(ed, 'Kern Doppelt A');
+            const shelfB = await shelfOf(ed, 'Kern Doppelt B');
+            const foreign = await shelfOf(admin, 'Kern Doppelt Fremd');
+            const fields = { publisher: 'Kern Doppelt Verlag' };
+            const inA = await newSeries(ed, 'Kern Doppelt Reihe', { ...fields, shelf_id: shelfA });
+            const inB = await newSeries(ed, 'Kern Doppelt Reihe', { ...fields, shelf_id: shelfB });
+            const inForeign = await newSeries(admin, 'Kern Doppelt Reihe', { ...fields, shelf_id: foreign });
+            const a1 = await newVolume(ed, inA, '1', { isbn: '9783551000019', status: 'Fehlt' });
+            const a2 = await newVolume(ed, inA, '2', { status: 'Fehlt' });
+            const a3 = await newVolume(ed, inA, '3', { status: 'Fehlt' });
+            await newVolume(ed, inB, '1', { status: 'Vorhanden' });
+            await newVolume(ed, inB, '2', { status: 'Vorbestellt' });
+            await newVolume(admin, inForeign, '3', { status: 'Vorhanden' });
+
+            const list = await ed('GET', `/shopping-list?shelf_id=${shelfA}`);
+            assert.equal(list.status, 200);
+            const item = (id) => list.body.items.find(i => i.id === id);
+            assert.deepEqual(item(a1).owned_elsewhere, [{ shelf_id: shelfB, shelf_name: 'Kern Doppelt B', status: 'owned', owners: ['ed'] }]);
+            assert.deepEqual(item(a2).owned_elsewhere, [{ shelf_id: shelfB, shelf_name: 'Kern Doppelt B', status: 'ordered', owners: [] }]);
+            assert.equal('owned_elsewhere' in item(a3), false, "volume 3 is owned only in admin's shelf, which ed does not see");
+
+            const scan = await ed('GET', '/lookup/isbn?isbn=9783551000019');
+            assert.equal(scan.status, 200, JSON.stringify(scan.body));
+            assert.equal(scan.body.matched_volume.id, a1);
+            assert.deepEqual(scan.body.matched_volume.owned_elsewhere, [{ shelf_id: shelfB, shelf_name: 'Kern Doppelt B', status: 'owned', owners: ['ed'] }]);
+            assert.equal(JSON.stringify((await ed('GET', '/shopping-list')).body).includes('Kern Doppelt Fremd'), false);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

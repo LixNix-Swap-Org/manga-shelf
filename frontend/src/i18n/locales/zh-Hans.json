@@ -2115,6 +2115,8 @@
   "Schlüssel nicht gefunden": "未找到密钥",
   "Schlüssel prüfen": "检查密钥",
   "Schlüsselbund gesperrt – entsperren und Manga Shelf neu starten": "钥匙串已锁定——请解锁后重启 Manga Shelf",
+  "Schon bestellt in: {places}": "已订购于：{places}",
+  "Schon vorhanden in: {places}": "已拥有于：{places}",
   "Schreibweise „{alias}“ entfernen": "移除写法“{alias}”",
   "Schreibweisen unten auswählen, dann den gemeinsamen Namen festlegen": "先在下方选择写法，再设置统一名称",
   "Schreibweisen vereinheitlichen": "统一写法",

@@ -4,6 +4,7 @@ const { volumeOrderSql } = require('../lib/volumeNumber');
 const { buildShoppingList } = require('../radar');
 const { wishedSeries } = require('./wishlist');
 const access = require('../lib/access');
+const { ownedElsewhere } = require('../lib/ownedElsewhere');
 
 // paused and dropped series (mangas.collecting) keep their missing volumes off the list
 const SHOPPING_SERIES = "COALESCE(m.collecting, 'aktiv') NOT IN ('pausiert', 'abgebrochen')";
@@ -28,6 +29,9 @@ function shoppingList(ctx, { query }) {
             m.title ASC,
             ${volumeOrderSql('v')}
     `).all(...scope.params);
+    // the same edition volume owned or ordered in another of the caller's shelves: a warning against buying it twice
+    const elsewhere = ownedElsewhere(ctx, missingVols.map(v => v.id));
+    for (const v of missingVols) if (elsewhere.has(v.id)) v.owned_elsewhere = elsewhere.get(v.id);
 
     // ?include_others=1: volumes others own and the caller does not yet, in series the caller already collects
     if (qstr(query.include_others) === '1') {
