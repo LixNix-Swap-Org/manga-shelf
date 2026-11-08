@@ -87,8 +87,9 @@ function userStats(ctx, { params }) {
     if (!user || !access.canSeeUser(ctx, user.id)) throw notFound('Benutzer');
 
     const scope = access.inShelves('m.shelf_id', access.accessibleShelfIds(ctx));
-    const readVolumes = ctx.db.prepare(`
+    const rows = ctx.db.prepare(`
         SELECT strftime('%Y-%m-%dT%H:%M:%SZ', vr.read_at) AS read_at, v.id, v.volume_number, v.type, v.notes, v.pages,
+               v.catalog_volume_id, COALESCE(m.catalog_series_id, -m.id) AS edition,
                m.id as manga_id, m.title as manga_title, m.cover_image as manga_cover
         FROM shelf_volume_reads vr
         JOIN volumes v ON vr.volume_id = v.id
@@ -97,20 +98,33 @@ function userStats(ctx, { params }) {
         ORDER BY vr.read_at DESC, v.id DESC
     `).all(userId, ...scope.params);
 
+    // A read is stored once per catalog volume; an edition in two of the user's shelves shows it on both rows. Each
+    // catalog volume counts once (its first row), and its series is listed under the first row met of its edition.
+    const seenVolumes = new Set();
+    const editionOf = new Map();
+    const readVolumes = [];
+    for (const { catalog_volume_id: catalogVolume, edition, ...v } of rows) {
+        if (seenVolumes.has(catalogVolume)) continue;
+        seenVolumes.add(catalogVolume);
+        editionOf.set(v, edition);
+        readVolumes.push(v);
+    }
+
     const totalVolumes = readVolumes.length;
     const totalPages = readVolumes.reduce((sum, v) => sum + (v.pages || 0), 0);
 
     const mangasReadMap = new Map();
     readVolumes.forEach(v => {
-        if (!mangasReadMap.has(v.manga_id)) {
-            mangasReadMap.set(v.manga_id, {
+        const edition = editionOf.get(v);
+        if (!mangasReadMap.has(edition)) {
+            mangasReadMap.set(edition, {
                 id: v.manga_id,
                 title: v.manga_title,
                 cover_image: v.manga_cover,
                 volumes: []
             });
         }
-        mangasReadMap.get(v.manga_id).volumes.push({
+        mangasReadMap.get(edition).volumes.push({
             id: v.id,
             volume_number: v.volume_number,
             type: v.type,
