@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BookCheck, BookOpen, CircleCheck } from 'lucide-react';
+import { BookCheck, BookOpen, CircleCheck, Library } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { fmtNumber, fmtPct, countLabel, cssPct, fmtDateTime, sortReadVolumes } from '../statsFormat';
@@ -106,10 +106,59 @@ function ReaderDetails({ details, visibleSeries, onShowMore, onBack, onNavigate 
   );
 }
 
+/**
+ * Reading per shelf (`shelf_reading` of /api/stats): owned volumes, how many of them a member has read, and every member
+ * with their own count. Shown with two or more shelves, or one shelf shared by two or more members.
+ */
+export function ShelfReadingCard({ shelves }) {
+  const list = Array.isArray(shelves) ? shelves : [];
+  if (!(list.length >= 2 || list.some(s => (s.members || []).length >= 2))) return null;
+  return (
+    <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
+      <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
+        <Library className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+        {t('Lesestand pro Regal')}
+      </h3>
+      <p className="text-xs text-slate-400 mb-4">{t('Ein Band zählt als gelesen, sobald ein Mitglied des Regals ihn gelesen hat.')}</p>
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {list.map(s => {
+          const pct = s.owned > 0 ? (s.read / s.owned) * 100 : 0;
+          return (
+            <li key={s.shelf_id} className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h4 className="font-bold text-white text-sm flex items-start gap-2 min-w-0">
+                  <span aria-hidden="true" className="w-2.5 h-2.5 mt-1 rounded-full shrink-0" style={{ backgroundColor: s.color || '#6366f1' }} />
+                  <span className="break-words [overflow-wrap:anywhere]">{s.name}</span>
+                </h4>
+                <span className="text-xs text-slate-400 font-mono shrink-0 mt-0.5">
+                  {t('{read} von {owned} gelesen', { read: fmtNumber(s.read), owned: fmtNumber(s.owned) })}
+                </span>
+              </div>
+              <div aria-hidden="true" className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mb-3">
+                <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" style={{ width: `${cssPct(pct)}%` }} />
+              </div>
+              <ul className="space-y-1 text-xs">
+                {(s.members || []).map(m => (
+                  <li key={m.user_id} className="flex justify-between gap-3">
+                    <span className="text-slate-300 truncate">{m.username}</span>
+                    <span className="text-slate-400 font-mono shrink-0">{countLabel(m.read, 'Band', 'Bände')}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /** Reading tab: one card per reader, or the read series of one reader. */
 export default function ReadingTab({
-  readers, ownedVols, details, visibleSeries, onShowMore, onBack, readerError, loadingDetails, onLoadDetails, onNavigate
+  readers, ownedVols, shelves, details, visibleSeries, onShowMore, onBack, readerError, loadingDetails, onLoadDetails, onNavigate
 }) {
+  // the reader cards count an edition held in several shelves once, so their "Im Besitz" can be below the volume count
+  const editionsCounted = readers.some(r => typeof r.total_owned === 'number' && r.total_owned < ownedVols);
   return (
     <div className="space-y-6 animate-fade-in">
       {details ? (
@@ -120,7 +169,10 @@ export default function ReadingTab({
             <BookCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
             {t('Lese-Tracking & SuB (Stapel ungelesener Bücher)')}
           </h3>
-          <p className="text-xs text-slate-400 mb-6">{t('Übersicht aller Leser und deren Lesestatus über die gesamte Manga-Sammlung.')}</p>
+          <p className={`text-xs text-slate-400 ${editionsCounted ? 'mb-1' : 'mb-6'}`}>{t('Übersicht aller Leser und deren Lesestatus über die gesamte Manga-Sammlung.')}</p>
+          {editionsCounted && (
+            <p className="text-xs text-slate-400 mb-6">{t('Ausgaben, die in mehreren Regalen stehen, zählen hier einmal.')}</p>
+          )}
           {readerError && <p role="alert" className="mb-4 text-xs text-rose-300">{readerError}</p>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -178,6 +230,7 @@ export default function ReadingTab({
           </div>
         </div>
       )}
+      {!details && <ShelfReadingCard shelves={shelves} />}
     </div>
   );
 }

@@ -23,6 +23,8 @@
 - A volume you read counts as read in every shelf that holds the same edition, and a webtoon chapter likewise. Others see your marks only in shelves you are a member of.
 - Leaving a shelf or moving a series into a shelf you are not in no longer deletes your reading marks and chapters: they are hidden there and show again when you are back. Only ownership marks are still deleted; the confirmation texts say so.
 - Deleting a series or volume keeps the reading marks of its edition: other shelves holding it still show them, and the same edition added again (or restored from the trash) shows them again. Deleting an account still deletes its marks.
+- The statistics count an edition that stands in several of your shelves once: the reading history (months, years, streak, "Weiterlesen", webtoon chapters), "Alle gelesenen Bände anzeigen" and the reader cards in the tab "Lesen" (read, unread and owned per edition; a note says so when it differs from the volume count).
+- New card "Lesestand pro Regal" in the statistics tab "Lesen": per shelf its owned volumes, how many of them a member has read, and each member with their reads there. It shows with two or more shelves or a shelf shared by several members, and follows the shelf filter. `GET /api/stats` carries it as `shelf_reading`.
 
 ### Ownership
 - Ownership is stored as copies of a volume: a copy belongs to a person or, when nobody is named, to the household. The status "Vorhanden" now always follows the copies in the database itself, so status and owners can no longer disagree (the check "Besitzer bei nicht vorhandenem Band" stays empty). Nothing changes in the app yet; several copies per person and a purchase price per copy follow later.

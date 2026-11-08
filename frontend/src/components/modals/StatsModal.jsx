@@ -361,6 +361,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
                     <ReadingTab
                       readers={readersList}
                       ownedVols={ownedVols}
+                      shelves={statsData.shelf_reading}
                       details={detailedReaderStats}
                       visibleSeries={visibleReaderSeries}
                       onShowMore={() => setVisibleReaderSeries(n => n + READER_SERIES_STEP)}
