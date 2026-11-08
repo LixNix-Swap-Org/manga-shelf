@@ -123,3 +123,30 @@ test('the helpers write by catalog entry: add, replace, remove, read and chapter
     marks.clearChapterProgress(d, 3, 2);
     assert.deepEqual([chapters(d, 3), chapters(d, 4)], [[], []]);
 });
+
+test('an edition in two of the reader\'s shelves counts once in the reading history, "Weiterlesen" and the chapters', async () => {
+    const { conn: d } = migratedFrom41();
+    const { createCtx, dbFromConnection } = require('../../core/ctx');
+    const { dispatch } = require('../../core/routes');
+    d.exec(`
+        UPDATE volumes SET pages = 200 WHERE id IN (11, 21);
+        INSERT INTO volumes (id, manga_id, volume_number, status) VALUES (22, 2, '2', 'Vorhanden');
+    `);
+    const ctx = createCtx({ db: dbFromConnection(d), user: { id: 2, username: 'bob', role: 'editor' }, now: () => new Date('2024-06-15T12:00:00Z') });
+    const get = async (url) => (await dispatch(ctx, { method: 'GET', url })).body;
+
+    const reading = await get('/stats/reading');
+    const may = reading.by_month.find(m => m.month === '2023-05');
+    assert.deepEqual({ ...may }, { month: '2023-05', volumes: 1, pages: 200, series: 1 }, 'volume 1 is read once, not once per shelf');
+    assert.deepEqual(reading.last_year, { year: 2023, volumes: 1, pages: 200 });
+    assert.equal(reading.continue_reading.length, 1, 'One Piece is listed once');
+    assert.equal(reading.continue_reading[0].manga_id, 1, 'under the row with the lowest id');
+    assert.deepEqual({ ...reading.chapters }, { series: 1, read: 25, finished: 0 }, 'the webtoon counts once');
+
+    const stats = (await get('/users/2/stats')).stats;
+    assert.equal(stats.totalVolumes, 1);
+    assert.equal(stats.totalPages, 200);
+    assert.equal(stats.readMangas.length, 1);
+    assert.equal(stats.recentVolumes.length, 1);
+    assert.deepEqual(Object.keys(stats.recentVolumes[0]).sort(), ['id', 'manga_cover', 'manga_id', 'manga_title', 'notes', 'pages', 'read_at', 'type', 'volume_number']);
+});
