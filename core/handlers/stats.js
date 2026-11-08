@@ -398,11 +398,15 @@ function readingStreaks(monthKeys, currentKey) {
     return { longest, longest_end: keyOf(longestEnd), current };
 }
 
-/** Series with a read regular volume whose next owned regular volume after the highest read one is still unread. */
+/**
+ * Series with a read regular volume whose next owned regular volume after the highest read one is still unread. An
+ * edition in two of the reader's shelves is listed once (the row with the lowest id).
+ */
 function continueReading(ctx, userId) {
     return ctx.db.prepare(`
         SELECT * FROM (
-            SELECT m.id AS manga_id, m.title, m.cover_image, r.last_read_at, r.last_number,
+            SELECT c.*, ROW_NUMBER() OVER (PARTITION BY c.edition ORDER BY c.manga_id) AS edition_rank FROM (
+            SELECT m.id AS manga_id, COALESCE(m.catalog_series_id, -m.id) AS edition, m.title, m.cover_image, r.last_read_at, r.last_number,
                    (SELECT v2.id FROM {volumes} v2
                     WHERE v2.manga_id = m.id AND v2.status = 'Vorhanden' AND ${regularNumberedSql('v2')} AND v2.number_sort > r.last_number
                       AND NOT EXISTS (SELECT 1 FROM {volume_reads} x WHERE x.volume_id = v2.id AND x.user_id = ?)
@@ -417,8 +421,10 @@ function continueReading(ctx, userId) {
                 GROUP BY v.manga_id
             ) r
             JOIN {mangas} m ON m.id = r.manga_id
+            ) c
+            WHERE c.next_id IS NOT NULL
         )
-        WHERE next_id IS NOT NULL
+        WHERE edition_rank = 1
         ORDER BY last_read_at IS NULL, last_read_at DESC, title COLLATE NOCASE
         LIMIT ${CONTINUE_LIMIT}
     `).all(userId, userId, userId).map((row) => {
@@ -452,16 +458,25 @@ function reading(realCtx, { query }) {
     const first = keys[0];
     const currentKey = keys[keys.length - 1];
 
+    // A read is stored once per catalog volume; an edition in two of the reader's shelves shows it on both rows, so the
+    // history counts each catalog volume (and series) once.
     const monthRows = ctx.db.prepare(`
-        SELECT SUBSTR(vr.read_at, 1, 7) AS month, count(*) AS volume_count, SUM(COALESCE(v.pages, 0)) AS pages, COUNT(DISTINCT v.manga_id) AS series
-        FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id
-        WHERE vr.user_id = ? AND vr.read_at IS NOT NULL
+        SELECT SUBSTR(r.read_at, 1, 7) AS month, count(*) AS volume_count, SUM(r.pages) AS pages, COUNT(DISTINCT r.series) AS series
+        FROM (
+            SELECT v.catalog_volume_id, MAX(vr.read_at) AS read_at, MAX(COALESCE(v.pages, 0)) AS pages,
+                   MIN(COALESCE(m.catalog_series_id, -m.id)) AS series
+            FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id JOIN {mangas} m ON m.id = v.manga_id
+            WHERE vr.user_id = ? AND vr.read_at IS NOT NULL
+            GROUP BY v.catalog_volume_id
+        ) r
         GROUP BY month
     `).all(userId);
     const byMonthMap = new Map(monthRows.map(r => [r.month, r]));
-    const unknownDate = ctx.db.prepare('SELECT count(*) AS n FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id WHERE vr.user_id = ? AND vr.read_at IS NULL').get(userId).n;
+    const unknownDate = ctx.db.prepare('SELECT COUNT(DISTINCT v.catalog_volume_id) AS n FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id WHERE vr.user_id = ? AND vr.read_at IS NULL').get(userId).n;
 
-    // backlog: owned volumes (household) by purchase month, minus this reader's reads of owned volumes by read month
+    // backlog: owned volumes (household) by purchase month, minus this reader's reads of owned volumes by read month;
+    // both per shelf row, so a second copy of an edition counts as owned and, once its edition is read, as read
+    // (the same rule as read_count against the owned volumes in GET /stats)
     const owned = ctx.db.prepare(`
         SELECT CASE WHEN ${PURCHASE_MONTH} THEN SUBSTR(TRIM(purchase_date), 1, 7) ELSE NULL END AS month, count(*) AS n
         FROM {volumes} WHERE status = 'Vorhanden' GROUP BY month
@@ -507,13 +522,20 @@ function reading(realCtx, { query }) {
     };
 }
 
-/** Webtoons with chapter progress of the user: how many, chapters read in total, how many read to their known end. */
+/**
+ * Webtoons with chapter progress of the user: how many, chapters read in total, how many read to their known end. The
+ * chapter is stored once per catalog series, so an edition in two of the user's shelves counts once.
+ */
 function chapterTotals(ctx, userId) {
     const row = ctx.db.prepare(`
-        SELECT count(*) AS series, COALESCE(SUM(cp.chapters_read), 0) AS read,
-               COALESCE(SUM(CASE WHEN m.total_chapters > 0 AND cp.chapters_read >= m.total_chapters THEN 1 ELSE 0 END), 0) AS finished
-        FROM {chapter_progress} cp JOIN {mangas} m ON m.id = cp.manga_id
-        WHERE cp.user_id = ? AND m.format = 'webtoon'
+        SELECT count(*) AS series, COALESCE(SUM(e.chapters_read), 0) AS read, COALESCE(SUM(e.finished), 0) AS finished
+        FROM (
+            SELECT MAX(cp.chapters_read) AS chapters_read,
+                   MAX(CASE WHEN m.total_chapters > 0 AND cp.chapters_read >= m.total_chapters THEN 1 ELSE 0 END) AS finished
+            FROM {chapter_progress} cp JOIN {mangas} m ON m.id = cp.manga_id
+            WHERE cp.user_id = ? AND m.format = 'webtoon'
+            GROUP BY COALESCE(m.catalog_series_id, -m.id)
+        ) e
     `).get(userId);
     return { series: row.series, read: row.read, finished: row.finished };
 }
