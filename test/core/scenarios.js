@@ -1031,6 +1031,53 @@ const scenarios = [
         }
     },
     {
+        name: 'copies: price, date and condition per copy, lending to an account or a person, the lent list, and the trash keeps it',
+        async run({ admin, ed }) {
+            const shelf = (await ed('POST', '/shelves', { name: 'Kern Exemplar Regal' })).body.id;
+            const ids = Object.fromEntries((await ed('GET', '/users/directory')).body.users.map(u => [u.username, u.id]));
+            const series = await newSeries(ed, 'Kern Exemplar Reihe', { shelf_id: shelf });
+            const volumeId = await newVolume(ed, series, '1', { status: 'Vorhanden', price: 7 });
+            const copiesOf = async () => (await ed('GET', `/mangas/${series}`)).body.volumes.find(v => v.id === volumeId).copies;
+            let [copy] = await copiesOf();
+            assert.deepEqual({ ...copy, id: 0 }, {
+                id: 0, owner_user_id: ids.ed, owner: 'ed', price: 7, purchase_date: null, condition: null,
+                lent_to_user_id: null, lent_to: null, lent_at: null
+            });
+            const put = (api, body, id = copy.id) => api('PUT', `/volumes/${volumeId}/copies/${id}`, body);
+
+            let res = await put(ed, { price: '6,50', purchase_date: '2025-03-01', condition: 'Gut' });
+            assert.equal(res.status, 200, JSON.stringify(res.body));
+            assert.deepEqual([res.body.copy.price, res.body.copy.purchase_date, res.body.copy.condition], [6.5, '2025-03-01', 'Gut']);
+            assert.equal((await put(ed, { price: 'viel' })).status, 400);
+
+            res = await put(ed, { lent: { user_id: ids.admin, at: '2026-01-02' } });
+            assert.deepEqual([res.body.copy.lent_to_user_id, res.body.copy.lent_to, res.body.copy.lent_at], [ids.admin, 'admin', '2026-01-02']);
+            assert.equal((await put(ed, { lent: { user_id: ids.ed } })).status, 400, 'not to the owner');
+            assert.equal((await put(admin, { price: 1 })).status, 404, 'admin is no member of the shelf');
+            assert.equal((await put(ed, { price: 1 }, copy.id + 999)).status, 404);
+
+            const lentOut = (await ed('GET', '/copies/lent')).body;
+            assert.deepEqual(lentOut.lent_out.map(c => [c.copy_id, c.title, c.lent_to, c.manga_id]), [[copy.id, 'Kern Exemplar Reihe', 'admin', series]]);
+            const borrowed = (await admin('GET', '/copies/lent')).body.borrowed;
+            assert.deepEqual(borrowed.map(c => [c.title, c.volume_number, c.owner, c.manga_id, c.shelf_name]), [['Kern Exemplar Reihe', '1', 'ed', null, null]],
+                'admin sees what was lent to him, without a way into a shelf he does not belong to');
+
+            // a volume in the trash comes back with its lent copy
+            const trashId = (await ed('DELETE', `/volumes/${volumeId}`)).body.trash_id;
+            assert.equal((await ed('POST', `/trash/${trashId}/restore`)).status, 200);
+            [copy] = await copiesOf();
+            assert.deepEqual([copy.owner, copy.price, copy.condition, copy.lent_to, copy.lent_at], ['ed', 6.5, 'Gut', 'admin', '2026-01-02']);
+
+            res = await put(ed, { lent: { name: 'Oma Erika' } });
+            assert.equal(res.status, 200, JSON.stringify(res.body));
+            assert.deepEqual([res.body.copy.lent_to_user_id, res.body.copy.lent_to, /^\d{4}-\d{2}-\d{2}$/.test(res.body.copy.lent_at)], [null, 'Oma Erika', true]);
+            assert.equal((await put(ed, { lent: { name: 'x'.repeat(65) } })).status, 400);
+            res = await put(ed, { lent: null });
+            assert.deepEqual([res.body.copy.lent_to, res.body.copy.lent_at], [null, null]);
+            assert.deepEqual((await admin('GET', '/copies/lent')).body.borrowed, []);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

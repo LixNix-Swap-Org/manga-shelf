@@ -33,6 +33,18 @@ const OWNERS_VIEW_SQL = `
         SELECT volume_id, owner_user_id AS user_id, purchase_price AS price, purchase_date, condition, created_at, id AS rowid
         FROM volume_copies WHERE owner_user_id IS NOT NULL;`;
 
+// migration 47: the view also carries who borrowed the copy (a trash entry and a bulk undo keep the lending)
+const OWNERS_VIEW_LENT_SQL = `
+    CREATE VIEW IF NOT EXISTS volume_owners AS
+        SELECT volume_id, owner_user_id AS user_id, purchase_price AS price, purchase_date, condition, created_at, id AS rowid,
+               lent_to_user_id, lent_to_name, lent_at
+        FROM volume_copies WHERE owner_user_id IS NOT NULL;`;
+
+// the lending columns of migration 47; a restored row names an account only while it still exists
+const LENT_COLUMNS = ['lent_to_user_id', 'lent_to_name', 'lent_at'];
+const hasLending = (extra) => LENT_COLUMNS.some(c => extra[c] !== undefined);
+const lentUser = (db, id) => (id === null || id === undefined ? null : (cached(db, 'SELECT id FROM users WHERE id = ?').get(id)?.id ?? null));
+
 const COPY_TRIGGERS = ['trg_volume_copies_ins', 'trg_volume_copies_del', 'trg_volumes_copies_status', 'trg_volumes_copies_insert'];
 
 const COPY_TRIGGERS_SQL = `
@@ -80,11 +92,20 @@ function cached(db, sql) {
 /** Whether ownership lives in volume_copies already (migration 44 ran). */
 const copiesInPlace = (d) => Boolean(d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'volume_copies'").get());
 
-/** A personal copy of `userId` (no-op when there is one); `extra` = { price, purchase_date, condition, created_at }. Returns true when added. */
+/**
+ * A personal copy of `userId` (no-op when there is one); `extra` = { price, purchase_date, condition, created_at } and,
+ * from a trash entry or an undo (migration 47), { lent_to_user_id, lent_to_name, lent_at }. Returns true when added.
+ */
 function addCopy(db, volumeId, userId, extra = {}) {
+    const base = [volumeId, userId, extra.price ?? null, extra.purchase_date ?? null, extra.condition ?? null, extra.created_at ?? null];
+    if (hasLending(extra)) {
+        return cached(db, `INSERT OR IGNORE INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at,
+            lent_to_user_id, lent_to_name, lent_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?)`)
+            .run(...base, lentUser(db, extra.lent_to_user_id), extra.lent_to_name ?? null, extra.lent_at ?? null).changes > 0;
+    }
     return cached(db, `INSERT OR IGNORE INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at)
         VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`)
-        .run(volumeId, userId, extra.price ?? null, extra.purchase_date ?? null, extra.condition ?? null, extra.created_at ?? null).changes > 0;
+        .run(...base).changes > 0;
 }
 
 /** Removes the personal copies of `userId` on the volume; true when there was one. */
@@ -138,7 +159,14 @@ function setOwners(db, volumeId, owners, { household = true } = {}) {
         VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
         ON CONFLICT (volume_id, owner_user_id) WHERE owner_user_id IS NOT NULL DO UPDATE SET purchase_price = excluded.purchase_price,
             purchase_date = excluded.purchase_date, condition = excluded.condition, created_at = excluded.created_at`);
-    for (const o of owners) upsert.run(volumeId, o.user_id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, o.created_at ?? null);
+    for (const o of owners) {
+        upsert.run(volumeId, o.user_id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, o.created_at ?? null);
+        // the lending of the snapshot comes back with the copy (rows of a snapshot from before migration 47 have none)
+        if (hasLending(o)) {
+            db.prepare('UPDATE volume_copies SET lent_to_user_id = ?, lent_to_name = ?, lent_at = ? WHERE volume_id = ? AND owner_user_id = ?')
+                .run(lentUser(db, o.lent_to_user_id), o.lent_to_name ?? null, o.lent_at ?? null, volumeId, o.user_id);
+        }
+    }
     const keep = owners.map(o => Number(o.user_id));
     const vol = db.prepare('SELECT status, price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     if (!keep.length && !household) {
@@ -154,9 +182,49 @@ function setOwners(db, volumeId, owners, { household = true } = {}) {
     db.prepare(`DELETE FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NOT NULL${others}`).run(volumeId, ...keep);
 }
 
+/**
+ * The copies matching `where` (over volume_copies c and volumes v) in the answer shape, by volume id, oldest first:
+ * { id, owner_user_id, owner (null: the household's), price, purchase_date, condition, lent_to_user_id, lent_to
+ * (the account's name, or the stored name of a person without one or of an account gone since), lent_at }.
+ */
+function copiesByVolume(db, where, params = []) {
+    const byVolume = new Map();
+    for (const c of db.prepare(`
+        SELECT c.id, c.volume_id, c.owner_user_id, o.username AS owner, c.purchase_price, c.purchase_date, c.condition,
+               b.id AS lent_to_user_id, COALESCE(b.username, c.lent_to_name) AS lent_to, c.lent_at
+        FROM volume_copies c
+        JOIN volumes v ON v.id = c.volume_id
+        LEFT JOIN users o ON o.id = c.owner_user_id
+        LEFT JOIN users b ON b.id = c.lent_to_user_id
+        WHERE ${where}
+        ORDER BY c.volume_id, c.created_at, c.id
+    `).all(...params)) {
+        if (!byVolume.has(c.volume_id)) byVolume.set(c.volume_id, []);
+        byVolume.get(c.volume_id).push({
+            id: c.id,
+            owner_user_id: c.owner_user_id,
+            owner: c.owner ?? null,
+            price: c.purchase_price,
+            purchase_date: c.purchase_date,
+            condition: c.condition,
+            lent_to_user_id: c.lent_to_user_id ?? null,
+            lent_to: c.lent_to ?? null,
+            lent_at: c.lent_to ? c.lent_at : null
+        });
+    }
+    return byVolume;
+}
+
+/** Sets `copies` on every volume of a series detail (an empty list for a volume without one). */
+function attachCopies(detail, byVolume) {
+    for (const v of detail?.volumes || []) v.copies = byVolume.get(v.id) || [];
+    return detail;
+}
+
 module.exports = {
     COPIES_TABLE_SQL,
     OWNERS_VIEW_SQL,
+    OWNERS_VIEW_LENT_SQL,
     COPY_TRIGGERS,
     COPY_TRIGGERS_SQL,
     copiesInPlace,
@@ -169,5 +237,7 @@ module.exports = {
     dropHouseholdCopies,
     updateCopy,
     followVolumeValue,
-    setOwners
+    setOwners,
+    copiesByVolume,
+    attachCopies
 };

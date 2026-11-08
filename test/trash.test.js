@@ -105,7 +105,9 @@ test('a deleted series is invisible everywhere and comes back with ids, owners a
     assert.equal(restored.status, 200, JSON.stringify(restored.body));
     assert.deepEqual(restored.body, { success: true, kind: 'manga', id, manga_id: id, title: 'Papierkorb Reihe' });
     const detailAfter = (await editor('GET', `/mangas/${id}`)).body;
-    assert.deepEqual(detailAfter, detailBefore);
+    // a restored copy is a new volume_copies row: everything but its id comes back
+    const withoutCopyIds = (d) => ({ ...d, volumes: d.volumes.map(v => ({ ...v, copies: v.copies.map(({ id: _id, ...c }) => c) })) });
+    assert.deepEqual(withoutCopyIds(detailAfter), withoutCopyIds(detailBefore));
     assert.deepEqual(await visible('Papierkorb Reihe'), before);
     assert.equal(db.prepare('SELECT owned_volumes FROM mangas WHERE id = ?').get(id).owned_volumes, 2);
     assert.equal((await trashItems()).some(t => t.id === entry.id), false);

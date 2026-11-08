@@ -53,7 +53,10 @@ const ui = (props) => (
 let fetchMock;
 beforeEach(() => {
   fetchMock = vi.fn();
-  vi.stubGlobal('fetch', fetchMock);
+  // the lent card of the overview asks on its own; it answers "nothing lent" without taking a queued answer
+  vi.stubGlobal('fetch', (url, init) => (String(url).includes('/api/copies/lent')
+    ? Promise.resolve(response({ lent_out: [], borrowed: [] }))
+    : fetchMock(url, init)));
 });
 
 describe('statsFormat', () => {

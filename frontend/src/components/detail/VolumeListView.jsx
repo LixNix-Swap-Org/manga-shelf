@@ -1,7 +1,7 @@
 import { BookOpen, Plus, Truck, Calendar, BookCheck, PenLine, ShoppingCart, Trash } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
-import OwnerBadges from './OwnerBadges';
+import OwnerBadges, { LentBadge } from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, releaseVerb, volumeStatusKind } from './volumeViewHelpers';
 import { assetImgProps } from '../../utils/api';
 import { t } from '../../i18n/index.js';
@@ -223,6 +223,7 @@ export default function VolumeListView({
                   <span className="ml-1.5 align-middle">
                     <OwnerBadges vol={vol} multiUser={(manga?.reader_stats?.length || 0) > 1} />
                   </span>
+                  <LentBadge vol={vol} className="ml-1.5 align-middle" />
                   {vol.isbn && (
                     <span className="block text-[10px] text-slate-400 font-mono font-normal">
                       ISBN: {vol.isbn}

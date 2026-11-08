@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react';
+import { Handshake, Users } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 
 const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
@@ -40,6 +40,24 @@ export default function OwnerBadges({ vol, multiUser }) {
           {readerInitials(o.username)}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** "Verliehen" when a copy of the volume is lent out; the title names who has it. */
+export function LentBadge({ vol, className = '' }) {
+  const lent = (vol?.copies || []).filter(c => c.lent_to);
+  if (lent.length === 0) return null;
+  const names = lent.map(c => c.lent_to).join(', ');
+  return (
+    <span
+      className={`inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-200 border border-violet-500/40 ${className}`}
+      title={t('Ausgeliehen an: {names}', { names })}
+      data-lent
+    >
+      <Handshake className="w-2.5 h-2.5" aria-hidden="true" />
+      <span>{t('Verliehen')}</span>
+      <span className="sr-only">{t('Ausgeliehen an: {names}', { names })}</span>
     </span>
   );
 }

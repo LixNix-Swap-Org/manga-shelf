@@ -1,4 +1,5 @@
 // Volume editor dialog: composes the volumeEdit/ field groups around useVolumeEditForm.
+import { useState } from 'react';
 import { TriangleAlert, X } from 'lucide-react';
 import VolumePhotoManager from './VolumePhotoManager';
 import EditHeader from './volumeEdit/EditHeader';
@@ -9,6 +10,7 @@ import StatusPriceFields from './volumeEdit/StatusPriceFields';
 import DetailFields from './volumeEdit/DetailFields';
 import EditFooter from './volumeEdit/EditFooter';
 import OwnersField from './volumeEdit/OwnersField';
+import CopiesField from './volumeEdit/CopiesField';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
@@ -61,6 +63,8 @@ function VolumeEditDialog({
   const mpLookup = isMpVolume(activeVolume, manga) && isMpVolume(editVolForm, manga);
 
   const dialogRef = useDialogA11y(true);
+  // an owners toggle adds or drops a copy: the copies list reads them again
+  const [ownersVersion, setOwnersVersion] = useState(0);
 
   return (
         <div
@@ -113,9 +117,19 @@ function VolumeEditDialog({
                     owners={activeVolume.owners}
                     users={manga?.reader_stats}
                     currentUser={user}
-                    onChanged={handleOwnersChanged}
+                    onChanged={(data) => { handleOwnersChanged(data); setOwnersVersion(n => n + 1); }}
                   />
                 )}
+                <CopiesField
+                  volumeId={activeVolume.id}
+                  mangaId={mangaId}
+                  copies={activeVolume.copies}
+                  currentUser={user}
+                  canEdit={canEdit}
+                  currency={editionCurrency(manga)}
+                  ownersVersion={ownersVersion}
+                  onChanged={() => handleOwnersChanged({})}
+                />
 
                 {/* Volume Cover & Images Section */}
                 <VolumePhotoManager
