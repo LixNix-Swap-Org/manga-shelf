@@ -4,10 +4,15 @@ import { ApiError, apiFetch, readJson } from '../../../utils/api';
 import { formatDate, formatMoney, currencySymbol } from '../../../utils/format';
 import { conditionLabel } from '../../../utils/enumLabels';
 import { VOLUME_CONDITIONS } from '../../../utils/volumeHelpers';
-import { localISODate } from '../../../utils/radarHelpers';
 import { isValidPriceInput } from './editorUtils';
 import { t } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
+
+// today as YYYY-MM-DD in local time (the upper bound of "Seit"); radarHelpers would pull a chunk of its own in here
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const NOT_LENT = 'none';
 const OTHER_PERSON = 'name';
@@ -207,7 +212,7 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
                   {form.lend !== NOT_LENT && (
                     <div>
                       <label htmlFor={`${id}-lend-at`} className="block text-[11px] text-slate-400 mb-1">{t('Seit')}</label>
-                      <input id={`${id}-lend-at`} type="date" max={localISODate()} className="input-field" value={form.lend_at} onChange={setField('lend_at')} />
+                      <input id={`${id}-lend-at`} type="date" max={today()} className="input-field" value={form.lend_at} onChange={setField('lend_at')} />
                     </div>
                   )}
                   {form.lend === OTHER_PERSON && (
