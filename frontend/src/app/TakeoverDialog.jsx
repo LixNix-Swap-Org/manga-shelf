@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { CloudDownload, CloudUpload, GitMerge, LogIn, TriangleAlert } from 'lucide-react';
+import { CloudDownload, CloudUpload, GitMerge, LogIn, TriangleExclamationPoint } from 'lucide-react';
 import ToolDialog from '../components/modals/ToolDialog';
 import { notify } from '../utils/notify';
 import { formatCount } from '../utils/format';
@@ -176,7 +176,7 @@ export default function TakeoverDialog({ kind, onClose, onDone, initialSession =
           </dl>
         )}
         {inspect && serverHasData(inspect) && (
-          <p role="alert" className="flex gap-2 text-sm text-amber-200"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />{t('Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.')}</p>
+          <p role="alert" className="flex gap-2 text-sm text-amber-200"><TriangleExclamationPoint className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />{t('Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.')}</p>
         )}
         {inspect?.warnings?.length > 0 && (
           <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">{inspect.warnings.map((w, i) => <li key={w}>{payloadText(inspect, 'warnings', i)}</li>)}</ul>

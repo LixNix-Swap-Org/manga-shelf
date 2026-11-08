@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, AlertTriangle } from 'lucide-react';
+import { Trash2, TriangleExclamationPoint } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
 
@@ -92,7 +92,7 @@ export default function ConfirmDialog({
             {effectiveVariant === 'danger' ? (
               <Trash2 className="w-5 h-5" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-5 h-5" aria-hidden="true" />
             )}
           </div>
           <div className="flex-1 min-w-0">

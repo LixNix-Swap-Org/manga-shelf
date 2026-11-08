@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Camera, Check, ClipboardPaste, Pencil, Plug, Plus, Server, ShieldAlert, Trash, Wifi, WifiOff, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Camera, Check, ClipboardPaste, Pencil, Plug, Plus, Server, ShieldExclamationPoint, Trash, Wifi, WifiOff, X } from 'lucide-react';
 import { useDocumentTitle } from '../components/common/PageChrome';
 import { notify } from '../utils/notify';
 import { haptic } from '../utils/haptics';
@@ -417,7 +417,7 @@ export default function ServerScreen({ user, onSelect, onUseLocal, onTakeover })
                       </ul>
                       {insecureUrls(server).length > 0 && (
                         <p className="mt-1 flex items-start gap-1 text-[11px] text-red-300" data-testid="insecure-server">
-                          <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+                          <ShieldExclamationPoint className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
                           <span>{t('Anmeldung nicht möglich: {urls} ist unverschlüsselt und nicht im Heimnetz. Bearbeiten und https:// verwenden.', { urls: insecureUrls(server).join(', ') })}</span>
                         </p>
                       )}

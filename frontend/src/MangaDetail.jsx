@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
-import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleAlert, Library } from 'lucide-react';
+import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleExclamationPoint, Library } from 'lucide-react';
 import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
@@ -487,7 +487,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
         {refreshError && (
           <div role="status" className="mb-4 p-3 bg-amber-500/10 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
             <span className="flex items-center gap-2">
-              <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
               {refreshError}
             </span>
             <button

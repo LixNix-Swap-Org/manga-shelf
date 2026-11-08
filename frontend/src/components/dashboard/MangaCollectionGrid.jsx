@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useRef } from 'react';
-import { BookOpen, Globe, Plus, RefreshCw, Trash, TriangleAlert, X } from 'lucide-react';
+import { BookOpen, Globe, Plus, RefreshCw, Trash, TriangleExclamationPoint, X } from 'lucide-react';
 import MangaCard from './MangaCard';
 import MangaRow from './MangaRow';
 import useProgressiveList from '../../hooks/useProgressiveList';
@@ -159,7 +159,7 @@ function EmptyState({ filtersActive, error, onRetry, isOffline, canEdit, handleO
       </div>
     ) : reset;
   } else if (error) {
-    icon = <TriangleAlert className="w-8 h-8" />;
+    icon = <TriangleExclamationPoint className="w-8 h-8" />;
     heading = t('Sammlung konnte nicht geladen werden');
     text = error;
     action = onRetry && (
@@ -259,7 +259,7 @@ function MangaCollectionGrid({
   const banner = error && !showErrorPanel ? (
     <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
       <span className="flex items-center gap-2 min-w-0">
-        <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+        <TriangleExclamationPoint className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
         <span>{error}</span>
       </span>
       {onRetry && (

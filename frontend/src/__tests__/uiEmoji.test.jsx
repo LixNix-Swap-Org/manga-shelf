@@ -125,7 +125,7 @@ describe('icons that replaced emoji', () => {
       expect(icons).toEqual([
         ['buy', 'lucide-shopping-cart'], ['owned', 'lucide-circle-check'], ['partner', 'lucide-users'], ['check', 'lucide-info'],
         ['new', 'lucide-book-open'], ['mystery', 'lucide-circle-question-mark'], ['offline', 'lucide-wifi-off'],
-        ['buy', 'lucide-check'], ['buy', 'lucide-clock'], ['buy', 'lucide-triangle-alert']
+        ['buy', 'lucide-check'], ['buy', 'lucide-clock'], ['buy', 'lucide-triangle-exclamation-point']
       ]);
       expect(rows[0].classList.contains('text-emerald-300')).toBe(true);
       expect(rows[9].textContent).toContain('nicht gebucht: Konflikt');

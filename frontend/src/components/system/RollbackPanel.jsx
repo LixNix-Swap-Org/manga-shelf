@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Download, ExternalLink, RotateCcw, TriangleAlert } from 'lucide-react';
+import { Download, ExternalLink, RotateCcw, TriangleExclamationPoint } from 'lucide-react';
 import { formatDateTime } from '../../utils/format';
 import { t } from '../../i18n/index.js';
 import UpdateInstructions from './UpdateInstructions';
@@ -19,7 +19,7 @@ export function DataLossNotice({ current, version, then, now, file, at, method =
   return (
     <div className={redBox} data-testid="update-data-loss">
       <p className="font-semibold flex items-center gap-1.5">
-        <TriangleAlert className="w-4 h-4 shrink-0" aria-hidden="true" /> {t('Änderungen seit dem Update gehen verloren')}
+        <TriangleExclamationPoint className="w-4 h-4 shrink-0" aria-hidden="true" /> {t('Änderungen seit dem Update gehen verloren')}
       </p>
       <p className="break-words">
         {t('v{current} hat die Datenbank beim Update umgebaut (Schema v{then} → v{now}); v{version} kann sie so nicht öffnen. Zurück geht es nur mit dem Backup von vor dem Update: {file} ({date}).', {

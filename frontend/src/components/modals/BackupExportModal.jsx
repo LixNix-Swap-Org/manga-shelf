@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Download, FileArchive, TriangleAlert, Upload } from 'lucide-react';
+import { Download, FileArchive, TriangleExclamationPoint, Upload } from 'lucide-react';
 import ToolDialog from './ToolDialog';
 import FilePickerButton from '../common/FilePickerButton';
 import { notify } from '../../utils/notify';
@@ -124,7 +124,7 @@ export default function BackupExportModal({ onClose, onReplaced }) {
                 {formatCount(staged.uploads.size, 'Bild', 'Bilder')}
                 {manifest?.created_at ? ` · ${t('erstellt {date}', { date: formatDateTime(new Date(manifest.created_at)) })}` : ''}
               </p>
-              <p className="flex gap-2 text-amber-200"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />{t('Ersetzt alle Reihen, Bände und Bilder auf diesem Gerät.')}</p>
+              <p className="flex gap-2 text-amber-200"><TriangleExclamationPoint className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />{t('Ersetzt alle Reihen, Bände und Bilder auf diesem Gerät.')}</p>
               <label className="flex items-center gap-2 text-slate-200">
                 <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> {t('Sammlung auf diesem Gerät ersetzen')}
               </label>

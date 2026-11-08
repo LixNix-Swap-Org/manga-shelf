@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  X, CloudUpload, Shield, Download, CircleCheck, FileArchive, RefreshCw, Plus, TriangleAlert, FileSpreadsheet, Undo2
+  X, CloudUpload, Shield, Download, CircleCheck, FileArchive, RefreshCw, Plus, TriangleExclamationPoint, FileSpreadsheet, Undo2
 } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { clearOfflineData } from '../../utils/offlineStore';
@@ -434,7 +434,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         )}
         {warning && (
           <div role="alert" className="bg-amber-500/10 border border-amber-500/30 text-amber-200 p-3 rounded-xl text-xs flex items-center gap-2 mt-3 shrink-0">
-            <TriangleAlert className="w-4 h-4 shrink-0 text-amber-400" aria-hidden="true" />
+            <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" aria-hidden="true" />
             <span>{warning}</span>
           </div>
         )}
@@ -585,7 +585,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
             {backupModalTab === 'upload' && (
               <form onSubmit={handleUploadSubmit} className="space-y-4">
                 <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 p-3 rounded-xl text-xs flex gap-2.5 leading-relaxed">
-                  <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                  <TriangleExclamationPoint className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
                   <div>
                     {rich('{warning} Das Einspielen überschreibt die aktuelle SQLite-Datenbank ({file}) und Coverbilder mit dem Stand aus dem ausgewählten ZIP-Archiv. Das Backup wird zuerst geprüft; danach siehst du, was es enthält, und bestätigst die Wiederherstellung.', {
                       warning: <span className="font-semibold text-amber-300">{tr('Achtung:')}</span>,

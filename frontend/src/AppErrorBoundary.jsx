@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { RotateCw, TriangleAlert } from 'lucide-react';
+import { RotateCw, TriangleExclamationPoint } from 'lucide-react';
 import { isChunkLoadError, reloadForStaleChunk } from './appShell';
 import { useDocumentTitle } from './components/common/PageChrome';
 import { t } from './i18n/index.js';
@@ -40,7 +40,7 @@ export default class AppErrorBoundary extends Component {
       <main className="flex min-h-screen items-center justify-center p-4 bg-slate-950 text-slate-100">
         <ErrorTitle title={stale ? t('Neue Version verfügbar') : t('Fehler')} />
         <div role="alert" className="glass-panel w-full max-w-md rounded-3xl border border-slate-700/80 p-8 text-center shadow-2xl">
-          <TriangleAlert className="mx-auto mb-4 h-10 w-10 text-amber-400" aria-hidden="true" />
+          <TriangleExclamationPoint className="mx-auto mb-4 h-10 w-10 text-amber-400" aria-hidden="true" />
           <h1 className="text-xl font-bold text-white">
             {stale ? t('Neue Version verfügbar') : t('Etwas ist schiefgelaufen')}
           </h1>
