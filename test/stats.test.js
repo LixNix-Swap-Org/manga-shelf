@@ -38,7 +38,7 @@ test('response carries summary and the lists once, without legacy duplicates', a
     const id = await newSeries('Form Reihe', { publisher: 'Carlsen' });
     await addVolume(id, '1', { price: 7 });
     const body = await getStats();
-    assert.deepEqual(Object.keys(body).sort(), ['currencies', 'languages', 'owner_publishers', 'owner_stats', 'publishers', 'spending', 'summary', 'top_series', 'user_reading_stats']);
+    assert.deepEqual(Object.keys(body).sort(), ['currencies', 'languages', 'owner_publishers', 'owner_stats', 'publishers', 'shelf_reading', 'spending', 'summary', 'top_series', 'user_reading_stats']);
     assert.deepEqual(body.owner_publishers, [], 'one user: no owner x publisher breakdown');
     assert.equal(typeof body.summary.total_series, 'number');
     assert.ok(body.summary.collection_start_date);

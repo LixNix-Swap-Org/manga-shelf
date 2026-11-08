@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import StatsModal from '../components/modals/StatsModal';
 import SpendingCard from '../components/modals/SpendingCard';
 import OwnerStatsCard from '../components/modals/OwnerStatsCard';
+import ReadingTab from '../components/modals/stats/ReadingTab';
 import {
   fmtNumber, fmtEuro, fmtPct, countLabel, parseUtcTimestamp, publisherSegments, publisherColor
 } from '../components/modals/statsFormat';
@@ -584,5 +585,39 @@ describe('StatsModal: Leseverlauf and the collection tools', () => {
     render(ui({ user: { id: 2, role: 'editor' } }));
     await screen.findByText('1.234,50 €');
     expect(screen.queryByRole('button', { name: 'Verlage zusammenführen' })).toBeNull();
+  });
+});
+
+describe('ReadingTab: per edition and per shelf', () => {
+  const reader = { user_id: 1, username: 'anna', role: 'admin', read_count: 15, unread_count: 0, total_owned: 15, read_pct: 100 };
+  const tab = (props) => render(
+    <MemoryRouter>
+      <ReadingTab readers={[reader]} ownedVols={30} details={null} visibleSeries={10} onShowMore={() => {}} onBack={() => {}}
+        readerError="" loadingDetails={false} onLoadDetails={() => {}} onNavigate={() => {}} {...props} />
+    </MemoryRouter>
+  );
+
+  it('notes that editions in several shelves count once when the reader cards count fewer than the volumes', () => {
+    tab({ shelves: [] });
+    expect(screen.getByText('Ausgaben, die in mehreren Regalen stehen, zählen hier einmal.')).toBeTruthy();
+    expect(screen.queryByText('Lesestand pro Regal')).toBeNull();
+  });
+
+  it('shows the shelf card with each shelf and member, and hides it for one shelf of one member', () => {
+    const shelves = [
+      { shelf_id: 1, name: 'Wohnzimmer', color: '#22c55e', owned: 15, read: 12, members: [{ user_id: 1, username: 'anna', read: 12 }, { user_id: 2, username: 'ben', read: 4 }] },
+      { shelf_id: 2, name: 'Arbeitszimmer', color: '#6366f1', owned: 15, read: 15, members: [{ user_id: 1, username: 'anna', read: 15 }] }
+    ];
+    const { unmount } = tab({ shelves, readers: [{ ...reader, total_owned: 30 }] });
+    expect(screen.queryByText('Ausgaben, die in mehreren Regalen stehen, zählen hier einmal.')).toBeNull();
+    const card = screen.getByRole('heading', { name: 'Lesestand pro Regal' }).closest('div');
+    expect(within(card).getByRole('heading', { name: 'Wohnzimmer' })).toBeTruthy();
+    expect(within(card).getByText('12 von 15 gelesen')).toBeTruthy();
+    expect(within(card).getByText('4 Bände')).toBeTruthy();
+    expect(within(card).getByText('15 von 15 gelesen')).toBeTruthy();
+    unmount();
+
+    tab({ shelves: [shelves[1]] });
+    expect(screen.queryByText('Lesestand pro Regal')).toBeNull();
   });
 });

@@ -236,6 +236,49 @@ function statsUsers(ctx, shelfIds) {
     `).all(...members.params, ...series.params, ...series.params);
 }
 
+// one owned or read book of an edition, whatever shelf row shows it (a volume not linked yet counts on its own)
+const EDITION_VOLUME = 'COALESCE(v.catalog_volume_id, -v.id)';
+
+/**
+ * `shelf_reading` of GET /stats: per requested shelf its owned volumes, how many of them a member has read, and every
+ * member with their reads there. Reads show only to members of a row's shelf (shelf_volume_reads), as everywhere.
+ */
+function shelfReading(ctx, shelfIds) {
+    if (!shelfIds.length) return [];
+    const shelves = access.inShelves('s.id', shelfIds);
+    const series = access.inShelves('m.shelf_id', shelfIds);
+    const members = access.inShelves('sm.shelf_id', shelfIds);
+    const volumes = new Map(ctx.db.prepare(`
+        SELECT m.shelf_id, count(*) AS owned,
+               SUM(CASE WHEN EXISTS (SELECT 1 FROM shelf_volume_reads vr WHERE vr.volume_id = v.id) THEN 1 ELSE 0 END) AS read
+        FROM volumes v JOIN mangas m ON m.id = v.manga_id
+        WHERE v.status = 'Vorhanden' AND ${series.sql} GROUP BY m.shelf_id
+    `).all(...series.params).map(r => [r.shelf_id, r]));
+    const reads = new Map(ctx.db.prepare(`
+        SELECT m.shelf_id, vr.user_id, count(*) AS n
+        FROM shelf_volume_reads vr JOIN volumes v ON v.id = vr.volume_id JOIN mangas m ON m.id = v.manga_id
+        WHERE v.status = 'Vorhanden' AND ${series.sql} GROUP BY m.shelf_id, vr.user_id
+    `).all(...series.params).map(r => [`${r.shelf_id}:${r.user_id}`, r.n]));
+    const membersOf = new Map();
+    for (const r of ctx.db.prepare(`
+        SELECT sm.shelf_id, u.id, u.username FROM shelf_members sm JOIN users u ON u.id = sm.user_id
+        WHERE ${members.sql} ORDER BY u.username COLLATE NOCASE, u.id
+    `).all(...members.params)) {
+        if (!membersOf.has(r.shelf_id)) membersOf.set(r.shelf_id, []);
+        membersOf.get(r.shelf_id).push({ user_id: r.id, username: r.username, read: reads.get(`${r.shelf_id}:${r.id}`) || 0 });
+    }
+    return ctx.db.prepare(`
+        SELECT s.id, s.name, s.color FROM shelves s WHERE ${shelves.sql} ORDER BY s.is_default DESC, s.name COLLATE NOCASE, s.id
+    `).all(...shelves.params).map(s => ({
+        shelf_id: s.id,
+        name: s.name,
+        color: s.color,
+        owned: volumes.get(s.id)?.owned || 0,
+        read: volumes.get(s.id)?.read || 0,
+        members: membersOf.get(s.id) || []
+    }));
+}
+
 const round1 = (n) => Math.round(n * 10) / 10;
 const avgOrNull = (n) => (n === null || n === undefined ? null : round2(n));
 
@@ -287,23 +330,27 @@ function stats(realCtx, { query } = {}) {
         missing_value: round2(p.missing_value)
     }));
 
-    // User Reading Stats (Multi-User)
+    // Reading per user, counted per edition (catalog volume): an edition in two of the requested shelves is one book to
+    // read, so it counts once as owned and, read, once as read. total_owned can thus be below total_owned_volumes.
     const allUsers = statsUsers(realCtx, shelfIds);
     const named = new Set(allUsers.map(u => u.id));
+    const ownedEditions = ctx.db.prepare(`
+        SELECT COUNT(DISTINCT ${EDITION_VOLUME}) AS n FROM {volumes} v WHERE v.status = 'Vorhanden'
+    `).get().n;
     const readsByUser = new Map(ctx.db.prepare(`
-        SELECT vr.user_id, count(*) AS n FROM {volume_reads} vr JOIN {volumes} v ON vr.volume_id = v.id
+        SELECT vr.user_id, COUNT(DISTINCT ${EDITION_VOLUME}) AS n FROM {volume_reads} vr JOIN {volumes} v ON vr.volume_id = v.id
         WHERE v.status = 'Vorhanden' GROUP BY vr.user_id
     `).all().map(r => [r.user_id, r.n]));
     const userReadingStats = allUsers.map(u => {
         const readCount = readsByUser.get(u.id) || 0;
-        const pct = totalOwnedVolumes > 0 ? Math.round((readCount / totalOwnedVolumes) * 1000) / 10 : 0;
+        const pct = ownedEditions > 0 ? Math.round((readCount / ownedEditions) * 1000) / 10 : 0;
         return {
             user_id: u.id,
             username: u.username,
             role: u.role,
             read_count: readCount,
-            unread_count: Math.max(0, totalOwnedVolumes - readCount),
-            total_owned: totalOwnedVolumes,
+            unread_count: Math.max(0, ownedEditions - readCount),
+            total_owned: ownedEditions,
             read_pct: pct
         };
     });
@@ -361,6 +408,7 @@ function stats(realCtx, { query } = {}) {
             summary,
             publishers,
             user_reading_stats: userReadingStats,
+            shelf_reading: shelfReading(realCtx, shelfIds),
             owner_stats: ownerStats,
             owner_publishers: ownerPublishers,
             top_series: topSeries,
