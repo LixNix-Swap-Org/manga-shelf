@@ -143,6 +143,18 @@ test('an edition in two of the reader\'s shelves counts once in the reading hist
     assert.equal(reading.continue_reading[0].manga_id, 1, 'under the row with the lowest id');
     assert.deepEqual({ ...reading.chapters }, { series: 1, read: 25, finished: 0 }, 'the webtoon counts once');
 
+    const overview = await get('/stats');
+    assert.equal(overview.summary.total_owned_volumes, 4, 'the volume count stays per copy');
+    const card = (id) => { const r = overview.user_reading_stats.find(u => u.user_id === id); return [r.read_count, r.unread_count, r.total_owned]; };
+    assert.deepEqual(card(2), [1, 1, 2], 'bob: one of two editions read, not two of four');
+    assert.deepEqual(card(1), [1, 1, 2], 'alice sees volume 1 read in the household shelf');
+    assert.deepEqual(overview.shelf_reading.map(s => ({ ...s, members: s.members.map(m => ({ ...m })) })), [
+        { shelf_id: 1, name: 'Sammlung', color: '#6366f1', owned: 2, read: 1, members: [{ user_id: 1, username: 'alice', read: 1 }, { user_id: 2, username: 'bob', read: 1 }] },
+        { shelf_id: 2, name: 'Bob', color: '#6366f1', owned: 2, read: 1, members: [{ user_id: 2, username: 'bob', read: 1 }] }
+    ], "per shelf: carl's read of volume 2 stays hidden, he is no member");
+    const bobOnly = await get('/stats?shelf_id=2');
+    assert.deepEqual(bobOnly.shelf_reading.map(s => s.shelf_id), [2], 'the shelf filter narrows the card');
+
     const stats = (await get('/users/2/stats')).stats;
     assert.equal(stats.totalVolumes, 1);
     assert.equal(stats.totalPages, 200);
