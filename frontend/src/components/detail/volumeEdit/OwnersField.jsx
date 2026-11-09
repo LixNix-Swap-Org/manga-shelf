@@ -17,11 +17,16 @@ export function ownersUndoBody(data, wasOwned, target = {}) {
   if (!wasOwned) return { owned: false, ...target, ...restoreDate };
   const removed = data?.removed_owner;
   if (!removed) return null;
+  const lent = removed.lent_to_user_id
+    ? { user_id: removed.lent_to_user_id, ...(removed.lent_at ? { at: removed.lent_at } : {}) }
+    : (removed.lent_to_name ? { name: removed.lent_to_name, ...(removed.lent_at ? { at: removed.lent_at } : {}) } : null);
   return {
     owned: true,
     ...target,
     ...(removed.price !== null && removed.price !== undefined ? { price: removed.price } : {}),
     ...(removed.purchase_date ? { purchase_date: removed.purchase_date } : {}),
+    ...(removed.condition ? { condition: removed.condition } : {}),
+    ...(lent ? { lent } : {}),
     ...restoreDate
   };
 }

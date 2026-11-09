@@ -92,7 +92,10 @@ function linkResolver(ctx, animeId = null) {
 function setLink(ctx, row, mangaId) {
     const shelfId = access.mangaAccess(ctx, mangaId, 'editor');
     const work = ensureWork(ctx, mangaId);
-    ctx.db.prepare(`DELETE FROM anime_work_links WHERE anime_id = ? AND ${SHELF_ROW} AND scope_shelf_id = ?`).run(row.id, shelfId);
+    const editable = access.accessibleShelfIds(ctx, 'editor');
+    const scope = access.inShelves('scope_shelf_id', editable);
+    ctx.db.prepare(`DELETE FROM anime_work_links WHERE anime_id = ? AND ${SHELF_ROW} AND (scope_shelf_id = ? OR (hidden = 0 AND ${scope.sql}))`)
+        .run(row.id, shelfId, ...scope.params);
     if (row.work_id !== work && (!row.work_id || ownsWork(ctx, row.work_id))) {
         if (row.work_id) ctx.db.prepare(`DELETE FROM anime_work_links WHERE anime_id = ? AND ${SHELF_ROW} AND hidden = 1 AND work_id = ?`).run(row.id, row.work_id);
         ctx.db.prepare('UPDATE animes SET work_id = ? WHERE id = ?').run(work, row.id);

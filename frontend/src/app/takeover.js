@@ -148,7 +148,7 @@ function insertRow(conn, table, columns, row) {
 // and the device has only its own shelf 1, which the trigger gives every series without shelf_id
 // The catalog links (migration 41) are the server's ids: the device's triggers link its own catalog.
 const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id', 'catalog_series_id']);
-const SKIP_VOLUME = new Set(['number_sort', 'owners', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id']);
+const SKIP_VOLUME = new Set(['number_sort', 'owners', 'copies', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id']);
 const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));
 const hasText = (v) => typeof v === 'string' && v.trim() !== '';
 
@@ -173,9 +173,16 @@ export function fillFromSnapshot(conn, snapshot) {
       const derived = images.length === 1 && images[0] === v.cover_image;
       vol.images = images.length && !derived ? JSON.stringify(images) : null;
       insertRow(conn, 'volumes', volumeCols, vol);
+      const ownCopy = (v.copies || []).find((c) => c.owner_user_id === me.id);
       for (const o of v.owners || []) {
         if (o.user_id !== me.id) continue;
-        copies.addCopy(conn, v.id, me.id, { price: o.price, purchase_date: o.purchase_date, condition: o.condition, created_at: hasText(o.created_at) ? o.created_at : null });
+        copies.addCopy(conn, v.id, me.id, {
+          price: ownCopy?.price ?? o.price,
+          purchase_date: ownCopy?.purchase_date ?? o.purchase_date,
+          condition: ownCopy?.condition ?? o.condition,
+          created_at: hasText(o.created_at) ? o.created_at : null,
+          ...(ownCopy?.lent_to ? { lent_to_name: ownCopy.lent_to, lent_at: ownCopy.lent_at ?? null } : {})
+        });
       }
       // the volume insert gave an owned volume a household copy; without an own copy it counts as missing, as before copies
       if (!copies.hasCopy(conn, v.id, me.id)) copies.dropHouseholdCopies(conn, v.id);

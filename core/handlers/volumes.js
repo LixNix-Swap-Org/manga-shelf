@@ -475,7 +475,7 @@ function parseReadOp(ctx, read) {
 }
 
 const ownerRows = (ctx, volumeId) => ctx.db.prepare(
-    'SELECT user_id, price, purchase_date, condition, created_at FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid'
+    'SELECT user_id, price, purchase_date, condition, created_at, lent_to_user_id, lent_to_name, lent_at FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid'
 ).all(volumeId);
 
 const BULK_SNAPSHOT_COLUMNS = ['manga_id', ...BULK_SET_FIELDS];

@@ -114,3 +114,27 @@ test('the pinned edition goes into the trash: its shelf shows another edition of
         await core.close();
     }
 });
+
+test('switching a linked series across the caller\'s own shelves replaces the earlier pin (also across works)', async () => {
+    const { core, admin, ed, shelf, series, anime, linkOf } = await setup();
+    try {
+        const first = await shelf(ed, 'Regal Eins');
+        const second = await shelf(ed, 'Regal Zwei');
+        const adminShelf = await shelf(admin, 'Admin Regal');
+        const m1 = await series(ed, 'Werk E', { work_key: 'anilist:7005', shelf_id: first });
+        const m2 = await series(ed, 'Werk E', { work_key: 'anilist:7005', shelf_id: second });
+        const otherWork = await series(ed, 'Werk F', { work_key: 'anilist:7006', shelf_id: second });
+        const adminEdition = await series(admin, 'Werk E Admin', { work_key: 'anilist:7005', shelf_id: adminShelf });
+        assert.ok(m1 < m2);
+
+        const id = await anime(ed, 'Anime E', m1);
+        assert.equal(await linkOf(ed, id), m1);
+        assert.equal((await ed('PUT', `/anime/${id}`, { manga_id: m2 })).status, 200);
+        assert.equal(await linkOf(ed, id), m2, 'the new pin in shelf 2 wins over the lower id in shelf 1');
+        assert.equal((await ed('PUT', `/anime/${id}`, { manga_id: otherWork })).status, 200);
+        assert.equal(await linkOf(ed, id), otherWork, 'switching to another work in shelf 2 replaces the old pin');
+        assert.equal(await linkOf(admin, id), adminEdition, 'admin still holds an edition of the original work');
+    } finally {
+        await core.close();
+    }
+});
