@@ -140,6 +140,34 @@ describe('ShelvesModal', () => {
     expect(calls('DELETE')).toEqual([['/api/shelves/2/members/1', undefined]]);
   });
 
+  it('the removal toast takes it back through the undo endpoint and shows the member again', async () => {
+    routes['DELETE /api/shelves/1/members/2'] = () => fakeResponse(200, { success: true, members: [member(1, 'admin', 'owner')], undo_token: 'tok-1' });
+    routes['POST /api/shelves/undo'] = () => fakeResponse(200, { success: true, restored_copies: 3, members: [member(1, 'admin', 'owner'), member(2, 'erika', 'editor')] });
+    renderModal();
+    await openShelf('Familie');
+    fireEvent.click(screen.getByRole('button', { name: 'erika: Entfernen' }));
+    const question = await screen.findByRole('dialog', { name: 'Mitglied entfernen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Entfernen' }));
+    await waitFor(() => expect(screen.queryByText('erika')).toBeNull());
+    const toast = toasts.last();
+    expect(toast.message).toBe('erika ist kein Mitglied mehr.');
+    expect(toast.action.label).toBe('Rückgängig');
+    toast.action.onClick();
+    await waitFor(() => expect(screen.getByText('erika')).toBeTruthy());
+    expect(calls('POST')).toEqual([['/api/shelves/undo', { undo_token: 'tok-1' }]]);
+    expect(toasts.messages('success')).toContain('Rückgängig gemacht');
+  });
+
+  it('a removal without undo token shows no undo action', async () => {
+    routes['DELETE /api/shelves/2/members/1'] = () => fakeResponse(200, { success: true });
+    renderModal();
+    await openShelf('Bens Regal');
+    fireEvent.click(screen.getByRole('button', { name: 'admin: Entfernen' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Regal verlassen' })).getByRole('button', { name: 'Verlassen' }));
+    await waitFor(() => expect(toasts.messages('success')).toContain('Du hast das Regal verlassen.'));
+    expect(toasts.last().action).toBeFalsy();
+  });
+
   it('the only owner can neither demote nor remove themselves; with a second owner both are offered', async () => {
     renderModal();
     await openShelf('Familie');

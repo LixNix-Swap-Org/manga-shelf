@@ -648,7 +648,9 @@ function takeUndo(ctx, token) {
     if (typeof token !== 'string' || token.trim() === '' || token.length > 100) {
         throw badRequest('Ungültige Rückgängig-Daten (erwartet: undo_token der Sammelbearbeitung)', 'BULK_REVERT');
     }
-    const entry = ctx.undo.get(token);
+    const found = ctx.undo.get(token);
+    // a token of POST /shelves/undo (it has a kind) is no bulk edit, and stays for its own endpoint
+    const entry = found && found.previous && found.previous.kind ? null : found;
     if (!entry || entry.expires <= ctx.now().getTime() || entry.generation !== ctx.db.generation()) {
         if (entry) ctx.undo.delete(token);
         throw new HttpError(410, 'Rückgängig ist nicht mehr möglich (abgelaufen oder schon ausgeführt)', 'BULK_UNDO_EXPIRED');
@@ -768,6 +770,6 @@ function revertBulk(ctx, token) {
 }
 
 module.exports = {
-    create, createBatch, update, catalogReset, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
+    create, createBatch, update, catalogReset, remove, bulk, rememberUndo, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
     UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL
 };

@@ -16,6 +16,8 @@ import { editionCurrency, editionLanguage, editionRegion, isMpEdition } from '..
 import { formatCount } from '../utils/format';
 import { invalidateShelves } from '../utils/shelfScope';
 
+const MOVE_UNDO_MS = 15000;
+
 // i18n
 export const MANGA_STATUSES = ['Laufend', 'Abgeschlossen', 'Pausiert', 'Abgebrochen', 'Geplant'];
 
@@ -382,6 +384,34 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     }
   };
 
+  // a move drops the copies of people who are no members of the new shelf: the toast names them and takes it back
+  const notifyRemovedOwners = (data) => {
+    const names = Array.isArray(data.removed_owners) ? data.removed_owners : [];
+    if (!names.length) return;
+    const token = typeof data.undo_token === 'string' && data.undo_token ? data.undo_token : null;
+    notify.info(t('Im neuen Regal sind {names} kein Mitglied, ihre Exemplare dieser Reihe sind entfernt.', { names: names.join(', ') }), token ? {
+      duration: MOVE_UNDO_MS,
+      action: { label: t('Rückgängig'), onClick: () => undoMove(token) }
+    } : undefined);
+  };
+
+  const undoMove = async (token) => {
+    try {
+      const res = await apiFetch('/api/shelves/undo', { method: 'POST', body: { undo_token: token } });
+      if (!res.ok) {
+        if (res.status === 401) handleUnauthorized();
+        else await notifyResponseError(res, t('Rückgängig fehlgeschlagen'));
+        return;
+      }
+      notify.success(t('Rückgängig gemacht'));
+      dropCache(ownerRef.current, LIST_KEY);
+      invalidateShelves();
+      await fetchManga();
+    } catch (err) {
+      notify.error(err);
+    }
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!canEdit) return;
@@ -411,6 +441,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
         }
         dropCache(ownerRef.current, LIST_KEY);
         invalidateShelves();
+        notifyRemovedOwners((await readJson(shelfRes)) ?? {});
       }
       if (hasBodyChanges) {
         const res = await apiFetch(`/api/mangas/${id}`, { method: 'PUT', body });
