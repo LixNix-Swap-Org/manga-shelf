@@ -8,6 +8,7 @@ const { config } = require('./utils/config');
 const schema = require('./core/schema');
 const { loadPublisherAliases } = require('./core/lib/publishers');
 const { msg } = require('./core/errors');
+const { runInTransaction } = require('./core/ctx');
 const updateState = require('./services/update/state');
 const { recoverReplacedDatabase } = require('./services/update/dbRecovery');
 const appVersion = require('./package.json').version;
@@ -351,26 +352,13 @@ function ensureDbOpen() {
 }
 
 /**
- * Runs fn inside one SQLite transaction (BEGIN IMMEDIATE; rollback on error). fn MUST be synchronous:
- * with a single connection, awaiting inside would let unrelated requests run in the transaction.
+ * Runs fn inside one SQLite transaction (BEGIN IMMEDIATE; rollback on error; nested calls are savepoints,
+ * core/ctx.js runInTransaction). fn MUST be synchronous: with a single connection, awaiting inside would let
+ * unrelated requests run in the transaction.
  */
 function runTransaction(fn) {
     if (!currentDb) initDb();
-    const conn = currentDb;
-    conn.exec('BEGIN IMMEDIATE;');
-    try {
-        const result = fn(conn);
-        if (result && typeof result.then === 'function') {
-            result.then(null, () => {});
-            // the callback's synchronous part is rolled back; whatever it does after its first await runs outside any transaction
-            throw new Error('runTransaction: asynchrone Callbacks sind nicht erlaubt');
-        }
-        conn.exec('COMMIT;');
-        return result;
-    } catch (err) {
-        try { conn.exec('ROLLBACK;'); } catch (rbErr) { log.warn('ROLLBACK failed:', rbErr.message); }
-        throw err;
-    }
+    return runInTransaction(currentDb, fn, log);
 }
 
 const db = new Proxy({}, {

@@ -284,3 +284,30 @@ test('a restore never claims an id above the table sequence', async () => {
     assert.ok(seq('volumes') < farVolume, 'the sequence is not pushed up');
     assert.ok(seq('mangas') < farManga);
 });
+
+test('the trash list reads its fields from the payload; a broken payload lists with empty fields', async () => {
+    const id = await series('Payload Reihe', { cover_image: '/uploads/payload.jpg' });
+    const v1 = await volume(id, '1');
+    await volume(id, '2', { status: 'Fehlt' });
+    const lone = await series('Payload Einzelband');
+    const v3 = await volume(lone, '3', { cover_image: '/uploads/band.jpg' });
+    const delVolume = await editor('DELETE', `/volumes/${v3}`);
+    assert.equal(delVolume.status, 200);
+    const delSeries = await editor('DELETE', `/mangas/${id}`);
+    assert.equal(delSeries.status, 200);
+    const items = await trashItems();
+    const seriesEntry = items.find(i => i.id === delSeries.body.trash_id);
+    assert.deepEqual(
+        [seriesEntry.cover_image, seriesEntry.publisher, seriesEntry.volume_count, seriesEntry.owned_count, seriesEntry.restorable],
+        ['/uploads/payload.jpg', 'Carlsen Manga', 2, 1, true]
+    );
+    const volumeEntry = items.find(i => i.id === delVolume.body.trash_id);
+    assert.deepEqual(
+        [volumeEntry.volume_number, volumeEntry.type, volumeEntry.status, volumeEntry.cover_image, volumeEntry.restorable],
+        ['3', 'volume', 'Vorhanden', '/uploads/band.jpg', true]
+    );
+    assert.ok(v1);
+    db.prepare('UPDATE trash SET payload = ? WHERE id = ?').run('{kaputt', delSeries.body.trash_id);
+    const broken = (await trashItems()).find(i => i.id === delSeries.body.trash_id);
+    assert.deepEqual([broken.cover_image, broken.volume_count, broken.owned_count], [null, 0, 0]);
+});

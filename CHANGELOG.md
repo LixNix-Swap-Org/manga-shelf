@@ -9,6 +9,9 @@
 - **Checked values:** the database itself refuses a volume status, volume type, collecting status or series format outside the lists the app knows (the legacy status "Gelesen" stays allowed for the data-quality fix). Stored rows with another value stay and remain editable; the start log names how many there are.
 - **One household shelf:** a unique index keeps a second shelf from being marked as the household shelf.
 - **Volume type always set:** volumes without a type are stored as regular volumes, and a volume written with an empty type becomes one; the queries compare the type directly instead of wrapping it, so the index on series, type and number now serves the progress and gap queries.
+- Transactions can be nested: a transaction inside another one is a savepoint, so a helper with its own transaction also runs inside a caller's one. The shelf membership that a first read sets up for an account without a shelf is written in one transaction.
+- The trash list reads cover, counts and volume fields straight from the stored entries instead of parsing every entry, and checks the series of all volume entries in one query.
+- The CSV import reuses its statements for owners and reads: 15,000 rows take about 0.7 s instead of 1.5 s.
 
 ### Catalog
 - **The catalog holds the edition data:** title, author, publisher, description, cover, volume count, genres and, per volume, ISBN, release date, pages, list price and cover belong to the catalog entry of the edition. A series or volume in a shelf shows them and can keep a value of its own per field.

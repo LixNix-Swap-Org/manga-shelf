@@ -73,15 +73,20 @@ function ensureMembership(ctx) {
     const has = ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId);
     if (!has) {
         if (!ctx.db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId)) return;
-        const home = defaultShelf(ctx.db);
-        if (home) {
-            const members = ctx.db.prepare('SELECT COUNT(*) AS n FROM shelf_members WHERE shelf_id = ?').get(home.id).n;
-            const role = members === 0 ? 'owner' : joinRole(user.role);
-            if (members === 0) ctx.db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = ?').run(userId, home.id);
-            ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(home.id, userId, role);
-        } else {
-            createPersonalShelf(ctx.db, userId);
-        }
+        // a read can land here (an account from a restore or an older database), so the writes get a transaction of
+        // their own (a savepoint inside the caller's one) and check again inside it
+        ctx.db.transaction(() => {
+            if (ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)) return;
+            const home = defaultShelf(ctx.db);
+            if (home) {
+                const members = ctx.db.prepare('SELECT COUNT(*) AS n FROM shelf_members WHERE shelf_id = ?').get(home.id).n;
+                const role = members === 0 ? 'owner' : joinRole(user.role);
+                if (members === 0) ctx.db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = ?').run(userId, home.id);
+                ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(home.id, userId, role);
+            } else {
+                createPersonalShelf(ctx.db, userId);
+            }
+        });
     }
     cache.set(userId, key);
 }

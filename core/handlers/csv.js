@@ -10,6 +10,7 @@ const { DEFAULT_CURRENCY, DEFAULT_LANGUAGE, isManualWorkKey, manualWorkKey } = r
 const { readProfile } = require('../lib/locales');
 const access = require('../lib/access');
 const { qstr } = require('../lib/query');
+const { withStatementCache } = require('../ctx');
 
 const DRY_RUN_ROLLBACK = Symbol('dry-run');
 const MAX_IMPORT_ROWS = 20000;
@@ -280,6 +281,8 @@ function importCsv(ctx, { body }) {
                             format, total_chapters)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    // the per-volume helpers (owners, reads) prepare the same few statements for every row; reuse them for this import
+    const loopDb = withStatementCache(ctx.db);
     const defaultLanguage = readProfile(ctx.db, ctx.user.id).default_language;
     const updateWish = ctx.db.prepare('UPDATE mangas SET wish_priority = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     const insertVolume = ctx.db.prepare(`
@@ -409,10 +412,10 @@ function importCsv(ctx, { body }) {
                 r.purchase_date, r.status, r.notes, r.type, r.priority, r.target_price, r.cover_image, r.images, r.manga_passion_volume_id, r.language, r.sort_after);
             const newVolumeId = Number(ins.lastInsertRowid);
             for (const userId of ownerIds) {
-                addOwner(ctx.db, newVolumeId, userId, { price: r.price, purchase_date: r.purchase_date, condition: r.condition });
+                addOwner(loopDb, newVolumeId, userId, { price: r.price, purchase_date: r.purchase_date, condition: r.condition });
             }
-            syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
-            for (const userId of new Set(readerIds)) markRead(ctx.db, newVolumeId, userId);
+            syncOwnersWithStatus(loopDb, newVolumeId, ctx.user.id);
+            for (const userId of new Set(readerIds)) markRead(loopDb, newVolumeId, userId);
         }
     };
     if (dryRun) {
