@@ -207,8 +207,9 @@ function detailOf(ctx, id) {
         manga,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
-        // an anonymous rating still counts in `community` but carries no name here
-        progress: progress.map((p) => (p === mine
+        // an anonymous rating still counts in `community` but carries no name here; the list names only people the
+        // caller shares a shelf with (an admin sees all), `community` still counts everybody without names
+        progress: access.visibleRows(ctx, progress).map((p) => (p === mine
             ? { ...store.progressOf(p), username: p.username }
             : { ...community.othersView(store.progressOf(p), p), username: p.username })),
         community: { ...community.summarize(progress), episodes: community.episodeCommunity(progress) }
@@ -295,6 +296,9 @@ function list(ctx) {
     const now = nowMs(ctx);
     const userId = ctx.user ? ctx.user.id : null;
     const communities = community.communityByAnime(progress);
+    // who watches what is shown only for people the caller shares a shelf with (an admin sees all)
+    const visible = access.visibleUserIds(ctx);
+    const visibleRows = (rows) => (visible ? rows.filter((p) => visible.has(Number(p.user_id))) : rows);
     const remembered = rememberedLinks(ctx);
     const linkOf = animeLinks.linkResolver(ctx);
     let queued = 0;
@@ -309,7 +313,7 @@ function list(ctx) {
             watch: store.watchOf(row, mine, remembered.get(row.id)),
             my_progress: store.progressOf(mine),
             community: communities.get(row.id) || { average: null, count: 0, watchers: 0 },
-            progress_users: all.map((p) => ({ user_id: p.user_id, username: p.username, status: p.status, episodes_watched: p.episodes_watched }))
+            progress_users: visibleRows(all).map((p) => ({ user_id: p.user_id, username: p.username, status: p.status, episodes_watched: p.episodes_watched }))
         };
     });
     return { body };

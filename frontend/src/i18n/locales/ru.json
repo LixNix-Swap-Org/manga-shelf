@@ -2423,7 +2423,7 @@
   "Standardsprache deiner Ausgaben": "Язык ваших изданий по умолчанию",
   "Standardsprache: {language}": "Язык по умолчанию: {language}",
   "Stapel ungelesen": "Стопка непрочитанного",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "Начинает с собственной пустой коллекции. Видит её только новый аккаунт, даже администраторы её не видят.",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "Начинает с собственной пустой коллекции. В приложении её видит только новый аккаунт, даже администраторы не видят; резервные копии всё равно её содержат.",
   "Startstatus": "Начальный статус",
   "Statistik offline nicht verfügbar": "Статистика недоступна офлайн",
   "Statistik öffnen": "Открыть статистику",

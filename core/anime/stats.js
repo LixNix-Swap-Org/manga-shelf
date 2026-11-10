@@ -1,4 +1,6 @@
 // Anime block of GET /stats: only when the list has entries.
+const { visibleRows } = require('../lib/access');
+
 const MONTHS = 12;
 const TOP = 8;
 
@@ -96,7 +98,8 @@ function animeStats(ctx) {
         completed: counts.completed || 0,
         planned: counts.planned || 0,
         insights: insightsOf(ctx),
-        per_user: perUser.map((r) => ({
+        // only accounts the caller shares a shelf with (an admin sees all), like the progress in the anime list
+        per_user: visibleRows(ctx, perUser).map((r) => ({
             user_id: r.user_id,
             username: r.username,
             episodes_watched: r.episodes_watched || 0,

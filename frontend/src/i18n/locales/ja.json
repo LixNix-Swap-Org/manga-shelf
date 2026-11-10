@@ -2306,7 +2306,7 @@
   "Standardsprache deiner Ausgaben": "版の標準言語",
   "Standardsprache: {language}": "標準言語: {language}",
   "Stapel ungelesen": "積読",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "専用の空のコレクションで始まります。見られるのは新しいアカウントだけで、管理者にも見えません。",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "空の専用コレクションから始まります。アプリ内で見られるのは新しいアカウントだけで、管理者も見られません。ただしバックアップには含まれます。",
   "Startstatus": "初期ステータス",
   "Statistik offline nicht verfügbar": "統計はオフラインでは利用できません",
   "Statistik öffnen": "統計を開く",

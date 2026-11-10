@@ -51,6 +51,24 @@ function canSeeUser(ctx, userId) {
     `).get(ctx.user.id, userId));
 }
 
+/**
+ * Ids of the accounts the caller may see by name (see canSeeUser): itself and everyone it shares a shelf with; null
+ * means every account (an admin, or background work without a user).
+ */
+function visibleUserIds(ctx) {
+    if (!ctx.user || ctx.user.role === 'admin') return null;
+    const ids = ctx.db.prepare(`
+        SELECT DISTINCT b.user_id FROM shelf_members a JOIN shelf_members b ON b.shelf_id = a.shelf_id WHERE a.user_id = ?
+    `).all(ctx.user.id).map(r => Number(r.user_id));
+    return new Set([Number(ctx.user.id), ...ids]);
+}
+
+/** `rows` without those of accounts the caller may not see; `key` names the user id field. */
+function visibleRows(ctx, rows, key = 'user_id') {
+    const ids = visibleUserIds(ctx);
+    return ids ? rows.filter(r => ids.has(Number(r[key]))) : rows;
+}
+
 const memberships = new WeakMap();
 
 const defaultShelf = (db) => db.prepare('SELECT id, name FROM shelves WHERE is_default = 1 ORDER BY id LIMIT 1').get();
@@ -391,7 +409,7 @@ function prepareScoped(db, sql) {
 }
 
 module.exports = {
-    scopeSql, scopedCtx, prepareScoped, parseId, isReadOnlyAccount, joinRole, isMember, canSeeUser, memberRole, activeOwnerCount,
+    scopeSql, scopedCtx, prepareScoped, parseId, isReadOnlyAccount, joinRole, isMember, canSeeUser, visibleUserIds, visibleRows, memberRole, activeOwnerCount,
     resolveTargetUser, ROLE_WEIGHT, ensureMembership, createPersonalShelf, userPrimaryShelf, parseShelfSetup, setupUserShelf,
     reconcileShelfRoles, shelfRole, requireShelf, accessibleShelfIds, requestedShelfIds,
     inShelves, targetShelfId, mangaAccess, volumeAccess

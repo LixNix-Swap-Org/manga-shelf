@@ -148,3 +148,26 @@ test('an admin acting for another user leaves the rating alone and gets the row 
     const self = await admin('PUT', `/anime/${id}/progress`, { user_id: adminId, score: 6, rating_visibility: 'private' });
     assert.deepEqual([self.status, self.body.score, self.body.rating_visibility], [200, 6, 'private'], 'the own id is the own row');
 });
+
+test('who watches what is named only to people who share a shelf; a public rating and the community still count', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'dora', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+    const dora = ctx.client();
+    assert.equal((await dora('POST', '/auth/login', { username: 'dora', password: 'password123' })).status, 200);
+    const id = (await anna('POST', '/anime', { title: 'Getrennt', episodes: 10 })).body.id;
+    assert.equal((await anna('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 4, score: 8, rating_visibility: 'public' })).status, 200);
+    assert.equal((await dora('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 2 })).status, 200);
+
+    const names = (rows) => rows.map((p) => p.username).sort();
+    const forDora = (await dora('GET', '/anime')).body.find((x) => x.id === id);
+    assert.deepEqual(names(forDora.progress_users), ['dora'], 'dora shares no shelf with anna');
+    assert.equal(forDora.community.watchers, 2, 'the community still counts anna, without a name');
+    assert.deepEqual(names((await dora('GET', `/anime/${id}`)).body.progress), ['dora']);
+    assert.deepEqual((await dora('GET', `/anime/${id}/ratings`)).body.ratings.filter((r) => !r.own).map((r) => r.username), ['anna'],
+        'a rating anna made public stays named');
+    const perUser = (await dora('GET', '/stats')).body.anime.per_user.map((r) => r.username);
+    assert.deepEqual(perUser, ['dora']);
+
+    const forAnna = (await anna('GET', '/anime')).body.find((x) => x.id === id);
+    assert.deepEqual(names(forAnna.progress_users), ['anna'], 'and anna does not see dora');
+    assert.deepEqual(names((await admin('GET', '/anime')).body.find((x) => x.id === id).progress_users), ['anna', 'dora'], 'an admin sees everybody');
+});

@@ -283,9 +283,10 @@ function moveManga(ctx, { params, body }) {
     return { body: { success: true, id: mangaId, shelf_id: target } };
 }
 
+/** GET /users/directory: the accounts the caller may see by name (shares a shelf with them; an admin sees all). */
 function directory(ctx) {
-  const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
-  return { body: { users } };
+    const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
+    return { body: { users: access.visibleRows(ctx, users, 'id') } };
 }
 
 module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga };

@@ -2384,7 +2384,7 @@
   "Standardsprache deiner Ausgaben": "Langue par défaut de tes éditions",
   "Standardsprache: {language}": "Langue par défaut : {language}",
   "Stapel ungelesen": "Pile non lue",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "Démarre avec sa propre collection, vide. Seul le nouveau compte la voit, pas même les admins.",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "Démarre avec sa propre collection, vide. Seul le nouveau compte la voit dans l’app, pas même les admins ; les sauvegardes la contiennent quand même.",
   "Startstatus": "Statut initial",
   "Statistik offline nicht verfügbar": "Statistiques indisponibles hors ligne",
   "Statistik öffnen": "Ouvrir les statistiques",

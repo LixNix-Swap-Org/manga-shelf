@@ -2345,7 +2345,7 @@
   "Standardsprache deiner Ausgaben": "Default language of your editions",
   "Standardsprache: {language}": "Default language: {language}",
   "Stapel ungelesen": "Unread pile",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "Starts with a collection of its own, empty. Only the new account sees it, not even admins.",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "Starts with a collection of its own, empty. Only the new account sees it in the app, not even admins; backups still contain it.",
   "Startstatus": "Initial status",
   "Statistik offline nicht verfügbar": "Statistics not available offline",
   "Statistik öffnen": "Open statistics",

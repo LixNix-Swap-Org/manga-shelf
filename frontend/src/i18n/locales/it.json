@@ -2384,7 +2384,7 @@
   "Standardsprache deiner Ausgaben": "Lingua predefinita delle tue edizioni",
   "Standardsprache: {language}": "Lingua predefinita: {language}",
   "Stapel ungelesen": "Pila da leggere",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "Parte con una collezione propria, vuota. La vede solo il nuovo account, nemmeno gli amministratori.",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "Inizia con una collezione propria e vuota. Solo il nuovo account la vede nell’app, nemmeno gli admin; i backup la contengono comunque.",
   "Startstatus": "Stato iniziale",
   "Statistik offline nicht verfügbar": "Statistiche non disponibili offline",
   "Statistik öffnen": "Apri statistiche",

@@ -2345,7 +2345,7 @@
   "Standardsprache deiner Ausgaben": "Baskılarının varsayılan dili",
   "Standardsprache: {language}": "Varsayılan dil: {language}",
   "Stapel ungelesen": "Okunmamış yığın",
-  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.": "Kendine ait boş bir koleksiyonla başlar. Onu yalnızca yeni hesap görür, yöneticiler bile göremez.",
+  "Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.": "Kendine ait boş bir koleksiyonla başlar. Uygulamada onu yalnızca yeni hesap görür, yöneticiler bile göremez; yedekler yine de onu içerir.",
   "Startstatus": "Başlangıç durumu",
   "Statistik offline nicht verfügbar": "İstatistikler çevrimdışı kullanılamaz",
   "Statistik öffnen": "İstatistikleri aç",
