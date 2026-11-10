@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CircleAlert, CircleCheck, Info, X } from 'lucide-react';
+import { CircleExclamationPoint, CircleCheck, Info, X } from 'lucide-react';
 import { dismiss, subscribe } from '../../utils/notify';
 import { rich } from '../../i18n/react.jsx';
 import { t as tr } from '../../i18n/index.js';
@@ -17,7 +17,7 @@ const BULK_BAR_ID = 'bulk-action-bar';
 const MIN_RESUME_MS = 1500;
 
 const KIND_STYLE = {
-  error: { Icon: CircleAlert, box: 'border-red-500/50 bg-red-950/95 text-red-100', icon: 'text-red-300', action: 'text-red-200' },
+  error: { Icon: CircleExclamationPoint, box: 'border-red-500/50 bg-red-950/95 text-red-100', icon: 'text-red-300', action: 'text-red-200' },
   success: { Icon: CircleCheck, box: 'border-emerald-500/40 bg-slate-900/95 text-slate-100', icon: 'text-emerald-400', action: 'text-emerald-300' },
   info: { Icon: Info, box: 'border-slate-700 bg-slate-900/95 text-slate-100', icon: 'text-sky-400', action: 'text-sky-300' }
 };

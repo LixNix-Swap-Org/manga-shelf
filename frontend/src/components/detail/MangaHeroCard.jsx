@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X, ArrowRightLeft } from 'lucide-react';
+import { BookOpen, BuildingComplex, ChevronDown, CircleExclamationPoint, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X, ArrowRightLeft } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
@@ -411,7 +411,7 @@ export default function MangaHeroCard({
             {/* Edit Lookup Error */}
             {editLookupError && (
               <div role="alert" className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-                <CircleAlert className="w-4 h-4 shrink-0 text-amber-400" />
+                <CircleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
                 <span>{editLookupError}</span>
               </div>
             )}

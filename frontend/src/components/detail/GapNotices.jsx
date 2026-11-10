@@ -1,4 +1,4 @@
-import { TriangleAlert, CircleAlert, Check, Sparkles, Search, ShoppingCart } from 'lucide-react';
+import { TriangleExclamationPoint, CircleExclamationPoint, Check, Sparkles, Search, ShoppingCart } from 'lucide-react';
 import { formatCount } from '../../utils/format';
 import { t, tn } from '../../i18n/index.js';
 import { rich } from '../../i18n/react.jsx';
@@ -53,7 +53,7 @@ export default function GapNotices({
       {mpGapData?.matched && unconfirmed && canEdit && !isOffline && (
         <div className="mb-4 p-3 bg-sky-500/10 border border-sky-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-sky-100">
           <div className="flex items-center gap-2.5">
-            <CircleAlert className="w-5 h-5 text-sky-300 shrink-0" aria-hidden="true" />
+            <CircleExclamationPoint className="w-5 h-5 text-sky-300 shrink-0" aria-hidden="true" />
             <div>
               <div className="font-bold text-sky-200">{t('Manga-Passion-Edition nicht bestätigt')}</div>
               <div className="text-[11px] text-sky-100/90 leading-tight">
@@ -86,7 +86,7 @@ export default function GapNotices({
 
       {duplicateEntries.length > 0 && canEdit && (
         <div role="status" className="mb-4 p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-200">
-          <TriangleAlert className="w-4 h-4 text-rose-400 shrink-0" aria-hidden="true" />
+          <TriangleExclamationPoint className="w-4 h-4 text-rose-400 shrink-0" aria-hidden="true" />
           <span>
             <strong>{t('Doppelte Einträge:')}</strong> {duplicateEntries.map(d => `${d.label} (${d.count}×)`).join(', ')}
             {' '}– {duplicateHint(volumeViewMode)}
@@ -98,7 +98,7 @@ export default function GapNotices({
       {showDiscrepancy && (
         <div className="mb-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
           <div className="flex items-center gap-2.5">
-            <CircleAlert className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
+            <CircleExclamationPoint className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
             <div>
               <div className="font-bold text-amber-300">{t('Sammlungs-Info korrigieren (Manga-Passion-Abgleich)')}</div>
               <div className="text-[11px] text-amber-200/90 leading-tight">
@@ -181,14 +181,14 @@ export default function GapNotices({
 
       {gapsFound && dropped && (
         <p id="gap-notice-dropped" className="mb-4 text-[11px] text-slate-400 flex items-center gap-1.5">
-          <CircleAlert className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <CircleExclamationPoint className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
           <span>{t('Nicht mehr gesammelt: {count} nicht angezeigt.', { count: formatCount(detectedGaps.length, 'Lücke wird', 'Lücken werden') })}</span>
         </p>
       )}
 
       {mpGapNotice && !isOffline && (
         <p role="status" className="mb-4 -mt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-          <CircleAlert className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <CircleExclamationPoint className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
           <span>{mpGapNotice}</span>
         </p>
       )}

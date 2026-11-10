@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, CircleCheck, Database, HardDrive, KeyRound, LogOut, RefreshCw, Server, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { Archive, CircleCheck, Database, HardDrive, KeyRound, LogOut, RefreshCw, Server, Sparkles, TriangleExclamationPoint, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import api, { TIMEOUTS, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
@@ -285,7 +285,7 @@ export default function SystemModal({ isOpen, onClose }) {
 
             <Section id="system-overview-title" title={t('Server')} Icon={Server}>
               <p className={`text-xs flex items-center gap-1.5 ${status === 'ok' ? 'text-emerald-300' : status === 'error' ? 'text-rose-300' : 'text-amber-300'}`} data-testid="system-health">
-                {status === 'ok' ? <CircleCheck className="w-3.5 h-3.5" aria-hidden="true" /> : <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />}
+                {status === 'ok' ? <CircleCheck className="w-3.5 h-3.5" aria-hidden="true" /> : <TriangleExclamationPoint className="w-3.5 h-3.5" aria-hidden="true" />}
                 {HEALTH_TEXT[status] ? t(HEALTH_TEXT[status]) : t('Unbekannt')}{notes.length ? `: ${notes.join(', ')}` : ''}
               </p>
               <Facts rows={[

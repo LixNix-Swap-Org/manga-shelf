@@ -1,4 +1,4 @@
-import { Package, Sparkles, X, CircleCheck, TriangleAlert } from 'lucide-react';
+import { Package, Sparkles, X, CircleCheck, TriangleExclamationPoint } from 'lucide-react';
 import { t } from '../../../i18n/index.js';
 
 /** Manga-Passion autofill banner with its status message. */
@@ -67,7 +67,7 @@ export default function AutofillPanel({
               ) : autofillMessage.type === 'info' ? (
                 <Sparkles className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
               ) : (
-                <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+                <TriangleExclamationPoint className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
               )}
               <span>{autofillMessage.text}{/* i18n-ignore: translated where produced (useVolumeEditForm) */}</span>
             </div>

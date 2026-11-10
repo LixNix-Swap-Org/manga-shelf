@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { CircleCheck, Download, ExternalLink, RefreshCw, RotateCcw, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Download, ExternalLink, RefreshCw, RotateCcw, ShieldExclamationPoint, ShieldCheck, Sparkles, TriangleExclamationPoint } from 'lucide-react';
 import api, { readJson, TIMEOUTS } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatDateTime, formatMegabytes, formatNumber, formatTime } from '../../utils/format';
@@ -81,7 +81,7 @@ function WaitCard({ watch, waitRef, onReload }) {
     <div ref={waitRef} tabIndex={-1} className={`${failed ? redBox : 'space-y-2 text-xs'} outline-none`} data-testid="update-wait">
       <p role="status" aria-live="polite" className={`font-semibold flex items-center gap-1.5 ${failed ? '' : 'text-white'}`}>
         {failed
-          ? <TriangleAlert className="w-4 h-4 shrink-0" aria-hidden="true" />
+          ? <TriangleExclamationPoint className="w-4 h-4 shrink-0" aria-hidden="true" />
           : <RefreshCw className="w-4 h-4 shrink-0 animate-spin" aria-hidden="true" />}
         {watchStatusText(watch)}
       </p>
@@ -140,7 +140,7 @@ function LastResult({ last }) {
   }
   return (
     <div className={last.result === 'pending_start' ? amberBox : redBox} data-testid="update-last">
-      <p className="flex items-start gap-1.5"><TriangleAlert className="w-4 h-4 shrink-0" aria-hidden="true" /> <span>{text}</span></p>
+      <p className="flex items-start gap-1.5"><TriangleExclamationPoint className="w-4 h-4 shrink-0" aria-hidden="true" /> <span>{text}</span></p>
       {backup && <p>{t('Backup davor: {file}', { file: backup })}</p>}
       {details && (
         <details>
@@ -461,7 +461,7 @@ export default function UpdateSection({ update, instanceId = null, platform = ''
           <p>{t('Vorher wird ein geprüftes Backup der Datenbank angelegt.')}</p>
           {(notes.length > 0 || noteLinks.length > 0) && (
             <div className={amberBox} data-testid="update-admin-notes">
-              <p className="font-semibold flex items-center gap-1.5"><TriangleAlert className="w-4 h-4" aria-hidden="true" /> {t('Vor dem Update beachten')}</p>
+              <p className="font-semibold flex items-center gap-1.5"><TriangleExclamationPoint className="w-4 h-4" aria-hidden="true" /> {t('Vor dem Update beachten')}</p>
               {notes.map((note, i) => (
                 <div key={`${note.version}-${i}`}>
                   <p className="font-semibold">v{note.version}</p>
@@ -523,7 +523,7 @@ export default function UpdateSection({ update, instanceId = null, platform = ''
       {!waiting && !preparing && phase === 'failed' && (
         <div ref={failureRef} tabIndex={-1} role={failedInSession ? 'alert' : undefined} className={`${severe ? redBox : amberBox} outline-none`} data-testid="update-failure">
           <p className="flex items-start gap-1.5">
-            {severe ? <ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" /> : <TriangleAlert className="w-4 h-4 shrink-0" aria-hidden="true" />}
+            {severe ? <ShieldExclamationPoint className="w-4 h-4 shrink-0" aria-hidden="true" /> : <TriangleExclamationPoint className="w-4 h-4 shrink-0" aria-hidden="true" />}
             <span>{failureText}</span>
           </p>
           {!severe && <p>{t('Nichts wurde verändert.')}</p>}
