@@ -103,6 +103,21 @@ const ownerNames = (owners) => (Array.isArray(owners) ? owners : [])
   .map((o) => (typeof o === 'string' ? o : o?.username))
   .filter(Boolean);
 
+/**
+ * Warning against a second purchase: the shelves (of the caller) where the same edition volume is owned or ordered,
+ * from `owned_elsewhere` of the shopping list or the ISBN lookup. '' when there is none.
+ */
+export const elsewhereText = (list) => {
+  const rows = Array.isArray(list) ? list : [];
+  const place = (e) => (e.owners?.length ? `${e.shelf_name} (${e.owners.join(', ')})` : e.shelf_name);
+  const owned = rows.filter((e) => e.status === 'owned').map(place);
+  const ordered = rows.filter((e) => e.status === 'ordered').map(place);
+  return [
+    owned.length ? t('Schon vorhanden in: {places}', { places: owned.join(', ') }) : '',
+    ordered.length ? t('Schon bestellt in: {places}', { places: ordered.join(', ') }) : ''
+  ].filter(Boolean).join(' · ');
+};
+
 // i18n
 const VIEWER_SHELF_TEXT = '{volume}: In diesem Regal bist du Leser und kannst hier nicht buchen';
 
@@ -117,7 +132,10 @@ export const classifyShopScan = (isbn, data, shoppingItems = [], { readOnlySerie
   const key = toIsbn13(clean);
   const fromList = shoppingItems.find((it) => isbnDigits(it.isbn) && toIsbn13(it.isbn) === key);
   const entry = (kind, label, extra = {}) => ({ isbn: clean, kind, label, ...extra });
-  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), { itemId: it.id, price: it.price ?? null, currency: it.currency ?? null });
+  const elsewhere = (list) => (Array.isArray(list) && list.length ? { elsewhere: list } : {});
+  const buyEntry = (it) => entry('buy', volumeLabel(itemTitle(it), it), {
+    itemId: it.id, price: it.price ?? null, currency: it.currency ?? null, ...elsewhere(it.owned_elsewhere ?? data?.matched_volume?.owned_elsewhere)
+  });
   if (fromList) return buyEntry(fromList);
 
   const book = data?.book;
@@ -147,7 +165,7 @@ export const classifyShopScan = (isbn, data, shoppingItems = [], { readOnlySerie
   if (manga && mv) {
     // stored but not on the list (ordered, announced, or missing in a paused series): booking adds the user as owner
     return entry('claim', t('{volume} (Status {status})', { volume: volumeLabel(manga.title, mv), status: statusLabel(mv.status) }), {
-      volumeId: mv.id, mangaId: manga.id ?? mv.manga_id ?? null, price: mv.price ?? null, currency
+      volumeId: mv.id, mangaId: manga.id ?? mv.manga_id ?? null, price: mv.price ?? null, currency, ...elsewhere(mv.owned_elsewhere)
     });
   }
   if (manga && book?.volume_number) {

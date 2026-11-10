@@ -6,7 +6,7 @@ import {
   classifyShopScan, classifyShopScanOffline, classifyLocalHit, localSourceNote, lookupFailureKind, canStartLookup,
   mergeScanEntry, normalizeBuyOutcome, shouldStopBooking, applyBookingResults, markScanBooking, bookingSummary, isBookable,
   basketTotals, removeScanEntry, loadScanList, saveScanList, reconcileScanList, filterShoppingItems, recountPublishers, resolvePublisherFilter,
-  formatShoppingStand, liveScanSupported
+  formatShoppingStand, liveScanSupported, elsewhereText
 } from '../../utils/scanHelpers';
 import { lookupLocalIsbn, formatAge } from '../../utils/offlineStore';
 import { useForegroundRefresh } from '../../hooks/usePullToRefresh';
@@ -636,7 +636,10 @@ export default function ShoppingListView({
             <li key={e.isbn} className={`flex items-start gap-2 ${color}`} data-kind={e.kind}>
               <span aria-hidden="true" className="shrink-0"><Icon className="w-3.5 h-3.5" /></span>
               {/* i18n-ignore: scanHelpers builds the label with t() */}
-              <span className="min-w-0 truncate">{e.label}</span>
+              <span className="min-w-0">
+                <span className="block truncate">{e.label}</span>
+                {e.elsewhere && !e.done && <span className="block text-amber-300">{elsewhereText(e.elsewhere)}</span>}
+              </span>
             </li>
           );
         })}
@@ -771,6 +774,9 @@ export default function ShoppingListView({
                     {e.booking && <span className="ml-1 text-slate-400">{t('(wird gebucht…)')}</span>}
                     {e.kind === 'add' && !e.done && !e.booking && canEdit && <span className="ml-1 text-slate-400">{t('(wird beim Buchen angelegt)')}</span>}
                     {!e.done && e.failed && <span className="ml-1 text-rose-300">{t('– nicht gebucht: {error}', { error: e.error })}</span>}
+                    {e.elsewhere && !e.done && (
+                      <span className="block text-amber-300" data-elsewhere>{elsewhereText(e.elsewhere)}</span>
+                    )}
                   </span>
                   {recheck && (
                     <button
@@ -1088,6 +1094,12 @@ export default function ShoppingListView({
                       )}
                     </div>
 
+                    {item.owned_elsewhere?.length > 0 && (
+                      <p className="text-[11px] text-amber-300 mt-1 flex items-start gap-1" data-elsewhere>
+                        <TriangleExclamationPoint className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />
+                        <span className="min-w-0 break-words">{elsewhereText(item.owned_elsewhere)}</span>
+                      </p>
+                    )}
                     {item.target_price > 0 && (
                       <p className="text-[11px] text-amber-300 mt-1">
                         {t('Zielpreis: max. {price}', { price: formatMoney(item.target_price, editionCurrency(item)) })}

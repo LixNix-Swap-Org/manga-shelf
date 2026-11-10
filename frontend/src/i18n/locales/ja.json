@@ -2115,6 +2115,8 @@
   "Schlüssel nicht gefunden": "キーが見つかりません",
   "Schlüssel prüfen": "キーを確認",
   "Schlüsselbund gesperrt – entsperren und Manga Shelf neu starten": "キーチェーンがロックされています – ロックを解除して、Manga Shelfを再起動してください",
+  "Schon bestellt in: {places}": "注文済み: {places}",
+  "Schon vorhanden in: {places}": "所持済み: {places}",
   "Schreibweise „{alias}“ entfernen": "表記「{alias}」を削除",
   "Schreibweisen unten auswählen, dann den gemeinsamen Namen festlegen": "下で表記を選んでから、共通の名前を設定してください",
   "Schreibweisen vereinheitlichen": "表記を統一",

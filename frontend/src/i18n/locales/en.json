@@ -2150,6 +2150,8 @@
   "Schlüssel nicht gefunden": "Key not found",
   "Schlüssel prüfen": "Check key",
   "Schlüsselbund gesperrt – entsperren und Manga Shelf neu starten": "Keychain locked – unlock it and restart Manga Shelf",
+  "Schon bestellt in: {places}": "Already ordered in: {places}",
+  "Schon vorhanden in: {places}": "Already owned in: {places}",
   "Schreibweise „{alias}“ entfernen": "Remove spelling “{alias}”",
   "Schreibweisen unten auswählen, dann den gemeinsamen Namen festlegen": "Choose spellings below, then set the shared name",
   "Schreibweisen vereinheitlichen": "Unify spellings",
