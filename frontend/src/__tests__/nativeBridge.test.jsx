@@ -17,7 +17,7 @@ import { openExternal, setOpenExternal } from '../app/openExternal.js';
 import { takePendingDeepLink, takePendingShare, installDeepLinkBridge, buildShareLink, SHARE_LINK_EVENT } from '../app/deepLink.js';
 import useAnimeList from '../hooks/useAnimeList';
 import useShareIntake from '../hooks/useShareIntake';
-import ShareLinkDialog from '../components/modals/ShareLinkDialog';
+import EpisodeLinkDialog from '../components/modals/EpisodeLinkDialog';
 import { fakeResponse } from './fakeResponse';
 import LiveScanner, { scanNative, NATIVE_TEXTS } from '../components/common/LiveScanner';
 import BarcodeScannerButton from '../components/common/BarcodeScannerButton';
@@ -642,7 +642,7 @@ describe('iOS share extension inbox', () => {
     }, []);
     if (!share.state) return null;
     return (
-      <ShareLinkDialog
+      <EpisodeLinkDialog
         state={share.state} list={anime.list} listLoaded={anime.loaded} canAdd onClose={share.close} onSubmitPaste={share.submitPaste}
         onRetry={share.retry} onChoose={share.choose} onAddToList={vi.fn()} onConfirm={share.confirm}
       />
