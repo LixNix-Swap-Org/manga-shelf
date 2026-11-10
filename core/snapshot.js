@@ -66,10 +66,13 @@ function listVolumeSearch(ctx, shelfIds = access.accessibleShelfIds(ctx)) {
         `).all(...scope.params);
 }
 
-/** volumes.* without the internal number_sort, in table order (the API shape of a volume). */
+/** Columns the triggers keep and no answer shows: number_sort (migration 15) and the catalog link (migration 41). */
+const INTERNAL_VOLUME_COLUMNS = new Set(['number_sort', 'catalog_volume_id']);
+
+/** volumes.* without the internal columns, in table order (the API shape of a volume). */
 function volumeColumns(ctx) {
     return ctx.db.prepare('PRAGMA table_info(volumes)').all()
-        .filter(c => c.name !== 'number_sort')
+        .filter(c => !INTERNAL_VOLUME_COLUMNS.has(c.name))
         .map(c => `v."${c.name.replace(/"/g, '""')}"`)
         .join(', ');
 }
@@ -155,6 +158,7 @@ function groupBy(rows, key) {
  */
 function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = []) {
     delete manga.manga_passion_edition_data;
+    delete manga.catalog_series_id;   // internal catalog link (migration 41), kept by triggers
     manga.editions = editions;
     manga.volumes = volumes;
     manga.chapter_progress = chapters.map(r => ({ user_id: r.user_id, username: r.username, chapters_read: r.chapters_read, updated_at: r.updated_at }));
