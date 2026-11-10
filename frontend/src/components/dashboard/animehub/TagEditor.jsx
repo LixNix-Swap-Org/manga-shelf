@@ -6,11 +6,13 @@ const MAX_TAG = 30;
 const MAX_TAGS = 20;
 
 /**
- * Tags of one entry as chips, shared by everybody. Adding or removing one sends only that change (`onSave({ tags_add })`,
+ * Tags of one entry as chips, seen by everybody. Adding or removing one sends only that change (`onSave({ tags_add })`,
  * `onSave({ tags_remove })`), so a tag someone else added meanwhile stays; `onSave` resolves false when nothing was stored,
- * and the typed name then stays in the field.
+ * and the typed name then stays in the field. Each person removes only the tags they may (`removable`, the server's
+ * `removable_tags`: their own and old ones; an admin any); without that list every tag counts as removable.
  */
-export default function TagEditor({ tags = [], known = [], canEdit, busy, onSave }) {
+export default function TagEditor({ tags = [], removable, known = [], canEdit, busy, onSave }) {
+  const canRemove = (tag) => !Array.isArray(removable) || removable.some((x) => x.toLowerCase() === tag.toLowerCase());
   const [value, setValue] = useState('');
   const ids = useId();
   const add = async (e) => {
@@ -28,7 +30,7 @@ export default function TagEditor({ tags = [], known = [], canEdit, busy, onSave
         {tags.map((tag) => (
           <li key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100">
             {tag}
-            {canEdit && (
+            {canEdit && canRemove(tag) && (
               <button type="button" disabled={busy} className="hit-44 inline-flex items-center justify-center w-6 h-6 -my-1 -mr-1.5 rounded-full text-fuchsia-300 hover:text-white" aria-label={t('Tag „{tag}“ entfernen', { tag })} onClick={() => onSave({ tags_remove: [tag] })}>
                 <X className="w-3 h-3" aria-hidden="true" />
               </button>

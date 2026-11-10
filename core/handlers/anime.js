@@ -13,6 +13,7 @@ const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../a
 const { SourceError } = require('../anime/request');
 const episodeMarks = require('../anime/episodes');
 const community = require('../anime/community');
+const animeTags = require('../anime/tags');
 const { settings } = require('../anime/settings');
 const links = require('../watch/links');
 const { seasonLinkOf, seasonServiceOf, MAX_SEASON } = require('../watch/crunchyroll');
@@ -104,6 +105,17 @@ const loadRow = (ctx, id) => {
     return row;
 };
 
+/** Sets the caller's own note of an entry (their row exists, see update). */
+const writeOwnNote = (ctx, animeId, notes) => ctx.db.prepare('UPDATE anime_progress SET notes = ?, updated_at = ? WHERE anime_id = ? AND user_id = ?')
+    .run(notes, sqlNow(ctx), animeId, ctx.user.id);
+
+/**
+ * Whether the caller may delete the entry for everybody: an admin always, anyone else only while nobody else has it on
+ * their list (counted whether or not they share their anime list, see access.sharedAnimeRows).
+ */
+const mayDeleteForAll = (ctx, animeId) => Boolean(ctx.user) && (ctx.user.role === 'admin'
+    || !ctx.db.prepare('SELECT 1 FROM anime_progress WHERE anime_id = ? AND user_id <> ? LIMIT 1').get(animeId, ctx.user.id));
+
 /** Every user's progress of one entry, with usernames. */
 const progressRows = (ctx, animeId) => ctx.db.prepare(`
     SELECT p.*, u.username, u.share_anime_activity FROM anime_progress p JOIN users u ON u.id = p.user_id
@@ -181,7 +193,7 @@ function seasonChain(ctx, row, relations) {
 /** The detail answer of GET /anime/:id (also returned by POST, PUT and refresh). */
 function detailOf(ctx, id) {
     const row = loadRow(ctx, id);
-    const entry = store.entryOf(row, nowMs(ctx));
+    const entry = { ...store.entryOf(row, nowMs(ctx)), ...animeTags.tagFields(animeTags.tagRows(ctx.db, id), ctx.user) };
     const relations = store.parseJson(row.relations, []);
     const byAni = ctx.db.prepare('SELECT id FROM animes WHERE anilist_id = ?');
     const byMal = ctx.db.prepare('SELECT id FROM animes WHERE mal_id = ?');
@@ -206,6 +218,7 @@ function detailOf(ctx, id) {
         season_chain: seasonChain(ctx, row, relations),
         manga,
         my_progress: store.progressOf(mine),
+        can_delete_for_all: mayDeleteForAll(ctx, id),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
         // an anonymous rating still counts in `community` but carries no name here; the list names only accounts that
         // share their anime list (access.sharedAnimeRows), `community` still counts everybody without names
@@ -301,9 +314,10 @@ function list(ctx) {
     const visibleRows = (rows) => access.sharedAnimeRows(ctx, rows);
     const remembered = rememberedLinks(ctx);
     const linkOf = animeLinks.linkResolver(ctx);
+    const tagsOf = animeTags.tagFieldsByAnime(ctx.db, ctx.user);
     let queued = 0;
     const body = rows.map((row) => {
-        const entry = store.entryOf(row, now);
+        const entry = { ...store.entryOf(row, now), ...(tagsOf.get(row.id) || animeTags.NO_TAGS) };
         if (entry.stale && queued < 50 && gateway.scheduleRefresh(ctx, row.id)) queued++;
         const all = byAnime.get(row.id) || [];
         const mine = all.find((p) => p.user_id === userId);
@@ -424,13 +438,14 @@ async function create(ctx, { body }) {
         const episodes = cleanEpisodes(body.episodes);
         const kind = cleanKind(body.kind) || 'anime';
         const insert = ctx.db.prepare(`
-            INSERT INTO animes (title, episodes, notes, kind, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO animes (title, episodes, kind, updated_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?)
         `);
+        // the note of a new entry is the creator's own (migration 49)
         const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES) ?? null;
         created = ctx.db.transaction(() => {
-            const id = Number(insert.run(title, episodes ?? null, notes, kind, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
+            const id = Number(insert.run(title, episodes ?? null, kind, userId, sqlNow(ctx), sqlNow(ctx)).lastInsertRowid);
             if (mangaId !== null) animeLinks.setLink(ctx, { id, work_id: null }, mangaId);
-            writeProgress(ctx, id, userId, { status: 'Geplant' });
+            writeProgress(ctx, id, userId, { status: 'Geplant', ...(notes !== null ? { notes } : {}) });
             return { id, watched: watched ? applyWatched(ctx, id, userId, watched) : null };
         });
     } else {
@@ -462,8 +477,11 @@ function update(ctx, { params, body }) {
     if (title !== undefined) columns.title = title;
     const titleDe = cleanOptionalText(body.title_de, 'title_de', MAX_TITLE);
     if (titleDe !== undefined) columns.title_de = titleDe;
+    // the note of PUT /anime/:id is the caller's own (migration 49), as in PUT /anime/:id/progress
     const notes = cleanOptionalText(body.notes, 'notes', MAX_NOTES);
-    if (notes !== undefined) columns.notes = notes;
+    if (notes !== undefined && !ctx.db.prepare('SELECT 1 FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(id, ctx.user.id)) {
+        throw badRequest('Notizen gehören zu deiner Liste: bitte den Titel erst auf deine Liste setzen', 'NOT_ON_LIST');
+    }
     // the series link lives on the work and per shelf (core/lib/animeLinks.js): checked here, written with the columns below
     const linkTo = body.manga_id === undefined ? undefined : optionalId(body.manga_id, 'manga_id');
     if (linkTo) access.mangaAccess(ctx, linkTo, 'editor');
@@ -482,56 +500,26 @@ function update(ctx, { params, body }) {
         const seasons = parseCustomSeasons(body.custom_seasons, columns.episodes !== undefined ? columns.episodes : row.episodes);
         columns.custom_seasons = seasons ? JSON.stringify(seasons) : null;
     }
-    if (body.tags !== undefined) {
-        const tags = parseTags(body.tags);
-        columns.tags = tags.length ? JSON.stringify(tags) : null;
-    } else if (body.tags_add !== undefined || body.tags_remove !== undefined) {
-        const tags = changeTags(store.parseJson(row.tags, []), body.tags_add, body.tags_remove);
-        columns.tags = tags.length ? JSON.stringify(tags) : null;
+    // tags are per person (core/anime/tags.js); checked here, written with the columns below
+    const tagChange = body.tags !== undefined ? { tags: body.tags }
+        : (body.tags_add !== undefined || body.tags_remove !== undefined ? { add: body.tags_add, remove: body.tags_remove } : null);
+    if (tagChange) {
+        if (tagChange.tags !== undefined) animeTags.parseTags(tagChange.tags);
+        if (tagChange.add !== undefined) animeTags.parseTags(tagChange.add);
+        if (tagChange.remove !== undefined) animeTags.parseTags(tagChange.remove);
     }
-    if (!Object.keys(columns).length && linkTo === undefined) throw badRequest('Keine Änderungen angegeben');
-    columns.updated_at = sqlNow(ctx);
-    columns.updated_by = ctx.user.id;
+    if (!Object.keys(columns).length && linkTo === undefined && !tagChange && notes === undefined) throw badRequest('Keine Änderungen angegeben');
     ctx.db.transaction(() => {
         // a link the caller sees only in a shelf they may not edit answers 404 (nothing about it is theirs to change)
         if (linkTo === null) animeLinks.clearLink(ctx, row);
         else if (linkTo !== undefined) animeLinks.setLink(ctx, row, linkTo);
-        store.updateRow(ctx, id, columns);
+        if (tagChange) animeTags.changeTags(ctx.db, id, ctx.user, tagChange);
+        if (notes !== undefined) writeOwnNote(ctx, id, notes);
+        if (Object.keys(columns).length) store.updateRow(ctx, id, { ...columns, updated_at: sqlNow(ctx), updated_by: ctx.user.id });
     });
     return { body: detailOf(ctx, id) };
 }
 
-const MAX_TAGS = 20;
-const MAX_TAG = 30;
-
-/** tags of PUT /anime/:id: null or [] clears them, else a list of at most 20 short names (duplicates in any case are dropped). */
-function parseTags(value) {
-    if (value === null) return [];
-    if (!Array.isArray(value) || value.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
-    const seen = new Set();
-    const tags = [];
-    for (const raw of value) {
-        const name = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
-        if (!name || name.length > MAX_TAG) throw badRequest(msg('Ein Tag hat 1 bis {max} Zeichen', { max: MAX_TAG }));
-        if (!seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); tags.push(name); }
-    }
-    return tags;
-}
-
-/**
- * tags_add / tags_remove of PUT /anime/:id: applied to the stored tags instead of replacing them, so two people adding a tag
- * to the same entry at once both keep theirs. Names as in `tags` (removal ignores case); more than 20 afterwards is 400.
- */
-function changeTags(stored, add, remove) {
-    const added = add === undefined ? [] : parseTags(add);
-    const removed = new Set((remove === undefined ? [] : parseTags(remove)).map((name) => name.toLowerCase()));
-    const tags = stored.filter((name) => !removed.has(name.toLowerCase()));
-    for (const name of added) {
-        if (!tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
-    }
-    if (tags.length > MAX_TAGS) throw badRequest(msg('Tags müssen eine Liste mit höchstens {max} Namen sein', { max: MAX_TAGS }));
-    return tags;
-}
 
 const seasonsError = () => badRequest(msg('Staffeln müssen bei Folge 1 beginnen und aufsteigende Startfolgen mit Namen bis {max_name} Zeichen haben (höchstens {max})',
     { max: episodeMarks.MAX_SEASONS, max_name: episodeMarks.MAX_SEASON_NAME }));
@@ -1031,6 +1019,10 @@ function remove(ctx, { params }) {
     const userId = ctx.user.id;
     ctx.db.transaction(() => {
         if (!ctx.db.prepare('SELECT id FROM animes WHERE id = ?').get(id)) throw notFound('Anime');
+        // the entry carries everybody's list, ratings and tags: while others have it, only an admin deletes it for all
+        if (!mayDeleteForAll(ctx, id)) {
+            throw new HttpError(403, 'Andere haben diesen Titel auf ihrer Liste. Entferne ihn von deiner Liste; für alle löschen kann ihn nur ein Admin.', 'ANIME_IN_USE');
+        }
         syncState.recordDecline(ctx, userId, declineKeys(ctx, userId, id));
         const others = ctx.db.prepare('SELECT user_id FROM anime_sync WHERE service = ? AND user_id <> ?').all(syncState.SERVICE, userId);
         for (const { user_id: other } of others) {

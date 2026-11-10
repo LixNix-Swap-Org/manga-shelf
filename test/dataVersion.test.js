@@ -72,10 +72,10 @@ test('data version: the collection start date counts for the collection, anime w
 test('every table is either part of a data version or known to leave it alone', () => {
     // volume_owners is a view of volume_copies since migration 44
     const versioned = new Set(['mangas', 'volumes', 'volume_copies', 'volume_reads', 'chapter_progress', 'shelves', 'shelf_members', 'users',
-        'animes', 'anime_progress', 'app_settings']);
+        'animes', 'anime_progress', 'anime_tags', 'app_settings']);
     // read by no endpoint with an ETag (or only through a versioned table): a new table has to be put in one of the lists
     const unversioned = new Set(['api_cache', 'manga_passion_cache', 'schema_migrations', 'data_versions', 'trash', 'publisher_aliases',
-        'user_api_credentials', 'anime_links', 'anime_sync', 'anime_airings', 'works', 'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4',
+        'user_api_credentials', 'calendar_feeds', 'anime_links', 'anime_sync', 'anime_airings', 'works', 'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4',
         // written only by triggers of versioned tables (mangas, volumes, animes, works through mangas)
         'catalog_series', 'catalog_volumes', 'catalog_merge_log', 'anime_work_links']);
     const tables = dbm.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
